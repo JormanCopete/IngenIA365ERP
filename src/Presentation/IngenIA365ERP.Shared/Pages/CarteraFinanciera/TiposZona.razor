@@ -1,0 +1,130 @@
+@page "/cartera/tipos-zona"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Tipos de Zona - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Tipos de Zona</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ZoneTypeItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="200" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ZoneTypeItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Nombre *</label>
+                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del tipo de zona" />
+                </div>
+                <div>
+                    <label>Nombre Corto</label>
+                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ZoneTypeItem>? _grid;
+    private List<ZoneTypeItem> _items = [];
+    private ZoneTypeModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<ZoneTypeItem>>("/api/lending/zone-types?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Tipo de Zona"; _showDialog = true; }
+
+    private void OpenEdit(ZoneTypeItem item)
+    {
+        _model = new()
+        {
+            Name = item.Name,
+            ShortName = item.ShortName
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Tipo de Zona";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(ZoneTypeItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/lending/zone-types/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/lending/zone-types", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/zone-types/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class ZoneTypeItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public string ShortName { get; set; } = "";
+    }
+
+    private class ZoneTypeModel
+    {
+        public string Name { get; set; } = "";
+        public string ShortName { get; set; } = "";
+    }
+}

@@ -1,0 +1,203 @@
+@page "/reportes/inventario-valorizado"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject IJSRuntime JS
+
+<PageTitle>Inventario Valorizado - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Inventario Valorizado</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Consultar</SfButton>
+        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_data is null)">PDF</SfButton>
+        @if (_data is not null && _data.Count > 0)
+        {
+            <SfButton CssClass="e-success" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Excel</SfButton>
+        }
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Bodega</label>
+        <SfDropDownList TValue="string" TItem="WarehouseOption" @bind-Value="_warehouseId" DataSource="_warehouses"
+                        CssClass="e-small" Width="250px" Placeholder="Todas las bodegas">
+            <DropDownListFieldSettings Text="Name" Value="Id" />
+        </SfDropDownList>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#00bcd4" />
+}
+
+@if (_data is not null && _data.Count > 0)
+{
+    <!-- Summary -->
+    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="info-card">
+            <span class="label">Total Productos</span>
+            <span>@_data.Count</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Total Unidades</span>
+            <span>@_data.Sum(d => d.Stock).ToString("N2")</span>
+        </div>
+        <div class="info-card" style="border-color:#00bcd4;">
+            <span class="label">Valor Total Inventario</span>
+            <span style="font-weight:bold;color:#00bcd4;">@_data.Sum(d => d.TotalValue).ToString("N2")</span>
+        </div>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="InventoryRow" DataSource="_data" AllowPaging="true" AllowSorting="true"
+            AllowFiltering="true" AllowGrouping="true" AllowExcelExport="true">
+        <GridPageSettings PageSize="50" />
+        <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.Excel" />
+        <GridColumns>
+            <GridColumn Field="ProductCode" HeaderText="Codigo" Width="120" />
+            <GridColumn Field="ProductName" HeaderText="Producto" Width="280" />
+            <GridColumn Field="GroupName" HeaderText="Grupo" Width="160" />
+            <GridColumn Field="WarehouseName" HeaderText="Bodega" Width="140" />
+            <GridColumn Field="Unit" HeaderText="Unidad" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="Stock" HeaderText="Existencia" Width="120" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{
+                        var row = context as InventoryRow;
+                        var color = row?.Stock <= 0 ? "color:#f44336;" : "";
+                    }
+                    <span style="@color">@row?.Stock.ToString("N2")</span>
+                </Template>
+            </GridColumn>
+            <GridColumn Field="UnitCost" HeaderText="Costo Unitario" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TotalValue" HeaderText="Valor Total" Width="160" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{ var row = context as InventoryRow; }
+                    <b>@row?.TotalValue.ToString("N2")</b>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="Stock" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="TotalValue" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+}
+else if (!_loading && _data is not null)
+{
+    <p style="color:#999;">No se encontraron productos en inventario.</p>
+}
+
+@code {
+    private SfGrid<InventoryRow>? _grid;
+    private string? _warehouseId;
+    private bool _loading;
+    private List<InventoryRow>? _data;
+    private List<WarehouseOption> _warehouses = [new("", "Todas las bodegas")];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var list = await Http.GetFromJsonAsync<List<WarehouseOption>>("/api/inventory/warehouses") ?? [];
+            _warehouses = [new("", "Todas las bodegas"), .. list];
+        }
+        catch
+        {
+            // Warehouse list will only have "Todas"
+        }
+    }
+
+    private async Task LoadPreview()
+    {
+        _loading = true;
+        try
+        {
+            var warehouseParam = string.IsNullOrEmpty(_warehouseId) ? "" : $"?warehouseId={_warehouseId}";
+            _data = await Http.GetFromJsonAsync<List<InventoryRow>>(
+                $"/api/reports/inventory/valued{warehouseParam}");
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+        _loading = false;
+    }
+
+    private async Task DownloadPdf()
+    {
+        try
+        {
+            var warehouseParam = string.IsNullOrEmpty(_warehouseId) ? "" : $"?warehouseId={_warehouseId}";
+            var response = await Http.GetAsync($"/api/reports/inventory/valued/pdf{warehouseParam}");
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var base64 = Convert.ToBase64String(bytes);
+                var date = DateTime.Today.ToString("yyyyMMdd");
+                await JS.InvokeVoidAsync("eval",
+                    $"{{const a=document.createElement('a');a.href='data:application/pdf;base64,{base64}';a.download='InventarioValorizado_{date}.pdf';a.click();}}");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Error generando PDF");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+    }
+
+    private async Task ExportExcel()
+    {
+        if (_grid is not null)
+        {
+            var props = new ExcelExportProperties
+            {
+                FileName = $"InventarioValorizado_{DateTime.Today:yyyyMMdd}.xlsx",
+                Header = new ExcelHeader
+                {
+                    HeaderRows = 1,
+                    Rows = [new ExcelRow
+                    {
+                        Cells = [new ExcelCell { ColSpan = 8, Value = "Inventario Valorizado",
+                            Style = new ExcelStyle { Bold = true, FontSize = 14 } }]
+                    }]
+                }
+            };
+            await _grid.ExportToExcelAsync(props);
+        }
+    }
+
+    private class InventoryRow
+    {
+        public string ProductCode { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string GroupName { get; set; } = "";
+        public string WarehouseName { get; set; } = "";
+        public string Unit { get; set; } = "";
+        public decimal Stock { get; set; }
+        public decimal UnitCost { get; set; }
+        public decimal TotalValue { get; set; }
+    }
+
+    private record WarehouseOption(string Id, string Name);
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

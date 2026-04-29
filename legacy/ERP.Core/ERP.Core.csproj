@@ -1,0 +1,125 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ERP.Core</RootNamespace>
+    <AssemblyName>ERP.Core</AssemblyName>
+    <LangVersion>13</LangVersion>
+  </PropertyGroup>
+
+  <!-- ============================================================ -->
+  <!-- Crystal Reports (v10.5 - REQUIERE MIGRACION a version .NET)  -->
+  <!-- Descomentar cuando se tenga el runtime compatible con .NET 10 -->
+  <!-- ============================================================ -->
+  <!--
+  <ItemGroup>
+    <Reference Include="CrystalDecisions.CrystalReports.Engine">
+      <HintPath>..\lib\CrystalDecisions.CrystalReports.Engine.dll</HintPath>
+    </Reference>
+    <Reference Include="CrystalDecisions.Shared">
+      <HintPath>..\lib\CrystalDecisions.Shared.dll</HintPath>
+    </Reference>
+    <Reference Include="CrystalDecisions.Windows.Forms">
+      <HintPath>..\lib\CrystalDecisions.Windows.Forms.dll</HintPath>
+    </Reference>
+    <Reference Include="CrystalDecisions.ReportSource">
+      <HintPath>..\lib\CrystalDecisions.ReportSource.dll</HintPath>
+    </Reference>
+    <Reference Include="CrystalDecisions.Enterprise.Framework">
+      <HintPath>..\lib\CrystalDecisions.Enterprise.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="CrystalDecisions.Enterprise.InfoStore">
+      <HintPath>..\lib\CrystalDecisions.Enterprise.InfoStore.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+
+  <!-- ============================================================ -->
+  <!-- Telerik WinControls (v2011 - REQUIERE MIGRACION)             -->
+  <!-- Descomentar cuando se tenga version compatible con .NET 10   -->
+  <!-- ============================================================ -->
+  <!--
+  <ItemGroup>
+    <Reference Include="Telerik.WinControls">
+      <HintPath>..\lib\Telerik.WinControls.dll</HintPath>
+    </Reference>
+    <Reference Include="Telerik.WinControls.GridView">
+      <HintPath>..\lib\Telerik.WinControls.GridView.dll</HintPath>
+    </Reference>
+    <Reference Include="Telerik.WinControls.UI">
+      <HintPath>..\lib\Telerik.WinControls.UI.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+
+  <!-- ============================================================ -->
+  <!-- VB Compatibility: incluido en .NET 10 por defecto            -->
+  <!-- No requiere PackageReference, usar: using Microsoft.VisualBasic; -->
+  <!-- ============================================================ -->
+
+  <!-- ============================================================ -->
+  <!-- ODBC: en .NET 10 requiere paquete NuGet                      -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <PackageReference Include="System.Data.Odbc" Version="9.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- ============================================================ -->
+  <!-- COM Interop - Office                                         -->
+  <!-- Descomentar segun necesidad                                  -->
+  <!-- ============================================================ -->
+  <!--
+  <ItemGroup>
+    <COMReference Include="Excel">
+      <WrapperTool>tlbimp</WrapperTool>
+    </COMReference>
+    <COMReference Include="Outlook">
+      <WrapperTool>tlbimp</WrapperTool>
+    </COMReference>
+    <COMReference Include="Microsoft.Office.Core">
+      <WrapperTool>tlbimp</WrapperTool>
+    </COMReference>
+  </ItemGroup>
+  -->
+
+  <!-- ============================================================ -->
+  <!-- COM Interop - Hardware POS                                   -->
+  <!-- Descomentar segun necesidad                                  -->
+  <!-- ============================================================ -->
+  <!--
+  <ItemGroup>
+    <COMReference Include="OpenCajon">
+      <WrapperTool>tlbimp</WrapperTool>
+    </COMReference>
+  </ItemGroup>
+  -->
+
+  <!-- ============================================================ -->
+  <!-- Hardware - Biometria Nitgen                                  -->
+  <!-- Descomentar cuando se tenga DLL compatible                   -->
+  <!-- ============================================================ -->
+  <!--
+  <ItemGroup>
+    <Reference Include="NITGEN.SDK.NBioBSP">
+      <HintPath>..\lib\NITGEN.SDK.NBioBSP.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+
+</Project>

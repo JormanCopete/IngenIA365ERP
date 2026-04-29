@@ -1,0 +1,168 @@
+@page "/cartera/parametros-provision"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Parametros de Provision - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Parametros de Provision</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ProvisionParameterItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Period" HeaderText="Periodo" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Code" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="RateB" HeaderText="Tasa B %" Width="120" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn Field="RateC" HeaderText="Tasa C %" Width="120" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn Field="RateD" HeaderText="Tasa D %" Width="120" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn Field="RateE" HeaderText="Tasa E %" Width="120" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ProvisionParameterItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Periodo *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.Period"
+                        Placeholder="202601" Format="N0" Min="0" />
+                </div>
+                <div>
+                    <label>Codigo *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.Code"
+                        Placeholder="0" Format="N0" Min="0" />
+                </div>
+                <div>
+                    <label>Tasa B (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.RateB"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+                <div>
+                    <label>Tasa C (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.RateC"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+                <div>
+                    <label>Tasa D (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.RateD"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+                <div>
+                    <label>Tasa E (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.RateE"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ProvisionParameterItem>? _grid;
+    private List<ProvisionParameterItem> _items = [];
+    private ProvisionParameterModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<ProvisionParameterItem>>("/api/lending/provision-parameters?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro de Provision"; _showDialog = true; }
+
+    private void OpenEdit(ProvisionParameterItem item)
+    {
+        _model = new()
+        {
+            Period = item.Period,
+            Code = item.Code,
+            RateB = item.RateB,
+            RateC = item.RateC,
+            RateD = item.RateD,
+            RateE = item.RateE
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Parametro de Provision";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(ProvisionParameterItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/lending/provision-parameters/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/lending/provision-parameters", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/provision-parameters/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class ProvisionParameterItem
+    {
+        public Guid PublicId { get; set; }
+        public int Period { get; set; }
+        public int Code { get; set; }
+        public decimal RateB { get; set; }
+        public decimal RateC { get; set; }
+        public decimal RateD { get; set; }
+        public decimal RateE { get; set; }
+    }
+
+    private class ProvisionParameterModel
+    {
+        public int Period { get; set; }
+        public int Code { get; set; }
+        public decimal RateB { get; set; }
+        public decimal RateC { get; set; }
+        public decimal RateD { get; set; }
+        public decimal RateE { get; set; }
+    }
+}

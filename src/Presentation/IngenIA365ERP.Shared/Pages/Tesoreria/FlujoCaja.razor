@@ -1,0 +1,132 @@
+@page "/tesoreria/flujo-caja"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Flujo de Caja - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Flujo de Caja</h3>
+</div>
+
+<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Anio *</label>
+        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2020" Max="2030" Width="120px" />
+    </div>
+    <div>
+        <label>Mes Desde</label>
+        <SfNumericTextBox TValue="int?" @bind-Value="_monthFrom" Min="1" Max="12" Width="100px" Placeholder="1" />
+    </div>
+    <div>
+        <label>Mes Hasta</label>
+        <SfNumericTextBox TValue="int?" @bind-Value="_monthTo" Min="1" Max="12" Width="100px" Placeholder="12" />
+    </div>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Consultar</SfButton>
+</div>
+
+@if (_items.Count > 0)
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+        <div class="kpi-card">
+            <span class="kpi-label">Total Ingresos</span>
+            <span class="kpi-value" style="color:#4caf50;">@_totalIncome.ToString("N0")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Total Egresos</span>
+            <span class="kpi-value" style="color:#f44336;">@_totalExpense.ToString("N0")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Flujo Neto</span>
+            <span class="kpi-value" style="color:@(_netFlow >= 0 ? "#4caf50" : "#f44336");">@_netFlow.ToString("N0")</span>
+        </div>
+    </div>
+
+    <SfChart Title="Flujo de Caja Mensual" Width="100%" Height="400px">
+        <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category">
+            <ChartAxisLabelStyle FontSize="11px" />
+        </ChartPrimaryXAxis>
+        <ChartPrimaryYAxis LabelFormat="N0" />
+        <ChartSeriesCollection>
+            <ChartSeries DataSource="@_items" XName="Period" YName="TotalIncome" Name="Ingresos"
+                Type="ChartSeriesType.StackingColumn" Fill="#4caf50" />
+            <ChartSeries DataSource="@_items" XName="Period" YName="TotalExpense" Name="Egresos"
+                Type="ChartSeriesType.StackingColumn" Fill="#f44336" />
+            <ChartSeries DataSource="@_items" XName="Period" YName="NetFlow" Name="Flujo Neto"
+                Type="ChartSeriesType.Line" Fill="#2196f3" Width="3">
+                <ChartMarker Visible="true" Width="8" Height="8" />
+            </ChartSeries>
+        </ChartSeriesCollection>
+        <ChartLegendSettings Visible="true" Position="LegendPosition.Bottom" />
+        <ChartTooltipSettings Enable="true" Format="${series.name}: ${point.y:N0}" />
+    </SfChart>
+
+    <h4 style="margin-top:24px;">Detalle por Mes</h4>
+    <SfGrid TValue="CashFlowItem" DataSource="@_items" AllowSorting="true">
+        <GridColumns>
+            <GridColumn Field="Period" HeaderText="Periodo" Width="180" />
+            <GridColumn Field="TotalIncome" HeaderText="Ingresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TotalExpense" HeaderText="Egresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="NetFlow" HeaderText="Flujo Neto" Width="160" Format="N0" TextAlign="TextAlign.Right">
+                <Template>
+                    @{
+                        var item = context as CashFlowItem;
+                        var color = (item?.NetFlow ?? 0) >= 0 ? "#4caf50" : "#f44336";
+                        <span style="color:@color;font-weight:600;">@item?.NetFlow.ToString("N0")</span>
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+}
+else
+{
+    <div style="text-align:center;padding:40px;color:#999;">
+        <span class="e-icons e-chart" style="font-size:48px;"></span>
+        <p>Seleccione los parametros y haga clic en Consultar para ver el flujo de caja.</p>
+    </div>
+}
+
+@code {
+    private List<CashFlowItem> _items = [];
+    private int _year = DateTime.Now.Year;
+    private int? _monthFrom = 1;
+    private int? _monthTo = 12;
+    private decimal _totalIncome;
+    private decimal _totalExpense;
+    private decimal _netFlow;
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = $"/api/treasury/cash-flow?year={_year}";
+            if (_monthFrom.HasValue)
+                url += $"&monthFrom={_monthFrom}";
+            if (_monthTo.HasValue)
+                url += $"&monthTo={_monthTo}";
+
+            _items = await Http.GetFromJsonAsync<List<CashFlowItem>>(url) ?? [];
+
+            _totalIncome = _items.Sum(i => i.TotalIncome);
+            _totalExpense = _items.Sum(i => i.TotalExpense);
+            _netFlow = _totalIncome - _totalExpense;
+        }
+        catch
+        {
+            _items = [];
+            await Notification.ErrorAsync("Error al consultar flujo de caja");
+        }
+    }
+
+    private class CashFlowItem
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public string Period { get; set; } = "";
+        public decimal TotalIncome { get; set; }
+        public decimal TotalExpense { get; set; }
+        public decimal NetFlow { get; set; }
+    }
+}

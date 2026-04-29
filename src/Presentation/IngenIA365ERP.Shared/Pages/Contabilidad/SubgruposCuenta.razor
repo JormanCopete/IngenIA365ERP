@@ -1,0 +1,138 @@
+@page "/contabilidad/subgrupos-cuenta"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Subgrupos de Cuenta - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Subgrupos de Cuenta</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="AccountSubgroupItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="SubgroupNumber" HeaderText="Numero Subgrupo" Width="180" />
+        <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+        <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="180" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as AccountSubgroupItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Numero Subgrupo *</label>
+                    <SfTextBox @bind-Value="_model.SubgroupNumber" Placeholder="Numero del subgrupo" />
+                </div>
+                <div>
+                    <label>Descripcion *</label>
+                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion del subgrupo" />
+                </div>
+                <div>
+                    <label>Cuenta Contable</label>
+                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<AccountSubgroupItem>? _grid;
+    private List<AccountSubgroupItem> _items = [];
+    private AccountSubgroupModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<AccountSubgroupItem>>("/api/accounting/account-subgroups?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Subgrupo de Cuenta"; _showDialog = true; }
+
+    private void OpenEdit(AccountSubgroupItem item)
+    {
+        _model = new()
+        {
+            SubgroupNumber = item.SubgroupNumber,
+            Description = item.Description,
+            AccountCode = item.AccountCode
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Subgrupo de Cuenta";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(AccountSubgroupItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/accounting/account-subgroups/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/accounting/account-subgroups", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/accounting/account-subgroups/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class AccountSubgroupItem
+    {
+        public Guid PublicId { get; set; }
+        public string SubgroupNumber { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string? AccountCode { get; set; }
+    }
+
+    private class AccountSubgroupModel
+    {
+        public string SubgroupNumber { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string? AccountCode { get; set; }
+    }
+}

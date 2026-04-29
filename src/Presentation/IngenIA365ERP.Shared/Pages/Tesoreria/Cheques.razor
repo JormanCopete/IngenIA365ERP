@@ -1,0 +1,216 @@
+@page "/tesoreria/cheques"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Cheques - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Cheques</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Cheque</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="CheckItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="BankName" HeaderText="Banco" Width="180" />
+        <GridColumn Field="CheckNumber" HeaderText="Numero" Width="120" TextAlign="TextAlign.Right" />
+        <GridColumn Field="PayeeName" HeaderText="Beneficiario" Width="220" />
+        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="IssueDate" HeaderText="Fecha Emision" Width="130" Format="dd/MM/yyyy" />
+        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+            <Template>
+                @{
+                    var item = context as CheckItem;
+                    var badgeClass = item?.Status switch
+                    {
+                        "E" => "e-badge e-badge-info",
+                        "C" => "e-badge e-badge-success",
+                        "A" => "e-badge e-badge-danger",
+                        "D" => "e-badge e-badge-warning",
+                        _ => "e-badge"
+                    };
+                    <span class="@badgeClass">@item?.StatusText</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="200" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as CheckItem;
+                    @if (item?.Status == "E")
+                    {
+                        <SfButton CssClass="e-flat e-small e-success" Content="Cobrar"
+                            OnClick="@(() => ProcessAction(item!, "C"))" />
+                        <SfButton CssClass="e-flat e-small e-danger" Content="Anular"
+                            OnClick="@(() => ProcessAction(item!, "V"))" />
+                    }
+                    @if (item?.Status == "C")
+                    {
+                        <SfButton CssClass="e-flat e-small e-warning" Content="Devolver"
+                            OnClick="@(() => ProcessAction(item!, "R"))" />
+                    }
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="Registrar Cheque" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Banco (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.BankPublicId" Placeholder="GUID del banco" />
+                </div>
+                <div>
+                    <label>Numero de Cheque *</label>
+                    <SfTextBox @bind-Value="_model.CheckNumber" Placeholder="Numero del cheque" />
+                </div>
+                <div>
+                    <label>Monto *</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.Amount" Placeholder="0" Decimals="0" Format="N0" Min="1" />
+                </div>
+                <div>
+                    <label>Beneficiario (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.PayeePublicId" Placeholder="GUID del beneficiario" />
+                </div>
+                <div>
+                    <label>Fecha de Emision *</label>
+                    <SfDatePicker TValue="DateTime" @bind-Value="_model.IssueDate" Placeholder="Fecha emision" />
+                </div>
+                <div>
+                    <label>Fecha de Vencimiento</label>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_model.DueDate" Placeholder="Fecha vencimiento" />
+                </div>
+                <div>
+                    <label>Concepto (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.ConceptPublicId" Placeholder="GUID del concepto de tesoreria" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmProcess"
+    Message="@_confirmMessage" />
+
+@code {
+    private SfGrid<CheckItem>? _grid;
+    private List<CheckItem> _items = [];
+    private CheckModel _model = new();
+    private bool _showDialog, _showConfirm;
+    private string _confirmMessage = "";
+    private Guid _processCheckId;
+    private string _processAction = "";
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<CheckItem>>("/api/treasury/checks?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new() { IssueDate = DateTime.Today };
+        _showDialog = true;
+    }
+
+    private void ProcessAction(CheckItem item, string action)
+    {
+        _processCheckId = item.PublicId;
+        _processAction = action;
+        _confirmMessage = action switch
+        {
+            "C" => $"Confirma el cobro del cheque #{item.CheckNumber}?",
+            "V" => $"Confirma la anulacion del cheque #{item.CheckNumber}?",
+            "R" => $"Confirma la devolucion del cheque #{item.CheckNumber}?",
+            _ => "Confirmar accion?"
+        };
+        _showConfirm = true;
+    }
+
+    private async Task ConfirmProcess()
+    {
+        var payload = new { Action = _processAction };
+        var res = await Http.PostAsJsonAsync($"/api/treasury/checks/{_processCheckId}/process", payload);
+        if (res.IsSuccessStatusCode)
+        {
+            var actionText = _processAction switch
+            {
+                "C" => "cobrado",
+                "V" => "anulado",
+                "R" => "devuelto",
+                _ => "procesado"
+            };
+            await Notification.SuccessAsync($"Cheque {actionText} exitosamente");
+            await LoadData();
+        }
+        else
+            await Notification.ErrorAsync("Error al procesar cheque");
+    }
+
+    private async Task Save()
+    {
+        if (!Guid.TryParse(_model.BankPublicId, out _) ||
+            !Guid.TryParse(_model.PayeePublicId, out _) ||
+            !Guid.TryParse(_model.ConceptPublicId, out _))
+        {
+            await Notification.ErrorAsync("Los identificadores deben ser GUIDs validos.");
+            return;
+        }
+
+        var payload = new
+        {
+            BankPublicId = Guid.Parse(_model.BankPublicId),
+            CheckNumber = _model.CheckNumber,
+            Amount = _model.Amount,
+            PayeePublicId = Guid.Parse(_model.PayeePublicId),
+            IssueDate = DateOnly.FromDateTime(_model.IssueDate),
+            DueDate = _model.DueDate.HasValue ? DateOnly.FromDateTime(_model.DueDate.Value) : (DateOnly?)null,
+            ConceptPublicId = Guid.Parse(_model.ConceptPublicId)
+        };
+
+        var res = await Http.PostAsJsonAsync("/api/treasury/checks", payload);
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Cheque registrado exitosamente");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ErrorAsync("Error al registrar cheque");
+    }
+
+    private class CheckItem
+    {
+        public Guid PublicId { get; set; }
+        public string BankName { get; set; } = "";
+        public int CheckNumber { get; set; }
+        public string PayeeName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public DateOnly IssueDate { get; set; }
+        public DateOnly? DueDate { get; set; }
+        public string Status { get; set; } = "";
+        public string StatusText { get; set; } = "";
+    }
+
+    private class CheckModel
+    {
+        public string BankPublicId { get; set; } = "";
+        public string CheckNumber { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string PayeePublicId { get; set; } = "";
+        public DateTime IssueDate { get; set; } = DateTime.Today;
+        public DateTime? DueDate { get; set; }
+        public string ConceptPublicId { get; set; } = "";
+    }
+}

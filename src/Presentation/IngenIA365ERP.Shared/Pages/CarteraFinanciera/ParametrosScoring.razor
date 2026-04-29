@@ -1,0 +1,155 @@
+@page "/cartera/scoring"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Parametros de Scoring - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Parametros de Scoring</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ScoringParameterItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="CriterionCode" HeaderText="Cod. Criterio" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="CriterionName" HeaderText="Nombre Criterio" Width="220" />
+        <GridColumn Field="SubItemCode" HeaderText="Cod. SubItem" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="SubItemName" HeaderText="Nombre SubItem" Width="220" />
+        <GridColumn Field="Percentage" HeaderText="Porcentaje %" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ScoringParameterItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Codigo Criterio *</label>
+                    <SfTextBox @bind-Value="_model.CriterionCode" Placeholder="Codigo (max 2)" MaxLength="2" />
+                </div>
+                <div>
+                    <label>Nombre Criterio *</label>
+                    <SfTextBox @bind-Value="_model.CriterionName" Placeholder="Nombre del criterio" />
+                </div>
+                <div>
+                    <label>Codigo SubItem</label>
+                    <SfTextBox @bind-Value="_model.SubItemCode" Placeholder="Codigo (max 3)" MaxLength="3" />
+                </div>
+                <div>
+                    <label>Nombre SubItem</label>
+                    <SfTextBox @bind-Value="_model.SubItemName" Placeholder="Nombre del sub-item" />
+                </div>
+                <div>
+                    <label>Porcentaje (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.Percentage"
+                        Placeholder="0.00" Decimals="2" Format="N2" Min="0" Max="100" Step="0.01m" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ScoringParameterItem>? _grid;
+    private List<ScoringParameterItem> _items = [];
+    private ScoringParameterModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<ScoringParameterItem>>("/api/lending/scoring-parameters?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro de Scoring"; _showDialog = true; }
+
+    private void OpenEdit(ScoringParameterItem item)
+    {
+        _model = new()
+        {
+            CriterionCode = item.CriterionCode,
+            CriterionName = item.CriterionName,
+            SubItemCode = item.SubItemCode,
+            SubItemName = item.SubItemName,
+            Percentage = item.Percentage
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Parametro de Scoring";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(ScoringParameterItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/lending/scoring-parameters/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/lending/scoring-parameters", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/scoring-parameters/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class ScoringParameterItem
+    {
+        public Guid PublicId { get; set; }
+        public string CriterionCode { get; set; } = "";
+        public string CriterionName { get; set; } = "";
+        public string SubItemCode { get; set; } = "";
+        public string SubItemName { get; set; } = "";
+        public decimal Percentage { get; set; }
+    }
+
+    private class ScoringParameterModel
+    {
+        public string CriterionCode { get; set; } = "";
+        public string CriterionName { get; set; } = "";
+        public string SubItemCode { get; set; } = "";
+        public string SubItemName { get; set; } = "";
+        public decimal Percentage { get; set; }
+    }
+}

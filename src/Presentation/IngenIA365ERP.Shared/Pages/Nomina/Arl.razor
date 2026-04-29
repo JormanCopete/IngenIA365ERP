@@ -1,0 +1,118 @@
+@page "/nomina/arl"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>ARL - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>ARL (Administradoras de Riesgos Laborales)</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
+        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="180" />
+        <GridColumn Field="TaxId" HeaderText="NIT" Width="140" />
+        <GridColumn Field="CheckDigit" HeaderText="DV" Width="80" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Factor" HeaderText="Factor" Width="120" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ItemModel;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Codigo" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Digito Verificacion" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="decimal" @bind-Value="_model.Factor" Placeholder="Factor" Format="N4" FloatLabelType="FloatLabelType.Always" />
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ItemModel>? _grid;
+    private List<ItemModel> _items = [];
+    private FormModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/work-risk?pageSize=500"); _items = r?.Items ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva ARL"; _showDialog = true; }
+
+    private void OpenEdit(ItemModel item)
+    {
+        _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName, TaxId = item.TaxId, CheckDigit = item.CheckDigit, Factor = item.Factor };
+        _editId = item.PublicId; _dialogTitle = "Editar ARL"; _showDialog = true;
+    }
+
+    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        var res = _editId.HasValue
+            ? await Http.PutAsJsonAsync($"/api/payroll/work-risk/{_editId}", _model)
+            : await Http.PostAsJsonAsync("/api/payroll/work-risk", _model);
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/payroll/work-risk/{_deleteId}");
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class Paged { public List<ItemModel> Items { get; set; } = []; }
+    private class ItemModel
+    {
+        public Guid PublicId { get; set; }
+        public int Code { get; set; }
+        public string Name { get; set; } = "";
+        public string ShortName { get; set; } = "";
+        public string TaxId { get; set; } = "";
+        public int CheckDigit { get; set; }
+        public decimal Factor { get; set; }
+    }
+    private class FormModel
+    {
+        public int Code { get; set; }
+        public string Name { get; set; } = "";
+        public string ShortName { get; set; } = "";
+        public string TaxId { get; set; } = "";
+        public int CheckDigit { get; set; }
+        public decimal Factor { get; set; }
+    }
+}

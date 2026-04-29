@@ -1,0 +1,202 @@
+@page "/tesoreria/facturas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Facturas de Tesoreria - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Facturas de Tesoreria</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Factura</SfButton>
+</div>
+
+<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Tipo</label>
+        <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_filterType" DataSource="@_docTypes" Width="200px" Placeholder="Todos">
+            <DropDownListFieldSettings Value="Code" Text="Name" />
+        </SfDropDownList>
+    </div>
+    <div>
+        <label>Vencimiento Desde</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueFrom" Placeholder="Desde" Width="160px" />
+    </div>
+    <div>
+        <label>Vencimiento Hasta</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueTo" Placeholder="Hasta" Width="160px" />
+    </div>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Buscar</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="InvoiceItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="InvoiceNumber" HeaderText="Numero" Width="120" />
+        <GridColumn Field="DocumentTypeText" HeaderText="Tipo" Width="160" />
+        <GridColumn Field="PersonName" HeaderText="Persona" Width="220" />
+        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="InvoiceDate" HeaderText="Fecha" Width="130" Format="dd/MM/yyyy" />
+        <GridColumn Field="DueDate" HeaderText="Vencimiento" Width="130" Format="dd/MM/yyyy" />
+        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+            <Template>
+                @{
+                    var item = context as InvoiceItem;
+                    var badgeClass = item?.Status switch
+                    {
+                        "P" => "e-badge e-badge-warning",
+                        "G" => "e-badge e-badge-success",
+                        "A" => "e-badge e-badge-danger",
+                        _ => "e-badge e-badge-info"
+                    };
+                    <span class="@badgeClass">@item?.StatusText</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="Registrar Factura de Tesoreria" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Tipo *</label>
+                    <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_model.InvoiceType" DataSource="@_invoiceTypes">
+                        <DropDownListFieldSettings Value="Code" Text="Name" />
+                    </SfDropDownList>
+                </div>
+                <div>
+                    <label>Persona (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.PersonPublicId" Placeholder="GUID de la persona" />
+                </div>
+                <div>
+                    <label>Monto *</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.Amount" Placeholder="0" Decimals="0" Format="N0" Min="1" />
+                </div>
+                <div>
+                    <label>Fecha de Vencimiento *</label>
+                    <SfDatePicker TValue="DateTime" @bind-Value="_model.DueDate" Placeholder="Fecha vencimiento" />
+                </div>
+                <div>
+                    <label>Concepto (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.ConceptPublicId" Placeholder="GUID del concepto de tesoreria" />
+                </div>
+                <div>
+                    <label>Descripcion</label>
+                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion" Multiline="true" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    private SfGrid<InvoiceItem>? _grid;
+    private List<InvoiceItem> _items = [];
+    private InvoiceModel _model = new();
+    private bool _showDialog;
+    private string? _filterType;
+    private DateTime? _filterDueFrom;
+    private DateTime? _filterDueTo;
+
+    private readonly List<DropItem> _docTypes =
+    [
+        new("", "Todos"),
+        new("CXP", "Cuentas por Pagar"),
+        new("CXC", "Cuentas por Cobrar")
+    ];
+
+    private readonly List<DropItem> _invoiceTypes =
+    [
+        new("CxP", "Cuenta por Pagar"),
+        new("CxC", "Cuenta por Cobrar")
+    ];
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "/api/treasury/invoices?pageSize=500";
+            if (!string.IsNullOrEmpty(_filterType))
+                url += $"&documentType={_filterType}";
+            if (_filterDueFrom.HasValue)
+                url += $"&dueDateFrom={DateOnly.FromDateTime(_filterDueFrom.Value):yyyy-MM-dd}";
+            if (_filterDueTo.HasValue)
+                url += $"&dueDateTo={DateOnly.FromDateTime(_filterDueTo.Value):yyyy-MM-dd}";
+
+            _items = await Http.GetFromJsonAsync<List<InvoiceItem>>(url) ?? [];
+        }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new() { DueDate = DateTime.Today.AddDays(30) };
+        _showDialog = true;
+    }
+
+    private async Task Save()
+    {
+        if (!Guid.TryParse(_model.PersonPublicId, out _) ||
+            !Guid.TryParse(_model.ConceptPublicId, out _))
+        {
+            await Notification.ErrorAsync("Los identificadores deben ser GUIDs validos.");
+            return;
+        }
+
+        var payload = new
+        {
+            InvoiceType = _model.InvoiceType,
+            PersonPublicId = Guid.Parse(_model.PersonPublicId),
+            Amount = _model.Amount,
+            DueDate = DateOnly.FromDateTime(_model.DueDate),
+            ConceptPublicId = Guid.Parse(_model.ConceptPublicId),
+            Description = _model.Description
+        };
+
+        var res = await Http.PostAsJsonAsync("/api/treasury/invoices", payload);
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Factura registrada exitosamente");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ErrorAsync("Error al registrar factura");
+    }
+
+    private class InvoiceItem
+    {
+        public Guid PublicId { get; set; }
+        public string InvoiceNumber { get; set; } = "";
+        public string DocumentType { get; set; } = "";
+        public string DocumentTypeText { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public DateOnly InvoiceDate { get; set; }
+        public DateOnly? DueDate { get; set; }
+        public string Status { get; set; } = "";
+        public string StatusText { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    private class InvoiceModel
+    {
+        public string InvoiceType { get; set; } = "CxP";
+        public string PersonPublicId { get; set; } = "";
+        public decimal Amount { get; set; }
+        public DateTime DueDate { get; set; } = DateTime.Today.AddDays(30);
+        public string ConceptPublicId { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    private record DropItem(string Code, string Name);
+}

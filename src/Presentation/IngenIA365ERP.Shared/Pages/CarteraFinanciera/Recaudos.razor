@@ -1,0 +1,283 @@
+@page "/cartera/recaudos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Recaudos y Pagos - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <h3>Recaudos y Pagos</h3>
+</div>
+
+<!-- Step 1: Search Person -->
+<div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+    <h5 style="margin:0 0 12px;">1. Buscar Asociado</h5>
+    <div style="display:flex;gap:8px;align-items:end;">
+        <div style="flex:1;">
+            <SfTextBox @bind-Value="_searchTerm" Placeholder="Cedula o nombre del asociado" />
+        </div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="SearchPerson"
+                  Disabled="@string.IsNullOrWhiteSpace(_searchTerm)">Buscar</SfButton>
+    </div>
+    @if (_searchResults.Count > 0)
+    {
+        <div style="margin-top:8px;max-height:150px;overflow-y:auto;border:1px solid #333;border-radius:4px;">
+            @foreach (var p in _searchResults)
+            {
+                <div style="padding:6px 12px;cursor:pointer;border-bottom:1px solid #333;"
+                     @onclick="() => SelectPerson(p)">
+                    <strong>@p.FullName</strong> - @p.IdentificationNumber
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Step 2: Select Credit -->
+@if (_selectedPerson is not null)
+{
+    <div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+        <h5 style="margin:0 0 8px;">2. Creditos de @_selectedPerson.FullName</h5>
+        @if (_portfolios.Count == 0)
+        {
+            <p style="color:#888;">No tiene creditos activos.</p>
+        }
+        else
+        {
+            <SfGrid TValue="PortfolioOption" DataSource="_portfolios" AllowSelection="true" GridLines="GridLine.Both">
+                <GridEvents TValue="PortfolioOption" RowSelected="OnPortfolioSelected" />
+                <GridColumns>
+                    <GridColumn Field="@nameof(PortfolioOption.PortfolioNumber)" HeaderText="No. Credito" Width="110" />
+                    <GridColumn Field="@nameof(PortfolioOption.CreditLineName)" HeaderText="Linea" Width="170" />
+                    <GridColumn Field="@nameof(PortfolioOption.CurrentBalance)" HeaderText="Saldo" Width="130" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(PortfolioOption.InstallmentAmount)" HeaderText="Cuota" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(PortfolioOption.DaysOverdue)" HeaderText="Dias Mora" Width="100" TextAlign="TextAlign.Center" />
+                    <GridColumn Field="@nameof(PortfolioOption.PendingInstallmentCount)" HeaderText="Cuotas Pend." Width="100" TextAlign="TextAlign.Center" />
+                </GridColumns>
+            </SfGrid>
+        }
+    </div>
+}
+
+<!-- Step 3: Installments + Payment -->
+@if (_selectedPortfolio is not null)
+{
+    <div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+        <h5 style="margin:0 0 8px;">3. Cuotas Pendientes - Credito #@_selectedPortfolio.PortfolioNumber</h5>
+        @if (_installments.Count > 0)
+        {
+            <SfGrid TValue="InstallmentOption" DataSource="_installments" GridLines="GridLine.Both">
+                <GridColumns>
+                    <GridColumn Field="@nameof(InstallmentOption.Period)" HeaderText="Cuota" Width="70" TextAlign="TextAlign.Center" />
+                    <GridColumn Field="@nameof(InstallmentOption.ProcessDate)" HeaderText="Fecha" Width="110" Format="d" />
+                    <GridColumn Field="@nameof(InstallmentOption.BalanceCapital)" HeaderText="Capital" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(InstallmentOption.BalanceInterest)" HeaderText="Interes" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(InstallmentOption.DefaultInterest)" HeaderText="Mora" Width="100" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(InstallmentOption.TotalPending)" HeaderText="Total" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+                    <GridColumn Field="@nameof(InstallmentOption.Status)" HeaderText="Estado" Width="90" TextAlign="TextAlign.Center" />
+                </GridColumns>
+            </SfGrid>
+
+            <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;background:#111;padding:12px;border-radius:8px;">
+                <div>
+                    <label>Total Pendiente</label>
+                    <SfNumericTextBox TValue="decimal" Value="@_totalPending" Readonly="true" Format="N0" CssClass="e-disabled" />
+                </div>
+                <div>
+                    <label>Valor a Pagar *</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_paymentAmount" Format="N0" Min="0" />
+                </div>
+                <div>
+                    <label>Fecha Pago</label>
+                    <SfDatePicker TValue="DateTime" @bind-Value="_paymentDate" Format="dd/MM/yyyy" />
+                </div>
+                <div>
+                    <label>Forma de Pago</label>
+                    <SfDropDownList TValue="string" TItem="PayMethodItem" @bind-Value="_paymentMethod"
+                                    DataSource="_payMethods">
+                        <DropDownListFieldSettings Text="Text" Value="Value" />
+                    </SfDropDownList>
+                </div>
+                <div>
+                    <label>Referencia</label>
+                    <SfTextBox @bind-Value="_reference" Placeholder="Numero cheque/transferencia" />
+                </div>
+                <div style="display:flex;align-items:end;">
+                    <SfButton CssClass="e-success" IconCss="e-icons e-check" OnClick="ProcessPayment"
+                              Disabled="@(_paymentAmount <= 0 || _processing)">
+                        @(_processing ? "Procesando..." : "Aplicar Pago")
+                    </SfButton>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Step 4: Receipt -->
+@if (_receipt is not null)
+{
+    <div style="background:#0a2a0a;border:1px solid #27ae60;padding:16px;border-radius:8px;margin-top:16px;">
+        <h4 style="color:#27ae60;margin:0 0 12px;">Pago Aplicado Exitosamente</h4>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:500px;">
+            <span style="color:#888;">Recibo No.:</span><span>@_receipt.DocumentNumber</span>
+            <span style="color:#888;">Capital:</span><span>@_receipt.PaidCapital.ToString("N0")</span>
+            <span style="color:#888;">Interes:</span><span>@_receipt.PaidInterest.ToString("N0")</span>
+            <span style="color:#888;">Mora:</span><span>@_receipt.PaidDefault.ToString("N0")</span>
+            <span style="color:#888;">Total Pagado:</span><span style="font-weight:bold;">@((_receipt.PaidCapital + _receipt.PaidInterest + _receipt.PaidDefault).ToString("N0"))</span>
+            <span style="color:#888;">Cuotas Cubiertas:</span><span>@_receipt.InstallmentsCovered</span>
+            <span style="color:#888;">Sobrante:</span><span>@_receipt.Remaining.ToString("N0")</span>
+            @if (_receipt.IsFullyPaid)
+            {
+                <span style="grid-column:span 2;color:#27ae60;font-weight:bold;font-size:16px;">CREDITO CANCELADO TOTALMENTE</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string _searchTerm = "";
+    private List<PersonResult> _searchResults = [];
+    private PersonResult? _selectedPerson;
+    private List<PortfolioOption> _portfolios = [];
+    private PortfolioOption? _selectedPortfolio;
+    private List<InstallmentOption> _installments = [];
+    private decimal _totalPending;
+
+    // Payment form
+    private decimal _paymentAmount;
+    private DateTime _paymentDate = DateTime.Today;
+    private string _paymentMethod = "EF";
+    private string _reference = "";
+    private bool _processing;
+    private PaymentResult? _receipt;
+
+    private List<PayMethodItem> _payMethods =
+    [
+        new("EF", "Efectivo"),
+        new("CH", "Cheque"),
+        new("TR", "Transferencia"),
+        new("TA", "Tarjeta")
+    ];
+
+    protected override void OnInitialized()
+    {
+        // Check if portfolio was passed via query string
+        var uri = new Uri(Nav.Uri);
+        var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var portfolioParam = queryParams["portfolio"];
+        if (!string.IsNullOrEmpty(portfolioParam) && Guid.TryParse(portfolioParam, out _))
+        {
+            // Will be loaded after person search
+        }
+    }
+
+    private async Task SearchPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm)) return;
+        _receipt = null;
+        try
+        {
+            _searchResults = await Http.GetFromJsonAsync<List<PersonResult>>(
+                $"api/core/people/search?q={Uri.EscapeDataString(_searchTerm)}") ?? [];
+        }
+        catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
+    }
+
+    private async Task SelectPerson(PersonResult person)
+    {
+        _selectedPerson = person;
+        _searchResults = [];
+        _selectedPortfolio = null;
+        _installments = [];
+        _receipt = null;
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PagedResponse<PortfolioOption>>(
+                $"api/lending/portfolios?PersonPublicId={person.PublicId}&Status=A&PageSize=50");
+            _portfolios = response?.Items ?? [];
+        }
+        catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
+    }
+
+    private async Task OnPortfolioSelected(RowSelectEventArgs<PortfolioOption> args)
+    {
+        _selectedPortfolio = args.Data;
+        _receipt = null;
+        if (_selectedPortfolio is null) return;
+        await LoadInstallments(_selectedPortfolio.PublicId);
+    }
+
+    private async Task LoadInstallments(Guid portfolioId)
+    {
+        try
+        {
+            _installments = await Http.GetFromJsonAsync<List<InstallmentOption>>(
+                $"api/lending/portfolios/{portfolioId}/installments") ?? [];
+
+            _installments = _installments
+                .Where(i => i.BalanceCapital > 0 || i.BalanceInterest > 0 || i.DefaultInterest > 0)
+                .ToList();
+
+            _totalPending = _installments.Sum(i => i.BalanceCapital + i.BalanceInterest + i.DefaultInterest);
+            _paymentAmount = _selectedPortfolio?.InstallmentAmount ?? 0;
+        }
+        catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
+    }
+
+    private async Task ProcessPayment()
+    {
+        if (_selectedPortfolio is null || _paymentAmount <= 0) return;
+        _processing = true;
+        try
+        {
+            var payload = new
+            {
+                PortfolioPublicId = _selectedPortfolio.PublicId,
+                Amount = _paymentAmount,
+                PaymentDate = DateOnly.FromDateTime(_paymentDate),
+                PaymentMethod = _paymentMethod,
+                Reference = string.IsNullOrEmpty(_reference) ? (string?)null : _reference
+            };
+
+            var response = await Http.PostAsJsonAsync("api/lending/payments", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                _receipt = await response.Content.ReadFromJsonAsync<PaymentResult>();
+                await Notification.SuccessAsync("Pago aplicado exitosamente.");
+
+                // Refresh installments
+                if (_selectedPortfolio is not null)
+                {
+                    await LoadInstallments(_selectedPortfolio.PublicId);
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
+        finally { _processing = false; }
+    }
+
+    // --- Types ---
+    record PersonResult(Guid PublicId, string IdentificationNumber, string FullName, bool IsAssociate, bool IsEmployee, string? CityName, string? Status);
+    record PortfolioOption(Guid PublicId, long PortfolioNumber, string PersonName, string IdentificationNumber,
+        string CreditLineName, DateOnly DisbursementDate, decimal CurrentBalance, decimal ApprovedAmount,
+        int PaidInstallments, decimal PendingInstallmentCount, int DaysOverdue, string Category,
+        decimal InterestRate, decimal InstallmentAmount, DateOnly? MaturityDate, string StatusText);
+    record InstallmentOption(Guid PublicId, int Period, DateOnly? ProcessDate, decimal AccruedCapital,
+        decimal AccruedInterest, decimal TotalAmount, decimal PaidCapital, decimal PaidInterest,
+        decimal BalanceCapital, decimal BalanceInterest, decimal DefaultInterest, string Status)
+    {
+        public decimal TotalPending => BalanceCapital + BalanceInterest + DefaultInterest;
+    }
+    record PayMethodItem(string Value, string Text);
+    record PaymentResult(Guid TransactionPublicId, long DocumentNumber, decimal PaidCapital,
+        decimal PaidInterest, decimal PaidDefault, decimal Remaining, int InstallmentsCovered, bool IsFullyPaid);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

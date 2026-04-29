@@ -1,0 +1,171 @@
+@page "/contabilidad/balance-prueba"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Balance de Prueba - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Balance de Prueba</h3>
+</div>
+
+<!-- Period Selector -->
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+    <div>
+        <label>Ano</label>
+        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+    </div>
+    <div>
+        <label>Mes</label>
+        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Consultar</SfButton>
+    @if (_data is not null && _data.Count > 0)
+    {
+        <SfButton CssClass="e-success e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
+    }
+</div>
+
+@if (_loading)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#00bcd4" />
+}
+
+@if (_data is not null && _data.Count > 0)
+{
+    <!-- Summary -->
+    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="info-card">
+            <span class="label">Total Debitos</span>
+            <span>@_data.Sum(d => d.Debit).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Total Creditos</span>
+            <span>@_data.Sum(d => d.Credit).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Cuentas</span>
+            <span>@_data.Count</span>
+        </div>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="TrialBalanceLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
+            AllowFiltering="true" AllowExcelExport="true" AllowGrouping="true">
+        <GridPageSettings PageSize="50" />
+        <GridColumns>
+            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
+            <GridColumn Field="AccountName" HeaderText="Nombre" Width="300" />
+            <GridColumn Field="Level" HeaderText="Nivel" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="Nature" HeaderText="Nat." Width="60" TextAlign="TextAlign.Center" />
+            <GridColumn Field="PreviousBalance" HeaderText="Saldo Anterior" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Debit" HeaderText="Debitos" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Credit" HeaderText="Creditos" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="FinalBalance" HeaderText="Saldo Final" Width="160" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{
+                        var line = context as TrialBalanceLine;
+                        var color = line?.FinalBalance >= 0 ? "" : "color:#f44336;";
+                    }
+                    <span style="@color">@line?.FinalBalance.ToString("N2")</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="PreviousBalance" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="FinalBalance" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+}
+else if (!_loading && _data is not null)
+{
+    <p style="color:#999;">No se encontraron movimientos para el periodo seleccionado.</p>
+}
+
+@code {
+    private SfGrid<TrialBalanceLine>? _grid;
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private bool _loading;
+    private List<TrialBalanceLine>? _data;
+
+    private static readonly List<MonthOption> _months =
+    [
+        new(1, "01 - Enero"), new(2, "02 - Febrero"), new(3, "03 - Marzo"),
+        new(4, "04 - Abril"), new(5, "05 - Mayo"), new(6, "06 - Junio"),
+        new(7, "07 - Julio"), new(8, "08 - Agosto"), new(9, "09 - Septiembre"),
+        new(10, "10 - Octubre"), new(11, "11 - Noviembre"), new(12, "12 - Diciembre")
+    ];
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _data = await Http.GetFromJsonAsync<List<TrialBalanceLine>>(
+                $"/api/accounting/trial-balance/{_year}/{_month}");
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error al cargar balance de prueba.");
+        }
+        _loading = false;
+    }
+
+    private async Task ExportExcel()
+    {
+        if (_grid is not null)
+        {
+            var props = new ExcelExportProperties
+            {
+                FileName = $"BalancePrueba_{_year}_{_month:D2}.xlsx",
+                Header = new ExcelHeader
+                {
+                    HeaderRows = 1,
+                    Rows = [new ExcelRow
+                    {
+                        Cells = [new ExcelCell { ColSpan = 8, Value = $"Balance de Prueba - Periodo {_year}-{_month:D2}",
+                            Style = new ExcelStyle { Bold = true, FontSize = 14 } }]
+                    }]
+                }
+            };
+            await _grid.ExportToExcelAsync(props);
+        }
+    }
+
+    private class TrialBalanceLine
+    {
+        public string AccountCode { get; set; } = "";
+        public string AccountName { get; set; } = "";
+        public byte Level { get; set; }
+        public string Nature { get; set; } = "";
+        public decimal PreviousBalance { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal FinalBalance { get; set; }
+    }
+
+    private record MonthOption(int Value, string Name);
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

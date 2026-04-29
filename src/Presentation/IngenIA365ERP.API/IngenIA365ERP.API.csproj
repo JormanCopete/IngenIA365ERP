@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Carter" Version="8.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.*" />
+    <PackageReference Include="AspNetCoreRateLimit" Version="5.*" />
+    <PackageReference Include="QuestPDF" Version="2024.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Identity\IngenIA365ERP.Identity.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Caching\IngenIA365ERP.Caching.csproj" />
+  </ItemGroup>
+</Project>

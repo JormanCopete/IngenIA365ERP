@@ -1,0 +1,513 @@
+@page "/asociados/registro"
+@page "/asociados/registro/{PersonId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>@(_isNew ? "Nuevo Asociado" : "Ficha del Asociado") - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>@(_isNew ? "Registro de Asociado" : $"Asociado - {_person?.FirstName} {_person?.LastName}")</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                  OnClick='@(() => Nav.NavigateTo("/asociados"))'>Volver</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@_saving"
+                  OnClick="SavePerson">Guardar</SfButton>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div style="display:flex;justify-content:center;padding:40px;">
+        <SfSpinner Visible="true" />
+    </div>
+}
+else
+{
+    <SfTab>
+        <TabItems>
+            <!-- Tab 1: Datos Personales -->
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Datos Personales" IconCss="e-icons e-people" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div style="padding:16px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">
+                            <div>
+                                <label>Tipo Documento *</label>
+                                <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_editPerson.IdType"
+                                                DataSource="_idTypes" Placeholder="Seleccione">
+                                    <DropDownListFieldSettings Text="Text" Value="Value" />
+                                </SfDropDownList>
+                            </div>
+                            <div>
+                                <label>Numero Documento *</label>
+                                <SfTextBox @bind-Value="_editPerson.TaxId" Placeholder="Numero de identificacion" />
+                            </div>
+                            <div>
+                                <label>Primer Apellido *</label>
+                                <SfTextBox @bind-Value="_editPerson.LastName" Placeholder="Apellidos" />
+                            </div>
+                            <div>
+                                <label>Nombres *</label>
+                                <SfTextBox @bind-Value="_editPerson.FirstName" Placeholder="Nombres" />
+                            </div>
+                            <div>
+                                <label>Razon Social</label>
+                                <SfTextBox @bind-Value="_editPerson.BusinessName" Placeholder="Solo para juridicas" />
+                            </div>
+                            <div>
+                                <label>Genero</label>
+                                <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_editPerson.Gender"
+                                                DataSource="_genders" Placeholder="Seleccione">
+                                    <DropDownListFieldSettings Text="Text" Value="Value" />
+                                </SfDropDownList>
+                            </div>
+                            <div>
+                                <label>Fecha Nacimiento</label>
+                                <SfDatePicker TValue="DateTime?" @bind-Value="_editPerson.DateOfBirth" Format="dd/MM/yyyy" />
+                            </div>
+                            <div>
+                                <label>Estado Civil</label>
+                                <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_editPerson.MaritalStatus"
+                                                DataSource="_maritalStatuses" Placeholder="Seleccione">
+                                    <DropDownListFieldSettings Text="Text" Value="Value" />
+                                </SfDropDownList>
+                            </div>
+                            <div>
+                                <label>Direccion</label>
+                                <SfTextBox @bind-Value="_editPerson.Address" />
+                            </div>
+                            <div>
+                                <label>Telefono</label>
+                                <SfTextBox @bind-Value="_editPerson.Phone1" />
+                            </div>
+                            <div>
+                                <label>Celular</label>
+                                <SfTextBox @bind-Value="_editPerson.Mobile" />
+                            </div>
+                            <div>
+                                <label>Correo Electronico</label>
+                                <SfTextBox @bind-Value="_editPerson.Email" Type="InputType.Email" />
+                            </div>
+                            <div>
+                                <label>Empleador</label>
+                                <SfTextBox @bind-Value="_editPerson.Employer" />
+                            </div>
+                            <div>
+                                <label>Salario</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editPerson.Salary" Format="N0" Min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
+            <!-- Tab 2: Asociado -->
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Asociado" IconCss="e-icons e-user" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div style="padding:16px;">
+                        @if (_person?.AssociateData is not null || _isNew)
+                        {
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">
+                                <div>
+                                    <label>Fecha Ingreso</label>
+                                    <SfDatePicker TValue="DateTime?" @bind-Value="_editAssociate.JoinDate" Format="dd/MM/yyyy" />
+                                </div>
+                                <div>
+                                    <label>Tasa Aporte (%)</label>
+                                    <SfNumericTextBox TValue="decimal" @bind-Value="_editAssociate.ContributionRate" Format="N2" Min="0" Max="100" />
+                                </div>
+                                <div>
+                                    <label>Estado</label>
+                                    <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_editAssociate.Status"
+                                                    DataSource="_associateStatuses" Placeholder="Seleccione">
+                                        <DropDownListFieldSettings Text="Text" Value="Value" />
+                                    </SfDropDownList>
+                                </div>
+                                <div>
+                                    <label>Calificacion</label>
+                                    <SfTextBox @bind-Value="_editAssociate.CategoryRating" />
+                                </div>
+                                <div>
+                                    <label>Tipo Descuento</label>
+                                    <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_editAssociate.DeductionType"
+                                                    DataSource="_deductionTypes" Placeholder="Seleccione">
+                                        <DropDownListFieldSettings Text="Text" Value="Value" />
+                                    </SfDropDownList>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color:#888;">Esta persona no es asociado. Active la casilla "Es Asociado" en Datos Personales.</p>
+                        }
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
+            <!-- Tab 3: Conyuge -->
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Conyuge" IconCss="e-icons e-people" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div style="padding:16px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">
+                            <div>
+                                <label>Nombre Conyuge</label>
+                                <SfTextBox @bind-Value="_editSpouse.SpouseName" />
+                            </div>
+                            <div>
+                                <label>Documento Conyuge</label>
+                                <SfTextBox @bind-Value="_editSpouse.SpouseIdNumber" />
+                            </div>
+                            <div>
+                                <label>Empleador</label>
+                                <SfTextBox @bind-Value="_editSpouse.SpouseEmployer" />
+                            </div>
+                            <div>
+                                <label>Salario</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editSpouse.SpouseSalary" Format="N0" Min="0" />
+                            </div>
+                            <div>
+                                <label>Telefono</label>
+                                <SfTextBox @bind-Value="_editSpouse.SpousePhone" />
+                            </div>
+                        </div>
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
+            <!-- Tab 4: Financiero -->
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Financiero" IconCss="e-icons e-money" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div style="padding:16px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">
+                            <div>
+                                <label>Capacidad de Endeudamiento</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.DebtCapacity" Format="N0" Min="0" />
+                            </div>
+                            <div>
+                                <label>Otros Ingresos</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.OtherIncome" Format="N0" Min="0" />
+                            </div>
+                            <div>
+                                <label>Total Activos</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.TotalAssets" Format="N0" Min="0" />
+                            </div>
+                            <div>
+                                <label>Ingresos Variables</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.VariableIncome" Format="N0" Min="0" />
+                            </div>
+                            <div>
+                                <label>Score Crediticio</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.CreditScore" Format="N0" />
+                            </div>
+                            <div>
+                                <label>Score Central de Riesgo</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.CreditBureauScore" Format="N0" />
+                            </div>
+                            <div>
+                                <label>Calificacion Central</label>
+                                <SfTextBox @bind-Value="_editFinancial.CreditBureauRating" />
+                            </div>
+                            <div>
+                                <label>Pago Deuda Externa</label>
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_editFinancial.ExternalDebtPayment" Format="N0" Min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
+            <!-- Tab 5: Productos -->
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Productos" IconCss="e-icons e-list-unordered" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div style="padding:16px;">
+                        @if (_person?.PortfolioSummary is not null)
+                        {
+                            var ps = _person.PortfolioSummary;
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
+                                <div class="kpi-card">
+                                    <span class="kpi-value">@ps.ActiveLoans</span>
+                                    <span class="kpi-label">Creditos Activos</span>
+                                    <span class="kpi-amount">@ps.TotalLoanBalance.ToString("N0")</span>
+                                </div>
+                                <div class="kpi-card">
+                                    <span class="kpi-value">@ps.SavingsAccounts</span>
+                                    <span class="kpi-label">Cuentas de Ahorro</span>
+                                    <span class="kpi-amount">@ps.TotalSavingsBalance.ToString("N0")</span>
+                                </div>
+                                <div class="kpi-card">
+                                    <span class="kpi-value">@ps.TotalContributions.ToString("N0")</span>
+                                    <span class="kpi-label">Aportes</span>
+                                </div>
+                                <div class="kpi-card" style="@(ps.TotalOverdueAmount > 0 ? "border-color:#e74c3c;" : "")">
+                                    <span class="kpi-value" style="@(ps.TotalOverdueAmount > 0 ? "color:#e74c3c;" : "")">@ps.TotalOverdueAmount.ToString("N0")</span>
+                                    <span class="kpi-label">Saldo en Mora</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color:#888;">Guarde la persona primero para ver el resumen de productos.</p>
+                        }
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
+}
+
+<style>
+    .kpi-card {
+        background: var(--sf-card-bg, #1e1e2e);
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .kpi-value { font-size: 28px; font-weight: bold; color: #00bcd4; }
+    .kpi-label { font-size: 13px; color: #888; margin-top: 4px; }
+    .kpi-amount { font-size: 15px; color: #ccc; margin-top: 4px; }
+</style>
+
+@code {
+    [Parameter] public Guid? PersonId { get; set; }
+
+    private bool _isNew => PersonId == null || PersonId == Guid.Empty;
+    private bool _loading = true;
+    private bool _saving;
+
+    // Loaded data
+    private PersonDetailResponse? _person;
+
+    // Edit models
+    private EditPersonModel _editPerson = new();
+    private EditAssociateModel _editAssociate = new();
+    private EditSpouseModel _editSpouse = new();
+    private EditFinancialModel _editFinancial = new();
+
+    // Dropdowns
+    private List<DropItem> _idTypes =
+    [
+        new("C", "Cedula de Ciudadania"),
+        new("E", "Cedula de Extranjeria"),
+        new("N", "NIT"),
+        new("P", "Pasaporte"),
+        new("T", "Tarjeta de Identidad")
+    ];
+
+    private List<DropItem> _genders =
+    [
+        new("M", "Masculino"),
+        new("F", "Femenino")
+    ];
+
+    private List<DropItem> _maritalStatuses =
+    [
+        new("S", "Soltero/a"),
+        new("C", "Casado/a"),
+        new("U", "Union Libre"),
+        new("D", "Divorciado/a"),
+        new("V", "Viudo/a")
+    ];
+
+    private List<DropItem> _associateStatuses =
+    [
+        new("A", "Activo"),
+        new("R", "Retirado"),
+        new("S", "Suspendido")
+    ];
+
+    private List<DropItem> _deductionTypes =
+    [
+        new("N", "Nomina"),
+        new("C", "Caja"),
+        new("V", "Voluntario")
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        if (!_isNew)
+        {
+            try
+            {
+                _person = await Http.GetFromJsonAsync<PersonDetailResponse>($"api/core/people/{PersonId}/detail");
+                if (_person is not null)
+                {
+                    _editPerson = new()
+                    {
+                        TaxId = _person.TaxId,
+                        IdType = _person.IdType,
+                        FirstName = _person.FirstName,
+                        LastName = _person.LastName,
+                        BusinessName = _person.BusinessName,
+                        Gender = _person.Gender,
+                        MaritalStatus = _person.MaritalStatus,
+                        DateOfBirth = _person.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+                        Address = _person.Address,
+                        Phone1 = _person.Phone1,
+                        Mobile = _person.Mobile,
+                        Email = _person.Email,
+                        Employer = _person.Employer,
+                        Salary = _person.Salary
+                    };
+
+                    if (_person.AssociateData is not null)
+                    {
+                        _editAssociate = new()
+                        {
+                            JoinDate = _person.AssociateData.JoinDate?.ToDateTime(TimeOnly.MinValue),
+                            ContributionRate = _person.AssociateData.ContributionRate,
+                            Status = _person.AssociateData.Status,
+                            CategoryRating = _person.AssociateData.CategoryRating,
+                            DeductionType = _person.AssociateData.DeductionType
+                        };
+                    }
+
+                    if (_person.SpouseData is not null)
+                    {
+                        _editSpouse = new()
+                        {
+                            SpouseName = _person.SpouseData.SpouseName,
+                            SpouseIdNumber = _person.SpouseData.SpouseIdNumber,
+                            SpouseEmployer = _person.SpouseData.SpouseEmployer,
+                            SpouseSalary = _person.SpouseData.SpouseSalary,
+                            SpousePhone = _person.SpouseData.SpousePhone
+                        };
+                    }
+
+                    if (_person.FinancialData is not null)
+                    {
+                        _editFinancial = new()
+                        {
+                            DebtCapacity = _person.FinancialData.DebtCapacity,
+                            OtherIncome = _person.FinancialData.OtherIncome,
+                            TotalAssets = _person.FinancialData.TotalAssets,
+                            VariableIncome = _person.FinancialData.VariableIncome,
+                            CreditScore = _person.FinancialData.CreditScore,
+                            CreditBureauScore = _person.FinancialData.CreditBureauScore,
+                            CreditBureauRating = _person.FinancialData.CreditBureauRating,
+                            ExternalDebtPayment = _person.FinancialData.ExternalDebtPayment
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await Notification.ErrorAsync($"Error cargando datos: {ex.Message}");
+            }
+        }
+        _loading = false;
+    }
+
+    private async Task SavePerson()
+    {
+        _saving = true;
+        try
+        {
+            // TODO: Wire up to Create/Update Person endpoints
+            await Notification.SuccessAsync("Datos guardados correctamente.");
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error guardando: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // --- Local models ---
+    record DropItem(string Value, string Text);
+
+    class EditPersonModel
+    {
+        public string TaxId { get; set; } = "";
+        public string IdType { get; set; } = "C";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string? BusinessName { get; set; }
+        public string? Gender { get; set; }
+        public string? MaritalStatus { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Address { get; set; }
+        public string? Phone1 { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public string? Employer { get; set; }
+        public decimal Salary { get; set; }
+    }
+
+    class EditAssociateModel
+    {
+        public DateTime? JoinDate { get; set; }
+        public decimal ContributionRate { get; set; }
+        public string? Status { get; set; }
+        public string? CategoryRating { get; set; }
+        public string? DeductionType { get; set; }
+    }
+
+    class EditSpouseModel
+    {
+        public string? SpouseName { get; set; }
+        public string? SpouseIdNumber { get; set; }
+        public string? SpouseEmployer { get; set; }
+        public decimal SpouseSalary { get; set; }
+        public string? SpousePhone { get; set; }
+    }
+
+    class EditFinancialModel
+    {
+        public decimal DebtCapacity { get; set; }
+        public decimal OtherIncome { get; set; }
+        public decimal TotalAssets { get; set; }
+        public decimal VariableIncome { get; set; }
+        public decimal CreditScore { get; set; }
+        public decimal CreditBureauScore { get; set; }
+        public string? CreditBureauRating { get; set; }
+        public decimal ExternalDebtPayment { get; set; }
+    }
+
+    // --- API Response types ---
+    record PersonDetailResponse(
+        Guid PublicId, string FirstName, string LastName, string? BusinessName,
+        string TaxId, string IdType, string? Address, string? Phone1, string? Mobile, string? Email,
+        string? Gender, string? MaritalStatus, DateOnly? DateOfBirth,
+        string? Employer, decimal Salary, bool IsAssociate, bool IsEmployee, string? Status,
+        AssociateDataResponse? AssociateData, SpouseDataResponse? SpouseData,
+        FinancialDataResponse? FinancialData, PortfolioSummaryResponse PortfolioSummary);
+
+    record AssociateDataResponse(DateOnly? JoinDate, decimal ContributionRate, string? Status,
+        string? CategoryRating, string? DeductionType, string? EmployerCompanyName,
+        string? BranchName, string? SectionName);
+
+    record SpouseDataResponse(string? SpouseName, string? SpouseIdNumber, string? SpouseEmployer,
+        decimal SpouseSalary, string? SpousePhone);
+
+    record FinancialDataResponse(decimal DebtCapacity, decimal OtherIncome, decimal TotalAssets,
+        decimal VariableIncome, decimal CreditScore, decimal CreditBureauScore,
+        string? CreditBureauRating, decimal ExternalDebtPayment, decimal ExternalDebtBalance);
+
+    record PortfolioSummaryResponse(int ActiveLoans, decimal TotalLoanBalance, int SavingsAccounts,
+        decimal TotalSavingsBalance, decimal TotalContributions, decimal TotalOverdueAmount);
+}

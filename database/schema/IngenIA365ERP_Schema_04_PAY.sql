@@ -1,0 +1,950 @@
+-- ============================================================
+-- IngenIA365ERP — Database Schema v1.0
+-- Module: PAY_ (Payroll/Nomina) — 27 tables
+-- ============================================================
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+
+-- 182. PAY_Employees (orig: nom_empleados)
+CREATE TABLE [dbo].[PAY_Employees] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PersonId                    INT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    CostCenterId                NVARCHAR(8) NOT NULL,
+    IdentificationNumber        NVARCHAR(20) NOT NULL,
+    LastName                    NVARCHAR(30) NOT NULL,
+    FirstName                   NVARCHAR(30) NOT NULL,
+    IssuedAt                    NVARCHAR(30) NOT NULL,
+    EmployeeClass               INT NOT NULL,
+    Gender                      INT NOT NULL,
+    MilitaryBooklet             NVARCHAR(14) NOT NULL,
+    MilitaryDistrict            NVARCHAR(4) NOT NULL,
+    DriverLicense               NVARCHAR(14) NOT NULL,
+    LicenseCategory             NVARCHAR(1) NOT NULL,
+    Address                     NVARCHAR(60) NOT NULL,
+    CityId                      INT NOT NULL,
+    Phone                       NVARCHAR(14) NOT NULL,
+    Mobile                      NVARCHAR(14) NOT NULL,
+    Email                       NVARCHAR(60) NOT NULL,
+    BloodType                   NVARCHAR(2) NOT NULL,
+    RhFactor                    NVARCHAR(2) NOT NULL,
+    BankId                      NVARCHAR(4) NOT NULL,
+    AccountType                 INT NOT NULL,
+    BankAccountNumber           NVARCHAR(25) NOT NULL,
+    AcademicLevel               INT NOT NULL,
+    PayrollClass                INT NOT NULL,
+    PaymentMethod               INT NOT NULL,
+    AreaCode                    NVARCHAR(4) NOT NULL,
+    SectionId                   NVARCHAR(4) NOT NULL,
+    PositionId                  INT NOT NULL,
+    Salary                      DECIMAL(18,2) NOT NULL,
+    SalaryType                  INT NOT NULL,
+    EffectiveDate               DATETIME2 NULL,
+    TransportSubsidyClass       INT NOT NULL,
+    ContractType                INT NOT NULL,
+    ContractEndDate             DATETIME2 NOT NULL,
+    FirstPayCycle               INT NOT NULL,
+    WithholdingTaxRate          DECIMAL(7,4) NULL,
+    ContributionCycle           INT NOT NULL,
+    TerminationDate             DATETIME2 NOT NULL,
+    TerminationCause            NVARCHAR(4) NOT NULL,
+    RehireDate                  DATETIME2 NOT NULL,
+    BirthDate                   DATETIME2 NOT NULL,
+    PantsSize                   NVARCHAR(4) NOT NULL,
+    ShirtSize                   NVARCHAR(4) NOT NULL,
+    ShoeSize                    NVARCHAR(4) NOT NULL,
+    HelmetSize                  NVARCHAR(4) NOT NULL,
+    RepresentationExpense       DECIMAL(18,2) NOT NULL,
+    TechnicalBonus              DECIMAL(18,2) NOT NULL,
+    OtherBonus                  DECIMAL(18,2) NOT NULL,
+    HealthInsuranceId           INT NOT NULL,
+    PensionFundId               INT NOT NULL,
+    WorkRiskId                  INT NOT NULL,
+    SeveranceFundId             DECIMAL(6,0) NOT NULL,
+    SenaId                      INT NOT NULL,
+    IcbfId                      INT NOT NULL,
+    FamilySubsidyId             INT NOT NULL,
+    SeveranceCauseDate          DATETIME2 NOT NULL,
+    BonusDays                   DECIMAL(10,0) NOT NULL,
+    VacationDays                DECIMAL(10,0) NOT NULL,
+    IndemnityDays               DECIMAL(10,0) NOT NULL,
+    SeveranceAvgDays            DECIMAL(10,0) NOT NULL,
+    BonusAvgDays                DECIMAL(10,0) NOT NULL,
+    IndemnityAvgDays            DECIMAL(10,0) NOT NULL,
+    HolidayDays                 INT NOT NULL,
+    PensionFundMember           NVARCHAR(1) NOT NULL,
+    JoinDate                    DATETIME2 NOT NULL,
+    LicenseExpiryDate           DATETIME2 NOT NULL,
+    VacationAvgDays             DECIMAL(10,0) NOT NULL,
+    VacationCauseDate           DATETIME2 NOT NULL,
+    BonusCauseDate              DATETIME2 NOT NULL,
+    Status                      INT NOT NULL,
+    OverallSize                 NVARCHAR(4) NULL,
+    EmployeeType                INT NOT NULL,
+    WorkRiskRateId              INT NOT NULL,
+    IsLiquidated                NVARCHAR(1) NOT NULL,
+    LiquidationDate             DATETIME2 NULL,
+    SpecialRegime               NVARCHAR(1) NOT NULL,
+    SeveranceDaysCalc           DECIMAL(10,0) NOT NULL,
+    IndemnityDaysCalc           DECIMAL(10,0) NOT NULL,
+    ExtraBonusFlag              NVARCHAR(1) NOT NULL,
+    DeductibleWithholding       DECIMAL(17,4) NOT NULL,
+    WithholdingCycle            INT NOT NULL,
+    WithholdingAvgType          INT NOT NULL,
+    -- Legacy identifiers
+    LegacyIdNomina              INT NULL,
+    LegacyIdEmpleado            BIGINT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_Employees] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_Employees_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 183. PAY_PayrollConcepts (orig: nom_cptos)
+CREATE TABLE [dbo].[PAY_PayrollConcepts] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    ConceptCode                 INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    ConceptClass                INT NOT NULL,
+    Nature                      INT NOT NULL,
+    Value                       DECIMAL(18,2) NOT NULL,
+    Factor                      DECIMAL(12,2) NOT NULL,
+    Base                        INT NOT NULL,
+    AffectsSalary               INT NOT NULL,
+    DaysComputed                NVARCHAR(2) NOT NULL,
+    TimesExtended               INT NOT NULL,
+    ValueExtended               INT NOT NULL,
+    LiquidationBase             INT NOT NULL,
+    TopSalary                   DECIMAL(18,2) NOT NULL,
+    CertificateLine             NVARCHAR(4) NOT NULL,
+    CertificateColumn           NVARCHAR(4) NOT NULL,
+    AffectsBenefits             INT NOT NULL,
+    AffectsWithholding          INT NOT NULL,
+    IsBenefit                   INT NOT NULL,
+    MaintainBalance             INT NOT NULL,
+    Priority                    NVARCHAR(2) NOT NULL,
+    ProvisionRate               DECIMAL(6,3) NOT NULL,
+    ProvisionBase               INT NOT NULL,
+    TaxId                       NVARCHAR(14) NOT NULL,
+    IntegralSalary              INT NOT NULL,
+    SingleUnit                  INT NOT NULL,
+    AdminBase                   INT NOT NULL,
+    RelatedConceptId            INT NOT NULL,
+    PaymentConceptId            INT NOT NULL,
+    VatRate                     DECIMAL(6,3) NOT NULL,
+    EquivalentCode              NVARCHAR(6) NOT NULL,
+    MinorRate                   DECIMAL(4,2) NOT NULL,
+    MajorRate                   DECIMAL(4,2) NOT NULL,
+    AffectsSeverance             INT NOT NULL,
+    AffectsBonus                INT NOT NULL,
+    AffectsVacation             INT NOT NULL,
+    AffectsIndemnity            INT NOT NULL,
+    AdminId                     NVARCHAR(6) NOT NULL,
+    IsAutomatic                 NVARCHAR(1) NOT NULL,
+    ConceptSubClass             INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PayrollConcepts] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PayrollConcepts_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PayrollConcepts_ConceptCode] UNIQUE (ConceptCode)
+);
+GO
+
+-- 184. PAY_PayrollPlanLiquidations (orig: nom_liqplan)
+CREATE TABLE [dbo].[PAY_PayrollPlanLiquidations] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayPeriodId                 INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   DECIMAL(6,0) NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    Nature                      INT NOT NULL,
+    Days                        INT NOT NULL,
+    Time                        DECIMAL(10,0) NOT NULL,
+    Amount                      DECIMAL(18,2) NOT NULL,
+    PaymentMethod               DECIMAL(1,0) NOT NULL,
+    CostCenterCode              NVARCHAR(8) NOT NULL,
+    UserName                    NVARCHAR(14) NOT NULL,
+    SystemDate                  DATETIME2 NOT NULL,
+    RecordType                  NVARCHAR(2) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PayrollPlanLiquidations] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PayrollPlanLiquidations_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PayrollPlanLiquidations_Biz] UNIQUE (PayPeriodId, PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
+);
+GO
+
+-- 185. PAY_PayrollTransactions (orig: nom_movtos)
+CREATE TABLE [dbo].[PAY_PayrollTransactions] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayPeriodId                 INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   INT NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    Time                        DECIMAL(10,0) NULL,
+    Amount                      DECIMAL(18,2) NULL,
+    PaymentMethod               DECIMAL(1,0) NULL,
+    UserName                    NVARCHAR(50) NULL,
+    TransactionDate             DATETIME2 NULL,
+    Description                 NVARCHAR(200) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PayrollTransactions] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PayrollTransactions_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PayrollTransactions_Biz] UNIQUE (PayPeriodId, PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
+);
+GO
+
+-- 186. PAY_PayrollEntries (orig: nom_novedad)
+CREATE TABLE [dbo].[PAY_PayrollEntries] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Cycle                       INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    EntityCode                  INT NOT NULL,
+    EntryType                   DECIMAL(3,0) NOT NULL,
+    StartDate                   DATETIME2 NOT NULL,
+    AuthorizationNumber         DECIMAL(12,0) NOT NULL,
+    IncapacityAmount            DECIMAL(18,2) NOT NULL,
+    UpcAmount                   DECIMAL(18,2) NOT NULL,
+    Days                        INT NOT NULL,
+    NewEntity                   NVARCHAR(10) NOT NULL,
+    UserName                    NVARCHAR(20) NOT NULL,
+    ProcessDate                 DATETIME2 NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PayrollEntries] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PayrollEntries_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PayrollEntries_Biz] UNIQUE (Cycle, PayrollCompanyId, EmployeeId)
+);
+GO
+
+-- 187. PAY_SalaryChanges (orig: nom_novsalario)
+CREATE TABLE [dbo].[PAY_SalaryChanges] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    EffectiveDate               DATETIME2 NOT NULL,
+    NewSalary                   DECIMAL(18,2) NOT NULL,
+    UserName                    NVARCHAR(20) NULL,
+    EntryDate                   DATETIME2 NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_SalaryChanges] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_SalaryChanges_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 188. PAY_PayPeriods (orig: nom_perpagos)
+CREATE TABLE [dbo].[PAY_PayPeriods] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PlanId                      INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    Description                 NVARCHAR(100) NULL,
+    PayDate                     NVARCHAR(40) NULL,
+    LiquidationCompanyId        NVARCHAR(4) NULL,
+    CycleMonth                  INT NULL,
+    CycleHours                  INT NULL,
+    StartDate                   DATETIME2 NOT NULL,
+    EndDate                     DATETIME2 NOT NULL,
+    Periodicity                 INT NULL,
+    AdditionalConcept1          INT NULL,
+    AdditionalConcept2          INT NULL,
+    AdditionalConcept3          INT NULL,
+    AdditionalConcept4          INT NULL,
+    OnlyEntries                 NVARCHAR(1) NULL,
+    NoAutoSalaryLiq             NVARCHAR(1) NULL,
+    NoAbsenceLiq                NVARCHAR(1) NULL,
+    NoDirectDebitLiq            NVARCHAR(1) NULL,
+    Status                      INT NOT NULL,
+    StatusMessage               NVARCHAR(100) NOT NULL,
+    PeriodId                    INT NOT NULL,
+    AdvanceLiquidation          NVARCHAR(1) NOT NULL,
+    AdvanceCrossing             NVARCHAR(1) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PayPeriods] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PayPeriods_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PayPeriods_Biz] UNIQUE (PlanId, PayrollCompanyId)
+);
+GO
+
+-- 189. PAY_Absences (orig: nom_ausentismos)
+CREATE TABLE [dbo].[PAY_Absences] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   INT NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    StartDate                   DATETIME2 NOT NULL,
+    EndDate                     DATETIME2 NOT NULL,
+    VacationCauseStart          DATETIME2 NOT NULL,
+    VacationCauseEnd            DATETIME2 NOT NULL,
+    AbsenceType                 INT NOT NULL,
+    DiagnosisCode               INT NOT NULL,
+    IncapacityClass             INT NOT NULL,
+    IsExtension                 INT NOT NULL,
+    BaseAmount                  DECIMAL(18,2) NOT NULL,
+    SerialNumber                NVARCHAR(20) NOT NULL,
+    Hours                       INT NOT NULL,
+    ExtensionConceptId          INT NOT NULL,
+    ExtensionSequence           DECIMAL(12,0) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_Absences] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_Absences_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_Absences_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
+);
+GO
+
+-- 190. PAY_DirectDebits (orig: nom_libranzas)
+CREATE TABLE [dbo].[PAY_DirectDebits] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   INT NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    VoucherCode                 NVARCHAR(10) NOT NULL,
+    DebitDate                   DATETIME2 NULL,
+    DiscountDate                DATETIME2 NULL,
+    InitialAmount               DECIMAL(18,2) NOT NULL,
+    DiscountCycle               INT NOT NULL,
+    InterestRate                DECIMAL(8,4) NOT NULL,
+    InstallmentAmount           DECIMAL(18,2) NOT NULL,
+    InstallmentType             INT NOT NULL,
+    LiquidationBase             INT NOT NULL,
+    NumberOfInstallments        INT NOT NULL,
+    UserName                    NVARCHAR(20) NOT NULL,
+    SystemDate                  DATETIME2 NOT NULL,
+    EntryDate                   DATETIME2 NOT NULL,
+    EntryUser                   NVARCHAR(20) NOT NULL,
+    Status                      NVARCHAR(2) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_DirectDebits] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_DirectDebits_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_DirectDebits_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
+);
+GO
+
+-- 191. PAY_SeveranceProviders (orig: nom_cesantias)
+CREATE TABLE [dbo].[PAY_SeveranceProviders] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_SeveranceProviders] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_SeveranceProviders_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_SeveranceProviders_Code] UNIQUE (Code)
+);
+GO
+
+-- 192. PAY_SeveranceHistory (orig: nom_antcesantia)
+CREATE TABLE [dbo].[PAY_SeveranceHistory] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    PlanId                      INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    CauseStartDate              DATETIME2 NULL,
+    CauseEndDate                DATETIME2 NULL,
+    CutoffDate                  DATETIME2 NULL,
+    SalaryBase                  DECIMAL(18,5) NULL,
+    DaysWorked                  INT NULL,
+    AdvanceAmount               DECIMAL(18,3) NULL,
+    InterestAmount              DECIMAL(18,3) NULL,
+    Resolution                  NVARCHAR(30) NULL,
+    ResolutionDate              DATETIME2 NULL,
+    Destination                 NVARCHAR(100) NULL,
+    AdvanceConceptId            INT NULL,
+    InterestConceptId           INT NULL,
+    UserName                    NVARCHAR(14) NULL,
+    SystemDate                  DATETIME2 NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_SeveranceHistory] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_SeveranceHistory_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 193. PAY_VacationLiquidations (orig: nom_liqvac)
+CREATE TABLE [dbo].[PAY_VacationLiquidations] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PlanId                      INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   DECIMAL(6,0) NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    Nature                      INT NOT NULL,
+    Days                        INT NOT NULL,
+    Time                        DECIMAL(10,0) NOT NULL,
+    Amount                      DECIMAL(18,2) NOT NULL,
+    CostCenterCode              NVARCHAR(8) NOT NULL,
+    UserName                    NVARCHAR(20) NOT NULL,
+    SystemDate                  DATETIME2 NOT NULL,
+    RecordType                  NVARCHAR(2) NOT NULL,
+    LiquidationDate             DATETIME2 NULL,
+    CauseStartDate              DATETIME2 NULL,
+    CauseEndDate                DATETIME2 NULL,
+    LeaveStartDate              DATETIME2 NULL,
+    LeaveEndDate                DATETIME2 NULL,
+    ReturnDate                  DATETIME2 NULL,
+    IsAccountingPosted          NVARCHAR(1) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_VacationLiquidations] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_VacationLiquidations_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 194. PAY_PreLiquidations (orig: nom_preliq)
+CREATE TABLE [dbo].[PAY_PreLiquidations] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    Sequence                    INT NOT NULL,
+    IdentificationNumber        BIGINT NOT NULL,
+    Value                       DECIMAL(18,2) NOT NULL,
+    BasicSalary                 DECIMAL(18,2) NOT NULL,
+    Ibc                         DECIMAL(18,2) NOT NULL,
+    TotalDays                   INT NOT NULL,
+    PreviousDays                INT NOT NULL,
+    EntryDays                   INT NOT NULL,
+    HealthValue                 DECIMAL(18,2) NOT NULL,
+    PensionValue                DECIMAL(18,2) NOT NULL,
+    WorkRiskValue               DECIMAL(18,2) NOT NULL,
+    SolidarityValue             DECIMAL(18,2) NOT NULL,
+    BranchId                    INT NOT NULL,
+    ClassCode                   NVARCHAR(1) NOT NULL,
+    PensionEntry                NVARCHAR(1) NOT NULL,
+    HealthEntry                 NVARCHAR(1) NOT NULL,
+    WorkRiskEntry               NVARCHAR(1) NOT NULL,
+    HealthEntityId              INT NOT NULL,
+    PensionEntityId             INT NOT NULL,
+    WorkRiskEntityId            INT NOT NULL,
+    MaternityValue              DECIMAL(18,2) NOT NULL,
+    GeneralValue                DECIMAL(18,2) NOT NULL,
+    IsNewHire                   NVARCHAR(1) NOT NULL,
+    IsTermination               NVARCHAR(1) NOT NULL,
+    IsRateChange                NVARCHAR(1) NOT NULL,
+    IsEntityChange              NVARCHAR(1) NOT NULL,
+    IsSuspensionPension         NVARCHAR(1) NOT NULL,
+    IsSuspensionTemp            NVARCHAR(1) NOT NULL,
+    IsUnpaidLeave               NVARCHAR(1) NOT NULL,
+    IsGeneralIncapacity         NVARCHAR(1) NOT NULL,
+    IsMaternityLeave            NVARCHAR(1) NOT NULL,
+    IsVacation                  NVARCHAR(1) NOT NULL,
+    IsTemporaryTransfer         NVARCHAR(1) NOT NULL,
+    IsVoluntaryPension          NVARCHAR(1) NOT NULL,
+    IsWorkRiskIncapacity        NVARCHAR(1) NOT NULL,
+    WorkRiskRate                DECIMAL(5,3) NOT NULL,
+    UserName                    NVARCHAR(15) NOT NULL,
+    ProcessDate                 DATETIME2 NOT NULL,
+    SalaryClass                 INT NOT NULL,
+    StartDate                   DATETIME2 NOT NULL,
+    EndDate                     DATETIME2 NOT NULL,
+    EmployeeName                NVARCHAR(40) NOT NULL,
+    RecordNumber                INT NOT NULL,
+    TotalEmployees              INT NOT NULL,
+    GeneralAuth                 INT NOT NULL,
+    MaternityAuth               INT NOT NULL,
+    UpcValue                    INT NOT NULL,
+    IsVacationCause             NVARCHAR(1) NOT NULL,
+    IsVacationEnjoyment         NVARCHAR(1) NOT NULL,
+    CurrentSalary               DECIMAL(18,2) NOT NULL,
+    MinimumWage                 DECIMAL(18,2) NOT NULL,
+    IncapacityClass             INT NOT NULL,
+    IsExtension                 NVARCHAR(1) NOT NULL,
+    AffiliationDays             INT NOT NULL,
+    IbcWorkRisk                 DECIMAL(18,2) NOT NULL,
+    EntryCode                   INT NOT NULL,
+    WorkRiskIncapacityDays      INT NOT NULL,
+    PilaPensionCode             NVARCHAR(6) NOT NULL,
+    PilaHealthCode              NVARCHAR(6) NOT NULL,
+    PilaWorkRiskCode            NVARCHAR(6) NOT NULL,
+    PilaCcfCode                 NVARCHAR(6) NOT NULL,
+    CcfValue                    INT NOT NULL,
+    IsIntegralSalary            NVARCHAR(1) NOT NULL,
+    SenaValue                   INT NOT NULL,
+    IcbfValue                   INT NOT NULL,
+    EsapValue                   INT NOT NULL,
+    EducationMinValue           INT NOT NULL,
+    IbcCcf                      INT NOT NULL,
+    SenaContrib                 NVARCHAR(1) NOT NULL,
+    CompensationFundId          INT NOT NULL,
+    Period                      INT NOT NULL,
+    CurrentSalaryFull           DECIMAL(18,2) NOT NULL,
+    VacationEntryDays           INT NOT NULL,
+    IncapacityEntryDays         INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PreLiquidations] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PreLiquidations_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 195. PAY_PreLiquidationResponses (orig: nom_respreliq)
+CREATE TABLE [dbo].[PAY_PreLiquidationResponses] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PilaCode                    NVARCHAR(10) NOT NULL,
+    Name                        NVARCHAR(50) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    TotalEmployees              INT NOT NULL,
+    IbcAmount                   INT NOT NULL,
+    ContributionAmount          INT NOT NULL,
+    UpcAmount                   INT NOT NULL,
+    SolidarityAmount            INT NOT NULL,
+    GeneralAuth                 INT NOT NULL,
+    GeneralValue                INT NOT NULL,
+    MaternityAuth               INT NOT NULL,
+    MaternityValue              INT NOT NULL,
+    WorkRiskAuth                NVARCHAR(15) NOT NULL,
+    WorkRiskValue               INT NOT NULL,
+    EntityClass                 NVARCHAR(5) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PreLiquidationResponses] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PreLiquidationResponses_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 196. PAY_EmployeeLiquidationMasters (orig: nom_maeliqemp)
+CREATE TABLE [dbo].[PAY_EmployeeLiquidationMasters] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PlanId                      INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    Salary                      DECIMAL(18,2) NOT NULL,
+    JoinDate                    DATETIME2 NOT NULL,
+    ContractType                INT NOT NULL,
+    ContractEndDate             DATETIME2 NOT NULL,
+    SpecialRegime               NVARCHAR(1) NOT NULL,
+    LiquidationDate             DATETIME2 NOT NULL,
+    TerminationCause            INT NOT NULL,
+    SeveranceUnpaidDays         INT NULL,
+    BonusUnpaidDays             INT NULL,
+    VacationUnpaidDays          INT NULL,
+    PreviousSeveranceAmount     DECIMAL(18,2) NOT NULL,
+    CurrentSeveranceAmount      DECIMAL(18,2) NOT NULL,
+    LastVacationPayDate         DATETIME2 NOT NULL,
+    LastBonusPayDate            DATETIME2 NOT NULL,
+    SeveranceBase               DECIMAL(18,2) NOT NULL,
+    BonusBase                   DECIMAL(18,2) NOT NULL,
+    VacationBase                DECIMAL(18,2) NOT NULL,
+    IndemnityBase               DECIMAL(18,2) NOT NULL,
+    SeveranceDays               DECIMAL(18,2) NOT NULL,
+    BonusDays                   DECIMAL(18,2) NOT NULL,
+    VacationDays                DECIMAL(18,2) NOT NULL,
+    IndemnityDays               DECIMAL(18,2) NOT NULL,
+    IsAccountingPosted          NVARCHAR(1) NOT NULL,
+    SystemDate                  DATETIME2 NOT NULL,
+    UserName                    NVARCHAR(14) NOT NULL,
+    LastSeverancePayDate        DATETIME2 NOT NULL,
+    LastSeveranceInterestDate   DATETIME2 NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_EmployeeLiquidationMasters] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_EmployeeLiquidationMasters_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 197. PAY_EmployeeLiquidationDetails (orig: nom_detliqemp)
+CREATE TABLE [dbo].[PAY_EmployeeLiquidationDetails] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PlanId                      INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   DECIMAL(6,0) NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    Time                        DECIMAL(10,0) NOT NULL,
+    Amount                      DECIMAL(18,2) NOT NULL,
+    Nature                      INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_EmployeeLiquidationDetails] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_EmployeeLiquidationDetails_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 198. PAY_AccountingEntries (orig: nom_contpla)
+CREATE TABLE [dbo].[PAY_AccountingEntries] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PlanId                      INT NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    ConceptId                   INT NOT NULL,
+    SequenceNumber              INT NOT NULL,
+    CostCenterCode              NVARCHAR(10) NOT NULL,
+    AccountCode                 NVARCHAR(15) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    DocumentType                NVARCHAR(5) NOT NULL,
+    DocumentNumber              NVARCHAR(20) NOT NULL,
+    DebitAmount                 DECIMAL(18,2) NOT NULL,
+    CreditAmount                DECIMAL(18,2) NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_AccountingEntries] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_AccountingEntries_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 199. PAY_ConceptAccounts (orig: nom_cuentas)
+CREATE TABLE [dbo].[PAY_ConceptAccounts] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    ConceptId                   INT NOT NULL,
+    CostCenterId                NVARCHAR(10) NOT NULL,
+    ExpenseAccountCode          NVARCHAR(15) NOT NULL,
+    CounterAccountCode          NVARCHAR(15) NOT NULL,
+    ProvisionAccountCode        NVARCHAR(15) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_ConceptAccounts] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_ConceptAccounts_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_ConceptAccounts_Biz] UNIQUE (ConceptId, CostCenterId)
+);
+GO
+
+-- 200. PAY_BookBalances (orig: nom_sallib)
+CREATE TABLE [dbo].[PAY_BookBalances] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    ConceptId                   INT NOT NULL,
+    SequenceNumber              DECIMAL(12,0) NOT NULL,
+    PeriodYear                  INT NOT NULL,
+    InitialAmount               DECIMAL(18,2) NOT NULL,
+    JanCharge                   DECIMAL(18,2) NOT NULL,
+    JanPayment                  DECIMAL(18,2) NOT NULL,
+    FebCharge                   DECIMAL(18,2) NOT NULL,
+    FebPayment                  DECIMAL(18,2) NOT NULL,
+    MarCharge                   DECIMAL(18,2) NOT NULL,
+    MarPayment                  DECIMAL(18,2) NOT NULL,
+    AprCharge                   DECIMAL(18,2) NOT NULL,
+    AprPayment                  DECIMAL(18,2) NOT NULL,
+    MayCharge                   DECIMAL(18,2) NOT NULL,
+    MayPayment                  DECIMAL(18,2) NOT NULL,
+    JunCharge                   DECIMAL(18,2) NOT NULL,
+    JunPayment                  DECIMAL(18,2) NOT NULL,
+    JulCharge                   DECIMAL(18,2) NOT NULL,
+    JulPayment                  DECIMAL(18,2) NOT NULL,
+    AugCharge                   DECIMAL(18,2) NOT NULL,
+    AugPayment                  DECIMAL(18,2) NOT NULL,
+    SepCharge                   DECIMAL(18,2) NOT NULL,
+    SepPayment                  DECIMAL(18,2) NOT NULL,
+    OctCharge                   DECIMAL(18,2) NOT NULL,
+    OctPayment                  DECIMAL(18,2) NOT NULL,
+    NovCharge                   DECIMAL(18,2) NOT NULL,
+    NovPayment                  DECIMAL(18,2) NOT NULL,
+    DecCharge                   DECIMAL(18,2) NOT NULL,
+    DecPayment                  DECIMAL(18,2) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_BookBalances] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_BookBalances_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_BookBalances_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber, PeriodYear)
+);
+GO
+
+-- 201. PAY_WithholdingCauses (orig: nom_cauret)
+CREATE TABLE [dbo].[PAY_WithholdingCauses] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    IndemnityType               INT NOT NULL,
+    AutoDeductions              INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_WithholdingCauses] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_WithholdingCauses_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_WithholdingCauses_Code] UNIQUE (Code)
+);
+GO
+
+-- 202. PAY_WithholdingParameters (orig: nom_parretfte)
+CREATE TABLE [dbo].[PAY_WithholdingParameters] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PayrollCompanyId            INT NOT NULL,
+    UvtRangeStart               INT NOT NULL,
+    UvtRangeEnd                 INT NOT NULL,
+    Rate                        DECIMAL(17,4) NOT NULL,
+    AdditionalUvt               INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_WithholdingParameters] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_WithholdingParameters_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_WithholdingParameters_Biz] UNIQUE (PayrollCompanyId, UvtRangeStart, UvtRangeEnd)
+);
+GO
+
+-- 203. PAY_HealthInsuranceProviders (orig: nom_eps)
+CREATE TABLE [dbo].[PAY_HealthInsuranceProviders] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_HealthInsuranceProviders] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_HealthInsuranceProviders_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_HealthInsuranceProviders_Code] UNIQUE (Code)
+);
+GO
+
+-- 204. PAY_WorkRiskProviders (orig: nom_arp)
+CREATE TABLE [dbo].[PAY_WorkRiskProviders] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    Factor                      DECIMAL(8,4) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_WorkRiskProviders] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_WorkRiskProviders_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_WorkRiskProviders_Code] UNIQUE (Code)
+);
+GO
+
+-- 205. PAY_WorkRiskRates (orig: nom_arptarifa)
+CREATE TABLE [dbo].[PAY_WorkRiskRates] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    Rate                        DECIMAL(18,8) NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_WorkRiskRates] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_WorkRiskRates_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_WorkRiskRates_Code] UNIQUE (Code)
+);
+GO
+
+-- 206. PAY_PensionProviders (orig: nom_pensiones)
+CREATE TABLE [dbo].[PAY_PensionProviders] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    ShortName                   NVARCHAR(50) NOT NULL,
+    TaxId                       NVARCHAR(20) NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_PensionProviders] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_PensionProviders_PublicId] UNIQUE (PublicId),
+    CONSTRAINT [UK_PAY_PensionProviders_Code] UNIQUE (Code)
+);
+GO
+
+-- 207. PAY_TaxCertificates (orig: nom_impcert)
+CREATE TABLE [dbo].[PAY_TaxCertificates] (
+    Id                          BIGINT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    PeriodCode                  NVARCHAR(5) NOT NULL,
+    PayrollCompanyId            INT NOT NULL,
+    EmployeeId                  INT NOT NULL,
+    Value34                     DECIMAL(18,2) NOT NULL,
+    Value35                     DECIMAL(18,2) NOT NULL,
+    Value36                     DECIMAL(18,2) NOT NULL,
+    Value37                     DECIMAL(18,2) NOT NULL,
+    Value38                     DECIMAL(18,2) NOT NULL,
+    Value39                     DECIMAL(18,2) NOT NULL,
+    Value40                     DECIMAL(18,2) NOT NULL,
+    Value41                     DECIMAL(18,2) NOT NULL,
+    Value42                     DECIMAL(18,2) NOT NULL,
+    Value43                     DECIMAL(18,2) NOT NULL,
+    StartDate                   DATETIME2 NOT NULL,
+    EndDate                     DATETIME2 NOT NULL,
+    IssueDate                   DATETIME2 NOT NULL,
+    IssuedAt                    NVARCHAR(60) NOT NULL,
+    PayerName                   NVARCHAR(60) NOT NULL,
+    PayerTaxId                  NVARCHAR(20) NOT NULL,
+    Threshold                   DECIMAL(18,2) NOT NULL,
+    Rate                        DECIMAL(8,4) NOT NULL,
+    CityId                      INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_TaxCertificates] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_TaxCertificates_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- 208. PAY_AutoContributionParams (orig: nom_parautapo)
+CREATE TABLE [dbo].[PAY_AutoContributionParams] (
+    Id                          INT IDENTITY(1,1) NOT NULL,
+    PublicId                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    Code                        INT NOT NULL,
+    IdType                      INT NOT NULL,
+    IdNumber                    INT NOT NULL,
+    CheckDigit                  INT NOT NULL,
+    Name                        NVARCHAR(100) NOT NULL,
+    Address                     NVARCHAR(100) NOT NULL,
+    Phone                       NVARCHAR(30) NOT NULL,
+    Fax                         NVARCHAR(30) NOT NULL,
+    CityId                      INT NOT NULL,
+    CityName                    NVARCHAR(50) NOT NULL,
+    DepartmentId                INT NOT NULL,
+    DepartmentName              NVARCHAR(50) NOT NULL,
+    HealthRate                  DECIMAL(6,3) NOT NULL,
+    PensionRate                 DECIMAL(6,3) NOT NULL,
+    WorkRiskRate                DECIMAL(6,3) NOT NULL,
+    CcfRate                     DECIMAL(6,3) NOT NULL,
+    SenaRate                    DECIMAL(6,3) NOT NULL,
+    IcbfRate                    DECIMAL(6,3) NOT NULL,
+    SolidarityFundRate          DECIMAL(6,3) NOT NULL,
+    EsapRate                    DECIMAL(6,3) NOT NULL,
+    EducationMinRate            DECIMAL(6,3) NOT NULL,
+    CcfAdminCode                NVARCHAR(6) NOT NULL,
+    WorkRiskAdminCode           NVARCHAR(6) NOT NULL,
+    LatePaymentRate             DECIMAL(6,3) NOT NULL,
+    LinkType                    INT NOT NULL,
+    ContributionType            INT NOT NULL,
+    HealthCoverage              INT NOT NULL,
+    ContributionBase            INT NOT NULL,
+    EmployerNumber              NVARCHAR(15) NOT NULL,
+    MinimumWage                 DECIMAL(18,2) NOT NULL,
+    ProvisionRegime             INT NOT NULL,
+    FormNumber                  NVARCHAR(15) NOT NULL,
+    CorrectionDate              DATETIME2 NOT NULL,
+    ContributionClass           INT NOT NULL,
+    LegalNature                 INT NOT NULL,
+    EconomicActivityId          INT NOT NULL,
+    Email                       NVARCHAR(200) NOT NULL,
+    RepresentativeId            NVARCHAR(15) NOT NULL,
+    RepresentativeCheckDigit    NVARCHAR(1) NOT NULL,
+    RepresentativeLastName1     NVARCHAR(30) NOT NULL,
+    RepresentativeLastName2     NVARCHAR(30) NOT NULL,
+    RepresentativeFirstName1    NVARCHAR(30) NOT NULL,
+    RepresentativeFirstName2    NVARCHAR(30) NOT NULL,
+    PresentationMethod          INT NOT NULL,
+    -- Audit columns
+    CreatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    CONSTRAINT [PK_PAY_AutoContributionParams] PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT [UK_PAY_AutoContributionParams_PublicId] UNIQUE (PublicId)
+);
+GO
+
+-- ============================================================
+-- End of PAY_ module — 27 tables
+-- ============================================================

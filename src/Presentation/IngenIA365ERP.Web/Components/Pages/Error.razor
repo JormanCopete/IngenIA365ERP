@@ -1,0 +1,30 @@
+@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Error - IngenIA365ERP</PageTitle>
+
+<h1>Error</h1>
+<h2>Ha ocurrido un error al procesar su solicitud.</h2>
+
+@if (ShowRequestId)
+{
+    <p>
+        <strong>Request ID:</strong> <code>@RequestId</code>
+    </p>
+}
+
+<h3>Desarrollo</h3>
+<p>
+    Active la pagina de excepciones del desarrollador para obtener informacion detallada del error.
+</p>
+
+@code{
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

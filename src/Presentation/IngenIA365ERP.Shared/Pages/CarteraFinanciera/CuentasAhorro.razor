@@ -1,0 +1,192 @@
+@page "/cartera/ahorros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Cuentas de Ahorro - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Cuentas de Ahorro</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfDropDownList TValue="string" TItem="StatusItem" @bind-Value="_statusFilter"
+                        DataSource="_statusOptions" Placeholder="Todas" Width="160px"
+                        CssClass="e-small">
+            <DropDownListFieldSettings Text="Text" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="StatusItem" ValueChange="OnFilterChanged" />
+        </SfDropDownList>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus"
+                  OnClick="ShowNewAccountDialog">Nueva Cuenta</SfButton>
+    </div>
+</div>
+
+<SfGrid TValue="SavingsAccountRow" DataSource="_accounts" AllowPaging="true" AllowSorting="true"
+        AllowFiltering="true" GridLines="GridLine.Both">
+    <GridPageSettings PageSize="20" />
+    <GridEvents TValue="SavingsAccountRow" RowSelected="OnRowSelected" />
+    <GridColumns>
+        <GridColumn Field="@nameof(SavingsAccountRow.AccountNumber)" HeaderText="No. Cuenta" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(SavingsAccountRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(SavingsAccountRow.SavingsLineName)" HeaderText="Linea de Ahorro" Width="180" />
+        <GridColumn Field="@nameof(SavingsAccountRow.Balance)" HeaderText="Saldo" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(SavingsAccountRow.CreationDate)" HeaderText="Fecha Apertura" Width="130" Format="d" />
+        <GridColumn Field="@nameof(SavingsAccountRow.Status)" HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as SavingsAccountRow;
+                    var css = row?.Status == "Activa" ? "badge-activa" : "badge-cerrada";
+                }
+                <span class="@css">@row?.Status</span>
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<!-- Dialog: Nueva Cuenta -->
+<SfDialog @bind-Visible="_showNewDialog" Header="Nueva Cuenta de Ahorro" Width="450px"
+          IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
+                <label>Asociado (Documento / Codigo)</label>
+                <SfTextBox @bind-Value="_newPersonCode" Placeholder="Buscar por documento..." />
+                <label>Linea de Ahorro</label>
+                <SfDropDownList TValue="string" TItem="SavingsLineItem" @bind-Value="_newSavingsLineId"
+                                DataSource="_savingsLines" CssClass="e-small">
+                    <DropDownListFieldSettings Text="Text" Value="Value" />
+                </SfDropDownList>
+                <label>Deposito Inicial</label>
+                <SfNumericTextBox TValue="decimal?" @bind-Value="_newInitialDeposit" Min="0" Format="N0" Placeholder="0" />
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showNewDialog = false)" />
+        <DialogButton Content="Crear Cuenta" IsPrimary="true" OnClick="CreateAccount" />
+    </DialogButtons>
+</SfDialog>
+
+<style>
+    .badge-activa { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-cerrada { background:#95a5a6; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+</style>
+
+@code {
+    private List<SavingsAccountRow> _accounts = [];
+    private string _statusFilter = "A";
+    private bool _showNewDialog;
+    private string _newPersonCode = "";
+    private string _newSavingsLineId = "";
+    private decimal? _newInitialDeposit;
+    private List<SavingsLineItem> _savingsLines = [];
+
+    private List<StatusItem> _statusOptions =
+    [
+        new("A", "Activas"),
+        new("C", "Cerradas"),
+        new("", "Todas")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSavingsLines();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = $"api/lending/savings-accounts?PageSize=100&Status={_statusFilter}";
+            var response = await Http.GetFromJsonAsync<PagedResponse<SavingsAccountRow>>(url);
+            _accounts = response?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error cargando cuentas: {ex.Message}");
+        }
+    }
+
+    private async Task LoadSavingsLines()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PagedResponse<SavingsLineItem>>("api/lending/savings-parameters?PageSize=100");
+            _savingsLines = response?.Items ?? [];
+        }
+        catch { /* silent */ }
+    }
+
+    private async Task OnFilterChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, StatusItem> args)
+    {
+        await LoadData();
+    }
+
+    private void OnRowSelected(RowSelectEventArgs<SavingsAccountRow> args)
+    {
+        if (args.Data?.PublicId != null)
+            Nav.NavigateTo($"/cartera/ahorros/{args.Data.PublicId}");
+    }
+
+    private void ShowNewAccountDialog()
+    {
+        _newPersonCode = "";
+        _newSavingsLineId = _savingsLines.FirstOrDefault()?.Value ?? "";
+        _newInitialDeposit = null;
+        _showNewDialog = true;
+    }
+
+    private async Task CreateAccount()
+    {
+        try
+        {
+            // Resolve person by code
+            var personResult = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_newPersonCode}");
+            if (personResult is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+
+            Guid.TryParse(_newSavingsLineId, out var lineGuid);
+
+            var payload = new
+            {
+                PersonPublicId = personResult.PublicId,
+                SavingsLinePublicId = lineGuid,
+                InitialDeposit = _newInitialDeposit
+            };
+
+            var response = await Http.PostAsJsonAsync("api/lending/savings-accounts", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Cuenta creada exitosamente.");
+                _showNewDialog = false;
+                await LoadData();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    // --- Local types ---
+    record StatusItem(string Value, string Text);
+    record SavingsLineItem(Guid PublicId, string Name, int SavingsLineId)
+    {
+        public string Value => PublicId.ToString();
+        public string Text => Name;
+    }
+    record SavingsAccountRow(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
+        string SavingsLineName, DateOnly CreationDate, decimal Balance, string Status);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+}

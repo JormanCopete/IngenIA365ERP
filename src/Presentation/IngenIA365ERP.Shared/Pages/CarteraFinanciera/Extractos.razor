@@ -1,0 +1,229 @@
+@page "/cartera/extractos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Extractos - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Extractos de Asociados</h3>
+</div>
+
+<!-- Period Selector and Mode -->
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;flex-wrap:wrap;">
+    <div>
+        <label>Ano</label>
+        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+    </div>
+    <div>
+        <label>Mes</label>
+        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-print" OnClick="@(() => _showBulkConfirm = true)">Generar Masivo</SfButton>
+</div>
+
+@if (_bulkResult is not null)
+{
+    <div style="margin-bottom:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;">
+        <p>Se generaron <b>@_bulkResult.StatementsGenerated</b> extractos para el periodo @_bulkResult.Year-@_bulkResult.Month.ToString("D2").</p>
+    </div>
+}
+
+<hr style="border-color:#444;margin:24px 0;" />
+
+<!-- Individual Statement -->
+<h4>Consulta Individual</h4>
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+    <div style="flex:1;max-width:400px;">
+        <label>Buscar Asociado</label>
+        <SfTextBox @bind-Value="_searchTerm" Placeholder="Nombre o identificacion..." CssClass="e-small" />
+    </div>
+    <SfButton CssClass="e-info e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar</SfButton>
+</div>
+
+@if (_searchResults is not null && _searchResults.Count > 0)
+{
+    <SfGrid TValue="PersonItem" DataSource="_searchResults" AllowSelection="true">
+        <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single" />
+        <GridEvents RowSelected="OnPersonSelected" TValue="PersonItem" />
+        <GridColumns>
+            <GridColumn Field="TaxId" HeaderText="Identificacion" Width="140" />
+            <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
+        </GridColumns>
+    </SfGrid>
+}
+
+@if (_statement is not null)
+{
+    <div style="margin-top:24px;padding:16px;border:1px solid #444;border-radius:4px;">
+        <h4>Extracto de @_statement.PersonName</h4>
+        <p>Identificacion: @_statement.IdentificationNumber | Periodo: @_statement.Year-@_statement.Month.ToString("D2")</p>
+
+        @if (_statement.Credits.Count > 0)
+        {
+            <h5 style="margin-top:16px;">Creditos</h5>
+            <SfGrid TValue="CreditSummary" DataSource="_statement.Credits">
+                <GridColumns>
+                    <GridColumn Field="PortfolioNumber" HeaderText="No. Obligacion" Width="140" />
+                    <GridColumn Field="CreditLine" HeaderText="Linea" Width="200" />
+                    <GridColumn Field="CurrentBalance" HeaderText="Saldo Capital" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="InterestBalance" HeaderText="Saldo Intereses" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="InstallmentAmount" HeaderText="Cuota" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="PaidInstallments" HeaderText="Cuotas Pagadas" Width="120" TextAlign="TextAlign.Center" />
+                </GridColumns>
+            </SfGrid>
+        }
+
+        @if (_statement.Savings.Count > 0)
+        {
+            <h5 style="margin-top:16px;">Ahorros</h5>
+            <SfGrid TValue="SavingsSummary" DataSource="_statement.Savings">
+                <GridColumns>
+                    <GridColumn Field="AccountNumber" HeaderText="No. Cuenta" Width="140" />
+                    <GridColumn Field="SavingsLine" HeaderText="Linea" Width="200" />
+                    <GridColumn Field="Balance" HeaderText="Saldo" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                </GridColumns>
+            </SfGrid>
+        }
+
+        @if (_statement.CDTs.Count > 0)
+        {
+            <h5 style="margin-top:16px;">CDTs</h5>
+            <SfGrid TValue="CdtSummary" DataSource="_statement.CDTs">
+                <GridColumns>
+                    <GridColumn Field="CertificateNumber" HeaderText="No. CDT" Width="140" />
+                    <GridColumn Field="Amount" HeaderText="Valor" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="Rate" HeaderText="Tasa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="MaturityDate" HeaderText="Vencimiento" Width="130" Format="d" Type="ColumnType.Date" />
+                </GridColumns>
+            </SfGrid>
+        }
+    </div>
+}
+
+<ConfirmDialog @bind-Visible="_showBulkConfirm"
+               Title="Generar Extractos Masivos"
+               Message="@($"Esta seguro de generar extractos para todos los asociados del periodo {_year}-{_month:D2}?")"
+               ConfirmText="Generar"
+               OnConfirm="GenerateBulk" />
+
+@code {
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private bool _showBulkConfirm;
+    private BulkResult? _bulkResult;
+    private string _searchTerm = "";
+    private List<PersonItem>? _searchResults;
+    private StatementDto? _statement;
+
+    private static readonly List<MonthOption> _months =
+    [
+        new(1, "01 - Enero"), new(2, "02 - Febrero"), new(3, "03 - Marzo"),
+        new(4, "04 - Abril"), new(5, "05 - Mayo"), new(6, "06 - Junio"),
+        new(7, "07 - Julio"), new(8, "08 - Agosto"), new(9, "09 - Septiembre"),
+        new(10, "10 - Octubre"), new(11, "11 - Noviembre"), new(12, "12 - Diciembre")
+    ];
+
+    private async Task GenerateBulk()
+    {
+        try
+        {
+            var response = await Http.PostAsync($"/api/lending/statements/generate/{_year}/{_month}", null);
+            if (response.IsSuccessStatusCode)
+            {
+                _bulkResult = await response.Content.ReadFromJsonAsync<BulkResult>();
+                await Notification.SuccessAsync("Extractos generados exitosamente.");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Error al generar extractos.");
+            }
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error de conexion.");
+        }
+    }
+
+    private async Task SearchPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm)) return;
+        try
+        {
+            _searchResults = await Http.GetFromJsonAsync<List<PersonItem>>(
+                $"/api/core/people?searchTerm={Uri.EscapeDataString(_searchTerm)}&pageSize=10");
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error al buscar asociado.");
+        }
+    }
+
+    private async Task OnPersonSelected(RowSelectEventArgs<PersonItem> args)
+    {
+        try
+        {
+            _statement = await Http.GetFromJsonAsync<StatementDto>(
+                $"/api/lending/statements/{args.Data.PublicId}/{_year}/{_month}");
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error al cargar extracto.");
+        }
+    }
+
+    private class PersonItem
+    {
+        public Guid PublicId { get; set; }
+        public string TaxId { get; set; } = "";
+        public string FullName { get; set; } = "";
+    }
+
+    private class BulkResult
+    {
+        public int StatementsGenerated { get; set; }
+        public int Year { get; set; }
+        public int Month { get; set; }
+    }
+
+    private class StatementDto
+    {
+        public string PersonName { get; set; } = "";
+        public string IdentificationNumber { get; set; } = "";
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public List<CreditSummary> Credits { get; set; } = [];
+        public List<SavingsSummary> Savings { get; set; } = [];
+        public List<CdtSummary> CDTs { get; set; } = [];
+    }
+
+    private class CreditSummary
+    {
+        public long PortfolioNumber { get; set; }
+        public string CreditLine { get; set; } = "";
+        public decimal CurrentBalance { get; set; }
+        public decimal InterestBalance { get; set; }
+        public decimal InstallmentAmount { get; set; }
+        public int PaidInstallments { get; set; }
+    }
+
+    private class SavingsSummary
+    {
+        public long AccountNumber { get; set; }
+        public string SavingsLine { get; set; } = "";
+        public decimal Balance { get; set; }
+    }
+
+    private class CdtSummary
+    {
+        public string CertificateNumber { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal Rate { get; set; }
+        public DateTime? MaturityDate { get; set; }
+    }
+
+    private record MonthOption(int Value, string Name);
+}

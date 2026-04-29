@@ -1,0 +1,99 @@
+@page "/debito/movimientos-tarjeta"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Movimientos Tarjeta Debito - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Movimientos Tarjeta Debito</h3>
+</div>
+
+<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Tarjeta (PublicId)</label>
+        <SfTextBox @bind-Value="_cardPublicId" Placeholder="GUID de la tarjeta" Width="320px" />
+    </div>
+    <div>
+        <label>Fecha Desde</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Placeholder="Desde" Width="160px" />
+    </div>
+    <div>
+        <label>Fecha Hasta</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Placeholder="Hasta" Width="160px" />
+    </div>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@Search">Buscar</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="TransactionItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Date" HeaderText="Fecha" Width="180" Format="dd/MM/yyyy HH:mm" />
+        <GridColumn Field="CardNumber" HeaderText="Tarjeta" Width="180" />
+        <GridColumn Field="TypeText" HeaderText="Tipo" Width="150" />
+        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="MerchantCode" HeaderText="Comercio" Width="160" />
+        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+            <Template>
+                @{
+                    var t = context as TransactionItem;
+                    var badge = t?.Status switch
+                    {
+                        "A" => "e-badge e-badge-success",
+                        "R" => "e-badge e-badge-danger",
+                        "V" => "e-badge e-badge-warning",
+                        _ => "e-badge e-badge-info"
+                    };
+                    <span class="@badge">@t?.StatusText</span>
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+@code {
+    private SfGrid<TransactionItem>? _grid;
+    private List<TransactionItem> _items = [];
+    private string _cardPublicId = "";
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+
+    private async Task Search()
+    {
+        if (!Guid.TryParse(_cardPublicId, out var cardId))
+        {
+            await Notification.ErrorAsync("Ingrese un GUID de tarjeta valido.");
+            return;
+        }
+
+        try
+        {
+            var url = $"/api/debit/cards/{cardId}/transactions?pageSize=500";
+            if (_dateFrom.HasValue)
+                url += $"&dateFrom={DateOnly.FromDateTime(_dateFrom.Value):yyyy-MM-dd}";
+            if (_dateTo.HasValue)
+                url += $"&dateTo={DateOnly.FromDateTime(_dateTo.Value):yyyy-MM-dd}";
+
+            _items = await Http.GetFromJsonAsync<List<TransactionItem>>(url) ?? [];
+        }
+        catch
+        {
+            _items = [];
+            await Notification.ErrorAsync("Error al consultar movimientos");
+        }
+    }
+
+    private class TransactionItem
+    {
+        public Guid PublicId { get; set; }
+        public DateTime? Date { get; set; }
+        public string? CardNumber { get; set; }
+        public string? Type { get; set; }
+        public string TypeText { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? MerchantCode { get; set; }
+        public string? Status { get; set; }
+        public string StatusText { get; set; } = "";
+    }
+}

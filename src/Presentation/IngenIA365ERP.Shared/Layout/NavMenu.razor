@@ -1,0 +1,179 @@
+@inject NavigationManager Navigation
+
+<div class="nav-menu">
+    <div class="brand">
+        <span class="e-icons e-bank brand-icon"></span>
+        @if (SidebarOpen)
+        {
+            <span class="brand-text">IngenIA365ERP</span>
+        }
+    </div>
+
+    <nav class="nav-items">
+        <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+            <span class="e-icons e-home"></span>
+            @if (SidebarOpen) { <span>Dashboard</span> }
+        </NavLink>
+
+        <div class="nav-section">
+            @if (SidebarOpen) { <span class="section-title">OPERACIONES</span> }
+        </div>
+
+        <NavMenuGroup Icon="e-chart" Title="Contabilidad" Expanded="SidebarOpen">
+            <NavLink href="/contabilidad/plan-cuentas" class="nav-subitem">Plan de Cuentas</NavLink>
+            <NavLink href="/contabilidad/comprobantes/lista" class="nav-subitem">Comprobantes Contables</NavLink>
+            <NavLink href="/contabilidad/movimientos" class="nav-subitem">Movimientos</NavLink>
+            <NavLink href="/contabilidad/saldos" class="nav-subitem">Saldos por Cuenta</NavLink>
+            <NavLink href="/contabilidad/conciliacion" class="nav-subitem">Conciliacion Bancaria</NavLink>
+            <NavLink href="/contabilidad/presupuestos" class="nav-subitem">Presupuestos</NavLink>
+            <NavLink href="/contabilidad/tipos-comprobante" class="nav-subitem">Tipos Comprobante</NavLink>
+            <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos Contables</NavLink>
+            <NavLink href="/contabilidad/grupos-cuenta" class="nav-subitem">Grupos de Cuenta</NavLink>
+            <NavLink href="/contabilidad/categorias-riesgo" class="nav-subitem">Categorias Riesgo</NavLink>
+            <NavLink href="/contabilidad/impuestos/iva" class="nav-subitem">Lineas IVA</NavLink>
+            <NavLink href="/contabilidad/formatos-dian" class="nav-subitem">Formatos DIAN</NavLink>
+            <NavLink href="/contabilidad/codigos-impuestos" class="nav-subitem">Codigos Impuestos</NavLink>
+            <NavLink href="/contabilidad/cierre-periodo" class="nav-subitem">Cierre Periodo</NavLink>
+            <NavLink href="/contabilidad/balance-prueba" class="nav-subitem">Balance de Prueba</NavLink>
+            <NavLink href="/contabilidad/certificados-retencion" class="nav-subitem">Cert. Retencion</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
+            <NavLink href="/cartera/solicitudes" class="nav-subitem">Solicitudes Credito</NavLink>
+            <NavLink href="/cartera/creditos" class="nav-subitem">Cartera Creditos</NavLink>
+            <NavLink href="/cartera/recaudos" class="nav-subitem">Recaudos/Pagos</NavLink>
+            <NavLink href="/cartera/mora" class="nav-subitem">Mora y Cobro</NavLink>
+            <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de Ahorro</NavLink>
+            <NavLink href="/cartera/depositos" class="nav-subitem">Depositos</NavLink>
+            <NavLink href="/cartera/retiros" class="nav-subitem">Retiros</NavLink>
+            <NavLink href="/cartera/cdt" class="nav-subitem">CDT Certificados</NavLink>
+            <NavLink href="/cartera/cdt/nuevo" class="nav-subitem">Nuevo CDT</NavLink>
+            <NavLink href="/cartera/aportes" class="nav-subitem">Aportes</NavLink>
+            <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiro Asociado</NavLink>
+            <NavLink href="/cartera/lineas-credito" class="nav-subitem">Lineas de Credito</NavLink>
+            <NavLink href="/cartera/codigos-movimiento" class="nav-subitem">Codigos Movimiento</NavLink>
+            <NavLink href="/cartera/parametros-ahorro" class="nav-subitem">Parametros Ahorro</NavLink>
+            <NavLink href="/cartera/tasas-interes" class="nav-subitem">Tasas de Interes</NavLink>
+            <NavLink href="/cartera/parametros-provision" class="nav-subitem">Parametros Provision</NavLink>
+            <NavLink href="/cartera/zonas" class="nav-subitem">Zonas</NavLink>
+            <NavLink href="/cartera/tipos-zona" class="nav-subitem">Tipos de Zona</NavLink>
+            <NavLink href="/cartera/scoring" class="nav-subitem">Scoring</NavLink>
+            <NavLink href="/cartera/conceptos-descuento" class="nav-subitem">Conceptos Descuento</NavLink>
+            <NavLink href="/cartera/estados-retiro" class="nav-subitem">Estados Retiro</NavLink>
+            <NavLink href="/cartera/parametros-vivienda" class="nav-subitem">Param. Vivienda</NavLink>
+            <NavLink href="/cartera/parametros-sipla" class="nav-subitem">Param. SIPLA</NavLink>
+            <NavLink href="/cartera/parametros-periodicidad" class="nav-subitem">Periodicidad</NavLink>
+            <NavLink href="/cartera/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
+            <NavLink href="/cartera/cuentas-cartera" class="nav-subitem">Cuentas Cartera</NavLink>
+            <NavLink href="/cartera/causacion" class="nav-subitem">Causacion Intereses</NavLink>
+            <NavLink href="/cartera/calificacion" class="nav-subitem">Calificacion Cartera</NavLink>
+            <NavLink href="/cartera/descuento-nomina" class="nav-subitem">Descuento Nomina</NavLink>
+            <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
+            <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
+            <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
+            <NavLink href="/inventario/productos" class="nav-subitem">Productos</NavLink>
+            <NavLink href="/inventario/movimientos" class="nav-subitem">Movimientos</NavLink>
+            <NavLink href="/inventario/facturacion" class="nav-subitem">Facturacion</NavLink>
+            <NavLink href="/inventario/grupos" class="nav-subitem">Grupos</NavLink>
+            <NavLink href="/inventario/grupos-primarios" class="nav-subitem">Grupos Primarios</NavLink>
+            <NavLink href="/inventario/tipos-movimiento" class="nav-subitem">Tipos Movimiento</NavLink>
+            <NavLink href="/inventario/bodegas" class="nav-subitem">Bodegas</NavLink>
+            <NavLink href="/inventario/ubicaciones" class="nav-subitem">Ubicaciones</NavLink>
+            <NavLink href="/inventario/puntos-venta" class="nav-subitem">Puntos de Venta</NavLink>
+            <NavLink href="/inventario/turnos" class="nav-subitem">Turnos</NavLink>
+            <NavLink href="/inventario/vendedores" class="nav-subitem">Vendedores</NavLink>
+            <NavLink href="/inventario/tipos-descuento" class="nav-subitem">Tipos Descuento</NavLink>
+            <NavLink href="/inventario/tipos-lista-precios" class="nav-subitem">Listas Precios</NavLink>
+            <NavLink href="/inventario/parametros-comisiones" class="nav-subitem">Comisiones</NavLink>
+            <NavLink href="/inventario/movimientos/nuevo" class="nav-subitem">Nuevo Movimiento</NavLink>
+            <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
+            <NavLink href="/nomina/empleados" class="nav-subitem">Empleados</NavLink>
+            <NavLink href="/nomina/liquidacion" class="nav-subitem">Liquidacion</NavLink>
+            <NavLink href="/nomina/novedades" class="nav-subitem">Novedades</NavLink>
+            <NavLink href="/nomina/conceptos" class="nav-subitem">Conceptos</NavLink>
+            <NavLink href="/nomina/periodos-pago" class="nav-subitem">Periodos Pago</NavLink>
+            <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
+            <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
+            <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
+            <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
+            <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-description" Title="CDT" Expanded="SidebarOpen">
+            <NavLink href="/cdt/parametros" class="nav-subitem">Parametros CDT</NavLink>
+            <NavLink href="/cdt/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-money" Title="Tarjeta Debito" Expanded="SidebarOpen">
+            <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
+            <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
+            <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
+            <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-cheque" Title="Tesoreria" Expanded="SidebarOpen">
+            <NavLink href="/tesoreria/cheques" class="nav-subitem">Cheques</NavLink>
+            <NavLink href="/tesoreria/facturas" class="nav-subitem">Facturas CxP/CxC</NavLink>
+            <NavLink href="/tesoreria/flujo-caja" class="nav-subitem">Flujo de Caja</NavLink>
+            <NavLink href="/tesoreria/conceptos" class="nav-subitem">Conceptos</NavLink>
+        </NavMenuGroup>
+
+        <div class="nav-section">
+            @if (SidebarOpen) { <span class="section-title">MAESTROS</span> }
+        </div>
+
+        <NavMenuGroup Icon="e-user" Title="Asociados" Expanded="SidebarOpen">
+            <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
+            <NavLink href="/asociados/beneficiarios" class="nav-subitem">Beneficiarios</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-list-unordered" Title="Maestros Core" Expanded="SidebarOpen">
+            <NavLink href="/maestros/agencias" class="nav-subitem">Agencias</NavLink>
+            <NavLink href="/maestros/ciudades" class="nav-subitem">Ciudades</NavLink>
+            <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
+            <NavLink href="/maestros/centros-costo" class="nav-subitem">Centros de Costo</NavLink>
+            <NavLink href="/maestros/secciones" class="nav-subitem">Secciones</NavLink>
+            <NavLink href="/maestros/profesiones" class="nav-subitem">Profesiones</NavLink>
+            <NavLink href="/maestros/cargos" class="nav-subitem">Cargos</NavLink>
+            <NavLink href="/maestros/parentescos" class="nav-subitem">Parentescos</NavLink>
+            <NavLink href="/maestros/motivos-retiro" class="nav-subitem">Motivos de Retiro</NavLink>
+            <NavLink href="/maestros/enfermedades" class="nav-subitem">Enfermedades</NavLink>
+            <NavLink href="/maestros/entidades" class="nav-subitem">Entidades</NavLink>
+            <NavLink href="/maestros/deportes" class="nav-subitem">Deportes</NavLink>
+            <NavLink href="/maestros/actividades-culturales" class="nav-subitem">Act. Culturales</NavLink>
+            <NavLink href="/maestros/convenios" class="nav-subitem">Convenios</NavLink>
+        </NavMenuGroup>
+
+        <div class="nav-section">
+            @if (SidebarOpen) { <span class="section-title">SISTEMA</span> }
+        </div>
+
+        <NavMenuGroup Icon="e-lock" Title="Administracion" Expanded="SidebarOpen">
+            <NavLink href="/admin/usuarios" class="nav-subitem">Usuarios</NavLink>
+            <NavLink href="/admin/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
+            <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-print-layout" Title="Reportes" Expanded="SidebarOpen">
+            <NavLink href="/reportes" class="nav-subitem">Centro de Reportes</NavLink>
+            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
+            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
+            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
+            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
+            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
+            <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
+            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
+        </NavMenuGroup>
+    </nav>
+</div>
+
+@code {
+    [Parameter] public bool SidebarOpen { get; set; } = true;
+}

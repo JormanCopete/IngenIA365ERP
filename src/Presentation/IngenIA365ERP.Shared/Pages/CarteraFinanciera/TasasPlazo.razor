@@ -1,0 +1,153 @@
+@page "/cartera/tasas-plazo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Tasas por Plazo - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Tasas por Plazo</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="CreditLineId" HeaderText="Linea Credito" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="AmountStart" HeaderText="Monto Desde" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AmountEnd" HeaderText="Monto Hasta" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="TermStart" HeaderText="Plazo Desde" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="TermEnd" HeaderText="Plazo Hasta" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="SeniorityStart" HeaderText="Antig. Desde" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="SeniorityEnd" HeaderText="Antig. Hasta" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Rate" HeaderText="Tasa" Width="100" Format="N3" TextAlign="TextAlign.Right" />
+        <GridColumn Field="MaxTerm" HeaderText="Plazo Max" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="GuaranteeType" HeaderText="Tipo Garantia" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ItemModel;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Linea de Credito" FloatLabelType="FloatLabelType.Always" />
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountStart" Placeholder="Monto Desde" Format="N2" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountEnd" Placeholder="Monto Hasta" Format="N2" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.TermStart" Placeholder="Plazo Desde" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.TermEnd" Placeholder="Plazo Hasta" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.SeniorityStart" Placeholder="Antiguedad Desde" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.SeniorityEnd" Placeholder="Antiguedad Hasta" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tasa" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.MaxTerm" Placeholder="Plazo Maximo" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.MaxAmount" Placeholder="Monto Maximo" Format="N2" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_model.GuaranteeType" Placeholder="Tipo Garantia" FloatLabelType="FloatLabelType.Always" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ItemModel>? _grid;
+    private List<ItemModel> _items = [];
+    private FormModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { var r = await Http.GetFromJsonAsync<Paged>("/api/lending/term-rates?pageSize=500"); _items = r?.Items ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Tasa por Plazo"; _showDialog = true; }
+
+    private void OpenEdit(ItemModel item)
+    {
+        _model = new()
+        {
+            CreditLineId = item.CreditLineId, AmountStart = item.AmountStart, AmountEnd = item.AmountEnd,
+            TermStart = item.TermStart, TermEnd = item.TermEnd, SeniorityStart = item.SeniorityStart,
+            SeniorityEnd = item.SeniorityEnd, Rate = item.Rate, MaxTerm = item.MaxTerm,
+            MaxAmount = item.MaxAmount, GuaranteeType = item.GuaranteeType
+        };
+        _editId = item.PublicId; _dialogTitle = "Editar Tasa por Plazo"; _showDialog = true;
+    }
+
+    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        var res = _editId.HasValue
+            ? await Http.PutAsJsonAsync($"/api/lending/term-rates/{_editId}", _model)
+            : await Http.PostAsJsonAsync("/api/lending/term-rates", _model);
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/term-rates/{_deleteId}");
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class Paged { public List<ItemModel> Items { get; set; } = []; }
+    private class ItemModel
+    {
+        public Guid PublicId { get; set; }
+        public int CreditLineId { get; set; }
+        public decimal AmountStart { get; set; }
+        public decimal AmountEnd { get; set; }
+        public int TermStart { get; set; }
+        public int TermEnd { get; set; }
+        public int SeniorityStart { get; set; }
+        public int SeniorityEnd { get; set; }
+        public decimal Rate { get; set; }
+        public int MaxTerm { get; set; }
+        public decimal MaxAmount { get; set; }
+        public string GuaranteeType { get; set; } = "";
+    }
+    private class FormModel
+    {
+        public int CreditLineId { get; set; }
+        public decimal AmountStart { get; set; }
+        public decimal AmountEnd { get; set; }
+        public int TermStart { get; set; }
+        public int TermEnd { get; set; }
+        public int SeniorityStart { get; set; }
+        public int SeniorityEnd { get; set; }
+        public decimal Rate { get; set; }
+        public int MaxTerm { get; set; }
+        public decimal MaxAmount { get; set; }
+        public string GuaranteeType { get; set; } = "";
+    }
+}

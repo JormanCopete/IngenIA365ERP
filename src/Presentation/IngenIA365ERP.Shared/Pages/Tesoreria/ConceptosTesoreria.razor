@@ -1,0 +1,146 @@
+@page "/tesoreria/conceptos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Conceptos de Tesoreria - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Conceptos de Tesoreria</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="TreasuryConceptItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="ConceptCode" HeaderText="Codigo" Width="120" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+        <GridColumn Field="ShortName" HeaderText="Resumido" Width="200" />
+        <GridColumn Field="ConceptType" HeaderText="Tipo" Width="100" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as TreasuryConceptItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Codigo *</label>
+                    <SfTextBox @bind-Value="_model.ConceptCode" Placeholder="Codigo del concepto" />
+                </div>
+                <div>
+                    <label>Nombre *</label>
+                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del concepto" />
+                </div>
+                <div>
+                    <label>Resumido</label>
+                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                </div>
+                <div>
+                    <label>Tipo de Concepto</label>
+                    <SfTextBox @bind-Value="_model.ConceptType" Placeholder="Tipo" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<TreasuryConceptItem>? _grid;
+    private List<TreasuryConceptItem> _items = [];
+    private TreasuryConceptModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<TreasuryConceptItem>>("/api/treasury/concepts?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Concepto de Tesoreria"; _showDialog = true; }
+
+    private void OpenEdit(TreasuryConceptItem item)
+    {
+        _model = new()
+        {
+            ConceptCode = item.ConceptCode,
+            Name = item.Name,
+            ShortName = item.ShortName,
+            ConceptType = item.ConceptType
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Concepto de Tesoreria";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(TreasuryConceptItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/treasury/concepts/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/treasury/concepts", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/treasury/concepts/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class TreasuryConceptItem
+    {
+        public Guid PublicId { get; set; }
+        public string ConceptCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? ConceptType { get; set; }
+    }
+
+    private class TreasuryConceptModel
+    {
+        public string ConceptCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? ConceptType { get; set; }
+    }
+}

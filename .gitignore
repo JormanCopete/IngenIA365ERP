@@ -1,0 +1,274 @@
+## ============================================
+## .gitignore para proyecto .NET (IngenIA365ERP)
+## Stack: .NET 10, Blazor Hybrid MAUI, Carter APIs
+## ============================================
+
+## -----------------------------
+## Archivos de compilación .NET
+## -----------------------------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Bb]uilds/
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+## -----------------------------
+## Archivos generados por MSBuild / .NET
+## -----------------------------
+*.binlog
+*.tlog
+*.swp
+*.*~
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+## -----------------------------
+## Archivos de Visual Studio
+## -----------------------------
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.svclog
+*.scc
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+
+## Roslyn cache
+*.ide/
+.idea/
+*.sln.iml
+
+## -----------------------------
+## NuGet
+## -----------------------------
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+.nuget/
+project.assets.json
+
+## -----------------------------
+## Entity Framework / EF Core
+## -----------------------------
+# Mantener migraciones en repo (NO ignorar la carpeta Migrations)
+# Pero ignorar artefactos generados
+*.edmx.diagram
+*.edmx.sql
+
+## -----------------------------
+## Resultados de Tests
+## -----------------------------
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+*.trx
+*.vsmdi
+
+## -----------------------------
+## Publish / Deploy
+## -----------------------------
+[Pp]ublish/
+[Pp]ublishProfiles/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+PublishScripts/
+
+## -----------------------------
+## Archivos de configuración con secretos
+## -----------------------------
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Production.json
+secrets.json
+*.pfx
+*.key
+*.pem
+*.cer
+*.crt
+.env
+.env.local
+.env.*.local
+launchSettings.json
+
+## -----------------------------
+## Blazor / WebAssembly
+## -----------------------------
+wwwroot/dist/
+wwwroot/_framework/
+wwwroot/_content/
+
+## -----------------------------
+## MAUI / Mobile
+## -----------------------------
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM/
+Resources/Resource.designer.cs
+
+## -----------------------------
+## Node.js / Frontend tooling
+## -----------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+.npm/
+
+## -----------------------------
+## Archivos del Sistema Operativo
+## -----------------------------
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.stackdump
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+## -----------------------------
+## JetBrains Rider / ReSharper
+## -----------------------------
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+
+## -----------------------------
+## Bases de datos locales / Backups
+## -----------------------------
+*.mdf
+*.ldf
+*.ndf
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+LocalDB/
+
+## -----------------------------
+## Archivos temporales y caché
+## -----------------------------
+*.tmp
+*.temp
+*.cache
+*.bak
+*.swp
+~$*
+*.~*
+.history/
+
+## -----------------------------
+## Documentación generada
+## -----------------------------
+_site/
+DocProject/Help/*.HxT
+DocProject/Help/*.HxC
+DocProject/Help/*.hhc
+DocProject/Help/*.hhk
+DocProject/Help/*.hhp
+DocProject/Help/Html2
+DocProject/Help/html
+
+## -----------------------------
+## Logs de aplicación
+## -----------------------------
+*.log
+logs/
+LogFiles/
+nlog*.config.user
+
+## -----------------------------
+## Archivos específicos de Azure / AWS
+## -----------------------------
+*.publishsettings
+csx/
+*.build.csdef
+ecf/
+rcf/
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+*.appxbundle
+*.appxupload
+
+## -----------------------------
+## IngenIA365ERP - Específicos del proyecto
+## -----------------------------
+# Backups y archivos temporales propios
+*.backup
+*.orig
+TempData/
+UploadedFiles/
+
+# Documentación temporal de trabajo
+docs/temp/
+docs/draft/
+
+# Archivos de migración con datos sensibles
+database/migration/data/*.sql
+!database/migration/data/.gitkeep
+
+## -----------------------------
+## Otros
+## -----------------------------
+*.lock
+*.pid
+*.seed
+*.tgz
+.yarn-integrity

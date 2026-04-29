@@ -1,0 +1,32 @@
+@* Selector de rango de fechas con presets *@
+
+<div class="date-range-selector">
+    <div class="date-range-presets">
+        <SfButton CssClass="e-flat e-small" OnClick="@(() => SetPreset(0))">Hoy</SfButton>
+        <SfButton CssClass="e-flat e-small" OnClick="@(() => SetPreset(7))">Esta semana</SfButton>
+        <SfButton CssClass="e-flat e-small" OnClick="@(() => SetPreset(30))">Este mes</SfButton>
+        <SfButton CssClass="e-flat e-small" OnClick="@(() => SetPreset(365))">Este anio</SfButton>
+    </div>
+    <div class="date-range-pickers">
+        <SfDatePicker TValue="DateTime?" @bind-Value="From" Placeholder="Desde"
+                      Max="@(To ?? DateTime.MaxValue)" Format="dd/MM/yyyy" CssClass="e-small" />
+        <span class="date-separator">-</span>
+        <SfDatePicker TValue="DateTime?" @bind-Value="To" Placeholder="Hasta"
+                      Min="@(From ?? DateTime.MinValue)" Format="dd/MM/yyyy" CssClass="e-small" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public DateTime? From { get; set; } = DateTime.Today.AddMonths(-1);
+    [Parameter] public EventCallback<DateTime?> FromChanged { get; set; }
+    [Parameter] public DateTime? To { get; set; } = DateTime.Today;
+    [Parameter] public EventCallback<DateTime?> ToChanged { get; set; }
+
+    private async Task SetPreset(int days)
+    {
+        To = DateTime.Today;
+        From = days == 0 ? DateTime.Today : DateTime.Today.AddDays(-days);
+        await FromChanged.InvokeAsync(From);
+        await ToChanged.InvokeAsync(To);
+    }
+}

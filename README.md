@@ -1,0 +1,129 @@
+# IngenIA365ERP
+
+ERP Financiero SaaS para cooperativas colombianas. Migrado desde SOLIDO (VB.NET/WinForms) a una arquitectura moderna Clean Architecture con .NET 10.
+
+## Tecnologia
+
+- **Backend:** .NET 10, Minimal APIs (Carter), EF Core 10, CQRS (MediatR)
+- **Frontend:** Blazor Hybrid MAUI + Blazor Server + Blazor WebAssembly
+- **UI:** SyncFusion Blazor 33.1.44 (tema fluent2-dark)
+- **BD Transaccional:** SQL Server (schema-per-tenant)
+- **BD Auditoria:** MongoDB (batching, TTL 5 anos)
+- **Cache:** Redis
+- **Auth:** JWT RS256, RBAC con 112 permisos, 8 roles
+- **Reportes:** QuestPDF (15 reportes PDF)
+- **Testing:** xUnit + FluentAssertions + ArchUnitNET
+
+## Requisitos
+
+- .NET 10 SDK
+- Docker Desktop
+- SQL Server 2022+ (o via Docker)
+
+## Inicio rapido
+
+```bash
+# 1. Levantar infraestructura con Docker
+docker-compose up -d sqlserver mongodb redis
+
+# 2. Inicializar BD (requiere sqlcmd)
+cd tools/scripts
+pwsh init-dev.ps1
+
+# 3. Ejecutar API (terminal 1)
+cd src/Presentation/IngenIA365ERP.API
+dotnet run
+
+# 4. Ejecutar Web (terminal 2)
+cd src/Presentation/IngenIA365ERP.Web
+dotnet run
+
+# 5. Abrir en navegador
+# API:  http://localhost:5000/swagger
+# Web:  http://localhost:5001
+```
+
+### Con Docker Compose completo
+
+```bash
+docker-compose up -d
+# API:  http://localhost:5000
+# Web:  http://localhost:5001
+# RabbitMQ Management: http://localhost:15672 (ingenia365/ingenia365dev)
+```
+
+## Estructura del proyecto
+
+```
+IngenIA365ERP.slnx
+|
++-- src/
+|   +-- Core/
+|   |   +-- IngenIA365ERP.Domain/           -> Entidades, Value Objects, Eventos
+|   |   +-- IngenIA365ERP.Application/      -> CQRS, Validacion, Interfaces
+|   |
+|   +-- Infrastructure/
+|   |   +-- IngenIA365ERP.Persistence/      -> EF Core + SQL Server
+|   |   +-- IngenIA365ERP.Identity/         -> Auth + JWT + Permisos
+|   |   +-- IngenIA365ERP.Audit/            -> MongoDB
+|   |   +-- IngenIA365ERP.Caching/          -> Redis
+|   |   +-- IngenIA365ERP.Legacy/           -> Puente a ERP.Core (temporal)
+|   |
+|   +-- Presentation/
+|       +-- IngenIA365ERP.API/              -> Minimal APIs (backend)
+|       +-- IngenIA365ERP.Web/              -> Blazor Server
+|       +-- IngenIA365ERP.Web.Client/       -> Blazor WASM
+|       +-- IngenIA365ERP.Shared/           -> Componentes Blazor compartidos
+|       +-- IngenIA365ERP.App/              -> MAUI Hybrid (desktop/movil)
+|
++-- tests/
+|   +-- IngenIA365ERP.Domain.Tests/
+|   +-- IngenIA365ERP.Application.Tests/
+|   +-- IngenIA365ERP.API.IntegrationTests/
+|   +-- IngenIA365ERP.Architecture.Tests/
+|
++-- tools/
+    +-- IngenIA365ERP.DataMigrator/         -> Migracion de datos SOLIDO -> nuevo
+    +-- IngenIA365ERP.DbMigrator/           -> Crear schemas por tenant
+    +-- scripts/                            -> Scripts SQL e inicializacion
+```
+
+## Modulos
+
+| Modulo | Prefijo BD | Descripcion |
+|--------|-----------|-------------|
+| Core | COR_ | Personas, sucursales, ciudades, bancos, parametros |
+| Contabilidad | ACC_ | Plan de cuentas, comprobantes, movimientos, saldos |
+| Cartera Financiera | LND_ | Creditos, ahorros, aportes, recaudos, mora |
+| Nomina | PAY_ | Empleados, liquidacion, novedades, prestaciones |
+| Inventario | INV_ | Productos, bodegas, movimientos, facturacion |
+| CDT | CDT_ | Certificados de deposito a termino |
+| Tarjeta Debito | DEB_ | Tarjetas, transacciones |
+| Tesoreria | TRS_ | Cheques, facturas, flujo de caja |
+| Seguridad | SEC_ | Usuarios, roles, permisos |
+| Auditoria | AUD_ | Logs de auditoria y acceso |
+
+## Multi-tenancy
+
+- **Estrategia:** Schema-per-tenant en SQL Server
+- **Resolucion:** Header `X-Tenant-Id` o subdominio
+- **Admin:** BD separada `IngenIA365ERP_Admin` con tablas `ADM_*`
+- **Herramienta:** `tools/IngenIA365ERP.DbMigrator` para crear/listar/eliminar tenants
+
+## CI/CD
+
+Pipeline en `.github/workflows/ci.yml`:
+- Build + tests en cada push/PR
+- Docker build + push a GHCR en merge a `main`
+
+## Migracion desde SOLIDO
+
+- **Fase 1:** 33 plugins VB.NET -> C# -> ERP.Core consolidado
+- **Fase 2:** Rediseno BD (272 tablas), Clean Architecture, 382 archivos CQRS, 136 paginas Blazor, 15 reportes PDF
+- **Fase 3:** Docker, CI/CD, scripts de inicializacion, tests de arquitectura
+- **Documentacion:** `MAPEO-BD-VIEJO-NUEVO.md`, `ANALISIS-FORMULARIOS.md`
+- **Migrador:** `tools/IngenIA365ERP.DataMigrator` para datos existentes
+
+## Documentacion adicional
+
+- [`docs/CONFIGURACION-Y-AUTENTICACION.md`](docs/CONFIGURACION-Y-AUTENTICACION.md) — AppMode (Mock/Api), tenant resolution, tablas Identity, seed, cadenas de conexion, registracion DI, troubleshooting.

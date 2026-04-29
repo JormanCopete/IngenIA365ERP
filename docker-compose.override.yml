@@ -1,0 +1,25 @@
+version: "3.9"
+
+# Override para desarrollo local con hot reload
+services:
+  api:
+    build:
+      target: build
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+    volumes:
+      - ./src:/src/src:ro
+      - ./tools:/src/tools:ro
+    command: dotnet watch run --project src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj --urls http://+:8080
+
+  web:
+    build:
+      target: build
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+      - ApiBaseUrl=http://api:8080
+    volumes:
+      - ./src:/src/src:ro
+    command: dotnet watch run --project src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj --urls http://+:8080

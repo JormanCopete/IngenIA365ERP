@@ -1,0 +1,295 @@
+@page "/cartera/mora"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Mora y Cobro - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Mora y Gestion de Cobro</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-warning" IconCss="e-icons e-refresh" OnClick="@(() => _showCalculate = true)">Calcular Mora</SfButton>
+    </div>
+</div>
+
+<!-- KPI Dashboard -->
+@if (_summary is not null)
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
+        <div class="kpi-card">
+            <span class="kpi-label">Total en Mora</span>
+            <span class="kpi-value" style="color:#e74c3c;">$@_summary.TotalOverdueAmount.ToString("N0")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Cartera Total</span>
+            <span class="kpi-value">$@_summary.TotalPortfolioBalance.ToString("N0")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">% Cartera en Riesgo</span>
+            <span class="kpi-value" style="@(_summary.PortfolioAtRiskPct > 5 ? "color:#e74c3c" : "color:#f39c12")">@_summary.PortfolioAtRiskPct.ToString("N2")%</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Creditos en Mora</span>
+            <span class="kpi-value">@_summary.TotalOverduePortfolios</span>
+        </div>
+    </div>
+
+    <!-- Classification distribution -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px;">
+        <div class="class-card" style="border-left:4px solid #27ae60;">
+            <span class="class-label">A - Normal</span>
+            <span class="class-count">@_summary.ClassA creditos</span>
+            <span class="class-amount">$@_summary.AmountA.ToString("N0")</span>
+        </div>
+        <div class="class-card" style="border-left:4px solid #f39c12;">
+            <span class="class-label">B - Aceptable</span>
+            <span class="class-count">@_summary.ClassB creditos</span>
+            <span class="class-amount">$@_summary.AmountB.ToString("N0")</span>
+        </div>
+        <div class="class-card" style="border-left:4px solid #e67e22;">
+            <span class="class-label">C - Apreciable</span>
+            <span class="class-count">@_summary.ClassC creditos</span>
+            <span class="class-amount">$@_summary.AmountC.ToString("N0")</span>
+        </div>
+        <div class="class-card" style="border-left:4px solid #e74c3c;">
+            <span class="class-label">D - Significativo</span>
+            <span class="class-count">@_summary.ClassD creditos</span>
+            <span class="class-amount">$@_summary.AmountD.ToString("N0")</span>
+        </div>
+        <div class="class-card" style="border-left:4px solid #8b0000;">
+            <span class="class-label">E - Incobrable</span>
+            <span class="class-count">@_summary.ClassE creditos</span>
+            <span class="class-amount">$@_summary.AmountE.ToString("N0")</span>
+        </div>
+    </div>
+}
+
+<!-- Filters -->
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+    <SfDropDownList TValue="string" TItem="ClassItem" @bind-Value="_classFilter"
+                    DataSource="_classOptions" Width="180px" CssClass="e-small" Placeholder="Clasificacion">
+        <DropDownListFieldSettings Text="Text" Value="Value" />
+        <DropDownListEvents TValue="string" TItem="ClassItem" ValueChange="OnFilterChanged" />
+    </SfDropDownList>
+    <div style="display:flex;gap:4px;align-items:center;">
+        <label style="font-size:13px;">Dias mora desde:</label>
+        <SfNumericTextBox TValue="int?" @bind-Value="_daysFrom" Width="80px" CssClass="e-small" Min="0" />
+        <label style="font-size:13px;">hasta:</label>
+        <SfNumericTextBox TValue="int?" @bind-Value="_daysTo" Width="80px" CssClass="e-small" Min="0" />
+    </div>
+    <SfTextBox @bind-Value="_searchTerm" Placeholder="Buscar por cedula" Width="180px" CssClass="e-small" />
+    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Filtrar</SfButton>
+</div>
+
+<!-- Overdue portfolios grid -->
+<SfGrid TValue="DefaultPortfolioRow" DataSource="_defaults" AllowPaging="true" AllowSorting="true"
+        AllowFiltering="true" GridLines="GridLine.Both">
+    <GridPageSettings PageSize="20" />
+    <GridEvents TValue="DefaultPortfolioRow" RowSelected="OnRowSelected" />
+    <GridColumns>
+        <GridColumn Field="@nameof(DefaultPortfolioRow.PortfolioNumber)" HeaderText="No. Credito" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.IdentificationNumber)" HeaderText="Cedula" Width="120" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.CreditLineName)" HeaderText="Linea" Width="170" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.CurrentBalance)" HeaderText="Saldo" Width="130" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.DaysOverdue)" HeaderText="Dias Mora" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as DefaultPortfolioRow;
+                    var color = row?.DaysOverdue switch { > 180 => "#8b0000", > 90 => "#e74c3c", > 60 => "#e67e22", > 30 => "#f39c12", _ => "#f1c40f" };
+                }
+                <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
+            </Template>
+        </GridColumn>
+        <GridColumn Field="@nameof(DefaultPortfolioRow.Classification)" HeaderText="Cat." Width="60" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as DefaultPortfolioRow;
+                    var catColor = row?.Classification switch { "A" => "#27ae60", "B" => "#f39c12", "C" => "#e67e22", "D" => "#e74c3c", "E" => "#8b0000", _ => "#888" };
+                }
+                <span style="background:@catColor;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Classification</span>
+            </Template>
+        </GridColumn>
+        <GridColumn Field="@nameof(DefaultPortfolioRow.CapitalBalance)" HeaderText="Cap.Mora" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.InterestBalance)" HeaderText="Int.Mora" Width="120" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.TotalOverdue)" HeaderText="Total Mora" Width="130" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(DefaultPortfolioRow.LastPaymentDate)" HeaderText="Ult. Pago" Width="110" Format="d" />
+    </GridColumns>
+</SfGrid>
+
+<!-- Calculate Defaults Dialog -->
+<SfDialog Width="400px" IsModal="true" @bind-Visible="_showCalculate" Header="Calcular Mora"
+          ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <p>Este proceso calculara la mora para todos los creditos activos.</p>
+                <div>
+                    <label>Fecha de Calculo *</label>
+                    <SfDatePicker TValue="DateTime" @bind-Value="_calculateDate" Format="dd/MM/yyyy" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showCalculate = false)" />
+        <DialogButton Content="Calcular" CssClass="e-warning" IsPrimary="true" OnClick="CalculateDefaults" />
+    </DialogButtons>
+</SfDialog>
+
+<!-- Calculation Result Dialog -->
+<SfDialog Width="400px" IsModal="true" @bind-Visible="_showResult" Header="Resultado del Calculo"
+          ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_calcResult is not null)
+            {
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <span style="color:#888;">Creditos procesados:</span><span>@_calcResult.PortfoliosProcessed</span>
+                    <span style="color:#888;">Nuevas moras:</span><span style="color:#e74c3c;">@_calcResult.NewDefaults</span>
+                    <span style="color:#888;">Moras actualizadas:</span><span style="color:#f39c12;">@_calcResult.UpdatedDefaults</span>
+                    <span style="color:#888;">Moras limpiadas:</span><span style="color:#27ae60;">@_calcResult.ClearedDefaults</span>
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-primary" IsPrimary="true" OnClick="@(() => _showResult = false)" />
+    </DialogButtons>
+</SfDialog>
+
+<style>
+    .kpi-card {
+        background: var(--sf-card-bg, #1e1e2e);
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    .kpi-value { font-size: 22px; font-weight: bold; color: #00bcd4; }
+    .kpi-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .class-card {
+        background: #1a1a2e;
+        padding: 10px 12px;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+    }
+    .class-label { font-size: 13px; font-weight: bold; color: #ccc; }
+    .class-count { font-size: 12px; color: #888; }
+    .class-amount { font-size: 14px; color: #fff; margin-top: 2px; }
+</style>
+
+@code {
+    private List<DefaultPortfolioRow> _defaults = [];
+    private SummaryResponse? _summary;
+    private string _classFilter = "";
+    private int? _daysFrom;
+    private int? _daysTo;
+    private string _searchTerm = "";
+
+    // Dialogs
+    private bool _showCalculate;
+    private bool _showResult;
+    private DateTime _calculateDate = DateTime.Today;
+    private CalcResultResponse? _calcResult;
+
+    private List<ClassItem> _classOptions =
+    [
+        new("", "Todas"),
+        new("A", "A - Normal"),
+        new("B", "B - Aceptable"),
+        new("C", "C - Apreciable"),
+        new("D", "D - Significativo"),
+        new("E", "E - Incobrable")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSummary();
+        await LoadData();
+    }
+
+    private async Task LoadSummary()
+    {
+        try
+        {
+            _summary = await Http.GetFromJsonAsync<SummaryResponse>("api/lending/defaults/summary");
+        }
+        catch { /* graceful fallback */ }
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "api/lending/defaults?PageSize=100";
+            if (!string.IsNullOrEmpty(_classFilter))
+                url += $"&Classification={_classFilter}";
+            if (_daysFrom.HasValue)
+                url += $"&DaysOverdueFrom={_daysFrom}";
+            if (_daysTo.HasValue)
+                url += $"&DaysOverdueTo={_daysTo}";
+            if (!string.IsNullOrEmpty(_searchTerm))
+                url += $"&SearchTerm={Uri.EscapeDataString(_searchTerm)}";
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<DefaultPortfolioRow>>(url);
+            _defaults = response?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private async Task OnFilterChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, ClassItem> args)
+    {
+        await LoadData();
+    }
+
+    private async Task CalculateDefaults()
+    {
+        try
+        {
+            var payload = new { CalculationDate = DateOnly.FromDateTime(_calculateDate) };
+            var response = await Http.PostAsJsonAsync("api/lending/defaults/calculate", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                _calcResult = await response.Content.ReadFromJsonAsync<CalcResultResponse>();
+                _showCalculate = false;
+                _showResult = true;
+                await LoadSummary();
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ErrorAsync(await response.Content.ReadAsStringAsync());
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
+    }
+
+    private void OnRowSelected(RowSelectEventArgs<DefaultPortfolioRow> args)
+    {
+        if (args.Data?.PortfolioPublicId != null)
+            Nav.NavigateTo($"/cartera/creditos/{args.Data.PortfolioPublicId}");
+    }
+
+    // --- Types ---
+    record ClassItem(string Value, string Text);
+    record DefaultPortfolioRow(Guid PortfolioPublicId, long PortfolioNumber, string PersonName,
+        string IdentificationNumber, string CreditLineName, decimal CurrentBalance, int DaysOverdue,
+        string Classification, string ClassificationText, decimal CapitalBalance,
+        decimal InterestBalance, decimal DefaultBalance, decimal TotalOverdue,
+        DateOnly DisbursementDate, DateOnly? LastPaymentDate);
+    record SummaryResponse(decimal TotalOverdueAmount, decimal TotalPortfolioBalance, decimal PortfolioAtRiskPct,
+        int TotalOverduePortfolios, int ClassA, int ClassB, int ClassC, int ClassD, int ClassE,
+        decimal AmountA, decimal AmountB, decimal AmountC, decimal AmountD, decimal AmountE);
+    record CalcResultResponse(int PortfoliosProcessed, int NewDefaults, int UpdatedDefaults, int ClearedDefaults);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

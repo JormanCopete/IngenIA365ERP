@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IngenIA365ERP.Web.Client\IngenIA365ERP.Web.Client.csproj" />
+    <ProjectReference Include="..\IngenIA365ERP.Shared\IngenIA365ERP.Shared.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageReference Include="Syncfusion.Blazor" Version="33.1.44" />
+    <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.1.44" />
+  </ItemGroup>
+
+</Project>

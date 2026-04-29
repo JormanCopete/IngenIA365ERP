@@ -1,0 +1,35 @@
+{
+  "permissions": {
+	"defaultMode": "bypassPermissions",
+    "skipDangerousModePermissionPrompt": true,
+    "allow": [
+	  "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Bash(curl -k -s -o /dev/null -w \"swagger: %{http_code}\\\\n\" https://localhost:7100/swagger/index.html)",
+      "Bash(curl -k -s -o /dev/null -w \"health: %{http_code}\\\\n\" https://localhost:7100/api/health)",
+      "Bash(curl -k -s https://localhost:7100/swagger/v1/swagger.json)",
+      "Bash(sqlcmd -S localhost -E -Q \"SELECT name FROM sys.databases WHERE name LIKE '%Ingenia%' OR name LIKE '%IngenIA%'\")",
+      "Bash(sqlcmd -S localhost -E -d IngenIA365ERP_Admin -Q \"SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '%enant%'\")",
+      "Bash(sqlcmd *)",
+      "Bash(curl -k -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST https://localhost:7100/api/auth/login -H \"Content-Type: application/json\" -d '{\"Email\":\"admin@ingenia365.com\",\"Password\":\"Admin123!\",\"TenantId\":\"dev_tenant\"}')",
+      "Bash(curl -k -s -w \"\\\\nHTTP %{http_code}\\\\n\" https://localhost:7100/api/treasury/checks/)",
+      "Bash(curl -k -s -w \"\\\\nHTTP %{http_code}\\\\n\" -H \"X-Tenant-Id: dev_tenant\" https://localhost:7100/api/treasury/checks/)",
+      "Bash(curl -k -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST https://localhost:7100/api/auth/login -H \"Content-Type: application/json\" -d '{\"Email\":\"admin@ingenia365.com\",\"Password\":\"Admin@Temporal2024!\",\"TenantId\":\"dev_tenant\"}')",
+      "Bash(curl -k -s -X POST https://localhost:7100/api/auth/login -H \"Content-Type: application/json\" -d '{\"Email\":\"admin@ingenia365.com\",\"Password\":\"Admin@Temporal2024!\",\"TenantId\":\"dev_tenant\"}')",
+      "Bash(python -c \"import sys,json; r=json.load\\(sys.stdin\\); print\\('top-level keys:', list\\(r.keys\\(\\)\\)\\); print\\('tokens keys:', list\\(r['tokens'].keys\\(\\)\\)\\); print\\('email:', r['email']\\); print\\('fullName:', r['fullName']\\); print\\('roles:', r['roles']\\); print\\('accessToken present:', bool\\(r['tokens']['accessToken']\\)\\)\")",
+      "Bash(grep -iE \"\\\\.md$|README|DOC\")",
+      "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al guardar\"\\)|Notification.ShowErrorAsync\\(res, \"Error al guardar\"\\)|g' {} +)",
+      "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al eliminar\"\\)|Notification.ShowErrorAsync\\(res, \"Error al eliminar\"\\)|g' {} +)",
+      "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al crear\"\\)|Notification.ShowErrorAsync\\(res, \"Error al crear\"\\)|g' {} +)",
+      "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al actualizar\"\\)|Notification.ShowErrorAsync\\(res, \"Error al actualizar\"\\)|g' {} +)",
+      "Bash(awk -F: '{s+=$2} END {print \"total replacements: \" s}')"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,72 @@
+@page "/cartera/cdt/liquidacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Liquidacion Intereses CDT - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Liquidacion de Intereses CDT</h3>
+</div>
+
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+    <div>
+        <label>Fecha de Liquidacion</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_liquidationDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
+    </div>
+</div>
+
+<ProcessExecutor TPreview="CDTPreviewLine" TResult="CDTResult"
+                 GetPreviewUrl="@(() => $"/api/cdt/interest-liquidation/preview?liquidationDate={GetDate():yyyy-MM-dd}")"
+                 GetExecuteUrl="@(() => "/api/cdt/interest-liquidation")"
+                 GetRequestBody="@(() => new { LiquidationDate = GetDate() } as object)">
+    <PreviewColumns>
+        <GridColumns>
+            <GridColumn Field="CertificateNumber" HeaderText="No. CDT" Width="140" />
+            <GridColumn Field="PersonName" HeaderText="Titular" Width="250" />
+            <GridColumn Field="Amount" HeaderText="Valor CDT" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Rate" HeaderText="Tasa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days" HeaderText="Dias" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="ProjectedInterest" HeaderText="Interes Proyectado" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+        </GridColumns>
+    </PreviewColumns>
+    <ResultTemplate>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+            <div class="info-card"><span class="label">CDTs Procesados</span><span>@context.CertificatesProcessed</span></div>
+            <div class="info-card"><span class="label">Total Intereses</span><span>@context.TotalInterest.ToString("N2")</span></div>
+            <div class="info-card"><span class="label">Fecha Liquidacion</span><span>@context.LiquidationDate</span></div>
+        </div>
+    </ResultTemplate>
+</ProcessExecutor>
+
+@code {
+    private DateTime? _liquidationDate = DateTime.Today;
+
+    private DateOnly GetDate() => _liquidationDate.HasValue
+        ? DateOnly.FromDateTime(_liquidationDate.Value)
+        : DateOnly.FromDateTime(DateTime.Today);
+
+    private class CDTPreviewLine
+    {
+        public string CertificateNumber { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal Rate { get; set; }
+        public int Days { get; set; }
+        public decimal ProjectedInterest { get; set; }
+    }
+
+    private class CDTResult
+    {
+        public int CertificatesProcessed { get; set; }
+        public decimal TotalInterest { get; set; }
+        public Guid? AccountingDocumentId { get; set; }
+        public string LiquidationDate { get; set; } = "";
+    }
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

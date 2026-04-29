@@ -1,0 +1,147 @@
+@page "/debito/tarjetas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Tarjetas Debito - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Tarjetas Debito</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Emitir Tarjeta</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="DebitCardItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="PersonName" HeaderText="Titular" Width="220" />
+        <GridColumn Field="MaskedCardNumber" HeaderText="Numero Tarjeta" Width="180" />
+        <GridColumn Field="AccountNumber" HeaderText="Cuenta Vinculada" Width="150" />
+        <GridColumn Field="Balance" HeaderText="Saldo" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="StatusText" HeaderText="Estado" Width="140">
+            <Template>
+                @{
+                    var item = context as DebitCardItem;
+                    var badgeClass = item?.Status switch
+                    {
+                        "A" => "e-badge e-badge-success",
+                        "B" => "e-badge e-badge-warning",
+                        "D" => "e-badge e-badge-danger",
+                        _ => "e-badge e-badge-info"
+                    };
+                    <span class="@badgeClass">@item?.StatusText</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="120" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as DebitCardItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye"
+                        OnClick="@(() => Navigation.NavigateTo($"/debito/tarjetas/{item!.PublicId}"))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="Emitir Nueva Tarjeta" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Persona (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.PersonPublicId" Placeholder="GUID de la persona" />
+                </div>
+                <div>
+                    <label>Cuenta de Ahorros (PublicId) *</label>
+                    <SfTextBox @bind-Value="_model.SavingsAccountPublicId" Placeholder="GUID de la cuenta de ahorros" />
+                </div>
+                <div>
+                    <label>Tipo de Tarjeta</label>
+                    <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_model.CardType" DataSource="@_cardTypes">
+                        <DropDownListFieldSettings Value="Code" Text="Name" />
+                    </SfDropDownList>
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Emitir" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    private SfGrid<DebitCardItem>? _grid;
+    private List<DebitCardItem> _items = [];
+    private IssueCardModel _model = new();
+    private bool _showDialog;
+
+    private readonly List<DropItem> _cardTypes =
+    [
+        new("D", "Debito"),
+        new("C", "Credito")
+    ];
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<DebitCardItem>>("/api/debit/cards?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new();
+        _showDialog = true;
+    }
+
+    private async Task Save()
+    {
+        if (!Guid.TryParse(_model.PersonPublicId, out _) || !Guid.TryParse(_model.SavingsAccountPublicId, out _))
+        {
+            await Notification.ErrorAsync("Los identificadores deben ser GUIDs validos.");
+            return;
+        }
+
+        var payload = new
+        {
+            PersonPublicId = Guid.Parse(_model.PersonPublicId),
+            SavingsAccountPublicId = Guid.Parse(_model.SavingsAccountPublicId),
+            CardType = _model.CardType
+        };
+
+        var res = await Http.PostAsJsonAsync("/api/debit/cards", payload);
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Tarjeta emitida exitosamente");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ErrorAsync("Error al emitir tarjeta");
+    }
+
+    private class DebitCardItem
+    {
+        public Guid PublicId { get; set; }
+        public string MaskedCardNumber { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public string? AccountNumber { get; set; }
+        public decimal Balance { get; set; }
+        public string Status { get; set; } = "";
+        public string StatusText { get; set; } = "";
+    }
+
+    private class IssueCardModel
+    {
+        public string PersonPublicId { get; set; } = "";
+        public string SavingsAccountPublicId { get; set; } = "";
+        public string CardType { get; set; } = "D";
+    }
+
+    private record DropItem(string Code, string Name);
+}

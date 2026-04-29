@@ -1,0 +1,89 @@
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0d1257 0%, #1a237e 50%, #283593 100%);
+    padding: 20px;
+}
+
+.login-card {
+    background: #1e1e2e;
+    border-radius: 12px;
+    padding: 40px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-logo {
+    font-size: 48px;
+    color: #00bcd4;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.login-header h1 {
+    color: #fff;
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+}
+
+.login-header p {
+    color: #9e9e9e;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.login-error {
+    background: rgba(244,67,54,0.1);
+    color: #f44336;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-field {
+    margin-bottom: 18px;
+}
+
+.form-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: #9e9e9e;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.login-btn {
+    margin-top: 8px;
+    height: 42px;
+    font-weight: 600;
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.login-footer a {
+    color: #00bcd4;
+    font-size: 0.85rem;
+    text-decoration: none;
+}
+
+.login-brand {
+    margin-top: 24px;
+    color: rgba(255,255,255,0.4);
+    font-size: 0.8rem;
+}

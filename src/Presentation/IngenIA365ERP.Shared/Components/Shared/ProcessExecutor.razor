@@ -1,0 +1,173 @@
+@typeparam TPreview
+@typeparam TResult
+
+<div class="process-executor">
+    @if (_state == ProcessState.Ready)
+    {
+        <div style="display:flex;gap:8px;align-items:center;">
+            @ParameterContent
+            <SfButton CssClass="e-info" IconCss="e-icons e-preview" OnClick="LoadPreview">Vista Previa</SfButton>
+        </div>
+    }
+
+    @if (_state == ProcessState.LoadingPreview)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="#333" ProgressColor="#00bcd4" />
+        <p>Cargando vista previa...</p>
+    }
+
+    @if (_state == ProcessState.Preview)
+    {
+        <SfGrid TValue="TPreview" DataSource="_previewData" AllowPaging="true" AllowSorting="true">
+            <GridPageSettings PageSize="20" />
+            @PreviewColumns
+        </SfGrid>
+        <div style="margin-top:16px;display:flex;gap:8px;">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="ShowConfirm">Ejecutar Proceso</SfButton>
+            <SfButton CssClass="e-flat" OnClick="Reset">Cancelar</SfButton>
+        </div>
+    }
+
+    @if (_state == ProcessState.Processing)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="#333" ProgressColor="#4caf50" />
+        <p>Procesando... Por favor espere.</p>
+    }
+
+    @if (_state == ProcessState.Done && _result is not null)
+    {
+        <div class="process-result">
+            @ResultTemplate(_result)
+        </div>
+        <div style="margin-top:16px;">
+            <SfButton CssClass="e-flat" IconCss="e-icons e-reload" OnClick="Reset">Nuevo Proceso</SfButton>
+        </div>
+    }
+
+    @if (_state == ProcessState.Error)
+    {
+        <div class="e-error" style="color:#f44336;padding:12px;border:1px solid #f44336;border-radius:4px;">
+            <span class="e-icons e-circle-close" style="margin-right:8px;"></span>
+            @_errorMessage
+        </div>
+        <div style="margin-top:16px;">
+            <SfButton CssClass="e-flat" OnClick="Reset">Reintentar</SfButton>
+        </div>
+    }
+</div>
+
+<ConfirmDialog @bind-Visible="_showConfirm"
+               Title="Confirmar Proceso"
+               Message="Esta seguro de ejecutar este proceso? Esta operacion no se puede deshacer."
+               ConfirmText="Ejecutar"
+               CancelText="Cancelar"
+               OnConfirm="Execute" />
+
+@code {
+    private enum ProcessState { Ready, LoadingPreview, Preview, Processing, Done, Error }
+
+    [Parameter] public string PreviewUrl { get; set; } = "";
+    [Parameter] public string ExecuteUrl { get; set; } = "";
+    [Parameter] public RenderFragment? PreviewColumns { get; set; }
+    [Parameter] public RenderFragment<TResult> ResultTemplate { get; set; } = default!;
+    [Parameter] public RenderFragment? ParameterContent { get; set; }
+    [Parameter] public object? RequestBody { get; set; }
+    [Parameter] public Func<string>? GetPreviewUrl { get; set; }
+    [Parameter] public Func<string>? GetExecuteUrl { get; set; }
+    [Parameter] public Func<object?>? GetRequestBody { get; set; }
+
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private INotificationService Notification { get; set; } = default!;
+
+    private ProcessState _state = ProcessState.Ready;
+    private List<TPreview>? _previewData;
+    private TResult? _result;
+    private string _errorMessage = "";
+    private bool _showConfirm;
+
+    private async Task LoadPreview()
+    {
+        try
+        {
+            _state = ProcessState.LoadingPreview;
+            StateHasChanged();
+
+            var url = GetPreviewUrl?.Invoke() ?? PreviewUrl;
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _previewData = await response.Content.ReadFromJsonAsync<List<TPreview>>();
+                _state = ProcessState.Preview;
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _errorMessage = $"Error al cargar vista previa: {error}";
+                _state = ProcessState.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error de conexion: {ex.Message}";
+            _state = ProcessState.Error;
+        }
+    }
+
+    private void ShowConfirm()
+    {
+        _showConfirm = true;
+    }
+
+    private async Task Execute()
+    {
+        try
+        {
+            _state = ProcessState.Processing;
+            StateHasChanged();
+
+            var url = GetExecuteUrl?.Invoke() ?? ExecuteUrl;
+            var body = GetRequestBody?.Invoke() ?? RequestBody;
+
+            HttpResponseMessage response;
+            if (body is not null)
+            {
+                response = await Http.PostAsJsonAsync(url, body);
+            }
+            else
+            {
+                response = await Http.PostAsync(url, null);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                _result = await response.Content.ReadFromJsonAsync<TResult>();
+                _state = ProcessState.Done;
+                await Notification.SuccessAsync("Proceso ejecutado exitosamente.");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _errorMessage = $"Error al ejecutar proceso: {error}";
+                _state = ProcessState.Error;
+                await Notification.ErrorAsync("Error al ejecutar el proceso.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error de conexion: {ex.Message}";
+            _state = ProcessState.Error;
+            await Notification.ErrorAsync("Error de conexion al ejecutar el proceso.");
+        }
+    }
+
+    private void Reset()
+    {
+        _state = ProcessState.Ready;
+        _previewData = null;
+        _result = default;
+        _errorMessage = "";
+    }
+}

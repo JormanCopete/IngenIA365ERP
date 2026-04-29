@@ -1,0 +1,242 @@
+@page "/cartera/retiros-asociado"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Retiro de Asociado - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Retiro de Asociado</h3>
+</div>
+
+<!-- Person search -->
+<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
+    <h4 style="margin-top:0;">Buscar Asociado</h4>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+            <label>Documento del Asociado</label>
+            <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
+        </div>
+        <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+    </div>
+
+    @if (_preview is not null)
+    {
+        <div style="margin-top:16px;">
+            <p style="margin:4px 0;">Asociado: <strong style="color:#3498db;">@_preview.PersonName</strong></p>
+
+            <!-- Product summary -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px;">
+                <div class="kpi-card" style="@(_preview.ActiveLoansCount > 0 ? "border-color:#e74c3c" : "")">
+                    <span class="kpi-label">Creditos Vigentes</span>
+                    <span class="kpi-value" style="color:@(_preview.ActiveLoansCount > 0 ? "#e74c3c" : "#27ae60")">@_preview.ActiveLoansCount</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Saldo Ahorros</span>
+                    <span class="kpi-value">@_preview.SavingsBalance.ToString("N0")</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Saldo Aportes</span>
+                    <span class="kpi-value">@_preview.ContributionBalance.ToString("N0")</span>
+                </div>
+                <div class="kpi-card" style="@(_preview.CdtCount > 0 ? "border-color:#f39c12" : "")">
+                    <span class="kpi-label">CDTs Vigentes</span>
+                    <span class="kpi-value" style="color:@(_preview.CdtCount > 0 ? "#f39c12" : "#27ae60")">@_preview.CdtCount</span>
+                </div>
+            </div>
+
+            @if (!_preview.CanWithdraw)
+            {
+                <!-- Blocking reasons -->
+                <div style="margin-top:16px;padding:16px;background:#2c1a1a;border:1px solid #e74c3c;border-radius:8px;">
+                    <h4 style="color:#e74c3c;margin-top:0;">No es posible procesar el retiro</h4>
+                    <ul style="color:#e74c3c;margin:0;">
+                        @foreach (var reason in _preview.BlockingReasons)
+                        {
+                            <li>@reason</li>
+                        }
+                    </ul>
+                </div>
+            }
+            else
+            {
+                <!-- Can withdraw -->
+                <div style="margin-top:16px;padding:16px;background:#1a2c1a;border:1px solid #27ae60;border-radius:8px;">
+                    <h4 style="color:#27ae60;margin-top:0;">El asociado puede retirarse</h4>
+                    <p>Total a devolver (aportes + ahorros): <strong>@((_preview.SavingsBalance + _preview.ContributionBalance).ToString("N0"))</strong></p>
+
+                    <div style="margin-top:12px;">
+                        <label>Motivo de Retiro</label>
+                        <SfDropDownList TValue="string" TItem="ReasonItem" @bind-Value="_selectedReasonId"
+                                        DataSource="_withdrawalReasons" CssClass="e-small" Width="300px">
+                            <DropDownListFieldSettings Text="Text" Value="Value" />
+                        </SfDropDownList>
+                    </div>
+
+                    <div style="margin-top:12px;">
+                        <label>Fecha de Retiro</label>
+                        <SfDatePicker TValue="DateTime?" @bind-Value="_withdrawalDate" Format="dd/MM/yyyy" Width="200px" CssClass="e-small" />
+                    </div>
+
+                    <div style="margin-top:16px;">
+                        <SfButton CssClass="e-danger" IconCss="e-icons e-close" OnClick="ShowConfirmDialog">Procesar Retiro</SfButton>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Recent withdrawals -->
+<h4>Retiros Recientes</h4>
+<SfGrid TValue="WithdrawalRow" DataSource="_recentWithdrawals" AllowPaging="true" AllowSorting="true"
+        GridLines="GridLine.Both">
+    <GridPageSettings PageSize="15" />
+    <GridColumns>
+        <GridColumn Field="@nameof(WithdrawalRow.EntryDate)" HeaderText="Fecha" Width="110" Format="d" />
+        <GridColumn Field="@nameof(WithdrawalRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(WithdrawalRow.PersonCode)" HeaderText="Documento" Width="130" />
+        <GridColumn Field="@nameof(WithdrawalRow.ReasonDescription)" HeaderText="Motivo" Width="200" />
+        <GridColumn Field="@nameof(WithdrawalRow.Period)" HeaderText="Periodo" Width="100" TextAlign="TextAlign.Center" />
+    </GridColumns>
+</SfGrid>
+
+<!-- Confirm dialog -->
+<SfDialog @bind-Visible="_showConfirmDialog" Header="Confirmar Retiro de Asociado" Width="450px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:8px;">
+                <p style="color:#e74c3c;font-weight:bold;">Esta accion es irreversible.</p>
+                <p>Se marcara al asociado <strong>@_preview?.PersonName</strong> como RETIRADO.</p>
+                <p>Motivo: <strong>@(_withdrawalReasons.FirstOrDefault(r => r.Value == _selectedReasonId)?.Text ?? "-")</strong></p>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showConfirmDialog = false)" />
+        <DialogButton Content="Confirmar Retiro" CssClass="e-danger" OnClick="ExecuteWithdrawal" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    private string _personCode = "";
+    private WithdrawalPreview? _preview;
+    private List<ReasonItem> _withdrawalReasons = [];
+    private string _selectedReasonId = "";
+    private DateTime? _withdrawalDate;
+    private bool _showConfirmDialog;
+    private List<WithdrawalRow> _recentWithdrawals = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReasons();
+        await LoadRecentWithdrawals();
+    }
+
+    private async Task LoadReasons()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PagedResponse<ReasonItem>>("api/core/withdrawal-reasons?PageSize=100");
+            _withdrawalReasons = response?.Items ?? [];
+            _selectedReasonId = _withdrawalReasons.FirstOrDefault()?.Value ?? "";
+        }
+        catch { /* silent */ }
+    }
+
+    private async Task LoadRecentWithdrawals()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PagedResponse<WithdrawalRow>>("api/lending/withdrawals?PageSize=20");
+            _recentWithdrawals = response?.Items ?? [];
+        }
+        catch { /* silent */ }
+    }
+
+    private async Task SearchPerson()
+    {
+        _preview = null;
+
+        if (string.IsNullOrWhiteSpace(_personCode)) return;
+
+        try
+        {
+            // Resolve person
+            var person = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_personCode}");
+            if (person is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+
+            // Get withdrawal preview
+            _preview = await Http.GetFromJsonAsync<WithdrawalPreview>($"api/lending/withdrawals/preview/{person.PublicId}");
+            _withdrawalDate = DateTime.Now;
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private void ShowConfirmDialog()
+    {
+        if (string.IsNullOrEmpty(_selectedReasonId))
+        {
+            return;
+        }
+        _showConfirmDialog = true;
+    }
+
+    private async Task ExecuteWithdrawal()
+    {
+        if (_preview is null) return;
+
+        Guid.TryParse(_selectedReasonId, out var reasonGuid);
+
+        try
+        {
+            var payload = new
+            {
+                PersonPublicId = _preview.PersonPublicId,
+                WithdrawalReasonPublicId = reasonGuid,
+                WithdrawalDate = _withdrawalDate.HasValue
+                    ? DateOnly.FromDateTime(_withdrawalDate.Value)
+                    : DateOnly.FromDateTime(DateTime.Now)
+            };
+
+            var response = await Http.PostAsJsonAsync("api/lending/withdrawals", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Retiro procesado exitosamente.");
+                _showConfirmDialog = false;
+                _preview = null;
+                _personCode = "";
+                await LoadRecentWithdrawals();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record WithdrawalPreview(Guid PersonPublicId, string PersonName, string PersonCode,
+        int ActiveLoansCount, decimal SavingsBalance, decimal ContributionBalance, int CdtCount,
+        bool CanWithdraw, List<string> BlockingReasons);
+    record ReasonItem(Guid PublicId, string Name)
+    {
+        public string Value => PublicId.ToString();
+        public string Text => Name;
+    }
+    record WithdrawalRow(Guid PublicId, string PersonCode, string PersonName, DateOnly EntryDate,
+        string PriorStatus, string CurrentStatus, string ReasonDescription, int Period);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

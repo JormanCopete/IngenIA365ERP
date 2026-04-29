@@ -1,0 +1,75 @@
+@* Dialogo de busqueda de personas - reemplazo del dialogo de terceros de SOLIDO *@
+
+<SfDialog Width="700px" IsModal="true" @bind-Visible="Visible" ShowCloseIcon="true"
+          Header="Buscar Persona" CssClass="search-dialog">
+    <DialogTemplates>
+        <Content>
+            <div class="search-filters" style="display:flex;gap:8px;margin-bottom:12px;">
+                <SfTextBox @bind-Value="_searchId" Placeholder="No. Identificacion" CssClass="e-small" />
+                <SfTextBox @bind-Value="_searchName" Placeholder="Nombre" CssClass="e-small" />
+                <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="@Search">Buscar</SfButton>
+            </div>
+            <SfGrid DataSource="@_results" AllowPaging="true" Height="300">
+                <GridPageSettings PageSize="10" />
+                <GridEvents RowSelected="@OnRowSelected" TValue="PersonSearchResult" />
+                <GridColumns>
+                    <GridColumn Field="@nameof(PersonSearchResult.IdentificationNumber)" HeaderText="Identificacion" Width="140" />
+                    <GridColumn Field="@nameof(PersonSearchResult.FullName)" HeaderText="Nombre Completo" Width="250" />
+                    <GridColumn Field="@nameof(PersonSearchResult.City)" HeaderText="Ciudad" Width="120" />
+                    <GridColumn Field="@nameof(PersonSearchResult.Phone)" HeaderText="Telefono" Width="120" />
+                </GridColumns>
+            </SfGrid>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@Close" />
+        <DialogButton Content="Seleccionar" IsPrimary="true" CssClass="e-primary"
+                      Disabled="@(_selected is null)" OnClick="@Select" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public EventCallback<PersonSearchResult> OnPersonSelected { get; set; }
+
+    private string? _searchId;
+    private string? _searchName;
+    private List<PersonSearchResult> _results = [];
+    private PersonSearchResult? _selected;
+
+    private Task Search()
+    {
+        // TODO: Replace with API call
+        _results =
+        [
+            new("1001", "Juan Perez Garcia", "Bogota", "3001234567"),
+            new("1002", "Maria Lopez Ruiz", "Medellin", "3009876543"),
+            new("1003", "Carlos Rodriguez", "Cali", "3005551234"),
+        ];
+        _results = _results.Where(p =>
+            (string.IsNullOrEmpty(_searchId) || p.IdentificationNumber.Contains(_searchId)) &&
+            (string.IsNullOrEmpty(_searchName) || p.FullName.Contains(_searchName, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+        return Task.CompletedTask;
+    }
+
+    private void OnRowSelected(RowSelectEventArgs<PersonSearchResult> args) => _selected = args.Data;
+
+    private async Task Select()
+    {
+        if (_selected is not null)
+        {
+            await OnPersonSelected.InvokeAsync(_selected);
+            await Close();
+        }
+    }
+
+    private async Task Close()
+    {
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    public record PersonSearchResult(string IdentificationNumber, string FullName, string City, string Phone);
+}

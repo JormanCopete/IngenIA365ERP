@@ -1,0 +1,151 @@
+@page "/cartera/parametros-vivienda"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Parametros de Vivienda - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Parametros de Vivienda</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="PersonCode" HeaderText="Codigo Persona" Width="140" />
+        <GridColumn Field="CreditLineId" HeaderText="Linea Credito" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="PortfolioNumber" HeaderText="No. Cartera" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="HousingClass" HeaderText="Clase Vivienda" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="HousingType" HeaderText="Tipo Vivienda" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="SocialInterest" HeaderText="Interes Social" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="HasSubsidy" HeaderText="Subsidio" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="NetworkValue" HeaderText="Valor Red" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ItemModel;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <SfTextBox @bind-Value="_model.PersonCode" Placeholder="Codigo Persona" FloatLabelType="FloatLabelType.Always" />
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Linea de Credito" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="long" @bind-Value="_model.PortfolioNumber" Placeholder="No. Cartera" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.HousingClass" Placeholder="Clase Vivienda" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.HousingType" Placeholder="Tipo Vivienda" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfTextBox @bind-Value="_model.SocialInterest" Placeholder="Interes Social" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_model.HasSubsidy" Placeholder="Tiene Subsidio" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.NetworkEntity" Placeholder="Entidad Red" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="long" @bind-Value="_model.NetworkValue" Placeholder="Valor Red" Format="N0" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.DisbursementType" Placeholder="Tipo Desembolso" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.CurrencyType" Placeholder="Tipo Moneda" FloatLabelType="FloatLabelType.Always" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ItemModel>? _grid;
+    private List<ItemModel> _items = [];
+    private FormModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { var r = await Http.GetFromJsonAsync<Paged>("/api/lending/housing-parameters?pageSize=500"); _items = r?.Items ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro Vivienda"; _showDialog = true; }
+
+    private void OpenEdit(ItemModel item)
+    {
+        _model = new()
+        {
+            PersonCode = item.PersonCode, CreditLineId = item.CreditLineId, PortfolioNumber = item.PortfolioNumber,
+            HousingClass = item.HousingClass, HousingType = item.HousingType, SocialInterest = item.SocialInterest,
+            HasSubsidy = item.HasSubsidy, NetworkEntity = item.NetworkEntity, NetworkValue = item.NetworkValue,
+            DisbursementType = item.DisbursementType, CurrencyType = item.CurrencyType
+        };
+        _editId = item.PublicId; _dialogTitle = "Editar Parametro Vivienda"; _showDialog = true;
+    }
+
+    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        var res = _editId.HasValue
+            ? await Http.PutAsJsonAsync($"/api/lending/housing-parameters/{_editId}", _model)
+            : await Http.PostAsJsonAsync("/api/lending/housing-parameters", _model);
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/housing-parameters/{_deleteId}");
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class Paged { public List<ItemModel> Items { get; set; } = []; }
+    private class ItemModel
+    {
+        public Guid PublicId { get; set; }
+        public string PersonCode { get; set; } = "";
+        public int CreditLineId { get; set; }
+        public long PortfolioNumber { get; set; }
+        public int HousingClass { get; set; }
+        public int HousingType { get; set; }
+        public string SocialInterest { get; set; } = "";
+        public string HasSubsidy { get; set; } = "";
+        public int NetworkEntity { get; set; }
+        public long NetworkValue { get; set; }
+        public int DisbursementType { get; set; }
+        public int CurrencyType { get; set; }
+    }
+    private class FormModel
+    {
+        public string PersonCode { get; set; } = "";
+        public int CreditLineId { get; set; }
+        public long PortfolioNumber { get; set; }
+        public int HousingClass { get; set; }
+        public int HousingType { get; set; }
+        public string SocialInterest { get; set; } = "";
+        public string HasSubsidy { get; set; } = "";
+        public int NetworkEntity { get; set; }
+        public long NetworkValue { get; set; }
+        public int DisbursementType { get; set; }
+        public int CurrencyType { get; set; }
+    }
+}

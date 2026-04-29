@@ -1,0 +1,16 @@
+@page "/home"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IFormFactor FormFactor
+
+<PageTitle>Home - IngenIA365ERP</PageTitle>
+
+<h1>IngenIA365ERP</h1>
+
+<p>ERP Financiero para Cooperativas Colombianas.</p>
+<p>Ejecutando en <em>@factor</em> usando <em>@platform</em>.</p>
+
+@code {
+    private string factor => FormFactor.GetFormFactor();
+    private string platform => FormFactor.GetPlatform();
+}

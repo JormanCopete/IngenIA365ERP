@@ -1,0 +1,106 @@
+@page "/cartera/descuento-nomina"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Descuento Nomina - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Descuento por Nomina</h3>
+</div>
+
+<!-- Period Selector -->
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+    <div>
+        <label>Periodo de Pago</label>
+        <SfDropDownList TValue="string" TItem="PeriodOption" @bind-Value="_selectedPeriod"
+                        DataSource="_payPeriods" CssClass="e-small" Width="350px">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_selectedPeriod))
+{
+    <ProcessExecutor TPreview="DeductionPreviewLine" TResult="DeductionResult"
+                     GetPreviewUrl="@(() => $"/api/lending/payroll-deductions/{_selectedPeriod}/preview")"
+                     GetExecuteUrl="@(() => $"/api/lending/payroll-deductions/{_selectedPeriod}")">
+        <PreviewColumns>
+            <GridColumns>
+                <GridColumn Field="IdentificationNumber" HeaderText="Identificacion" Width="140" />
+                <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="250" />
+                <GridColumn Field="PortfolioNumber" HeaderText="No. Obligacion" Width="140" />
+                <GridColumn Field="CreditLine" HeaderText="Linea" Width="180" />
+                <GridColumn Field="InstallmentAmount" HeaderText="Cuota" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="CurrentBalance" HeaderText="Saldo" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+        </PreviewColumns>
+        <ResultTemplate>
+            <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                <div class="info-card"><span class="label">Empleados Procesados</span><span>@context.EmployeesProcessed</span></div>
+                <div class="info-card"><span class="label">Obligaciones Procesadas</span><span>@context.PortfoliosProcessed</span></div>
+                <div class="info-card"><span class="label">Total Descontado</span><span>@context.TotalDeducted.ToString("N2")</span></div>
+            </div>
+        </ResultTemplate>
+    </ProcessExecutor>
+}
+else
+{
+    <p style="color:#999;">Seleccione un periodo de pago para continuar.</p>
+}
+
+@code {
+    private string _selectedPeriod = "";
+    private List<PeriodOption> _payPeriods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPayPeriods();
+    }
+
+    private async Task LoadPayPeriods()
+    {
+        try
+        {
+            var periods = await Http.GetFromJsonAsync<List<PayPeriodItem>>("/api/payroll/pay-periods?pageSize=50");
+            if (periods is not null)
+            {
+                _payPeriods = periods.Select(p => new PeriodOption(p.PublicId.ToString(), p.Description ?? $"Periodo {p.PeriodId}")).ToList();
+            }
+        }
+        catch { /* keep empty */ }
+    }
+
+    private class DeductionPreviewLine
+    {
+        public string EmployeeName { get; set; } = "";
+        public string IdentificationNumber { get; set; } = "";
+        public long PortfolioNumber { get; set; }
+        public string CreditLine { get; set; } = "";
+        public decimal InstallmentAmount { get; set; }
+        public decimal CurrentBalance { get; set; }
+    }
+
+    private class DeductionResult
+    {
+        public int EmployeesProcessed { get; set; }
+        public int PortfoliosProcessed { get; set; }
+        public decimal TotalDeducted { get; set; }
+        public Guid? AccountingDocumentId { get; set; }
+    }
+
+    private class PayPeriodItem
+    {
+        public Guid PublicId { get; set; }
+        public int PeriodId { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private record PeriodOption(string Value, string Name);
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

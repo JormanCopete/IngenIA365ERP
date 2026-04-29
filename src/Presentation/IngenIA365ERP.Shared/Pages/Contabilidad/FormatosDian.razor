@@ -1,0 +1,139 @@
+@page "/contabilidad/formatos-dian"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Formatos DIAN - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Formatos DIAN</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="DianFormatItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="FormatCode" HeaderText="Codigo Formato" Width="160" />
+        <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+        <GridColumn Field="Threshold" HeaderText="Cuantia Minima" Width="180" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as DianFormatItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Codigo Formato *</label>
+                    <SfTextBox @bind-Value="_model.FormatCode" Placeholder="Codigo del formato" />
+                </div>
+                <div>
+                    <label>Descripcion *</label>
+                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion del formato" />
+                </div>
+                <div>
+                    <label>Cuantia Minima</label>
+                    <SfNumericTextBox TValue="decimal?" @bind-Value="_model.Threshold"
+                        Placeholder="0.00" Decimals="2" Format="N2" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<DianFormatItem>? _grid;
+    private List<DianFormatItem> _items = [];
+    private DianFormatModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<DianFormatItem>>("/api/accounting/dian-report-formats?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Formato DIAN"; _showDialog = true; }
+
+    private void OpenEdit(DianFormatItem item)
+    {
+        _model = new()
+        {
+            FormatCode = item.FormatCode,
+            Description = item.Description,
+            Threshold = item.Threshold
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Formato DIAN";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(DianFormatItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/accounting/dian-report-formats/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/accounting/dian-report-formats", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/accounting/dian-report-formats/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class DianFormatItem
+    {
+        public Guid PublicId { get; set; }
+        public string FormatCode { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal? Threshold { get; set; }
+    }
+
+    private class DianFormatModel
+    {
+        public string FormatCode { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal? Threshold { get; set; }
+    }
+}

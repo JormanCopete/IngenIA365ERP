@@ -1,0 +1,500 @@
+@page "/inventario/movimientos/nuevo"
+@page "/inventario/movimientos/{DocumentId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Movimiento de Inventario - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>@(_isNew ? "Nuevo Movimiento de Inventario" : $"Movimiento {_header.DocumentTypeName} - {_header.DocumentNumber}")</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                  OnClick='@(() => Nav.NavigateTo("/inventario/movimientos"))'>Volver a Lista</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
+                  OnClick="SaveDocument">Guardar</SfButton>
+        @if (!_isNew && !_header.IsVoided)
+        {
+            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                      OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
+        }
+    </div>
+</div>
+
+<!-- Status badge -->
+@if (!_isNew)
+{
+    var badge = _header.IsVoided ? "e-badge e-badge-danger" : "e-badge e-badge-success";
+    var text = _header.IsVoided ? "Anulado" : "Activo";
+    <div style="margin-bottom:12px;">
+        <span class="@badge" style="font-size:14px;padding:4px 12px;">@text</span>
+    </div>
+}
+
+<!-- Header fields -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:20px;">
+    <div>
+        <label>Tipo Documento *</label>
+        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DocumentType"
+                        DataSource="_docTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="DropOption" ValueChange="OnDocTypeChanged" />
+        </SfDropDownList>
+    </div>
+    <div>
+        <label>Tipo Movimiento *</label>
+        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.TransactionTypeCode"
+                        DataSource="_transactionTypes" Enabled="@IsEditable" Placeholder="Seleccione">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+    <div>
+        <label>Numero</label>
+        <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
+                   Readonly="true" CssClass="e-disabled" />
+    </div>
+    <div>
+        <label>Fecha *</label>
+        <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
+    </div>
+    <div>
+        <label>Bodega Origen *</label>
+        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.WarehouseCode"
+                        DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+    @if (_header.DocumentType == "T")
+    {
+        <div>
+            <label>Bodega Destino *</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DestinationWarehouseCode"
+                            DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega destino">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+    }
+    <div>
+        <label>Referencia</label>
+        <SfTextBox @bind-Value="_header.Reference" Placeholder="Referencia externa" Enabled="@IsEditable" />
+    </div>
+    <div style="grid-column:span 2;">
+        <label>Descripcion</label>
+        <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del movimiento" Enabled="@IsEditable" />
+    </div>
+</div>
+
+<!-- Detail lines -->
+<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+    <h4 style="margin:0;">Detalle de Productos</h4>
+    @if (IsEditable)
+    {
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
+    }
+</div>
+
+<div style="overflow-x:auto;">
+    <table class="e-table" style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="background:var(--sf-grid-header-bg, #f5f5f5);">
+                <th style="width:40px;text-align:center;">#</th>
+                <th style="width:160px;">Codigo Producto</th>
+                <th style="width:260px;">Nombre Producto</th>
+                <th style="width:130px;text-align:right;">Cantidad</th>
+                <th style="width:140px;text-align:right;">Costo Unitario</th>
+                <th style="width:140px;text-align:right;">Total</th>
+                @if (IsEditable) { <th style="width:50px;"></th> }
+            </tr>
+        </thead>
+        <tbody>
+            @for (var i = 0; i < _lines.Count; i++)
+            {
+                var idx = i;
+                var line = _lines[idx];
+                <tr style="border-bottom:1px solid #e0e0e0;">
+                    <td style="text-align:center;color:#888;">@(idx + 1)</td>
+                    <td>
+                        <div style="display:flex;gap:4px;">
+                            <SfTextBox @bind-Value="line.ProductCode" Placeholder="Codigo" CssClass="e-small"
+                                       Enabled="@IsEditable" @onblur="@(() => LookupProduct(idx))" />
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenProductSearch(idx))" />
+                        </div>
+                    </td>
+                    <td><span style="font-size:12px;color:#666;">@line.ProductName</span></td>
+                    <td>
+                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Quantity" Format="N2" Min="0"
+                                          CssClass="e-small" Enabled="@IsEditable" />
+                    </td>
+                    <td>
+                        <SfNumericTextBox TValue="decimal" @bind-Value="line.UnitCost" Format="N2" Min="0"
+                                          CssClass="e-small" Enabled="@IsEditable" />
+                    </td>
+                    <td style="text-align:right;font-weight:600;">
+                        @((line.Quantity * line.UnitCost).ToString("N2"))
+                    </td>
+                    @if (IsEditable)
+                    {
+                        <td style="text-align:center;">
+                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                      OnClick="@(() => RemoveLine(idx))" />
+                        </td>
+                    }
+                </tr>
+            }
+            @if (_lines.Count == 0)
+            {
+                <tr><td colspan="@(IsEditable ? 7 : 6)" style="text-align:center;padding:20px;color:#888;">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Totals footer -->
+<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Total Lineas</span><br/>
+        <strong style="font-size:16px;">@_lines.Count</strong>
+    </div>
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Total Cantidad</span><br/>
+        <strong style="font-size:16px;">@TotalQuantity.ToString("N2")</strong>
+    </div>
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Valor Total</span><br/>
+        <strong style="font-size:16px;">@TotalAmount.ToString("N2")</strong>
+    </div>
+</div>
+
+<!-- Product search dialog -->
+<SfDialog @bind-Visible="_showProductSearch" Header="Buscar Producto" Width="650px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <SfTextBox @bind-Value="_productSearchText" Placeholder="Codigo o nombre de producto" CssClass="e-small" />
+                    <SfButton CssClass="e-primary e-small" OnClick="SearchProducts">Buscar</SfButton>
+                </div>
+                <SfGrid TValue="ProductSearchItem" DataSource="_productSearchResults" AllowPaging="true" Height="300">
+                    <GridPageSettings PageSize="10" />
+                    <GridEvents RowSelected="OnProductSelected" TValue="ProductSearchItem" />
+                    <GridColumns>
+                        <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" />
+                        <GridColumn Field="Name" HeaderText="Nombre" Width="280" />
+                        <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
+                        <GridColumn Field="CurrentStock" HeaderText="Stock" Width="90" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="CostPrice" HeaderText="Costo" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                    </GridColumns>
+                </SfGrid>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<!-- Void confirmation -->
+<ConfirmDialog @bind-Visible="_showVoidConfirm" OnConfirm="VoidDocument"
+               Message="Esta seguro de anular este movimiento de inventario? Esta accion no se puede deshacer." />
+
+@code {
+    [Parameter] public Guid? DocumentId { get; set; }
+
+    private bool _isNew => !DocumentId.HasValue;
+    private bool IsEditable => _isNew || !_header.IsVoided;
+    private bool CanSave => IsEditable
+                            && !string.IsNullOrWhiteSpace(_header.DocumentType)
+                            && !string.IsNullOrWhiteSpace(_header.TransactionTypeCode)
+                            && !string.IsNullOrWhiteSpace(_header.WarehouseCode)
+                            && (_header.DocumentType != "T" || !string.IsNullOrWhiteSpace(_header.DestinationWarehouseCode))
+                            && _lines.Count > 0;
+    private decimal TotalQuantity => _lines.Sum(l => l.Quantity);
+    private decimal TotalAmount => _lines.Sum(l => l.Quantity * l.UnitCost);
+
+    private DocumentHeader _header = new();
+    private List<DocumentLine> _lines = [];
+    private List<DropOption> _warehouses = [];
+    private List<DropOption> _transactionTypes = [];
+
+    private List<DropOption> _docTypes =
+    [
+        new("E", "Entrada"),
+        new("S", "Salida"),
+        new("T", "Transferencia"),
+        new("A", "Ajuste")
+    ];
+
+    // Product search
+    private bool _showProductSearch;
+    private string _productSearchText = "";
+    private List<ProductSearchItem> _productSearchResults = [];
+    private int _productSearchLineIndex;
+
+    // Void confirm
+    private bool _showVoidConfirm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadWarehouses(), LoadTransactionTypes());
+
+        if (DocumentId.HasValue)
+            await LoadDocument();
+        else
+        {
+            _header = new() { DocumentDate = DateTime.Today };
+            _lines = [];
+        }
+    }
+
+    private async Task LoadWarehouses()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/inventory/warehouses?pageSize=200");
+            _warehouses = (items ?? []).Select(w => new DropOption(w.Code, $"{w.Code} - {w.Name}")).ToList();
+        }
+        catch { _warehouses = []; }
+    }
+
+    private async Task LoadTransactionTypes()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/inventory/transaction-types?pageSize=200");
+            _transactionTypes = (items ?? []).Select(t => new DropOption(t.Code, $"{t.Code} - {t.Name}")).ToList();
+        }
+        catch { _transactionTypes = []; }
+    }
+
+    private async Task LoadDocument()
+    {
+        try
+        {
+            var doc = await Http.GetFromJsonAsync<DocumentDto>($"/api/inventory/documents/{DocumentId}");
+            if (doc is null) { await Notification.ErrorAsync("Documento no encontrado"); return; }
+
+            _header = new()
+            {
+                DocumentType = doc.DocumentType,
+                DocumentTypeName = _docTypes.FirstOrDefault(d => d.Value == doc.DocumentType)?.Name ?? doc.DocumentType,
+                TransactionTypeCode = doc.TransactionTypeCode,
+                DocumentNumber = doc.DocumentNumber,
+                DocumentDate = doc.DocumentDate,
+                WarehouseCode = doc.WarehouseCode,
+                DestinationWarehouseCode = doc.DestinationWarehouseCode ?? "",
+                Reference = doc.Reference ?? "",
+                Description = doc.Description ?? "",
+                IsVoided = doc.IsVoided
+            };
+
+            _lines = (doc.Lines ?? []).Select(l => new DocumentLine
+            {
+                PublicId = l.PublicId,
+                ProductCode = l.ProductCode,
+                ProductName = l.ProductName,
+                Quantity = l.Quantity,
+                UnitCost = l.UnitCost
+            }).ToList();
+        }
+        catch { await Notification.ErrorAsync("Error al cargar documento"); }
+    }
+
+    private void OnDocTypeChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> args)
+    {
+        if (_header.DocumentType != "T")
+            _header.DestinationWarehouseCode = "";
+    }
+
+    // Line management
+    private void AddLine()
+    {
+        _lines.Add(new DocumentLine());
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (index >= 0 && index < _lines.Count)
+            _lines.RemoveAt(index);
+    }
+
+    // Product lookup
+    private async Task LookupProduct(int idx)
+    {
+        if (idx >= _lines.Count || string.IsNullOrWhiteSpace(_lines[idx].ProductCode)) return;
+        try
+        {
+            var prod = await Http.GetFromJsonAsync<ProductSearchItem>($"/api/inventory/products/by-code/{_lines[idx].ProductCode}");
+            if (prod is not null)
+            {
+                _lines[idx].ProductName = prod.Name;
+                if (_lines[idx].UnitCost == 0)
+                    _lines[idx].UnitCost = prod.CostPrice;
+            }
+        }
+        catch { /* ignore */ }
+    }
+
+    private void OpenProductSearch(int idx)
+    {
+        _productSearchLineIndex = idx;
+        _productSearchText = "";
+        _productSearchResults = [];
+        _showProductSearch = true;
+    }
+
+    private async Task SearchProducts()
+    {
+        try
+        {
+            _productSearchResults = await Http.GetFromJsonAsync<List<ProductSearchItem>>(
+                $"/api/inventory/products?search={_productSearchText}&pageSize=50") ?? [];
+        }
+        catch { _productSearchResults = []; }
+    }
+
+    private void OnProductSelected(RowSelectEventArgs<ProductSearchItem> args)
+    {
+        if (_productSearchLineIndex < _lines.Count && args.Data is not null)
+        {
+            _lines[_productSearchLineIndex].ProductCode = args.Data.ProductCode;
+            _lines[_productSearchLineIndex].ProductName = args.Data.Name;
+            if (_lines[_productSearchLineIndex].UnitCost == 0)
+                _lines[_productSearchLineIndex].UnitCost = args.Data.CostPrice;
+        }
+        _showProductSearch = false;
+    }
+
+    // Save
+    private async Task SaveDocument()
+    {
+        var payload = new
+        {
+            _header.DocumentType,
+            _header.TransactionTypeCode,
+            _header.DocumentDate,
+            _header.WarehouseCode,
+            DestinationWarehouseCode = _header.DocumentType == "T" ? _header.DestinationWarehouseCode : null,
+            _header.Reference,
+            _header.Description,
+            Lines = _lines.Select(l => new
+            {
+                l.ProductCode,
+                l.Quantity,
+                l.UnitCost
+            }).ToList()
+        };
+
+        try
+        {
+            HttpResponseMessage res;
+            if (_isNew)
+                res = await Http.PostAsJsonAsync("/api/inventory/documents", payload);
+            else
+                res = await Http.PutAsJsonAsync($"/api/inventory/documents/{DocumentId}", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Movimiento guardado");
+                if (_isNew)
+                {
+                    var created = await res.Content.ReadFromJsonAsync<CreatedResult>();
+                    if (created?.PublicId != null)
+                        Nav.NavigateTo($"/inventario/movimientos/{created.PublicId}", replace: true);
+                }
+                else
+                    await LoadDocument();
+            }
+            else
+            {
+                var error = await res.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error al guardar: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // Void (anular)
+    private async Task VoidDocument()
+    {
+        try
+        {
+            var res = await Http.PostAsync($"/api/inventory/documents/{DocumentId}/void", null);
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Movimiento anulado");
+                await LoadDocument();
+            }
+            else
+                await Notification.ErrorAsync("Error al anular");
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // Models
+    private class DocumentHeader
+    {
+        public string DocumentType { get; set; } = "";
+        public string DocumentTypeName { get; set; } = "";
+        public string TransactionTypeCode { get; set; } = "";
+        public long DocumentNumber { get; set; }
+        public DateTime DocumentDate { get; set; } = DateTime.Today;
+        public string WarehouseCode { get; set; } = "";
+        public string DestinationWarehouseCode { get; set; } = "";
+        public string Reference { get; set; } = "";
+        public string Description { get; set; } = "";
+        public bool IsVoided { get; set; }
+    }
+
+    private class DocumentLine
+    {
+        public Guid? PublicId { get; set; }
+        public string ProductCode { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitCost { get; set; }
+    }
+
+    private class DocumentDto
+    {
+        public Guid PublicId { get; set; }
+        public string DocumentType { get; set; } = "";
+        public string TransactionTypeCode { get; set; } = "";
+        public long DocumentNumber { get; set; }
+        public DateTime DocumentDate { get; set; }
+        public string WarehouseCode { get; set; } = "";
+        public string? DestinationWarehouseCode { get; set; }
+        public string? Reference { get; set; }
+        public string? Description { get; set; }
+        public bool IsVoided { get; set; }
+        public List<DocumentLineDto> Lines { get; set; } = [];
+    }
+
+    private class DocumentLineDto
+    {
+        public Guid PublicId { get; set; }
+        public string ProductCode { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitCost { get; set; }
+    }
+
+    private class ProductSearchItem
+    {
+        public string ProductCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string UnitOfMeasure { get; set; } = "";
+        public decimal CurrentStock { get; set; }
+        public decimal CostPrice { get; set; }
+    }
+
+    private class CatalogItem
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    private class CreatedResult { public Guid PublicId { get; set; } }
+
+    private record DropOption(string Value, string Name);
+}

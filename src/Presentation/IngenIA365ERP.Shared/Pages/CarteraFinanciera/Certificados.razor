@@ -1,0 +1,133 @@
+@page "/cartera/cdt"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>CDT - Certificados - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>CDT - Certificados de Deposito a Termino</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfDropDownList TValue="string" TItem="StatusItem" @bind-Value="_statusFilter"
+                        DataSource="_statusOptions" Placeholder="Todos" Width="160px"
+                        CssClass="e-small">
+            <DropDownListFieldSettings Text="Text" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="StatusItem" ValueChange="OnFilterChanged" />
+        </SfDropDownList>
+        <SfButton CssClass="e-info e-small" IconCss="e-icons e-clock" OnClick="LoadNearExpiry">Proximos a Vencer</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus"
+                  OnClick='@(() => Nav.NavigateTo("/cartera/cdt/nuevo"))'>Nuevo CDT</SfButton>
+    </div>
+</div>
+
+<SfGrid TValue="CertificateRow" DataSource="_certificates" AllowPaging="true" AllowSorting="true"
+        AllowFiltering="true" GridLines="GridLine.Both">
+    <GridPageSettings PageSize="20" />
+    <GridEvents TValue="CertificateRow" RowSelected="OnRowSelected" />
+    <GridColumns>
+        <GridColumn Field="@nameof(CertificateRow.CertificateNumber)" HeaderText="No. CDT" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(CertificateRow.PersonName)" HeaderText="Titular" Width="200" />
+        <GridColumn Field="@nameof(CertificateRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(CertificateRow.InterestRate)" HeaderText="Tasa %" Width="90" TextAlign="TextAlign.Center" Format="N2" />
+        <GridColumn Field="@nameof(CertificateRow.Term)" HeaderText="Plazo (dias)" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(CertificateRow.IssueDate)" HeaderText="Emision" Width="110" Format="d" />
+        <GridColumn Field="@nameof(CertificateRow.MaturityDate)" HeaderText="Vencimiento" Width="110" Format="d" />
+        <GridColumn Field="@nameof(CertificateRow.StatusText)" HeaderText="Estado" Width="120" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as CertificateRow;
+                    var css = GetStatusCss(row?.Status ?? "");
+                }
+                <span class="@css">@row?.StatusText</span>
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<style>
+    .badge-vigente { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-vencido { background:#f39c12; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-cancelado { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-renovado { background:#3498db; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+</style>
+
+@code {
+    private List<CertificateRow> _certificates = [];
+    private string _statusFilter = "";
+
+    private List<StatusItem> _statusOptions =
+    [
+        new("", "Todos"),
+        new("V", "Vigente"),
+        new("E", "Vencido"),
+        new("C", "Cancelado"),
+        new("R", "Renovado")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "api/cdt/certificates?PageSize=100";
+            if (!string.IsNullOrEmpty(_statusFilter))
+                url += $"&Status={_statusFilter}";
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<CertificateRow>>(url);
+            _certificates = response?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error cargando certificados: {ex.Message}");
+        }
+    }
+
+    private async Task LoadNearExpiry()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<CertificateRow>>("api/cdt/certificates/near-expiry?daysAhead=30");
+            _certificates = items ?? [];
+            _statusFilter = "";
+            await Notification.InfoAsync($"Mostrando {_certificates.Count} certificado(s) proximos a vencer.");
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private async Task OnFilterChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, StatusItem> args)
+    {
+        await LoadData();
+    }
+
+    private void OnRowSelected(RowSelectEventArgs<CertificateRow> args)
+    {
+        if (args.Data?.PublicId != null)
+            Nav.NavigateTo($"/cartera/cdt/{args.Data.PublicId}");
+    }
+
+    private string GetStatusCss(string status) => status switch
+    {
+        "V" => "badge-vigente",
+        "E" => "badge-vencido",
+        "C" => "badge-cancelado",
+        "R" => "badge-renovado",
+        _ => "badge-cancelado"
+    };
+
+    // --- Local types ---
+    record StatusItem(string Value, string Text);
+    record CertificateRow(Guid PublicId, string CertificateNumber, string PersonName, decimal Amount,
+        decimal InterestRate, int Term, DateOnly IssueDate, DateOnly? MaturityDate,
+        string Status, string StatusText, string? RenewalType);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

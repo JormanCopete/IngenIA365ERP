@@ -1,0 +1,14 @@
+@inject ILoadingService LoadingService
+@implements IDisposable
+
+@if (LoadingService.IsLoading)
+{
+    <div class="loading-overlay">
+        <SfSpinner Visible="true" Label="Procesando..." Type="SpinnerType.Bootstrap5" />
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => LoadingService.OnChange += StateHasChanged;
+    public void Dispose() => LoadingService.OnChange -= StateHasChanged;
+}

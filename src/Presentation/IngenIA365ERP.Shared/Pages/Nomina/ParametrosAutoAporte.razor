@@ -1,0 +1,161 @@
+@page "/nomina/parametros-autoaportes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Parametros Autoliquidacion Aportes - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Parametros Autoliquidacion de Aportes</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Codigo" Width="90" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="200" />
+        <GridColumn Field="IdNumber" HeaderText="Identificacion" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="CityName" HeaderText="Ciudad" Width="130" />
+        <GridColumn Field="HealthRate" HeaderText="% Salud" Width="100" Format="N3" TextAlign="TextAlign.Right" />
+        <GridColumn Field="PensionRate" HeaderText="% Pension" Width="100" Format="N3" TextAlign="TextAlign.Right" />
+        <GridColumn Field="WorkRiskRate" HeaderText="% ARL" Width="100" Format="N3" TextAlign="TextAlign.Right" />
+        <GridColumn Field="MinimumWage" HeaderText="Salario Min" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ItemModel;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="650px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Codigo" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.IdType" Placeholder="Tipo Identificacion" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.IdNumber" Placeholder="Numero Identificacion" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="DV" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion" FloatLabelType="FloatLabelType.Always" />
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <SfTextBox @bind-Value="_model.Phone" Placeholder="Telefono" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_model.CityName" Placeholder="Ciudad" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.HealthRate" Placeholder="% Salud" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.PensionRate" Placeholder="% Pension" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.WorkRiskRate" Placeholder="% ARL" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.CcfRate" Placeholder="% CCF" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.SenaRate" Placeholder="% SENA" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.IcbfRate" Placeholder="% ICBF" Format="N3" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <SfNumericTextBox TValue="decimal" @bind-Value="_model.MinimumWage" Placeholder="Salario Minimo" Format="N2" FloatLabelType="FloatLabelType.Always" />
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ItemModel>? _grid;
+    private List<ItemModel> _items = [];
+    private FormModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/auto-contribution-params?pageSize=500"); _items = r?.Items ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro Autoaportes"; _showDialog = true; }
+
+    private void OpenEdit(ItemModel item)
+    {
+        _model = new()
+        {
+            Code = item.Code, IdType = item.IdType, IdNumber = item.IdNumber, CheckDigit = item.CheckDigit,
+            Name = item.Name, Address = item.Address, Phone = item.Phone, CityName = item.CityName,
+            HealthRate = item.HealthRate, PensionRate = item.PensionRate, WorkRiskRate = item.WorkRiskRate,
+            CcfRate = item.CcfRate, SenaRate = item.SenaRate, IcbfRate = item.IcbfRate, MinimumWage = item.MinimumWage
+        };
+        _editId = item.PublicId; _dialogTitle = "Editar Parametro Autoaportes"; _showDialog = true;
+    }
+
+    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        var res = _editId.HasValue
+            ? await Http.PutAsJsonAsync($"/api/payroll/auto-contribution-params/{_editId}", _model)
+            : await Http.PostAsJsonAsync("/api/payroll/auto-contribution-params", _model);
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/payroll/auto-contribution-params/{_deleteId}");
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class Paged { public List<ItemModel> Items { get; set; } = []; }
+    private class ItemModel
+    {
+        public Guid PublicId { get; set; }
+        public int Code { get; set; }
+        public int IdType { get; set; }
+        public int IdNumber { get; set; }
+        public int CheckDigit { get; set; }
+        public string Name { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string CityName { get; set; } = "";
+        public decimal HealthRate { get; set; }
+        public decimal PensionRate { get; set; }
+        public decimal WorkRiskRate { get; set; }
+        public decimal CcfRate { get; set; }
+        public decimal SenaRate { get; set; }
+        public decimal IcbfRate { get; set; }
+        public decimal MinimumWage { get; set; }
+    }
+    private class FormModel
+    {
+        public int Code { get; set; }
+        public int IdType { get; set; }
+        public int IdNumber { get; set; }
+        public int CheckDigit { get; set; }
+        public string Name { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string CityName { get; set; } = "";
+        public decimal HealthRate { get; set; }
+        public decimal PensionRate { get; set; }
+        public decimal WorkRiskRate { get; set; }
+        public decimal CcfRate { get; set; }
+        public decimal SenaRate { get; set; }
+        public decimal IcbfRate { get; set; }
+        public decimal MinimumWage { get; set; }
+    }
+}

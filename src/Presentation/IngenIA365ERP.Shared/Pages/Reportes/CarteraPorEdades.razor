@@ -1,0 +1,207 @@
+@page "/reportes/cartera-edades"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject IJSRuntime JS
+
+<PageTitle>Cartera por Edades - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Cartera por Edades</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Consultar</SfButton>
+        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_data is null)">PDF</SfButton>
+    </div>
+</div>
+
+<p style="color:#999;margin-bottom:16px;">Corte actual: @DateTime.Today.ToString("dd/MM/yyyy")</p>
+
+@if (_loading)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#00bcd4" />
+}
+
+@if (_data is not null && _data.Count > 0)
+{
+    <!-- Summary Totals -->
+    <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="info-card">
+            <span class="label">Vigente</span>
+            <span style="color:#4caf50;">@_data.Sum(d => d.Current).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">1-30 dias</span>
+            <span style="color:#8bc34a;">@_data.Sum(d => d.Days1to30).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">31-60 dias</span>
+            <span style="color:#ff9800;">@_data.Sum(d => d.Days31to60).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">61-90 dias</span>
+            <span style="color:#ff5722;">@_data.Sum(d => d.Days61to90).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">91-180 dias</span>
+            <span style="color:#e91e63;">@_data.Sum(d => d.Days91to180).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">180+ dias</span>
+            <span style="color:#f44336;">@_data.Sum(d => d.DaysOver180).ToString("N2")</span>
+        </div>
+        <div class="info-card" style="border-color:#00bcd4;">
+            <span class="label">Total Cartera</span>
+            <span style="font-weight:bold;">@_data.Sum(d => d.Total).ToString("N2")</span>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div style="margin-bottom:24px;padding:16px;border:1px solid #333;border-radius:8px;">
+        <SfChart>
+            <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" Title="Rango de Antiguedad" />
+            <ChartPrimaryYAxis Title="Monto ($)" LabelFormat="N0" />
+            <ChartSeriesCollection>
+                <ChartSeries DataSource="@_chartData" XName="Bucket" YName="Amount"
+                             Type="ChartSeriesType.Column" Fill="#00bcd4" ColumnWidth="0.6">
+                    <ChartSeriesAnimation Enable="true" Duration="800" />
+                </ChartSeries>
+            </ChartSeriesCollection>
+            <ChartTooltipSettings Enable="true" Format="${point.x}: $${point.y}" />
+        </SfChart>
+    </div>
+
+    <!-- Detail Grid -->
+    <SfGrid @ref="_grid" TValue="AgingRow" DataSource="_data" AllowPaging="true" AllowSorting="true"
+            AllowFiltering="true" AllowExcelExport="true">
+        <GridPageSettings PageSize="50" />
+        <GridColumns>
+            <GridColumn Field="LoanNumber" HeaderText="No. Credito" Width="140" />
+            <GridColumn Field="PersonName" HeaderText="Asociado" Width="220" />
+            <GridColumn Field="DocumentNumber" HeaderText="Documento" Width="130" />
+            <GridColumn Field="Current" HeaderText="Vigente" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days1to30" HeaderText="1-30" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days31to60" HeaderText="31-60" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days61to90" HeaderText="61-90" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days91to180" HeaderText="91-180" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="DaysOver180" HeaderText="180+" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Total" HeaderText="Total" Width="140" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{ var row = context as AgingRow; }
+                    <b>@row?.Total.ToString("N2")</b>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="Current" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Days1to30" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Days31to60" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Days61to90" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Days91to180" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="DaysOver180" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Total" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+}
+else if (!_loading && _data is not null)
+{
+    <p style="color:#999;">No se encontraron datos de cartera.</p>
+}
+
+@code {
+    private SfGrid<AgingRow>? _grid;
+    private bool _loading;
+    private List<AgingRow>? _data;
+    private List<ChartPoint>? _chartData;
+
+    private async Task LoadPreview()
+    {
+        _loading = true;
+        try
+        {
+            _data = await Http.GetFromJsonAsync<List<AgingRow>>("/api/reports/lending/aging");
+
+            if (_data is not null)
+            {
+                _chartData =
+                [
+                    new("Vigente", _data.Sum(d => (double)d.Current)),
+                    new("1-30", _data.Sum(d => (double)d.Days1to30)),
+                    new("31-60", _data.Sum(d => (double)d.Days31to60)),
+                    new("61-90", _data.Sum(d => (double)d.Days61to90)),
+                    new("91-180", _data.Sum(d => (double)d.Days91to180)),
+                    new("180+", _data.Sum(d => (double)d.DaysOver180)),
+                ];
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+        _loading = false;
+    }
+
+    private async Task DownloadPdf()
+    {
+        try
+        {
+            var response = await Http.GetAsync("/api/reports/lending/aging/pdf");
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var base64 = Convert.ToBase64String(bytes);
+                var date = DateTime.Today.ToString("yyyyMMdd");
+                await JS.InvokeVoidAsync("eval",
+                    $"{{const a=document.createElement('a');a.href='data:application/pdf;base64,{base64}';a.download='CarteraPorEdades_{date}.pdf';a.click();}}");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Error generando PDF");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+    }
+
+    private class AgingRow
+    {
+        public string LoanNumber { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public string DocumentNumber { get; set; } = "";
+        public decimal Current { get; set; }
+        public decimal Days1to30 { get; set; }
+        public decimal Days31to60 { get; set; }
+        public decimal Days61to90 { get; set; }
+        public decimal Days91to180 { get; set; }
+        public decimal DaysOver180 { get; set; }
+        public decimal Total => Current + Days1to30 + Days31to60 + Days61to90 + Days91to180 + DaysOver180;
+    }
+
+    private record ChartPoint(string Bucket, double Amount);
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 120px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

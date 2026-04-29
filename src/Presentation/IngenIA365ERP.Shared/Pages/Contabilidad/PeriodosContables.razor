@@ -1,0 +1,171 @@
+@page "/contabilidad/periodos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Periodos Contables - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Periodos Contables</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="AccountingPeriodItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Year" HeaderText="Anio" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="PeriodNumber" HeaderText="Periodo" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="StartDate" HeaderText="Fecha Inicio" Width="150" Format="d" Type="ColumnType.Date" />
+        <GridColumn Field="EndDate" HeaderText="Fecha Fin" Width="150" Format="d" Type="ColumnType.Date" />
+        <GridColumn Field="Status" HeaderText="Estado" Width="120" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as AccountingPeriodItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Anio *</label>
+                    <SfNumericTextBox TValue="int?" @bind-Value="_model.Year"
+                        Placeholder="2026" Min="2000" Max="2100" Step="1" />
+                </div>
+                <div>
+                    <label>Numero de Periodo *</label>
+                    <SfNumericTextBox TValue="int?" @bind-Value="_model.PeriodNumber"
+                        Placeholder="1" Min="1" Max="13" Step="1" />
+                </div>
+                <div>
+                    <label>Fecha Inicio *</label>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_model.StartDate" Placeholder="Fecha inicio" />
+                </div>
+                <div>
+                    <label>Fecha Fin *</label>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_model.EndDate" Placeholder="Fecha fin" />
+                </div>
+                <div>
+                    <label>Estado</label>
+                    <SfDropDownList TValue="string?" TItem="StatusOption" DataSource="@_statuses"
+                        @bind-Value="_model.Status" Placeholder="Seleccione estado">
+                        <DropDownListFieldSettings Text="Name" Value="Code" />
+                    </SfDropDownList>
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<AccountingPeriodItem>? _grid;
+    private List<AccountingPeriodItem> _items = [];
+    private List<StatusOption> _statuses =
+    [
+        new() { Code = "Open", Name = "Abierto" },
+        new() { Code = "Closed", Name = "Cerrado" },
+        new() { Code = "Locked", Name = "Bloqueado" }
+    ];
+    private AccountingPeriodModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<AccountingPeriodItem>>("/api/accounting/accounting-periods?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Periodo Contable"; _showDialog = true; }
+
+    private void OpenEdit(AccountingPeriodItem item)
+    {
+        _model = new()
+        {
+            Year = item.Year,
+            PeriodNumber = item.PeriodNumber,
+            StartDate = item.StartDate,
+            EndDate = item.EndDate,
+            Status = item.Status
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Periodo Contable";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(AccountingPeriodItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/accounting/accounting-periods/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/accounting/accounting-periods", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/accounting/accounting-periods/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class AccountingPeriodItem
+    {
+        public Guid PublicId { get; set; }
+        public int? Year { get; set; }
+        public int? PeriodNumber { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? Status { get; set; }
+    }
+
+    private class AccountingPeriodModel
+    {
+        public int? Year { get; set; }
+        public int? PeriodNumber { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? Status { get; set; }
+    }
+
+    private class StatusOption
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+}

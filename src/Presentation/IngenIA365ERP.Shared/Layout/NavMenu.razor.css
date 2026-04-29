@@ -1,0 +1,120 @@
+.nav-menu {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    min-height: 48px;
+}
+
+.brand-icon {
+    font-size: 22px;
+    color: #00bcd4;
+}
+
+.brand-text {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.nav-items {
+    padding: 8px 0;
+    flex: 1;
+}
+
+.nav-section {
+    padding: 16px 16px 4px;
+}
+
+.section-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.nav-item, ::deep .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 0.875rem;
+    border: none;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.nav-item:hover, ::deep .nav-item:hover {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+}
+
+::deep .nav-item.active, .nav-item.active {
+    background: rgba(0,188,212,0.12);
+    color: #00bcd4;
+    border-right: 3px solid #00bcd4;
+}
+
+.nav-item .e-icons {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.nav-group-toggle {
+    justify-content: flex-start;
+}
+
+.nav-group-title {
+    flex: 1;
+    text-align: left;
+}
+
+.nav-chevron {
+    font-size: 12px !important;
+    width: auto !important;
+    opacity: 0.5;
+}
+
+::deep .nav-group-items {
+    padding-left: 8px;
+}
+
+::deep .nav-subitem {
+    display: block;
+    padding: 8px 16px 8px 48px;
+    color: rgba(255,255,255,0.55);
+    text-decoration: none;
+    font-size: 0.82rem;
+    transition: all 0.15s ease;
+}
+
+::deep .nav-subitem:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.04);
+}
+
+::deep .nav-subitem.active {
+    color: #00bcd4;
+    background: rgba(0,188,212,0.08);
+}

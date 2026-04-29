@@ -1,0 +1,180 @@
+using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Audit;
+using IngenIA365ERP.Domain.Entities.CDT;
+using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Debit;
+using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Entities.Security;
+using IngenIA365ERP.Domain.Entities.Treasury;
+using IngenIA365ERP.Domain.Entities.Web;
+using Microsoft.EntityFrameworkCore;
+
+namespace IngenIA365ERP.Application.Common.Interfaces;
+
+public interface IApplicationDbContext
+{
+    // Core
+    DbSet<Person> People { get; }
+    DbSet<Associate> Associates { get; }
+    DbSet<Branch> Branches { get; }
+    DbSet<CostCenter> CostCenters { get; }
+    DbSet<City> Cities { get; }
+    DbSet<Bank> Banks { get; }
+    DbSet<Company> Companies { get; }
+    DbSet<Committee> Committees { get; }
+    DbSet<Beneficiary> Beneficiaries { get; }
+    DbSet<Reference> References { get; }
+    DbSet<Country> Countries { get; }
+    DbSet<Department> Departments { get; }
+    DbSet<Section> Sections { get; }
+    DbSet<Profession> Professions { get; }
+    DbSet<Position> Positions { get; }
+    DbSet<Relationship> Relationships { get; }
+    DbSet<WithdrawalReason> WithdrawalReasons { get; }
+    DbSet<Sport> Sports { get; }
+    DbSet<CulturalActivity> CulturalActivities { get; }
+    DbSet<Disease> Diseases { get; }
+    DbSet<ExternalEntity> ExternalEntities { get; }
+    DbSet<Agreement> Agreements { get; }
+    DbSet<Course> Courses { get; }
+    DbSet<Spouse> Spouses { get; }
+    DbSet<PersonFinancial> PeopleFinancial { get; }
+    DbSet<AssociateCategory> AssociateCategories { get; }
+    DbSet<CommitteeMember> CommitteeMembers { get; }
+    DbSet<EmployerCompany> EmployerCompanies { get; }
+    DbSet<Advisor> Advisors { get; }
+    DbSet<PaymentMethod> PaymentMethods { get; }
+
+    // Accounting
+    DbSet<ChartOfAccount> ChartOfAccounts { get; }
+    DbSet<AccountBalance> AccountBalances { get; }
+    DbSet<JournalEntry> JournalEntries { get; }
+    DbSet<VoucherType> VoucherTypes { get; }
+    DbSet<AccountingPeriod> AccountingPeriods { get; }
+    DbSet<AccountGroup> AccountGroups { get; }
+    DbSet<AccountSubgroup> AccountSubgroups { get; }
+    DbSet<RiskCategory> RiskCategories { get; }
+    DbSet<VatTaxLine> VatTaxLines { get; }
+    DbSet<IncomeTaxLine> IncomeTaxLines { get; }
+    DbSet<WithholdingTaxLine> WithholdingTaxLines { get; }
+    DbSet<IcaTaxLine> IcaTaxLines { get; }
+    DbSet<GmfTaxLine> GmfTaxLines { get; }
+    DbSet<DianReportFormat> DianReportFormats { get; }
+    DbSet<TaxFormCode> TaxFormCodes { get; }
+    DbSet<AccountingDocument> AccountingDocuments { get; }
+    DbSet<JournalEntryItem> JournalEntryItems { get; }
+    DbSet<AuxiliaryDocument> AuxiliaryDocuments { get; }
+    DbSet<ThirdPartyAccount> ThirdPartyAccounts { get; }
+    DbSet<BankReconciliation> BankReconciliations { get; }
+    DbSet<BankReconciliationMaster> BankReconciliationMasters { get; }
+    DbSet<Amortization> Amortizations { get; }
+    DbSet<Depreciation> Depreciations { get; }
+    DbSet<Budget> Budgets { get; }
+
+    // Lending
+    DbSet<LoanPortfolio> LoanPortfolios { get; }
+    DbSet<LendingTransaction> LendingTransactions { get; }
+    DbSet<PendingInstallment> PendingInstallments { get; }
+    DbSet<CreditLineParameter> CreditLineParameters { get; }
+    DbSet<TransactionCode> TransactionCodes { get; }
+    DbSet<SavingsParameter> SavingsParameters { get; }
+    DbSet<InterestRate> InterestRates { get; }
+    DbSet<ProvisionParameter> ProvisionParameters { get; }
+    DbSet<Zone> Zones { get; }
+    DbSet<SubZone> SubZones { get; }
+    DbSet<ZoneType> ZoneTypes { get; }
+    DbSet<ApplicationStatus> ApplicationStatuses { get; }
+    DbSet<ScoringParameter> ScoringParameters { get; }
+    DbSet<ScoringRange> ScoringRanges { get; }
+    DbSet<PayrollDeductionConcept> PayrollDeductionConcepts { get; }
+    DbSet<LoanApplication> LoanApplications { get; }
+    DbSet<DefaultRecord> DefaultRecords { get; }
+    DbSet<CollectionCase> CollectionCases { get; }
+    DbSet<Guarantee> Guarantees { get; }
+    DbSet<ExtraPayment> ExtraPayments { get; }
+    DbSet<SavingsAccount> SavingsAccounts { get; }
+    DbSet<DepositEntry> DepositEntries { get; }
+    DbSet<AccrualEntry> AccrualEntries { get; }
+    DbSet<PortfolioClassification> PortfolioClassifications { get; }
+    DbSet<RiskAssessment> RiskAssessments { get; }
+    DbSet<PayrollDeductionEntry> PayrollDeductionEntries { get; }
+    DbSet<WithdrawalStatus> WithdrawalStatuses { get; }
+    DbSet<HousingParameter> HousingParameters { get; }
+    DbSet<SiplaParameter> SiplaParameters { get; }
+    DbSet<PeriodicityParameter> PeriodicityParameters { get; }
+    DbSet<TermRate> TermRates { get; }
+    DbSet<PortfolioAccount> PortfolioAccounts { get; }
+    DbSet<ContributionReduction> ContributionReductions { get; }
+    DbSet<AssociateWithdrawal> AssociateWithdrawals { get; }
+    DbSet<CertificateEntry> CertificateEntries { get; }
+
+    // Payroll
+    DbSet<Employee> Employees { get; }
+    DbSet<PayrollConcept> PayrollConcepts { get; }
+    DbSet<PayPeriod> PayPeriods { get; }
+    DbSet<HealthInsuranceProvider> HealthInsuranceProviders { get; }
+    DbSet<WorkRiskProvider> WorkRiskProviders { get; }
+    DbSet<WorkRiskRate> WorkRiskRates { get; }
+    DbSet<PensionProvider> PensionProviders { get; }
+    DbSet<SeveranceProvider> SeveranceProviders { get; }
+    DbSet<ConceptAccount> ConceptAccounts { get; }
+    DbSet<WithholdingParameter> WithholdingParameters { get; }
+    DbSet<WithholdingCause> WithholdingCauses { get; }
+    DbSet<AutoContributionParam> AutoContributionParams { get; }
+    DbSet<PayrollTransaction> PayrollTransactions { get; }
+    DbSet<PayrollEntry> PayrollEntries { get; }
+    DbSet<SalaryChange> SalaryChanges { get; }
+    DbSet<Absence> Absences { get; }
+    DbSet<TaxCertificate> TaxCertificates { get; }
+
+    // Inventory
+    DbSet<Product> Products { get; }
+    DbSet<ProductGroup> ProductGroups { get; }
+    DbSet<PrimaryGroup> PrimaryGroups { get; }
+    DbSet<SecondaryGroup> SecondaryGroups { get; }
+    DbSet<InventoryTransactionType> InventoryTransactionTypes { get; }
+    DbSet<Warehouse> Warehouses { get; }
+    DbSet<Location> Locations { get; }
+    DbSet<SalesPoint> SalesPoints { get; }
+    DbSet<Shift> Shifts { get; }
+    DbSet<Salesperson> Salespeople { get; }
+    DbSet<DiscountType> DiscountTypes { get; }
+    DbSet<PriceListType> PriceListTypes { get; }
+    DbSet<ProductAccount> ProductAccounts { get; }
+    DbSet<VatAccount> VatAccounts { get; }
+    DbSet<CommissionParameter> CommissionParameters { get; }
+    DbSet<InventoryDocument> InventoryDocuments { get; }
+    DbSet<InventoryTransaction> InventoryTransactions { get; }
+    DbSet<InventoryInvoice> InventoryInvoices { get; }
+    DbSet<PhysicalInventory> PhysicalInventories { get; }
+
+    // CDT
+    DbSet<Certificate> Certificates { get; }
+    DbSet<CdtParameter> CdtParameters { get; }
+    DbSet<CdtRateByTerm> CdtRatesByTerm { get; }
+
+    // Debit
+    DbSet<DebitCard> DebitCards { get; }
+    DbSet<DebitAgreementParameter> DebitAgreementParameters { get; }
+    DbSet<PosTerminal> PosTerminals { get; }
+    DbSet<DebitDailyParameter> DebitDailyParameters { get; }
+    DbSet<DebitTransaction> DebitTransactions { get; }
+    DbSet<DebitAgreement> DebitAgreements { get; }
+
+    // Treasury
+    DbSet<Check> Checks { get; }
+    DbSet<TreasuryConcept> TreasuryConcepts { get; }
+    DbSet<TreasuryInvoice> TreasuryInvoices { get; }
+
+    // Security
+    DbSet<User> Users { get; }
+    DbSet<Role> Roles { get; }
+
+    // Admin
+    DbSet<Tenant> Tenants { get; }
+
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}

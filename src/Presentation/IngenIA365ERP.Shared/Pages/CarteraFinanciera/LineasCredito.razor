@@ -1,0 +1,151 @@
+@page "/cartera/lineas-credito"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Lineas de Credito - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Lineas de Credito</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="CreditLineItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="LegacyLinCred" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Description" HeaderText="Nombre" Width="250" />
+        <GridColumn Field="InterestRate" HeaderText="Tasa Interes %" Width="140" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn Field="MaxTerm" HeaderText="Plazo Maximo" Width="130" TextAlign="TextAlign.Right" />
+        <GridColumn Field="CreditLimit" HeaderText="Cupo Credito" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as CreditLineItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Nombre *</label>
+                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion de la linea" />
+                </div>
+                <div>
+                    <label>Tasa de Interes (%)</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.InterestRate"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+                <div>
+                    <label>Plazo Maximo (meses)</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.MaxTerm"
+                        Placeholder="0" Min="0" Max="999" Format="N0" />
+                </div>
+                <div>
+                    <label>Cupo de Credito</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.CreditLimit"
+                        Placeholder="0.00" Decimals="2" Format="N2" Min="0" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<CreditLineItem>? _grid;
+    private List<CreditLineItem> _items = [];
+    private CreditLineModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<CreditLineItem>>("/api/lending/credit-line-parameters?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Linea de Credito"; _showDialog = true; }
+
+    private void OpenEdit(CreditLineItem item)
+    {
+        _model = new()
+        {
+            Description = item.Description,
+            InterestRate = item.InterestRate,
+            MaxTerm = item.MaxTerm,
+            CreditLimit = item.CreditLimit
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Linea de Credito";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(CreditLineItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/lending/credit-line-parameters/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/lending/credit-line-parameters", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/credit-line-parameters/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class CreditLineItem
+    {
+        public Guid PublicId { get; set; }
+        public int? LegacyLinCred { get; set; }
+        public string Description { get; set; } = "";
+        public decimal InterestRate { get; set; }
+        public int MaxTerm { get; set; }
+        public decimal CreditLimit { get; set; }
+    }
+
+    private class CreditLineModel
+    {
+        public string Description { get; set; } = "";
+        public decimal InterestRate { get; set; }
+        public int MaxTerm { get; set; }
+        public decimal CreditLimit { get; set; }
+    }
+}

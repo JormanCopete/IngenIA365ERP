@@ -1,0 +1,122 @@
+@page "/cartera/cuentas-cartera"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Cuentas de Cartera - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Cuentas de Cartera</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="150" />
+        <GridColumn Field="RecordClass" HeaderText="Clase Registro" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Category" HeaderText="Categoria" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="GuaranteeType" HeaderText="Tipo Garantia" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="DeductionClass" HeaderText="Clase Descuento" Width="140" TextAlign="TextAlign.Center" />
+        <GridColumn Field="RiskLevel" HeaderText="Nivel Riesgo" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as ItemModel;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Cuenta Contable" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.RecordClass" Placeholder="Clase de Registro" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.Category" Placeholder="Categoria" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.GuaranteeType" Placeholder="Tipo Garantia" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.DeductionClass" Placeholder="Clase Descuento" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.RiskLevel" Placeholder="Nivel de Riesgo" FloatLabelType="FloatLabelType.Always" />
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<ItemModel>? _grid;
+    private List<ItemModel> _items = [];
+    private FormModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { var r = await Http.GetFromJsonAsync<Paged>("/api/lending/portfolio-accounts?pageSize=500"); _items = r?.Items ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Cuenta de Cartera"; _showDialog = true; }
+
+    private void OpenEdit(ItemModel item)
+    {
+        _model = new()
+        {
+            AccountCode = item.AccountCode, RecordClass = item.RecordClass, Category = item.Category,
+            GuaranteeType = item.GuaranteeType, DeductionClass = item.DeductionClass, RiskLevel = item.RiskLevel
+        };
+        _editId = item.PublicId; _dialogTitle = "Editar Cuenta de Cartera"; _showDialog = true;
+    }
+
+    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        var res = _editId.HasValue
+            ? await Http.PutAsJsonAsync($"/api/lending/portfolio-accounts/{_editId}", _model)
+            : await Http.PostAsJsonAsync("/api/lending/portfolio-accounts", _model);
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/portfolio-accounts/{_deleteId}");
+        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
+        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class Paged { public List<ItemModel> Items { get; set; } = []; }
+    private class ItemModel
+    {
+        public Guid PublicId { get; set; }
+        public string AccountCode { get; set; } = "";
+        public string RecordClass { get; set; } = "";
+        public int Category { get; set; }
+        public int GuaranteeType { get; set; }
+        public int DeductionClass { get; set; }
+        public string RiskLevel { get; set; } = "";
+    }
+    private class FormModel
+    {
+        public string AccountCode { get; set; } = "";
+        public string RecordClass { get; set; } = "";
+        public int Category { get; set; }
+        public int GuaranteeType { get; set; }
+        public int DeductionClass { get; set; }
+        public string RiskLevel { get; set; } = "";
+    }
+}

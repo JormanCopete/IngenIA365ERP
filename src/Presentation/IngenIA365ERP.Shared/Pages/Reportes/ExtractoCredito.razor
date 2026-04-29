@@ -1,0 +1,284 @@
+@page "/reportes/extracto-credito"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject IJSRuntime JS
+
+<PageTitle>Extracto de Credito - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Extracto de Credito</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_loanData is null)">PDF</SfButton>
+    </div>
+</div>
+
+<!-- Person Search -->
+<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Documento / NIT</label>
+        <SfTextBox @bind-Value="_personId" Placeholder="Ej: 1234567890" Width="200px" CssClass="e-small" />
+    </div>
+    <SfButton CssClass="e-outline e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar Asociado</SfButton>
+    @if (_loans is not null && _loans.Count > 0)
+    {
+        <div>
+            <label>Credito</label>
+            <SfDropDownList TValue="string" TItem="LoanOption" @bind-Value="_selectedLoan" DataSource="_loans"
+                            CssClass="e-small" Width="280px" Placeholder="Seleccione un credito">
+                <DropDownListFieldSettings Text="Display" Value="LoanId" />
+                <DropDownListEvents TValue="string" TItem="LoanOption" ValueChange="OnLoanChanged" />
+            </SfDropDownList>
+        </div>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(_personName))
+{
+    <div style="margin-bottom:12px;padding:8px 12px;background:#1e1e2e;border:1px solid #333;border-radius:4px;">
+        <strong>@_personName</strong> <span style="color:#999;margin-left:8px;">Doc: @_personId</span>
+    </div>
+}
+
+@if (_loading)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#00bcd4" />
+}
+
+@if (_loanData is not null)
+{
+    <!-- Loan Summary -->
+    <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="info-card">
+            <span class="label">Monto Aprobado</span>
+            <span>@_loanData.ApprovedAmount.ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Saldo Capital</span>
+            <span style="font-weight:bold;">@_loanData.OutstandingBalance.ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Tasa</span>
+            <span>@_loanData.InterestRate.ToString("N2")%</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Plazo</span>
+            <span>@_loanData.Term meses</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Fecha Desembolso</span>
+            <span>@_loanData.DisbursementDate.ToString("dd/MM/yyyy")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Estado</span>
+            <span style="color:@(_loanData.Status == "Vigente" ? "#4caf50" : "#ff9800");">@_loanData.Status</span>
+        </div>
+    </div>
+
+    <!-- Amortization Table -->
+    <h4 style="margin:16px 0 8px;">Tabla de Amortizacion</h4>
+    <SfGrid TValue="AmortizationRow" DataSource="_loanData.Amortization" AllowPaging="true" AllowSorting="true">
+        <GridPageSettings PageSize="24" />
+        <GridColumns>
+            <GridColumn Field="InstallmentNumber" HeaderText="Cuota" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="DueDate" HeaderText="Fecha Vencimiento" Width="140" Format="d" />
+            <GridColumn Field="Principal" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Interest" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TotalPayment" HeaderText="Cuota Total" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="RemainingBalance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Status" HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var row = context as AmortizationRow;
+                        var cssColor = row?.Status switch
+                        {
+                            "Pagada" => "#4caf50",
+                            "Vencida" => "#f44336",
+                            _ => "#999"
+                        };
+                    }
+                    <span style="color:@cssColor;font-weight:600;">@row?.Status</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="Principal" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Interest" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="TotalPayment" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+
+    <!-- Payments -->
+    @if (_loanData.Payments is not null && _loanData.Payments.Count > 0)
+    {
+        <h4 style="margin:24px 0 8px;">Pagos Realizados</h4>
+        <SfGrid TValue="PaymentRow" DataSource="_loanData.Payments" AllowPaging="true">
+            <GridPageSettings PageSize="12" />
+            <GridColumns>
+                <GridColumn Field="PaymentDate" HeaderText="Fecha Pago" Width="140" Format="d" />
+                <GridColumn Field="ReceiptNumber" HeaderText="No. Recibo" Width="140" />
+                <GridColumn Field="PrincipalPaid" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="InterestPaid" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="LateFee" HeaderText="Mora" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalPaid" HeaderText="Total Pagado" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+        </SfGrid>
+    }
+}
+
+@code {
+    private string _personId = "";
+    private string _personName = "";
+    private string? _selectedLoan;
+    private bool _loading;
+    private List<LoanOption>? _loans;
+    private LoanStatement? _loanData;
+
+    private async Task SearchPerson()
+    {
+        if (string.IsNullOrWhiteSpace(_personId))
+        {
+            await Notification.ErrorAsync("Ingrese el numero de documento.");
+            return;
+        }
+
+        _loading = true;
+        _loanData = null;
+        _selectedLoan = null;
+        try
+        {
+            var person = await Http.GetFromJsonAsync<PersonInfo>($"/api/people/by-document/{_personId}");
+            if (person is not null)
+            {
+                _personName = person.FullName;
+                _loans = await Http.GetFromJsonAsync<List<LoanOption>>($"/api/reports/lending/loans-by-person/{person.PublicId}");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Asociado no encontrado.");
+                _personName = "";
+                _loans = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+        _loading = false;
+    }
+
+    private async Task OnLoanChanged(ChangeEventArgs<string, LoanOption> args)
+    {
+        if (string.IsNullOrEmpty(args.Value)) return;
+
+        _loading = true;
+        try
+        {
+            _loanData = await Http.GetFromJsonAsync<LoanStatement>(
+                $"/api/reports/lending/loan-statement/{args.Value}");
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+        _loading = false;
+    }
+
+    private async Task LoadPreview()
+    {
+        if (_loanData is not null) return;
+        await SearchPerson();
+    }
+
+    private async Task DownloadPdf()
+    {
+        if (string.IsNullOrEmpty(_selectedLoan))
+        {
+            await Notification.ErrorAsync("Seleccione un credito primero.");
+            return;
+        }
+
+        try
+        {
+            var response = await Http.GetAsync($"/api/reports/lending/loan-statement/{_selectedLoan}/pdf");
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval",
+                    $"{{const a=document.createElement('a');a.href='data:application/pdf;base64,{base64}';a.download='ExtractoCredito_{_selectedLoan}.pdf';a.click();}}");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Error generando PDF");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+    }
+
+    private class PersonInfo
+    {
+        public string PublicId { get; set; } = "";
+        public string FullName { get; set; } = "";
+    }
+
+    private class LoanOption
+    {
+        public string LoanId { get; set; } = "";
+        public string Display { get; set; } = "";
+    }
+
+    private class LoanStatement
+    {
+        public decimal ApprovedAmount { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public decimal InterestRate { get; set; }
+        public int Term { get; set; }
+        public DateTime DisbursementDate { get; set; }
+        public string Status { get; set; } = "";
+        public List<AmortizationRow> Amortization { get; set; } = [];
+        public List<PaymentRow>? Payments { get; set; }
+    }
+
+    private class AmortizationRow
+    {
+        public int InstallmentNumber { get; set; }
+        public DateTime DueDate { get; set; }
+        public decimal Principal { get; set; }
+        public decimal Interest { get; set; }
+        public decimal TotalPayment { get; set; }
+        public decimal RemainingBalance { get; set; }
+        public string Status { get; set; } = "";
+    }
+
+    private class PaymentRow
+    {
+        public DateTime PaymentDate { get; set; }
+        public string ReceiptNumber { get; set; } = "";
+        public decimal PrincipalPaid { get; set; }
+        public decimal InterestPaid { get; set; }
+        public decimal LateFee { get; set; }
+        public decimal TotalPaid { get; set; }
+    }
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 130px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

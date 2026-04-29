@@ -1,0 +1,37 @@
+@* Reemplazo de MessageBox.Show() del WinForms *@
+
+<SfDialog Width="400px" IsModal="true" @bind-Visible="Visible" ShowCloseIcon="true"
+          Header="@Title" CssClass="confirm-dialog">
+    <DialogTemplates>
+        <Content>
+            <p>@Message</p>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="@CancelText" CssClass="e-flat" OnClick="@OnCancelClick" />
+        <DialogButton Content="@ConfirmText" IsPrimary="true" CssClass="e-primary" OnClick="@OnConfirmClick" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirmar";
+    [Parameter] public string Message { get; set; } = "Esta seguro?";
+    [Parameter] public string ConfirmText { get; set; } = "Confirmar";
+    [Parameter] public string CancelText { get; set; } = "Cancelar";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    private async Task OnConfirmClick()
+    {
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task OnCancelClick()
+    {
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+}

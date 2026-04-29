@@ -1,0 +1,189 @@
+@page "/inventario/tipos-movimiento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Tipos de Movimiento - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Tipos de Movimiento</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="TransactionTypeItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="TypeCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Description" HeaderText="Descripcion" Width="250" />
+        <GridColumn Field="ShortDescription" HeaderText="Resumido" Width="150" />
+        <GridColumn Field="TransactionVoucherCode" HeaderText="Cpte Transac." Width="120" />
+        <GridColumn Field="CostVoucherCode" HeaderText="Cpte Costo" Width="120" />
+        <GridColumn Field="DocumentClass" HeaderText="Clase Doc" Width="100" />
+        <GridColumn Field="ControlsStock" HeaderText="Ctrl Stock" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="IsReturn" HeaderText="Devolucion" Width="100" DisplayAsCheckBox="true" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as TransactionTypeItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Codigo *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.TypeCode" Placeholder="Codigo tipo" Min="0" />
+                </div>
+                <div>
+                    <label>Descripcion *</label>
+                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion del tipo" />
+                </div>
+                <div>
+                    <label>Resumido</label>
+                    <SfTextBox @bind-Value="_model.ShortDescription" Placeholder="Descripcion corta" />
+                </div>
+                <div>
+                    <label>Comprobante Transaccion</label>
+                    <SfTextBox @bind-Value="_model.TransactionVoucherCode" Placeholder="Codigo comprobante" />
+                </div>
+                <div>
+                    <label>Comprobante Costo</label>
+                    <SfTextBox @bind-Value="_model.CostVoucherCode" Placeholder="Codigo comprobante costo" />
+                </div>
+                <div>
+                    <label>Clase Documento</label>
+                    <SfTextBox @bind-Value="_model.DocumentClass" Placeholder="Clase de documento" />
+                </div>
+                <div>
+                    <label>Control Stock</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.ControlsStock" Placeholder="0" Min="0" />
+                </div>
+                <div>
+                    <SfCheckBox @bind-Checked="_model.IsReturn" Label="Es Devolucion" />
+                </div>
+                <div>
+                    <SfCheckBox @bind-Checked="_model.UpdatesAccounting" Label="Actualiza Contabilidad" />
+                </div>
+                <div>
+                    <SfCheckBox @bind-Checked="_model.CostsProducts" Label="Costea Productos" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<TransactionTypeItem>? _grid;
+    private List<TransactionTypeItem> _items = [];
+    private TransactionTypeModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<TransactionTypeItem>>("/api/inventory/transaction-types?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Tipo de Movimiento"; _showDialog = true; }
+
+    private void OpenEdit(TransactionTypeItem item)
+    {
+        _model = new()
+        {
+            TypeCode = item.TypeCode,
+            Description = item.Description,
+            ShortDescription = item.ShortDescription,
+            TransactionVoucherCode = item.TransactionVoucherCode,
+            CostVoucherCode = item.CostVoucherCode,
+            DocumentClass = item.DocumentClass,
+            ControlsStock = item.ControlsStock,
+            IsReturn = item.IsReturn,
+            UpdatesAccounting = item.UpdatesAccounting,
+            CostsProducts = item.CostsProducts
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Tipo de Movimiento";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(TransactionTypeItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/inventory/transaction-types/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/inventory/transaction-types", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/inventory/transaction-types/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class TransactionTypeItem
+    {
+        public Guid PublicId { get; set; }
+        public int TypeCode { get; set; }
+        public string Description { get; set; } = "";
+        public string? ShortDescription { get; set; }
+        public string? TransactionVoucherCode { get; set; }
+        public string? CostVoucherCode { get; set; }
+        public string? DocumentClass { get; set; }
+        public int ControlsStock { get; set; }
+        public bool IsReturn { get; set; }
+        public bool UpdatesAccounting { get; set; }
+        public bool CostsProducts { get; set; }
+    }
+
+    private class TransactionTypeModel
+    {
+        public int TypeCode { get; set; }
+        public string Description { get; set; } = "";
+        public string? ShortDescription { get; set; }
+        public string? TransactionVoucherCode { get; set; }
+        public string? CostVoucherCode { get; set; }
+        public string? DocumentClass { get; set; }
+        public int ControlsStock { get; set; }
+        public bool IsReturn { get; set; }
+        public bool UpdatesAccounting { get; set; }
+        public bool CostsProducts { get; set; }
+    }
+}

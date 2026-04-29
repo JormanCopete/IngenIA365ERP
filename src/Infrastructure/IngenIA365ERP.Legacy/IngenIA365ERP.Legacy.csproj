@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IngenIA365ERP.Legacy</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
+    <!-- TODO: Add reference to ERP.Core once project path is finalized -->
+    <!-- <ProjectReference Include="..\..\..\..\Plugins\PluginsComplete\ERP.Core\ERP.Core.csproj" /> -->
+  </ItemGroup>
+</Project>

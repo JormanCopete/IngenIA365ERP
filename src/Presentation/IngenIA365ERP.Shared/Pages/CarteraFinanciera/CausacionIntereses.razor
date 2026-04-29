@@ -1,0 +1,126 @@
+@page "/cartera/causacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Causacion de Intereses - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Causacion de Intereses de Cartera</h3>
+</div>
+
+<!-- Parameters -->
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;flex-wrap:wrap;">
+    <div>
+        <label>Fecha de Causacion</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_accrualDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
+    </div>
+    <div>
+        <label>Linea de Credito (opcional)</label>
+        <SfDropDownList TValue="string" TItem="CreditLineOption" @bind-Value="_selectedCreditLine"
+                        DataSource="_creditLines" CssClass="e-small" Width="250px" AllowFiltering="true">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+        </SfDropDownList>
+    </div>
+</div>
+
+<ProcessExecutor TPreview="AccrualPreviewLine" TResult="AccrualResult"
+                 GetPreviewUrl="GetPreviewUrl"
+                 GetExecuteUrl="@(() => "/api/lending/accruals")"
+                 GetRequestBody="GetRequestBody">
+    <PreviewColumns>
+        <GridColumns>
+            <GridColumn Field="PortfolioNumber" HeaderText="No. Obligacion" Width="140" />
+            <GridColumn Field="PersonName" HeaderText="Asociado" Width="250" />
+            <GridColumn Field="CreditLine" HeaderText="Linea" Width="180" />
+            <GridColumn Field="Balance" HeaderText="Saldo" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Rate" HeaderText="Tasa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Days" HeaderText="Dias" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="ProjectedInterest" HeaderText="Interes Proyectado" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="ProjectedDefault" HeaderText="Interes Mora" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+        </GridColumns>
+    </PreviewColumns>
+    <ResultTemplate>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+            <div class="info-card"><span class="label">Obligaciones Procesadas</span><span>@context.PortfoliosProcessed</span></div>
+            <div class="info-card"><span class="label">Total Intereses</span><span>@context.TotalInterest.ToString("N2")</span></div>
+            <div class="info-card"><span class="label">Total Mora</span><span>@context.TotalDefaultInterest.ToString("N2")</span></div>
+            <div class="info-card"><span class="label">Fecha Causacion</span><span>@context.AccrualDate</span></div>
+        </div>
+    </ResultTemplate>
+</ProcessExecutor>
+
+@code {
+    private DateTime? _accrualDate = DateTime.Today;
+    private string _selectedCreditLine = "";
+    private List<CreditLineOption> _creditLines = [new("", "Todas las lineas")];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCreditLines();
+    }
+
+    private async Task LoadCreditLines()
+    {
+        try
+        {
+            var lines = await Http.GetFromJsonAsync<List<CreditLineItem>>("/api/lending/credit-line-parameters?pageSize=100");
+            if (lines is not null)
+            {
+                _creditLines = [new("", "Todas las lineas"), ..lines.Select(l => new CreditLineOption(l.PublicId.ToString(), l.Description))];
+            }
+        }
+        catch { /* keep defaults */ }
+    }
+
+    private string GetPreviewUrl()
+    {
+        var date = _accrualDate.HasValue ? DateOnly.FromDateTime(_accrualDate.Value) : DateOnly.FromDateTime(DateTime.Today);
+        var url = $"/api/lending/accruals/preview?accrualDate={date:yyyy-MM-dd}";
+        if (!string.IsNullOrEmpty(_selectedCreditLine))
+            url += $"&creditLinePublicId={_selectedCreditLine}";
+        return url;
+    }
+
+    private object? GetRequestBody()
+    {
+        var date = _accrualDate.HasValue ? DateOnly.FromDateTime(_accrualDate.Value) : DateOnly.FromDateTime(DateTime.Today);
+        Guid? creditLineId = string.IsNullOrEmpty(_selectedCreditLine) ? null : Guid.Parse(_selectedCreditLine);
+        return new { AccrualDate = date, CreditLinePublicId = creditLineId };
+    }
+
+    private class AccrualPreviewLine
+    {
+        public long PortfolioNumber { get; set; }
+        public string PersonName { get; set; } = "";
+        public string CreditLine { get; set; } = "";
+        public decimal Balance { get; set; }
+        public decimal Rate { get; set; }
+        public int Days { get; set; }
+        public decimal ProjectedInterest { get; set; }
+        public decimal ProjectedDefault { get; set; }
+    }
+
+    private class AccrualResult
+    {
+        public int PortfoliosProcessed { get; set; }
+        public decimal TotalInterest { get; set; }
+        public decimal TotalDefaultInterest { get; set; }
+        public Guid? AccountingDocumentId { get; set; }
+        public string AccrualDate { get; set; } = "";
+    }
+
+    private class CreditLineItem
+    {
+        public Guid PublicId { get; set; }
+        public string Description { get; set; } = "";
+    }
+
+    private record CreditLineOption(string Value, string Name);
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

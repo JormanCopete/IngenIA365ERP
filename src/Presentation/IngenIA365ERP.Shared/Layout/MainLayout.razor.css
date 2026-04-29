@@ -1,0 +1,120 @@
+.erp-layout {
+    display: flex;
+    min-height: 100vh;
+    background: var(--content-bg, #1e1e2e);
+}
+
+::deep .erp-sidebar {
+    background: var(--sidebar-bg, #111827) !important;
+    border-right: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+}
+
+.erp-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+::deep .erp-toolbar {
+    background: var(--sidebar-bg, #111827) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    min-height: 48px;
+}
+
+::deep .erp-toolbar .e-toolbar-item .e-tbar-btn {
+    color: var(--text-primary, #e0e0e0);
+}
+
+.toolbar-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--accent, #00bcd4);
+    letter-spacing: 0.5px;
+}
+
+.toolbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px;
+}
+
+.user-icon {
+    font-size: 18px;
+    color: var(--accent, #00bcd4);
+}
+
+.user-name {
+    font-weight: 500;
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.9rem;
+}
+
+.tenant-badge {
+    background: rgba(0,188,212,0.15);
+    color: var(--accent, #00bcd4);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.erp-content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    background: var(--content-bg, #1e1e2e);
+}
+
+.erp-footer {
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #9e9e9e);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    background: var(--sidebar-bg, #111827);
+}
+
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+    color: #333;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+@media (max-width: 767px) {
+    .erp-content {
+        padding: 1rem;
+    }
+    .user-name, .tenant-badge {
+        display: none;
+    }
+}

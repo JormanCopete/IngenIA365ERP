@@ -1,0 +1,189 @@
+@page "/debito/tarjetas/{CardId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Detalle Tarjeta - IngenIA365ERP</PageTitle>
+
+@if (_card is null)
+{
+    <SfSpinner Visible="true" />
+}
+else
+{
+    <div class="page-header">
+        <h3>Tarjeta @_card.MaskedCardNumber</h3>
+        <div style="display:flex;gap:8px;">
+            @if (_card.Status == "A")
+            {
+                <SfButton CssClass="e-warning" IconCss="e-icons e-lock" OnClick="@OpenBlock">Bloquear</SfButton>
+            }
+            <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                OnClick="@(() => Navigation.NavigateTo("/debito/tarjetas"))">Volver</SfButton>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+        <div class="kpi-card">
+            <span class="kpi-label">Titular</span>
+            <span class="kpi-value">@_card.PersonName</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Cuenta</span>
+            <span class="kpi-value">@(_card.AccountNumber ?? "N/A")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Saldo Disponible</span>
+            <span class="kpi-value">@_card.Balance.ToString("N0")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Estado</span>
+            <span class="kpi-value @GetBadgeClass(_card.Status)">@_card.StatusText</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Tipo</span>
+            <span class="kpi-value">@(_card.CardType == "D" ? "Debito" : "Credito")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Emision</span>
+            <span class="kpi-value">@_card.IssueDate?.ToString("dd/MM/yyyy")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Vencimiento</span>
+            <span class="kpi-value">@_card.ExpiryDate?.ToString("dd/MM/yyyy")</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Limite ATM diario</span>
+            <span class="kpi-value">@(_card.DailyAtmLimit?.ToString("N0") ?? "N/A")</span>
+        </div>
+    </div>
+
+    <h4>Transacciones Recientes</h4>
+    <SfGrid TValue="TransactionItem" DataSource="@_card.RecentTransactions"
+        AllowPaging="true" AllowSorting="true">
+        <GridColumns>
+            <GridColumn Field="Date" HeaderText="Fecha" Width="180" Format="dd/MM/yyyy HH:mm" />
+            <GridColumn Field="TypeText" HeaderText="Tipo" Width="150" />
+            <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="MerchantCode" HeaderText="Comercio" Width="160" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+                <Template>
+                    @{
+                        var t = context as TransactionItem;
+                        var badge = t?.Status switch
+                        {
+                            "A" => "e-badge e-badge-success",
+                            "R" => "e-badge e-badge-danger",
+                            _ => "e-badge e-badge-info"
+                        };
+                        <span class="@badge">@t?.StatusText</span>
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+}
+
+<SfDialog @bind-Visible="_showBlockDialog" Header="Bloquear Tarjeta" Width="400px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Tipo de Bloqueo *</label>
+                    <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_blockType" DataSource="@_blockTypes">
+                        <DropDownListFieldSettings Value="Code" Text="Name" />
+                    </SfDropDownList>
+                </div>
+                <div>
+                    <label>Razon</label>
+                    <SfTextBox @bind-Value="_blockReason" Placeholder="Razon del bloqueo" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showBlockDialog = false)" />
+        <DialogButton Content="Bloquear" CssClass="e-danger" IsPrimary="true" OnClick="@ConfirmBlock" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    [Parameter] public Guid CardId { get; set; }
+
+    private CardDetail? _card;
+    private bool _showBlockDialog;
+    private string _blockType = "T";
+    private string? _blockReason;
+
+    private readonly List<DropItem> _blockTypes =
+    [
+        new("T", "Temporal"),
+        new("D", "Definitivo")
+    ];
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _card = await Http.GetFromJsonAsync<CardDetail>($"/api/debit/cards/{CardId}"); }
+        catch { _card = null; }
+    }
+
+    private void OpenBlock() { _blockType = "T"; _blockReason = null; _showBlockDialog = true; }
+
+    private async Task ConfirmBlock()
+    {
+        var payload = new { BlockType = _blockType, Reason = _blockReason };
+        var res = await Http.PostAsJsonAsync($"/api/debit/cards/{CardId}/block", payload);
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Tarjeta bloqueada");
+            _showBlockDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ErrorAsync("Error al bloquear tarjeta");
+    }
+
+    private static string GetBadgeClass(string status) => status switch
+    {
+        "A" => "e-badge e-badge-success",
+        "B" => "e-badge e-badge-warning",
+        "D" => "e-badge e-badge-danger",
+        _ => "e-badge e-badge-info"
+    };
+
+    private class CardDetail
+    {
+        public Guid PublicId { get; set; }
+        public string MaskedCardNumber { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public string? PersonCode { get; set; }
+        public string? AccountNumber { get; set; }
+        public decimal Balance { get; set; }
+        public string Status { get; set; } = "";
+        public string StatusText { get; set; } = "";
+        public string CardType { get; set; } = "D";
+        public DateOnly? IssueDate { get; set; }
+        public DateOnly? ExpiryDate { get; set; }
+        public decimal? DailyAtmLimit { get; set; }
+        public decimal? DailyPosLimit { get; set; }
+        public List<TransactionItem> RecentTransactions { get; set; } = [];
+    }
+
+    private class TransactionItem
+    {
+        public Guid PublicId { get; set; }
+        public DateTime? Date { get; set; }
+        public string? Type { get; set; }
+        public string TypeText { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? MerchantCode { get; set; }
+        public string? Status { get; set; }
+        public string StatusText { get; set; } = "";
+    }
+
+    private record DropItem(string Code, string Name);
+}

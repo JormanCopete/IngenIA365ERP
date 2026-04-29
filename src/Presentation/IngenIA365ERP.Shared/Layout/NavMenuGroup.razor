@@ -1,0 +1,29 @@
+@* Collapsible menu group for NavMenu *@
+
+<div class="nav-group">
+    <button class="nav-item nav-group-toggle" @onclick="Toggle">
+        <span class="e-icons e-@Icon"></span>
+        @if (Expanded)
+        {
+            <span class="nav-group-title">@Title</span>
+            <span class="e-icons @(_isOpen ? "e-chevron-up" : "e-chevron-down") nav-chevron"></span>
+        }
+    </button>
+    @if (_isOpen && Expanded)
+    {
+        <div class="nav-group-items">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Expanded { get; set; } = true;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _isOpen;
+
+    private void Toggle() => _isOpen = !_isOpen;
+}

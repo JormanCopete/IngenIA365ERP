@@ -1,0 +1,190 @@
+@page "/cartera/retiros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Retiros de Ahorro - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Retiros de Ahorro</h3>
+</div>
+
+<!-- Quick withdrawal form -->
+<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
+    <h4 style="margin-top:0;">Registro Rapido de Retiro</h4>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+            <label>Documento del Asociado</label>
+            <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
+        </div>
+        <div>
+            <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+        </div>
+    </div>
+
+    @if (_personName is not null)
+    {
+        <p style="margin:8px 0;color:#27ae60;">Asociado: <strong>@_personName</strong></p>
+
+        @if (_personAccounts.Count > 0)
+        {
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
+                <div style="min-width:220px;">
+                    <label>Cuenta de Ahorro</label>
+                    <SfDropDownList TValue="string" TItem="AccountItem" @bind-Value="_selectedAccountId"
+                                    DataSource="_personAccounts" CssClass="e-small">
+                        <DropDownListFieldSettings Text="Text" Value="Value" />
+                        <DropDownListEvents TValue="string" TItem="AccountItem" ValueChange="OnAccountChanged" />
+                    </SfDropDownList>
+                </div>
+                <div>
+                    <span style="color:#888;">Saldo: </span>
+                    <strong style="color:#f39c12;">@_selectedBalance.ToString("N0")</strong>
+                </div>
+                <div style="min-width:150px;">
+                    <label>Monto a Retirar</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_withdrawAmount" Min="1" Format="N0" />
+                </div>
+                <div style="min-width:200px;">
+                    <label>Referencia (opcional)</label>
+                    <SfTextBox @bind-Value="_reference" />
+                </div>
+                <SfButton CssClass="e-warning" IconCss="e-icons e-minus" OnClick="ExecuteWithdraw">Retirar</SfButton>
+            </div>
+
+            @if (_withdrawAmount > _selectedBalance && _selectedBalance > 0)
+            {
+                <p style="color:#e74c3c;margin-top:8px;">El monto excede el saldo disponible.</p>
+            }
+        }
+        else
+        {
+            <p style="color:#f39c12;">El asociado no tiene cuentas de ahorro activas.</p>
+        }
+    }
+</div>
+
+<!-- Recent withdrawals -->
+<h4>Retiros Recientes</h4>
+<SfGrid TValue="RecentWithdrawRow" DataSource="_recentWithdraws" AllowPaging="true" AllowSorting="true"
+        GridLines="GridLine.Both">
+    <GridPageSettings PageSize="15" />
+    <GridColumns>
+        <GridColumn Field="@nameof(RecentWithdrawRow.EntryDate)" HeaderText="Fecha" Width="110" Format="d" />
+        <GridColumn Field="@nameof(RecentWithdrawRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(RecentWithdrawRow.AccountNumber)" HeaderText="Cuenta" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(RecentWithdrawRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(RecentWithdrawRow.EntryTypeText)" HeaderText="Tipo" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as RecentWithdrawRow;
+                }
+                <span class="badge-retiro">@row?.EntryTypeText</span>
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<style>
+    .badge-retiro { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+</style>
+
+@code {
+    private string _personCode = "";
+    private string? _personName;
+    private Guid? _personPublicId;
+    private List<AccountItem> _personAccounts = [];
+    private string _selectedAccountId = "";
+    private decimal _selectedBalance;
+    private decimal _withdrawAmount;
+    private string _reference = "";
+    private List<RecentWithdrawRow> _recentWithdraws = [];
+
+    private async Task SearchPerson()
+    {
+        _personName = null;
+        _personAccounts = [];
+        _selectedBalance = 0;
+
+        if (string.IsNullOrWhiteSpace(_personCode)) return;
+
+        try
+        {
+            var person = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_personCode}");
+            if (person is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+
+            _personName = $"{person.FirstName} {person.LastName}";
+            _personPublicId = person.PublicId;
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<AccountItem>>(
+                $"api/lending/savings-accounts?PersonPublicId={person.PublicId}&Status=A&PageSize=50");
+            _personAccounts = response?.Items ?? [];
+
+            if (_personAccounts.Count > 0)
+            {
+                _selectedAccountId = _personAccounts[0].Value;
+                _selectedBalance = _personAccounts[0].Balance;
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private void OnAccountChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, AccountItem> args)
+    {
+        var account = _personAccounts.FirstOrDefault(a => a.Value == args.Value);
+        _selectedBalance = account?.Balance ?? 0;
+    }
+
+    private async Task ExecuteWithdraw()
+    {
+        if (_withdrawAmount <= 0) { await Notification.ErrorAsync("Ingrese un monto valido."); return; }
+        if (string.IsNullOrEmpty(_selectedAccountId)) { await Notification.ErrorAsync("Seleccione una cuenta."); return; }
+        if (_withdrawAmount > _selectedBalance)
+        {
+            await Notification.ErrorAsync($"Saldo insuficiente. Disponible: {_selectedBalance:N0}");
+            return;
+        }
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/lending/savings-accounts/{_selectedAccountId}/withdraw",
+                new { Amount = _withdrawAmount, Reference = _reference });
+
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync($"Retiro de {_withdrawAmount:N0} registrado exitosamente.");
+                _withdrawAmount = 0;
+                _reference = "";
+                // Refresh balance
+                await SearchPerson();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record AccountItem(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
+        string SavingsLineName, DateOnly CreationDate, decimal Balance, string Status)
+    {
+        public string Value => PublicId.ToString();
+        public string Text => $"Cuenta {AccountNumber} - {SavingsLineName} (Saldo: {Balance:N0})";
+    }
+    record RecentWithdrawRow(DateOnly EntryDate, string PersonName, long AccountNumber, decimal Amount,
+        string EntryType, string EntryTypeText);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

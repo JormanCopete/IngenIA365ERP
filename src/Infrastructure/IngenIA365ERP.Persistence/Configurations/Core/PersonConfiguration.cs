@@ -1,0 +1,181 @@
+using IngenIA365ERP.Domain.Entities.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace IngenIA365ERP.Persistence.Configurations.Core;
+
+public class PersonConfiguration : IEntityTypeConfiguration<Person>
+{
+    public void Configure(EntityTypeBuilder<Person> builder)
+    {
+        builder.ToTable("COR_People");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).UseIdentityColumn();
+
+        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_People_PublicId");
+
+        // Identification
+        builder.Property(e => e.LegacyCode).HasMaxLength(20);
+        builder.Property(e => e.LastName).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.FirstName).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.TaxId).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.TaxIdCheckDigit).HasMaxLength(2);
+        builder.Property(e => e.IdIssuedAt).HasMaxLength(40);
+        builder.Property(e => e.IdType).HasMaxLength(2).IsRequired();
+        builder.Property(e => e.PersonType).HasMaxLength(2);
+        builder.Property(e => e.BusinessName).HasMaxLength(150);
+        builder.Property(e => e.PreviousCode).HasMaxLength(20);
+
+        // Contact
+        builder.Property(e => e.Address).HasMaxLength(120);
+        builder.Property(e => e.Phone1).HasMaxLength(40);
+        builder.Property(e => e.Phone2).HasMaxLength(40);
+        builder.Property(e => e.Fax).HasMaxLength(30);
+        builder.Property(e => e.Mobile).HasMaxLength(30);
+        builder.Property(e => e.Email).HasMaxLength(120);
+        builder.Property(e => e.MailingAddress).HasMaxLength(120);
+        builder.Property(e => e.MailingPreference).HasMaxLength(2);
+        builder.Property(e => e.EmailType).HasMaxLength(2);
+        builder.Property(e => e.DaneCityCode).HasMaxLength(20);
+
+        // Demographics
+        builder.Property(e => e.Gender).HasMaxLength(2);
+        builder.Property(e => e.MaritalStatus).HasMaxLength(2);
+        builder.Property(e => e.EducationLevel).HasMaxLength(2);
+        builder.Property(e => e.SocialStratum).HasMaxLength(4);
+        builder.Property(e => e.HousingType).HasMaxLength(2);
+        builder.Property(e => e.HasVehicle).HasDefaultValue(false);
+        builder.Property(e => e.VehicleType).HasDefaultValue(0);
+        builder.Property(e => e.IsHeadOfHousehold).HasDefaultValue(false);
+        builder.Property(e => e.WorkShift).HasMaxLength(2);
+        builder.Property(e => e.NaturalLegalType).HasDefaultValue((short)0);
+
+        // Employment
+        builder.Property(e => e.Employer).HasMaxLength(80);
+        builder.Property(e => e.SalaryType).HasMaxLength(2);
+        builder.Property(e => e.Salary).HasPrecision(17, 2).HasDefaultValue(0m);
+        builder.Property(e => e.Severance).HasPrecision(17, 2).HasDefaultValue(0m);
+        builder.Property(e => e.SeveranceFund).HasMaxLength(100);
+
+        // Tax & Regulatory
+        builder.Property(e => e.WithholdingExempt).HasDefaultValue(false);
+        builder.Property(e => e.IcaWithholdingExempt).HasDefaultValue(false);
+        builder.Property(e => e.TaxRegime).HasMaxLength(2);
+        builder.Property(e => e.IcaType).HasMaxLength(6);
+        builder.Property(e => e.IsLargeContributor).HasDefaultValue(false);
+        builder.Property(e => e.IcaRate).HasPrecision(10, 5);
+        builder.Property(e => e.DataOrigin).HasMaxLength(6);
+        builder.Property(e => e.PaymentDays).HasDefaultValue((short)0);
+        builder.Property(e => e.HasTaxLien).HasDefaultValue(false);
+        builder.Property(e => e.HasSpecialPrice).HasDefaultValue(false);
+        builder.Property(e => e.IsEmployerClient).HasDefaultValue(false);
+        builder.Property(e => e.SourceWithholding).HasDefaultValue(false);
+        builder.Property(e => e.NaturalHasRut).HasDefaultValue(false);
+        builder.Property(e => e.CiiuCode).HasMaxLength(20);
+        builder.Property(e => e.CreditLimit).HasPrecision(17, 2).HasDefaultValue(0m);
+        builder.Property(e => e.ThirdPartyType).HasMaxLength(2);
+
+        // Banking
+        builder.Property(e => e.BankAccountNumber).HasMaxLength(30);
+        builder.Property(e => e.BankAccountType).HasMaxLength(2);
+        builder.Property(e => e.NitBankCode).HasMaxLength(20);
+        builder.Property(e => e.NitBankAccountType).HasMaxLength(2);
+        builder.Property(e => e.NitBankAccountNumber).HasMaxLength(30);
+        builder.Property(e => e.NitAdvisorId).HasMaxLength(20);
+
+        // Role flags
+        builder.Property(e => e.IsAssociate).HasDefaultValue(false);
+        builder.Property(e => e.IsEmployee).HasDefaultValue(false);
+        builder.Property(e => e.IsAdvisor).HasDefaultValue(false);
+        builder.Property(e => e.IsThirdParty).HasDefaultValue(false);
+        builder.Property(e => e.ReceivesInvoice).HasDefaultValue(false);
+
+        // Status flags
+        builder.Property(e => e.Status).HasMaxLength(2);
+        builder.Property(e => e.IsDisabled).HasDefaultValue(false);
+        builder.Property(e => e.IsInsolvent).HasDefaultValue(false);
+        builder.Property(e => e.IsOnVacation).HasDefaultValue(false);
+        builder.Property(e => e.IsOnUnpaidLeave).HasDefaultValue(false);
+        builder.Property(e => e.IsPensioner).HasDefaultValue(false);
+        builder.Property(e => e.IsInsubordinate).HasDefaultValue(false);
+        builder.Property(e => e.IsDeceased).HasDefaultValue(false);
+        builder.Property(e => e.IsFromGovernment).HasDefaultValue(false);
+        builder.Property(e => e.IsPublicResourceAdmin).HasDefaultValue(false);
+        builder.Property(e => e.PensionType).HasMaxLength(10);
+        builder.Property(e => e.SeveranceType).HasMaxLength(10);
+
+        // Online access
+        builder.Property(e => e.InternetPassword).HasMaxLength(20);
+        builder.Property(e => e.OnlineConsultation).HasDefaultValue(false);
+        builder.Property(e => e.ConsultationStatus).HasMaxLength(2);
+        builder.Property(e => e.AffiliationCode).HasMaxLength(20);
+        builder.Property(e => e.ConsultationChargeType).HasMaxLength(2);
+        builder.Property(e => e.ConsultationCreditLine).HasDefaultValue(0);
+        builder.Property(e => e.UserPassword).HasMaxLength(40);
+
+        // Risk & Compliance
+        builder.Property(e => e.AuthCentralRisk).HasDefaultValue(false);
+        builder.Property(e => e.PosCardClass).HasMaxLength(2);
+        builder.Property(e => e.PosCardLimit).HasPrecision(17, 2).HasDefaultValue(0m);
+        builder.Property(e => e.InsuranceRiskRate).HasPrecision(9, 3).HasDefaultValue(0m);
+        builder.Property(e => e.ZoneTypeId).HasDefaultValue(0);
+        builder.Property(e => e.ZoneId).HasDefaultValue(0);
+        builder.Property(e => e.IsSiplaExempt).HasDefaultValue(false);
+        builder.Property(e => e.SiplaUser).HasMaxLength(20);
+        builder.Property(e => e.SinglePromissoryNote).HasDefaultValue(false);
+        builder.Property(e => e.PledgesContributions).HasDefaultValue(false);
+        builder.Property(e => e.InManagement).HasDefaultValue(false);
+
+        // Accounting center flags
+        builder.Property(e => e.CpAdmin).HasDefaultValue(false);
+        builder.Property(e => e.CpContributions).HasDefaultValue(false);
+        builder.Property(e => e.CpLocal).HasDefaultValue(false);
+        builder.Property(e => e.CpCommission).HasDefaultValue(false);
+        builder.Property(e => e.ProfitCenter).HasMaxLength(20);
+        builder.Property(e => e.CapacityPayPct).HasDefaultValue(false);
+
+        // Other income
+        builder.Property(e => e.OtherIncomeDescription).HasMaxLength(120);
+
+        // Legacy audit
+        builder.Property(e => e.LegacyUser).HasMaxLength(20);
+        builder.Property(e => e.LegacyUserName).HasMaxLength(80);
+
+        // Unique constraints
+        builder.HasIndex(e => e.TaxId).IsUnique().HasDatabaseName("UK_COR_People_TaxId");
+
+        // Search indexes
+        builder.HasIndex(e => e.LegacyCode).HasDatabaseName("IX_COR_People_LegacyCode");
+        builder.HasIndex(e => e.CityId).HasDatabaseName("IX_COR_People_CityId");
+        builder.HasIndex(e => new { e.LastName, e.FirstName }).HasDatabaseName("IX_COR_People_FullName");
+
+        // Relationships
+        builder.HasOne(e => e.City).WithMany(c => c.People).HasForeignKey(e => e.CityId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.MailingCity).WithMany().HasForeignKey(e => e.MailingCityId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Bank).WithMany().HasForeignKey(e => e.BankId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Profession).WithMany().HasForeignKey(e => e.ProfessionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Position).WithMany().HasForeignKey(e => e.PositionId).OnDelete(DeleteBehavior.Restrict);
+
+        // One-to-one children configured from child side (Cascade)
+        builder.HasOne(e => e.Associate).WithOne(a => a.Person).HasForeignKey<Associate>(a => a.PersonId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(e => e.Spouse).WithOne(s => s.Person).HasForeignKey<Spouse>(s => s.PersonId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(e => e.Financial).WithOne(f => f.Person).HasForeignKey<PersonFinancial>(f => f.PersonId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(e => e.AssociateCategory).WithOne(ac => ac.Person).HasForeignKey<AssociateCategory>(ac => ac.PersonId).OnDelete(DeleteBehavior.Cascade);
+
+        // One-to-many
+        builder.HasMany(e => e.Beneficiaries).WithOne(b => b.Person).HasForeignKey(b => b.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(e => e.References).WithOne(r => r.Person).HasForeignKey(r => r.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(e => e.CommitteeMemberships).WithOne(cm => cm.Person).HasForeignKey(cm => cm.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(e => e.Notifications).WithOne(n => n.RecipientPerson).HasForeignKey(n => n.RecipientPersonId).OnDelete(DeleteBehavior.Restrict);
+
+        // Audit
+        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedBy).HasMaxLength(100);
+        builder.Property(e => e.UpdatedBy).HasMaxLength(100);
+        builder.Property(e => e.DeletedBy).HasMaxLength(100);
+        builder.Property(e => e.IsDeleted).HasDefaultValue(false);
+
+        builder.HasQueryFilter(e => !e.IsDeleted);
+    }
+}

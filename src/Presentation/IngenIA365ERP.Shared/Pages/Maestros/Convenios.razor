@@ -1,0 +1,214 @@
+@page "/maestros/convenios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Convenios - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Convenios</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="AgreementItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Name" HeaderText="Nombre" Width="220" />
+        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="120" />
+        <GridColumn Field="EntityCode" HeaderText="Codigo Entidad" Width="130" />
+        <GridColumn Field="AccountNumber" HeaderText="No. Cuenta" Width="150" />
+        <GridColumn Field="MaxDiscountPercentage" HeaderText="% Max Descuento" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="IsActive" HeaderText="Activo" Width="90" DisplayAsCheckBox="true" TextAlign="TextAlign.Center" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as AgreementItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label>Nombre *</label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del convenio" />
+                    </div>
+                    <div>
+                        <label>Nombre Corto</label>
+                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label>Codigo Entidad</label>
+                        <SfTextBox @bind-Value="_model.EntityCode" Placeholder="Codigo de la entidad" />
+                    </div>
+                    <div>
+                        <label>Numero de Cuenta</label>
+                        <SfTextBox @bind-Value="_model.AccountNumber" Placeholder="Numero de cuenta" />
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label>Cuenta Contable Debito</label>
+                        <SfTextBox @bind-Value="_model.DebitAccountCode" Placeholder="Cuenta debito" />
+                    </div>
+                    <div>
+                        <label>Cuenta Contable Credito</label>
+                        <SfTextBox @bind-Value="_model.CreditAccountCode" Placeholder="Cuenta credito" />
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label>% Maximo Descuento</label>
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_model.MaxDiscountPercentage"
+                            Placeholder="0.00" Decimals="2" Format="N2" Min="0" Max="100" Step="0.01m" />
+                    </div>
+                    <div>
+                        <label>Monto Maximo Descuento</label>
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_model.MaxDiscountAmount"
+                            Placeholder="0.00" Decimals="2" Format="N2" Min="0" />
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label>Tipo Comprobante</label>
+                        <SfTextBox @bind-Value="_model.VoucherTypeCode" Placeholder="Tipo comprobante" />
+                    </div>
+                    <div style="display:flex;align-items:end;">
+                        <SfCheckBox @bind-Checked="_model.IsActive" Label="Activo" />
+                    </div>
+                </div>
+                <div>
+                    <SfCheckBox @bind-Checked="_model.AllowsPayrollDiscount" Label="Permite Descuento por Nomina" />
+                </div>
+                <div>
+                    <label>Observaciones</label>
+                    <SfTextBox @bind-Value="_model.Notes" Placeholder="Observaciones" Multiline="true" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<AgreementItem>? _grid;
+    private List<AgreementItem> _items = [];
+    private AgreementModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<AgreementItem>>("/api/core/agreements?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new() { IsActive = true }; _editId = null; _dialogTitle = "Nuevo Convenio"; _showDialog = true; }
+
+    private void OpenEdit(AgreementItem item)
+    {
+        _model = new()
+        {
+            Name = item.Name,
+            ShortName = item.ShortName,
+            EntityCode = item.EntityCode,
+            AccountNumber = item.AccountNumber,
+            DebitAccountCode = item.DebitAccountCode,
+            CreditAccountCode = item.CreditAccountCode,
+            MaxDiscountPercentage = item.MaxDiscountPercentage,
+            MaxDiscountAmount = item.MaxDiscountAmount,
+            VoucherTypeCode = item.VoucherTypeCode,
+            IsActive = item.IsActive,
+            AllowsPayrollDiscount = item.AllowsPayrollDiscount,
+            Notes = item.Notes
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Convenio";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(AgreementItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/core/agreements/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/core/agreements", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/core/agreements/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class AgreementItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? EntityCode { get; set; }
+        public string? AccountNumber { get; set; }
+        public string? DebitAccountCode { get; set; }
+        public string? CreditAccountCode { get; set; }
+        public decimal? MaxDiscountPercentage { get; set; }
+        public decimal? MaxDiscountAmount { get; set; }
+        public string? VoucherTypeCode { get; set; }
+        public bool IsActive { get; set; }
+        public bool AllowsPayrollDiscount { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private class AgreementModel
+    {
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? EntityCode { get; set; }
+        public string? AccountNumber { get; set; }
+        public string? DebitAccountCode { get; set; }
+        public string? CreditAccountCode { get; set; }
+        public decimal? MaxDiscountPercentage { get; set; }
+        public decimal? MaxDiscountAmount { get; set; }
+        public string? VoucherTypeCode { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool AllowsPayrollDiscount { get; set; }
+        public string? Notes { get; set; }
+    }
+}

@@ -1,0 +1,241 @@
+@page "/cartera/cdt/nuevo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Nuevo CDT - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Nuevo Certificado de Deposito a Termino</h3>
+    <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+              OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
+</div>
+
+<div style="background:#1e1e2e;border-radius:8px;padding:24px;max-width:700px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <!-- Person search -->
+        <div style="grid-column:1/3;">
+            <label>Titular - Documento</label>
+            <div style="display:flex;gap:8px;">
+                <SfTextBox @bind-Value="_personCode" Placeholder="Documento del asociado..." />
+                <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+            </div>
+            @if (_personName is not null)
+            {
+                <p style="color:#27ae60;margin:4px 0;">@_personName</p>
+            }
+        </div>
+
+        <!-- CDT Type -->
+        <div style="grid-column:1/3;">
+            <label>Tipo de CDT</label>
+            <SfDropDownList TValue="string" TItem="CdtParamItem" @bind-Value="_selectedCdtParamId"
+                            DataSource="_cdtParams" CssClass="e-small">
+                <DropDownListFieldSettings Text="Text" Value="Value" />
+                <DropDownListEvents TValue="string" TItem="CdtParamItem" ValueChange="OnCdtTypeChanged" />
+            </SfDropDownList>
+        </div>
+
+        <!-- Amount -->
+        <div>
+            <label>Monto</label>
+            <SfNumericTextBox TValue="decimal" @bind-Value="_amount" Min="0" Format="N0"
+                              ValueChange="RecalculateProjection" />
+            @if (_selectedParam is not null)
+            {
+                <small style="color:#888;">Min: @(_selectedParam.MinAmount?.ToString("N0") ?? "N/A") - Max: @(_selectedParam.MaxAmount?.ToString("N0") ?? "N/A")</small>
+            }
+        </div>
+
+        <!-- Term -->
+        <div>
+            <label>Plazo (dias)</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_termDays" Min="1" Format="N0"
+                              ValueChange="RecalculateProjection" />
+        </div>
+
+        <!-- Auto renewal -->
+        <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" @bind="_autoRenewal" id="cbAutoRenewal" />
+            <label for="cbAutoRenewal">Renovacion automatica</label>
+        </div>
+    </div>
+
+    <!-- Rate and projection -->
+    @if (_projectedRate > 0 || _amount > 0)
+    {
+        <div style="margin-top:20px;padding:16px;background:#16213e;border-radius:8px;">
+            <h4 style="margin-top:0;">Proyeccion de Intereses</h4>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
+                <div class="kpi-card">
+                    <span class="kpi-label">Tasa Anual</span>
+                    <span class="kpi-value" style="color:#3498db;">@_projectedRate.ToString("N2")%</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Interes al Vencimiento</span>
+                    <span class="kpi-value" style="color:#27ae60;">@_projectedInterest.ToString("N0")</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Total a Recibir</span>
+                    <span class="kpi-value">@((_amount + _projectedInterest).ToString("N0"))</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Fecha Vencimiento</span>
+                    <span class="kpi-value" style="font-size:14px;">@DateOnly.FromDateTime(DateTime.Now).AddDays(_termDays)</span>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div style="margin-top:20px;display:flex;gap:12px;">
+        <SfButton CssClass="e-flat" OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Cancelar</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="CreateCertificate">Crear CDT</SfButton>
+    </div>
+</div>
+
+@code {
+    private string _personCode = "";
+    private string? _personName;
+    private Guid? _personPublicId;
+    private List<CdtParamItem> _cdtParams = [];
+    private string _selectedCdtParamId = "";
+    private CdtParamItem? _selectedParam;
+    private decimal _amount;
+    private int _termDays = 90;
+    private bool _autoRenewal;
+    private decimal _projectedRate;
+    private decimal _projectedInterest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCdtParams();
+    }
+
+    private async Task LoadCdtParams()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PagedResponse<CdtParamItem>>("api/cdt/parameters?PageSize=100");
+            _cdtParams = response?.Items ?? [];
+            if (_cdtParams.Count > 0)
+            {
+                _selectedCdtParamId = _cdtParams[0].Value;
+                _selectedParam = _cdtParams[0];
+                _projectedRate = _selectedParam.AnnualRate ?? 0;
+            }
+        }
+        catch { /* silent */ }
+    }
+
+    private async Task SearchPerson()
+    {
+        _personName = null;
+        _personPublicId = null;
+
+        if (string.IsNullOrWhiteSpace(_personCode)) return;
+
+        try
+        {
+            var person = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_personCode}");
+            if (person is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+            _personName = $"{person.FirstName} {person.LastName}";
+            _personPublicId = person.PublicId;
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private void OnCdtTypeChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, CdtParamItem> args)
+    {
+        _selectedParam = _cdtParams.FirstOrDefault(p => p.Value == args.Value);
+        _projectedRate = _selectedParam?.AnnualRate ?? 0;
+        RecalculateProjection();
+    }
+
+    private void RecalculateProjection(Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal>? args = null)
+    {
+        RecalculateProjection();
+    }
+
+    private void RecalculateProjection(Syncfusion.Blazor.Inputs.ChangeEventArgs<int>? args = null)
+    {
+        RecalculateProjection();
+    }
+
+    private void RecalculateProjection()
+    {
+        if (_amount > 0 && _termDays > 0 && _projectedRate > 0)
+        {
+            _projectedInterest = Math.Round(_amount * _projectedRate / 100m * _termDays / 365m, 0);
+        }
+        else
+        {
+            _projectedInterest = 0;
+        }
+    }
+
+    private async Task CreateCertificate()
+    {
+        if (_personPublicId is null)
+        {
+            await Notification.ErrorAsync("Busque y seleccione un titular.");
+            return;
+        }
+        if (_amount <= 0)
+        {
+            await Notification.ErrorAsync("Ingrese un monto valido.");
+            return;
+        }
+        if (string.IsNullOrEmpty(_selectedCdtParamId))
+        {
+            await Notification.ErrorAsync("Seleccione un tipo de CDT.");
+            return;
+        }
+
+        Guid.TryParse(_selectedCdtParamId, out var cdtParamGuid);
+
+        try
+        {
+            var payload = new
+            {
+                PersonPublicId = _personPublicId.Value,
+                CdtParameterPublicId = cdtParamGuid,
+                Amount = _amount,
+                TermDays = _termDays,
+                AutoRenewal = _autoRenewal
+            };
+
+            var response = await Http.PostAsJsonAsync("api/cdt/certificates", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                var newId = await response.Content.ReadFromJsonAsync<Guid>();
+                await Notification.SuccessAsync("CDT creado exitosamente.");
+                Nav.NavigateTo($"/cartera/cdt/{newId}");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record CdtParamItem(Guid PublicId, int CreditLineId, string? Description, decimal? AnnualRate,
+        decimal? MinAmount, decimal? MaxAmount, int? Term)
+    {
+        public string Value => PublicId.ToString();
+        public string Text => Description ?? $"CDT Linea {CreditLineId}";
+    }
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

@@ -1,0 +1,155 @@
+@page "/cartera/conceptos-descuento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Conceptos de Descuento - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Conceptos de Descuento por Nomina</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="DeductionConceptItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="CompanyCode" HeaderText="Cod. Empresa" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="CreditLineId" HeaderText="Linea Credito" Width="130" TextAlign="TextAlign.Center" />
+        <GridColumn Field="PayrollConceptCode" HeaderText="Concepto Nomina" Width="160" />
+        <GridColumn Field="InterestConceptCode" HeaderText="Concepto Interes" Width="160" />
+        <GridColumn Field="ExtraConceptCode" HeaderText="Concepto Extra" Width="150" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as DeductionConceptItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Codigo Empresa *</label>
+                    <SfTextBox @bind-Value="_model.CompanyCode" Placeholder="Codigo (max 5)" MaxLength="5" />
+                </div>
+                <div>
+                    <label>Linea de Credito *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId"
+                        Placeholder="0" Format="N0" Min="0" />
+                </div>
+                <div>
+                    <label>Concepto Nomina</label>
+                    <SfTextBox @bind-Value="_model.PayrollConceptCode" Placeholder="Codigo concepto nomina" MaxLength="8" />
+                </div>
+                <div>
+                    <label>Concepto Interes</label>
+                    <SfTextBox @bind-Value="_model.InterestConceptCode" Placeholder="Codigo concepto interes" MaxLength="8" />
+                </div>
+                <div>
+                    <label>Concepto Extra</label>
+                    <SfTextBox @bind-Value="_model.ExtraConceptCode" Placeholder="Codigo concepto extra" MaxLength="8" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<DeductionConceptItem>? _grid;
+    private List<DeductionConceptItem> _items = [];
+    private DeductionConceptModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<DeductionConceptItem>>("/api/lending/deduction-concepts?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Concepto de Descuento"; _showDialog = true; }
+
+    private void OpenEdit(DeductionConceptItem item)
+    {
+        _model = new()
+        {
+            CompanyCode = item.CompanyCode,
+            CreditLineId = item.CreditLineId,
+            PayrollConceptCode = item.PayrollConceptCode,
+            InterestConceptCode = item.InterestConceptCode,
+            ExtraConceptCode = item.ExtraConceptCode
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Concepto de Descuento";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(DeductionConceptItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/lending/deduction-concepts/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/lending/deduction-concepts", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/lending/deduction-concepts/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class DeductionConceptItem
+    {
+        public Guid PublicId { get; set; }
+        public string CompanyCode { get; set; } = "";
+        public int CreditLineId { get; set; }
+        public string PayrollConceptCode { get; set; } = "";
+        public string InterestConceptCode { get; set; } = "";
+        public string ExtraConceptCode { get; set; } = "";
+    }
+
+    private class DeductionConceptModel
+    {
+        public string CompanyCode { get; set; } = "";
+        public int CreditLineId { get; set; }
+        public string PayrollConceptCode { get; set; } = "";
+        public string InterestConceptCode { get; set; } = "";
+        public string ExtraConceptCode { get; set; } = "";
+    }
+}

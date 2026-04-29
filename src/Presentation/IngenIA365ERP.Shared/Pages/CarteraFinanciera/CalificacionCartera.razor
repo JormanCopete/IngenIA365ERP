@@ -1,0 +1,219 @@
+@page "/cartera/calificacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Calificacion de Cartera - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Calificacion de Cartera</h3>
+</div>
+
+<!-- Parameters -->
+<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+    <div>
+        <label>Fecha de Calificacion</label>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_classificationDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
+    </div>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="@(() => _showConfirm = true)">Ejecutar Calificacion</SfButton>
+    <SfButton CssClass="e-info e-small" IconCss="e-icons e-reload" OnClick="LoadCurrentData">Actualizar</SfButton>
+</div>
+
+@if (_processing)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#4caf50" />
+    <p>Procesando calificacion...</p>
+}
+
+<!-- Distribution Chart -->
+@if (_currentDistribution is not null && _currentDistribution.Count > 0)
+{
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
+        <div style="flex:1;min-width:300px;">
+            <h4>Distribucion por Categoria</h4>
+            <SfChart Title="Calificacion de Cartera">
+                <ChartSeriesCollection>
+                    <ChartSeries DataSource="_currentDistribution" XName="Classification" YName="TotalBalance"
+                                 Type="ChartSeriesType.Column" InnerRadius="60%">
+                    </ChartSeries>
+                </ChartSeriesCollection>
+                <ChartTooltipSettings Enable="true" Format="${point.x}: $${point.y:N2}" />
+            </SfChart>
+        </div>
+        <div style="flex:1;min-width:300px;">
+            <SfGrid TValue="ClassificationItem" DataSource="_currentDistribution" AllowSorting="true">
+                <GridColumns>
+                    <GridColumn Field="Classification" HeaderText="Categoria" Width="100" TextAlign="TextAlign.Center">
+                        <Template>
+                            @{
+                                var item = context as ClassificationItem;
+                                var color = item?.Classification switch
+                                {
+                                    "A" => "#4caf50",
+                                    "B" => "#ffc107",
+                                    "C" => "#ff9800",
+                                    "D" => "#ff5722",
+                                    "E" => "#f44336",
+                                    _ => "#999"
+                                };
+                            }
+                            <span style="font-weight:bold;color:@color;">@item?.Classification</span>
+                        </Template>
+                    </GridColumn>
+                    <GridColumn Field="Count" HeaderText="Cantidad" Width="100" TextAlign="TextAlign.Center" />
+                    <GridColumn Field="TotalBalance" HeaderText="Saldo Total" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="ProvisionRate" HeaderText="% Provision" Width="120" Format="N1" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="ProvisionAmount" HeaderText="Provision" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                </GridColumns>
+                <GridAggregates>
+                    <GridAggregate>
+                        <GridAggregateColumns>
+                            <GridAggregateColumn Field="Count" Type="AggregateType.Sum">
+                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
+                            </GridAggregateColumn>
+                            <GridAggregateColumn Field="TotalBalance" Type="AggregateType.Sum" Format="N2">
+                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                            </GridAggregateColumn>
+                            <GridAggregateColumn Field="ProvisionAmount" Type="AggregateType.Sum" Format="N2">
+                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                            </GridAggregateColumn>
+                        </GridAggregateColumns>
+                    </GridAggregate>
+                </GridAggregates>
+            </SfGrid>
+        </div>
+    </div>
+}
+
+<!-- History Chart -->
+@if (_history is not null && _history.Count > 0)
+{
+    <h4>Historico de Calificacion (Ultimos 12 meses)</h4>
+    <SfChart Title="Evolucion de Calificacion">
+        <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
+        <ChartPrimaryYAxis LabelFormat="N0" />
+        <ChartSeriesCollection>
+            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountA" Name="A" Type="ChartSeriesType.StackingColumn" />
+            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountB" Name="B" Type="ChartSeriesType.StackingColumn" />
+            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountC" Name="C" Type="ChartSeriesType.StackingColumn" />
+            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountD" Name="D" Type="ChartSeriesType.StackingColumn" />
+            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountE" Name="E" Type="ChartSeriesType.StackingColumn" />
+        </ChartSeriesCollection>
+        <ChartTooltipSettings Enable="true" />
+        <ChartLegendSettings Visible="true" />
+    </SfChart>
+}
+
+<!-- Result -->
+@if (_result is not null)
+{
+    <div style="margin-top:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;background:#1b5e20;">
+        <h5>Resultado</h5>
+        <p>Obligaciones procesadas: @_result.PortfoliosProcessed</p>
+        <p>Total provision: @_result.TotalProvision.ToString("N2")</p>
+    </div>
+}
+
+<ConfirmDialog @bind-Visible="_showConfirm"
+               Title="Ejecutar Calificacion"
+               Message="Esta seguro de ejecutar la calificacion de cartera? Se actualizaran las provisiones."
+               ConfirmText="Ejecutar"
+               OnConfirm="ExecuteClassification" />
+
+@code {
+    private DateTime? _classificationDate = DateTime.Today;
+    private bool _processing;
+    private bool _showConfirm;
+    private List<ClassificationItem>? _currentDistribution;
+    private List<HistoryItem>? _history;
+    private ClassificationResult? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentData();
+    }
+
+    private async Task LoadCurrentData()
+    {
+        try
+        {
+            _currentDistribution = await Http.GetFromJsonAsync<List<ClassificationItem>>(
+                "/api/lending/classifications/current");
+            _history = await Http.GetFromJsonAsync<List<HistoryItem>>(
+                "/api/lending/classifications/history");
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error al cargar datos de calificacion.");
+        }
+    }
+
+    private async Task ExecuteClassification()
+    {
+        _processing = true;
+        _result = null;
+        try
+        {
+            var date = _classificationDate.HasValue
+                ? DateOnly.FromDateTime(_classificationDate.Value)
+                : DateOnly.FromDateTime(DateTime.Today);
+            var body = new { ClassificationDate = date };
+            var response = await Http.PostAsJsonAsync("/api/lending/classifications", body);
+            if (response.IsSuccessStatusCode)
+            {
+                _result = await response.Content.ReadFromJsonAsync<ClassificationResult>();
+                await Notification.SuccessAsync("Calificacion ejecutada exitosamente.");
+                await LoadCurrentData();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch
+        {
+            await Notification.ErrorAsync("Error de conexion.");
+        }
+        _processing = false;
+    }
+
+    private class ClassificationItem
+    {
+        public string Classification { get; set; } = "";
+        public int Count { get; set; }
+        public decimal TotalBalance { get; set; }
+        public decimal ProvisionRate { get; set; }
+        public decimal ProvisionAmount { get; set; }
+    }
+
+    private class HistoryItem
+    {
+        public int Period { get; set; }
+        public string PeriodLabel { get; set; } = "";
+        public int CountA { get; set; }
+        public int CountB { get; set; }
+        public int CountC { get; set; }
+        public int CountD { get; set; }
+        public int CountE { get; set; }
+        public decimal AmountA { get; set; }
+        public decimal AmountB { get; set; }
+        public decimal AmountC { get; set; }
+        public decimal AmountD { get; set; }
+        public decimal AmountE { get; set; }
+    }
+
+    private class ClassificationResult
+    {
+        public int PortfoliosProcessed { get; set; }
+        public decimal TotalProvision { get; set; }
+        public Guid? AccountingDocumentId { get; set; }
+    }
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  # --- INFRAESTRUCTURA ---
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ingenia365-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "IngenIA365_Dev2026!"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "IngenIA365_Dev2026!" -Q "SELECT 1" -C -No
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: ingenia365-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: IngenIA365ERP_Audit
+
+  redis:
+    image: redis:7-alpine
+    container_name: ingenia365-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ingenia365-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ingenia365
+      RABBITMQ_DEFAULT_PASS: ingenia365dev
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  # --- APLICACION ---
+  api:
+    build:
+      context: .
+      dockerfile: src/Presentation/IngenIA365ERP.API/Dockerfile
+    container_name: ingenia365-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__SqlServer=Server=sqlserver;Database=IngenIA365ERP;User=sa;Password=IngenIA365_Dev2026!;TrustServerCertificate=true
+      - ConnectionStrings__MongoDB=mongodb://mongodb:27017/IngenIA365ERP_Audit
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+      - MongoDb__ConnectionString=mongodb://mongodb:27017
+      - MongoDb__DatabaseName=IngenIA365ERP_Audit
+      - JwtSettings__PrivateKeyPath=Keys/dev_private.pem
+      - JwtSettings__PublicKeyPath=Keys/dev_public.pem
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Presentation/IngenIA365ERP.Web/Dockerfile
+    container_name: ingenia365-web
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ApiBaseUrl=http://api:8080
+    depends_on:
+      - api
+
+volumes:
+  sqlserver-data:
+  mongo-data:
+  redis-data:
+  rabbitmq-data:

@@ -1,0 +1,132 @@
+@page "/cartera/solicitudes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Solicitudes de Credito - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Solicitudes de Credito</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfDropDownList TValue="string" TItem="StatusItem" @bind-Value="_statusFilter"
+                        DataSource="_statusOptions" Placeholder="Todos los estados" Width="180px"
+                        CssClass="e-small">
+            <DropDownListFieldSettings Text="Text" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="StatusItem" ValueChange="OnFilterChanged" />
+        </SfDropDownList>
+        <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Placeholder="Desde" Width="140px" CssClass="e-small" Format="dd/MM/yyyy" />
+        <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Placeholder="Hasta" Width="140px" CssClass="e-small" Format="dd/MM/yyyy" />
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus"
+                  OnClick='@(() => Nav.NavigateTo("/cartera/solicitudes/nueva"))'>Nueva Solicitud</SfButton>
+    </div>
+</div>
+
+<SfGrid TValue="LoanApplicationRow" DataSource="_applications" AllowPaging="true" AllowSorting="true"
+        AllowFiltering="true" GridLines="GridLine.Both">
+    <GridPageSettings PageSize="20" />
+    <GridEvents TValue="LoanApplicationRow" RowSelected="OnRowSelected" />
+    <GridColumns>
+        <GridColumn Field="@nameof(LoanApplicationRow.ApplicationNumber)" HeaderText="No. Solicitud" Width="120" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(LoanApplicationRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(LoanApplicationRow.CreditLineName)" HeaderText="Linea de Credito" Width="180" />
+        <GridColumn Field="@nameof(LoanApplicationRow.RequestedAmount)" HeaderText="Monto Solicitado" Width="150" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(LoanApplicationRow.ApprovedAmount)" HeaderText="Monto Aprobado" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(LoanApplicationRow.Term)" HeaderText="Plazo" Width="80" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(LoanApplicationRow.InterestRate)" HeaderText="Tasa %" Width="80" TextAlign="TextAlign.Center" Format="N2" />
+        <GridColumn Field="@nameof(LoanApplicationRow.ApplicationDate)" HeaderText="Fecha" Width="110" Format="d" />
+        <GridColumn Field="@nameof(LoanApplicationRow.StatusText)" HeaderText="Estado" Width="130" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as LoanApplicationRow;
+                    var (css, _) = GetStatusBadge(row?.Status ?? "");
+                }
+                <span class="@css">@row?.StatusText</span>
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<style>
+    .badge-radicada { background:#f39c12; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-aprobada { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-rechazada { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-desembolsada { background:#3498db; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-cancelada { background:#95a5a6; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+</style>
+
+@code {
+    private List<LoanApplicationRow> _applications = [];
+    private string _statusFilter = "";
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+
+    private List<StatusItem> _statusOptions =
+    [
+        new("", "Todos"),
+        new("R", "Radicada"),
+        new("A", "Aprobada"),
+        new("X", "Rechazada"),
+        new("D", "Desembolsada"),
+        new("C", "Cancelada")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "api/lending/loan-applications?PageSize=100";
+            if (!string.IsNullOrEmpty(_statusFilter))
+                url += $"&Status={_statusFilter}";
+            if (_dateFrom.HasValue)
+                url += $"&DateFrom={DateOnly.FromDateTime(_dateFrom.Value)}";
+            if (_dateTo.HasValue)
+                url += $"&DateTo={DateOnly.FromDateTime(_dateTo.Value)}";
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<LoanApplicationRow>>(url);
+            _applications = response?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error cargando solicitudes: {ex.Message}");
+        }
+    }
+
+    private async Task OnFilterChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, StatusItem> args)
+    {
+        await LoadData();
+    }
+
+    // Date filters use @bind-Value directly, no event needed
+
+    private void OnRowSelected(RowSelectEventArgs<LoanApplicationRow> args)
+    {
+        if (args.Data?.PublicId != null)
+            Nav.NavigateTo($"/cartera/solicitudes/{args.Data.PublicId}");
+    }
+
+    private (string css, string text) GetStatusBadge(string status) => status switch
+    {
+        "R" => ("badge-radicada", "Radicada"),
+        "A" => ("badge-aprobada", "Aprobada"),
+        "X" => ("badge-rechazada", "Rechazada"),
+        "D" => ("badge-desembolsada", "Desembolsada"),
+        "C" => ("badge-cancelada", "Cancelada"),
+        _ => ("badge-cancelada", status)
+    };
+
+    // --- Local types ---
+    record StatusItem(string Value, string Text);
+    record LoanApplicationRow(Guid PublicId, int ApplicationNumber, string PersonCode, string PersonName,
+        string CreditLineName, decimal RequestedAmount, decimal ApprovedAmount, int Term,
+        decimal InterestRate, decimal InstallmentAmount, string Status, string StatusText,
+        DateOnly ApplicationDate, DateOnly? ApprovalDate, DateOnly? DisbursementDate);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

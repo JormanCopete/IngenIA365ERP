@@ -1,0 +1,183 @@
+@page "/maestros/centros-costo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Centros de Costo - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Centros de Costo</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="CostCenterItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
+        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
+        <GridColumn Field="CompanyName" HeaderText="Empresa" Width="200" />
+        <GridColumn Field="PayrollType" HeaderText="Tipo Nomina" Width="150" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as CostCenterItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Nombre *</label>
+                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+                </div>
+                <div>
+                    <label>Nombre Corto</label>
+                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                </div>
+                <div>
+                    <label>Empresa</label>
+                    <SfDropDownList TValue="Guid?" TItem="CompanyOption" DataSource="@_companies"
+                        @bind-Value="_model.CompanyId" Placeholder="Seleccione empresa">
+                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                    </SfDropDownList>
+                </div>
+                <div>
+                    <label>Tipo Nomina</label>
+                    <SfDropDownList TValue="string?" TItem="PayrollTypeOption" DataSource="@_payrollTypes"
+                        @bind-Value="_model.PayrollType" Placeholder="Seleccione tipo">
+                        <DropDownListFieldSettings Text="Name" Value="Code" />
+                    </SfDropDownList>
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<CostCenterItem>? _grid;
+    private List<CostCenterItem> _items = [];
+    private List<CompanyOption> _companies = [];
+    private List<PayrollTypeOption> _payrollTypes =
+    [
+        new() { Code = "Quincenal", Name = "Quincenal" },
+        new() { Code = "Mensual", Name = "Mensual" },
+        new() { Code = "Decadal", Name = "Decadal" },
+        new() { Code = "Semanal", Name = "Semanal" }
+    ];
+    private CostCenterModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanies();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<CostCenterItem>>("/api/core/cost-centers?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private async Task LoadCompanies()
+    {
+        try { _companies = await Http.GetFromJsonAsync<List<CompanyOption>>("/api/core/companies?pageSize=500") ?? []; }
+        catch { _companies = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Centro de Costo"; _showDialog = true; }
+
+    private void OpenEdit(CostCenterItem item)
+    {
+        _model = new()
+        {
+            Name = item.Name,
+            ShortName = item.ShortName,
+            CompanyId = item.CompanyId,
+            PayrollType = item.PayrollType
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Centro de Costo";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(CostCenterItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/core/cost-centers/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/core/cost-centers", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/core/cost-centers/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class CostCenterItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public Guid? CompanyId { get; set; }
+        public string? CompanyName { get; set; }
+        public string? PayrollType { get; set; }
+    }
+
+    private class CostCenterModel
+    {
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public Guid? CompanyId { get; set; }
+        public string? PayrollType { get; set; }
+    }
+
+    private class CompanyOption
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private class PayrollTypeOption
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+}

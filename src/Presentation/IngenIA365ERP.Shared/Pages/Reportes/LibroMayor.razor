@@ -1,0 +1,184 @@
+@page "/reportes/libro-mayor"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject IJSRuntime JS
+
+<PageTitle>Libro Mayor - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Libro Mayor</h3>
+    <div style="display:flex;gap:8px;">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
+    <div>
+        <label>Cuenta Contable</label>
+        <SfTextBox @bind-Value="_accountCode" Placeholder="Ej: 110505" Width="180px" CssClass="e-small" />
+    </div>
+    <div>
+        <label>Fecha Desde</label>
+        <SfDatePicker TValue="DateTime" @bind-Value="_dateFrom" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
+    </div>
+    <div>
+        <label>Fecha Hasta</label>
+        <SfDatePicker TValue="DateTime" @bind-Value="_dateTo" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
+    </div>
+</div>
+
+@if (_loading)
+{
+    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                   TrackColor="#333" ProgressColor="#00bcd4" />
+}
+
+@if (_data is not null && _data.Count > 0)
+{
+    <!-- Account Header -->
+    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="info-card">
+            <span class="label">Cuenta</span>
+            <span>@_accountCode - @_accountName</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Total Debitos</span>
+            <span>@_data.Sum(d => d.Debit).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Total Creditos</span>
+            <span>@_data.Sum(d => d.Credit).ToString("N2")</span>
+        </div>
+        <div class="info-card">
+            <span class="label">Saldo Final</span>
+            <span style="font-weight:bold;">@(_data.LastOrDefault()?.Balance.ToString("N2") ?? "0.00")</span>
+        </div>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="LedgerLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
+            AllowExcelExport="true">
+        <GridPageSettings PageSize="50" />
+        <GridColumns>
+            <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="d" />
+            <GridColumn Field="VoucherType" HeaderText="Tipo" Width="80" TextAlign="TextAlign.Center" />
+            <GridColumn Field="DocNumber" HeaderText="No. Documento" Width="140" />
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+            <GridColumn Field="Debit" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Credit" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Balance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{
+                        var line = context as LedgerLine;
+                        var color = line?.Balance >= 0 ? "" : "color:#f44336;";
+                    }
+                    <span style="@color">@line?.Balance.ToString("N2")</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+}
+else if (!_loading && _data is not null)
+{
+    <p style="color:#999;">No se encontraron movimientos para la cuenta y periodo seleccionados.</p>
+}
+
+@code {
+    private SfGrid<LedgerLine>? _grid;
+    private string _accountCode = "";
+    private string _accountName = "";
+    private DateTime _dateFrom = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _dateTo = DateTime.Today;
+    private bool _loading;
+    private List<LedgerLine>? _data;
+
+    private async Task LoadPreview()
+    {
+        if (string.IsNullOrWhiteSpace(_accountCode))
+        {
+            await Notification.ErrorAsync("Debe ingresar una cuenta contable.");
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var from = _dateFrom.ToString("yyyy-MM-dd");
+            var to = _dateTo.ToString("yyyy-MM-dd");
+            _data = await Http.GetFromJsonAsync<List<LedgerLine>>(
+                $"/api/reports/accounting/general-ledger?account={_accountCode}&from={from}&to={to}");
+
+            if (_data is not null && _data.Count > 0)
+                _accountName = _data[0].AccountName ?? "";
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+        _loading = false;
+    }
+
+    private async Task DownloadPdf()
+    {
+        if (string.IsNullOrWhiteSpace(_accountCode))
+        {
+            await Notification.ErrorAsync("Debe ingresar una cuenta contable.");
+            return;
+        }
+
+        try
+        {
+            var from = _dateFrom.ToString("yyyy-MM-dd");
+            var to = _dateTo.ToString("yyyy-MM-dd");
+            var response = await Http.GetAsync(
+                $"/api/reports/accounting/general-ledger/pdf?account={_accountCode}&from={from}&to={to}");
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval",
+                    $"{{const a=document.createElement('a');a.href='data:application/pdf;base64,{base64}';a.download='LibroMayor_{_accountCode}.pdf';a.click();}}");
+            }
+            else
+            {
+                await Notification.ErrorAsync("Error generando PDF");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync(ex.Message);
+        }
+    }
+
+    private class LedgerLine
+    {
+        public DateTime Date { get; set; }
+        public string? AccountName { get; set; }
+        public string VoucherType { get; set; } = "";
+        public string DocNumber { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
+    }
+}
+
+<style>
+    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+</style>

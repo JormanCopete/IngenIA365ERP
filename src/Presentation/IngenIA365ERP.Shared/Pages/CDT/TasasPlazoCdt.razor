@@ -1,0 +1,162 @@
+@page "/cdt/tasas-plazo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Tasas por Plazo CDT - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Tasas por Plazo CDT</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="RateByTermItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="CreditLineId" HeaderText="Linea Credito" Width="120" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AmountRangeStart" HeaderText="Monto Desde" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AmountRangeEnd" HeaderText="Monto Hasta" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="TermStart" HeaderText="Plazo Desde" Width="110" TextAlign="TextAlign.Right" />
+        <GridColumn Field="TermEnd" HeaderText="Plazo Hasta" Width="110" TextAlign="TextAlign.Right" />
+        <GridColumn Field="InterestRate" HeaderText="Tasa" Width="120" Format="N5" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as RateByTermItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Linea de Credito *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Id linea de credito" Min="0" />
+                </div>
+                <div>
+                    <label>Monto Rango Inicio *</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountRangeStart" Placeholder="0.00" Decimals="2" Format="N2" Min="0" />
+                </div>
+                <div>
+                    <label>Monto Rango Fin *</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountRangeEnd" Placeholder="0.00" Decimals="2" Format="N2" Min="0" />
+                </div>
+                <div>
+                    <label>Plazo Inicio (dias) *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.TermStart" Placeholder="0" Min="0" />
+                </div>
+                <div>
+                    <label>Plazo Fin (dias) *</label>
+                    <SfNumericTextBox TValue="int" @bind-Value="_model.TermEnd" Placeholder="0" Min="0" />
+                </div>
+                <div>
+                    <label>Tasa de Interes (%)</label>
+                    <SfNumericTextBox TValue="decimal?" @bind-Value="_model.InterestRate" Placeholder="0.00000" Decimals="5" Format="N5" Min="0" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<RateByTermItem>? _grid;
+    private List<RateByTermItem> _items = [];
+    private RateByTermModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<RateByTermItem>>("/api/cdt/rates-by-term?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Tasa por Plazo"; _showDialog = true; }
+
+    private void OpenEdit(RateByTermItem item)
+    {
+        _model = new()
+        {
+            CreditLineId = item.CreditLineId,
+            AmountRangeStart = item.AmountRangeStart,
+            AmountRangeEnd = item.AmountRangeEnd,
+            TermStart = item.TermStart,
+            TermEnd = item.TermEnd,
+            InterestRate = item.InterestRate
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Tasa por Plazo";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(RateByTermItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/cdt/rates-by-term/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/cdt/rates-by-term", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/cdt/rates-by-term/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class RateByTermItem
+    {
+        public Guid PublicId { get; set; }
+        public int CreditLineId { get; set; }
+        public decimal AmountRangeStart { get; set; }
+        public decimal AmountRangeEnd { get; set; }
+        public int TermStart { get; set; }
+        public int TermEnd { get; set; }
+        public decimal? InterestRate { get; set; }
+    }
+
+    private class RateByTermModel
+    {
+        public int CreditLineId { get; set; }
+        public decimal AmountRangeStart { get; set; }
+        public decimal AmountRangeEnd { get; set; }
+        public int TermStart { get; set; }
+        public int TermEnd { get; set; }
+        public decimal? InterestRate { get; set; }
+    }
+}

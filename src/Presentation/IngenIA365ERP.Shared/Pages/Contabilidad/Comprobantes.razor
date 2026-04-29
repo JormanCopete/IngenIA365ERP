@@ -1,0 +1,601 @@
+@page "/contabilidad/comprobantes"
+@page "/contabilidad/comprobantes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>@(_isNew ? "Nuevo Comprobante" : "Comprobante") - IngenIA365ERP</PageTitle>
+
+<!-- Toolbar -->
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>@(_isNew ? "Nuevo Comprobante Contable" : $"Comprobante {_header.VoucherTypeCode} - {_header.DocumentNumber}")</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                  OnClick='@(() => Nav.NavigateTo("/contabilidad/comprobantes/lista"))'>Volver a Lista</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
+                  OnClick="SaveDocument">Guardar</SfButton>
+        @if (!_isNew && !_header.IsClosed && !_header.IsVoided)
+        {
+            <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(!IsBalanced)"
+                      OnClick="PostDocument">Contabilizar</SfButton>
+        }
+        @if (!_isNew && _header.IsClosed && !_header.IsVoided)
+        {
+            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                      OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
+        }
+    </div>
+</div>
+
+<!-- Status badge -->
+@if (!_isNew)
+{
+    var badge = _header.IsVoided ? "e-badge e-badge-danger"
+              : _header.IsClosed ? "e-badge e-badge-success"
+              : "e-badge e-badge-warning";
+    var text = _header.IsVoided ? "Anulado" : _header.IsClosed ? "Contabilizado" : "Borrador";
+    <div style="margin-bottom:12px;">
+        <span class="@badge" style="font-size:14px;padding:4px 12px;">@text</span>
+    </div>
+}
+
+<!-- Header fields -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:20px;">
+    <div>
+        <label>Tipo Comprobante *</label>
+        <SfDropDownList TValue="string" TItem="VoucherTypeItem" @bind-Value="_header.VoucherTypeCode"
+                        DataSource="_voucherTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
+            <DropDownListFieldSettings Text="Display" Value="Code" />
+        </SfDropDownList>
+    </div>
+    <div>
+        <label>Numero</label>
+        <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
+                   Readonly="true" CssClass="e-disabled" />
+    </div>
+    <div>
+        <label>Fecha *</label>
+        <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
+    </div>
+    <div style="grid-column:span 2;">
+        <label>Descripcion *</label>
+        <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del comprobante" Enabled="@IsEditable" />
+    </div>
+</div>
+
+<!-- Detail lines -->
+<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+    <h4 style="margin:0;">Detalle de Movimientos</h4>
+    @if (IsEditable)
+    {
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
+    }
+</div>
+
+<div style="overflow-x:auto;">
+    <table class="e-table" style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="background:var(--sf-grid-header-bg, #f5f5f5);">
+                <th style="width:40px;text-align:center;">#</th>
+                <th style="width:140px;">Cuenta</th>
+                <th style="width:200px;">Nombre Cuenta</th>
+                <th style="width:130px;">Tercero</th>
+                <th style="width:140px;">Centro Costo</th>
+                <th style="width:120px;">Sucursal</th>
+                <th style="width:140px;text-align:right;">Debito</th>
+                <th style="width:140px;text-align:right;">Credito</th>
+                <th style="width:200px;">Descripcion</th>
+                @if (IsEditable) { <th style="width:50px;"></th> }
+            </tr>
+        </thead>
+        <tbody>
+            @for (var i = 0; i < _lines.Count; i++)
+            {
+                var idx = i;
+                var line = _lines[idx];
+                <tr style="border-bottom:1px solid #e0e0e0;">
+                    <td style="text-align:center;color:#888;">@(idx + 1)</td>
+                    <td>
+                        <div style="display:flex;gap:4px;">
+                            <SfTextBox @bind-Value="line.AccountCode" Placeholder="Cuenta" CssClass="e-small"
+                                       Enabled="@IsEditable" @onblur="@(() => LookupAccount(idx))" />
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenAccountSearch(idx))" />
+                        </div>
+                    </td>
+                    <td><span style="font-size:12px;color:#666;">@line.AccountName</span></td>
+                    <td>
+                        <div style="display:flex;gap:4px;">
+                            <SfTextBox @bind-Value="line.PersonCode" Placeholder="NIT" CssClass="e-small"
+                                       Enabled="@IsEditable" @onblur="@(() => LookupPerson(idx))" />
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenPersonSearch(idx))" />
+                        </div>
+                    </td>
+                    <td>
+                        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.CostCenterCode"
+                                        DataSource="_costCenters" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
+                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                        </SfDropDownList>
+                    </td>
+                    <td>
+                        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.BranchCode"
+                                        DataSource="_branches" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
+                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                        </SfDropDownList>
+                    </td>
+                    <td>
+                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Debit" Format="N2" Min="0"
+                                          CssClass="e-small" Enabled="@IsEditable"
+                                          ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnDebitChange(idx, e.Value))" />
+                    </td>
+                    <td>
+                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Credit" Format="N2" Min="0"
+                                          CssClass="e-small" Enabled="@IsEditable"
+                                          ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnCreditChange(idx, e.Value))" />
+                    </td>
+                    <td>
+                        <SfTextBox @bind-Value="line.Description" Placeholder="Detalle" CssClass="e-small"
+                                   Enabled="@IsEditable" />
+                    </td>
+                    @if (IsEditable)
+                    {
+                        <td style="text-align:center;">
+                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                      OnClick="@(() => RemoveLine(idx))" />
+                        </td>
+                    }
+                </tr>
+            }
+            @if (_lines.Count == 0)
+            {
+                <tr><td colspan="@(IsEditable ? 10 : 9)" style="text-align:center;padding:20px;color:#888;">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Totals footer -->
+<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Total Debitos</span><br/>
+        <strong style="font-size:16px;">@TotalDebit.ToString("N2")</strong>
+    </div>
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Total Creditos</span><br/>
+        <strong style="font-size:16px;">@TotalCredit.ToString("N2")</strong>
+    </div>
+    <div style="text-align:right;">
+        <span style="font-size:12px;color:#666;">Diferencia</span><br/>
+        <strong style="font-size:16px;color:@(IsBalanced ? "green" : "red");">@Difference.ToString("N2")</strong>
+    </div>
+</div>
+
+<!-- Account search dialog -->
+<SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre de cuenta" CssClass="e-small" />
+                    <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
+                </div>
+                <SfGrid TValue="AccountSearchItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
+                    <GridPageSettings PageSize="10" />
+                    <GridEvents RowSelected="OnAccountSelected" TValue="AccountSearchItem" />
+                    <GridColumns>
+                        <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
+                        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+                        <GridColumn Field="Nature" HeaderText="Naturaleza" Width="100" />
+                    </GridColumns>
+                </SfGrid>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<!-- Person search dialog -->
+<SfDialog @bind-Visible="_showPersonSearch" Header="Buscar Tercero" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <SfTextBox @bind-Value="_personSearchText" Placeholder="NIT o nombre" CssClass="e-small" />
+                    <SfButton CssClass="e-primary e-small" OnClick="SearchPersons">Buscar</SfButton>
+                </div>
+                <SfGrid TValue="PersonSearchItem" DataSource="_personSearchResults" AllowPaging="true" Height="300">
+                    <GridPageSettings PageSize="10" />
+                    <GridEvents RowSelected="OnPersonSelected" TValue="PersonSearchItem" />
+                    <GridColumns>
+                        <GridColumn Field="IdentificationNumber" HeaderText="NIT" Width="140" />
+                        <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
+                    </GridColumns>
+                </SfGrid>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<!-- Void confirmation -->
+<ConfirmDialog @bind-Visible="_showVoidConfirm" OnConfirm="VoidDocument"
+               Message="Esta seguro de anular este comprobante? Esta accion no se puede deshacer." />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _isNew => !Id.HasValue;
+    private bool IsEditable => !_header.IsClosed && !_header.IsVoided;
+    private bool CanSave => IsEditable && !string.IsNullOrWhiteSpace(_header.VoucherTypeCode) && _lines.Count > 0;
+    private bool IsBalanced => Math.Abs(Difference) < 0.01m;
+    private decimal TotalDebit => _lines.Sum(l => l.Debit);
+    private decimal TotalCredit => _lines.Sum(l => l.Credit);
+    private decimal Difference => TotalDebit - TotalCredit;
+
+    private DocumentHeader _header = new();
+    private List<DocumentLine> _lines = [];
+    private List<VoucherTypeItem> _voucherTypes = [];
+    private List<DropOption> _costCenters = [new("", "--")];
+    private List<DropOption> _branches = [new("", "--")];
+
+    // Account search
+    private bool _showAccountSearch;
+    private string _accountSearchText = "";
+    private List<AccountSearchItem> _accountSearchResults = [];
+    private int _accountSearchLineIndex;
+
+    // Person search
+    private bool _showPersonSearch;
+    private string _personSearchText = "";
+    private List<PersonSearchItem> _personSearchResults = [];
+    private int _personSearchLineIndex;
+
+    // Void confirm
+    private bool _showVoidConfirm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadVoucherTypes(), LoadCostCenters(), LoadBranches());
+
+        if (Id.HasValue)
+            await LoadDocument();
+        else
+        {
+            _header = new() { DocumentDate = DateTime.Today };
+            _lines = [];
+        }
+    }
+
+    private async Task LoadVoucherTypes()
+    {
+        try
+        {
+            var types = await Http.GetFromJsonAsync<List<VoucherTypeItem>>("/api/accounting/voucher-types?pageSize=100");
+            _voucherTypes = types ?? [];
+            foreach (var t in _voucherTypes) t.Display = $"{t.Code} - {t.Name}";
+        }
+        catch { _voucherTypes = []; }
+    }
+
+    private async Task LoadCostCenters()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/cost-centers?pageSize=200");
+            _costCenters = [new("", "--"), .. (items ?? []).Select(c => new DropOption(c.Code, $"{c.Code} - {c.Name}"))];
+        }
+        catch { /* keep default */ }
+    }
+
+    private async Task LoadBranches()
+    {
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/branches?pageSize=200");
+            _branches = [new("", "--"), .. (items ?? []).Select(b => new DropOption(b.Code, $"{b.Code} - {b.Name}"))];
+        }
+        catch { /* keep default */ }
+    }
+
+    private async Task LoadDocument()
+    {
+        try
+        {
+            var doc = await Http.GetFromJsonAsync<DocumentDto>($"/api/accounting/documents/{Id}");
+            if (doc is null) { await Notification.ErrorAsync("Comprobante no encontrado"); return; }
+
+            _header = new()
+            {
+                VoucherTypeCode = doc.VoucherTypeCode,
+                DocumentNumber = doc.DocumentNumber,
+                DocumentDate = doc.DocumentDate,
+                Description = doc.Description,
+                IsClosed = doc.IsClosed,
+                IsVoided = doc.IsVoided
+            };
+
+            _lines = (doc.Lines ?? []).Select(l => new DocumentLine
+            {
+                PublicId = l.PublicId,
+                AccountCode = l.AccountCode,
+                AccountName = l.AccountName,
+                PersonCode = l.PersonCode,
+                CostCenterCode = l.CostCenterCode ?? "",
+                BranchCode = l.BranchCode ?? "",
+                Debit = l.Debit,
+                Credit = l.Credit,
+                Description = l.Description
+            }).ToList();
+        }
+        catch { await Notification.ErrorAsync("Error al cargar comprobante"); }
+    }
+
+    // Line management
+    private void AddLine()
+    {
+        _lines.Add(new DocumentLine());
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (index >= 0 && index < _lines.Count)
+            _lines.RemoveAt(index);
+    }
+
+    private void OnDebitChange(int idx, decimal value)
+    {
+        if (idx < _lines.Count && value > 0)
+            _lines[idx].Credit = 0;
+    }
+
+    private void OnCreditChange(int idx, decimal value)
+    {
+        if (idx < _lines.Count && value > 0)
+            _lines[idx].Debit = 0;
+    }
+
+    // Account lookup
+    private async Task LookupAccount(int idx)
+    {
+        if (idx >= _lines.Count || string.IsNullOrWhiteSpace(_lines[idx].AccountCode)) return;
+        try
+        {
+            var acct = await Http.GetFromJsonAsync<AccountSearchItem>($"/api/accounting/chart-of-accounts/by-code/{_lines[idx].AccountCode}");
+            if (acct is not null) _lines[idx].AccountName = acct.Name;
+        }
+        catch { /* ignore */ }
+    }
+
+    private void OpenAccountSearch(int idx)
+    {
+        _accountSearchLineIndex = idx;
+        _accountSearchText = "";
+        _accountSearchResults = [];
+        _showAccountSearch = true;
+    }
+
+    private async Task SearchAccounts()
+    {
+        try
+        {
+            _accountSearchResults = await Http.GetFromJsonAsync<List<AccountSearchItem>>(
+                $"/api/accounting/chart-of-accounts?search={_accountSearchText}&pageSize=50") ?? [];
+        }
+        catch { _accountSearchResults = []; }
+    }
+
+    private void OnAccountSelected(RowSelectEventArgs<AccountSearchItem> args)
+    {
+        if (_accountSearchLineIndex < _lines.Count && args.Data is not null)
+        {
+            _lines[_accountSearchLineIndex].AccountCode = args.Data.AccountCode;
+            _lines[_accountSearchLineIndex].AccountName = args.Data.Name;
+        }
+        _showAccountSearch = false;
+    }
+
+    // Person lookup
+    private async Task LookupPerson(int idx)
+    {
+        if (idx >= _lines.Count || string.IsNullOrWhiteSpace(_lines[idx].PersonCode)) return;
+        try
+        {
+            var p = await Http.GetFromJsonAsync<PersonSearchItem>($"/api/core/people/by-identification/{_lines[idx].PersonCode}");
+            if (p is not null) _lines[idx].PersonName = p.FullName;
+        }
+        catch { /* ignore */ }
+    }
+
+    private void OpenPersonSearch(int idx)
+    {
+        _personSearchLineIndex = idx;
+        _personSearchText = "";
+        _personSearchResults = [];
+        _showPersonSearch = true;
+    }
+
+    private async Task SearchPersons()
+    {
+        try
+        {
+            _personSearchResults = await Http.GetFromJsonAsync<List<PersonSearchItem>>(
+                $"/api/core/people?search={_personSearchText}&pageSize=50") ?? [];
+        }
+        catch { _personSearchResults = []; }
+    }
+
+    private void OnPersonSelected(RowSelectEventArgs<PersonSearchItem> args)
+    {
+        if (_personSearchLineIndex < _lines.Count && args.Data is not null)
+        {
+            _lines[_personSearchLineIndex].PersonCode = args.Data.IdentificationNumber;
+            _lines[_personSearchLineIndex].PersonName = args.Data.FullName;
+        }
+        _showPersonSearch = false;
+    }
+
+    // Save
+    private async Task SaveDocument()
+    {
+        var payload = new
+        {
+            _header.VoucherTypeCode,
+            _header.DocumentDate,
+            _header.Description,
+            Lines = _lines.Select(l => new
+            {
+                l.AccountCode,
+                l.PersonCode,
+                CostCenterCode = string.IsNullOrEmpty(l.CostCenterCode) ? null : l.CostCenterCode,
+                BranchCode = string.IsNullOrEmpty(l.BranchCode) ? null : l.BranchCode,
+                l.Debit,
+                l.Credit,
+                l.Description
+            }).ToList()
+        };
+
+        try
+        {
+            HttpResponseMessage res;
+            if (_isNew)
+                res = await Http.PostAsJsonAsync("/api/accounting/documents", payload);
+            else
+                res = await Http.PutAsJsonAsync($"/api/accounting/documents/{Id}", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Comprobante guardado");
+                if (_isNew)
+                {
+                    var created = await res.Content.ReadFromJsonAsync<CreatedResult>();
+                    if (created?.PublicId != null)
+                        Nav.NavigateTo($"/contabilidad/comprobantes/{created.PublicId}", replace: true);
+                }
+                else
+                    await LoadDocument();
+            }
+            else
+            {
+                var error = await res.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error al guardar: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // Post (contabilizar)
+    private async Task PostDocument()
+    {
+        if (!IsBalanced) { await Notification.ErrorAsync("El comprobante no esta cuadrado"); return; }
+        try
+        {
+            var res = await Http.PostAsync($"/api/accounting/documents/{Id}/post", null);
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Comprobante contabilizado");
+                await LoadDocument();
+            }
+            else
+                await Notification.ErrorAsync("Error al contabilizar");
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // Void (anular)
+    private async Task VoidDocument()
+    {
+        try
+        {
+            var res = await Http.PostAsync($"/api/accounting/documents/{Id}/void", null);
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Comprobante anulado");
+                await LoadDocument();
+            }
+            else
+                await Notification.ErrorAsync("Error al anular");
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // Models
+    private class DocumentHeader
+    {
+        public string VoucherTypeCode { get; set; } = "";
+        public long DocumentNumber { get; set; }
+        public DateTime DocumentDate { get; set; } = DateTime.Today;
+        public string Description { get; set; } = "";
+        public bool IsClosed { get; set; }
+        public bool IsVoided { get; set; }
+    }
+
+    private class DocumentLine
+    {
+        public Guid? PublicId { get; set; }
+        public string AccountCode { get; set; } = "";
+        public string AccountName { get; set; } = "";
+        public string PersonCode { get; set; } = "";
+        public string PersonName { get; set; } = "";
+        public string CostCenterCode { get; set; } = "";
+        public string BranchCode { get; set; } = "";
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string Description { get; set; } = "";
+    }
+
+    private class DocumentDto
+    {
+        public Guid PublicId { get; set; }
+        public string VoucherTypeCode { get; set; } = "";
+        public long DocumentNumber { get; set; }
+        public DateTime DocumentDate { get; set; }
+        public string Description { get; set; } = "";
+        public bool IsClosed { get; set; }
+        public bool IsVoided { get; set; }
+        public List<DocumentLineDto> Lines { get; set; } = [];
+    }
+
+    private class DocumentLineDto
+    {
+        public Guid PublicId { get; set; }
+        public string AccountCode { get; set; } = "";
+        public string AccountName { get; set; } = "";
+        public string PersonCode { get; set; } = "";
+        public string? CostCenterCode { get; set; }
+        public string? BranchCode { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string Description { get; set; } = "";
+    }
+
+    private class VoucherTypeItem
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Display { get; set; } = "";
+    }
+
+    private class CatalogItem
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    private class AccountSearchItem
+    {
+        public string AccountCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Nature { get; set; }
+    }
+
+    private class PersonSearchItem
+    {
+        public string IdentificationNumber { get; set; } = "";
+        public string FullName { get; set; } = "";
+    }
+
+    private class CreatedResult { public Guid PublicId { get; set; } }
+
+    private record DropOption(string Value, string Name);
+}

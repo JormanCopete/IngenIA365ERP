@@ -1,0 +1,162 @@
+@page "/maestros/bancos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Bancos - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Bancos</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+</div>
+
+<SfGrid @ref="_grid" TValue="BankItem" DataSource="@_items"
+    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridColumns>
+        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
+        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
+        <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="150" />
+        <GridColumn Field="VoucherTypeCode" HeaderText="Tipo Comprobante" Width="150" />
+        <GridColumn Field="CheckDigitRequired" HeaderText="Digito Chequeo" Width="130" DisplayAsCheckBox="true" />
+        <GridColumn Field="FinancialTaxRate" HeaderText="% GMF" Width="100" Format="N4" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = context as BankItem;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label>Nombre *</label>
+                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del banco" />
+                </div>
+                <div>
+                    <label>Nombre Corto</label>
+                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                </div>
+                <div>
+                    <label>Cuenta Contable</label>
+                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
+                </div>
+                <div>
+                    <label>Tipo Comprobante</label>
+                    <SfTextBox @bind-Value="_model.VoucherTypeCode" Placeholder="Codigo tipo comprobante" />
+                </div>
+                <div>
+                    <SfCheckBox @bind-Checked="_model.CheckDigitRequired" Label="Requiere Digito de Chequeo" />
+                </div>
+                <div>
+                    <label>Tasa GMF (%)</label>
+                    <SfNumericTextBox TValue="decimal?" @bind-Value="_model.FinancialTaxRate"
+                        Placeholder="0.0000" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+    Message="Esta seguro de eliminar este registro?" />
+
+@code {
+    private SfGrid<BankItem>? _grid;
+    private List<BankItem> _items = [];
+    private BankModel _model = new();
+    private Guid? _editId;
+    private bool _showDialog, _showConfirm;
+    private string _dialogTitle = "";
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<BankItem>>("/api/core/banks?pageSize=500") ?? []; }
+        catch { _items = []; }
+    }
+
+    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Banco"; _showDialog = true; }
+
+    private void OpenEdit(BankItem item)
+    {
+        _model = new()
+        {
+            Name = item.Name,
+            ShortName = item.ShortName,
+            AccountCode = item.AccountCode,
+            VoucherTypeCode = item.VoucherTypeCode,
+            CheckDigitRequired = item.CheckDigitRequired,
+            FinancialTaxRate = item.FinancialTaxRate
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Banco";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(BankItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+
+    private async Task Save()
+    {
+        HttpResponseMessage res;
+        if (_editId.HasValue)
+            res = await Http.PutAsJsonAsync($"/api/core/banks/{_editId}", _model);
+        else
+            res = await Http.PostAsJsonAsync("/api/core/banks", _model);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro guardado");
+            _showDialog = false;
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al guardar");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var res = await Http.DeleteAsync($"/api/core/banks/{_deleteId}");
+        if (res.IsSuccessStatusCode)
+        {
+            await Notification.SuccessAsync("Registro eliminado");
+            await LoadData();
+        }
+        else
+            await Notification.ShowErrorAsync(res, "Error al eliminar");
+    }
+
+    private class BankItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? VoucherTypeCode { get; set; }
+        public bool CheckDigitRequired { get; set; }
+        public decimal? FinancialTaxRate { get; set; }
+    }
+
+    private class BankModel
+    {
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? AccountCode { get; set; }
+        public string? VoucherTypeCode { get; set; }
+        public bool CheckDigitRequired { get; set; }
+        public decimal? FinancialTaxRate { get; set; }
+    }
+}

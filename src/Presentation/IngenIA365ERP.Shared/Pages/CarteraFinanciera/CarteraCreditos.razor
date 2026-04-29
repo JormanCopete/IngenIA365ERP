@@ -1,0 +1,129 @@
+@page "/cartera/creditos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Cartera de Creditos - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h3>Cartera de Creditos</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfTextBox @bind-Value="_searchTerm" Placeholder="Buscar por cedula o numero credito" Width="250px"
+                   CssClass="e-small" />
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
+        <SfDropDownList TValue="string" TItem="StatusOpt" @bind-Value="_statusFilter"
+                        DataSource="_statuses" Width="150px" CssClass="e-small">
+            <DropDownListFieldSettings Text="Text" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="StatusOpt" ValueChange="OnStatusChanged" />
+        </SfDropDownList>
+    </div>
+</div>
+
+<SfGrid TValue="PortfolioRow" DataSource="_portfolios" AllowPaging="true" AllowSorting="true"
+        AllowFiltering="true" GridLines="GridLine.Both">
+    <GridPageSettings PageSize="20" />
+    <GridEvents TValue="PortfolioRow" RowSelected="OnRowSelected" />
+    <GridColumns>
+        <GridColumn Field="@nameof(PortfolioRow.PortfolioNumber)" HeaderText="No. Credito" Width="110" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(PortfolioRow.PersonName)" HeaderText="Asociado" Width="200" />
+        <GridColumn Field="@nameof(PortfolioRow.IdentificationNumber)" HeaderText="Cedula" Width="120" />
+        <GridColumn Field="@nameof(PortfolioRow.CreditLineName)" HeaderText="Linea" Width="170" />
+        <GridColumn Field="@nameof(PortfolioRow.DisbursementDate)" HeaderText="Desembolso" Width="110" Format="d" />
+        <GridColumn Field="@nameof(PortfolioRow.ApprovedAmount)" HeaderText="Monto" Width="130" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(PortfolioRow.CurrentBalance)" HeaderText="Saldo" Width="130" TextAlign="TextAlign.Right" Format="N0" />
+        <GridColumn Field="@nameof(PortfolioRow.PaidInstallments)" HeaderText="Cuotas Pag." Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(PortfolioRow.InterestRate)" HeaderText="Tasa %" Width="80" TextAlign="TextAlign.Center" Format="N2" />
+        <GridColumn Field="@nameof(PortfolioRow.DaysOverdue)" HeaderText="Dias Mora" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as PortfolioRow;
+                    var color = row?.DaysOverdue switch
+                    {
+                        > 180 => "#8b0000",
+                        > 90 => "#e74c3c",
+                        > 60 => "#e67e22",
+                        > 30 => "#f39c12",
+                        > 0 => "#f1c40f",
+                        _ => "#27ae60"
+                    };
+                }
+                <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
+            </Template>
+        </GridColumn>
+        <GridColumn Field="@nameof(PortfolioRow.Category)" HeaderText="Cat." Width="60" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var row = context as PortfolioRow;
+                    var catColor = row?.Category switch
+                    {
+                        "A" => "#27ae60",
+                        "B" => "#f39c12",
+                        "C" => "#e67e22",
+                        "D" => "#e74c3c",
+                        "E" => "#8b0000",
+                        _ => "#888"
+                    };
+                }
+                <span style="background:@catColor;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Category</span>
+            </Template>
+        </GridColumn>
+        <GridColumn Field="@nameof(PortfolioRow.StatusText)" HeaderText="Estado" Width="120" />
+    </GridColumns>
+</SfGrid>
+
+@code {
+    private List<PortfolioRow> _portfolios = [];
+    private string _searchTerm = "";
+    private string _statusFilter = "A";
+
+    private List<StatusOpt> _statuses =
+    [
+        new("", "Todos"),
+        new("A", "Vigentes"),
+        new("C", "Cancelados")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "api/lending/portfolios?PageSize=100";
+            if (!string.IsNullOrEmpty(_statusFilter))
+                url += $"&Status={_statusFilter}";
+            if (!string.IsNullOrEmpty(_searchTerm))
+                url += $"&SearchTerm={Uri.EscapeDataString(_searchTerm)}";
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<PortfolioRow>>(url);
+            _portfolios = response?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error cargando cartera: {ex.Message}");
+        }
+    }
+
+    private async Task OnStatusChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, StatusOpt> args)
+    {
+        await LoadData();
+    }
+
+    private void OnRowSelected(RowSelectEventArgs<PortfolioRow> args)
+    {
+        if (args.Data?.PublicId != null)
+            Nav.NavigateTo($"/cartera/creditos/{args.Data.PublicId}");
+    }
+
+    record StatusOpt(string Value, string Text);
+    record PortfolioRow(Guid PublicId, long PortfolioNumber, string PersonName, string IdentificationNumber,
+        string CreditLineName, DateOnly DisbursementDate, decimal CurrentBalance, decimal ApprovedAmount,
+        int PaidInstallments, decimal PendingInstallmentCount, int DaysOverdue, string Category,
+        decimal InterestRate, decimal InstallmentAmount, DateOnly? MaturityDate, string StatusText);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

@@ -1,0 +1,132 @@
+@inherits LayoutComponentBase
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject INotificationService NotificationService
+@inject ILoadingService LoadingService
+@implements IDisposable
+
+<AuthorizeView>
+    <Authorized>
+        <div class="erp-layout">
+            <SfSidebar @ref="_sidebar" Width="260px" DockSize="60px" EnableDock="true"
+                       MediaQuery="(min-width: 768px)" IsOpen="@_sidebarOpen" Type="SidebarType.Push"
+                       CssClass="erp-sidebar">
+                <ChildContent>
+                    <NavMenu SidebarOpen="@_sidebarOpen" />
+                </ChildContent>
+            </SfSidebar>
+
+            <div class="erp-main">
+                <SfToolbar CssClass="erp-toolbar">
+                    <ToolbarItems>
+                        <ToolbarItem PrefixIcon="e-icons e-menu" TooltipText="Menu" OnClick="@ToggleSidebar" />
+                        <ToolbarItem Type="ItemType.Separator" />
+                        <ToolbarItem>
+                            <Template>
+                                <span class="toolbar-title">IngenIA365ERP</span>
+                            </Template>
+                        </ToolbarItem>
+                        <ToolbarItem Align="ItemAlign.Right">
+                            <Template>
+                                <div class="toolbar-user">
+                                    <span class="e-icons e-people user-icon"></span>
+                                    <span class="user-name">@_userName</span>
+                                    <span class="tenant-badge">@_tenantId</span>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-logout"
+                                              Content="Salir" OnClick="@Logout" />
+                                </div>
+                            </Template>
+                        </ToolbarItem>
+                    </ToolbarItems>
+                </SfToolbar>
+
+                <div class="erp-content">
+                    @Body
+                </div>
+
+                <footer class="erp-footer">
+                    <span>&copy; 2026 IngenIA 365 | v1.0</span>
+                </footer>
+            </div>
+        </div>
+
+        @if (LoadingService.IsLoading)
+        {
+            <div class="loading-overlay">
+                <SfSpinner Visible="true" Label="Procesando..." />
+            </div>
+        }
+
+        <SfToast @ref="_toast" ShowCloseButton="true" NewestOnTop="true">
+            <ToastPosition X="Right" Y="Top" />
+        </SfToast>
+    </Authorized>
+    <NotAuthorized>
+        <RedirectToLogin />
+    </NotAuthorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ha ocurrido un error inesperado.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">X</span>
+</div>
+
+@code {
+    private SfSidebar? _sidebar;
+    private SfToast? _toast;
+    private bool _sidebarOpen = true;
+    private string _userName = "Usuario";
+    private string _tenantId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userName = user.Identity.Name ?? "Usuario";
+            _tenantId = user.FindFirst("tenantId")?.Value ?? "";
+        }
+
+        NotificationService.OnNotify += ShowToast;
+        LoadingService.OnChange += StateHasChanged;
+    }
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private async Task ShowToast(string title, string message, NotificationType type)
+    {
+        if (_toast is null) return;
+        var cssClass = type switch
+        {
+            NotificationType.Success => "e-toast-success",
+            NotificationType.Error => "e-toast-danger",
+            NotificationType.Warning => "e-toast-warning",
+            NotificationType.Info => "e-toast-info",
+            _ => ""
+        };
+        await _toast.ShowAsync(new ToastModel
+        {
+            Title = title,
+            Content = message,
+            CssClass = cssClass,
+            Timeout = type == NotificationType.Error ? 8000 : 4000
+        });
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        if (AuthStateProvider is CustomAuthStateProvider custom)
+            custom.NotifyUserLogout();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        NotificationService.OnNotify -= ShowToast;
+        LoadingService.OnChange -= StateHasChanged;
+    }
+}
