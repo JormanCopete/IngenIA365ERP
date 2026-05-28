@@ -75,7 +75,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<PriceListTypeItem>>("/api/inventory/price-list-types?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<PriceListTypeItem>("/api/inventory/price-list-types?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

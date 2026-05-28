@@ -251,7 +251,7 @@
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/inventory/warehouses?pageSize=200");
+            var items = await Http.GetListAsync<CatalogItem>("/api/inventory/warehouses?pageSize=200");
             _warehouses = (items ?? []).Select(w => new DropOption(w.Code, $"{w.Code} - {w.Name}")).ToList();
         }
         catch { _warehouses = []; }
@@ -261,7 +261,7 @@
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/inventory/transaction-types?pageSize=200");
+            var items = await Http.GetListAsync<CatalogItem>("/api/inventory/transaction-types?pageSize=200");
             _transactionTypes = (items ?? []).Select(t => new DropOption(t.Code, $"{t.Code} - {t.Name}")).ToList();
         }
         catch { _transactionTypes = []; }
@@ -347,7 +347,7 @@
     {
         try
         {
-            _productSearchResults = await Http.GetFromJsonAsync<List<ProductSearchItem>>(
+            _productSearchResults = await Http.GetListAsync<ProductSearchItem>(
                 $"/api/inventory/products?search={_productSearchText}&pageSize=50") ?? [];
         }
         catch { _productSearchResults = []; }

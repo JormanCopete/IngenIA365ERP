@@ -107,7 +107,7 @@ else
             if (_monthTo.HasValue)
                 url += $"&monthTo={_monthTo}";
 
-            _items = await Http.GetFromJsonAsync<List<CashFlowItem>>(url) ?? [];
+            _items = await Http.GetListAsync<CashFlowItem>(url) ?? [];
 
             _totalIncome = _items.Sum(i => i.TotalIncome);
             _totalExpense = _items.Sum(i => i.TotalExpense);

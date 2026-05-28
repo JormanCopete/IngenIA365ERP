@@ -111,7 +111,7 @@ else if (!_loading && _data is not null)
     {
         try
         {
-            var list = await Http.GetFromJsonAsync<List<WarehouseOption>>("/api/inventory/warehouses") ?? [];
+            var list = await Http.GetListAsync<WarehouseOption>("/api/inventory/warehouses") ?? [];
             _warehouses = [new("", "Todas las bodegas"), .. list];
         }
         catch
@@ -126,7 +126,7 @@ else if (!_loading && _data is not null)
         try
         {
             var warehouseParam = string.IsNullOrEmpty(_warehouseId) ? "" : $"?warehouseId={_warehouseId}";
-            _data = await Http.GetFromJsonAsync<List<InventoryRow>>(
+            _data = await Http.GetListAsync<InventoryRow>(
                 $"/api/reports/inventory/valued{warehouseParam}");
         }
         catch (Exception ex)

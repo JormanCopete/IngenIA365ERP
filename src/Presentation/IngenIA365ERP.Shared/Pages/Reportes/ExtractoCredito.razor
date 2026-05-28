@@ -164,7 +164,7 @@
             if (person is not null)
             {
                 _personName = person.FullName;
-                _loans = await Http.GetFromJsonAsync<List<LoanOption>>($"/api/reports/lending/loans-by-person/{person.PublicId}");
+                _loans = await Http.GetListAsync<LoanOption>($"/api/reports/lending/loans-by-person/{person.PublicId}");
             }
             else
             {

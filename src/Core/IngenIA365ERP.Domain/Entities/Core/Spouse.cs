@@ -4,8 +4,19 @@ using IngenIA365ERP.Domain.Common;
 namespace IngenIA365ERP.Domain.Entities.Core;
 
 /// <summary>
-/// Maps to [dbo].[COR_Spouses] — one-to-one with Person for spouse data.
-/// Legacy: extracted from sys_maenit CONY* fields.
+/// Maps to [dbo].[COR_Spouses]. Hija de <see cref="Person"/> (1:1).
+///
+/// <para>
+/// Contiene SOLO datos personales del conyuge (nombre, identificacion,
+/// direccion, contacto basico).
+/// </para>
+///
+/// <para>
+/// Los datos del EMPLEO del conyuge (donde trabaja, salario, cargo,
+/// profesion, etc.) viven en <see cref="Associate"/> bajo el prefijo
+/// <c>Spouse*</c>, dado que solo tienen sentido cuando la persona es
+/// asociado (decision P10).
+/// </para>
 /// </summary>
 public class Spouse : AuditableEntity
 {
@@ -28,33 +39,19 @@ public class Spouse : AuditableEntity
     [MaxLength(80)]
     public string? SpouseAddress { get; set; }
 
-    [MaxLength(80)]
-    public string? SpouseEmployer { get; set; }
-
-    [MaxLength(80)]
-    public string? SpouseEmployerAddress { get; set; }
-
     [MaxLength(30)]
     public string? SpousePhone { get; set; }
 
     [MaxLength(40)]
     public string? SpouseCity { get; set; }
 
-    [MaxLength(10)]
-    public string? SpouseProfession { get; set; }
-
-    [MaxLength(60)]
-    public string? SpousePosition { get; set; }
-
-    public decimal SpouseSalary { get; set; }
+    [MaxLength(30)]
+    public string? SpouseFax { get; set; }
 
     public DateOnly? SpouseDateOfBirth { get; set; }
 
     [MaxLength(2)]
     public string? SpouseGender { get; set; }
-
-    [MaxLength(30)]
-    public string? SpouseFax { get; set; }
 
     [MaxLength(2)]
     public string? SpouseMailingPref { get; set; }
@@ -62,30 +59,7 @@ public class Spouse : AuditableEntity
     [MaxLength(120)]
     public string? SpouseMailingAddress { get; set; }
 
-    [MaxLength(10)]
-    public string? SpouseCompanyCode { get; set; }
+    // === Navigation ===
 
-    [MaxLength(10)]
-    public string? SpouseBranchCode { get; set; }
-
-    [MaxLength(10)]
-    public string? SpouseSectionCode { get; set; }
-
-    public DateOnly? SpouseEmployerStart { get; set; }
-
-    [MaxLength(2)]
-    public string? SpouseEducationLevel { get; set; }
-
-    [MaxLength(2)]
-    public string? SpouseSalaryType { get; set; }
-
-    public decimal? SpouseSeverance { get; set; }
-
-    public decimal? SpouseOtherIncome { get; set; }
-
-    [MaxLength(120)]
-    public string? SpouseOtherIncomeDesc { get; set; }
-
-    // Navigation
     public Person Person { get; set; } = null!;
 }

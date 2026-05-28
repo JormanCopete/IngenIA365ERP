@@ -311,8 +311,8 @@
     {
         try
         {
-            var branchTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/branches?pageSize=200");
-            var ccTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/cost-centers?pageSize=200");
+            var branchTask = Http.GetListAsync<CatalogItem>("/api/core/branches?pageSize=200");
+            var ccTask = Http.GetListAsync<CatalogItem>("/api/accounting/cost-centers?pageSize=200");
             await Task.WhenAll(branchTask, ccTask);
 
             if (branchTask.Result is not null)
@@ -349,7 +349,7 @@
             if (!string.IsNullOrEmpty(_branchFilter)) url += $"&branchCode={_branchFilter}";
             if (!string.IsNullOrEmpty(_costCenterFilter)) url += $"&costCenterCode={_costCenterFilter}";
 
-            _executionItems = await Http.GetFromJsonAsync<List<BudgetExecutionItem>>(url) ?? [];
+            _executionItems = await Http.GetListAsync<BudgetExecutionItem>(url) ?? [];
         }
         catch
         {
@@ -440,7 +440,7 @@
     {
         try
         {
-            _accountSearchResults = await Http.GetFromJsonAsync<List<AccountItem>>(
+            _accountSearchResults = await Http.GetListAsync<AccountItem>(
                 $"/api/accounting/chart-of-accounts?search={_accountSearchText}&pageSize=50") ?? [];
         }
         catch { _accountSearchResults = []; }

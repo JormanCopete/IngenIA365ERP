@@ -65,7 +65,7 @@
     {
         try
         {
-            var lines = await Http.GetFromJsonAsync<List<CreditLineItem>>("/api/lending/credit-line-parameters?pageSize=100");
+            var lines = await Http.GetListAsync<CreditLineItem>("/api/lending/credit-line-parameters?pageSize=100");
             if (lines is not null)
             {
                 _creditLines = [new("", "Todas las lineas"), ..lines.Select(l => new CreditLineOption(l.PublicId.ToString(), l.Description))];

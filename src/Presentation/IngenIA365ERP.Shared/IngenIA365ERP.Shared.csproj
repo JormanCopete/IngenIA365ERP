@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Syncfusion.Blazor" Version="33.1.44" />
-    <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.1.44" />
+    <PackageReference Include="Syncfusion.Blazor" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.2.8" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.*" />

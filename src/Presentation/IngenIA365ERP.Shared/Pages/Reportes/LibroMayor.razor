@@ -120,7 +120,7 @@ else if (!_loading && _data is not null)
         {
             var from = _dateFrom.ToString("yyyy-MM-dd");
             var to = _dateTo.ToString("yyyy-MM-dd");
-            _data = await Http.GetFromJsonAsync<List<LedgerLine>>(
+            _data = await Http.GetListAsync<LedgerLine>(
                 $"/api/reports/accounting/general-ledger?account={_accountCode}&from={from}&to={to}");
 
             if (_data is not null && _data.Count > 0)

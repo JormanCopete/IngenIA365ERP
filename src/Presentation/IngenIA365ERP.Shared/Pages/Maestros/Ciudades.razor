@@ -1,28 +1,45 @@
 @page "/maestros/ciudades"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
 
 <PageTitle>Ciudades - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
     <h3>Ciudades</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfTextBox Placeholder="Buscar ciudad..." @bind-Value="_search" Width="240px"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                        @bind-Value="_filterDepartment"
+                        DataSource="@_departments"
+                        Placeholder="Filtrar por departamento"
+                        Width="220px"
+                        AllowFiltering="true">
+            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+            <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => LoadData())" />
+        </SfDropDownList>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Ciudad</SfButton>
+    </div>
 </div>
 
-<SfGrid @ref="_grid" TValue="CityItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+<SfGrid @ref="_grid" TValue="CityRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
-        <GridColumn Field="DepartmentName" HeaderText="Departamento" Width="200" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        <GridColumn Field="@nameof(CityRow.DepartmentName)" HeaderText="Departamento" Width="220" />
+        <GridColumn Field="@nameof(CityRow.Name)" HeaderText="Nombre" Width="280" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
-                    var item = context as CityItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    var c = context as CityRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(c!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(c!))" Title="Eliminar" />
                 }
             </Template>
         </GridColumn>
@@ -32,123 +49,262 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                    <div>
+                        <label>Departamento <span style="color:red">*</span></label>
+                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                        @bind-Value="_model.DepartmentPublicId"
+                                        DataSource="@_departments"
+                                        Placeholder="Seleccione departamento"
+                                        AllowFiltering="true">
+                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                        </SfDropDownList>
+                        <ValidationMessage For="@(() => _model.DepartmentPublicId)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la ciudad"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
                 </div>
-                <div>
-                    <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
-                </div>
-                <div>
-                    <label>Departamento *</label>
-                    <SfDropDownList TValue="Guid?" TItem="DepartmentOption" DataSource="@_departments"
-                        @bind-Value="_model.DepartmentId" Placeholder="Seleccione departamento">
-                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
-                    </SfDropDownList>
-                </div>
-            </div>
+                <button type="submit" id="ciudades-submit" style="display:none"></button>
+            </EditForm>
         </Content>
     </DialogTemplates>
     <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
+               Message="¿Esta seguro de eliminar esta ciudad?" />
 
 @code {
-    private SfGrid<CityItem>? _grid;
-    private List<CityItem> _items = [];
-    private List<DepartmentOption> _departments = [];
+    private SfGrid<CityRow>? _grid;
+    private List<CityRow> _items = new();
+    private List<LookupOption> _departments = new();
+    private string _search = "";
+    private Guid? _filterDepartment;
+    private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
     private CityModel _model = new();
     private Guid? _editId;
-    private bool _showDialog, _showConfirm;
-    private string _dialogTitle = "";
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadDepartments();
-        await LoadData();
-    }
-
-    private async Task LoadData()
-    {
-        try { _items = await Http.GetFromJsonAsync<List<CityItem>>("/api/core/cities?pageSize=500") ?? []; }
-        catch { _items = []; }
+        await Task.WhenAll(LoadDepartments(), LoadData());
     }
 
     private async Task LoadDepartments()
     {
-        try { _departments = await Http.GetFromJsonAsync<List<DepartmentOption>>("/api/core/departments?pageSize=500") ?? []; }
-        catch { _departments = []; }
+        try
+        {
+            // El DTO de departamento trae { PublicId, Code, Name, CountryPublicId, CountryName }.
+            // Mostramos "Nombre" en el dropdown y guardamos PublicId.
+            _departments = (await Http.GetListAsync<DepartmentRaw>("/api/core/departments?PageNumber=1&PageSize=2000"))
+                .Select(d => new LookupOption(d.PublicId, d.Name)).ToList();
+        }
+        catch { _departments = new List<LookupOption>(); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Ciudad"; _showDialog = true; }
-
-    private void OpenEdit(CityItem item)
+    private async Task LoadData()
     {
-        _model = new() { Name = item.Name, ShortName = item.ShortName, DepartmentId = item.DepartmentId };
-        _editId = item.PublicId;
+        try
+        {
+            var url = "/api/core/cities?PageNumber=1&PageSize=1000";
+            if (!string.IsNullOrWhiteSpace(_search))
+                url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
+            if (_filterDepartment.HasValue && _filterDepartment.Value != Guid.Empty)
+                url += $"&DepartmentPublicId={_filterDepartment.Value}";
+
+            _items = await Http.GetListAsync<CityRow>(url);
+        }
+        catch (Exception ex)
+        {
+            _items = new List<CityRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar las ciudades: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce = new System.Threading.CancellationTokenSource();
+        var token = _searchDebounce.Token;
+        try
+        {
+            await Task.Delay(350, token);
+            if (!token.IsCancellationRequested) await LoadData();
+        }
+        catch (TaskCanceledException) { /* expected */ }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new CityModel
+        {
+            // Si hay filtro activo de departamento, lo preselecciona
+            DepartmentPublicId = _filterDepartment
+        };
+        _editId = null;
+        _dialogTitle = "Nueva Ciudad";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(CityRow row)
+    {
+        _model = new CityModel
+        {
+            Name = row.Name,
+            DepartmentPublicId = row.DepartmentPublicId
+        };
+        _editId = row.PublicId;
         _dialogTitle = "Editar Ciudad";
         _showDialog = true;
     }
 
-    private void OpenDelete(CityItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+    private void OpenDelete(CityRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new CityModel();
+        _editId = null;
+    }
 
     private async Task Save()
     {
-        HttpResponseMessage res;
-        if (_editId.HasValue)
-            res = await Http.PutAsJsonAsync($"/api/core/cities/{_editId}", _model);
-        else
-            res = await Http.PostAsJsonAsync("/api/core/cities", _model);
+        if (_saving) return;
 
-        if (res.IsSuccessStatusCode)
+        // Validaciones cliente alineadas al CreateCityCommandValidator del backend.
+        if (_model.DepartmentPublicId is null || _model.DepartmentPublicId == Guid.Empty)
         {
-            await Notification.SuccessAsync("Registro guardado");
-            _showDialog = false;
-            await LoadData();
+            await Notification.WarningAsync("Debe seleccionar un departamento.");
+            return;
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al guardar");
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            // Payload coincide con CreateCityCommand / UpdateCityCommand
+            var payload = new
+            {
+                Name = _model.Name,
+                DepartmentPublicId = _model.DepartmentPublicId.Value
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/cities/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/cities", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Ciudad actualizada."
+                    : "Ciudad creada.");
+                _showDialog = false;
+                _model = new CityModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar ciudad");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ConfirmDelete()
     {
-        var res = await Http.DeleteAsync($"/api/core/cities/{_deleteId}");
-        if (res.IsSuccessStatusCode)
+        try
         {
-            await Notification.SuccessAsync("Registro eliminado");
-            await LoadData();
+            var res = await Http.DeleteAsync($"/api/core/cities/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Ciudad eliminada.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar ciudad");
+            }
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al eliminar");
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
     }
 
-    private class CityItem
+    // ---------- Models ----------
+
+    /// <summary>Coincide con CityDto del backend.</summary>
+    private class CityRow
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
-        public string? ShortName { get; set; }
-        public Guid? DepartmentId { get; set; }
-        public string? DepartmentName { get; set; }
+        public Guid DepartmentPublicId { get; set; }
+        public string DepartmentName { get; set; } = "";
     }
 
+    /// <summary>
+    /// Payload del formulario que se serializa al CreateCityCommand / UpdateCityCommand.
+    /// IMPORTANTE: el backend exige <c>DepartmentPublicId</c> (no <c>DepartmentId</c>).
+    /// </summary>
     private class CityModel
     {
+        [Required(ErrorMessage = "Debe seleccionar un departamento.")]
+        public Guid? DepartmentPublicId { get; set; }
+
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        [MaxLength(100, ErrorMessage = "El nombre no puede superar 100 caracteres.")]
         public string Name { get; set; } = "";
-        public string? ShortName { get; set; }
-        public Guid? DepartmentId { get; set; }
     }
 
-    private class DepartmentOption
+    /// <summary>Forma cruda del DTO de departamento (solo se usa para llenar el dropdown).</summary>
+    private class DepartmentRaw
     {
         public Guid PublicId { get; set; }
+        public string Code { get; set; } = "";
         public string Name { get; set; } = "";
+        public Guid CountryPublicId { get; set; }
+        public string CountryName { get; set; } = "";
+    }
+
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
     }
 }

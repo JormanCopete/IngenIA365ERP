@@ -70,7 +70,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<PrimaryGroupItem>>("/api/inventory/primary-groups?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<PrimaryGroupItem>("/api/inventory/primary-groups?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

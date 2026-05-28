@@ -91,7 +91,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<AccountingPeriodItem>>("/api/accounting/accounting-periods?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<AccountingPeriodItem>("/api/accounting/accounting-periods?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

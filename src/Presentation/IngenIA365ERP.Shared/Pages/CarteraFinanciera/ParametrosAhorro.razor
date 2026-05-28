@@ -83,7 +83,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<SavingsParameterItem>>("/api/lending/savings-parameters?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<SavingsParameterItem>("/api/lending/savings-parameters?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

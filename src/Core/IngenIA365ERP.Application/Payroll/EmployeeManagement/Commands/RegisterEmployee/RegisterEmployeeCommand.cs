@@ -7,19 +7,39 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
 
+/// <summary>
+/// Registra a una persona EXISTENTE como empleado interno de la cooperativa.
+/// La Person debe existir previamente (ver /maestros/personas).
+///
+/// <para>
+/// Solo guarda datos LABORALES en PAY_Employees. Los datos personales
+/// (nombre, documento, contacto) se leen de COR_People via PersonId.
+/// </para>
+///
+/// <para>
+/// Si la persona ya es asociado, conserva su fila en COR_Associates intacta:
+/// los salarios externo (Associate.ExternalSalary) e interno (Employee.Salary)
+/// son INDEPENDIENTES.
+/// </para>
+/// </summary>
 public record RegisterEmployeeCommand : IRequest<Result<Guid>>
 {
     public Guid PersonPublicId { get; init; }
-    public string PositionName { get; init; } = string.Empty;
-    public string DepartmentName { get; init; } = string.Empty;
+
+    // Datos laborales
     public decimal BaseSalary { get; init; }
     public int ContractType { get; init; }
     public DateTime HireDate { get; init; }
+
+    // Lookups (resueltos a Id en el handler)
     public Guid? HealthInsurancePublicId { get; init; }
     public Guid? PensionProviderPublicId { get; init; }
     public Guid? WorkRiskProviderPublicId { get; init; }
-    public string? BankAccountNumber { get; init; }
-    public Guid? BankPublicId { get; init; }
+
+    // Banca nomina
+    public Guid? PayrollBankPublicId { get; init; }
+    public string? PayrollBankAccountNumber { get; init; }
+    public int PayrollBankAccountType { get; init; }
 }
 
 public class RegisterEmployeeCommandHandler(
@@ -30,21 +50,21 @@ public class RegisterEmployeeCommandHandler(
 {
     public async Task<Result<Guid>> Handle(RegisterEmployeeCommand request, CancellationToken ct)
     {
-        // 1. Resolve Person
+        // 1. Persona existente
         var person = await context.People.FirstOrDefaultAsync(
             p => p.PublicId == request.PersonPublicId && !p.IsDeleted, ct);
         if (person is null)
             return Result.Failure<Guid>(new Error("Employee.PersonNotFound",
                 "Persona no encontrada."));
 
-        // 2. Check not already an employee
+        // 2. No registrarla dos veces como empleado activo
         var existingEmployee = await context.Employees.FirstOrDefaultAsync(
             e => e.PersonId == person.Id && !e.IsDeleted && e.Status != -1, ct);
         if (existingEmployee is not null)
             return Result.Failure<Guid>(new Error("Employee.AlreadyExists",
                 "Esta persona ya esta registrada como empleado activo."));
 
-        // 3. Resolve Health Insurance
+        // 3. Resolver lookups
         int healthInsuranceId = 0;
         if (request.HealthInsurancePublicId.HasValue)
         {
@@ -53,7 +73,6 @@ public class RegisterEmployeeCommandHandler(
             if (eps is not null) healthInsuranceId = eps.Id;
         }
 
-        // 4. Resolve Pension Provider
         int pensionId = 0;
         if (request.PensionProviderPublicId.HasValue)
         {
@@ -62,7 +81,6 @@ public class RegisterEmployeeCommandHandler(
             if (pension is not null) pensionId = pension.Id;
         }
 
-        // 5. Resolve Work Risk Provider
         int workRiskId = 0;
         if (request.WorkRiskProviderPublicId.HasValue)
         {
@@ -71,58 +89,68 @@ public class RegisterEmployeeCommandHandler(
             if (wrl is not null) workRiskId = wrl.Id;
         }
 
-        // 6. Resolve Bank
-        string bankId = "";
-        if (request.BankPublicId.HasValue)
+        string payrollBankId = "";
+        if (request.PayrollBankPublicId.HasValue)
         {
             var bank = await context.Banks.AsNoTracking()
-                .FirstOrDefaultAsync(b => b.PublicId == request.BankPublicId.Value && !b.IsDeleted, ct);
-            if (bank is not null) bankId = bank.Id.ToString();
+                .FirstOrDefaultAsync(b => b.PublicId == request.PayrollBankPublicId.Value && !b.IsDeleted, ct);
+            if (bank is not null) payrollBankId = bank.Id.ToString();
         }
 
-        // 7. Create Employee
+        // 4. Crear empleado.
+        // IMPORTANTE: el DDL de PAY_Employees tiene varias columnas legacy NOT NULL
+        // sin DEFAULT (AreaCode, SectionId, TerminationCause, PensionFundMember, etc.).
+        // Si EF Core pasa NULL en cualquiera de esas, SQL Server rechaza el INSERT.
+        // Por eso inicializamos TODOS los strings nullable en cadena vacia y las
+        // fechas obligatorias en DateTime.MaxValue.
         var employee = new Employee
         {
             PersonId = person.Id,
-            PayrollCompanyId = 1, // default company
-            LastName = person.LastName,
-            FirstName = person.FirstName,
-            IdentificationNumber = person.TaxId,
+            PayrollCompanyId = 1,
+            CostCenterId = "",
+            AreaCode = "",
+            SectionId = "",
+            TerminationCause = "",
+            PensionFundMember = "",
+            IsLiquidated = "",
+            SpecialRegime = "",
+            ExtraBonusFlag = "",
+            // Datos laborales reales del comando
             Salary = request.BaseSalary,
+            SalaryType = 0,
             ContractType = request.ContractType,
             JoinDate = request.HireDate,
-            BirthDate = person.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
             HealthInsuranceId = healthInsuranceId,
             PensionFundId = pensionId,
             WorkRiskId = workRiskId,
-            BankId = bankId,
-            BankAccountNumber = request.BankAccountNumber ?? "",
-            Status = 1, // Active
-            Address = person.Address ?? "",
-            Email = person.Email ?? "",
-            Phone = person.Phone1 ?? "",
-            Mobile = person.Mobile ?? "",
-            CityId = person.CityId ?? 0,
-            CostCenterId = "",
-            IssuedAt = person.IdIssuedAt ?? "",
+            // Banca nomina
+            PayrollBankId = payrollBankId,
+            PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "",
+            PayrollBankAccountType = request.PayrollBankAccountType,
+            // Fechas legacy (sentinel del SOLIDO original)
             TerminationDate = DateTime.MaxValue,
-            TerminationCause = "",
             ContractEndDate = DateTime.MaxValue,
+            RehireDate = DateTime.MaxValue,
+            SeveranceCauseDate = DateTime.MaxValue,
+            LicenseExpiryDate = DateTime.MaxValue,
+            VacationCauseDate = DateTime.MaxValue,
+            BonusCauseDate = DateTime.MaxValue,
+            Status = 1,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };
         context.Employees.Add(employee);
 
-        // 8. Mark person as employee
+        // 5. Marcar el flag IsEmployee en la persona
         person.IsEmployee = true;
         person.UpdatedAt = dateTime.UtcNow;
         person.UpdatedBy = currentUser.UserName;
 
-        // 9. Record initial salary change
+        // 6. Registro inicial en historial salarial
         var salaryChange = new SalaryChange
         {
             PayrollCompanyId = 1,
-            EmployeeId = employee.Id, // will be set after SaveChanges
+            EmployeeId = 0,
             EffectiveDate = request.HireDate,
             NewSalary = request.BaseSalary,
             UserName = currentUser.UserName,
@@ -133,7 +161,6 @@ public class RegisterEmployeeCommandHandler(
 
         await context.SaveChangesAsync(ct);
 
-        // Now set the FK for salary change
         salaryChange.EmployeeId = employee.Id;
         context.SalaryChanges.Add(salaryChange);
         await context.SaveChangesAsync(ct);
@@ -146,16 +173,10 @@ public class RegisterEmployeeCommandValidator : AbstractValidator<RegisterEmploy
 {
     public RegisterEmployeeCommandValidator()
     {
-        RuleFor(x => x.PersonPublicId)
-            .NotEmpty().WithMessage("Persona requerida.");
-
-        RuleFor(x => x.BaseSalary)
-            .GreaterThan(0).WithMessage("Salario base debe ser mayor a 0.");
-
-        RuleFor(x => x.HireDate)
-            .NotEmpty().WithMessage("Fecha de ingreso requerida.");
-
-        RuleFor(x => x.ContractType)
-            .InclusiveBetween(0, 10).WithMessage("Tipo de contrato invalido.");
+        RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Persona requerida.");
+        RuleFor(x => x.BaseSalary).GreaterThan(0).WithMessage("Salario base debe ser mayor a 0.");
+        RuleFor(x => x.HireDate).NotEmpty().WithMessage("Fecha de ingreso requerida.");
+        RuleFor(x => x.ContractType).InclusiveBetween(0, 10).WithMessage("Tipo de contrato invalido.");
+        RuleFor(x => x.PayrollBankAccountType).InclusiveBetween(0, 2);
     }
 }

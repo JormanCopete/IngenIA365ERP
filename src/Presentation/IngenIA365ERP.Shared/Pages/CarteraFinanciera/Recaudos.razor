@@ -179,7 +179,7 @@
         _receipt = null;
         try
         {
-            _searchResults = await Http.GetFromJsonAsync<List<PersonResult>>(
+            _searchResults = await Http.GetListAsync<PersonResult>(
                 $"api/core/people/search?q={Uri.EscapeDataString(_searchTerm)}") ?? [];
         }
         catch (Exception ex) { await Notification.ErrorAsync(ex.Message); }
@@ -214,7 +214,7 @@
     {
         try
         {
-            _installments = await Http.GetFromJsonAsync<List<InstallmentOption>>(
+            _installments = await Http.GetListAsync<InstallmentOption>(
                 $"api/lending/portfolios/{portfolioId}/installments") ?? [];
 
             _installments = _installments

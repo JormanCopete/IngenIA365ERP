@@ -13,15 +13,23 @@ public class SalespersonConfiguration : IEntityTypeConfiguration<Salesperson>
         builder.Property(e => e.Id).UseIdentityColumn();
 
         builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
-        builder.HasIndex(e => e.PublicId).IsUnique();
-        builder.HasIndex(e => e.IdNumber).IsUnique();
+        builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_INV_Salespeople_PublicId");
 
-        builder.Property(e => e.IdNumber).HasMaxLength(20).IsRequired();
-        builder.Property(e => e.Name).HasMaxLength(100).IsRequired();
-        builder.Property(e => e.LastName).HasMaxLength(100);
-        builder.Property(e => e.Address).HasMaxLength(100);
-        builder.Property(e => e.Phone).HasMaxLength(30);
-        builder.Property(e => e.Mobile).HasMaxLength(30);
+        // PersonId NOT NULL — every salesperson is a Person
+        builder.Property(e => e.PersonId).IsRequired();
+        builder.HasIndex(e => e.PersonId).IsUnique().HasDatabaseName("UK_INV_Salespeople_PersonId");
+
+        builder.HasOne(e => e.Person)
+            .WithMany()
+            .HasForeignKey(e => e.PersonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Audit
+        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedBy).HasMaxLength(100);
+        builder.Property(e => e.UpdatedBy).HasMaxLength(100);
+        builder.Property(e => e.DeletedBy).HasMaxLength(100);
+        builder.Property(e => e.IsDeleted).HasDefaultValue(false);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

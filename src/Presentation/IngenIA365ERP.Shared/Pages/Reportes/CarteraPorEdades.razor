@@ -138,7 +138,7 @@ else if (!_loading && _data is not null)
         _loading = true;
         try
         {
-            _data = await Http.GetFromJsonAsync<List<AgingRow>>("/api/reports/lending/aging");
+            _data = await Http.GetListAsync<AgingRow>("/api/reports/lending/aging");
 
             if (_data is not null)
             {

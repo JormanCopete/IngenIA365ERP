@@ -57,10 +57,12 @@ public record PersonDetailDto(
     string? Gender,
     string? MaritalStatus,
     DateOnly? DateOfBirth,
-    string? Employer,
-    decimal Salary,
     bool IsAssociate,
     bool IsEmployee,
+    bool IsThirdParty,
+    bool IsCustomer,
+    bool IsSupplier,
+    bool IsSalesperson,
     string? Status,
     AssociateDataDto? AssociateData,
     SpouseDataDto? SpouseData,
@@ -108,16 +110,18 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
                 a.Section?.Name);
         }
 
-        // Spouse data
+        // Spouse data — datos personales del conyuge vienen de Spouse,
+        // datos laborales del conyuge vienen de Associate (decision P10).
         SpouseDataDto? spouseData = null;
         if (person.Spouse is not null)
         {
             var s = person.Spouse;
+            var a = person.Associate;
             spouseData = new SpouseDataDto(
                 s.SpouseName,
                 s.SpouseIdNumber,
-                s.SpouseEmployer,
-                s.SpouseSalary,
+                a?.SpouseEmployer,
+                a?.SpouseSalary ?? 0m,
                 s.SpousePhone);
         }
 
@@ -185,10 +189,12 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
             person.Gender,
             person.MaritalStatus,
             person.DateOfBirth,
-            person.Employer,
-            person.Salary,
             person.IsAssociate,
             person.IsEmployee,
+            person.IsThirdParty,
+            person.IsCustomer,
+            person.IsSupplier,
+            person.IsSalesperson,
             person.Status,
             associateData,
             spouseData,

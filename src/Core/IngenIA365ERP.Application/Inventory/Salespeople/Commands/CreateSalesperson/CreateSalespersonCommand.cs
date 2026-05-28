@@ -3,18 +3,18 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Salespeople.Commands.CreateSalesperson;
 
+/// <summary>
+/// Asigna el rol Vendedor a una Person existente. Crea fila en INV_Salespeople
+/// y marca Person.IsSalesperson = true. La persona debe estar registrada
+/// previamente en /maestros/personas.
+/// </summary>
 public record CreateSalespersonCommand : IRequest<Result<Guid>>
 {
-    public string IdNumber { get; init; } = string.Empty;
-    public string Name { get; init; } = string.Empty;
-    public string? LastName { get; init; }
-    public string? Address { get; init; }
-    public string? Phone { get; init; }
-    public string? Mobile { get; init; }
-    public int? CityId { get; init; }
+    public Guid PersonPublicId { get; init; }
     public int? SalespersonType { get; init; }
     public bool AppliesCommission { get; init; }
 }
@@ -25,28 +25,35 @@ public class CreateSalespersonCommandHandler(
     ICurrentUserService currentUser)
     : IRequestHandler<CreateSalespersonCommand, Result<Guid>>
 {
-    public async Task<Result<Guid>> Handle(
-        CreateSalespersonCommand request,
-        CancellationToken cancellationToken)
+    public async Task<Result<Guid>> Handle(CreateSalespersonCommand request, CancellationToken ct)
     {
+        var person = await context.People.FirstOrDefaultAsync(
+            p => p.PublicId == request.PersonPublicId && !p.IsDeleted, ct);
+        if (person is null)
+            return Result.Failure<Guid>(new Error("Salesperson.PersonNotFound",
+                "Persona no encontrada."));
+
+        var existing = await context.Salespeople.AsNoTracking()
+            .AnyAsync(s => s.PersonId == person.Id && !s.IsDeleted, ct);
+        if (existing)
+            return Result.Failure<Guid>(new Error("Salesperson.AlreadyExists",
+                "Esta persona ya esta registrada como vendedor."));
+
         var entity = new Salesperson
         {
-            IdNumber = request.IdNumber,
-            Name = request.Name,
-            LastName = request.LastName,
-            Address = request.Address,
-            Phone = request.Phone,
-            Mobile = request.Mobile,
-            CityId = request.CityId,
+            PersonId = person.Id,
             SalespersonType = request.SalespersonType,
             AppliesCommission = request.AppliesCommission,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };
-
         context.Salespeople.Add(entity);
-        await context.SaveChangesAsync(cancellationToken);
 
+        person.IsSalesperson = true;
+        person.UpdatedAt = dateTime.UtcNow;
+        person.UpdatedBy = currentUser.UserName;
+
+        await context.SaveChangesAsync(ct);
         return Result.Success(entity.PublicId);
     }
 }
@@ -55,24 +62,6 @@ public class CreateSalespersonCommandValidator : AbstractValidator<CreateSalespe
 {
     public CreateSalespersonCommandValidator()
     {
-        RuleFor(x => x.IdNumber)
-            .NotEmpty().WithMessage("ID number is required.")
-            .MaximumLength(20).WithMessage("ID number must not exceed 20 characters.");
-
-        RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(100).WithMessage("Name must not exceed 100 characters.");
-
-        RuleFor(x => x.LastName)
-            .MaximumLength(100).WithMessage("Last name must not exceed 100 characters.");
-
-        RuleFor(x => x.Address)
-            .MaximumLength(100).WithMessage("Address must not exceed 100 characters.");
-
-        RuleFor(x => x.Phone)
-            .MaximumLength(30).WithMessage("Phone must not exceed 30 characters.");
-
-        RuleFor(x => x.Mobile)
-            .MaximumLength(30).WithMessage("Mobile must not exceed 30 characters.");
+        RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Persona requerida.");
     }
 }

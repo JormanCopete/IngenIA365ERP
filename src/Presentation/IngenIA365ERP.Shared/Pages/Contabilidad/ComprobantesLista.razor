@@ -118,7 +118,7 @@
     {
         try
         {
-            var types = await Http.GetFromJsonAsync<List<VoucherTypeItem>>("/api/accounting/voucher-types?pageSize=100");
+            var types = await Http.GetListAsync<VoucherTypeItem>("/api/accounting/voucher-types?pageSize=100");
             if (types is not null)
             {
                 _typeOptions = [new("", "Todos"), .. types.Select(t => new DropOption(t.Code, $"{t.Code} - {t.Name}"))];

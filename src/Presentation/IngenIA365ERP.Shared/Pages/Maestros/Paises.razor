@@ -1,0 +1,222 @@
+@page "/maestros/paises"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Paises - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <h3>Paises</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfTextBox Placeholder="Buscar por nombre..." @bind-Value="_search" Width="280px"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Pais</SfButton>
+    </div>
+</div>
+
+<SfGrid @ref="_grid" TValue="CountryRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="@nameof(CountryRow.Name)" HeaderText="Nombre" Width="400" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+            <Template>
+                @{
+                    var c = context as CountryRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(c!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(c!))" Title="Eliminar" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del pais"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                </div>
+                <button type="submit" id="paises-submit" style="display:none"></button>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+               Message="¿Esta seguro de eliminar este pais?" />
+
+@code {
+    private SfGrid<CountryRow>? _grid;
+    private List<CountryRow> _items = new();
+    private string _search = "";
+    private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
+    private CountryModel _model = new();
+    private Guid? _editId;
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "/api/core/countries?PageNumber=1&PageSize=500";
+            if (!string.IsNullOrWhiteSpace(_search))
+                url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
+
+            _items = await Http.GetListAsync<CountryRow>(url);
+        }
+        catch (Exception ex)
+        {
+            _items = new List<CountryRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar los paises: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce = new System.Threading.CancellationTokenSource();
+        var token = _searchDebounce.Token;
+        try
+        {
+            await Task.Delay(350, token);
+            if (!token.IsCancellationRequested) await LoadData();
+        }
+        catch (TaskCanceledException) { /* expected */ }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new CountryModel();
+        _editId = null;
+        _dialogTitle = "Nuevo Pais";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(CountryRow row)
+    {
+        _model = new CountryModel { Name = row.Name };
+        _editId = row.PublicId;
+        _dialogTitle = "Editar Pais";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(CountryRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new CountryModel();
+        _editId = null;
+    }
+
+    private async Task Save()
+    {
+        if (_saving) return;
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = new { Name = _model.Name };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/countries/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/countries", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Pais actualizado."
+                    : "Pais creado.");
+                _showDialog = false;
+                _model = new CountryModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar pais");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"/api/core/countries/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Pais eliminado.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar pais");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+    }
+
+    /// <summary>Coincide con CountryDto.</summary>
+    private class CountryRow
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private class CountryModel
+    {
+        [Required(ErrorMessage = "Nombre obligatorio.")]
+        [MaxLength(100, ErrorMessage = "Nombre no puede superar 100 caracteres.")]
+        public string Name { get; set; } = "";
+    }
+}

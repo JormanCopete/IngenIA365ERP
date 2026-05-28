@@ -153,7 +153,7 @@
         if (string.IsNullOrWhiteSpace(_searchTerm)) return;
         try
         {
-            _searchResults = await Http.GetFromJsonAsync<List<PersonItem>>(
+            _searchResults = await Http.GetListAsync<PersonItem>(
                 $"/api/core/people?searchTerm={Uri.EscapeDataString(_searchTerm)}&pageSize=10");
         }
         catch

@@ -63,7 +63,7 @@ else
     {
         try
         {
-            var periods = await Http.GetFromJsonAsync<List<PayPeriodItem>>("/api/payroll/pay-periods?pageSize=50");
+            var periods = await Http.GetListAsync<PayPeriodItem>("/api/payroll/pay-periods?pageSize=50");
             if (periods is not null)
             {
                 _payPeriods = periods.Select(p => new PeriodOption(p.PublicId.ToString(), p.Description ?? $"Periodo {p.PeriodId}")).ToList();

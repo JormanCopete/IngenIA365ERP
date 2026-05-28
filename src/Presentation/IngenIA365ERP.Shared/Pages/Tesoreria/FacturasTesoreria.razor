@@ -132,7 +132,7 @@
             if (_filterDueTo.HasValue)
                 url += $"&dueDateTo={DateOnly.FromDateTime(_filterDueTo.Value):yyyy-MM-dd}";
 
-            _items = await Http.GetFromJsonAsync<List<InvoiceItem>>(url) ?? [];
+            _items = await Http.GetListAsync<InvoiceItem>(url) ?? [];
         }
         catch { _items = []; }
     }
