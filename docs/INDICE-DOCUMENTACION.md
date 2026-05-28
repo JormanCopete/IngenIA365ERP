@@ -16,6 +16,11 @@
 
 ## Documentación por Fase
 
+### Fase 0: Fundamentos
+| Archivo | Descripción |
+|---|---|
+| `.specify/memory/constitution.md` | Constitución del proyecto — doce principios vinculantes (Spec-First, Clean Architecture, CQRS + MediatR, Multi-tenancy, Person centralizada, PublicId, Soft-delete + auditoría, Validación dual, Errores visibles, SIPLA/SARLAFT, Inmutabilidad contable, Migraciones idempotentes). v1.0.0 — Ratificada 2026-05-03. |
+
 ### Fase 1: Consolidación VB.NET → C# (COMPLETADA)
 | Archivo | Descripción |
 |---|---|
