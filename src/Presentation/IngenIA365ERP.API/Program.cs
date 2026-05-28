@@ -10,6 +10,7 @@ using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.Seed;
 using IngenIA365ERP.Persistence;
+using Microsoft.OpenApi;  // En OpenApi 2.x los tipos se movieron de Microsoft.OpenApi.Models a la raiz Microsoft.OpenApi
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -31,35 +32,29 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {
-        options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+        options.SwaggerDoc("v1", new OpenApiInfo
         {
             Title = "IngenIA365ERP API",
             Version = "v1",
             Description = "API para el ERP Financiero IngenIA365ERP"
         });
 
-        // JWT Bearer in Swagger
-        options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        // JWT Bearer in Swagger.
+        // Microsoft.OpenApi 2.x removio OpenApiSecurityScheme.Reference; ahora se usa
+        // OpenApiSecuritySchemeReference y AddSecurityRequirement con delegate (document =>).
+        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header. Ejemplo: 'Bearer {token}'",
             Name = "Authorization",
-            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-            Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.Http,
+            BearerFormat = "JWT",
             Scheme = "Bearer"
         });
-        options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
         {
-            {
-                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-                {
-                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                    {
-                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
+            // El value type del diccionario en OpenApi 2.x es List<string>, no string[].
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
         });
     });
 
