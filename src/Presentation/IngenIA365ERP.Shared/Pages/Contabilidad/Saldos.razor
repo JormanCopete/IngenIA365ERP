@@ -143,8 +143,8 @@
     {
         try
         {
-            var branchTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/branches?pageSize=200");
-            var ccTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/cost-centers?pageSize=200");
+            var branchTask = Http.GetListAsync<CatalogItem>("/api/core/branches?pageSize=200");
+            var ccTask = Http.GetListAsync<CatalogItem>("/api/accounting/cost-centers?pageSize=200");
             await Task.WhenAll(branchTask, ccTask);
 
             if (branchTask.Result is not null)

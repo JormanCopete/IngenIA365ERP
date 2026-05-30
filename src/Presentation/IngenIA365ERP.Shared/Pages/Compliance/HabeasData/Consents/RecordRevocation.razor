@@ -1,0 +1,78 @@
+@page "/compliance/habeas-data/consents/revocar/{PersonId:int}"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Registrar revocación — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Compliance.HabeasData.Revoke">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Revocar consentimiento del titular #@PersonId</h1>
+            <p class="muted">
+                Una vez revocado, se publica <code>HabeasDataRevokedEvent</code> y los módulos
+                suscritos detienen el procesamiento (marketing, analytics, etc.).
+            </p>
+
+            <div class="form-grid">
+                <label>Motivo / notas
+                    <textarea rows="5" maxlength="2000" @bind="_notes" required></textarea>
+                </label>
+            </div>
+
+            @if (_error is not null) { <p class="error">@_error</p> }
+
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button class="primary" @onclick="RevokeAsync" disabled="@_saving">
+                    @(_saving ? "Procesando…" : "Registrar revocación")
+                </button>
+                <button @onclick="Cancel">Cancelar</button>
+            </div>
+        </div>
+    </ChildContent>
+    <Fallback><p>No tienes permiso para registrar revocaciones.</p></Fallback>
+</PermissionGate>
+
+@code {
+    [Parameter] public int PersonId { get; set; }
+
+    private string _notes = string.Empty;
+    private bool _saving;
+    private string? _error;
+
+    private async Task RevokeAsync()
+    {
+        _saving = true; _error = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/consents/revoke",
+                new { personId = PersonId, notes = _notes });
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await ExtractErrorAsync(resp);
+                return;
+            }
+            Nav.NavigateTo($"/compliance/habeas-data/persons/{PersonId}/historial");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void Cancel() =>
+        Nav.NavigateTo($"/compliance/habeas-data/persons/{PersonId}/historial");
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            return env is null ? $"Error {(int)resp.StatusCode}" : $"{env.Code}: {env.Message}";
+        }
+        catch { return $"Error {(int)resp.StatusCode}"; }
+    }
+
+    private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);
+}

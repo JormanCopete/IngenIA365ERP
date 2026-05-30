@@ -271,7 +271,7 @@
     {
         try
         {
-            var types = await Http.GetFromJsonAsync<List<VoucherTypeItem>>("/api/accounting/voucher-types?pageSize=100");
+            var types = await Http.GetListAsync<VoucherTypeItem>("/api/accounting/voucher-types?pageSize=100");
             _voucherTypes = types ?? [];
             foreach (var t in _voucherTypes) t.Display = $"{t.Code} - {t.Name}";
         }
@@ -282,7 +282,7 @@
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/cost-centers?pageSize=200");
+            var items = await Http.GetListAsync<CatalogItem>("/api/accounting/cost-centers?pageSize=200");
             _costCenters = [new("", "--"), .. (items ?? []).Select(c => new DropOption(c.Code, $"{c.Code} - {c.Name}"))];
         }
         catch { /* keep default */ }
@@ -292,7 +292,7 @@
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/branches?pageSize=200");
+            var items = await Http.GetListAsync<CatalogItem>("/api/core/branches?pageSize=200");
             _branches = [new("", "--"), .. (items ?? []).Select(b => new DropOption(b.Code, $"{b.Code} - {b.Name}"))];
         }
         catch { /* keep default */ }
@@ -379,7 +379,7 @@
     {
         try
         {
-            _accountSearchResults = await Http.GetFromJsonAsync<List<AccountSearchItem>>(
+            _accountSearchResults = await Http.GetListAsync<AccountSearchItem>(
                 $"/api/accounting/chart-of-accounts?search={_accountSearchText}&pageSize=50") ?? [];
         }
         catch { _accountSearchResults = []; }
@@ -419,7 +419,7 @@
     {
         try
         {
-            _personSearchResults = await Http.GetFromJsonAsync<List<PersonSearchItem>>(
+            _personSearchResults = await Http.GetListAsync<PersonSearchItem>(
                 $"/api/core/people?search={_personSearchText}&pageSize=50") ?? [];
         }
         catch { _personSearchResults = []; }

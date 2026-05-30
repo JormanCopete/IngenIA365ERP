@@ -1,0 +1,104 @@
+@using IngenIA365ERP.Shared.Configuration
+@using Microsoft.AspNetCore.Components.Forms
+@inject HttpClient Http
+
+<div class="attachment-uploader">
+    <InputFile OnChange="OnFileSelectedAsync" disabled="@_uploading" />
+
+    @if (_uploading)
+    {
+        <p>Subiendo @_currentFileName… @($"{_progressPercent:N0}%")</p>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error">@_error</p>
+    }
+</div>
+
+@code {
+    /// <summary>Tipo canónico de la entidad dueña (ej. "User", "Loan").</summary>
+    [Parameter, EditorRequired] public string OwnerEntityType { get; set; } = string.Empty;
+
+    /// <summary>PublicId (Guid) de la entidad dueña.</summary>
+    [Parameter, EditorRequired] public Guid OwnerEntityPublicId { get; set; }
+
+    /// <summary>Tamaño máximo en bytes — default 25 MB.</summary>
+    [Parameter] public long MaxBytes { get; set; } = 25L * 1024 * 1024;
+
+    /// <summary>Callback cuando un archivo se sube correctamente.</summary>
+    [Parameter] public EventCallback<Guid> OnUploaded { get; set; }
+
+    private bool _uploading;
+    private string _error = string.Empty;
+    private string _currentFileName = string.Empty;
+    private double _progressPercent;
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = string.Empty;
+        var file = e.File;
+        if (file is null) return;
+
+        if (file.Size > MaxBytes)
+        {
+            _error = $"El archivo excede {MaxBytes / (1024 * 1024)} MB.";
+            return;
+        }
+
+        _uploading = true;
+        _currentFileName = file.Name;
+        _progressPercent = 0;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var stream = file.OpenReadStream(MaxBytes);
+            var streamContent = new StreamContent(stream);
+            streamContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
+            content.Add(streamContent, "file", file.Name);
+            content.Add(new StringContent(OwnerEntityType), "ownerEntityType");
+            content.Add(new StringContent(OwnerEntityPublicId.ToString()), "ownerEntityPublicId");
+
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/attachments";
+            var resp = await Http.PostAsync(url, content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await ExtractErrorAsync(resp);
+                return;
+            }
+
+            var newId = await resp.Content.ReadFromJsonAsync<Guid>();
+            if (OnUploaded.HasDelegate)
+            {
+                await OnUploaded.InvokeAsync(newId);
+            }
+            _progressPercent = 100;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error subiendo el archivo: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            return env is null
+                ? $"Error {(int)resp.StatusCode}"
+                : $"{env.Code}: {env.Message}";
+        }
+        catch
+        {
+            return $"Error {(int)resp.StatusCode}";
+        }
+    }
+
+    private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);
+}

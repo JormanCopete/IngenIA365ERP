@@ -1,0 +1,130 @@
+@page "/admin/tenants"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Cooperativas — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>Cooperativas (Tenants)</h1>
+
+    <div class="toolbar">
+        <input type="search" placeholder="Buscar por nombre, NIT o subdominio…" @bind="_search" @bind:event="oninput" />
+        <label><input type="checkbox" @bind="_includeSuspended" /> incluir suspendidas</label>
+        <button class="primary" @onclick="OpenCreate">+ Nueva cooperativa</button>
+        <button @onclick="LoadAsync">Refrescar</button>
+    </div>
+
+    @if (_loading)
+    {
+        <p>Cargando…</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+    else if (_items.Count == 0)
+    {
+        <p>Sin resultados.</p>
+    }
+    else
+    {
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>NIT</th>
+                    <th>Subdominio</th>
+                    <th>Plan</th>
+                    <th>Estado</th>
+                    <th>Sucursales</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in _items)
+                {
+                    <tr>
+                        <td>@t.Name</td>
+                        <td>@t.Nit</td>
+                        <td>@t.Subdomain</td>
+                        <td>@t.PlanType</td>
+                        <td>
+                            @if (t.IsSuspended) { <span class="badge warn">Suspendida</span> }
+                            else if (t.IsActive) { <span class="badge ok">Activa</span> }
+                            else { <span class="badge">Inactiva</span> }
+                        </td>
+                        <td>@t.BranchCount</td>
+                        <td>
+                            <button @onclick="() => Edit(t.PublicId)">Editar</button>
+                            @if (t.IsSuspended)
+                            {
+                                <button @onclick="() => ActivateAsync(t.PublicId)">Reactivar</button>
+                            }
+                            else
+                            {
+                                <button @onclick="() => OpenSuspend(t.PublicId)">Suspender</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<TenantListItem> _items = new();
+    private string _search = string.Empty;
+    private bool _includeSuspended;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/saas/tenants?search={Uri.EscapeDataString(_search)}&includeSuspended={_includeSuspended}";
+            var resp = await Http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Error {(int)resp.StatusCode}: {await resp.Content.ReadAsStringAsync()}";
+                return;
+            }
+            var page = await resp.Content.ReadFromJsonAsync<PagedResult<TenantListItem>>();
+            _items = page?.Items?.ToList() ?? new();
+        }
+        finally { _loading = false; }
+    }
+
+    private void OpenCreate() => Nav.NavigateTo("/admin/tenants/new");
+    private void Edit(Guid publicId) => Nav.NavigateTo($"/admin/tenants/{publicId}");
+
+    private async Task ActivateAsync(Guid publicId)
+    {
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}/api/saas/tenants/{publicId}/activate", null);
+        if (resp.IsSuccessStatusCode) await LoadAsync();
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    private async Task OpenSuspend(Guid publicId)
+    {
+        var reason = "Suspendido desde panel"; // En UI real, modal con textarea.
+        var resp = await Http.PostAsJsonAsync(
+            $"{AppSettings.GetApiBaseUrl()}/api/saas/tenants/{publicId}/suspend",
+            new { reason });
+        if (resp.IsSuccessStatusCode) await LoadAsync();
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    public sealed record TenantListItem(
+        Guid PublicId, string Name, string? Nit, string? Subdomain, string PlanType,
+        bool IsActive, bool IsSuspended, int BranchCount,
+        DateTime? ActivatedAt, DateTime? SuspendedAt);
+
+    public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+}

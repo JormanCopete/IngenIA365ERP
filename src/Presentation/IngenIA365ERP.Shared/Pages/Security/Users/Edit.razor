@@ -1,0 +1,110 @@
+@page "/security/users/new"
+@page "/security/users/{PublicId:guid}"
+@using IngenIA365ERP.Shared.Configuration
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Nuevo usuario" : "Editar usuario") — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>@(_isNew ? "Registrar usuario" : "Editar usuario")</h1>
+
+    <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="user-edit">
+        <DataAnnotationsValidator />
+
+        @if (_isNew)
+        {
+            <div class="row">
+                <label>Usuario<InputText @bind-Value="_model.Username" /></label>
+                <label>Contraseña inicial<InputText type="password" @bind-Value="_model.InitialPassword" /></label>
+            </div>
+        }
+        <div class="row">
+            <label>Correo<InputText @bind-Value="_model.Email" /></label>
+            <label>Cédula<InputText @bind-Value="_model.IdentificationNumber" /></label>
+        </div>
+
+        <ValidationSummary />
+        @if (_error is not null) { <p class="error">@_error</p> }
+
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_saving">Guardar</button>
+            <button type="button" @onclick="Cancel">Cancelar</button>
+        </div>
+    </EditForm>
+
+    @if (!_isNew)
+    {
+        <hr />
+        <h2>Acciones administrativas</h2>
+        <div class="row">
+            <input type="password" placeholder="Nueva contraseña" @bind="_newPassword" />
+            <button @onclick="ResetPasswordAsync">Reset password</button>
+        </div>
+        <p class="hint">El usuario deberá cambiarla al ingresar.</p>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? PublicId { get; set; }
+    private bool _isNew => PublicId is null;
+    private readonly Model _model = new();
+    private bool _saving;
+    private string? _error;
+    private string _newPassword = string.Empty;
+
+    private async Task SaveAsync()
+    {
+        _saving = true; _error = null;
+        try
+        {
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/users";
+            HttpResponseMessage resp = _isNew
+                ? await Http.PostAsJsonAsync(url, new
+                {
+                    username = _model.Username,
+                    email = _model.Email,
+                    fullName = _model.Username,
+                    initialPassword = _model.InitialPassword,
+                    personId = (int?)null,
+                    identificationNumber = _model.IdentificationNumber,
+                    rolePublicIds = Array.Empty<Guid>()
+                })
+                : await Http.PutAsJsonAsync($"{url}/{PublicId}", new
+                {
+                    email = _model.Email,
+                    identificationNumber = _model.IdentificationNumber,
+                    personId = (int?)null
+                });
+
+            if (resp.IsSuccessStatusCode) Nav.NavigateTo("/security/users");
+            else _error = await resp.Content.ReadAsStringAsync();
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (PublicId is null || string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _error = "Ingresa la nueva contraseña."; return;
+        }
+        var resp = await Http.PostAsJsonAsync(
+            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/reset-password",
+            new { newPassword = _newPassword });
+        if (resp.IsSuccessStatusCode) { _newPassword = string.Empty; _error = null; }
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    private void Cancel() => Nav.NavigateTo("/security/users");
+
+    public sealed class Model
+    {
+        [Required, MaxLength(100)] public string Username { get; set; } = string.Empty;
+        [Required, EmailAddress, MaxLength(200)] public string Email { get; set; } = string.Empty;
+        [Required, MinLength(8)] public string InitialPassword { get; set; } = string.Empty;
+        [MaxLength(20)] public string? IdentificationNumber { get; set; }
+    }
+}

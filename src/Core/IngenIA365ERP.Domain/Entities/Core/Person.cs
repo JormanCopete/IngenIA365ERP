@@ -4,12 +4,30 @@ using IngenIA365ERP.Domain.Common;
 namespace IngenIA365ERP.Domain.Entities.Core;
 
 /// <summary>
-/// Maps to [dbo].[COR_People] (sys_maenit + cnt_nit).
-/// The central entity (~100 columns).
+/// Maps to [dbo].[COR_People] (sys_maenit + cnt_nit + inv_Vendedor unificadas).
+///
+/// <para>
+/// Tabla MAESTRA centralizada de personas. Solo contiene datos VERDADERAMENTE
+/// comunes a cualquier persona (identificacion, contacto basico, demografia,
+/// datos fiscales/contables y banca de proveedor/recaudo de cliente).
+/// </para>
+///
+/// <para>
+/// Los datos especificos de cada ROL viven en tablas hijas con FK a Person:
+///   - <see cref="Associate"/>           = rol asociado de la cooperativa.
+///   - <see cref="Payroll.Employee"/>    = rol empleado interno (planilla cooperativa).
+///   - <see cref="Spouse"/>              = info personal del conyuge (no laboral).
+///   - <see cref="PersonFinancial"/>     = capacidad de pago / scoring crediticio.
+///   - <see cref="Inventory.Salesperson"/> = rol vendedor.
+/// </para>
+///
+/// <para>Los flags <c>Is*</c> indican que roles tiene la persona; las tablas hijas
+/// existen solo si el flag esta en true.</para>
 /// </summary>
 public class Person : AuditableEntity
 {
-    // === IDENTIFICATION ===
+    // === IDENTIFICACION ===
+
     [MaxLength(20)]
     public string? LegacyCode { get; set; }
 
@@ -34,7 +52,7 @@ public class Person : AuditableEntity
     public DateOnly? IdIssueDate { get; set; }
 
     [MaxLength(2)]
-    public string? PersonType { get; set; }
+    public string? PersonType { get; set; } // 01 = Natural, 02 = Juridica
 
     [MaxLength(150)]
     public string? BusinessName { get; set; }
@@ -42,7 +60,10 @@ public class Person : AuditableEntity
     [MaxLength(20)]
     public string? PreviousCode { get; set; }
 
-    // === CONTACT ===
+    public short NaturalLegalType { get; set; }
+
+    // === CONTACTO ===
+
     [MaxLength(120)]
     public string? Address { get; set; }
 
@@ -77,7 +98,8 @@ public class Person : AuditableEntity
     [MaxLength(20)]
     public string? DaneCityCode { get; set; }
 
-    // === DEMOGRAPHICS ===
+    // === DEMOGRAFIA ===
+
     [MaxLength(2)]
     public string? Gender { get; set; }
 
@@ -102,26 +124,8 @@ public class Person : AuditableEntity
     [MaxLength(2)]
     public string? WorkShift { get; set; }
 
-    public short NaturalLegalType { get; set; }
+    // === DATOS FISCALES / CONTABLES (cnt_nit fusionado, decision P4) ===
 
-    // === EMPLOYMENT ===
-    [MaxLength(80)]
-    public string? Employer { get; set; }
-
-    public DateOnly? EmployerStartDate { get; set; }
-
-    [MaxLength(2)]
-    public string? SalaryType { get; set; }
-
-    public decimal Salary { get; set; }
-    public decimal Severance { get; set; }
-    public int? ProfessionId { get; set; }
-    public int? PositionId { get; set; }
-
-    [MaxLength(100)]
-    public string? SeveranceFund { get; set; }
-
-    // === TAX & REGULATORY ===
     public bool WithholdingExempt { get; set; }
     public bool IcaWithholdingExempt { get; set; }
 
@@ -147,117 +151,58 @@ public class Person : AuditableEntity
     [MaxLength(20)]
     public string? CiiuCode { get; set; }
 
-    public decimal CreditLimit { get; set; }
-
     [MaxLength(2)]
     public string? ThirdPartyType { get; set; }
 
-    // === BANKING ===
-    [MaxLength(30)]
-    public string? BankAccountNumber { get; set; }
-
-    public int? BankId { get; set; }
-
-    [MaxLength(2)]
-    public string? BankAccountType { get; set; }
-
-    public int? BankAccountCityId { get; set; }
+    // Withholding auxiliar
+    public bool WithholdingAux { get; set; }
+    public decimal? WithholdingAuxAmount { get; set; }
+    public decimal? WithholdingAuxPct { get; set; }
 
     [MaxLength(20)]
-    public string? NitBankCode { get; set; }
+    public string? WithholdingAuxAccount { get; set; }
 
-    [MaxLength(2)]
-    public string? NitBankAccountType { get; set; }
-
-    [MaxLength(30)]
-    public string? NitBankAccountNumber { get; set; }
+    // === BANCA DEL PROVEEDOR / RECAUDO DE CLIENTES (decision P5c) ===
+    // Para pagos a proveedores y recaudos de clientes. La banca del rol
+    // empleado (nomina) y del rol asociado (depositos) viven en sus
+    // respectivas tablas hijas.
 
     [MaxLength(20)]
-    public string? NitAdvisorId { get; set; }
+    public string? SupplierBankCode { get; set; }
 
-    // === ROLE FLAGS ===
+    [MaxLength(2)]
+    public string? SupplierBankAccountType { get; set; }
+
+    [MaxLength(30)]
+    public string? SupplierBankAccountNumber { get; set; }
+
+    [MaxLength(20)]
+    public string? SupplierAdvisorId { get; set; }
+
+    // === FLAGS DE ROL ===
+
     public bool IsAssociate { get; set; }
     public bool IsEmployee { get; set; }
     public bool IsAdvisor { get; set; }
     public bool IsThirdParty { get; set; }
     public bool ReceivesInvoice { get; set; }
 
-    // === STATUS FLAGS ===
+    // Nuevos (decision P7 + P6)
+    public bool IsCustomer { get; set; }
+    public bool IsSupplier { get; set; }
+    public bool IsSalesperson { get; set; }
+
+    // === ESTADO ===
+
     [MaxLength(2)]
     public string? Status { get; set; }
 
     public bool IsDisabled { get; set; }
     public bool IsInsolvent { get; set; }
-    public bool IsOnVacation { get; set; }
-    public bool IsOnUnpaidLeave { get; set; }
-    public bool IsPensioner { get; set; }
-    public bool IsInsubordinate { get; set; }
     public bool IsDeceased { get; set; }
-    public bool IsFromGovernment { get; set; }
-    public bool IsPublicResourceAdmin { get; set; }
 
-    [MaxLength(10)]
-    public string? PensionType { get; set; }
+    // === LEGACY AUDIT (preservado del SOLIDO original) ===
 
-    [MaxLength(10)]
-    public string? SeveranceType { get; set; }
-
-    // === ONLINE ACCESS ===
-    [MaxLength(20)]
-    public string? InternetPassword { get; set; }
-
-    public bool OnlineConsultation { get; set; }
-
-    [MaxLength(2)]
-    public string? ConsultationStatus { get; set; }
-
-    [MaxLength(20)]
-    public string? AffiliationCode { get; set; }
-
-    [MaxLength(2)]
-    public string? ConsultationChargeType { get; set; }
-
-    public int ConsultationCreditLine { get; set; }
-
-    [MaxLength(40)]
-    public string? UserPassword { get; set; }
-
-    // === RISK & COMPLIANCE ===
-    public bool AuthCentralRisk { get; set; }
-
-    [MaxLength(2)]
-    public string? PosCardClass { get; set; }
-
-    public decimal PosCardLimit { get; set; }
-    public decimal InsuranceRiskRate { get; set; }
-    public int ZoneTypeId { get; set; }
-    public int ZoneId { get; set; }
-    public bool IsSiplaExempt { get; set; }
-    public DateTime? SiplaExemptDate { get; set; }
-
-    [MaxLength(20)]
-    public string? SiplaUser { get; set; }
-
-    public bool SinglePromissoryNote { get; set; }
-    public bool PledgesContributions { get; set; }
-    public bool InManagement { get; set; }
-
-    // === ACCOUNTING CENTER FLAGS ===
-    public bool CpAdmin { get; set; }
-    public bool CpContributions { get; set; }
-    public bool CpLocal { get; set; }
-    public bool CpCommission { get; set; }
-
-    [MaxLength(20)]
-    public string? ProfitCenter { get; set; }
-
-    public bool CapacityPayPct { get; set; }
-
-    // === OTHER INCOME DESCRIPTION ===
-    [MaxLength(120)]
-    public string? OtherIncomeDescription { get; set; }
-
-    // === LEGACY AUDIT ===
     [MaxLength(20)]
     public string? LegacyUser { get; set; }
 
@@ -268,11 +213,9 @@ public class Person : AuditableEntity
     public DateTime? LegacySystemDate { get; set; }
 
     // === Navigation properties ===
+
     public City? City { get; set; }
     public City? MailingCity { get; set; }
-    public Bank? Bank { get; set; }
-    public Profession? Profession { get; set; }
-    public Position? Position { get; set; }
     public Associate? Associate { get; set; }
     public Spouse? Spouse { get; set; }
     public PersonFinancial? Financial { get; set; }
@@ -280,5 +223,5 @@ public class Person : AuditableEntity
     public ICollection<Beneficiary> Beneficiaries { get; set; } = [];
     public ICollection<Reference> References { get; set; } = [];
     public ICollection<CommitteeMember> CommitteeMemberships { get; set; } = [];
-    public ICollection<Notification> Notifications { get; set; } = [];
+    // Notifications now reference users by RecipientUserPublicId (not Person FK).
 }

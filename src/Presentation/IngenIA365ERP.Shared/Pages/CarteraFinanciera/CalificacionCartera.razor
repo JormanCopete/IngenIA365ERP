@@ -139,9 +139,9 @@
     {
         try
         {
-            _currentDistribution = await Http.GetFromJsonAsync<List<ClassificationItem>>(
+            _currentDistribution = await Http.GetListAsync<ClassificationItem>(
                 "/api/lending/classifications/current");
-            _history = await Http.GetFromJsonAsync<List<HistoryItem>>(
+            _history = await Http.GetListAsync<HistoryItem>(
                 "/api/lending/classifications/history");
         }
         catch

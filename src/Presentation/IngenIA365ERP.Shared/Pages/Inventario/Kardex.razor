@@ -156,7 +156,7 @@ else
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/inventory/warehouses?pageSize=200");
+            var items = await Http.GetListAsync<CatalogItem>("/api/inventory/warehouses?pageSize=200");
             _warehouseOptions = [new("", "Todas"), .. (items ?? []).Select(w => new DropOption(w.Code, $"{w.Code} - {w.Name}"))];
         }
         catch { /* keep default */ }
@@ -167,7 +167,7 @@ else
         if (string.IsNullOrWhiteSpace(_productSearch)) return;
         try
         {
-            _productResults = await Http.GetFromJsonAsync<List<ProductItem>>(
+            _productResults = await Http.GetListAsync<ProductItem>(
                 $"/api/inventory/products?search={_productSearch}&pageSize=50") ?? [];
 
             if (_productResults.Count == 1)
@@ -215,7 +215,7 @@ else
         if (_selectedProduct is null) return;
         try
         {
-            _stockSummary = await Http.GetFromJsonAsync<List<StockSummaryItem>>(
+            _stockSummary = await Http.GetListAsync<StockSummaryItem>(
                 $"/api/inventory/stock/{_selectedProduct.PublicId}/summary") ?? [];
         }
         catch { _stockSummary = []; }
@@ -232,7 +232,7 @@ else
             if (_dateFrom.HasValue) url += $"&dateFrom={DateOnly.FromDateTime(_dateFrom.Value):yyyy-MM-dd}";
             if (_dateTo.HasValue) url += $"&dateTo={DateOnly.FromDateTime(_dateTo.Value):yyyy-MM-dd}";
 
-            _movements = await Http.GetFromJsonAsync<List<KardexMovement>>(url) ?? [];
+            _movements = await Http.GetListAsync<KardexMovement>(url) ?? [];
         }
         catch { _movements = []; }
         finally { _loading = false; }

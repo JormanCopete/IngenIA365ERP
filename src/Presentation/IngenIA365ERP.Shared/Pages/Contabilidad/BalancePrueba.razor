@@ -119,7 +119,7 @@ else if (!_loading && _data is not null)
         _loading = true;
         try
         {
-            _data = await Http.GetFromJsonAsync<List<TrialBalanceLine>>(
+            _data = await Http.GetListAsync<TrialBalanceLine>(
                 $"/api/accounting/trial-balance/{_year}/{_month}");
         }
         catch

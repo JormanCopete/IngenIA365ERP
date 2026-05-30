@@ -12,6 +12,9 @@ using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.Web;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Compliance;
+using IngenIA365ERP.Domain.Exceptions;
+using IngenIA365ERP.Persistence.Configurations.Common;
 using IngenIA365ERP.Persistence.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 
@@ -60,6 +63,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<RecreationalEvent> RecreationalEvents => Set<RecreationalEvent>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationDeliveryFailure> NotificationDeliveryFailures => Set<NotificationDeliveryFailure>();
+    public DbSet<HabeasDataPolicyVersion> HabeasDataPolicyVersions => Set<HabeasDataPolicyVersion>();
+    public DbSet<HabeasDataConsent> HabeasDataConsents => Set<HabeasDataConsent>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
     public DbSet<ExternalEntity> ExternalEntities => Set<ExternalEntity>();
     public DbSet<Position> Positions => Set<Position>();
@@ -297,6 +303,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
+    public DbSet<PasswordPolicy> PasswordPolicies => Set<PasswordPolicy>();
+    public DbSet<PasswordHistory> PasswordHistory => Set<PasswordHistory>();
+    public DbSet<MfaBackupCode> MfaBackupCodes => Set<MfaBackupCode>();
+    public DbSet<MfaResetRequest> MfaResetRequests => Set<MfaResetRequest>();
 
     // === Audit (14) ===
     public DbSet<CompanyChange> CompanyChanges => Set<CompanyChange>();
@@ -322,10 +332,15 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<WebExtraPayment> WebExtraPayments => Set<WebExtraPayment>();
     public DbSet<WebDataUpdate> WebDataUpdates => Set<WebDataUpdate>();
 
-    // === Admin (3) ===
+    // === Admin (3+1) ===
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
+    public DbSet<TenantBranch> TenantBranches => Set<TenantBranch>();
+
+    // === Security extras (cross-tenant operadores) ===
+    public DbSet<UserTenantAssignment> UserTenantAssignments => Set<UserTenantAssignment>();
+    public DbSet<UserBranchAssignment> UserBranchAssignments => Set<UserBranchAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -334,6 +349,12 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         modelBuilder.HasDefaultSchema(schema);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        // Convenciones transversales (T011 RowVersion + T022 filtro soft-delete).
+        // Se aplica después de las configuraciones específicas para que cualquier
+        // override por entidad ya esté registrado.
+        modelBuilder.ApplyBaseEntityConventions();
+
         base.OnModelCreating(modelBuilder);
     }
 
@@ -380,6 +401,39 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
             }
         }
 
-        return await base.SaveChangesAsync(cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // T021: traducir conflicto de RowVersion al tipo del dominio para
+            // que los handlers MediatR puedan mapearlo a Result.Failure
+            // ("Concurrency.StaleRowVersion", …) sin acoplarse a EF Core.
+            var entry = ex.Entries.FirstOrDefault();
+            var entityType = entry?.Entity.GetType().Name ?? "Entidad";
+            string? publicId = null;
+            string? lastEditor = null;
+            DateTime? lastEditedAt = null;
+
+            if (entry is not null)
+            {
+                if (entry.Entity is BaseEntity be) publicId = be.PublicId.ToString();
+                else if (entry.Entity is BaseEntityLong bel) publicId = bel.PublicId.ToString();
+
+                if (entry.Entity is AuditableEntity ae)
+                {
+                    lastEditor = ae.UpdatedBy ?? ae.CreatedBy;
+                    lastEditedAt = ae.UpdatedAt ?? ae.CreatedAt;
+                }
+                else if (entry.Entity is AuditableEntityLong ael)
+                {
+                    lastEditor = ael.UpdatedBy ?? ael.CreatedBy;
+                    lastEditedAt = ael.UpdatedAt ?? ael.CreatedAt;
+                }
+            }
+
+            throw new ConcurrencyConflictException(entityType, publicId, lastEditor, lastEditedAt, ex);
+        }
     }
 }

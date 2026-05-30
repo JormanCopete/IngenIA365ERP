@@ -25,7 +25,16 @@ public class User : AuditableEntity
     public bool CanOverrideLimits { get; set; }
     public string? IdentificationNumber { get; set; }
 
+    /// <summary>Operador global del SaaS (admin del producto, no de un tenant).</summary>
+    public bool IsSaasOperator { get; set; }
+
+    /// <summary>true si la última contraseña fue establecida por reset administrativo
+    /// y debe ser cambiada en el siguiente login (FR-009).</summary>
+    public bool MustChangePassword { get; set; }
+
     // Navigation
     public Person? Person { get; set; }
     public ICollection<Role> Roles { get; set; } = [];
+    public ICollection<MfaBackupCode> MfaBackupCodes { get; set; } = [];
+    public ICollection<PasswordHistory> PasswordHistory { get; set; } = [];
 }

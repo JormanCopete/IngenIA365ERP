@@ -118,11 +118,14 @@ public class GetPayrollDetailQueryHandler(IApplicationDbContext context)
 
         var transactions = await txQuery.ToListAsync(ct);
 
-        // Load employee names
+        // Load employee names — vienen de COR_People via JOIN.
         var employeeIds = transactions.Select(t => t.EmployeeId).Distinct().ToList();
-        var employees = await context.Employees.AsNoTracking()
-            .Where(e => employeeIds.Contains(e.Id))
-            .ToDictionaryAsync(e => e.Id, e => new { e.PublicId, Name = e.FirstName + " " + e.LastName, e.IdentificationNumber }, ct);
+        var employees = await (
+            from e in context.Employees.AsNoTracking()
+            join p in context.People.AsNoTracking() on e.PersonId equals p.Id
+            where employeeIds.Contains(e.Id)
+            select new { e.Id, e.PublicId, Name = p.FirstName + " " + p.LastName, IdentificationNumber = p.TaxId })
+            .ToDictionaryAsync(x => x.Id, x => new { x.PublicId, x.Name, x.IdentificationNumber }, ct);
 
         // Load concept names
         var conceptIds = transactions.Select(t => t.ConceptId).Distinct().ToList();
@@ -182,6 +185,7 @@ public class GetPayslipQueryHandler(IApplicationDbContext context)
                 "Periodo no encontrado."));
 
         var employee = await context.Employees.AsNoTracking()
+            .Include(e => e.Person)
             .FirstOrDefaultAsync(e => e.PublicId == request.EmployeePublicId && !e.IsDeleted, ct);
         if (employee is null)
             return Result.Failure<PayslipDto>(new Error("Payslip.EmployeeNotFound",
@@ -219,8 +223,8 @@ public class GetPayslipQueryHandler(IApplicationDbContext context)
 
         return Result.Success(new PayslipDto(
             employee.PublicId,
-            $"{employee.FirstName} {employee.LastName}",
-            employee.IdentificationNumber,
+            $"{employee.Person.FirstName} {employee.Person.LastName}",
+            employee.Person.TaxId,
             period.Description ?? $"Periodo {period.PeriodId}",
             DateOnly.FromDateTime(period.StartDate),
             DateOnly.FromDateTime(period.EndDate),

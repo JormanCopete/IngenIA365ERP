@@ -38,16 +38,13 @@ public class TerminateEmployeeCommandHandler(
         employee.UpdatedBy = currentUser.UserName;
 
         // 4. Mark person as no longer employee
-        if (employee.PersonId.HasValue)
+        var person = await context.People.FirstOrDefaultAsync(
+            p => p.Id == employee.PersonId && !p.IsDeleted, ct);
+        if (person is not null)
         {
-            var person = await context.People.FirstOrDefaultAsync(
-                p => p.Id == employee.PersonId.Value && !p.IsDeleted, ct);
-            if (person is not null)
-            {
-                person.IsEmployee = false;
-                person.UpdatedAt = dateTime.UtcNow;
-                person.UpdatedBy = currentUser.UserName;
-            }
+            person.IsEmployee = false;
+            person.UpdatedAt = dateTime.UtcNow;
+            person.UpdatedBy = currentUser.UserName;
         }
 
         await context.SaveChangesAsync(ct);

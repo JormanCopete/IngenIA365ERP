@@ -65,7 +65,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<ExternalEntityItem>>("/api/core/external-entities?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<ExternalEntityItem>("/api/core/external-entities?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

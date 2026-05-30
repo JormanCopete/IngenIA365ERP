@@ -125,7 +125,7 @@ else if (!_loading && _data is not null)
         _loading = true;
         try
         {
-            _data = await Http.GetFromJsonAsync<List<ResultLine>>(
+            _data = await Http.GetListAsync<ResultLine>(
                 $"/api/reports/accounting/income-statement?year={_year}&month={_month}");
 
             _totalIncome = _data?.Where(d => d.Section == "Ingresos").Sum(d => d.Amount) ?? 0;

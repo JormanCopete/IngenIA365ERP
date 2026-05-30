@@ -84,7 +84,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<ChartAccountItem>>("/api/accounting/chart-of-accounts?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<ChartAccountItem>("/api/accounting/chart-of-accounts?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

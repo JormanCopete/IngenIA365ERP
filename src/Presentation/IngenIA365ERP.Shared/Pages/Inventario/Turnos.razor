@@ -75,7 +75,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<ShiftItem>>("/api/inventory/shifts?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<ShiftItem>("/api/inventory/shifts?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

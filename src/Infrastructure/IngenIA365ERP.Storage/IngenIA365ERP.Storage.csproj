@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IngenIA365ERP.Storage</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.*" />
+    <PackageReference Include="MimeKit" Version="4.*" />
+    <PackageReference Include="RazorEngineCore" Version="2025.*" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- T116 — Templates de correo. Se copian al output para que el renderer
+         (NotificationTemplateRenderer, T117) los lea desde EmailTemplates/. -->
+    <None Update="EmailTemplates\*.cshtml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

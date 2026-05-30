@@ -1,5 +1,6 @@
 @page "/maestros/centros-costo"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
@@ -8,176 +9,352 @@
 
 <div class="page-header">
     <h3>Centros de Costo</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Centro de Costo</SfButton>
 </div>
 
-<SfGrid @ref="_grid" TValue="CostCenterItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+<SfGrid @ref="_grid" TValue="CostCenterRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
-        <GridColumn Field="CompanyName" HeaderText="Empresa" Width="200" />
-        <GridColumn Field="PayrollType" HeaderText="Tipo Nomina" Width="150" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        <GridColumn Field="@nameof(CostCenterRow.Name)" HeaderText="Nombre" Width="260" />
+        <GridColumn Field="@nameof(CostCenterRow.CompanyName)" HeaderText="Empresa" Width="220" />
+        <GridColumn Field="@nameof(CostCenterRow.CompanyTaxId)" HeaderText="NIT Empresa" Width="140" />
+        <GridColumn Field="@nameof(CostCenterRow.PayrollStatus)" HeaderText="Estado Nomina" Width="160" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
-                    var item = context as CostCenterItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    var cc = context as CostCenterRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(cc!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(cc!))" Title="Eliminar" />
                 }
             </Template>
         </GridColumn>
     </GridColumns>
 </SfGrid>
 
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                    <div style="grid-column:span 2;">
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del centro de costo"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                    <div style="grid-column:span 2;">
+                        <label>Empresa</label>
+                        <SfDropDownList TValue="Guid?" TItem="CompanyOption"
+                                        Value="@_selectedCompanyId"
+                                        DataSource="@_companies"
+                                        Placeholder="Seleccione empresa (opcional)"
+                                        AllowFiltering="true"
+                                        ShowClearButton="true">
+                            <DropDownListFieldSettings Text="Display" Value="PublicId" />
+                            <DropDownListEvents TValue="Guid?" TItem="CompanyOption"
+                                                ValueChange="OnCompanyChanged" />
+                        </SfDropDownList>
+                        <small style="color:#888;font-size:11px;">
+                            Si la empresa no aparece, primero registrela en
+                            <a href="/maestros/empresas" target="_blank">Maestros - Empresas</a>.
+                        </small>
+                    </div>
+                    <div>
+                        <label>Tipo de Nomina</label>
+                        <SfNumericTextBox TValue="short" @bind-Value="_model.PayrollType"
+                                          Format="N0" Min="0" Placeholder="0" />
+                    </div>
+                    <div>
+                        <label>Periodo</label>
+                        <SfNumericTextBox TValue="short" @bind-Value="_model.Period"
+                                          Format="N0" Min="0" Placeholder="0" />
+                    </div>
+                    <div>
+                        <label>Periodicidad Nomina</label>
+                        <SfNumericTextBox TValue="short" @bind-Value="_model.PayrollPeriodicity"
+                                          Format="N0" Min="0" Placeholder="0" />
+                    </div>
+                    <div>
+                        <label>Estado Nomina</label>
+                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                        @bind-Value="_model.PayrollStatus"
+                                        DataSource="@_payrollStatuses"
+                                        Placeholder="Seleccione estado">
+                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                        </SfDropDownList>
+                    </div>
                 </div>
-                <div>
-                    <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
-                </div>
-                <div>
-                    <label>Empresa</label>
-                    <SfDropDownList TValue="Guid?" TItem="CompanyOption" DataSource="@_companies"
-                        @bind-Value="_model.CompanyId" Placeholder="Seleccione empresa">
-                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
-                    </SfDropDownList>
-                </div>
-                <div>
-                    <label>Tipo Nomina</label>
-                    <SfDropDownList TValue="string?" TItem="PayrollTypeOption" DataSource="@_payrollTypes"
-                        @bind-Value="_model.PayrollType" Placeholder="Seleccione tipo">
-                        <DropDownListFieldSettings Text="Name" Value="Code" />
-                    </SfDropDownList>
-                </div>
-            </div>
+                <button type="submit" id="cc-submit" style="display:none"></button>
+            </EditForm>
         </Content>
     </DialogTemplates>
     <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
+               Message="¿Esta seguro de eliminar este centro de costo?" />
 
 @code {
-    private SfGrid<CostCenterItem>? _grid;
-    private List<CostCenterItem> _items = [];
-    private List<CompanyOption> _companies = [];
-    private List<PayrollTypeOption> _payrollTypes =
-    [
-        new() { Code = "Quincenal", Name = "Quincenal" },
-        new() { Code = "Mensual", Name = "Mensual" },
-        new() { Code = "Decadal", Name = "Decadal" },
-        new() { Code = "Semanal", Name = "Semanal" }
-    ];
+    private SfGrid<CostCenterRow>? _grid;
+    private List<CostCenterRow> _items = new();
+    private List<CompanyOption> _companies = new();
+    private Guid? _selectedCompanyId;
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
     private CostCenterModel _model = new();
     private Guid? _editId;
-    private bool _showDialog, _showConfirm;
-    private string _dialogTitle = "";
     private Guid _deleteId;
+
+    private List<CodeOption> _payrollStatuses = new()
+    {
+        new("Quincenal", "Quincenal"),
+        new("Mensual", "Mensual"),
+        new("Decadal", "Decadal"),
+        new("Semanal", "Semanal")
+    };
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadCompanies();
-        await LoadData();
-    }
-
-    private async Task LoadData()
-    {
-        try { _items = await Http.GetFromJsonAsync<List<CostCenterItem>>("/api/core/cost-centers?pageSize=500") ?? []; }
-        catch { _items = []; }
+        await Task.WhenAll(LoadCompanies(), LoadData());
     }
 
     private async Task LoadCompanies()
     {
-        try { _companies = await Http.GetFromJsonAsync<List<CompanyOption>>("/api/core/companies?pageSize=500") ?? []; }
-        catch { _companies = []; }
+        try
+        {
+            // El DTO de empresa trae { PublicId, Name, TaxId, ShortName, ... }.
+            // El backend del CostCenter espera CompanyName + CompanyTaxId (strings denormalizados),
+            // por eso al elegir una empresa resolvemos esos campos en OnCompanyChanged.
+            var raw = await Http.GetListAsync<CompanyRaw>("/api/core/companies?PageNumber=1&PageSize=500");
+            _companies = raw
+                .Select(c => new CompanyOption
+                {
+                    PublicId = c.PublicId,
+                    Name = c.Name,
+                    TaxId = c.TaxId,
+                    Display = $"{c.Name} ({c.TaxId})"
+                })
+                .ToList();
+        }
+        catch { _companies = new List<CompanyOption>(); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Centro de Costo"; _showDialog = true; }
-
-    private void OpenEdit(CostCenterItem item)
+    private async Task LoadData()
     {
-        _model = new()
+        try
         {
-            Name = item.Name,
-            ShortName = item.ShortName,
-            CompanyId = item.CompanyId,
-            PayrollType = item.PayrollType
+            _items = await Http.GetListAsync<CostCenterRow>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        }
+        catch (Exception ex)
+        {
+            _items = new List<CostCenterRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar los centros de costo: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    /// <summary>Al seleccionar una empresa del dropdown, resuelve Name y TaxId hacia el modelo.</summary>
+    private void OnCompanyChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, CompanyOption> args)
+    {
+        _selectedCompanyId = args.Value;
+        if (args.ItemData is not null)
+        {
+            _model.CompanyName = args.ItemData.Name;
+            _model.CompanyTaxId = args.ItemData.TaxId;
+        }
+        else
+        {
+            _model.CompanyName = null;
+            _model.CompanyTaxId = null;
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new CostCenterModel();
+        _selectedCompanyId = null;
+        _editId = null;
+        _dialogTitle = "Nuevo Centro de Costo";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(CostCenterRow row)
+    {
+        _model = new CostCenterModel
+        {
+            Name = row.Name,
+            CompanyName = row.CompanyName,
+            CompanyTaxId = row.CompanyTaxId,
+            PayrollType = row.PayrollType,
+            Period = row.Period,
+            PayrollPeriodicity = row.PayrollPeriodicity,
+            PayrollStatus = row.PayrollStatus
         };
-        _editId = item.PublicId;
+        // Encontrar la empresa correspondiente por TaxId
+        var match = !string.IsNullOrEmpty(row.CompanyTaxId)
+            ? _companies.FirstOrDefault(c => c.TaxId == row.CompanyTaxId)
+            : null;
+        _selectedCompanyId = match?.PublicId;
+        _editId = row.PublicId;
         _dialogTitle = "Editar Centro de Costo";
         _showDialog = true;
     }
 
-    private void OpenDelete(CostCenterItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+    private void OpenDelete(CostCenterRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new CostCenterModel();
+        _selectedCompanyId = null;
+        _editId = null;
+    }
 
     private async Task Save()
     {
-        HttpResponseMessage res;
-        if (_editId.HasValue)
-            res = await Http.PutAsJsonAsync($"/api/core/cost-centers/{_editId}", _model);
-        else
-            res = await Http.PostAsJsonAsync("/api/core/cost-centers", _model);
+        if (_saving) return;
 
-        if (res.IsSuccessStatusCode)
+        if (string.IsNullOrWhiteSpace(_model.Name))
         {
-            await Notification.SuccessAsync("Registro guardado");
-            _showDialog = false;
-            await LoadData();
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al guardar");
+
+        _saving = true;
+        try
+        {
+            // Payload coincide con CreateCostCenterCommand / UpdateCostCenterCommand:
+            // CompanyName y CompanyTaxId son strings denormalizados (no FK).
+            var payload = new
+            {
+                Name = _model.Name,
+                CompanyName = _model.CompanyName,
+                CompanyTaxId = _model.CompanyTaxId,
+                PayrollType = _model.PayrollType,
+                Period = _model.Period,
+                PayrollPeriodicity = _model.PayrollPeriodicity,
+                PayrollStatus = _model.PayrollStatus
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/cost-centers/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/cost-centers", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Centro de costo actualizado."
+                    : "Centro de costo creado.");
+                _showDialog = false;
+                _model = new CostCenterModel();
+                _selectedCompanyId = null;
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar centro de costo");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ConfirmDelete()
     {
-        var res = await Http.DeleteAsync($"/api/core/cost-centers/{_deleteId}");
-        if (res.IsSuccessStatusCode)
+        try
         {
-            await Notification.SuccessAsync("Registro eliminado");
-            await LoadData();
+            var res = await Http.DeleteAsync($"/api/core/cost-centers/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Centro de costo eliminado.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar centro de costo");
+            }
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al eliminar");
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
     }
 
-    private class CostCenterItem
+    /// <summary>Coincide con el DTO devuelto por /api/core/cost-centers.</summary>
+    private class CostCenterRow
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
-        public string? ShortName { get; set; }
-        public Guid? CompanyId { get; set; }
         public string? CompanyName { get; set; }
-        public string? PayrollType { get; set; }
+        public string? CompanyTaxId { get; set; }
+        public short PayrollType { get; set; }
+        public short Period { get; set; }
+        public short PayrollPeriodicity { get; set; }
+        public string? PayrollStatus { get; set; }
     }
 
+    /// <summary>Modelo del formulario (envia CompanyName y CompanyTaxId).</summary>
     private class CostCenterModel
     {
+        [Required(ErrorMessage = "Nombre obligatorio.")]
+        [MaxLength(80)]
         public string Name { get; set; } = "";
-        public string? ShortName { get; set; }
-        public Guid? CompanyId { get; set; }
-        public string? PayrollType { get; set; }
+
+        [MaxLength(100)]
+        public string? CompanyName { get; set; }
+
+        [MaxLength(20)]
+        public string? CompanyTaxId { get; set; }
+
+        public short PayrollType { get; set; }
+        public short Period { get; set; }
+        public short PayrollPeriodicity { get; set; }
+
+        [MaxLength(30)]
+        public string? PayrollStatus { get; set; }
     }
 
-    private class CompanyOption
+    /// <summary>Forma cruda de /api/core/companies usada para llenar el dropdown.</summary>
+    private class CompanyRaw
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
+        public string TaxId { get; set; } = "";
     }
 
-    private class PayrollTypeOption
+    /// <summary>Opcion del dropdown enriquecida con un campo Display "Nombre (NIT)".</summary>
+    private class CompanyOption
     {
-        public string Code { get; set; } = "";
+        public Guid? PublicId { get; set; }
         public string Name { get; set; } = "";
+        public string TaxId { get; set; } = "";
+        public string Display { get; set; } = "";
     }
+
+    private record CodeOption(string Value, string Name);
 }

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "ingenia365erp.audit.mongodb.bootstrap.v1",
+  "description": "Definición declarativa del bootstrap de la base de auditoría en MongoDB. El runner ejecuta cada bloque vía mongosh / driver oficial; cada operación es idempotente.",
+  "version": 1,
+  "database": "IngenIA365ERP_Audit",
+  "collections": [
+    {
+      "name": "audit_events_template",
+      "createIfMissing": true,
+      "indexes": [
+        { "keys": { "tenantId": 1, "occurredAt": -1 }, "name": "ix_tenant_occurredAt" },
+        { "keys": { "tenantId": 1, "userId": 1, "occurredAt": -1 }, "name": "ix_tenant_user_occurredAt" },
+        { "keys": { "tenantId": 1, "entityType": 1, "entityPublicId": 1, "occurredAt": -1 }, "name": "ix_tenant_entity_occurredAt" },
+        { "keys": { "occurredAt": 1 }, "name": "ttl_occurredAt_5y", "expireAfterSeconds": 157680000 }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "role": "audit_appendOnly",
+      "privileges": [
+        {
+          "resource": { "db": "IngenIA365ERP_Audit", "collection": "" },
+          "actions": [ "insert", "find", "listCollections", "listIndexes" ]
+        }
+      ],
+      "roles": [],
+      "rationale": "Niega explícitamente update, remove, dropCollection, createIndex (que ya se hizo por el rol admin durante el bootstrap), garantizando append-only a nivel de base de datos. FR-024 / FR-025 — entradas del audit log son inmutables."
+    },
+    {
+      "role": "audit_readOnly",
+      "privileges": [
+        {
+          "resource": { "db": "IngenIA365ERP_Audit", "collection": "" },
+          "actions": [ "find", "listCollections", "listIndexes" ]
+        }
+      ],
+      "roles": [],
+      "rationale": "Rol consumido por la consola de auditoría (US3, T091) y por el endpoint de verificación de PDF firmado (T090)."
+    }
+  ],
+  "users": [
+    {
+      "user": "audit_writer",
+      "passwordSource": "env:AUDIT_WRITER_PASSWORD",
+      "roles": [ { "role": "audit_appendOnly", "db": "IngenIA365ERP_Audit" } ]
+    },
+    {
+      "user": "audit_reader",
+      "passwordSource": "env:AUDIT_READER_PASSWORD",
+      "roles": [ { "role": "audit_readOnly", "db": "IngenIA365ERP_Audit" } ]
+    }
+  ],
+  "notes": [
+    "Sharding: el cluster productivo particiona por hashed(tenantId). En dev (docker/dev.yml) corre standalone — el script salta la fase de shardCollection.",
+    "Las colecciones reales se nombran audit_events_{tenantId}; los índices se replican al primer InsertOne por convención del runner (AuditIndexBootstrap)."
+  ]
+}

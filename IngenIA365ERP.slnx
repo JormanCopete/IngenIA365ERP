@@ -12,6 +12,7 @@
     <Project Path="src/Infrastructure/IngenIA365ERP.Audit/IngenIA365ERP.Audit.csproj" />
     <Project Path="src/Infrastructure/IngenIA365ERP.Caching/IngenIA365ERP.Caching.csproj" />
     <Project Path="src/Infrastructure/IngenIA365ERP.Legacy/IngenIA365ERP.Legacy.csproj" />
+    <Project Path="src/Infrastructure/IngenIA365ERP.Storage/IngenIA365ERP.Storage.csproj" />
   </Folder>
 
   <!-- Presentation -->
@@ -31,6 +32,7 @@
     <Project Path="tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj" />
     <Project Path="tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj" />
     <Project Path="tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj" />
+    <Project Path="tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj" />
   </Folder>
 
   <!-- Tools -->

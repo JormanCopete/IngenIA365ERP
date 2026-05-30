@@ -146,7 +146,7 @@
             _balance = await Http.GetFromJsonAsync<ContributionBalanceRow>($"api/lending/contributions/{person.PublicId}");
 
             // Get history
-            var history = await Http.GetFromJsonAsync<List<ContributionEntryRow>>($"api/lending/contributions/{person.PublicId}/history");
+            var history = await Http.GetListAsync<ContributionEntryRow>($"api/lending/contributions/{person.PublicId}/history");
             _entries = history ?? [];
         }
         catch (Exception ex)

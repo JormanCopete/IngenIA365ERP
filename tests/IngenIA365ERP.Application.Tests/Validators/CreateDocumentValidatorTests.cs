@@ -73,7 +73,9 @@ public class CreateDocumentValidatorTests
             ]
         };
         var result = _validator.TestValidate(command);
-        result.ShouldHaveAnyValidationError();
+        // FluentValidation v12 removio ShouldHaveAnyValidationError().
+        // En su lugar verificamos que el resultado de validacion sea invalido.
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
@@ -104,6 +106,8 @@ public class CreateDocumentValidatorTests
             ]
         };
         var result = _validator.TestValidate(command);
-        result.ShouldHaveAnyValidationError();
+        // FluentValidation v12 removio ShouldHaveAnyValidationError().
+        // En su lugar verificamos que el resultado de validacion sea invalido.
+        result.IsValid.Should().BeFalse();
     }
 }

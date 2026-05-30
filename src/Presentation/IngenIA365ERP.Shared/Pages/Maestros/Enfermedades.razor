@@ -60,7 +60,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<DiseaseItem>>("/api/core/diseases?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<DiseaseItem>("/api/core/diseases?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

@@ -123,7 +123,7 @@ else if (!_loading && _data is not null)
         try
         {
             var branchParam = string.IsNullOrEmpty(_branch) ? "" : $"&branch={_branch}";
-            _data = await Http.GetFromJsonAsync<List<BalanceLine>>(
+            _data = await Http.GetListAsync<BalanceLine>(
                 $"/api/reports/accounting/balance-general?year={_year}&month={_month}{branchParam}");
         }
         catch (Exception ex)

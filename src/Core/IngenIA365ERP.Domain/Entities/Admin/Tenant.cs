@@ -18,6 +18,24 @@ public class Tenant : AuditableEntity
     [MaxLength(50)]
     public string PlanType { get; set; } = "Basic";
 
+    // T034 — Identidad legal de la cooperativa (NIT y razón social colombiana).
+    // Obligatorios para la facturación y los reportes SARLAFT que el módulo
+    // de auditoría deja firmados; opcionales mientras la fila no esté
+    // activada para preservar idempotencia en backfills.
+    [MaxLength(20)]
+    public string? Nit { get; set; }
+
+    [MaxLength(200)]
+    public string? LegalName { get; set; }
+
+    [MaxLength(300)]
+    public string? LegalAddress { get; set; }
+
+    // Régimen tributario (Común, Simple, RégimenSimplificado, Especial, etc.).
+    // Valores libres por ahora; un catálogo (`COR_TaxRegimes`) se introducirá en módulo Contabilidad.
+    [MaxLength(50)]
+    public string? TaxRegime { get; set; }
+
     public bool IsActive { get; set; } = true;
     public int MaxUsers { get; set; } = 10;
     public long StorageLimitMb { get; set; } = 5120;

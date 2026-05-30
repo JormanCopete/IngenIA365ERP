@@ -99,7 +99,8 @@ public class CreateLoanApplicationCommandHandler(
             Remarks = request.Purpose,
             RecordDate = dateTime.TodayUtc,
             IdentificationNumber = person.TaxId,
-            Salary = person.Salary,
+            // Salary del asociado vive ahora en COR_Associates.ExternalSalary (si existe).
+            Salary = person.Associate?.ExternalSalary ?? 0m,
             BranchId = person.Associate?.BranchId?.ToString() ?? "1",
             CostCenterId = person.Associate?.CostCenterId?.ToString() ?? "1",
             EntryUserId = currentUser.UserName ?? "system",
