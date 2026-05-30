@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <RootNamespace>IngenIA365ERP.Load.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
@@ -12,14 +13,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="FluentAssertions" Version="8.10.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.*" />
-    <PackageReference Include="Testcontainers.MsSql" Version="4.*" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="4.*" />
-    <PackageReference Include="Testcontainers.Redis" Version="4.*" />
-    <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Presentation\IngenIA365ERP.API\IngenIA365ERP.API.csproj" />
+    <PackageReference Include="NBomber" Version="5.*" />
+    <PackageReference Include="NBomber.Http" Version="5.*" />
   </ItemGroup>
 </Project>
