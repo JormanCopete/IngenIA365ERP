@@ -40,5 +40,12 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at
+[specs/001-cimientos-tecnicos/plan.md](specs/001-cimientos-tecnicos/plan.md)
+along with its companion artifacts:
+- [spec.md](specs/001-cimientos-tecnicos/spec.md)
+- [research.md](specs/001-cimientos-tecnicos/research.md)
+- [data-model.md](specs/001-cimientos-tecnicos/data-model.md)
+- [quickstart.md](specs/001-cimientos-tecnicos/quickstart.md)
+- [contracts/](specs/001-cimientos-tecnicos/contracts/)
 <!-- SPECKIT END -->
