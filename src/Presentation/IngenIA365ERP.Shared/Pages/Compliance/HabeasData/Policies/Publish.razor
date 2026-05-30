@@ -1,0 +1,83 @@
+@page "/compliance/habeas-data/policies/publicar"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Publicar política habeas data — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Compliance.HabeasData.Publish">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Publicar nueva versión de política</h1>
+            <p class="muted">
+                Al publicar, la versión vigente queda cerrada y la nueva entra en vigor.
+                El hash SHA-256 se calcula al guardar.
+            </p>
+
+            <div class="form-grid">
+                <label>Título
+                    <input type="text" maxlength="300" @bind="_title" />
+                </label>
+                <label>Vigente desde (UTC)
+                    <input type="datetime-local" @bind="_effectiveFrom" />
+                </label>
+                <label>Contenido (Markdown)
+                    <textarea rows="20" @bind="_content"></textarea>
+                </label>
+            </div>
+
+            @if (_error is not null) { <p class="error">@_error</p> }
+
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button class="primary" @onclick="PublishAsync" disabled="@_saving">
+                    @(_saving ? "Publicando…" : "Publicar")
+                </button>
+                <button @onclick="Cancel">Cancelar</button>
+            </div>
+        </div>
+    </ChildContent>
+    <Fallback><p>No tienes permiso para publicar políticas habeas data.</p></Fallback>
+</PermissionGate>
+
+@code {
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private DateTime _effectiveFrom = DateTime.UtcNow.AddHours(1);
+    private bool _saving;
+    private string? _error;
+
+    private async Task PublishAsync()
+    {
+        _saving = true; _error = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/policies/",
+                new { title = _title, contentMarkdown = _content, effectiveFrom = _effectiveFrom });
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await ExtractErrorAsync(resp);
+                return;
+            }
+            Nav.NavigateTo("/compliance/habeas-data/policies");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void Cancel() => Nav.NavigateTo("/compliance/habeas-data/policies");
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            return env is null ? $"Error {(int)resp.StatusCode}" : $"{env.Code}: {env.Message}";
+        }
+        catch { return $"Error {(int)resp.StatusCode}"; }
+    }
+
+    private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);
+}

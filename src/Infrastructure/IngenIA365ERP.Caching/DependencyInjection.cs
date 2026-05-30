@@ -1,6 +1,8 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Caching.Configuration;
 using IngenIA365ERP.Caching.Services;
+using IngenIA365ERP.Caching.Services.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
@@ -26,6 +28,16 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ICacheService, RedisCacheService>();
+
+        // T029 — Abstracciones de seguridad respaldadas por Redis.
+        services.AddScoped<IRefreshTokenStore, RedisRefreshTokenStore>();
+        services.AddScoped<IRevokedTokenBlacklist, RedisRevokedTokenBlacklist>();
+        services.AddScoped<IPermissionClaimsCache, RedisPermissionClaimsCache>();
+        services.AddScoped<IMfaResetCoordinator, RedisMfaResetCoordinator>();
+
+        // T052 — Cache de challenge MFA (post-login, pre-verify) y enrollment.
+        services.AddScoped<IMfaChallengeStore, RedisMfaChallengeStore>();
+        services.AddScoped<IMfaEnrollmentStore, RedisMfaEnrollmentStore>();
 
         return services;
     }

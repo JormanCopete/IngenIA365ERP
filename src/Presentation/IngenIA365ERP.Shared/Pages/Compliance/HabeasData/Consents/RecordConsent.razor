@@ -1,0 +1,83 @@
+@page "/compliance/habeas-data/consents/aceptar/{PersonId:int}"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Registrar consentimiento — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Compliance.HabeasData.RecordConsent">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Registrar consentimiento del titular #@PersonId</h1>
+
+            <div class="form-grid">
+                <label>Canal
+                    <select @bind="_channel">
+                        <option value="Portal">Portal web</option>
+                        <option value="Email">Correo</option>
+                        <option value="Print">Impreso firmado</option>
+                        <option value="InPerson">Presencial</option>
+                    </select>
+                </label>
+                <label>Notas
+                    <textarea rows="4" maxlength="2000" @bind="_notes"></textarea>
+                </label>
+            </div>
+
+            @if (_error is not null) { <p class="error">@_error</p> }
+
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button class="primary" @onclick="AcceptAsync" disabled="@_saving">
+                    @(_saving ? "Guardando…" : "Registrar aceptación")
+                </button>
+                <button @onclick="Cancel">Cancelar</button>
+            </div>
+        </div>
+    </ChildContent>
+    <Fallback><p>No tienes permiso para registrar consentimientos.</p></Fallback>
+</PermissionGate>
+
+@code {
+    [Parameter] public int PersonId { get; set; }
+
+    private string _channel = "Portal";
+    private string _notes = string.Empty;
+    private bool _saving;
+    private string? _error;
+
+    private async Task AcceptAsync()
+    {
+        _saving = true; _error = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/consents/accept",
+                new { personId = PersonId, channel = _channel, notes = _notes });
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await ExtractErrorAsync(resp);
+                return;
+            }
+            Nav.NavigateTo($"/compliance/habeas-data/persons/{PersonId}/historial");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void Cancel() =>
+        Nav.NavigateTo($"/compliance/habeas-data/persons/{PersonId}/historial");
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            return env is null ? $"Error {(int)resp.StatusCode}" : $"{env.Code}: {env.Message}";
+        }
+        catch { return $"Error {(int)resp.StatusCode}"; }
+    }
+
+    private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);
+}

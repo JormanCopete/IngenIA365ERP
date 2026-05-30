@@ -1,0 +1,155 @@
+@page "/notificaciones"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+
+<PageTitle>Notificaciones — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Notifications.ManageOwn">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Notificaciones</h1>
+
+            <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+                <label><input type="checkbox" @bind="_onlyUnread" @bind:after="ReloadAsync" /> solo no leídas</label>
+                <label><input type="checkbox" @bind="_includeArchived" @bind:after="ReloadAsync" /> incluir archivadas</label>
+                <button @onclick="ReloadAsync" disabled="@_loading">Refrescar</button>
+                <button @onclick="MarkAllReadAsync" disabled="@(_loading || _unreadCount == 0)">
+                    Marcar todas como leídas
+                </button>
+                <span class="muted" style="margin-left:auto;">
+                    @_unreadCount no leídas · @_totalCount totales
+                </span>
+            </div>
+
+            @if (_loading) { <p>Cargando…</p> }
+            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_items.Count == 0) { <p>Sin notificaciones.</p> }
+            else
+            {
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Tipo</th>
+                            <th>Asunto</th>
+                            <th>Recibida</th>
+                            <th>Estado correo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var n in _items)
+                        {
+                            <tr style="@(n.ReadAt is null ? "font-weight:600" : string.Empty)">
+                                <td>@(n.ReadAt is null ? "●" : "")</td>
+                                <td>@n.Type</td>
+                                <td>
+                                    @n.Subject
+                                    <details>
+                                        <summary class="muted">ver detalle</summary>
+                                        <pre style="white-space:pre-wrap;">@n.Body</pre>
+                                    </details>
+                                </td>
+                                <td>@n.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@n.EmailStatus</td>
+                                <td>
+                                    @if (n.ReadAt is null)
+                                    {
+                                        <button @onclick="() => MarkReadAsync(n.PublicId)">Marcar leída</button>
+                                    }
+                                    @if (n.ArchivedAt is null)
+                                    {
+                                        <button @onclick="() => ArchiveAsync(n.PublicId)">Archivar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </ChildContent>
+    <Fallback>
+        <div class="admin-page">
+            <p>No tienes permiso para gestionar notificaciones.</p>
+        </div>
+    </Fallback>
+</PermissionGate>
+
+@code {
+    private bool _onlyUnread;
+    private bool _includeArchived;
+    private bool _loading;
+    private string? _error;
+    private int _unreadCount;
+    private int _totalCount;
+    private List<NotificationItem> _items = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var qs = $"?onlyUnread={_onlyUnread}&includeArchived={_includeArchived}&take=200";
+            var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/notifications/{qs}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await ExtractErrorAsync(resp);
+                return;
+            }
+            var dto = await resp.Content.ReadFromJsonAsync<InboxDto>();
+            _items = dto?.Items?.ToList() ?? new();
+            _unreadCount = dto?.UnreadCount ?? 0;
+            _totalCount = dto?.TotalCount ?? 0;
+        }
+        catch (Exception ex) { _error = $"Error: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task MarkReadAsync(Guid id) =>
+        await PostAsync($"/api/notifications/{id}/read");
+
+    private async Task ArchiveAsync(Guid id) =>
+        await PostAsync($"/api/notifications/{id}/archive");
+
+    private async Task MarkAllReadAsync() =>
+        await PostAsync("/api/notifications/read-all");
+
+    private async Task PostAsync(string path)
+    {
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}{path}", null);
+        if (!resp.IsSuccessStatusCode)
+        {
+            _error = await ExtractErrorAsync(resp);
+            return;
+        }
+        await ReloadAsync();
+    }
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            return env is null ? $"Error {(int)resp.StatusCode}" : $"{env.Code}: {env.Message}";
+        }
+        catch
+        {
+            return $"Error {(int)resp.StatusCode}";
+        }
+    }
+
+    public sealed record NotificationItem(
+        Guid PublicId, string Type, string Subject, string Body,
+        string Channels, string EmailStatus,
+        DateTime CreatedAt, DateTime? ReadAt, DateTime? ArchivedAt);
+
+    public sealed record InboxDto(
+        IReadOnlyList<NotificationItem> Items, int UnreadCount, int TotalCount);
+
+    private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);
+}

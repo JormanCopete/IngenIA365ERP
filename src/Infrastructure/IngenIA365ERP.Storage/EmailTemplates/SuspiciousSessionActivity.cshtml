@@ -1,0 +1,19 @@
+<div>
+    <h2 style="margin:0 0 12px 0; color:#b00020;">Actividad sospechosa en tu sesión</h2>
+    <p>Hola {{UserName}},</p>
+    <p>
+        Detectamos un comportamiento inusual: un refresh-token previamente rotado
+        fue reutilizado, lo que puede indicar que tu sesión está comprometida.
+    </p>
+    <p>
+        <strong>Cuenta:</strong> {{Username}}<br/>
+        <strong>IP:</strong> {{LastIp}}<br/>
+        <strong>User-Agent:</strong> {{UserAgent}}<br/>
+        <strong>Hora (UTC):</strong> {{DetectedAt}}
+    </p>
+    <p>
+        Por seguridad invalidamos toda la familia de tokens de esa sesión.
+        Si reconoces la actividad simplemente vuelve a iniciar sesión; de lo
+        contrario cambia tu contraseña inmediatamente y contacta a soporte.
+    </p>
+</div>

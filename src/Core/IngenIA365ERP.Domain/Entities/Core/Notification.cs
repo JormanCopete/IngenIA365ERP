@@ -4,31 +4,42 @@ using IngenIA365ERP.Domain.Common;
 namespace IngenIA365ERP.Domain.Entities.Core;
 
 /// <summary>
-/// Maps to [dbo].[COR_Notifications] (nueva — notification log, BIGINT PK).
+/// T115 — Notificación a un usuario (US6). Persiste el log canónico en
+/// <c>[dbo].[COR_Notifications]</c>. Mapea 1:1 al <c>NotificationPayload</c>
+/// de Application — el handler real (T118) crea una fila por destinatario y
+/// la cola del email dispatcher la lee para enviar correo según
+/// <see cref="EmailStatus"/>.
 /// </summary>
 public class Notification : AuditableEntityLong
 {
-    public int? TemplateId { get; set; }
+    public int TenantId { get; set; }
 
-    public int? RecipientPersonId { get; set; }
+    /// <summary>PublicId del User destinatario (Principio VI).</summary>
+    public Guid RecipientUserPublicId { get; set; }
 
-    [MaxLength(10)]
-    public string Channel { get; set; } = string.Empty;
+    /// <summary>Tipo canónico (AccountLocked, PasswordChanged, RoleAssigned…).</summary>
+    [MaxLength(80)]
+    public string Type { get; set; } = string.Empty;
 
     [MaxLength(500)]
-    public string? Subject { get; set; }
+    public string Subject { get; set; } = string.Empty;
 
-    public string? Body { get; set; }
+    public string Body { get; set; } = string.Empty;
 
-    public DateTime? SentAt { get; set; }
+    /// <summary>Canales a despachar: combinación InApp/Email.</summary>
+    public int ChannelsMask { get; set; }
 
+    /// <summary>Estado de la entrega por correo (Pending/Sent/Failed/Disabled).</summary>
     [MaxLength(20)]
-    public string Status { get; set; } = "Pending";
+    public string EmailStatus { get; set; } = "Pending";
 
-    [MaxLength(2000)]
-    public string? ErrorMessage { get; set; }
+    public DateTime? EmailSentAt { get; set; }
 
-    // Navigation properties
-    public NotificationTemplate? Template { get; set; }
-    public Person? RecipientPerson { get; set; }
+    public int EmailAttemptCount { get; set; }
+
+    /// <summary>Marcada leída por el destinatario en la UI (in-app).</summary>
+    public DateTime? ReadAt { get; set; }
+
+    /// <summary>Archivada por el destinatario.</summary>
+    public DateTime? ArchivedAt { get; set; }
 }

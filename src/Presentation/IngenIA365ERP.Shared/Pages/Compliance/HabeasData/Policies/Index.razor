@@ -1,0 +1,78 @@
+@page "/compliance/habeas-data/policies"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Política de habeas data — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Compliance.HabeasData.ViewHistory">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Política de habeas data — historial de versiones</h1>
+
+            <PermissionGate Required="Compliance.HabeasData.Publish">
+                <ChildContent>
+                    <button class="primary" @onclick='() => Nav.NavigateTo("/compliance/habeas-data/policies/publicar")'>
+                        + Publicar nueva versión
+                    </button>
+                </ChildContent>
+            </PermissionGate>
+
+            @if (_loading) { <p>Cargando…</p> }
+            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_items.Count == 0) { <p>Aún no hay versiones publicadas.</p> }
+            else
+            {
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>#</th><th>Título</th><th>SHA-256</th><th>Vigencia</th><th>Publicada por</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _items)
+                        {
+                            <tr>
+                                <td>v@(p.VersionNumber)</td>
+                                <td>@p.Title</td>
+                                <td><code>@p.Sha256Hex[..16]…</code></td>
+                                <td>
+                                    @p.EffectiveFrom.ToString("yyyy-MM-dd") →
+                                    @(p.EffectiveTo?.ToString("yyyy-MM-dd") ?? "—")
+                                </td>
+                                <td>@p.PublishedBy</td>
+                                <td>@(p.IsCurrent ? "Vigente" : "Histórica")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </ChildContent>
+    <Fallback><p>No tienes permiso para ver el historial de políticas habeas data.</p></Fallback>
+</PermissionGate>
+
+@code {
+    private bool _loading;
+    private string? _error;
+    private List<PolicyItem> _items = new();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/policies/");
+            if (!resp.IsSuccessStatusCode) { _error = $"Error {(int)resp.StatusCode}"; return; }
+            _items = await resp.Content.ReadFromJsonAsync<List<PolicyItem>>() ?? new();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    public sealed record PolicyItem(
+        Guid PublicId, int VersionNumber, string Title, string Sha256Hex,
+        DateTime EffectiveFrom, DateTime? EffectiveTo, string PublishedBy, bool IsCurrent);
+}

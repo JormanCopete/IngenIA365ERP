@@ -1,0 +1,92 @@
+@page "/security/roles"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Roles — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>Roles</h1>
+
+    <div class="toolbar">
+        <input type="search" placeholder="Buscar rol…" @bind="_search" @bind:event="oninput" />
+        <label><input type="checkbox" @bind="_includeBuiltIn" /> incluir built-in</label>
+        <button class="primary" @onclick="OpenCreate">+ Nuevo rol</button>
+        <button @onclick="LoadAsync">Refrescar</button>
+    </div>
+
+    @if (_loading) { <p>Cargando…</p> }
+    else if (_error is not null) { <p class="error">@_error</p> }
+    else if (_items.Count == 0) { <p>Sin resultados.</p> }
+    else
+    {
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>Código</th><th>Nombre</th><th>Tipo</th><th>Permisos</th><th>Usuarios</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _items)
+                {
+                    <tr>
+                        <td>@r.Code</td>
+                        <td>@r.Name</td>
+                        <td>@(r.IsBuiltIn ? "Built-in" : "Custom")</td>
+                        <td>@r.PermissionCount</td>
+                        <td>@r.UserCount</td>
+                        <td>
+                            <button @onclick="() => Edit(r.PublicId)">Editar</button>
+                            @if (!r.IsBuiltIn)
+                            {
+                                <button @onclick="() => DeleteAsync(r.PublicId)">Eliminar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<RoleItem> _items = new();
+    private string _search = string.Empty;
+    private bool _includeBuiltIn = true;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/roles?search={Uri.EscapeDataString(_search)}&includeBuiltIn={_includeBuiltIn}";
+            var resp = await Http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) { _error = $"Error {(int)resp.StatusCode}"; return; }
+            var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleItem>>();
+            _items = page?.Items?.ToList() ?? new();
+        }
+        finally { _loading = false; }
+    }
+
+    private void OpenCreate() => Nav.NavigateTo("/security/roles/new");
+    private void Edit(Guid id) => Nav.NavigateTo($"/security/roles/{id}");
+
+    private async Task DeleteAsync(Guid id)
+    {
+        var resp = await Http.DeleteAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/{id}");
+        if (resp.IsSuccessStatusCode) await LoadAsync();
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    public sealed record RoleItem(
+        Guid PublicId, string Code, string Name, string? Description,
+        bool IsBuiltIn, bool IsAssignable, bool IsActive,
+        int PermissionCount, int UserCount);
+
+    public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+}

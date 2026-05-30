@@ -1,0 +1,114 @@
+@page "/security/users/{PublicId:guid}/roles"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Roles del usuario — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>Roles del usuario</h1>
+    <p><code>@PublicId</code></p>
+
+    @if (_error is not null) { <p class="error">@_error</p> }
+
+    <h2>Roles asignados</h2>
+    @if (_assigned.Count == 0) { <p>Ninguno.</p> }
+    else
+    {
+        <ul>
+            @foreach (var r in _assigned)
+            {
+                <li>
+                    <strong>@r.Code</strong> — @r.Name
+                    <button @onclick="() => RemoveAsync(r.PublicId)">Quitar</button>
+                </li>
+            }
+        </ul>
+    }
+
+    <h2>Asignar rol</h2>
+    <select @bind="_selectedRolePublicId">
+        <option value="">— elegir rol —</option>
+        @foreach (var r in _availableRoles)
+        {
+            <option value="@r.PublicId">@r.Code — @r.Name</option>
+        }
+    </select>
+    <button @onclick="AssignAsync" disabled="@(string.IsNullOrEmpty(_selectedRolePublicId))">Asignar</button>
+
+    <hr />
+    <button @onclick="Back">Volver</button>
+</div>
+
+@code {
+    [Parameter] public Guid PublicId { get; set; }
+    private List<RoleItem> _assigned = new();
+    private List<RoleItem> _availableRoles = new();
+    private string? _selectedRolePublicId;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadUserAsync();
+        await LoadRolesAsync();
+    }
+
+    private async Task LoadUserAsync()
+    {
+        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
+        if (!resp.IsSuccessStatusCode)
+        {
+            _error = $"Error {(int)resp.StatusCode} al cargar usuario.";
+            return;
+        }
+        var detail = await resp.Content.ReadFromJsonAsync<UserDetailDto>();
+        _assigned = detail?.Roles?.ToList() ?? new();
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles?pageSize=200");
+        if (!resp.IsSuccessStatusCode) return;
+        var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleItem>>();
+        _availableRoles = page?.Items?.Where(r => _assigned.All(a => a.PublicId != r.PublicId)).ToList() ?? new();
+    }
+
+    private async Task AssignAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedRolePublicId)) return;
+        if (!Guid.TryParse(_selectedRolePublicId, out var rolePid)) return;
+        var resp = await Http.PostAsJsonAsync(
+            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/roles",
+            new { rolePublicId = rolePid });
+        if (resp.IsSuccessStatusCode)
+        {
+            _selectedRolePublicId = null;
+            await LoadUserAsync();
+            await LoadRolesAsync();
+        }
+        else { _error = await resp.Content.ReadAsStringAsync(); }
+    }
+
+    private async Task RemoveAsync(Guid rolePid)
+    {
+        var resp = await Http.DeleteAsync(
+            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/roles/{rolePid}");
+        if (resp.IsSuccessStatusCode)
+        {
+            await LoadUserAsync();
+            await LoadRolesAsync();
+        }
+        else { _error = await resp.Content.ReadAsStringAsync(); }
+    }
+
+    private void Back() => Nav.NavigateTo("/security/users");
+
+    public sealed record RoleItem(Guid PublicId, string Code, string Name);
+
+    public sealed record UserDetailDto(
+        Guid PublicId, string Username, string? Email,
+        IReadOnlyList<RoleItem> Roles);
+
+    public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+}

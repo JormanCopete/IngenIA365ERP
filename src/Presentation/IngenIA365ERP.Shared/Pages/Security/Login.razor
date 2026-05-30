@@ -1,0 +1,82 @@
+@page "/security/login"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject AuthClient AuthClient
+@inject NavigationManager Nav
+
+<PageTitle>Iniciar sesión — IngenIA365ERP</PageTitle>
+
+<div class="auth-card">
+    <h1>Iniciar sesión</h1>
+    <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="login">
+        <DataAnnotationsValidator />
+
+        <label>Cooperativa (subdominio o NIT)</label>
+        <InputText @bind-Value="_model.TenantSubdomainOrNit" autocomplete="username" />
+        <ValidationMessage For="@(() => _model.TenantSubdomainOrNit)" />
+
+        <label>Usuario</label>
+        <InputText @bind-Value="_model.Username" autocomplete="username" />
+        <ValidationMessage For="@(() => _model.Username)" />
+
+        <label>Contraseña</label>
+        <InputText @bind-Value="_model.Password" type="password" autocomplete="current-password" />
+        <ValidationMessage For="@(() => _model.Password)" />
+
+        <button type="submit" disabled="@_busy">Continuar</button>
+    </EditForm>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+</div>
+
+@code {
+    private readonly LoginInput _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await AuthClient.LoginAsync(_model.TenantSubdomainOrNit!, _model.Username!, _model.Password!);
+            if (result is null)
+            {
+                _error = "Usuario o contraseña inválidos.";
+                return;
+            }
+
+            if (result.MustChangePassword)
+            {
+                Nav.NavigateTo($"/security/change-password-required?token={Uri.EscapeDataString(result.MfaChallengeToken)}");
+                return;
+            }
+            Nav.NavigateTo($"/security/mfa-challenge?token={Uri.EscapeDataString(result.MfaChallengeToken)}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public sealed class LoginInput
+    {
+        [Required(ErrorMessage = "La cooperativa es obligatoria.")]
+        public string? TenantSubdomainOrNit { get; set; }
+
+        [Required(ErrorMessage = "El usuario es obligatorio.")]
+        public string? Username { get; set; }
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        public string? Password { get; set; }
+    }
+}

@@ -14,10 +14,24 @@ public class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
         builder.HasIndex(e => e.PublicId).IsUnique();
 
+        builder.Property(e => e.Code).HasMaxLength(40).IsRequired();
         builder.Property(e => e.Name).HasMaxLength(100).IsRequired();
-        builder.HasIndex(e => e.Name).IsUnique();
-
         builder.Property(e => e.Description).HasMaxLength(500);
+
+        // Único por tenant. Para SaaS-global (TenantId NULL), filtro adicional
+        // garantiza que solo un rol con cada Code exista globalmente.
+        builder.HasIndex(e => new { e.TenantId, e.Code })
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("UX_SEC_Roles_Tenant_Code_NotDeleted");
+
+        builder.Property(e => e.IsBuiltIn).HasDefaultValue(false);
+        builder.Property(e => e.IsAssignable).HasDefaultValue(true);
+
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

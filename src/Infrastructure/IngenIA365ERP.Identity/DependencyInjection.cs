@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Identity.Configuration;
+using IngenIA365ERP.Identity.KeyManagement;
 using IngenIA365ERP.Identity.Models;
 using IngenIA365ERP.Identity.Policies;
 using IngenIA365ERP.Identity.Services;
@@ -98,6 +100,14 @@ public static class DependencyInjection
         services.AddScoped<IIdentityAuthenticationService, IdentityAuthenticationService>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IEncryptionService, EncryptionService>();
+
+        // === Fase 0 — US1 ===
+        services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();
+        services.AddSingleton<IAccessTokenIssuer, AccessTokenIssuer>();
+        services.AddSingleton<ITotpService, TotpService>();
+        services.AddSingleton<IMfaBackupCodeGenerator, MfaBackupCodeGenerator>();
+        services.AddScoped<IPasswordPolicyEnforcer, PasswordPolicyEnforcer>();
+        services.AddScoped<IUserPermissionResolver, UserPermissionResolver>();
 
         return services;
     }

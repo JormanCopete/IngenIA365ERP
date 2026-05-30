@@ -20,10 +20,18 @@ public static class DependencyInjection
 
         services.AddScoped<ISaveChangesInterceptor, AuditableEntityInterceptor>();
         services.AddScoped<ISaveChangesInterceptor, SoftDeleteInterceptor>();
+        services.AddScoped<ISaveChangesInterceptor, RowVersionInterceptor>();
 
         // Admin/Tenant management DbContext (lives in IngenIA365ERP_Admin)
         services.AddDbContext<TenantDbContext>(options =>
             options.UseSqlServer(tenantConnectionString));
+
+        // T072 — AdminDbContext sobre la misma BD (IngenIA365ERP_Admin), pero
+        // expuesto a Application como IAdminDbContext para que los handlers
+        // de Tenants/Branches no toquen el ApplicationDbContext operacional.
+        services.AddDbContext<AdminDbContext>(options =>
+            options.UseSqlServer(tenantConnectionString));
+        services.AddScoped<IAdminDbContext>(sp => sp.GetRequiredService<AdminDbContext>());
 
         // Main application DbContext (tenant-scoped)
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
@@ -39,6 +47,10 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<TenantSchemaService>();
+
+        // Directorio de tenants (BD IngenIA365ERP_Admin) accesible desde Application
+        // sin acoplar a EF/Persistence.
+        services.AddScoped<ITenantDirectory, TenantDirectory>();
 
         return services;
     }

@@ -1,0 +1,19 @@
+<div>
+    <h2 style="margin:0 0 12px 0; color:#b00020;">Tu cuenta fue bloqueada</h2>
+    <p>Hola {{UserName}},</p>
+    <p>
+        Detectamos varios intentos de inicio de sesión fallidos en tu cuenta.
+        Por seguridad, tu acceso ha sido bloqueado temporalmente.
+    </p>
+    <p>
+        <strong>Cuenta:</strong> {{Username}}<br/>
+        <strong>Intentos fallidos:</strong> {{FailedAttempts}}<br/>
+        <strong>Última IP:</strong> {{LastIp}}<br/>
+        <strong>Hora (UTC):</strong> {{LockedAt}}
+    </p>
+    <p>
+        El bloqueo se libera automáticamente en 15 minutos, o pueden desbloquearlo
+        manualmente desde el panel de administración (<em>Seguridad → Usuarios → Desbloquear</em>).
+    </p>
+    <p>Si <strong>NO</strong> reconoces estos intentos, contacta a tu administrador inmediatamente.</p>
+</div>

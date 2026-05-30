@@ -1,0 +1,98 @@
+@page "/admin/branches"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Sucursales — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>Sucursales</h1>
+
+    <div class="toolbar">
+        <input type="search" placeholder="Buscar por código o nombre…" @bind="_search" @bind:event="oninput" />
+        <label><input type="checkbox" @bind="_includeInactive" /> incluir inactivas</label>
+        <button class="primary" @onclick="OpenCreate">+ Nueva sucursal</button>
+        <button @onclick="LoadAsync">Refrescar</button>
+    </div>
+
+    @if (_loading) { <p>Cargando…</p> }
+    else if (_error is not null) { <p class="error">@_error</p> }
+    else if (_items.Count == 0) { <p>Sin resultados.</p> }
+    else
+    {
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>Código</th><th>Nombre</th><th>Dirección</th><th>Tel.</th>
+                    <th>Matriz</th><th>Estado</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in _items)
+                {
+                    <tr>
+                        <td>@b.Code</td>
+                        <td>@b.Name</td>
+                        <td>@b.Address</td>
+                        <td>@b.Phone</td>
+                        <td>@(b.IsHeadquarters ? "★" : "")</td>
+                        <td>@(b.IsActive ? "Activa" : "Inactiva")</td>
+                        <td>
+                            <button @onclick="() => Edit(b.PublicId)">Editar</button>
+                            @if (b.IsActive && !b.IsHeadquarters)
+                            {
+                                <button @onclick="() => DeactivateAsync(b.PublicId)">Desactivar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<BranchItem> _items = new();
+    private string _search = string.Empty;
+    private bool _includeInactive;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/branches?search={Uri.EscapeDataString(_search)}&includeInactive={_includeInactive}";
+            var resp = await Http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Error {(int)resp.StatusCode}";
+                return;
+            }
+            var page = await resp.Content.ReadFromJsonAsync<PagedResult<BranchItem>>();
+            _items = page?.Items?.ToList() ?? new();
+        }
+        finally { _loading = false; }
+    }
+
+    private void OpenCreate() => Nav.NavigateTo("/admin/branches/new");
+    private void Edit(Guid publicId) => Nav.NavigateTo($"/admin/branches/{publicId}");
+
+    private async Task DeactivateAsync(Guid publicId)
+    {
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/branches/{publicId}/deactivate", null);
+        if (resp.IsSuccessStatusCode) await LoadAsync();
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    public sealed record BranchItem(
+        Guid PublicId, Guid TenantPublicId, string Code, string Name,
+        string? Address, string? City, string? Department, string? Phone,
+        bool IsActive, bool IsHeadquarters);
+
+    public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+}

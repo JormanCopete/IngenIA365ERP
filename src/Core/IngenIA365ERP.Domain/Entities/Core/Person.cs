@@ -223,5 +223,5 @@ public class Person : AuditableEntity
     public ICollection<Beneficiary> Beneficiaries { get; set; } = [];
     public ICollection<Reference> References { get; set; } = [];
     public ICollection<CommitteeMember> CommitteeMemberships { get; set; } = [];
-    public ICollection<Notification> Notifications { get; set; } = [];
+    // Notifications now reference users by RecipientUserPublicId (not Person FK).
 }

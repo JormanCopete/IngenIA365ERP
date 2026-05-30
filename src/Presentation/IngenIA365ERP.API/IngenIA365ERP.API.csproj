@@ -18,5 +18,6 @@
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Identity\IngenIA365ERP.Identity.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Caching\IngenIA365ERP.Caching.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
   </ItemGroup>
 </Project>

@@ -130,8 +130,7 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
             .HasForeignKey(r => r.PersonId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(e => e.CommitteeMemberships).WithOne(cm => cm.Person)
             .HasForeignKey(cm => cm.PersonId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasMany(e => e.Notifications).WithOne(n => n.RecipientPerson)
-            .HasForeignKey(n => n.RecipientPersonId).OnDelete(DeleteBehavior.Restrict);
+        // Notifications quedan asociadas por RecipientUserPublicId (US6) — sin FK a Person.
 
         // Audit
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
