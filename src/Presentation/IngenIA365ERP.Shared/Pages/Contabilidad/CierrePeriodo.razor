@@ -149,7 +149,7 @@
             _preview = await Http.GetFromJsonAsync<PeriodPreview>(
                 $"/api/accounting/periods/{_year}/{_month}/close-preview");
 
-            _trialBalance = await Http.GetFromJsonAsync<List<TrialBalanceLine>>(
+            _trialBalance = await Http.GetListAsync<TrialBalanceLine>(
                 $"/api/accounting/trial-balance/{_year}/{_month}");
         }
         catch

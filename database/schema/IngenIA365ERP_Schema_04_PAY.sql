@@ -102,6 +102,9 @@ CREATE TABLE [dbo].[PAY_Employees] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_Employees] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_Employees_PublicId] UNIQUE (PublicId)
 );
@@ -156,6 +159,9 @@ CREATE TABLE [dbo].[PAY_PayrollConcepts] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PayrollConcepts] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PayrollConcepts_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PayrollConcepts_ConceptCode] UNIQUE (ConceptCode)
@@ -185,6 +191,9 @@ CREATE TABLE [dbo].[PAY_PayrollPlanLiquidations] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PayrollPlanLiquidations] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PayrollPlanLiquidations_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PayrollPlanLiquidations_Biz] UNIQUE (PayPeriodId, PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
@@ -211,6 +220,9 @@ CREATE TABLE [dbo].[PAY_PayrollTransactions] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PayrollTransactions] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PayrollTransactions_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PayrollTransactions_Biz] UNIQUE (PayPeriodId, PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
@@ -239,6 +251,9 @@ CREATE TABLE [dbo].[PAY_PayrollEntries] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PayrollEntries] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PayrollEntries_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PayrollEntries_Biz] UNIQUE (Cycle, PayrollCompanyId, EmployeeId)
@@ -260,6 +275,9 @@ CREATE TABLE [dbo].[PAY_SalaryChanges] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_SalaryChanges] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_SalaryChanges_PublicId] UNIQUE (PublicId)
 );
@@ -297,6 +315,9 @@ CREATE TABLE [dbo].[PAY_PayPeriods] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PayPeriods] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PayPeriods_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PayPeriods_Biz] UNIQUE (PlanId, PayrollCompanyId)
@@ -329,6 +350,9 @@ CREATE TABLE [dbo].[PAY_Absences] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_Absences] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_Absences_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_Absences_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
@@ -363,6 +387,9 @@ CREATE TABLE [dbo].[PAY_DirectDebits] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_DirectDebits] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_DirectDebits_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_DirectDebits_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber)
@@ -383,6 +410,9 @@ CREATE TABLE [dbo].[PAY_SeveranceProviders] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_SeveranceProviders] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_SeveranceProviders_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_SeveranceProviders_Code] UNIQUE (Code)
@@ -415,6 +445,9 @@ CREATE TABLE [dbo].[PAY_SeveranceHistory] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_SeveranceHistory] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_SeveranceHistory_PublicId] UNIQUE (PublicId)
 );
@@ -449,6 +482,9 @@ CREATE TABLE [dbo].[PAY_VacationLiquidations] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_VacationLiquidations] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_VacationLiquidations_PublicId] UNIQUE (PublicId)
 );
@@ -539,6 +575,9 @@ CREATE TABLE [dbo].[PAY_PreLiquidations] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PreLiquidations] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PreLiquidations_PublicId] UNIQUE (PublicId)
 );
@@ -569,6 +608,9 @@ CREATE TABLE [dbo].[PAY_PreLiquidationResponses] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PreLiquidationResponses] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PreLiquidationResponses_PublicId] UNIQUE (PublicId)
 );
@@ -613,6 +655,9 @@ CREATE TABLE [dbo].[PAY_EmployeeLiquidationMasters] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_EmployeeLiquidationMasters] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_EmployeeLiquidationMasters_PublicId] UNIQUE (PublicId)
 );
@@ -635,6 +680,9 @@ CREATE TABLE [dbo].[PAY_EmployeeLiquidationDetails] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_EmployeeLiquidationDetails] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_EmployeeLiquidationDetails_PublicId] UNIQUE (PublicId)
 );
@@ -661,6 +709,9 @@ CREATE TABLE [dbo].[PAY_AccountingEntries] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_AccountingEntries] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_AccountingEntries_PublicId] UNIQUE (PublicId)
 );
@@ -680,6 +731,9 @@ CREATE TABLE [dbo].[PAY_ConceptAccounts] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_ConceptAccounts] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_ConceptAccounts_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_ConceptAccounts_Biz] UNIQUE (ConceptId, CostCenterId)
@@ -725,6 +779,9 @@ CREATE TABLE [dbo].[PAY_BookBalances] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_BookBalances] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_BookBalances_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_BookBalances_Biz] UNIQUE (PayrollCompanyId, EmployeeId, ConceptId, SequenceNumber, PeriodYear)
@@ -745,6 +802,9 @@ CREATE TABLE [dbo].[PAY_WithholdingCauses] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_WithholdingCauses] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_WithholdingCauses_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_WithholdingCauses_Code] UNIQUE (Code)
@@ -765,6 +825,9 @@ CREATE TABLE [dbo].[PAY_WithholdingParameters] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_WithholdingParameters] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_WithholdingParameters_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_WithholdingParameters_Biz] UNIQUE (PayrollCompanyId, UvtRangeStart, UvtRangeEnd)
@@ -785,6 +848,9 @@ CREATE TABLE [dbo].[PAY_HealthInsuranceProviders] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_HealthInsuranceProviders] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_HealthInsuranceProviders_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_HealthInsuranceProviders_Code] UNIQUE (Code)
@@ -806,6 +872,9 @@ CREATE TABLE [dbo].[PAY_WorkRiskProviders] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_WorkRiskProviders] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_WorkRiskProviders_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_WorkRiskProviders_Code] UNIQUE (Code)
@@ -825,6 +894,9 @@ CREATE TABLE [dbo].[PAY_WorkRiskRates] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_WorkRiskRates] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_WorkRiskRates_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_WorkRiskRates_Code] UNIQUE (Code)
@@ -845,6 +917,9 @@ CREATE TABLE [dbo].[PAY_PensionProviders] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_PensionProviders] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_PensionProviders_PublicId] UNIQUE (PublicId),
     CONSTRAINT [UK_PAY_PensionProviders_Code] UNIQUE (Code)
@@ -882,6 +957,9 @@ CREATE TABLE [dbo].[PAY_TaxCertificates] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_TaxCertificates] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_TaxCertificates_PublicId] UNIQUE (PublicId)
 );
@@ -940,6 +1018,9 @@ CREATE TABLE [dbo].[PAY_AutoContributionParams] (
     CreatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
     UpdatedAt                   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     UpdatedBy                   NVARCHAR(50) NOT NULL DEFAULT N'',
+    IsDeleted                   BIT NOT NULL DEFAULT 0,
+    DeletedAt                   DATETIME2 NULL,
+    DeletedBy                   NVARCHAR(100) NULL,
     CONSTRAINT [PK_PAY_AutoContributionParams] PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT [UK_PAY_AutoContributionParams_PublicId] UNIQUE (PublicId)
 );

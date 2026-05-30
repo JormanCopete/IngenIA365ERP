@@ -1,0 +1,108 @@
+@page "/security/users"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Usuarios — IngenIA365ERP</PageTitle>
+
+<div class="admin-page">
+    <h1>Usuarios</h1>
+
+    <div class="toolbar">
+        <input type="search" placeholder="Buscar usuario o correo…" @bind="_search" @bind:event="oninput" />
+        <label><input type="checkbox" @bind="_includeDisabled" /> incluir deshabilitados</label>
+        <button class="primary" @onclick="OpenCreate">+ Nuevo usuario</button>
+        <button @onclick="LoadAsync">Refrescar</button>
+    </div>
+
+    @if (_loading) { <p>Cargando…</p> }
+    else if (_error is not null) { <p class="error">@_error</p> }
+    else if (_items.Count == 0) { <p>Sin resultados.</p> }
+    else
+    {
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>Usuario</th><th>Email</th><th>Estado</th><th>MFA</th>
+                    <th>Bloqueado</th><th>Roles</th><th>Último login</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in _items)
+                {
+                    <tr>
+                        <td>@u.Username</td>
+                        <td>@u.Email</td>
+                        <td>@(u.IsActive ? "Activo" : "Inactivo")</td>
+                        <td>@(u.IsMfaEnabled ? "Sí" : "No")</td>
+                        <td>@(u.IsLocked ? "Sí" : "")</td>
+                        <td>@string.Join(", ", u.RoleCodes)</td>
+                        <td>@u.LastLoginAt?.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <button @onclick="() => Edit(u.PublicId)">Editar</button>
+                            <button @onclick="() => Roles(u.PublicId)">Roles</button>
+                            @if (u.IsLocked)
+                            {
+                                <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
+                            }
+                            @if (u.IsActive)
+                            {
+                                <button @onclick="() => DisableAsync(u.PublicId)">Deshabilitar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<UserItem> _items = new();
+    private string _search = string.Empty;
+    private bool _includeDisabled;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/users?search={Uri.EscapeDataString(_search)}&includeDisabled={_includeDisabled}";
+            var resp = await Http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Error {(int)resp.StatusCode}";
+                return;
+            }
+            var page = await resp.Content.ReadFromJsonAsync<PagedResult<UserItem>>();
+            _items = page?.Items?.ToList() ?? new();
+        }
+        finally { _loading = false; }
+    }
+
+    private void OpenCreate() => Nav.NavigateTo("/security/users/new");
+    private void Edit(Guid id) => Nav.NavigateTo($"/security/users/{id}");
+    private void Roles(Guid id) => Nav.NavigateTo($"/security/users/{id}/roles");
+
+    private async Task UnlockAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/unlock");
+    private async Task DisableAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/disable");
+
+    private async Task PostAsync(string path)
+    {
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}{path}", null);
+        if (resp.IsSuccessStatusCode) await LoadAsync();
+        else _error = await resp.Content.ReadAsStringAsync();
+    }
+
+    public sealed record UserItem(
+        Guid PublicId, string Username, string? Email,
+        bool IsActive, bool IsMfaEnabled, bool IsLocked,
+        DateTime? LastLoginAt, IReadOnlyList<string> RoleCodes);
+
+    public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+}

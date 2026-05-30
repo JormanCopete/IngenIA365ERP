@@ -1,5 +1,6 @@
 @page "/maestros/actividades-culturales"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
@@ -8,21 +9,24 @@
 
 <div class="page-header">
     <h3>Actividades Culturales</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Actividad</SfButton>
 </div>
 
-<SfGrid @ref="_grid" TValue="CulturalActivityItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+<SfGrid @ref="_grid" TValue="ActivityRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
-        <GridColumn Field="CommitteeName" HeaderText="Comite" Width="200" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        <GridColumn Field="@nameof(ActivityRow.Name)" HeaderText="Nombre" Width="280" />
+        <GridColumn Field="@nameof(ActivityRow.ShortName)" HeaderText="Nombre Corto" Width="180" />
+        <GridColumn Field="@nameof(ActivityRow.CommitteeName)" HeaderText="Comite" Width="200" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
-                    var item = context as CulturalActivityItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    var a = context as ActivityRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(a!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(a!))" Title="Eliminar" />
                 }
             </Template>
         </GridColumn>
@@ -32,123 +36,230 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la actividad"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                    <div>
+                        <label>Nombre Corto</label>
+                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                    </div>
+                    <div>
+                        <label>Comite</label>
+                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                        @bind-Value="_model.CommitteePublicId"
+                                        DataSource="@_committees"
+                                        Placeholder="Seleccione comite (opcional)"
+                                        AllowFiltering="true"
+                                        ShowClearButton="true">
+                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                        </SfDropDownList>
+                        <small style="color:#888;font-size:11px;">
+                            Si no aparecen comites, primero registre uno en
+                            <a href="/maestros/comites" target="_blank">Maestros - Comites</a>.
+                        </small>
+                    </div>
                 </div>
-                <div>
-                    <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
-                </div>
-                <div>
-                    <label>Comite</label>
-                    <SfDropDownList TValue="Guid?" TItem="CommitteeOption" DataSource="@_committees"
-                        @bind-Value="_model.CommitteeId" Placeholder="Seleccione comite">
-                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
-                    </SfDropDownList>
-                </div>
-            </div>
+                <button type="submit" id="actividades-submit" style="display:none"></button>
+            </EditForm>
         </Content>
     </DialogTemplates>
     <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
+               Message="¿Esta seguro de eliminar esta actividad?" />
 
 @code {
-    private SfGrid<CulturalActivityItem>? _grid;
-    private List<CulturalActivityItem> _items = [];
-    private List<CommitteeOption> _committees = [];
-    private CulturalActivityModel _model = new();
-    private Guid? _editId;
-    private bool _showDialog, _showConfirm;
+    private SfGrid<ActivityRow>? _grid;
+    private List<ActivityRow> _items = new();
+    private List<LookupOption> _committees = new();
+
+    private bool _showDialog, _showConfirm, _saving;
     private string _dialogTitle = "";
+    private ActivityModel _model = new();
+    private Guid? _editId;
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadCommittees();
-        await LoadData();
-    }
-
-    private async Task LoadData()
-    {
-        try { _items = await Http.GetFromJsonAsync<List<CulturalActivityItem>>("/api/core/cultural-activities?pageSize=500") ?? []; }
-        catch { _items = []; }
+        await Task.WhenAll(LoadCommittees(), LoadData());
     }
 
     private async Task LoadCommittees()
     {
-        try { _committees = await Http.GetFromJsonAsync<List<CommitteeOption>>("/api/core/committees?pageSize=500") ?? []; }
-        catch { _committees = []; }
+        try
+        {
+            _committees = (await Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500"))
+                .Select(c => new LookupOption(c.PublicId, c.Name)).ToList();
+        }
+        catch { _committees = new List<LookupOption>(); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Actividad Cultural"; _showDialog = true; }
-
-    private void OpenEdit(CulturalActivityItem item)
+    private async Task LoadData()
     {
-        _model = new() { Name = item.Name, ShortName = item.ShortName, CommitteeId = item.CommitteeId };
-        _editId = item.PublicId;
+        try
+        {
+            _items = await Http.GetListAsync<ActivityRow>("/api/core/cultural-activities?PageNumber=1&PageSize=500");
+        }
+        catch (Exception ex)
+        {
+            _items = new List<ActivityRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar las actividades: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new ActivityModel();
+        _editId = null;
+        _dialogTitle = "Nueva Actividad Cultural";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(ActivityRow row)
+    {
+        _model = new ActivityModel
+        {
+            Name = row.Name,
+            ShortName = row.ShortName,
+            CommitteePublicId = row.CommitteePublicId
+        };
+        _editId = row.PublicId;
         _dialogTitle = "Editar Actividad Cultural";
         _showDialog = true;
     }
 
-    private void OpenDelete(CulturalActivityItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+    private void OpenDelete(ActivityRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new ActivityModel();
+        _editId = null;
+    }
 
     private async Task Save()
     {
-        HttpResponseMessage res;
-        if (_editId.HasValue)
-            res = await Http.PutAsJsonAsync($"/api/core/cultural-activities/{_editId}", _model);
-        else
-            res = await Http.PostAsJsonAsync("/api/core/cultural-activities", _model);
+        if (_saving) return;
 
-        if (res.IsSuccessStatusCode)
+        if (string.IsNullOrWhiteSpace(_model.Name))
         {
-            await Notification.SuccessAsync("Registro guardado");
-            _showDialog = false;
-            await LoadData();
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al guardar");
+
+        _saving = true;
+        try
+        {
+            var payload = new
+            {
+                Name = _model.Name,
+                ShortName = _model.ShortName,
+                CommitteePublicId = _model.CommitteePublicId == Guid.Empty ? (Guid?)null : _model.CommitteePublicId
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/cultural-activities/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/cultural-activities", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Actividad actualizada."
+                    : "Actividad creada.");
+                _showDialog = false;
+                _model = new ActivityModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar actividad");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ConfirmDelete()
     {
-        var res = await Http.DeleteAsync($"/api/core/cultural-activities/{_deleteId}");
-        if (res.IsSuccessStatusCode)
+        try
         {
-            await Notification.SuccessAsync("Registro eliminado");
-            await LoadData();
+            var res = await Http.DeleteAsync($"/api/core/cultural-activities/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Actividad eliminada.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar actividad");
+            }
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al eliminar");
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
     }
 
-    private class CulturalActivityItem
+    private class ActivityRow
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
-        public Guid? CommitteeId { get; set; }
+        public Guid? CommitteePublicId { get; set; }
         public string? CommitteeName { get; set; }
     }
 
-    private class CulturalActivityModel
+    private class ActivityModel
     {
+        [Required(ErrorMessage = "Nombre obligatorio.")]
+        [MaxLength(80)]
         public string Name { get; set; } = "";
+
+        [MaxLength(40)]
         public string? ShortName { get; set; }
-        public Guid? CommitteeId { get; set; }
+
+        public Guid? CommitteePublicId { get; set; }
     }
 
-    private class CommitteeOption
+    private class LookupRaw
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
+    }
+
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
     }
 }

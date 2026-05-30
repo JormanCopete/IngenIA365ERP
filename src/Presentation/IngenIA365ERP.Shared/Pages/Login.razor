@@ -92,7 +92,9 @@
             if (response.Success)
             {
                 if (AuthStateProvider is CustomAuthStateProvider custom)
-                    custom.NotifyUserAuthentication(_model.Email);
+                    // Pasamos el token JWT (no el email) — el provider decodifica
+                    // los claims reales (perm, roles) para PermissionGate.
+                    custom.NotifyUserAuthentication(response.Token ?? string.Empty);
                 await Task.Delay(100);
                 Navigation.NavigateTo("/", false);
             }

@@ -27,36 +27,34 @@ namespace IngenIA365ERP.Shared.Services
                 // on this and all subsequent requests.
                 await _tenantService.SetTenantAsync(request.TenantId);
 
-                var apiUrl = AppSettings.Endpoints.Login;
-                var response = await _httpClient.PostAsJsonAsync(apiUrl, request);
+                // Estrategia: intenta primero /api/auth/dev/login (dev one-shot).
+                // Si no está disponible (404 = entorno no-Development), cae al
+                // flujo canónico /login → /mfa/verify.
+                var tokens = await TryDevLoginAsync(request)
+                          ?? await TwoStepLoginAsync(request);
 
-                if (response.IsSuccessStatusCode)
+                if (tokens is null)
                 {
-                    var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
-
-                    if (authResponse is not null && !string.IsNullOrEmpty(authResponse.Tokens.AccessToken))
+                    return new LoginResponse
                     {
-                        await _secureStorage.SetAsync(TokenKey, authResponse.Tokens.AccessToken);
-                        await _secureStorage.SetAsync(RefreshTokenKey, authResponse.Tokens.RefreshToken);
-
-                        return new LoginResponse
-                        {
-                            Success = true,
-                            Token = authResponse.Tokens.AccessToken,
-                            Message = "Login exitoso",
-                            User = new UserInfo
-                            {
-                                Email = authResponse.Email,
-                                Name = authResponse.FullName
-                            }
-                        };
-                    }
+                        Success = false,
+                        Message = "Usuario o contrasena incorrectos"
+                    };
                 }
+
+                await _secureStorage.SetAsync(TokenKey, tokens.AccessToken);
+                await _secureStorage.SetAsync(RefreshTokenKey, tokens.RefreshToken);
 
                 return new LoginResponse
                 {
-                    Success = false,
-                    Message = "Usuario o contrasena incorrectos"
+                    Success = true,
+                    Token = tokens.AccessToken,
+                    Message = "Login exitoso",
+                    User = new UserInfo
+                    {
+                        Email = tokens.User?.Username ?? request.Email,
+                        Name = tokens.User?.Username ?? request.Email
+                    }
                 };
             }
             catch (Exception ex)
@@ -68,6 +66,75 @@ namespace IngenIA365ERP.Shared.Services
                 };
             }
         }
+
+        /// <summary>
+        /// Endpoint dev-only que combina login + mfa/verify en una llamada.
+        /// Devuelve null si responde 404 (no registrado en el entorno) o si
+        /// el body de error indica que MFA está inscrito y debe usarse el
+        /// flujo canónico (Auth.DevLoginRequiresMfa).
+        /// </summary>
+        private async Task<AuthTokensDto?> TryDevLoginAsync(LoginRequest request)
+        {
+            var body = new
+            {
+                tenantSubdomainOrNit = request.TenantId,
+                username = request.Email,
+                email = request.Email,
+                tenantId = request.TenantId,
+                password = request.Password
+            };
+            var response = await _httpClient.PostAsJsonAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/auth/dev/login", body);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<AuthTokensDto>();
+        }
+
+        /// <summary>
+        /// Flujo canónico /login → /mfa/verify. Usa código TOTP dummy "000000"
+        /// y depende de que el usuario tenga MFA deshabilitado (en cuyo caso
+        /// el handler omite la verificación). Si MFA está activo, este método
+        /// devuelve null y la UI debería enrutar al challenge MFA real
+        /// (pendiente — Phase 0 US1 cubrió backend; la UI MFA quedó scaffold).
+        /// </summary>
+        private async Task<AuthTokensDto?> TwoStepLoginAsync(LoginRequest request)
+        {
+            var loginBody = new
+            {
+                tenantSubdomainOrNit = request.TenantId,
+                username = request.Email,
+                email = request.Email,
+                tenantId = request.TenantId,
+                password = request.Password
+            };
+            var loginResp = await _httpClient.PostAsJsonAsync(
+                AppSettings.Endpoints.Login, loginBody);
+            if (!loginResp.IsSuccessStatusCode) return null;
+
+            var challenge = await loginResp.Content.ReadFromJsonAsync<LoginChallengeDto>();
+            if (challenge is null || string.IsNullOrEmpty(challenge.MfaChallengeToken)) return null;
+
+            var verifyBody = new
+            {
+                mfaChallengeToken = challenge.MfaChallengeToken,
+                totpCode = "000000",
+                useBackupCode = false
+            };
+            var verifyResp = await _httpClient.PostAsJsonAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/auth/mfa/verify", verifyBody);
+            if (!verifyResp.IsSuccessStatusCode) return null;
+
+            return await verifyResp.Content.ReadFromJsonAsync<AuthTokensDto>();
+        }
+
+        // DTOs locales para el nuevo contrato (Phase 0 US1).
+        private sealed record LoginChallengeDto(string MfaChallengeToken, bool MustChangePassword);
+        private sealed record AuthTokensDto(
+            string AccessToken,
+            string RefreshToken,
+            DateTime AccessTokenExpiresAt,
+            DateTime RefreshTokenExpiresAt,
+            AuthenticatedUserDto? User);
+        private sealed record AuthenticatedUserDto(Guid PublicId, string Username);
 
         public async Task<bool> LogoutAsync()
         {

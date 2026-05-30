@@ -1,0 +1,188 @@
+@*
+    PersonSearchPicker — buscador inline de personas reutilizable.
+    Uso:
+        <PersonSearchPicker @bind-Selected="_selectedPerson"
+                            OnPersonSelected="HandlePersonSelected" />
+
+    Maneja debounce + GET /api/core/people/search, muestra resultados con badges
+    (Empleado / Asociado / Tercero / etc.) y un chip cuando hay seleccion activa.
+*@
+
+@inject HttpClient Http
+@using System.Net.Http.Json
+
+<div class="person-search-picker">
+    @if (Selected is not null)
+    {
+        @* Persona ya seleccionada — chip con boton para limpiar *@
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--ifx-border, #ccc);border-radius:4px;background:var(--ifx-elevated, #f5f5f5);">
+            <span class="e-badge e-badge-info" style="font-size:11px;">@Selected.IdentificationNumber</span>
+            <strong style="flex:1;">@Selected.FullName</strong>
+            @if (!string.IsNullOrEmpty(Selected.CityName))
+            {
+                <span style="color:#888;font-size:12px;">(@Selected.CityName)</span>
+            }
+            @if (Selected.IsEmployee)
+            {
+                <span class="e-badge e-badge-warning" style="font-size:10px;">Empleado</span>
+            }
+            @if (Selected.IsAssociate)
+            {
+                <span class="e-badge e-badge-success" style="font-size:10px;">Asociado</span>
+            }
+            @if (!HideClearButton)
+            {
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close"
+                          OnClick="HandleClear" Title="Cambiar persona" />
+            }
+        </div>
+    }
+    else
+    {
+        @* Buscador inline *@
+        <SfTextBox @bind-Value="_searchText"
+                   Placeholder="@Placeholder"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+
+        @if (_searching)
+        {
+            <div style="margin-top:4px;font-size:12px;color:#888;">Buscando...</div>
+        }
+        else if (_options.Count > 0)
+        {
+            <div style="margin-top:4px;border:1px solid var(--ifx-border, #ccc);border-radius:4px;max-height:240px;overflow-y:auto;background:var(--ifx-bg, #fff);">
+                @foreach (var p in _options)
+                {
+                    <div @onclick="async () => await HandleSelect(p)"
+                         style="padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--ifx-border, #eee);"
+                         onmouseover="this.style.background='rgba(0,188,212,0.12)'"
+                         onmouseout="this.style.background='transparent'">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <span class="e-badge e-badge-info" style="font-size:10px;">@p.IdentificationNumber</span>
+                                <strong style="margin-left:8px;">@p.FullName</strong>
+                            </div>
+                            <div style="font-size:11px;color:#888;">
+                                @if (!string.IsNullOrEmpty(p.CityName)) { <span>@p.CityName</span> }
+                                @if (p.IsEmployee)  { <span class="e-badge e-badge-warning" style="font-size:10px;margin-left:6px;">Empleado</span> }
+                                @if (p.IsAssociate) { <span class="e-badge e-badge-success" style="font-size:10px;margin-left:6px;">Asociado</span> }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_searchText) && _searchText.Length >= 2)
+        {
+            <div style="margin-top:4px;font-size:12px;color:#888;">
+                Sin resultados. La persona debe estar registrada en
+                <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
+            </div>
+        }
+        else if (ShowHelpText)
+        {
+            <div style="margin-top:4px;font-size:12px;color:#888;">
+                La persona debe estar previamente registrada en
+                <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
+            </div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Persona actualmente seleccionada. Vincular con @bind-Selected.</summary>
+    [Parameter] public PersonSearchItem? Selected { get; set; }
+
+    /// <summary>Callback para two-way binding de Selected.</summary>
+    [Parameter] public EventCallback<PersonSearchItem?> SelectedChanged { get; set; }
+
+    /// <summary>
+    /// Disparado cuando el usuario selecciona una persona del listado.
+    /// Util para que el padre cargue datos relacionados (ej. rol existente).
+    /// </summary>
+    [Parameter] public EventCallback<PersonSearchItem> OnPersonSelected { get; set; }
+
+    /// <summary>Disparado cuando el usuario limpia la seleccion.</summary>
+    [Parameter] public EventCallback OnCleared { get; set; }
+
+    /// <summary>Placeholder del buscador.</summary>
+    [Parameter] public string Placeholder { get; set; } = "Buscar por documento, nombre o apellido (min 2 caracteres)...";
+
+    /// <summary>Si es true, muestra el texto de ayuda inicial cuando no hay busqueda.</summary>
+    [Parameter] public bool ShowHelpText { get; set; } = true;
+
+    /// <summary>Si es true, oculta el boton de limpiar (X) cuando hay persona seleccionada.</summary>
+    [Parameter] public bool HideClearButton { get; set; }
+
+    private string _searchText = "";
+    private bool _searching;
+    private List<PersonSearchItem> _options = new();
+    private System.Threading.CancellationTokenSource? _debounce;
+
+    private async Task OnSearchChanged()
+    {
+        _debounce?.Cancel();
+        _debounce = new System.Threading.CancellationTokenSource();
+        var token = _debounce.Token;
+
+        var term = (_searchText ?? "").Trim();
+        if (term.Length < 2)
+        {
+            _options = new List<PersonSearchItem>();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(300, token);
+            if (token.IsCancellationRequested) return;
+
+            _searching = true;
+            await InvokeAsync(StateHasChanged);
+
+            _options = await Http.GetListAsync<PersonSearchItem>(
+                $"/api/core/people/search?q={Uri.EscapeDataString(term)}");
+        }
+        catch (TaskCanceledException) { /* expected */ }
+        catch
+        {
+            _options = new List<PersonSearchItem>();
+        }
+        finally
+        {
+            _searching = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandleSelect(PersonSearchItem person)
+    {
+        Selected = person;
+        _options = new List<PersonSearchItem>();
+        _searchText = "";
+        await SelectedChanged.InvokeAsync(person);
+        await OnPersonSelected.InvokeAsync(person);
+    }
+
+    private async Task HandleClear()
+    {
+        Selected = null;
+        _options = new List<PersonSearchItem>();
+        _searchText = "";
+        await SelectedChanged.InvokeAsync(null);
+        await OnCleared.InvokeAsync();
+    }
+
+    /// <summary>Resultado de /api/core/people/search.</summary>
+    public class PersonSearchItem
+    {
+        public Guid PublicId { get; set; }
+        public string IdentificationNumber { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public bool IsAssociate { get; set; }
+        public bool IsEmployee { get; set; }
+        public bool IsThirdParty { get; set; }
+        public string? CityName { get; set; }
+        public string? Status { get; set; }
+    }
+}

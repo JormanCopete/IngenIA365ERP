@@ -1,5 +1,6 @@
 @page "/maestros/deportes"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
@@ -8,21 +9,24 @@
 
 <div class="page-header">
     <h3>Deportes</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Deporte</SfButton>
 </div>
 
-<SfGrid @ref="_grid" TValue="SportItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+<SfGrid @ref="_grid" TValue="SportRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
-        <GridColumn Field="CommitteeName" HeaderText="Comite" Width="200" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        <GridColumn Field="@nameof(SportRow.Name)" HeaderText="Nombre" Width="280" />
+        <GridColumn Field="@nameof(SportRow.ShortName)" HeaderText="Nombre Corto" Width="180" />
+        <GridColumn Field="@nameof(SportRow.CommitteeName)" HeaderText="Comite" Width="200" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
-                    var item = context as SportItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    var s = context as SportRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(s!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(s!))" Title="Eliminar" />
                 }
             </Template>
         </GridColumn>
@@ -32,123 +36,232 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del deporte"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                    <div>
+                        <label>Nombre Corto</label>
+                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                    </div>
+                    <div>
+                        <label>Comite</label>
+                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                        @bind-Value="_model.CommitteePublicId"
+                                        DataSource="@_committees"
+                                        Placeholder="Seleccione comite (opcional)"
+                                        AllowFiltering="true"
+                                        ShowClearButton="true">
+                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                        </SfDropDownList>
+                        <small style="color:#888;font-size:11px;">
+                            Si no aparecen comites, primero registre uno en
+                            <a href="/maestros/comites" target="_blank">Maestros - Comites</a>.
+                        </small>
+                    </div>
                 </div>
-                <div>
-                    <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
-                </div>
-                <div>
-                    <label>Comite</label>
-                    <SfDropDownList TValue="Guid?" TItem="CommitteeOption" DataSource="@_committees"
-                        @bind-Value="_model.CommitteeId" Placeholder="Seleccione comite">
-                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
-                    </SfDropDownList>
-                </div>
-            </div>
+                <button type="submit" id="deportes-submit" style="display:none"></button>
+            </EditForm>
         </Content>
     </DialogTemplates>
     <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
+               Message="¿Esta seguro de eliminar este deporte?" />
 
 @code {
-    private SfGrid<SportItem>? _grid;
-    private List<SportItem> _items = [];
-    private List<CommitteeOption> _committees = [];
+    private SfGrid<SportRow>? _grid;
+    private List<SportRow> _items = new();
+    private List<LookupOption> _committees = new();
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
     private SportModel _model = new();
     private Guid? _editId;
-    private bool _showDialog, _showConfirm;
-    private string _dialogTitle = "";
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadCommittees();
-        await LoadData();
-    }
-
-    private async Task LoadData()
-    {
-        try { _items = await Http.GetFromJsonAsync<List<SportItem>>("/api/core/sports?pageSize=500") ?? []; }
-        catch { _items = []; }
+        await Task.WhenAll(LoadCommittees(), LoadData());
     }
 
     private async Task LoadCommittees()
     {
-        try { _committees = await Http.GetFromJsonAsync<List<CommitteeOption>>("/api/core/committees?pageSize=500") ?? []; }
-        catch { _committees = []; }
+        try
+        {
+            _committees = (await Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500"))
+                .Select(c => new LookupOption(c.PublicId, c.Name)).ToList();
+        }
+        catch { _committees = new List<LookupOption>(); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Deporte"; _showDialog = true; }
-
-    private void OpenEdit(SportItem item)
+    private async Task LoadData()
     {
-        _model = new() { Name = item.Name, ShortName = item.ShortName, CommitteeId = item.CommitteeId };
-        _editId = item.PublicId;
+        try
+        {
+            _items = await Http.GetListAsync<SportRow>("/api/core/sports?PageNumber=1&PageSize=500");
+        }
+        catch (Exception ex)
+        {
+            _items = new List<SportRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar los deportes: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new SportModel();
+        _editId = null;
+        _dialogTitle = "Nuevo Deporte";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(SportRow row)
+    {
+        _model = new SportModel
+        {
+            Name = row.Name,
+            ShortName = row.ShortName,
+            CommitteePublicId = row.CommitteePublicId
+        };
+        _editId = row.PublicId;
         _dialogTitle = "Editar Deporte";
         _showDialog = true;
     }
 
-    private void OpenDelete(SportItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+    private void OpenDelete(SportRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new SportModel();
+        _editId = null;
+    }
 
     private async Task Save()
     {
-        HttpResponseMessage res;
-        if (_editId.HasValue)
-            res = await Http.PutAsJsonAsync($"/api/core/sports/{_editId}", _model);
-        else
-            res = await Http.PostAsJsonAsync("/api/core/sports", _model);
+        if (_saving) return;
 
-        if (res.IsSuccessStatusCode)
+        if (string.IsNullOrWhiteSpace(_model.Name))
         {
-            await Notification.SuccessAsync("Registro guardado");
-            _showDialog = false;
-            await LoadData();
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al guardar");
+
+        _saving = true;
+        try
+        {
+            // El backend usa CommitteePublicId (Guid?). Ojo: si era Guid.Empty, lo convertimos a null.
+            var payload = new
+            {
+                Name = _model.Name,
+                ShortName = _model.ShortName,
+                CommitteePublicId = _model.CommitteePublicId == Guid.Empty ? (Guid?)null : _model.CommitteePublicId
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/sports/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/sports", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Deporte actualizado."
+                    : "Deporte creado.");
+                _showDialog = false;
+                _model = new SportModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar deporte");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ConfirmDelete()
     {
-        var res = await Http.DeleteAsync($"/api/core/sports/{_deleteId}");
-        if (res.IsSuccessStatusCode)
+        try
         {
-            await Notification.SuccessAsync("Registro eliminado");
-            await LoadData();
+            var res = await Http.DeleteAsync($"/api/core/sports/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Deporte eliminado.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar deporte");
+            }
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al eliminar");
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
     }
 
-    private class SportItem
+    /// <summary>Coincide con el DTO devuelto por /api/core/sports.</summary>
+    private class SportRow
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
-        public Guid? CommitteeId { get; set; }
+        public Guid? CommitteePublicId { get; set; }
         public string? CommitteeName { get; set; }
     }
 
     private class SportModel
     {
+        [Required(ErrorMessage = "Nombre obligatorio.")]
+        [MaxLength(80)]
         public string Name { get; set; } = "";
+
+        [MaxLength(40)]
         public string? ShortName { get; set; }
-        public Guid? CommitteeId { get; set; }
+
+        public Guid? CommitteePublicId { get; set; }
     }
 
-    private class CommitteeOption
+    private class LookupRaw
     {
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
+    }
+
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
     }
 }

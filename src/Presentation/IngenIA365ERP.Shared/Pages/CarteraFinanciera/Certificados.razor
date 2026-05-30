@@ -93,7 +93,7 @@
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CertificateRow>>("api/cdt/certificates/near-expiry?daysAhead=30");
+            var items = await Http.GetListAsync<CertificateRow>("api/cdt/certificates/near-expiry?daysAhead=30");
             _certificates = items ?? [];
             _statusFilter = "";
             await Notification.InfoAsync($"Mostrando {_certificates.Count} certificado(s) proximos a vencer.");

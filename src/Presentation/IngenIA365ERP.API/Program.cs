@@ -3,6 +3,7 @@ using Carter;
 using IngenIA365ERP.API.Middleware;
 using IngenIA365ERP.API.Services;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application;
 using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
@@ -10,6 +11,11 @@ using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.Seed;
 using IngenIA365ERP.Persistence;
+using IngenIA365ERP.Storage;
+using IngenIA365ERP.Caching;
+using IngenIA365ERP.API.Hubs;
+using IngenIA365ERP.API.HealthChecks;
+using Microsoft.OpenApi;  // En OpenApi 2.x los tipos se movieron de Microsoft.OpenApi.Models a la raiz Microsoft.OpenApi
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -31,35 +37,29 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {
-        options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+        options.SwaggerDoc("v1", new OpenApiInfo
         {
             Title = "IngenIA365ERP API",
             Version = "v1",
             Description = "API para el ERP Financiero IngenIA365ERP"
         });
 
-        // JWT Bearer in Swagger
-        options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        // JWT Bearer in Swagger.
+        // Microsoft.OpenApi 2.x removio OpenApiSecurityScheme.Reference; ahora se usa
+        // OpenApiSecuritySchemeReference y AddSecurityRequirement con delegate (document =>).
+        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header. Ejemplo: 'Bearer {token}'",
             Name = "Authorization",
-            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-            Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.Http,
+            BearerFormat = "JWT",
             Scheme = "Bearer"
         });
-        options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
         {
-            {
-                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-                {
-                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                    {
-                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
+            // El value type del diccionario en OpenApi 2.x es List<string>, no string[].
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
         });
     });
 
@@ -90,9 +90,20 @@ try
     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
     builder.Services.AddSingleton<ICurrentUserService, CurrentUserService>();
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
+    // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
+    builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
 
     // === Identity & Security ===
     builder.Services.AddIdentityServices(builder.Configuration);
+
+    // T052/T058 — MFA challenge + enrollment stores en memoria (fallback dev).
+    // Producción usa los respaldos en Redis vía AddCachingServices.
+    builder.Services.AddSingleton<IMfaChallengeStore, InMemoryMfaChallengeStore>();
+    builder.Services.AddSingleton<IMfaEnrollmentStore, InMemoryMfaEnrollmentStore>();
+    builder.Services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+    // T075 — cache de permisos efectivos (fallback dev). En producción
+    // AddCachingServices registra el RedisPermissionClaimsCache.
+    builder.Services.AddSingleton<IPermissionClaimsCache, InMemoryPermissionClaimsCache>();
 
     // === Rate Limiting ===
     builder.Services.AddMemoryCache();
@@ -140,8 +151,18 @@ try
     builder.Services.AddPersistenceServices(builder.Configuration);
     // builder.Services.AddCachingServices(builder.Configuration);  // Using MemoryCacheService instead of Redis for local dev
 
-    // Health checks
-    builder.Services.AddHealthChecks();
+    // T030 — Email (MailKit) y T025/T030a — Storage abstractions.
+    builder.Services.AddStorageServices(builder.Configuration);
+
+    // T031 — SignalR para el push de notificaciones in-app.
+    builder.Services.AddSignalR();
+    // T120 — Implementación SignalR de INotificationPusher (US6).
+    builder.Services.AddScoped<
+        IngenIA365ERP.Application.Notifications.Contracts.INotificationPusher,
+        IngenIA365ERP.API.Hubs.SignalRNotificationPusher>();
+
+    // T136 — Health checks: /health/live (proceso) y /health/ready (deps).
+    builder.Services.AddIngenIaHealthChecks(builder.Configuration);
 
     var app = builder.Build();
 
@@ -152,7 +173,28 @@ try
     // Seed Identity data (roles, permissions, admin user)
     if (app.Environment.IsDevelopment())
     {
-        await IdentitySeedData.SeedAsync(app.Services);
+        // Seeder legacy ASP.NET Identity (AspNetUsers/AspNetRoles). El flujo
+        // Phase 0+ vive en SEC_Users/SEC_Roles, no en estas tablas — el
+        // seeder se mantiene solo para retro-compatibilidad con código
+        // legacy que aún consume Identity. Su fallo NO debe derribar el
+        // host: si la BD de Identity está rara, logueamos y continuamos.
+        try
+        {
+            await IdentitySeedData.SeedAsync(app.Services);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex,
+                "IdentitySeedData (legacy ASP.NET Identity) falló al sembrar. " +
+                "El flujo Phase 0+ no depende de estas tablas — el host continúa.");
+        }
+
+        // T066/T067 (US2) — primero el catálogo y los roles built-in,
+        // para que DomainSecuritySeedData pueda asignar CompanyAdmin al admin.
+        await DomainPermissionCatalogSeeder.SeedAsync(app.Services);
+        await BuiltInRolesSeeder.SeedAsync(app.Services);
+        // Seed paralelo para SEC_Users (tabla de dominio usada por el flujo Phase 0/US1).
+        await DomainSecuritySeedData.SeedAsync(app.Services);
     }
 
     // Configure the HTTP request pipeline
@@ -160,6 +202,11 @@ try
     {
         app.UseSwagger();
         app.UseSwaggerUI();
+    }
+    else
+    {
+        // T137 — HSTS solo en prod (en dev HTTP local rompería).
+        app.UseHsts();
     }
 
     app.UseSecurityHeaders();
@@ -170,12 +217,18 @@ try
     app.UseTenantResolution();
     app.UseAuthentication();
     app.UseAuthorization();
+    // T074 — convierte cualquier 404 bajo /api/* en el envelope canónico,
+    // haciendo indistinguible "endpoint no existe" vs "no tienes permiso".
+    app.UseNotFoundEnvelope();
 
     // Map Carter endpoints
     app.MapCarter();
 
+    // T031 — Hub de notificaciones (autenticación JWT obligatoria por [Authorize]).
+    app.MapHub<NotificationsHub>("/hubs/notifications");
+
     // Health check endpoint
-    app.MapHealthChecks("/api/health");
+    app.MapIngenIaHealthChecks();
 
     app.Run();
 }

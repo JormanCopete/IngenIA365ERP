@@ -1,5 +1,6 @@
 @page "/maestros/agencias"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
@@ -12,16 +13,19 @@
 </div>
 
 <SfGrid @ref="_grid" TValue="BranchItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="200" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        <GridColumn Field="@nameof(BranchItem.Name)" HeaderText="Nombre" Width="320" />
+        <GridColumn Field="@nameof(BranchItem.ShortName)" HeaderText="Nombre Corto" Width="200" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
                     var item = context as BranchItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(item!))" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(item!))" />
                 }
             </Template>
         </GridColumn>
@@ -31,33 +35,42 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                    <div>
+                        <label>Nombre Corto</label>
+                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                        <ValidationMessage For="@(() => _model.ShortName)" />
+                    </div>
                 </div>
-                <div>
-                    <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
-                </div>
-            </div>
+                @* Submit oculto: permite ENTER y dispara OnValidSubmit con validacion *@
+                <button type="submit" id="agencias-submit" style="display:none"></button>
+            </EditForm>
         </Content>
     </DialogTemplates>
     <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
+               Message="¿Esta seguro de eliminar esta agencia?" />
 
 @code {
     private SfGrid<BranchItem>? _grid;
-    private List<BranchItem> _items = [];
-    private BranchItem _model = new();
+    private List<BranchItem> _items = new();
+    private BranchModel _model = new();
     private Guid? _editId;
-    private bool _showDialog, _showConfirm;
+    private bool _showDialog, _showConfirm, _saving;
     private string _dialogTitle = "";
     private Guid _deleteId;
 
@@ -65,48 +78,162 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<BranchItem>>("/api/core/branches?pageSize=500") ?? []; }
-        catch { _items = []; }
+        try
+        {
+            // GetListAsync (extension en HttpClientListExtensions) deserializa indistintamente
+            // PagedList<T> { items: [...] } o un array plano.
+            _items = await Http.GetListAsync<BranchItem>(
+                "/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        }
+        catch (Exception ex)
+        {
+            _items = new List<BranchItem>();
+            await Notification.ErrorAsync($"No se pudieron cargar las agencias: {ex.Message}");
+        }
+        finally
+        {
+            // Forza el repintado del grid con el nuevo DataSource.
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null)
+                await _grid.Refresh();
+        }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Agencia"; _showDialog = true; }
-    private void OpenEdit(BranchItem item) { _model = new() { Name = item.Name, ShortName = item.ShortName }; _editId = item.PublicId; _dialogTitle = "Editar Agencia"; _showDialog = true; }
-    private void OpenDelete(BranchItem item) { _deleteId = item.PublicId; _showConfirm = true; }
+    private void OpenCreate()
+    {
+        _model = new BranchModel();
+        _editId = null;
+        _dialogTitle = "Nueva Agencia";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(BranchItem item)
+    {
+        _model = new BranchModel
+        {
+            Name = item.Name,
+            ShortName = item.ShortName
+        };
+        _editId = item.PublicId;
+        _dialogTitle = "Editar Agencia";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(BranchItem item)
+    {
+        _deleteId = item.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new BranchModel();
+        _editId = null;
+    }
 
     private async Task Save()
     {
-        HttpResponseMessage res;
-        if (_editId.HasValue)
-            res = await Http.PutAsJsonAsync($"/api/core/branches/{_editId}", _model);
-        else
-            res = await Http.PostAsJsonAsync("/api/core/branches", _model);
+        if (_saving) return;
 
-        if (res.IsSuccessStatusCode)
+        // Validacion cliente minima (alineada al CreateBranchCommandValidator del backend).
+        if (string.IsNullOrWhiteSpace(_model.Name))
         {
-            await Notification.SuccessAsync("Registro guardado");
-            _showDialog = false;
-            await LoadData();
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al guardar");
+        if (_model.Name.Length > 80)
+        {
+            await Notification.WarningAsync("El nombre no puede superar 80 caracteres.");
+            return;
+        }
+        if (!string.IsNullOrEmpty(_model.ShortName) && _model.ShortName.Length > 40)
+        {
+            await Notification.WarningAsync("El nombre corto no puede superar 40 caracteres.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+            {
+                // El endpoint completa el PublicId desde la ruta, asi que basta enviar el cuerpo.
+                res = await Http.PutAsJsonAsync($"/api/core/branches/{_editId}", _model);
+            }
+            else
+            {
+                res = await Http.PostAsJsonAsync("/api/core/branches", _model);
+            }
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Agencia actualizada correctamente."
+                    : "Agencia creada correctamente.");
+                _showDialog = false;
+                _editId = null;
+                _model = new BranchModel();
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar la agencia");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado al guardar: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ConfirmDelete()
     {
-        var res = await Http.DeleteAsync($"/api/core/branches/{_deleteId}");
-        if (res.IsSuccessStatusCode)
+        try
         {
-            await Notification.SuccessAsync("Registro eliminado");
-            await LoadData();
+            var res = await Http.DeleteAsync($"/api/core/branches/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Agencia eliminada correctamente.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar la agencia");
+            }
         }
-        else
-            await Notification.ShowErrorAsync(res, "Error al eliminar");
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado al eliminar: {ex.Message}");
+        }
     }
 
+    /// <summary>
+    /// Modelo enviado al endpoint POST/PUT. Coincide con CreateBranchCommand y UpdateBranchCommand.
+    /// Anotaciones espejo del CreateBranchCommandValidator (FluentValidation) en el backend.
+    /// </summary>
+    private class BranchModel
+    {
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        [MaxLength(80, ErrorMessage = "El nombre no puede superar 80 caracteres.")]
+        public string Name { get; set; } = string.Empty;
+
+        [MaxLength(40, ErrorMessage = "El nombre corto no puede superar 40 caracteres.")]
+        public string? ShortName { get; set; }
+    }
+
+    /// <summary>
+    /// Vista que pinta la grilla. Coincide con BranchDto.
+    /// </summary>
     private class BranchItem
     {
         public Guid PublicId { get; set; }
-        public string Name { get; set; } = "";
+        public string Name { get; set; } = string.Empty;
         public string? ShortName { get; set; }
     }
 }

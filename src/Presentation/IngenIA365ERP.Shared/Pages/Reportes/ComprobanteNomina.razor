@@ -148,7 +148,7 @@ else if (!_loading && _searched)
     {
         try
         {
-            _employees = await Http.GetFromJsonAsync<List<EmployeeOption>>("/api/payroll/employees/active") ?? [];
+            _employees = await Http.GetListAsync<EmployeeOption>("/api/payroll/employees/active") ?? [];
         }
         catch
         {

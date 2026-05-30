@@ -7,11 +7,11 @@ namespace IngenIA365ERP.Identity.Services;
 
 public interface IIdentityAuthenticationService
 {
-    Task<Result<AuthResponse>> LoginAsync(LoginCommand command, string ipAddress, string userAgent);
-    Task<Result> LogoutAsync(int userId);
-    Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenCommand command);
-    Task<Result> ChangePasswordAsync(ChangePasswordCommand command);
-    Task<Result> ResetPasswordAsync(ResetPasswordCommand command);
+    Task<IdentityOpResult<AuthResponse>> LoginAsync(LoginCommand command, string ipAddress, string userAgent);
+    Task<IdentityOpResult> LogoutAsync(int userId);
+    Task<IdentityOpResult<AuthResponse>> RefreshTokenAsync(RefreshTokenCommand command);
+    Task<IdentityOpResult> ChangePasswordAsync(ChangePasswordCommand command);
+    Task<IdentityOpResult> ResetPasswordAsync(ResetPasswordCommand command);
 }
 
 public record LoginCommand(string Email, string Password, string TenantId);
@@ -19,16 +19,16 @@ public record RefreshTokenCommand(string AccessToken, string RefreshToken);
 public record ChangePasswordCommand(int UserId, string CurrentPassword, string NewPassword);
 public record ResetPasswordCommand(string Email, string TenantId, string NewPassword);
 
-public record Result(bool Succeeded, string? Error = null)
+public record IdentityOpResult(bool Succeeded, string? Error = null)
 {
-    public static Result Success() => new(true);
-    public static Result Failure(string error) => new(false, error);
+    public static IdentityOpResult Success() => new(true);
+    public static IdentityOpResult Failure(string error) => new(false, error);
 }
 
-public record Result<T>(bool Succeeded, T? Data = default, string? Error = null)
+public record IdentityOpResult<T>(bool Succeeded, T? Data = default, string? Error = null)
 {
-    public static Result<T> Success(T data) => new(true, data);
-    public static Result<T> Failure(string error) => new(false, default, error);
+    public static IdentityOpResult<T> Success(T data) => new(true, data);
+    public static IdentityOpResult<T> Failure(string error) => new(false, default, error);
 }
 
 public class IdentityAuthenticationService : IIdentityAuthenticationService
@@ -56,7 +56,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         _logger = logger;
     }
 
-    public async Task<Result<AuthResponse>> LoginAsync(LoginCommand command, string ipAddress, string userAgent)
+    public async Task<IdentityOpResult<AuthResponse>> LoginAsync(LoginCommand command, string ipAddress, string userAgent)
     {
         var user = await _userManager.Users
             .FirstOrDefaultAsync(u => u.Email == command.Email && u.TenantId == command.TenantId);
@@ -64,7 +64,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         if (user is null)
         {
             await RecordLoginAttempt(command.Email, command.TenantId, ipAddress, userAgent, false, "User not found");
-            return Result<AuthResponse>.Failure("Credenciales inválidas.");
+            return IdentityOpResult<AuthResponse>.Failure("Credenciales inválidas.");
         }
 
         // Check lockout
@@ -72,7 +72,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         {
             await RecordLoginAttempt(command.Email, command.TenantId, ipAddress, userAgent, false, "Account locked");
             var remainingMinutes = (int)(user.LockedUntil.Value - DateTime.UtcNow).TotalMinutes + 1;
-            return Result<AuthResponse>.Failure($"Cuenta bloqueada. Intente de nuevo en {remainingMinutes} minutos.");
+            return IdentityOpResult<AuthResponse>.Failure($"Cuenta bloqueada. Intente de nuevo en {remainingMinutes} minutos.");
         }
 
         // Verify password
@@ -88,13 +88,13 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
             }
             await _userManager.UpdateAsync(user);
             await RecordLoginAttempt(command.Email, command.TenantId, ipAddress, userAgent, false, "Invalid password");
-            return Result<AuthResponse>.Failure("Credenciales inválidas.");
+            return IdentityOpResult<AuthResponse>.Failure("Credenciales inválidas.");
         }
 
         if (!user.IsActive)
         {
             await RecordLoginAttempt(command.Email, command.TenantId, ipAddress, userAgent, false, "Account inactive");
-            return Result<AuthResponse>.Failure("Cuenta desactivada. Contacte al administrador.");
+            return IdentityOpResult<AuthResponse>.Failure("Cuenta desactivada. Contacte al administrador.");
         }
 
         // Successful login
@@ -118,7 +118,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
 
         _logger.LogInformation("Successful login for user {Email} in tenant {TenantId}", command.Email, command.TenantId);
 
-        return Result<AuthResponse>.Success(new AuthResponse(
+        return IdentityOpResult<AuthResponse>.Success(new AuthResponse(
             user.PublicId,
             user.FullName,
             user.Email ?? string.Empty,
@@ -129,37 +129,37 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
             tokens));
     }
 
-    public async Task<Result> LogoutAsync(int userId)
+    public async Task<IdentityOpResult> LogoutAsync(int userId)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null)
-            return Result.Failure("Usuario no encontrado.");
+            return IdentityOpResult.Failure("Usuario no encontrado.");
 
         user.RefreshToken = null;
         user.RefreshTokenExpiry = null;
         await _userManager.UpdateAsync(user);
 
         _logger.LogInformation("User {UserId} logged out", userId);
-        return Result.Success();
+        return IdentityOpResult.Success();
     }
 
-    public async Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenCommand command)
+    public async Task<IdentityOpResult<AuthResponse>> RefreshTokenAsync(RefreshTokenCommand command)
     {
         var principal = _jwtService.ValidateExpiredToken(command.AccessToken);
         if (principal is null)
-            return Result<AuthResponse>.Failure("Token de acceso inválido.");
+            return IdentityOpResult<AuthResponse>.Failure("Token de acceso inválido.");
 
         var userIdStr = principal.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
         if (userIdStr is null || !int.TryParse(userIdStr, out var userId))
-            return Result<AuthResponse>.Failure("Token de acceso inválido.");
+            return IdentityOpResult<AuthResponse>.Failure("Token de acceso inválido.");
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null || !user.IsActive)
-            return Result<AuthResponse>.Failure("Usuario no encontrado o inactivo.");
+            return IdentityOpResult<AuthResponse>.Failure("Usuario no encontrado o inactivo.");
 
         // Validate stored refresh token
         if (user.RefreshToken != command.RefreshToken || user.RefreshTokenExpiry < DateTime.UtcNow)
-            return Result<AuthResponse>.Failure("Refresh token inválido o expirado.");
+            return IdentityOpResult<AuthResponse>.Failure("Refresh token inválido o expirado.");
 
         var roles = await _userManager.GetRolesAsync(user);
         var permissions = await _permissionService.GetPermissionsAsync(user.Id);
@@ -171,7 +171,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         user.RefreshTokenExpiry = tokens.RefreshTokenExpiry;
         await _userManager.UpdateAsync(user);
 
-        return Result<AuthResponse>.Success(new AuthResponse(
+        return IdentityOpResult<AuthResponse>.Success(new AuthResponse(
             user.PublicId,
             user.FullName,
             user.Email ?? string.Empty,
@@ -182,36 +182,36 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
             tokens));
     }
 
-    public async Task<Result> ChangePasswordAsync(ChangePasswordCommand command)
+    public async Task<IdentityOpResult> ChangePasswordAsync(ChangePasswordCommand command)
     {
         var user = await _userManager.FindByIdAsync(command.UserId.ToString());
         if (user is null)
-            return Result.Failure("Usuario no encontrado.");
+            return IdentityOpResult.Failure("Usuario no encontrado.");
 
         var result = await _userManager.ChangePasswordAsync(user, command.CurrentPassword, command.NewPassword);
         if (!result.Succeeded)
-            return Result.Failure(string.Join(", ", result.Errors.Select(e => e.Description)));
+            return IdentityOpResult.Failure(string.Join(", ", result.Errors.Select(e => e.Description)));
 
         user.MustChangePassword = false;
         user.UpdatedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
         _logger.LogInformation("Password changed for user {UserId}", command.UserId);
-        return Result.Success();
+        return IdentityOpResult.Success();
     }
 
-    public async Task<Result> ResetPasswordAsync(ResetPasswordCommand command)
+    public async Task<IdentityOpResult> ResetPasswordAsync(ResetPasswordCommand command)
     {
         var user = await _userManager.Users
             .FirstOrDefaultAsync(u => u.Email == command.Email && u.TenantId == command.TenantId);
 
         if (user is null)
-            return Result.Failure("Usuario no encontrado.");
+            return IdentityOpResult.Failure("Usuario no encontrado.");
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, token, command.NewPassword);
         if (!result.Succeeded)
-            return Result.Failure(string.Join(", ", result.Errors.Select(e => e.Description)));
+            return IdentityOpResult.Failure(string.Join(", ", result.Errors.Select(e => e.Description)));
 
         user.MustChangePassword = true;
         user.FailedLoginAttempts = 0;
@@ -220,7 +220,7 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         await _userManager.UpdateAsync(user);
 
         _logger.LogInformation("Password reset for user {Email} in tenant {TenantId}", command.Email, command.TenantId);
-        return Result.Success();
+        return IdentityOpResult.Success();
     }
 
     private async Task RecordLoginAttempt(string email, string tenantId, string ipAddress, string userAgent, bool success, string? failureReason)

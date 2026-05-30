@@ -1,0 +1,53 @@
+@page "/security/mfa-reset-approvals"
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject AuthClient AuthClient
+
+<PageTitle>Aprobaciones de reset MFA — IngenIA365ERP</PageTitle>
+
+<h1>Aprobar solicitud de reset MFA</h1>
+<p>Necesita dos aprobaciones distintas para ejecutarse. El solicitante no puede aprobarse a sí mismo.</p>
+
+<EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="mfa-reset-approve">
+    <DataAnnotationsValidator />
+
+    <label>PublicId de la solicitud</label>
+    <InputText @bind-Value="_model.RequestPublicId" />
+    <ValidationMessage For="@(() => _model.RequestPublicId)" />
+
+    <button type="submit" disabled="@_busy">Aprobar</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(_status))
+{
+    <p>Estado: <strong>@_status</strong></p>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@code {
+    private readonly Input _model = new();
+    private bool _busy;
+    private string? _error;
+    private string? _status;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null; _status = null;
+        try
+        {
+            if (!Guid.TryParse(_model.RequestPublicId, out var id)) { _error = "PublicId inválido."; return; }
+            var status = await AuthClient.ApproveMfaResetAsync(id);
+            if (status is null) { _error = "No fue posible registrar la aprobación."; return; }
+            _status = status;
+        }
+        finally { _busy = false; }
+    }
+
+    public sealed class Input
+    {
+        [Required] public string? RequestPublicId { get; set; }
+    }
+}

@@ -2,6 +2,7 @@ using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
+using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Inventory;
@@ -47,6 +48,13 @@ public interface IApplicationDbContext
     DbSet<EmployerCompany> EmployerCompanies { get; }
     DbSet<Advisor> Advisors { get; }
     DbSet<PaymentMethod> PaymentMethods { get; }
+    DbSet<Attachment> Attachments { get; }
+    DbSet<Notification> Notifications { get; }
+    DbSet<NotificationDeliveryFailure> NotificationDeliveryFailures { get; }
+
+    // Compliance — Habeas data (US7)
+    DbSet<HabeasDataPolicyVersion> HabeasDataPolicyVersions { get; }
+    DbSet<HabeasDataConsent> HabeasDataConsents { get; }
 
     // Accounting
     DbSet<ChartOfAccount> ChartOfAccounts { get; }
@@ -172,9 +180,21 @@ public interface IApplicationDbContext
     // Security
     DbSet<User> Users { get; }
     DbSet<Role> Roles { get; }
+    DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<LoginAttempt> LoginAttempts { get; }
+    DbSet<UserTenantAssignment> UserTenantAssignments { get; }
+    DbSet<UserBranchAssignment> UserBranchAssignments { get; }
+    DbSet<PasswordPolicy> PasswordPolicies { get; }
+    DbSet<PasswordHistory> PasswordHistory { get; }
+    DbSet<MfaBackupCode> MfaBackupCodes { get; }
+    DbSet<MfaResetRequest> MfaResetRequests { get; }
+    DbSet<Permission> Permissions { get; }
+    DbSet<RolePermission> RolePermissions { get; }
+    DbSet<UserRole> UserRoles { get; }
 
     // Admin
     DbSet<Tenant> Tenants { get; }
+    DbSet<TenantBranch> TenantBranches { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

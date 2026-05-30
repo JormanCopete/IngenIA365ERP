@@ -15,12 +15,21 @@ public class AttachmentConfiguration : IEntityTypeConfiguration<Attachment>
         builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_Attachments_PublicId");
 
-        builder.Property(e => e.EntityType).HasMaxLength(100).IsRequired();
-        builder.Property(e => e.EntityId).IsRequired();
+        builder.Property(e => e.TenantId).IsRequired();
+        builder.Property(e => e.OwnerEntityType).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.OwnerEntityPublicId).IsRequired();
         builder.Property(e => e.FileName).HasMaxLength(500).IsRequired();
-        builder.Property(e => e.ContentType).HasMaxLength(200);
+        builder.Property(e => e.ContentType).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.SizeBytes).IsRequired();
+        builder.Property(e => e.Sha256Hex).HasMaxLength(64).IsRequired();
         builder.Property(e => e.StoragePath).HasMaxLength(2000).IsRequired();
         builder.Property(e => e.StorageProvider).HasMaxLength(50).IsRequired().HasDefaultValue("Local");
+        builder.Property(e => e.EncryptedDek).HasMaxLength(1000).IsRequired();
+
+        // Índice combinado por owner — el patrón de consulta es "lista los
+        // adjuntos del User X" → (TenantId, OwnerEntityType, OwnerEntityPublicId).
+        builder.HasIndex(e => new { e.TenantId, e.OwnerEntityType, e.OwnerEntityPublicId })
+            .HasDatabaseName("IX_COR_Attachments_Owner");
 
         // Audit
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");

@@ -1,0 +1,756 @@
+@page "/maestros/personas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Personas - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <h3>Personas</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfTextBox Placeholder="Buscar por documento, nombre, razon social..." @bind-Value="_search"
+                   Width="320px"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        <SfDropDownList TValue="string" TItem="RoleFilterOption"
+                        @bind-Value="_roleFilter"
+                        DataSource="@_roleFilters"
+                        Width="160px"
+                        Placeholder="Filtrar por rol">
+            <DropDownListFieldSettings Text="Name" Value="Value" />
+            <DropDownListEvents TValue="string" TItem="RoleFilterOption"
+                                ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, RoleFilterOption> e) => LoadData())" />
+        </SfDropDownList>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Persona</SfButton>
+    </div>
+</div>
+
+<SfGrid @ref="_grid" TValue="PersonRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="@nameof(PersonRow.IdType)" HeaderText="Tipo Doc." Width="90" TextAlign="TextAlign.Center" />
+        <GridColumn Field="@nameof(PersonRow.TaxId)" HeaderText="Documento" Width="130" />
+        <GridColumn Field="@nameof(PersonRow.FullName)" HeaderText="Nombre / Razon Social" Width="280" />
+        <GridColumn Field="@nameof(PersonRow.Email)" HeaderText="Correo" Width="200" />
+        <GridColumn Field="@nameof(PersonRow.Mobile)" HeaderText="Movil" Width="130" />
+        <GridColumn Field="@nameof(PersonRow.CityName)" HeaderText="Ciudad" Width="140" />
+        <GridColumn HeaderText="Roles" Width="170" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+            <Template>
+                @{
+                    var p = context as PersonRow;
+                    @if (p?.IsAssociate == true) { <span class="e-badge e-badge-success" style="font-size:10px;margin-right:3px;">Asociado</span> }
+                    @if (p?.IsEmployee == true) { <span class="e-badge e-badge-warning" style="font-size:10px;margin-right:3px;">Empleado</span> }
+                    @if (p?.IsThirdParty == true) { <span class="e-badge e-badge-info" style="font-size:10px;margin-right:3px;">Tercero</span> }
+                    @if (p?.IsAdvisor == true) { <span class="e-badge" style="font-size:10px;margin-right:3px;">Asesor</span> }
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="130" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+            <Template>
+                @{
+                    var p = context as PersonRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(p!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(p!))" Title="Eliminar" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+@* ===== Dialog Create / Edit ===== *@
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="900px"
+          IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+
+                <SfTab>
+                    <TabItems>
+                        @* --- Tab: Identificacion --- *@
+                        <TabItem>
+                            <ChildContent><TabHeader Text="Identificacion" /></ChildContent>
+                            <ContentTemplate>
+                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                    <div>
+                                        <label>Tipo Documento <span style="color:red">*</span></label>
+                                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                                        @bind-Value="_model.IdType"
+                                                        DataSource="@_idTypes"
+                                                        Placeholder="Seleccione">
+                                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                                        </SfDropDownList>
+                                    </div>
+                                    <div>
+                                        <label>Numero Documento <span style="color:red">*</span></label>
+                                        <SfTextBox @bind-Value="_model.TaxId" Placeholder="Numero de identificacion"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
+                                        <ValidationMessage For="@(() => _model.TaxId)" />
+                                    </div>
+                                    <div>
+                                        <label>Digito Verificacion (NIT)</label>
+                                        <SfTextBox @bind-Value="_model.TaxIdCheckDigit" Placeholder="DV"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Tipo Persona</label>
+                                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                                        @bind-Value="_model.PersonType"
+                                                        DataSource="@_personTypes"
+                                                        Placeholder="Natural / Juridica">
+                                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                                        </SfDropDownList>
+                                    </div>
+                                    <div>
+                                        <label>Nombres <span style="color:red">*</span></label>
+                                        <SfTextBox @bind-Value="_model.FirstName" Placeholder="Nombres"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
+                                        <ValidationMessage For="@(() => _model.FirstName)" />
+                                    </div>
+                                    <div>
+                                        <label>Apellidos <span style="color:red">*</span></label>
+                                        <SfTextBox @bind-Value="_model.LastName" Placeholder="Apellidos"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
+                                        <ValidationMessage For="@(() => _model.LastName)" />
+                                    </div>
+                                    <div style="grid-column:span 2;">
+                                        <label>Razon Social (si aplica)</label>
+                                        <SfTextBox @bind-Value="_model.BusinessName" Placeholder="Razon social comercial"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Lugar de Expedicion</label>
+                                        <SfTextBox @bind-Value="_model.IdIssuedAt" Placeholder="Ej: Cali"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Fecha de Expedicion</label>
+                                        <SfDatePicker TValue="DateTime?" @bind-Value="_model.IdIssueDateDt"
+                                                      Format="dd/MM/yyyy" Placeholder="dd/mm/aaaa" />
+                                    </div>
+                                </div>
+                            </ContentTemplate>
+                        </TabItem>
+
+                        @* --- Tab: Contacto --- *@
+                        <TabItem>
+                            <ChildContent><TabHeader Text="Contacto" /></ChildContent>
+                            <ContentTemplate>
+                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                    <div style="grid-column:span 2;">
+                                        <label>Direccion</label>
+                                        <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion residencial / comercial"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Ciudad</label>
+                                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                                        @bind-Value="_model.CityPublicId"
+                                                        DataSource="@_cities"
+                                                        Placeholder="Seleccione ciudad"
+                                                        AllowFiltering="true">
+                                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                        </SfDropDownList>
+                                    </div>
+                                    <div>
+                                        <label>Correo Electronico</label>
+                                        <SfTextBox @bind-Value="_model.Email" Placeholder="usuario@dominio.com"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
+                                        <ValidationMessage For="@(() => _model.Email)" />
+                                    </div>
+                                    <div>
+                                        <label>Telefono Principal</label>
+                                        <SfTextBox @bind-Value="_model.Phone1" Placeholder="Telefono fijo"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Telefono Secundario</label>
+                                        <SfTextBox @bind-Value="_model.Phone2" Placeholder="Telefono alterno"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
+                                    </div>
+                                    <div>
+                                        <label>Movil</label>
+                                        <SfTextBox @bind-Value="_model.Mobile" Placeholder="Celular"
+                                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "30" } })" />
+                                    </div>
+                                </div>
+                            </ContentTemplate>
+                        </TabItem>
+
+                        @* --- Tab: Demografia --- *@
+                        <TabItem>
+                            <ChildContent><TabHeader Text="Demografia" /></ChildContent>
+                            <ContentTemplate>
+                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                    <div>
+                                        <label>Genero</label>
+                                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                                        @bind-Value="_model.Gender"
+                                                        DataSource="@_genders"
+                                                        Placeholder="Seleccione">
+                                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                                        </SfDropDownList>
+                                    </div>
+                                    <div>
+                                        <label>Estado Civil</label>
+                                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                                        @bind-Value="_model.MaritalStatus"
+                                                        DataSource="@_maritalStatuses"
+                                                        Placeholder="Seleccione">
+                                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                                        </SfDropDownList>
+                                    </div>
+                                    <div>
+                                        <label>Fecha de Nacimiento</label>
+                                        <SfDatePicker TValue="DateTime?" @bind-Value="_model.DateOfBirthDt"
+                                                      Format="dd/MM/yyyy" Placeholder="dd/mm/aaaa"
+                                                      Max="DateTime.Today" />
+                                    </div>
+                                    <div>
+                                        <label>Nivel Educativo</label>
+                                        <SfDropDownList TValue="string" TItem="CodeOption"
+                                                        @bind-Value="_model.EducationLevel"
+                                                        DataSource="@_educationLevels"
+                                                        Placeholder="Seleccione">
+                                            <DropDownListFieldSettings Text="Name" Value="Value" />
+                                        </SfDropDownList>
+                                    </div>
+                                </div>
+                            </ContentTemplate>
+                        </TabItem>
+
+                        @* --- Tab: Roles --- *@
+                        <TabItem>
+                            <ChildContent><TabHeader Text="Roles" /></ChildContent>
+                            <ContentTemplate>
+                                <div style="padding:16px;">
+                                    <p style="color:#888;font-size:12px;margin-bottom:16px;">
+                                        Marque los roles que aplican a esta persona. La especializacion de cada rol
+                                        (datos de asociado, datos laborales, datos del vendedor) se administra en
+                                        sus modulos correspondientes (Asociados, Empleados, Vendedores).
+                                    </p>
+                                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsAssociate" Label="Asociado" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsEmployee" Label="Empleado (interno cooperativa)" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsCustomer" Label="Cliente" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsSupplier" Label="Proveedor" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsAdvisor" Label="Asesor Comercial" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsSalesperson" Label="Vendedor" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.IsThirdParty" Label="Tercero contable" />
+                                        </div>
+                                        <div>
+                                            <SfCheckBox @bind-Checked="_model.ReceivesInvoice" Label="Recibe Factura Electronica" />
+                                        </div>
+                                        <div>
+                                            <label>Estado</label>
+                                            <SfDropDownList TValue="string" TItem="CodeOption"
+                                                            @bind-Value="_model.Status"
+                                                            DataSource="@_statuses"
+                                                            Placeholder="Seleccione">
+                                                <DropDownListFieldSettings Text="Name" Value="Value" />
+                                            </SfDropDownList>
+                                        </div>
+                                    </div>
+                                </div>
+                            </ContentTemplate>
+                        </TabItem>
+                    </TabItems>
+                </SfTab>
+
+                <button type="submit" id="personas-submit" style="display:none"></button>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+               Message="¿Esta seguro de eliminar esta persona? Esta accion no se puede deshacer." />
+
+@code {
+    private SfGrid<PersonRow>? _grid;
+    private List<PersonRow> _items = new();
+    private string _search = "";
+    private string _roleFilter = "";
+    private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
+    private PersonModel _model = new();
+    private Guid? _editId;
+    private Guid _deleteId;
+
+    // Lookups
+    private List<LookupOption> _cities = new();
+
+    private List<RoleFilterOption> _roleFilters = new()
+    {
+        new("", "Todos"),
+        new("associate", "Asociados"),
+        new("employee", "Empleados"),
+        new("thirdparty", "Terceros"),
+        new("advisor", "Asesores")
+    };
+
+    private List<CodeOption> _idTypes = new()
+    {
+        new("C", "Cedula de Ciudadania"),
+        new("CE", "Cedula de Extranjeria"),
+        new("TI", "Tarjeta de Identidad"),
+        new("RC", "Registro Civil"),
+        new("NI", "NIT"),
+        new("PA", "Pasaporte"),
+        new("PE", "Permiso Especial")
+    };
+
+    private List<CodeOption> _personTypes = new()
+    {
+        new("01", "Natural"),
+        new("02", "Juridica")
+    };
+
+    private List<CodeOption> _genders = new()
+    {
+        new("M", "Masculino"),
+        new("F", "Femenino"),
+        new("O", "Otro")
+    };
+
+    private List<CodeOption> _maritalStatuses = new()
+    {
+        new("S", "Soltero(a)"),
+        new("C", "Casado(a)"),
+        new("U", "Union Libre"),
+        new("D", "Divorciado(a)"),
+        new("V", "Viudo(a)")
+    };
+
+    private List<CodeOption> _educationLevels = new()
+    {
+        new("PR", "Primaria"),
+        new("BA", "Bachillerato"),
+        new("TE", "Tecnico"),
+        new("TG", "Tecnologico"),
+        new("PG", "Profesional"),
+        new("ES", "Especializacion"),
+        new("MA", "Maestria"),
+        new("DR", "Doctorado")
+    };
+
+    private List<CodeOption> _statuses = new()
+    {
+        new("A", "Activo"),
+        new("I", "Inactivo"),
+        new("R", "Retirado")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            LoadCities(),
+            LoadData()
+        );
+    }
+
+    private async Task LoadCities()
+    {
+        try
+        {
+            _cities = (await Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000"))
+                .Select(c => new LookupOption(c.PublicId, c.Name)).ToList();
+        }
+        catch { _cities = new List<LookupOption>(); }
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = $"/api/core/people?PageNumber=1&PageSize=500";
+            if (!string.IsNullOrWhiteSpace(_search)) url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
+
+            switch (_roleFilter)
+            {
+                case "associate": url += "&IsAssociate=true"; break;
+                case "employee": url += "&IsEmployee=true"; break;
+                case "thirdparty": url += "&IsThirdParty=true"; break;
+                case "advisor": url += "&IsAdvisor=true"; break;
+            }
+
+            _items = await Http.GetListAsync<PersonRow>(url);
+        }
+        catch (Exception ex)
+        {
+            _items = new List<PersonRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar las personas: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce = new System.Threading.CancellationTokenSource();
+        var token = _searchDebounce.Token;
+        try
+        {
+            await Task.Delay(350, token);
+            if (!token.IsCancellationRequested) await LoadData();
+        }
+        catch (TaskCanceledException) { /* expected */ }
+    }
+
+    // ---------- Create / Edit ----------
+
+    private void OpenCreate()
+    {
+        _model = new PersonModel { IdType = "C", Status = "A", PersonType = "01" };
+        _editId = null;
+        _dialogTitle = "Nueva Persona";
+        _showDialog = true;
+    }
+
+    private async Task OpenEdit(PersonRow row)
+    {
+        try
+        {
+            var p = await Http.GetFromJsonAsync<PersonEditDto>($"/api/core/people/{row.PublicId}");
+            if (p is null)
+            {
+                await Notification.ErrorAsync("No se pudieron cargar los datos de la persona.");
+                return;
+            }
+
+            _model = new PersonModel
+            {
+                IdType = p.IdType,
+                TaxId = p.TaxId,
+                TaxIdCheckDigit = p.TaxIdCheckDigit,
+                IdIssuedAt = p.IdIssuedAt,
+                IdIssueDateDt = p.IdIssueDate?.ToDateTime(TimeOnly.MinValue),
+                FirstName = p.FirstName,
+                LastName = p.LastName,
+                BusinessName = p.BusinessName,
+                PersonType = p.PersonType,
+                Address = p.Address,
+                Phone1 = p.Phone1,
+                Phone2 = p.Phone2,
+                Mobile = p.Mobile,
+                Email = p.Email,
+                CityPublicId = p.CityPublicId,
+                Gender = p.Gender,
+                MaritalStatus = p.MaritalStatus,
+                DateOfBirthDt = p.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+                EducationLevel = p.EducationLevel,
+                IsAssociate = p.IsAssociate,
+                IsEmployee = p.IsEmployee,
+                IsThirdParty = p.IsThirdParty,
+                IsAdvisor = p.IsAdvisor,
+                IsCustomer = p.IsCustomer,
+                IsSupplier = p.IsSupplier,
+                IsSalesperson = p.IsSalesperson,
+                ReceivesInvoice = p.ReceivesInvoice,
+                Status = p.Status ?? "A"
+            };
+            _editId = row.PublicId;
+            _dialogTitle = $"Editar Persona: {p.FirstName} {p.LastName}";
+            _showDialog = true;
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error al cargar persona: {ex.Message}");
+        }
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new PersonModel();
+        _editId = null;
+    }
+
+    private async Task Save()
+    {
+        if (_saving) return;
+
+        // Validacion cliente alineada al backend.
+        if (string.IsNullOrWhiteSpace(_model.TaxId))
+        {
+            await Notification.WarningAsync("El numero de identificacion es obligatorio.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.FirstName))
+        {
+            await Notification.WarningAsync("Los nombres son obligatorios.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.LastName))
+        {
+            await Notification.WarningAsync("Los apellidos son obligatorios.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            // Payload coincide con CreatePersonCommand / UpdatePersonCommand
+            var payload = new
+            {
+                IdType = _model.IdType,
+                TaxId = _model.TaxId,
+                TaxIdCheckDigit = _model.TaxIdCheckDigit,
+                IdIssuedAt = _model.IdIssuedAt,
+                IdIssueDate = _model.IdIssueDateDt.HasValue
+                    ? DateOnly.FromDateTime(_model.IdIssueDateDt.Value).ToString("yyyy-MM-dd")
+                    : null,
+                FirstName = _model.FirstName,
+                LastName = _model.LastName,
+                BusinessName = _model.BusinessName,
+                PersonType = _model.PersonType,
+                Address = _model.Address,
+                Phone1 = _model.Phone1,
+                Phone2 = _model.Phone2,
+                Mobile = _model.Mobile,
+                Email = _model.Email,
+                CityPublicId = _model.CityPublicId,
+                Gender = _model.Gender,
+                MaritalStatus = _model.MaritalStatus,
+                DateOfBirth = _model.DateOfBirthDt.HasValue
+                    ? DateOnly.FromDateTime(_model.DateOfBirthDt.Value).ToString("yyyy-MM-dd")
+                    : null,
+                EducationLevel = _model.EducationLevel,
+                IsAssociate = _model.IsAssociate,
+                IsEmployee = _model.IsEmployee,
+                IsThirdParty = _model.IsThirdParty,
+                IsAdvisor = _model.IsAdvisor,
+                IsCustomer = _model.IsCustomer,
+                IsSupplier = _model.IsSupplier,
+                IsSalesperson = _model.IsSalesperson,
+                ReceivesInvoice = _model.ReceivesInvoice,
+                Status = _model.Status
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/people/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/people", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Persona actualizada correctamente."
+                    : "Persona creada correctamente.");
+                _showDialog = false;
+                _model = new PersonModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar persona");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ---------- Delete ----------
+
+    private void OpenDelete(PersonRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"/api/core/people/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Persona eliminada.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar persona");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+    }
+
+    // ---------- Models ----------
+
+    /// <summary>Coincide con PersonListItemDto.</summary>
+    private class PersonRow
+    {
+        public Guid PublicId { get; set; }
+        public string TaxId { get; set; } = "";
+        public string IdType { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string? BusinessName { get; set; }
+        public string FullName { get; set; } = "";
+        public string? Email { get; set; }
+        public string? Phone1 { get; set; }
+        public string? Mobile { get; set; }
+        public string? CityName { get; set; }
+        public bool IsAssociate { get; set; }
+        public bool IsEmployee { get; set; }
+        public bool IsThirdParty { get; set; }
+        public bool IsAdvisor { get; set; }
+        public string? Status { get; set; }
+    }
+
+    /// <summary>Coincide con PersonEditDto.</summary>
+    private class PersonEditDto
+    {
+        public Guid PublicId { get; set; }
+        public string IdType { get; set; } = "";
+        public string TaxId { get; set; } = "";
+        public string? TaxIdCheckDigit { get; set; }
+        public string? IdIssuedAt { get; set; }
+        public DateOnly? IdIssueDate { get; set; }
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string? BusinessName { get; set; }
+        public string? PersonType { get; set; }
+        public string? Address { get; set; }
+        public string? Phone1 { get; set; }
+        public string? Phone2 { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public Guid? CityPublicId { get; set; }
+        public string? CityName { get; set; }
+        public string? Gender { get; set; }
+        public string? MaritalStatus { get; set; }
+        public DateOnly? DateOfBirth { get; set; }
+        public string? EducationLevel { get; set; }
+        public bool IsAssociate { get; set; }
+        public bool IsEmployee { get; set; }
+        public bool IsThirdParty { get; set; }
+        public bool IsAdvisor { get; set; }
+        public bool IsCustomer { get; set; }
+        public bool IsSupplier { get; set; }
+        public bool IsSalesperson { get; set; }
+        public bool ReceivesInvoice { get; set; }
+        public string? Status { get; set; }
+    }
+
+    /// <summary>Modelo del formulario. Se serializa al payload del comando.</summary>
+    private class PersonModel
+    {
+        [Required(ErrorMessage = "Tipo de documento obligatorio.")]
+        public string IdType { get; set; } = "C";
+
+        [Required(ErrorMessage = "Numero de documento obligatorio.")]
+        [MaxLength(20)]
+        public string TaxId { get; set; } = "";
+
+        [MaxLength(2)]
+        public string? TaxIdCheckDigit { get; set; }
+
+        [MaxLength(40)]
+        public string? IdIssuedAt { get; set; }
+
+        public DateTime? IdIssueDateDt { get; set; }
+
+        [Required(ErrorMessage = "Nombres obligatorios.")]
+        [MaxLength(150)]
+        public string FirstName { get; set; } = "";
+
+        [Required(ErrorMessage = "Apellidos obligatorios.")]
+        [MaxLength(150)]
+        public string LastName { get; set; } = "";
+
+        [MaxLength(150)]
+        public string? BusinessName { get; set; }
+
+        public string? PersonType { get; set; } = "01";
+
+        [MaxLength(120)]
+        public string? Address { get; set; }
+
+        [MaxLength(40)]
+        public string? Phone1 { get; set; }
+
+        [MaxLength(40)]
+        public string? Phone2 { get; set; }
+
+        [MaxLength(30)]
+        public string? Mobile { get; set; }
+
+        [EmailAddress(ErrorMessage = "Correo electronico no valido.")]
+        [MaxLength(120)]
+        public string? Email { get; set; }
+
+        public Guid? CityPublicId { get; set; }
+
+        public string? Gender { get; set; }
+        public string? MaritalStatus { get; set; }
+        public DateTime? DateOfBirthDt { get; set; }
+        public string? EducationLevel { get; set; }
+
+        public bool IsAssociate { get; set; }
+        public bool IsEmployee { get; set; }
+        public bool IsThirdParty { get; set; }
+        public bool IsAdvisor { get; set; }
+        public bool IsCustomer { get; set; }
+        public bool IsSupplier { get; set; }
+        public bool IsSalesperson { get; set; }
+        public bool ReceivesInvoice { get; set; }
+
+        public string? Status { get; set; } = "A";
+    }
+
+    private class LookupRaw
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
+    }
+
+    private record CodeOption(string Value, string Name);
+    private record RoleFilterOption(string Value, string Name);
+}

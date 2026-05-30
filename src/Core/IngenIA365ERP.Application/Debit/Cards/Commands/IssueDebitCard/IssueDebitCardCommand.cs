@@ -24,8 +24,9 @@ public class IssueDebitCardCommandHandler(
         IssueDebitCardCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Resolve Person
+        // 1. Resolve Person (Include Associate to get DepositBankId)
         var person = await context.People.AsNoTracking()
+            .Include(p => p.Associate)
             .FirstOrDefaultAsync(p => p.PublicId == request.PersonPublicId && !p.IsDeleted, cancellationToken);
 
         if (person is null)
@@ -67,7 +68,9 @@ public class IssueDebitCardCommandHandler(
             Status = "A", // Activa
             IssueDate = DateOnly.FromDateTime(dateTime.UtcNow),
             ExpiryDate = DateOnly.FromDateTime(dateTime.UtcNow).AddYears(5),
-            BankId = person.BankId ?? 0,
+            // Banca del asociado (decision P5b: Associate.DepositBankId).
+            // Si la persona no es asociado o no tiene banca de deposito, 0.
+            BankId = person.Associate?.DepositBankId ?? 0,
             AvailableBalance = 0,
             DailyAtmLimit = 2000000,
             DailyAtmTransactions = 5,

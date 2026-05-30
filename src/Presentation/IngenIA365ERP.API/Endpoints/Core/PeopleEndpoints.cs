@@ -1,86 +1,63 @@
 using Carter;
+using IngenIA365ERP.Application.Core.People.Commands.CreatePerson;
+using IngenIA365ERP.Application.Core.People.Commands.DeletePerson;
+using IngenIA365ERP.Application.Core.People.Commands.UpdatePerson;
+using IngenIA365ERP.Application.Core.People.Queries;
+using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Core;
 
+/// <summary>
+/// CRUD principal del modulo Maestros - Personas (/api/core/people).
+/// La busqueda libre (autocomplete) y el detalle expandido (con cartera, asociado, etc.)
+/// estan en <see cref="PeopleDetailEndpoints"/>.
+/// </summary>
 public class PeopleEndpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/people").WithTags("People");
+        var group = app.MapGroup("/api/core/people")
+            .WithTags("People")
+            .RequireAuthorization();
 
-        group.MapGet("/", async () =>
+        // GET /api/core/people  -> listado paginado (con filtros por rol)
+        group.MapGet("/", async ([AsParameters] ListPeopleQuery query, ISender sender) =>
         {
-            // TODO: Wire up MediatR query: new GetPeopleQuery()
-            return Results.Ok(new[]
-            {
-                new { PublicId = Guid.NewGuid(), FirstName = "Juan", LastName = "Perez", DocumentNumber = "1234567890" },
-                new { PublicId = Guid.NewGuid(), FirstName = "Maria", LastName = "Garcia", DocumentNumber = "0987654321" }
-            });
-        })
-        .WithName("GetPeople")
-        .Produces(200);
+            var result = await sender.Send(query);
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+        }).WithName("ListPeople");
 
-        group.MapGet("/{publicId:guid}", async (Guid publicId) =>
+        // GET /api/core/people/{id}  -> datos basicos para edicion
+        group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
-            // TODO: Wire up MediatR query: new GetPersonByIdQuery(publicId)
-            return Results.Ok(new
-            {
-                PublicId = publicId,
-                FirstName = "Juan",
-                LastName = "Perez",
-                DocumentNumber = "1234567890",
-                IsAssociate = true,
-                IsEmployee = false
-            });
-        })
-        .WithName("GetPersonById")
-        .Produces(200)
-        .Produces(404);
+            var result = await sender.Send(new GetPersonByIdQuery(id));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
+        }).WithName("GetPersonById");
 
-        group.MapPost("/", async (CreatePersonRequest request) =>
+        // POST /api/core/people  -> crear persona
+        group.MapPost("/", async (CreatePersonCommand command, ISender sender) =>
         {
-            // TODO: Wire up MediatR command: new CreatePersonCommand(request)
-            var publicId = Guid.NewGuid();
-            return Results.Created($"/api/people/{publicId}", new { PublicId = publicId });
-        })
-        .WithName("CreatePerson")
-        .Produces(201)
-        .Produces(400);
+            var result = await sender.Send(command);
+            return result.IsSuccess
+                ? Results.Created($"/api/core/people/{result.Value}", result.Value)
+                : Results.BadRequest(result.Error);
+        }).WithName("CreatePerson");
 
-        group.MapPut("/{publicId:guid}", async (Guid publicId, UpdatePersonRequest request) =>
+        // PUT /api/core/people/{id}  -> actualizar persona
+        group.MapPut("/{id:guid}", async (Guid id, UpdatePersonCommand command, ISender sender) =>
         {
-            // TODO: Wire up MediatR command: new UpdatePersonCommand(publicId, request)
-            return Results.NoContent();
-        })
-        .WithName("UpdatePerson")
-        .Produces(204)
-        .Produces(400)
-        .Produces(404);
+            // Toma el id de la ruta como fuente de verdad.
+            if (command.PublicId != id) command = command with { PublicId = id };
 
-        group.MapDelete("/{publicId:guid}", async (Guid publicId) =>
+            var result = await sender.Send(command);
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        }).WithName("UpdatePerson");
+
+        // DELETE /api/core/people/{id}  -> soft-delete
+        group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
-            // TODO: Wire up MediatR command: new DeletePersonCommand(publicId)
-            return Results.NoContent();
-        })
-        .WithName("DeletePerson")
-        .Produces(204)
-        .Produces(404);
+            var result = await sender.Send(new DeletePersonCommand(id));
+            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
+        }).WithName("DeletePerson");
     }
 }
-
-// Placeholder DTOs - will be moved to Application layer
-public record CreatePersonRequest(
-    string FirstName,
-    string LastName,
-    string DocumentType,
-    string DocumentNumber,
-    bool IsAssociate = false,
-    bool IsEmployee = false);
-
-public record UpdatePersonRequest(
-    string FirstName,
-    string LastName,
-    string DocumentType,
-    string DocumentNumber,
-    bool IsAssociate = false,
-    bool IsEmployee = false);

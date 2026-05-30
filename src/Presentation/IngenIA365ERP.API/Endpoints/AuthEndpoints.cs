@@ -1,117 +1,232 @@
 using Carter;
-using IngenIA365ERP.Identity.Services;
+using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Security.Auth.ChangePassword;
+using IngenIA365ERP.Application.Security.Auth.Common;
+using IngenIA365ERP.Application.Security.Auth.EnrollMfa;
+using IngenIA365ERP.Application.Security.Auth.Login;
+using IngenIA365ERP.Application.Security.Auth.Logout;
+using IngenIA365ERP.Application.Security.Auth.LogoutAll;
+using IngenIA365ERP.Application.Security.Auth.MfaReset;
+using IngenIA365ERP.Application.Security.Auth.RefreshToken;
+using IngenIA365ERP.Application.Security.Auth.RegenerateBackupCodes;
+using IngenIA365ERP.Application.Security.Auth.VerifyMfa;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 
 namespace IngenIA365ERP.API.Endpoints;
 
+/// <summary>
+/// Módulo Carter que materializa los 11 endpoints definidos en
+/// <c>specs/001-cimientos-tecnicos/contracts/auth.md</c>. Cada endpoint
+/// se limita a reenviar al <see cref="ISender"/> de MediatR; toda la lógica
+/// vive en los handlers de <c>IngenIA365ERP.Application.Security.Auth.*</c>.
+/// La envolvente de error la aplica <see cref="ErrorEnvelopeFilter"/>.
+/// </summary>
 public class AuthEndpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/auth").WithTags("Authentication");
+        var group = app.MapGroup("/api/auth")
+            .WithTags("Authentication")
+            .AddEndpointFilter<ErrorEnvelopeFilter>();
 
-        group.MapPost("/login", LoginAsync)
-            .AllowAnonymous()
-            .WithName("Login")
-            .WithDescription("Autenticación de usuario");
+        // === Anónimos ===
+        group.MapPost("/login", LoginAsync).AllowAnonymous().WithName("Auth_Login");
+        group.MapPost("/mfa/verify", VerifyMfaAsync).AllowAnonymous().WithName("Auth_VerifyMfa");
+        group.MapPost("/refresh", RefreshAsync).AllowAnonymous().WithName("Auth_Refresh");
 
-        group.MapPost("/logout", LogoutAsync)
-            .RequireAuthorization()
-            .WithName("Logout")
-            .WithDescription("Cerrar sesión y revocar refresh token");
-
-        group.MapPost("/refresh", RefreshTokenAsync)
-            .AllowAnonymous()
-            .WithName("RefreshToken")
-            .WithDescription("Renovar tokens usando refresh token");
-
-        group.MapPost("/change-password", ChangePasswordAsync)
-            .RequireAuthorization()
-            .WithName("ChangePassword")
-            .WithDescription("Cambiar contraseña del usuario actual");
-
-        group.MapGet("/me", (Delegate)GetCurrentUserAsync)
-            .RequireAuthorization()
-            .WithName("GetCurrentUser")
-            .WithDescription("Obtener datos del usuario autenticado");
-    }
-
-    private static async Task<IResult> LoginAsync(
-        [FromBody] LoginRequest request,
-        IIdentityAuthenticationService authService,
-        HttpContext context)
-    {
-        var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var userAgent = context.Request.Headers.UserAgent.ToString();
-
-        var command = new LoginCommand(request.Email, request.Password, request.TenantId);
-        var result = await authService.LoginAsync(command, ipAddress, userAgent);
-
-        if (!result.Succeeded)
-            return Results.Unauthorized();
-
-        return Results.Ok(result.Data);
-    }
-
-    private static async Task<IResult> LogoutAsync(
-        IIdentityAuthenticationService authService,
-        HttpContext context)
-    {
-        var userIdClaim = context.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-        if (userIdClaim is null || !int.TryParse(userIdClaim.Value, out var userId))
-            return Results.Unauthorized();
-
-        var result = await authService.LogoutAsync(userId);
-        return result.Succeeded ? Results.Ok() : Results.BadRequest(result.Error);
-    }
-
-    private static async Task<IResult> RefreshTokenAsync(
-        [FromBody] RefreshRequest request,
-        IIdentityAuthenticationService authService)
-    {
-        var command = new RefreshTokenCommand(request.AccessToken, request.RefreshToken);
-        var result = await authService.RefreshTokenAsync(command);
-
-        if (!result.Succeeded)
-            return Results.Unauthorized();
-
-        return Results.Ok(result.Data);
-    }
-
-    private static async Task<IResult> ChangePasswordAsync(
-        [FromBody] ChangePasswordRequest request,
-        IIdentityAuthenticationService authService,
-        HttpContext context)
-    {
-        var userIdClaim = context.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-        if (userIdClaim is null || !int.TryParse(userIdClaim.Value, out var userId))
-            return Results.Unauthorized();
-
-        var command = new ChangePasswordCommand(userId, request.CurrentPassword, request.NewPassword);
-        var result = await authService.ChangePasswordAsync(command);
-
-        return result.Succeeded ? Results.Ok() : Results.BadRequest(result.Error);
-    }
-
-    private static Task<IResult> GetCurrentUserAsync(HttpContext context)
-    {
-        var claims = context.User;
-        var response = new
+        // === Dev-only: login en un solo paso (combina login + mfa/verify) ===
+        // Útil para iteración local cuando MFA no está inscrito en el admin sembrado.
+        // No se mapea en Staging/Production.
+        var env = app.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        if (env.IsDevelopment())
         {
-            UserId = claims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value,
-            PublicId = claims.FindFirst("publicId")?.Value,
-            Email = claims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email)?.Value,
-            FullName = claims.FindFirst("fullName")?.Value,
-            TenantId = claims.FindFirst("tenantId")?.Value,
-            Roles = claims.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value),
-            Permissions = claims.FindAll("permission").Select(c => c.Value)
-        };
+            group.MapPost("/dev/login", DevLoginAsync).AllowAnonymous().WithName("Auth_DevLogin");
+        }
 
-        return Task.FromResult(Results.Ok(response));
+        // === Autenticados ===
+        group.MapPost("/logout", LogoutAsync).RequireAuthorization().WithName("Auth_Logout");
+        group.MapPost("/logout-all", LogoutAllAsync).RequireAuthorization().WithName("Auth_LogoutAll");
+
+        group.MapPost("/mfa/enroll/start", EnrollMfaStartAsync).RequireAuthorization().WithName("Auth_EnrollMfaStart");
+        group.MapPost("/mfa/enroll/confirm", EnrollMfaConfirmAsync).RequireAuthorization().WithName("Auth_EnrollMfaConfirm");
+        group.MapPost("/mfa/backup-codes/regenerate", RegenerateBackupCodesAsync).RequireAuthorization().WithName("Auth_RegenerateBackupCodes");
+
+        group.MapPost("/mfa/reset/request", RequestMfaResetAsync).RequireAuthorization().WithName("Auth_RequestMfaReset");
+        group.MapPost("/mfa/reset/{requestPublicId:guid}/approve", ApproveMfaResetAsync).RequireAuthorization().WithName("Auth_ApproveMfaReset");
+
+        group.MapPost("/password/change", ChangePasswordAsync).RequireAuthorization().WithName("Auth_ChangePassword");
+    }
+
+    // === Handlers ===
+
+    private static async Task<object?> LoginAsync(
+        [FromBody] LoginRequestBody body,
+        ISender sender,
+        HttpContext http,
+        IIpAddressAccessor ip,
+        CancellationToken ct)
+    {
+        var ua = http.Request.Headers.UserAgent.ToString();
+        // Acepta indistintamente `username`/`email` y `tenantSubdomainOrNit`/`tenantId`.
+        // El handler busca por Username o Email (ver LoginCommandHandler).
+        var loginId = !string.IsNullOrWhiteSpace(body.Username) ? body.Username : body.Email;
+        var tenant = !string.IsNullOrWhiteSpace(body.TenantSubdomainOrNit)
+            ? body.TenantSubdomainOrNit : body.TenantId;
+        return await sender.Send(new LoginCommand(
+            tenant, loginId ?? string.Empty, body.Password,
+            ip.IpAddress, ua), ct);
+    }
+
+    private static async Task<object?> VerifyMfaAsync(
+        [FromBody] VerifyMfaRequestBody body,
+        ISender sender,
+        HttpContext http,
+        IIpAddressAccessor ip,
+        CancellationToken ct)
+    {
+        var ua = http.Request.Headers.UserAgent.ToString();
+        return await sender.Send(new VerifyMfaCommand(
+            body.MfaChallengeToken, body.TotpCode, body.UseBackupCode,
+            body.BackupCode, body.BranchPublicId, ip.IpAddress, ua), ct);
+    }
+
+    private static async Task<object?> RefreshAsync(
+        [FromBody] RefreshRequestBody body,
+        ISender sender,
+        HttpContext http,
+        IIpAddressAccessor ip,
+        CancellationToken ct)
+    {
+        var ua = http.Request.Headers.UserAgent.ToString();
+        return await sender.Send(new RefreshTokenCommand(
+            body.RefreshToken, ip.IpAddress, ua), ct);
+    }
+
+    private static async Task<object?> LogoutAsync(
+        [FromBody] LogoutRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new LogoutCommand(body.RefreshToken), ct);
+
+    private static async Task<object?> LogoutAllAsync(
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new LogoutAllCommand(), ct);
+
+    private static async Task<object?> EnrollMfaStartAsync(
+        [FromBody] EnrollMfaStartRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new EnrollMfaStartCommand(body.Password), ct);
+
+    private static async Task<object?> EnrollMfaConfirmAsync(
+        [FromBody] EnrollMfaConfirmRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new EnrollMfaConfirmCommand(body.EnrollmentToken, body.TotpCode), ct);
+
+    private static async Task<object?> RegenerateBackupCodesAsync(
+        [FromBody] RegenerateBackupCodesRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new RegenerateBackupCodesCommand(body.TotpCode), ct);
+
+    private static async Task<object?> RequestMfaResetAsync(
+        [FromBody] RequestMfaResetRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new RequestMfaResetCommand(
+            body.TargetUserPublicId, body.Reason, body.EvidenceAttachmentPublicId), ct);
+
+    private static async Task<object?> ApproveMfaResetAsync(
+        Guid requestPublicId,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new ApproveMfaResetCommand(requestPublicId), ct);
+
+    private static async Task<object?> ChangePasswordAsync(
+        [FromBody] ChangePasswordRequestBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new ChangePasswordCommand(body.CurrentPassword, body.NewPassword), ct);
+
+    /// <summary>
+    /// Dev-only: hace login + mfa/verify en una sola llamada, retornando
+    /// access + refresh directamente. Solo funciona si el admin sembrado
+    /// tiene <c>IsMfaEnabled=false</c> (caso típico en local). Acepta el
+    /// mismo body que <c>/login</c> (incluidos los alias <c>email</c>/<c>tenantId</c>).
+    /// </summary>
+    private static async Task<object?> DevLoginAsync(
+        [FromBody] LoginRequestBody body,
+        ISender sender,
+        HttpContext http,
+        IIpAddressAccessor ip,
+        CancellationToken ct)
+    {
+        var ua = http.Request.Headers.UserAgent.ToString();
+        var loginId = !string.IsNullOrWhiteSpace(body.Username) ? body.Username : body.Email;
+        var tenant = !string.IsNullOrWhiteSpace(body.TenantSubdomainOrNit)
+            ? body.TenantSubdomainOrNit : body.TenantId;
+
+        // 1) Login → challenge token.
+        var loginResult = await sender.Send(new LoginCommand(
+            tenant, loginId ?? string.Empty, body.Password, ip.IpAddress, ua), ct);
+
+        if (loginResult.IsFailure)
+        {
+            return loginResult; // ErrorEnvelopeFilter mapea a HTTP apropiado.
+        }
+
+        var challenge = loginResult.Value.MfaChallengeToken;
+
+        // 2) Verify MFA inmediatamente con un código dummy.
+        //    Si el usuario tiene IsMfaEnabled=false, el handler ignora el TOTP.
+        //    Si está enrolado, devolverá Auth.InvalidMfaCode y el cliente debe
+        //    usar el flujo regular (no /dev/login).
+        var verifyResult = await sender.Send(new VerifyMfaCommand(
+            MfaChallengeToken: challenge,
+            TotpCode: "000000",
+            UseBackupCode: false,
+            BackupCode: null,
+            BranchPublicId: null,
+            IpAddress: ip.IpAddress,
+            UserAgent: ua), ct);
+
+        if (verifyResult.IsFailure && verifyResult.Error.Code == "Auth.InvalidMfaCode")
+        {
+            return Result.Failure<AuthTokensResult>(
+                "Auth.DevLoginRequiresMfa",
+                "Este usuario tiene MFA inscrito — /dev/login no aplica. " +
+                "Usa el flujo regular: /login → /mfa/verify con tu código TOTP.");
+        }
+
+        return verifyResult;
     }
 }
 
-// === Request DTOs ===
-public record LoginRequest(string Email, string Password, string TenantId);
-public record RefreshRequest(string AccessToken, string RefreshToken);
-public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+// === Bodies (PublicIds en payload — FR Principio VI) ===
+/// <summary>
+/// Body de /api/auth/login. Acepta el contrato canónico <c>username</c> +
+/// <c>tenantSubdomainOrNit</c> y, por conveniencia operacional, los alias
+/// <c>email</c> + <c>tenantId</c> que usan algunos clientes legacy. El
+/// handler de dominio busca el usuario por <c>Username</c> o <c>Email</c>
+/// indistintamente.
+/// </summary>
+public record LoginRequestBody(
+    string? TenantSubdomainOrNit,
+    string? Username,
+    string Password,
+    string? Email = null,
+    string? TenantId = null);
+public record VerifyMfaRequestBody(string MfaChallengeToken, string? TotpCode, bool UseBackupCode, string? BackupCode, Guid? BranchPublicId);
+public record RefreshRequestBody(string RefreshToken);
+public record LogoutRequestBody(string RefreshToken);
+public record EnrollMfaStartRequestBody(string Password);
+public record EnrollMfaConfirmRequestBody(string EnrollmentToken, string TotpCode);
+public record RegenerateBackupCodesRequestBody(string TotpCode);
+public record RequestMfaResetRequestBody(Guid TargetUserPublicId, string Reason, Guid? EvidenceAttachmentPublicId);
+public record ChangePasswordRequestBody(string CurrentPassword, string NewPassword);

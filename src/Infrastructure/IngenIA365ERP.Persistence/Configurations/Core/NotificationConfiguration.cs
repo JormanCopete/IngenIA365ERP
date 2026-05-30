@@ -15,20 +15,24 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_Notifications_PublicId");
 
-        builder.Property(e => e.Channel).HasMaxLength(10).IsRequired();
-        builder.Property(e => e.Subject).HasMaxLength(500);
-        builder.Property(e => e.Status).HasMaxLength(20).IsRequired().HasDefaultValue("Pending");
-        builder.Property(e => e.ErrorMessage).HasMaxLength(2000);
+        builder.Property(e => e.TenantId).IsRequired();
+        builder.Property(e => e.RecipientUserPublicId).IsRequired();
+        builder.Property(e => e.Type).HasMaxLength(80).IsRequired();
+        builder.Property(e => e.Subject).HasMaxLength(500).IsRequired();
+        builder.Property(e => e.Body).IsRequired();
+        builder.Property(e => e.ChannelsMask).IsRequired();
+        builder.Property(e => e.EmailStatus).HasMaxLength(20).IsRequired().HasDefaultValue("Pending");
 
-        // FK indexes
-        builder.HasIndex(e => e.TemplateId).HasDatabaseName("IX_COR_Notifications_TemplateId");
-        builder.HasIndex(e => e.RecipientPersonId).HasDatabaseName("IX_COR_Notifications_RecipientPersonId");
+        // Lookup patrón "inbox del usuario X": (TenantId, RecipientUserPublicId, ReadAt).
+        builder.HasIndex(e => new { e.TenantId, e.RecipientUserPublicId, e.ReadAt })
+            .HasDatabaseName("IX_COR_Notifications_Inbox")
+            .HasFilter("[IsDeleted] = 0");
 
-        // Relationships
-        builder.HasOne(e => e.Template).WithMany(t => t.Notifications).HasForeignKey(e => e.TemplateId).OnDelete(DeleteBehavior.Restrict);
-        // RecipientPerson relationship configured from PersonConfiguration
+        // Cola del dispatcher: pendientes por email.
+        builder.HasIndex(e => e.EmailStatus)
+            .HasDatabaseName("IX_COR_Notifications_EmailStatus")
+            .HasFilter("[IsDeleted] = 0");
 
-        // Audit
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);

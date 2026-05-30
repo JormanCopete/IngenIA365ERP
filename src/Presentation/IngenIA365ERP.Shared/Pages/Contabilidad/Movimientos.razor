@@ -174,9 +174,9 @@
     {
         try
         {
-            var typesTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/voucher-types?pageSize=100");
-            var branchTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/branches?pageSize=200");
-            var ccTask = Http.GetFromJsonAsync<List<CatalogItem>>("/api/accounting/cost-centers?pageSize=200");
+            var typesTask = Http.GetListAsync<CatalogItem>("/api/accounting/voucher-types?pageSize=100");
+            var branchTask = Http.GetListAsync<CatalogItem>("/api/core/branches?pageSize=200");
+            var ccTask = Http.GetListAsync<CatalogItem>("/api/accounting/cost-centers?pageSize=200");
 
             await Task.WhenAll(typesTask, branchTask, ccTask);
 
@@ -236,7 +236,7 @@
     {
         try
         {
-            _accountSearchResults = await Http.GetFromJsonAsync<List<AccountItem>>(
+            _accountSearchResults = await Http.GetListAsync<AccountItem>(
                 $"/api/accounting/chart-of-accounts?search={_accountSearchText}&pageSize=50") ?? [];
         }
         catch { _accountSearchResults = []; }
@@ -253,7 +253,7 @@
     {
         try
         {
-            _personSearchResults = await Http.GetFromJsonAsync<List<PersonItem>>(
+            _personSearchResults = await Http.GetListAsync<PersonItem>(
                 $"/api/core/people?search={_personSearchText}&pageSize=50") ?? [];
         }
         catch { _personSearchResults = []; }

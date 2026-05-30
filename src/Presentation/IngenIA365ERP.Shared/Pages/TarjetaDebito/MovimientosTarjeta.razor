@@ -75,7 +75,7 @@
             if (_dateTo.HasValue)
                 url += $"&dateTo={DateOnly.FromDateTime(_dateTo.Value):yyyy-MM-dd}";
 
-            _items = await Http.GetFromJsonAsync<List<TransactionItem>>(url) ?? [];
+            _items = await Http.GetListAsync<TransactionItem>(url) ?? [];
         }
         catch
         {

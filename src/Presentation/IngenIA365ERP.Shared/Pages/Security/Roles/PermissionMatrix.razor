@@ -1,0 +1,83 @@
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+@if (_loading)
+{
+    <p>Cargando catálogo de permisos…</p>
+}
+else if (_groups.Count == 0)
+{
+    <p>Catálogo vacío.</p>
+}
+else
+{
+    <div class="permission-matrix">
+        @foreach (var module in _groups)
+        {
+            <fieldset>
+                <legend>@module.Key</legend>
+                <table>
+                    <thead><tr><th></th><th>Recurso</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in module.OrderBy(x => x.Resource).ThenBy(x => x.Action))
+                        {
+                            var on = SelectedPermissionPublicIds.Contains(p.PublicId);
+                            <tr>
+                                <td>
+                                    <input type="checkbox"
+                                           checked="@on"
+                                           @onchange="(e) => Toggle(p.PublicId, (bool)e.Value!)" />
+                                </td>
+                                <td>@p.Resource</td>
+                                <td>@p.Action</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </fieldset>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>PublicIds de los permisos actualmente seleccionados (two-way).</summary>
+    [Parameter, EditorRequired] public List<Guid> SelectedPermissionPublicIds { get; set; } = new();
+
+    /// <summary>Notifica cambios al padre cuando el usuario marca/desmarca.</summary>
+    [Parameter] public EventCallback<List<Guid>> SelectedPermissionPublicIdsChanged { get; set; }
+
+    private List<IGrouping<string, PermissionItem>> _groups = new();
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/permissions");
+            if (!resp.IsSuccessStatusCode) return;
+            var items = await resp.Content.ReadFromJsonAsync<List<PermissionItem>>() ?? new();
+            _groups = items.GroupBy(p => p.Module).OrderBy(g => g.Key).ToList();
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task Toggle(Guid publicId, bool isOn)
+    {
+        var next = new List<Guid>(SelectedPermissionPublicIds);
+        if (isOn)
+        {
+            if (!next.Contains(publicId)) next.Add(publicId);
+        }
+        else
+        {
+            next.Remove(publicId);
+        }
+        SelectedPermissionPublicIds = next;
+        await SelectedPermissionPublicIdsChanged.InvokeAsync(next);
+    }
+
+    public sealed record PermissionItem(
+        Guid PublicId, string Code, string Resource, string Action, string Module, string? Description);
+}

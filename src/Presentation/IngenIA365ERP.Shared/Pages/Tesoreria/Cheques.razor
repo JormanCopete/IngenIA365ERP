@@ -114,7 +114,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<CheckItem>>("/api/treasury/checks?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<CheckItem>("/api/treasury/checks?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 

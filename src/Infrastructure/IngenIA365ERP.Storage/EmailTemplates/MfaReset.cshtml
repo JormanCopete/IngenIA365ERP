@@ -1,0 +1,15 @@
+<div>
+    <h2 style="margin:0 0 12px 0; color:#0b3d91;">Tu MFA fue reiniciado</h2>
+    <p>Hola {{UserName}},</p>
+    <p>
+        Tu segundo factor de autenticación (TOTP) fue restablecido tras la
+        aprobación dual de los administradores <strong>{{ApproverA}}</strong> y
+        <strong>{{ApproverB}}</strong>.
+    </p>
+    <p>
+        En tu próximo inicio de sesión deberás escanear el nuevo código QR para
+        re-inscribir tu app autenticadora (Google Authenticator, Microsoft
+        Authenticator, etc.). Los códigos de respaldo anteriores quedaron invalidados.
+    </p>
+    <p><strong>Hora del reset (UTC):</strong> {{ResetAt}}</p>
+</div>

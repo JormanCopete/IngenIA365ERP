@@ -7,54 +7,62 @@
 
 <PageTitle>Detalle Empleado - IngenIA365ERP</PageTitle>
 
-<!-- Toolbar -->
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>@(_employee is not null ? $"Empleado: {_employee.FullName}" : "Detalle Empleado")</h3>
+    <h3>@(_employee is not null ? $"Empleado: {_employee.FirstName} {_employee.LastName}" : "Detalle Empleado")</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
                   OnClick='@(() => Nav.NavigateTo("/nomina/empleados"))'>Volver a Lista</SfButton>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!_hasChanges)"
-                  OnClick="SaveLaborData">Guardar Cambios Laborales</SfButton>
-        @if (_employee is not null && _employee.IsActive)
+        @if (_employee is not null && _employee.Status == 1)
         {
+            <SfButton CssClass="e-primary" IconCss="e-icons e-save"
+                      Disabled="@(!_hasChanges || _saving)"
+                      OnClick="SaveLaborData">Guardar Cambios</SfButton>
             <SfButton CssClass="e-danger" IconCss="e-icons e-close"
                       OnClick="@(() => _showTerminateConfirm = true)">Terminar Contrato</SfButton>
         }
     </div>
 </div>
 
-<!-- Status badge -->
 @if (_employee is not null)
 {
-    var badge = _employee.IsActive ? "e-badge e-badge-success" : "e-badge e-badge-danger";
-    var text = _employee.IsActive ? "Activo" : "Inactivo";
+    var statusBadge = _employee.Status == 1 ? "e-badge e-badge-success"
+                    : _employee.Status == -1 ? "e-badge e-badge-danger"
+                    : "e-badge e-badge-warning";
+    var statusText = _employee.Status == 1 ? "Activo"
+                   : _employee.Status == -1 ? "Retirado" : "Inactivo";
     <div style="margin-bottom:12px;">
-        <span class="@badge" style="font-size:14px;padding:4px 12px;">@text</span>
-        @if (!_employee.IsActive && _employee.TerminationDate.HasValue)
+        <span class="@statusBadge" style="font-size:14px;padding:4px 12px;">@statusText</span>
+        @if (_employee.Status == -1 && _employee.TerminationDate.HasValue)
         {
-            <span style="margin-left:8px;color:#888;font-size:13px;">Terminado el @_employee.TerminationDate.Value.ToString("dd/MM/yyyy")</span>
+            <span style="margin-left:8px;color:#888;font-size:13px;">
+                Terminado el @_employee.TerminationDate.Value.ToString("dd/MM/yyyy")
+                @if (!string.IsNullOrEmpty(_employee.TerminationCause))
+                {
+                    <span> — @_employee.TerminationCause</span>
+                }
+            </span>
         }
     </div>
 }
 
-@if (_employee is null && !_loading)
+@if (_loading)
+{
+    <div style="text-align:center;padding:60px;">
+        <SfSpinner Visible="true" />
+    </div>
+}
+else if (_employee is null)
 {
     <div style="text-align:center;padding:60px;color:#888;">
         <span class="e-icons e-people" style="font-size:48px;display:block;margin-bottom:12px;"></span>
         <p>Empleado no encontrado.</p>
     </div>
 }
-else if (_loading)
-{
-    <div style="text-align:center;padding:60px;">
-        <SfSpinner Visible="true" />
-    </div>
-}
 else
 {
     <SfTab>
         <TabItems>
-            <!-- Tab: Datos Personales -->
+            @* ===== Tab 1: Datos Personales (read-only, vienen de Persona) ===== *@
             <TabItem>
                 <ChildContent>
                     <TabHeader Text="Datos Personales" />
@@ -62,16 +70,16 @@ else
                 <ContentTemplate>
                     <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">
                         <div>
-                            <label>Nombre Completo</label>
-                            <SfTextBox Value="@_employee!.FullName" Readonly="true" CssClass="e-disabled" />
+                            <label>Nombres</label>
+                            <SfTextBox Value="@_employee.FirstName" Readonly="true" CssClass="e-disabled" />
                         </div>
                         <div>
-                            <label>Tipo Documento</label>
-                            <SfTextBox Value="@_employee.DocumentType" Readonly="true" CssClass="e-disabled" />
+                            <label>Apellidos</label>
+                            <SfTextBox Value="@_employee.LastName" Readonly="true" CssClass="e-disabled" />
                         </div>
                         <div>
                             <label>Numero Documento</label>
-                            <SfTextBox Value="@_employee.DocumentNumber" Readonly="true" CssClass="e-disabled" />
+                            <SfTextBox Value="@_employee.IdentificationNumber" Readonly="true" CssClass="e-disabled" />
                         </div>
                         <div>
                             <label>Correo Electronico</label>
@@ -81,22 +89,23 @@ else
                             <label>Telefono</label>
                             <SfTextBox Value="@_employee.Phone" Readonly="true" CssClass="e-disabled" />
                         </div>
+                        <div>
+                            <label>Movil</label>
+                            <SfTextBox Value="@_employee.Mobile" Readonly="true" CssClass="e-disabled" />
+                        </div>
                         <div style="grid-column:span 2;">
                             <label>Direccion</label>
                             <SfTextBox Value="@_employee.Address" Readonly="true" CssClass="e-disabled" />
                         </div>
-                        <div>
-                            <label>Ciudad</label>
-                            <SfTextBox Value="@_employee.City" Readonly="true" CssClass="e-disabled" />
-                        </div>
                     </div>
                     <div style="padding:0 20px 12px;color:#888;font-size:12px;">
-                        Los datos personales se administran desde el modulo de Personas (Core). Aqui son de solo lectura.
+                        Los datos personales se administran desde el modulo
+                        <a href="/maestros/personas">Maestros - Personas</a>. Aqui son de solo lectura.
                     </div>
                 </ContentTemplate>
             </TabItem>
 
-            <!-- Tab: Datos Laborales -->
+            @* ===== Tab 2: Datos Laborales (editables) ===== *@
             <TabItem>
                 <ChildContent>
                     <TabHeader Text="Datos Laborales" />
@@ -104,108 +113,116 @@ else
                 <ContentTemplate>
                     <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">
                         <div>
-                            <label>Cargo *</label>
-                            <SfTextBox @bind-Value="_labor.Position" Placeholder="Cargo del empleado"
-                                       ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
-                        </div>
-                        <div>
-                            <label>Departamento *</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.DepartmentCode"
-                                            DataSource="_departments" Placeholder="Seleccione">
-                                <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
-                            </SfDropDownList>
-                        </div>
-                        <div>
-                            <label>Salario Base *</label>
-                            <SfNumericTextBox TValue="decimal" @bind-Value="_labor.BaseSalary" Format="N2" Min="0"
+                            <label>Salario Base <span style="color:red">*</span></label>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_labor.BaseSalary"
+                                              Format="N2" Min="0" Step="50000m"
                                               ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => MarkChanged())" />
                         </div>
                         <div>
-                            <label>Tipo Contrato *</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.ContractType"
-                                            DataSource="_contractTypes" Placeholder="Seleccione">
+                            <label>Tipo de Contrato <span style="color:red">*</span></label>
+                            <SfDropDownList TValue="int" TItem="ContractTypeOption"
+                                            @bind-Value="_labor.ContractType"
+                                            DataSource="@_contractTypes" Placeholder="Seleccione">
                                 <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
+                                <DropDownListEvents TValue="int" TItem="ContractTypeOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<int, ContractTypeOption> e) => MarkChanged())" />
                             </SfDropDownList>
                         </div>
                         <div>
-                            <label>Fecha Ingreso</label>
-                            <SfDatePicker TValue="DateTime" @bind-Value="_labor.HireDate" Format="dd/MM/yyyy" Readonly="true" CssClass="e-disabled" />
+                            <label>Fecha de Ingreso</label>
+                            <SfDatePicker TValue="DateTime" Value="@_employee.HireDate"
+                                          Format="dd/MM/yyyy" Readonly="true" CssClass="e-disabled" />
                         </div>
+
                         <div>
-                            <label>EPS *</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.HealthInsuranceCode"
-                                            DataSource="_epsList" Placeholder="Seleccione">
-                                <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
+                            <label>EPS</label>
+                            <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                            @bind-Value="_labor.HealthInsurancePublicId"
+                                            DataSource="@_eps"
+                                            Placeholder="Seleccione EPS"
+                                            AllowFiltering="true">
+                                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => MarkChanged())" />
                             </SfDropDownList>
                         </div>
                         <div>
-                            <label>Pension *</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.PensionCode"
-                                            DataSource="_pensionList" Placeholder="Seleccione">
-                                <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
+                            <label>Fondo de Pension</label>
+                            <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                            @bind-Value="_labor.PensionProviderPublicId"
+                                            DataSource="@_pensions"
+                                            Placeholder="Seleccione AFP"
+                                            AllowFiltering="true">
+                                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => MarkChanged())" />
                             </SfDropDownList>
                         </div>
                         <div>
-                            <label>ARL / Riesgo Laboral *</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.WorkRiskCode"
-                                            DataSource="_arlList" Placeholder="Seleccione">
-                                <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
+                            <label>ARL (Riesgos Laborales)</label>
+                            <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                            @bind-Value="_labor.WorkRiskProviderPublicId"
+                                            DataSource="@_arl"
+                                            Placeholder="Seleccione ARL"
+                                            AllowFiltering="true">
+                                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => MarkChanged())" />
                             </SfDropDownList>
                         </div>
-                        <div>
-                            <label>Cuenta Bancaria</label>
-                            <SfTextBox @bind-Value="_labor.BankAccount" Placeholder="Numero de cuenta"
-                                       ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
-                        </div>
+
                         <div>
                             <label>Banco</label>
-                            <SfTextBox @bind-Value="_labor.BankName" Placeholder="Nombre del banco"
+                            <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                            @bind-Value="_labor.BankPublicId"
+                                            DataSource="@_banks"
+                                            Placeholder="Seleccione banco"
+                                            AllowFiltering="true">
+                                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => MarkChanged())" />
+                            </SfDropDownList>
+                        </div>
+                        <div>
+                            <label>Numero de Cuenta</label>
+                            <SfTextBox @bind-Value="_labor.BankAccountNumber"
+                                       Placeholder="Numero de cuenta"
+                                       HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "25" } })"
                                        ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
                         </div>
                         <div>
-                            <label>Tipo Cuenta</label>
-                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_labor.BankAccountType"
-                                            DataSource="_accountTypes" Placeholder="Seleccione">
+                            <label>Tipo de Cuenta</label>
+                            <SfDropDownList TValue="int" TItem="AccountTypeOption"
+                                            @bind-Value="_labor.AccountType"
+                                            DataSource="@_accountTypes" Placeholder="Seleccione">
                                 <DropDownListFieldSettings Text="Name" Value="Value" />
-                                <DropDownListEvents TValue="string" TItem="DropOption"
-                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, DropOption> e) => MarkChanged())" />
+                                <DropDownListEvents TValue="int" TItem="AccountTypeOption"
+                                                    ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<int, AccountTypeOption> e) => MarkChanged())" />
                             </SfDropDownList>
                         </div>
                     </div>
                 </ContentTemplate>
             </TabItem>
 
-            <!-- Tab: Historial -->
+            @* ===== Tab 3: Historial Salarial ===== *@
             <TabItem>
                 <ChildContent>
-                    <TabHeader Text="Historial" />
+                    <TabHeader Text="Historial Salarial" />
                 </ChildContent>
                 <ContentTemplate>
                     <div style="padding:20px;">
-                        <h4 style="margin-top:0;">Historial de Cambios Salariales</h4>
-                        <SfGrid TValue="SalaryHistoryItem" DataSource="@_salaryHistory"
+                        <SfGrid TValue="SalaryHistoryItem" DataSource="@_employee.SalaryHistory"
                                 AllowPaging="true" AllowSorting="true">
                             <GridPageSettings PageSize="15" />
                             <GridColumns>
-                                <GridColumn Field="EffectiveDate" HeaderText="Fecha Vigencia" Width="130" Format="dd/MM/yyyy" />
-                                <GridColumn Field="PreviousSalary" HeaderText="Salario Anterior" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-                                <GridColumn Field="NewSalary" HeaderText="Nuevo Salario" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-                                <GridColumn Field="ChangePercentage" HeaderText="% Cambio" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-                                <GridColumn Field="Reason" HeaderText="Motivo" Width="250" />
-                                <GridColumn Field="ChangedBy" HeaderText="Modificado Por" Width="150" />
+                                <GridColumn Field="@nameof(SalaryHistoryItem.EffectiveDate)" HeaderText="Fecha Vigencia" Width="160"
+                                            Format="dd/MM/yyyy" Type="ColumnType.Date" />
+                                <GridColumn Field="@nameof(SalaryHistoryItem.NewSalary)" HeaderText="Nuevo Salario" Width="180"
+                                            Format="N2" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="@nameof(SalaryHistoryItem.UserName)" HeaderText="Modificado Por" Width="200" />
                             </GridColumns>
                         </SfGrid>
-                        @if (_salaryHistory.Count == 0)
+                        @if (_employee.SalaryHistory.Count == 0)
                         {
                             <div style="text-align:center;padding:30px;color:#888;">Sin registros de cambios salariales.</div>
                         }
@@ -213,59 +230,26 @@ else
                 </ContentTemplate>
             </TabItem>
 
-            <!-- Tab: Nomina Actual -->
+            @* ===== Tab 4: Movimientos Recientes de Nomina ===== *@
             <TabItem>
                 <ChildContent>
-                    <TabHeader Text="Nomina Actual" />
+                    <TabHeader Text="Movimientos Recientes" />
                 </ChildContent>
                 <ContentTemplate>
                     <div style="padding:20px;">
-                        @if (!string.IsNullOrEmpty(_currentPeriod))
-                        {
-                            <div style="margin-bottom:12px;">
-                                <span style="font-size:12px;color:#666;">Periodo actual:</span>
-                                <strong style="margin-left:8px;">@_currentPeriod</strong>
-                            </div>
-                        }
-                        <SfGrid TValue="PayrollEntryItem" DataSource="@_payrollEntries"
-                                AllowSorting="true">
+                        <SfGrid TValue="RecentEntryItem" DataSource="@_employee.RecentEntries"
+                                AllowPaging="true" AllowSorting="true">
+                            <GridPageSettings PageSize="15" />
                             <GridColumns>
-                                <GridColumn Field="ConceptCode" HeaderText="Codigo" Width="100" />
-                                <GridColumn Field="ConceptName" HeaderText="Concepto" Width="280" />
-                                <GridColumn Field="EntryType" HeaderText="Tipo" Width="100" TextAlign="TextAlign.Center">
-                                    <Template>
-                                        @{
-                                            var entry = context as PayrollEntryItem;
-                                            var cssClass = entry?.EntryType == "D" ? "e-badge e-badge-success" : "e-badge e-badge-danger";
-                                            var label = entry?.EntryType == "D" ? "Devengado" : "Deduccion";
-                                            <span class="@cssClass" style="padding:2px 8px;font-size:11px;">@label</span>
-                                        }
-                                    </Template>
-                                </GridColumn>
-                                <GridColumn Field="Amount" HeaderText="Valor" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="@nameof(RecentEntryItem.PeriodDescription)" HeaderText="Periodo" Width="200" />
+                                <GridColumn Field="@nameof(RecentEntryItem.ConceptName)" HeaderText="Concepto" Width="300" />
+                                <GridColumn Field="@nameof(RecentEntryItem.Amount)" HeaderText="Valor" Width="160"
+                                            Format="N2" TextAlign="TextAlign.Right" />
                             </GridColumns>
                         </SfGrid>
-
-                        @if (_payrollEntries.Count > 0)
+                        @if (_employee.RecentEntries.Count == 0)
                         {
-                            <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
-                                <div style="text-align:right;">
-                                    <span style="font-size:12px;color:#666;">Total Devengados</span><br/>
-                                    <strong style="font-size:16px;color:#2e7d32;">@TotalEarnings.ToString("N2")</strong>
-                                </div>
-                                <div style="text-align:right;">
-                                    <span style="font-size:12px;color:#666;">Total Deducciones</span><br/>
-                                    <strong style="font-size:16px;color:#c62828;">@TotalDeductions.ToString("N2")</strong>
-                                </div>
-                                <div style="text-align:right;">
-                                    <span style="font-size:12px;color:#666;">Neto a Pagar</span><br/>
-                                    <strong style="font-size:18px;">@NetPay.ToString("N2")</strong>
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div style="text-align:center;padding:30px;color:#888;">No hay liquidacion de nomina para el periodo actual.</div>
+                            <div style="text-align:center;padding:30px;color:#888;">Sin movimientos recientes.</div>
                         }
                     </div>
                 </ContentTemplate>
@@ -274,20 +258,23 @@ else
     </SfTab>
 }
 
-<!-- Terminate contract confirmation -->
+@* ===== Dialogo Terminar Contrato ===== *@
 <SfDialog @bind-Visible="_showTerminateConfirm" Header="Terminar Contrato" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             <div style="padding:16px;">
-                <p style="margin-bottom:16px;">Esta seguro de terminar el contrato de <strong>@_employee?.FullName</strong>?</p>
+                <p style="margin-bottom:16px;">
+                    ¿Seguro que desea terminar el contrato de
+                    <strong>@_employee?.FirstName @_employee?.LastName</strong>?
+                </p>
                 <div style="display:flex;flex-direction:column;gap:12px;">
                     <div>
-                        <label>Fecha de Terminacion *</label>
+                        <label>Fecha de Terminacion <span style="color:red">*</span></label>
                         <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />
                     </div>
                     <div>
-                        <label>Motivo *</label>
-                        <SfTextBox @bind-Value="_terminationReason" Placeholder="Motivo de la terminacion" Multiline="true" />
+                        <label>Motivo</label>
+                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional)" Multiline="true" />
                     </div>
                 </div>
             </div>
@@ -296,8 +283,7 @@ else
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showTerminateConfirm = false)" />
         <DialogButton Content="Terminar Contrato" CssClass="e-danger" IsPrimary="true"
-                       Disabled="@(string.IsNullOrWhiteSpace(_terminationReason))"
-                       OnClick="TerminateContract" />
+                      OnClick="TerminateContract" Disabled="@_saving" />
     </DialogButtons>
 </SfDialog>
 
@@ -306,280 +292,281 @@ else
 
     private bool _loading = true;
     private bool _hasChanges;
-    private EmployeeDto? _employee;
+    private bool _saving;
+    private EmployeeDetailDto? _employee;
     private LaborData _labor = new();
-    private List<SalaryHistoryItem> _salaryHistory = [];
-    private List<PayrollEntryItem> _payrollEntries = [];
-    private string _currentPeriod = "";
+
+    // Lookups
+    private List<LookupOption> _eps = new();
+    private List<LookupOption> _pensions = new();
+    private List<LookupOption> _arl = new();
+    private List<LookupOption> _banks = new();
+
+    // Tipos de contrato (alineados al ContractType int del backend; rango 0-10).
+    private List<ContractTypeOption> _contractTypes = new()
+    {
+        new(1, "Indefinido"),
+        new(2, "Termino Fijo"),
+        new(3, "Obra o Labor"),
+        new(4, "Prestacion de Servicios"),
+        new(5, "Aprendizaje"),
+        new(6, "Practica / Pasantia")
+    };
+
+    private List<AccountTypeOption> _accountTypes = new()
+    {
+        new(0, "(Ninguno)"),
+        new(1, "Ahorros"),
+        new(2, "Corriente")
+    };
 
     // Terminate dialog
     private bool _showTerminateConfirm;
     private DateTime _terminationDate = DateTime.Today;
-    private string _terminationReason = "";
-
-    // Dropdown sources
-    private List<DropOption> _departments = [];
-    private List<DropOption> _epsList = [];
-    private List<DropOption> _pensionList = [];
-    private List<DropOption> _arlList = [];
-    private List<DropOption> _contractTypes =
-    [
-        new("I", "Indefinido"),
-        new("F", "Fijo"),
-        new("O", "Obra o Labor"),
-        new("P", "Prestacion de Servicios"),
-        new("A", "Aprendizaje")
-    ];
-    private List<DropOption> _accountTypes =
-    [
-        new("A", "Ahorros"),
-        new("C", "Corriente")
-    ];
-
-    private decimal TotalEarnings => _payrollEntries.Where(e => e.EntryType == "D").Sum(e => e.Amount);
-    private decimal TotalDeductions => _payrollEntries.Where(e => e.EntryType == "R").Sum(e => e.Amount);
-    private decimal NetPay => TotalEarnings - TotalDeductions;
+    private string _terminationCause = "";
 
     protected override async Task OnInitializedAsync()
     {
         await Task.WhenAll(
             LoadEmployee(),
-            LoadDepartments(),
             LoadEps(),
             LoadPensions(),
-            LoadArl()
+            LoadArl(),
+            LoadBanks()
         );
         _loading = false;
     }
+
+    // --- Carga ---
 
     private async Task LoadEmployee()
     {
         try
         {
-            _employee = await Http.GetFromJsonAsync<EmployeeDto>($"/api/payroll/employees/{EmployeeId}");
+            _employee = await Http.GetFromJsonAsync<EmployeeDetailDto>($"/api/payroll/employees/{EmployeeId}");
             if (_employee is null) return;
 
-            _labor = new()
+            // Sincroniza el modelo editable con la respuesta del backend.
+            _labor = new LaborData
             {
-                Position = _employee.Position,
-                DepartmentCode = _employee.DepartmentCode,
-                BaseSalary = _employee.BaseSalary,
+                BaseSalary = _employee.Salary,
                 ContractType = _employee.ContractType,
-                HireDate = _employee.HireDate,
-                HealthInsuranceCode = _employee.HealthInsuranceCode,
-                PensionCode = _employee.PensionCode,
-                WorkRiskCode = _employee.WorkRiskCode,
-                BankAccount = _employee.BankAccount ?? "",
-                BankName = _employee.BankName ?? "",
-                BankAccountType = _employee.BankAccountType ?? ""
+                HealthInsurancePublicId = _employee.HealthInsurancePublicId,
+                PensionProviderPublicId = _employee.PensionProviderPublicId,
+                WorkRiskProviderPublicId = _employee.WorkRiskProviderPublicId,
+                BankPublicId = _employee.PayrollBankPublicId,
+                BankAccountNumber = _employee.PayrollBankAccountNumber ?? "",
+                AccountType = _employee.PayrollBankAccountType
             };
-
-            // Load history and current payroll in parallel
-            await Task.WhenAll(LoadSalaryHistory(), LoadCurrentPayroll());
+            _hasChanges = false;
         }
-        catch { await Notification.ErrorAsync("Error al cargar empleado"); }
-    }
-
-    private async Task LoadDepartments()
-    {
-        try
+        catch (Exception ex)
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/core/departments?pageSize=200");
-            _departments = (items ?? []).Select(d => new DropOption(d.Code, $"{d.Code} - {d.Name}")).ToList();
+            await Notification.ErrorAsync($"Error al cargar empleado: {ex.Message}");
         }
-        catch { _departments = []; }
     }
 
     private async Task LoadEps()
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/payroll/eps?pageSize=100");
-            _epsList = (items ?? []).Select(e => new DropOption(e.Code, $"{e.Code} - {e.Name}")).ToList();
+            _eps = (await Http.GetListAsync<LookupRaw>("/api/payroll/health-insurance?PageNumber=1&PageSize=500"))
+                .Select(e => new LookupOption(e.PublicId, e.Name)).ToList();
         }
-        catch { _epsList = []; }
+        catch { _eps = new List<LookupOption>(); }
     }
 
     private async Task LoadPensions()
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/payroll/pensions?pageSize=100");
-            _pensionList = (items ?? []).Select(p => new DropOption(p.Code, $"{p.Code} - {p.Name}")).ToList();
+            _pensions = (await Http.GetListAsync<LookupRaw>("/api/payroll/pension-providers?PageNumber=1&PageSize=500"))
+                .Select(p => new LookupOption(p.PublicId, p.Name)).ToList();
         }
-        catch { _pensionList = []; }
+        catch { _pensions = new List<LookupOption>(); }
     }
 
     private async Task LoadArl()
     {
         try
         {
-            var items = await Http.GetFromJsonAsync<List<CatalogItem>>("/api/payroll/arl?pageSize=100");
-            _arlList = (items ?? []).Select(a => new DropOption(a.Code, $"{a.Code} - {a.Name}")).ToList();
+            _arl = (await Http.GetListAsync<LookupRaw>("/api/payroll/work-risk?PageNumber=1&PageSize=500"))
+                .Select(a => new LookupOption(a.PublicId, a.Name)).ToList();
         }
-        catch { _arlList = []; }
+        catch { _arl = new List<LookupOption>(); }
     }
 
-    private async Task LoadSalaryHistory()
+    private async Task LoadBanks()
     {
         try
         {
-            _salaryHistory = await Http.GetFromJsonAsync<List<SalaryHistoryItem>>(
-                $"/api/payroll/employees/{EmployeeId}/salary-history") ?? [];
+            _banks = (await Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500"))
+                .Select(b => new LookupOption(b.PublicId, b.Name)).ToList();
         }
-        catch { _salaryHistory = []; }
-    }
-
-    private async Task LoadCurrentPayroll()
-    {
-        try
-        {
-            var result = await Http.GetFromJsonAsync<CurrentPayrollDto>(
-                $"/api/payroll/employees/{EmployeeId}/current-payroll");
-            if (result is not null)
-            {
-                _currentPeriod = result.PeriodName;
-                _payrollEntries = result.Entries ?? [];
-            }
-        }
-        catch { _payrollEntries = []; }
+        catch { _banks = new List<LookupOption>(); }
     }
 
     private void MarkChanged() => _hasChanges = true;
 
+    // --- Guardar cambios laborales ---
+
     private async Task SaveLaborData()
     {
-        var payload = new
-        {
-            _labor.Position,
-            _labor.DepartmentCode,
-            _labor.BaseSalary,
-            _labor.ContractType,
-            _labor.HealthInsuranceCode,
-            _labor.PensionCode,
-            _labor.WorkRiskCode,
-            _labor.BankAccount,
-            _labor.BankName,
-            _labor.BankAccountType
-        };
+        if (_saving || _employee is null) return;
 
+        if (_labor.BaseSalary <= 0)
+        {
+            await Notification.WarningAsync("El salario base debe ser mayor a 0.");
+            return;
+        }
+
+        _saving = true;
         try
         {
+            // Payload alineado a UpdateEmployeeCommand (banca renombrada a Payroll*)
+            var payload = new
+            {
+                BaseSalary = _labor.BaseSalary,
+                ContractType = _labor.ContractType,
+                HealthInsurancePublicId = _labor.HealthInsurancePublicId,
+                PensionProviderPublicId = _labor.PensionProviderPublicId,
+                WorkRiskProviderPublicId = _labor.WorkRiskProviderPublicId,
+                PayrollBankPublicId = _labor.BankPublicId,
+                PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_labor.BankAccountNumber) ? null : _labor.BankAccountNumber,
+                PayrollBankAccountType = _labor.AccountType
+            };
+
             var res = await Http.PutAsJsonAsync($"/api/payroll/employees/{EmployeeId}", payload);
             if (res.IsSuccessStatusCode)
             {
-                await Notification.SuccessAsync("Datos laborales actualizados");
+                await Notification.SuccessAsync("Datos laborales actualizados correctamente.");
                 _hasChanges = false;
                 await LoadEmployee();
             }
             else
             {
-                var error = await res.Content.ReadAsStringAsync();
-                await Notification.ErrorAsync($"Error al guardar: {error}");
+                await Notification.ShowErrorAsync(res, "Error al guardar cambios");
             }
         }
-        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
+
+    // --- Terminar contrato ---
 
     private async Task TerminateContract()
     {
-        if (string.IsNullOrWhiteSpace(_terminationReason)) return;
+        if (_saving) return;
 
-        var payload = new
-        {
-            TerminationDate = _terminationDate,
-            Reason = _terminationReason
-        };
-
+        _saving = true;
         try
         {
+            var payload = new
+            {
+                TerminationDate = _terminationDate,
+                TerminationCause = _terminationCause
+            };
             var res = await Http.PostAsJsonAsync($"/api/payroll/employees/{EmployeeId}/terminate", payload);
             if (res.IsSuccessStatusCode)
             {
-                await Notification.SuccessAsync("Contrato terminado exitosamente");
+                await Notification.SuccessAsync("Contrato terminado correctamente.");
                 _showTerminateConfirm = false;
-                _terminationReason = "";
+                _terminationCause = "";
                 await LoadEmployee();
             }
             else
             {
-                var error = await res.Content.ReadAsStringAsync();
-                await Notification.ErrorAsync($"Error al terminar contrato: {error}");
+                await Notification.ShowErrorAsync(res, "Error al terminar contrato");
             }
         }
-        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
-    // Models
-    private class EmployeeDto
+    // --- Modelos ---
+
+    /// <summary>Coincide con EmployeeDetailDto del backend (modelo actualizado).</summary>
+    private class EmployeeDetailDto
     {
         public Guid PublicId { get; set; }
-        public string FullName { get; set; } = "";
-        public string DocumentType { get; set; } = "";
-        public string DocumentNumber { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string IdentificationNumber { get; set; } = "";
         public string Email { get; set; } = "";
         public string Phone { get; set; } = "";
+        public string Mobile { get; set; } = "";
         public string Address { get; set; } = "";
-        public string City { get; set; } = "";
-        public string Position { get; set; } = "";
-        public string DepartmentCode { get; set; } = "";
-        public decimal BaseSalary { get; set; }
-        public string ContractType { get; set; } = "";
+        public decimal Salary { get; set; }
+        public int ContractType { get; set; }
         public DateTime HireDate { get; set; }
-        public string HealthInsuranceCode { get; set; } = "";
-        public string PensionCode { get; set; } = "";
-        public string WorkRiskCode { get; set; } = "";
-        public string? BankAccount { get; set; }
-        public string? BankName { get; set; }
-        public string? BankAccountType { get; set; }
-        public bool IsActive { get; set; }
         public DateTime? TerminationDate { get; set; }
+        public string TerminationCause { get; set; } = "";
+        public int Status { get; set; }
+        public string HealthInsuranceName { get; set; } = "";
+        public string PensionProviderName { get; set; } = "";
+        public string WorkRiskProviderName { get; set; } = "";
+        public string PayrollBankAccountNumber { get; set; } = "";
+        public int PayrollBankAccountType { get; set; }
+        public Guid? HealthInsurancePublicId { get; set; }
+        public Guid? PensionProviderPublicId { get; set; }
+        public Guid? WorkRiskProviderPublicId { get; set; }
+        public Guid? PayrollBankPublicId { get; set; }
+        public string? PayrollBankName { get; set; }
+        public List<SalaryHistoryItem> SalaryHistory { get; set; } = new();
+        public List<RecentEntryItem> RecentEntries { get; set; } = new();
     }
 
     private class LaborData
     {
-        public string Position { get; set; } = "";
-        public string DepartmentCode { get; set; } = "";
         public decimal BaseSalary { get; set; }
-        public string ContractType { get; set; } = "";
-        public DateTime HireDate { get; set; }
-        public string HealthInsuranceCode { get; set; } = "";
-        public string PensionCode { get; set; } = "";
-        public string WorkRiskCode { get; set; } = "";
-        public string BankAccount { get; set; } = "";
-        public string BankName { get; set; } = "";
-        public string BankAccountType { get; set; } = "";
+        public int ContractType { get; set; }
+        public Guid? HealthInsurancePublicId { get; set; }
+        public Guid? PensionProviderPublicId { get; set; }
+        public Guid? WorkRiskProviderPublicId { get; set; }
+        public Guid? BankPublicId { get; set; }
+        public string BankAccountNumber { get; set; } = "";
+        public int AccountType { get; set; }
     }
 
     private class SalaryHistoryItem
     {
-        public DateOnly EffectiveDate { get; set; }
-        public decimal PreviousSalary { get; set; }
+        public DateTime EffectiveDate { get; set; }
         public decimal NewSalary { get; set; }
-        public decimal ChangePercentage { get; set; }
-        public string Reason { get; set; } = "";
-        public string ChangedBy { get; set; } = "";
+        public string? UserName { get; set; }
     }
 
-    private class PayrollEntryItem
+    private class RecentEntryItem
     {
-        public string ConceptCode { get; set; } = "";
         public string ConceptName { get; set; } = "";
-        public string EntryType { get; set; } = "";
-        public decimal Amount { get; set; }
+        public decimal? Amount { get; set; }
+        public string PeriodDescription { get; set; } = "";
     }
 
-    private class CurrentPayrollDto
+    private class LookupRaw
     {
-        public string PeriodName { get; set; } = "";
-        public List<PayrollEntryItem> Entries { get; set; } = [];
-    }
-
-    private class CatalogItem
-    {
-        public string Code { get; set; } = "";
+        public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
     }
 
-    private record DropOption(string Value, string Name);
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
+    }
+
+    private record ContractTypeOption(int Value, string Name);
+    private record AccountTypeOption(int Value, string Name);
 }

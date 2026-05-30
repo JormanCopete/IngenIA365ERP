@@ -272,3 +272,4 @@ database/migration/data/*.sql
 *.seed
 *.tgz
 .yarn-integrity
+speckit.constitution.md

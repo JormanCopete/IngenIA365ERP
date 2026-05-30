@@ -1,0 +1,299 @@
+@page "/maestros/departamentos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Departamentos - IngenIA365ERP</PageTitle>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <h3>Departamentos</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                        @bind-Value="_filterCountry"
+                        DataSource="@_countries"
+                        Placeholder="Filtrar por pais"
+                        Width="200px"
+                        AllowFiltering="true">
+            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+            <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => LoadData())" />
+        </SfDropDownList>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Departamento</SfButton>
+    </div>
+</div>
+
+<SfGrid @ref="_grid" TValue="DepartmentRow" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="@nameof(DepartmentRow.CountryName)" HeaderText="Pais" Width="200" />
+        <GridColumn Field="@nameof(DepartmentRow.Code)" HeaderText="Codigo" Width="120" />
+        <GridColumn Field="@nameof(DepartmentRow.Name)" HeaderText="Nombre" Width="280" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+            <Template>
+                @{
+                    var d = context as DepartmentRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => OpenEdit(d!))" Title="Editar" />
+                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                              OnClick="@(() => OpenDelete(d!))" Title="Eliminar" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                    <div>
+                        <label>Pais <span style="color:red">*</span></label>
+                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                        @bind-Value="_model.CountryPublicId"
+                                        DataSource="@_countries"
+                                        Placeholder="Seleccione pais"
+                                        AllowFiltering="true">
+                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                        </SfDropDownList>
+                        <ValidationMessage For="@(() => _model.CountryPublicId)" />
+                    </div>
+                    <div>
+                        <label>Codigo <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Code" Placeholder="Ej: VAC, ANT, CUN..."
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "10" } })" />
+                        <ValidationMessage For="@(() => _model.Code)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span style="color:red">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del departamento"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
+                        <ValidationMessage For="@(() => _model.Name)" />
+                    </div>
+                </div>
+                <button type="submit" id="dept-submit" style="display:none"></button>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+               Message="¿Esta seguro de eliminar este departamento?" />
+
+@code {
+    private SfGrid<DepartmentRow>? _grid;
+    private List<DepartmentRow> _items = new();
+    private List<LookupOption> _countries = new();
+    private Guid? _filterCountry;
+
+    private bool _showDialog, _showConfirm, _saving;
+    private string _dialogTitle = "";
+    private DepartmentModel _model = new();
+    private Guid? _editId;
+    private Guid _deleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadCountries(), LoadData());
+    }
+
+    private async Task LoadCountries()
+    {
+        try
+        {
+            _countries = (await Http.GetListAsync<LookupRaw>("/api/core/countries?PageNumber=1&PageSize=500"))
+                .Select(c => new LookupOption(c.PublicId, c.Name)).ToList();
+        }
+        catch { _countries = new List<LookupOption>(); }
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var url = "/api/core/departments?PageNumber=1&PageSize=1000";
+            if (_filterCountry.HasValue && _filterCountry.Value != Guid.Empty)
+                url += $"&CountryPublicId={_filterCountry.Value}";
+
+            _items = await Http.GetListAsync<DepartmentRow>(url);
+        }
+        catch (Exception ex)
+        {
+            _items = new List<DepartmentRow>();
+            await Notification.ErrorAsync($"No se pudieron cargar los departamentos: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+            if (_grid is not null) await _grid.Refresh();
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _model = new DepartmentModel
+        {
+            // Si el usuario filtra por pais, lo pre-selecciona
+            CountryPublicId = _filterCountry
+        };
+        _editId = null;
+        _dialogTitle = "Nuevo Departamento";
+        _showDialog = true;
+    }
+
+    private void OpenEdit(DepartmentRow row)
+    {
+        _model = new DepartmentModel
+        {
+            CountryPublicId = row.CountryPublicId,
+            Code = row.Code,
+            Name = row.Name
+        };
+        _editId = row.PublicId;
+        _dialogTitle = "Editar Departamento";
+        _showDialog = true;
+    }
+
+    private void OpenDelete(DepartmentRow row)
+    {
+        _deleteId = row.PublicId;
+        _showConfirm = true;
+    }
+
+    private void CancelDialog()
+    {
+        _showDialog = false;
+        _model = new DepartmentModel();
+        _editId = null;
+    }
+
+    private async Task Save()
+    {
+        if (_saving) return;
+
+        if (_model.CountryPublicId is null || _model.CountryPublicId == Guid.Empty)
+        {
+            await Notification.WarningAsync("Debe seleccionar un pais.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.Code))
+        {
+            await Notification.WarningAsync("El codigo es obligatorio.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            await Notification.WarningAsync("El nombre es obligatorio.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = new
+            {
+                CountryPublicId = _model.CountryPublicId.Value,
+                Code = _model.Code,
+                Name = _model.Name
+            };
+
+            HttpResponseMessage res;
+            if (_editId.HasValue)
+                res = await Http.PutAsJsonAsync($"/api/core/departments/{_editId}", payload);
+            else
+                res = await Http.PostAsJsonAsync("/api/core/departments", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync(_editId.HasValue
+                    ? "Departamento actualizado."
+                    : "Departamento creado.");
+                _showDialog = false;
+                _model = new DepartmentModel();
+                _editId = null;
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al guardar departamento");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"/api/core/departments/{_deleteId}");
+            if (res.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Departamento eliminado.");
+                await LoadData();
+            }
+            else
+            {
+                await Notification.ShowErrorAsync(res, "Error al eliminar departamento");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
+        }
+    }
+
+    // ---------- Models ----------
+
+    /// <summary>Coincide con DepartmentDto.</summary>
+    private class DepartmentRow
+    {
+        public Guid PublicId { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public Guid CountryPublicId { get; set; }
+        public string CountryName { get; set; } = "";
+    }
+
+    /// <summary>Modelo del formulario. Se serializa al payload del comando.</summary>
+    private class DepartmentModel
+    {
+        [Required(ErrorMessage = "Pais obligatorio.")]
+        public Guid? CountryPublicId { get; set; }
+
+        [Required(ErrorMessage = "Codigo obligatorio.")]
+        [MaxLength(10, ErrorMessage = "Codigo no puede superar 10 caracteres.")]
+        public string Code { get; set; } = "";
+
+        [Required(ErrorMessage = "Nombre obligatorio.")]
+        [MaxLength(100, ErrorMessage = "Nombre no puede superar 100 caracteres.")]
+        public string Name { get; set; } = "";
+    }
+
+    private class LookupRaw
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private class LookupOption
+    {
+        public Guid? PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public LookupOption(Guid publicId, string name) { PublicId = publicId; Name = name; }
+    }
+}

@@ -1,0 +1,93 @@
+@page "/security/mfa-enrollment"
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject AuthClient AuthClient
+
+<PageTitle>Inscripción MFA — IngenIA365ERP</PageTitle>
+
+<h1>Inscripción de segundo factor</h1>
+
+@if (_state == State.NeedPassword)
+{
+    <p>Por seguridad, confirma tu contraseña actual para iniciar la inscripción.</p>
+    <EditForm Model="@_step1" OnValidSubmit="@StartAsync" FormName="mfa-enroll-start">
+        <DataAnnotationsValidator />
+        <InputText @bind-Value="_step1.Password" type="password" />
+        <ValidationMessage For="@(() => _step1.Password)" />
+        <button type="submit" disabled="@_busy">Iniciar inscripción</button>
+    </EditForm>
+}
+else if (_state == State.ScanQr && _enrollment is not null)
+{
+    <p>Escanea el código QR con tu authenticator (Google Authenticator, Microsoft Authenticator, 1Password, …).</p>
+    @((MarkupString)_enrollment.QrCodeSvg)
+    <p>O ingresa manualmente el secreto: <code>@_enrollment.Secret</code></p>
+
+    <EditForm Model="@_step2" OnValidSubmit="@ConfirmAsync" FormName="mfa-enroll-confirm">
+        <DataAnnotationsValidator />
+        <label>Código TOTP del authenticator</label>
+        <InputText @bind-Value="_step2.TotpCode" maxlength="6" inputmode="numeric" />
+        <ValidationMessage For="@(() => _step2.TotpCode)" />
+        <button type="submit" disabled="@_busy">Confirmar inscripción</button>
+    </EditForm>
+}
+else if (_state == State.ShowBackupCodes)
+{
+    <p><strong>Guarda estos códigos en un lugar seguro</strong>. No se volverán a mostrar.</p>
+    <ul>
+        @foreach (var backupCode in _backupCodes)
+        {
+            <li><span class="backup-code">@backupCode</span></li>
+        }
+    </ul>
+}
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@code {
+    private enum State { NeedPassword, ScanQr, ShowBackupCodes }
+    private State _state = State.NeedPassword;
+    private MfaEnrollmentStartResponse? _enrollment;
+    private List<string> _backupCodes = new();
+    private bool _busy;
+    private string? _error;
+
+    private readonly Step1 _step1 = new();
+    private readonly Step2 _step2 = new();
+
+    private async Task StartAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            _enrollment = await AuthClient.EnrollMfaStartAsync(_step1.Password!);
+            _state = _enrollment is null ? State.NeedPassword : State.ScanQr;
+            if (_enrollment is null) _error = "No se pudo iniciar la inscripción.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_enrollment is null) return;
+        _busy = true; _error = null;
+        try
+        {
+            var codes = await AuthClient.EnrollMfaConfirmAsync(_enrollment.EnrollmentToken, _step2.TotpCode!);
+            if (codes is null) { _error = "Código inválido o inscripción expirada."; return; }
+            _backupCodes = codes;
+            _state = State.ShowBackupCodes;
+        }
+        finally { _busy = false; }
+    }
+
+    public sealed class Step1 { [Required] public string? Password { get; set; } }
+    public sealed class Step2
+    {
+        [Required, RegularExpression("^[0-9]{6}$", ErrorMessage = "El código TOTP debe tener 6 dígitos.")]
+        public string? TotpCode { get; set; }
+    }
+}

@@ -1,26 +1,7 @@
-using IngenIA365ERP.Domain.Entities.Security;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
-namespace IngenIA365ERP.Persistence.Configurations.Security;
-
-public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
-{
-    public void Configure(EntityTypeBuilder<UserRole> builder)
-    {
-        builder.ToTable("SEC_UserRoles_Explicit");
-        builder.HasKey(e => e.Id);
-        builder.Property(e => e.Id).UseIdentityColumn();
-
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
-        builder.HasIndex(e => e.PublicId).IsUnique();
-        builder.HasIndex(e => new { e.UserId, e.RoleId }).IsUnique();
-
-        builder.Property(e => e.AssignedBy).HasMaxLength(100).IsRequired();
-
-        builder.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(e => e.Role).WithMany().HasForeignKey(e => e.RoleId).OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => !e.IsDeleted);
-    }
-}
+// La configuración de UserRole se centraliza ahora en UserConfiguration vía
+// `UsingEntity<UserRole>(...)` para que la junction sea EL mapeo de SEC_UserRoles
+// y EF use los nombres reales de columna (UserId/RoleId) en lugar de la
+// convención implícita (RolesId/UsersId).
+//
+// Se conserva el archivo vacío como marca histórica — si en el futuro UserRole
+// requiere configuración extra independiente del N:N, se reintroduce aquí.

@@ -1,0 +1,97 @@
+@page "/compliance/habeas-data/persons/{PersonId:int}/historial"
+@using IngenIA365ERP.Shared.Configuration
+@using System.Net.Http.Json
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Historial habeas data — IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Compliance.HabeasData.ViewHistory">
+    <ChildContent>
+        <div class="admin-page">
+            <h1>Historial habeas data — titular #@PersonId</h1>
+
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <PermissionGate Required="Compliance.HabeasData.RecordConsent">
+                    <ChildContent>
+                        <button class="primary" @onclick='() => Nav.NavigateTo($"/compliance/habeas-data/consents/aceptar/{PersonId}")'>
+                            Registrar aceptación
+                        </button>
+                    </ChildContent>
+                </PermissionGate>
+                <PermissionGate Required="Compliance.HabeasData.Revoke">
+                    <ChildContent>
+                        <button @onclick='() => Nav.NavigateTo($"/compliance/habeas-data/consents/revocar/{PersonId}")'>
+                            Registrar revocación
+                        </button>
+                    </ChildContent>
+                </PermissionGate>
+            </div>
+
+            @if (_loading) { <p>Cargando…</p> }
+            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_items.Count == 0) { <p>El titular aún no tiene consentimientos registrados.</p> }
+            else
+            {
+                <p class="muted">
+                    Estado actual:
+                    <strong>@(_items[0].Action == "Accepted" ? "Consentimiento vigente" : "Revocado")</strong>
+                    (desde @_items[0].ActionAt.ToString("yyyy-MM-dd HH:mm"))
+                </p>
+
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Fecha</th><th>Acción</th><th>Versión</th><th>Canal</th><th>Por</th><th>Notas</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in _items)
+                        {
+                            <tr>
+                                <td>@h.ActionAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    <span style="color: @(h.Action == "Accepted" ? "green" : "darkred");">
+                                        @h.Action
+                                    </span>
+                                </td>
+                                <td>v@(h.PolicyVersionNumber)</td>
+                                <td>@h.Channel</td>
+                                <td>@h.ActionBy</td>
+                                <td>@h.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </ChildContent>
+    <Fallback><p>No tienes permiso para consultar el historial habeas data.</p></Fallback>
+</PermissionGate>
+
+@code {
+    [Parameter] public int PersonId { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private List<HistoryItem> _items = new();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var resp = await Http.GetAsync(
+                $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/consents/history/{PersonId}");
+            if (!resp.IsSuccessStatusCode) { _error = $"Error {(int)resp.StatusCode}"; return; }
+            _items = await resp.Content.ReadFromJsonAsync<List<HistoryItem>>() ?? new();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    public sealed record HistoryItem(
+        Guid PublicId, int PolicyVersionNumber, Guid PolicyVersionPublicId,
+        string Action, DateTime ActionAt, string ActionBy, string? Channel, string? Notes);
+}

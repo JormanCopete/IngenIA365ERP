@@ -38,6 +38,9 @@ CREATE TABLE SEC_Users (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_Users PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_Users_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_Users_Username UNIQUE (Username)
@@ -60,6 +63,9 @@ CREATE TABLE SEC_UserMenuAccess (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_UserMenuAccess PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_UserMenuAccess_PublicId UNIQUE (PublicId)
 );
@@ -77,6 +83,9 @@ CREATE TABLE SEC_Modules (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_Modules PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_Modules_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_Modules_UserProgram UNIQUE (UserId, ProgramCode)
@@ -93,6 +102,9 @@ CREATE TABLE SEC_UserAssignments (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_UserAssignments PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_UserAssignments_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_UserAssignments_VoucherUser UNIQUE (VoucherTypeCode, UserId)
@@ -111,6 +123,9 @@ CREATE TABLE SEC_Roles (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_Roles PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_Roles_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_Roles_Name UNIQUE (Name)
@@ -128,6 +143,9 @@ CREATE TABLE SEC_Permissions (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_Permissions PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_Permissions_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_Permissions_ResourceAction UNIQUE (Resource, Action)
@@ -144,6 +162,9 @@ CREATE TABLE SEC_RolePermissions (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_RolePermissions PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_RolePermissions_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_RolePermissions_RolePerm UNIQUE (RoleId, PermissionId)
@@ -162,6 +183,9 @@ CREATE TABLE SEC_UserRoles (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_UserRoles PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_UserRoles_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_SEC_UserRoles_UserRole UNIQUE (UserId, RoleId)
@@ -184,6 +208,9 @@ CREATE TABLE SEC_RefreshTokens (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_RefreshTokens PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_RefreshTokens_PublicId UNIQUE (PublicId)
 );
@@ -205,6 +232,9 @@ CREATE TABLE SEC_UserSessions (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_UserSessions PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_UserSessions_PublicId UNIQUE (PublicId)
 );
@@ -224,6 +254,9 @@ CREATE TABLE SEC_LoginAttempts (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_SEC_LoginAttempts PRIMARY KEY (Id),
     CONSTRAINT UK_SEC_LoginAttempts_PublicId UNIQUE (PublicId)
 );
@@ -250,6 +283,9 @@ CREATE TABLE AUD_CompanyChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_CompanyChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_CompanyChanges_PublicId UNIQUE (PublicId)
 );
@@ -272,6 +308,9 @@ CREATE TABLE AUD_UserChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_UserChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_UserChanges_PublicId UNIQUE (PublicId)
 );
@@ -294,6 +333,9 @@ CREATE TABLE AUD_VoucherTypeChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_VoucherTypeChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_VoucherTypeChanges_PublicId UNIQUE (PublicId)
 );
@@ -316,6 +358,9 @@ CREATE TABLE AUD_MasterChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_MasterChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_MasterChanges_PublicId UNIQUE (PublicId)
 );
@@ -338,6 +383,9 @@ CREATE TABLE AUD_MenuChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_MenuChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_MenuChanges_PublicId UNIQUE (PublicId)
 );
@@ -360,6 +408,9 @@ CREATE TABLE AUD_PeriodChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_PeriodChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_PeriodChanges_PublicId UNIQUE (PublicId)
 );
@@ -382,6 +433,9 @@ CREATE TABLE AUD_AssignmentChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_AssignmentChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_AssignmentChanges_PublicId UNIQUE (PublicId)
 );
@@ -404,6 +458,9 @@ CREATE TABLE AUD_AccountChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_AccountChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_AccountChanges_PublicId UNIQUE (PublicId)
 );
@@ -426,6 +483,9 @@ CREATE TABLE AUD_JournalChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_JournalChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_JournalChanges_PublicId UNIQUE (PublicId)
 );
@@ -448,6 +508,9 @@ CREATE TABLE AUD_PortfolioTransactionChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_PortfolioTransactionChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_PortfolioTransactionChanges_PublicId UNIQUE (PublicId)
 );
@@ -470,6 +533,9 @@ CREATE TABLE AUD_PortfolioMasterChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_PortfolioMasterChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_PortfolioMasterChanges_PublicId UNIQUE (PublicId)
 );
@@ -492,6 +558,9 @@ CREATE TABLE AUD_DefaultChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_DefaultChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_DefaultChanges_PublicId UNIQUE (PublicId)
 );
@@ -514,6 +583,9 @@ CREATE TABLE AUD_SavingsChanges (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_SavingsChanges PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_SavingsChanges_PublicId UNIQUE (PublicId)
 );
@@ -535,6 +607,9 @@ CREATE TABLE AUD_AuditReferences (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_AUD_AuditReferences PRIMARY KEY (Id),
     CONSTRAINT UK_AUD_AuditReferences_PublicId UNIQUE (PublicId)
 );
@@ -564,6 +639,9 @@ CREATE TABLE WEB_LoanApplications (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_LoanApplications PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_LoanApplications_PublicId UNIQUE (PublicId)
 );
@@ -584,6 +662,9 @@ CREATE TABLE WEB_AuxiliaryApplications (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_AuxiliaryApplications PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_AuxiliaryApplications_PublicId UNIQUE (PublicId)
 );
@@ -617,6 +698,9 @@ CREATE TABLE WEB_AffiliationApplications (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_AffiliationApplications PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_AffiliationApplications_PublicId UNIQUE (PublicId)
 );
@@ -639,6 +723,9 @@ CREATE TABLE WEB_Services (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_Services PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_Services_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_WEB_Services_NumTypeIdent UNIQUE (ServiceNumber, ServiceType, IdentificationNumber)
@@ -656,6 +743,9 @@ CREATE TABLE WEB_ExtraPayments (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_ExtraPayments PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_ExtraPayments_PublicId UNIQUE (PublicId)
 );
@@ -690,6 +780,9 @@ CREATE TABLE WEB_DataUpdates (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_WEB_DataUpdates PRIMARY KEY (Id),
     CONSTRAINT UK_WEB_DataUpdates_PublicId UNIQUE (PublicId)
 );
@@ -719,6 +812,9 @@ CREATE TABLE ADM_Tenants (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_ADM_Tenants PRIMARY KEY (Id),
     CONSTRAINT UK_ADM_Tenants_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_ADM_Tenants_SchemaName UNIQUE (SchemaName),
@@ -744,6 +840,9 @@ CREATE TABLE ADM_Subscriptions (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_ADM_Subscriptions PRIMARY KEY (Id),
     CONSTRAINT UK_ADM_Subscriptions_PublicId UNIQUE (PublicId)
 );
@@ -763,6 +862,9 @@ CREATE TABLE ADM_TenantSettings (
     CreatedBy               NVARCHAR(100) NOT NULL DEFAULT N'SYSTEM',
     UpdatedAt               DATETIME2 NULL,
     UpdatedBy               NVARCHAR(100) NULL,
+    IsDeleted               BIT NOT NULL DEFAULT 0,
+    DeletedAt               DATETIME2 NULL,
+    DeletedBy               NVARCHAR(100) NULL,
     CONSTRAINT PK_ADM_TenantSettings PRIMARY KEY (Id),
     CONSTRAINT UK_ADM_TenantSettings_PublicId UNIQUE (PublicId),
     CONSTRAINT UK_ADM_TenantSettings_TenantKey UNIQUE (TenantId, SettingKey)

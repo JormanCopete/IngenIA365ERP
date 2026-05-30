@@ -1,0 +1,79 @@
+@page "/security/mfa-challenge"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject AuthClient AuthClient
+@inject NavigationManager Nav
+
+<PageTitle>Verificación MFA — IngenIA365ERP</PageTitle>
+
+<div class="auth-card">
+    <h1>Verificación en dos pasos</h1>
+    <p>Ingresa el código de 6 dígitos de tu autenticador o un código de respaldo.</p>
+
+    <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="mfa-challenge">
+        <DataAnnotationsValidator />
+
+        <label><InputCheckbox @bind-Value="_model.UseBackupCode" /> Usar código de respaldo</label>
+
+        @if (!_model.UseBackupCode)
+        {
+            <label>Código TOTP</label>
+            <InputText @bind-Value="_model.TotpCode" inputmode="numeric" maxlength="6" />
+        }
+        else
+        {
+            <label>Código de respaldo</label>
+            <InputText @bind-Value="_model.BackupCode" />
+        }
+
+        <button type="submit" disabled="@_busy">Verificar</button>
+    </EditForm>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Token { get; set; }
+    private readonly Input _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _error = "Sesión expirada. Vuelve a iniciar sesión.";
+            return;
+        }
+        _busy = true;
+        _error = null;
+        try
+        {
+            var ok = await AuthClient.VerifyMfaAsync(
+                Token, _model.UseBackupCode ? null : _model.TotpCode,
+                _model.UseBackupCode, _model.BackupCode, branchPublicId: null);
+            if (!ok)
+            {
+                _error = "Código inválido o expirado.";
+                return;
+            }
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public sealed class Input
+    {
+        public bool UseBackupCode { get; set; }
+        [RegularExpression("^[0-9]{6}$", ErrorMessage = "El código TOTP debe tener 6 dígitos.")]
+        public string? TotpCode { get; set; }
+        public string? BackupCode { get; set; }
+    }
+}

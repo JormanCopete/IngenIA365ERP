@@ -128,7 +128,7 @@ else if (!_loading && _certificates is not null)
         _loading = true;
         try
         {
-            _certificates = await Http.GetFromJsonAsync<List<TaxCertItem>>(
+            _certificates = await Http.GetListAsync<TaxCertItem>(
                 $"/api/accounting/tax-certificates/{_year}");
         }
         catch
@@ -169,7 +169,7 @@ else if (!_loading && _certificates is not null)
         if (string.IsNullOrWhiteSpace(_searchTerm)) return;
         try
         {
-            _searchResults = await Http.GetFromJsonAsync<List<PersonItem>>(
+            _searchResults = await Http.GetListAsync<PersonItem>(
                 $"/api/core/people?searchTerm={Uri.EscapeDataString(_searchTerm)}&pageSize=10");
         }
         catch

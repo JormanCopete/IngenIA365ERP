@@ -1,0 +1,67 @@
+name: Load tests (nightly)
+
+# T133 — Ejecuta NBomber contra un stack dev efímero cada noche y
+# archiva los reportes HTML/JSON como artifacts del run.
+# Disparable manualmente desde la UI para verificar antes de un release.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC = 01:00 COT (después del cierre de día)
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: 'Duración total (ramp + plateau) en minutos'
+        required: false
+        default: '40'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  LOADTEST_BASE_URL: 'http://localhost:5000'
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Start dev stack
+        run: docker compose -f docker/dev.yml up -d
+
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do
+            if curl -fs http://localhost:5000/health/ready; then exit 0; fi
+            sleep 5
+          done
+          echo "API never became ready"; exit 1
+
+      - name: Seed synthetic dataset
+        run: |
+          dotnet run --project tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj \
+            -- seed || true
+
+      - name: Run NBomber scenario
+        run: |
+          dotnet test tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj \
+            --configuration Release --logger "trx;LogFileName=load.trx"
+
+      - name: Archive reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbomber-reports-${{ github.run_id }}
+          path: |
+            tests/IngenIA365ERP.Load.Tests/reports/**/*.html
+            tests/IngenIA365ERP.Load.Tests/reports/**/*.json
+            tests/IngenIA365ERP.Load.Tests/**/TestResults/**/*.trx
+          retention-days: 30
+
+      - name: Tear down dev stack
+        if: always()
+        run: docker compose -f docker/dev.yml down -v

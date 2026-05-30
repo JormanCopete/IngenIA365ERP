@@ -212,7 +212,7 @@ else
     {
         try
         {
-            var accounts = await Http.GetFromJsonAsync<List<BankAccountOption>>("/api/accounting/bank-accounts?pageSize=100");
+            var accounts = await Http.GetListAsync<BankAccountOption>("/api/accounting/bank-accounts?pageSize=100");
             _bankAccounts = accounts ?? [];
             foreach (var a in _bankAccounts) a.Display = $"{a.Code} - {a.Name}";
         }

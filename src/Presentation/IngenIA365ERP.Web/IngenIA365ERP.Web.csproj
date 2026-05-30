@@ -9,9 +9,9 @@
   <ItemGroup>
     <ProjectReference Include="..\IngenIA365ERP.Web.Client\IngenIA365ERP.Web.Client.csproj" />
     <ProjectReference Include="..\IngenIA365ERP.Shared\IngenIA365ERP.Shared.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
-    <PackageReference Include="Syncfusion.Blazor" Version="33.1.44" />
-    <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.1.44" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.8" />
+    <PackageReference Include="Syncfusion.Blazor" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.2.8" />
   </ItemGroup>
 
 </Project>

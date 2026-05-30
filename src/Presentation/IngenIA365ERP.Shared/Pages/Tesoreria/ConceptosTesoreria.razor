@@ -75,7 +75,7 @@
 
     private async Task LoadData()
     {
-        try { _items = await Http.GetFromJsonAsync<List<TreasuryConceptItem>>("/api/treasury/concepts?pageSize=500") ?? []; }
+        try { _items = await Http.GetListAsync<TreasuryConceptItem>("/api/treasury/concepts?pageSize=500") ?? []; }
         catch { _items = []; }
     }
 
