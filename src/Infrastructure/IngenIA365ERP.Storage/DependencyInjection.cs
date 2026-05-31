@@ -25,6 +25,11 @@ public static class DependencyInjection
         // los .cshtml leídos del filesystem; thread-safe via ConcurrentDictionary.
         services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
 
+        // Feature 002 — plantillas HTML del flujo de identidad central
+        // (Invitation, PasswordReset, PasswordChanged) bajo Templates/ con
+        // interpolación simple {{Key}}. Singleton: cachea cada plantilla.
+        services.AddSingleton<IIdentityEmailTemplates, IdentityEmailTemplates>();
+
         // T119 — Background dispatcher de correo para notificaciones US6.
         services.AddHostedService<NotificationEmailDispatcher>();
         return services;

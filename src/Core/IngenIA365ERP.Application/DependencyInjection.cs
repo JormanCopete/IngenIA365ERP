@@ -1,6 +1,8 @@
 using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Services;
+using IngenIA365ERP.Application.Invitations.Services;
 using Mapster;
 using MapsterMapper;
 using MediatR;
@@ -37,6 +39,14 @@ public static class DependencyInjection
         config.Scan(assembly);
         services.AddSingleton(config);
         services.AddScoped<IMapper, ServiceMapper>();
+
+        // Feature 002 — US1 services.
+        // ITenantUserProvisioner: garantiza fila SEC_Users en el tenant destino
+        // al aceptar invitación (T056). IInvitationEmailDispatcher: arma + envía
+        // el correo de invitación (T057). Ambos Scoped — consumen IApplicationDbContext
+        // / IEmailSender que también son Scoped.
+        services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
+        services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 
         return services;
     }

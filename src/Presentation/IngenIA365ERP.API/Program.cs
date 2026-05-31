@@ -155,6 +155,12 @@ try
     // Application layer DI registration (MediatR, FluentValidation, Mapster)
     builder.Services.AddApplicationServices();
 
+    // Feature 002 — opciones del flujo de identidad central
+    // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
+    builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
+        builder.Configuration.GetSection(
+            IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions.SectionName));
+
     // Infrastructure layer DI registrations
     builder.Services.AddPersistenceServices(builder.Configuration);
     // builder.Services.AddCachingServices(builder.Configuration);  // Using MemoryCacheService instead of Redis for local dev
