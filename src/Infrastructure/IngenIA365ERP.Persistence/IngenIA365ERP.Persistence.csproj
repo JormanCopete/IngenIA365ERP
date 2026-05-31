@@ -9,6 +9,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.*" />
+    <!-- Pinned para evitar que el tool dotnet-ef cargue Design 8.0.0 transitivo
+         (causa MissingMethodException contra runtime EF 10.x). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <!-- ASP.NET Core Identity con EF Core store: AdminDbContext extiende
          IdentityDbContext<CentralUserIdentity, IdentityRole<Guid>, Guid>.
          La interfaz pública la consume Application vía ICentralIdentityProvider
