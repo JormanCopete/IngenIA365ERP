@@ -49,6 +49,15 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
 
+  # MTA local para capturar correos de invitación / reset de contraseña en dev.
+  # SMTP en :1025 (sin auth), UI web en :8025.
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: ingenia365-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   # --- APLICACION ---
   api:
     build:

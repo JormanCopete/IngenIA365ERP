@@ -6,6 +6,11 @@
     <RootNamespace>IngenIA365ERP.Identity</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Microsoft.AspNetCore.Identity (abstracciones) viene transitivamente con
+         Microsoft.AspNetCore.Identity.EntityFrameworkCore. En .NET 10 no existe un
+         paquete standalone "Microsoft.AspNetCore.Identity" 10.x; sus tipos
+         pertenecen a Microsoft.Extensions.Identity.Core / .Stores cargados como
+         dependencias transitivas. -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.*" />
