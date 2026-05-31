@@ -52,6 +52,10 @@ builder.Services.AddScoped<ILoadingService, LoadingService>();
 // Feature 002 (US1) — cliente del módulo de invitaciones consumido por
 // AcceptInvitation.razor. Usa el HttpClient 'api' configurado arriba.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClient>();
+// Feature 002 (US2) — cliente del flujo de autenticación central
+// consumido por Login.razor + MfaChallenge.razor + SelectTenant.razor.
+// Scoped para mantener tokens en memoria por sesión WASM.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();

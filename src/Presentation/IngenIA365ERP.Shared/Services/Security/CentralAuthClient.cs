@@ -1,0 +1,266 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+
+namespace IngenIA365ERP.Shared.Services.Security;
+
+/// <summary>
+/// T077 — Cliente del flujo de identidad central (Feature 002).
+/// Reemplaza a <see cref="AuthClient"/> legacy de Fase 0 que requería tenant
+/// en el request de login.
+///
+/// <para>
+/// Mantiene en memoria DOS sets de tokens:
+/// <list type="bullet">
+///   <item><c>operational</c> — el JWT con <c>purpose=full</c> + <c>active_tenant_id</c>
+///         emitido por login mono-tenant o tras MFA/select-tenant.</item>
+///   <item><c>challenge</c> — un JWT temporal con <c>purpose</c> acotado
+///         (mfa-verify | mfa-enroll | tenant-select) que solo es válido para
+///         su endpoint correspondiente.</item>
+/// </list>
+/// El usuario nunca tiene ambos a la vez: cuando llega el operacional, el
+/// challenge se descarta.
+/// </para>
+/// </summary>
+public sealed class CentralAuthClient
+{
+    private readonly HttpClient _http;
+
+    // Operational session.
+    private string? _accessToken;
+    private DateTime _accessTokenExpiresAt;
+    private string? _refreshToken;
+
+    // Challenge token (temporary, scoped).
+    private string? _challengeToken;
+
+    public CentralAuthClient(HttpClient http) => _http = http;
+
+    public string? CurrentAccessToken => _accessToken;
+    public bool IsAuthenticated =>
+        !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
+
+    public event EventHandler? Authenticated;
+    public event EventHandler? SignedOut;
+
+    // ---------- Login ----------
+
+    public async Task<InvitationApiResult<LoginResponse>> LoginAsync(
+        string email, string password, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/auth/login", new { email, password }, ct);
+            var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                RouteLoginResponse(body);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- MFA verify ----------
+
+    public async Task<InvitationApiResult<LoginResponse>> MfaVerifyAsync(
+        string code, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<LoginResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/verify")
+            {
+                Content = JsonContent.Create(new { code }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                RouteLoginResponse(body);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Select tenant ----------
+
+    public async Task<InvitationApiResult<SelectTenantResponse>> SelectTenantAsync(
+        Guid tenantPublicId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<SelectTenantResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/sessions/select-tenant")
+            {
+                Content = JsonContent.Create(new { tenantPublicId }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<SelectTenantResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                _accessToken = body.AccessToken;
+                _accessTokenExpiresAt = body.AccessTokenExpiresAt;
+                _refreshToken = body.RefreshToken;
+                _challengeToken = null;
+                Authenticated?.Invoke(this, EventArgs.Empty);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<SelectTenantResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Logout ----------
+
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        if (!string.IsNullOrWhiteSpace(_accessToken))
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout")
+                {
+                    Content = JsonContent.Create(new { refreshToken = _refreshToken }),
+                };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+                await _http.SendAsync(req, ct);
+            }
+            catch (HttpRequestException ex)
+            {
+                // Best-effort: si la red falla, limpiar tokens locales igual.
+                // El refresh queda activo en Redis hasta su TTL natural (12h);
+                // el usuario simplemente vuelve a loguear si se reconecta.
+                System.Diagnostics.Debug.WriteLine($"CentralAuth logout HTTP fall: {ex.Message}");
+            }
+        }
+
+        _accessToken = null;
+        _accessTokenExpiresAt = DateTime.MinValue;
+        _refreshToken = null;
+        _challengeToken = null;
+        SignedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ---------- Routing del LoginResponse ----------
+
+    private void RouteLoginResponse(LoginResponse body)
+    {
+        if (body.Challenge == "None"
+            && !string.IsNullOrWhiteSpace(body.AccessToken)
+            && !string.IsNullOrWhiteSpace(body.RefreshToken))
+        {
+            _accessToken = body.AccessToken;
+            _accessTokenExpiresAt = body.AccessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
+            _refreshToken = body.RefreshToken;
+            _challengeToken = null;
+            Authenticated?.Invoke(this, EventArgs.Empty);
+        }
+        else if (!string.IsNullOrWhiteSpace(body.ChallengeToken))
+        {
+            // MfaRequired / MfaEnrollmentRequired / TenantSelection — guarda el
+            // challenge token; el siguiente request (mfa/verify, select-tenant)
+            // lo enviará en Authorization.
+            _challengeToken = body.ChallengeToken;
+        }
+    }
+}
+
+// -------------------- DTOs --------------------
+
+public sealed record LoginResponse(
+    string Challenge,
+    Guid? CentralUserId,
+    string? Email,
+    bool? IsGlobalMasterAdmin,
+    string? AccessToken,
+    DateTime? AccessTokenExpiresAt,
+    string? RefreshToken,
+    DateTime? RefreshTokenExpiresAt,
+    string? ChallengeToken,
+    string? ChallengeTokenPurpose,
+    int? ExpiresInSeconds,
+    IReadOnlyList<ActiveTenantSummary>? ActiveTenants,
+    Guid? DefaultTenantPublicId,
+    bool? AutoSelected,
+    Guid? ActiveTenantPublicId,
+    string? ActiveTenantName,
+    string? Message,
+    IReadOnlyList<TenantSummary>? TenantsRequiringMfa);
+
+public sealed record ActiveTenantSummary(
+    Guid TenantPublicId,
+    string TenantName,
+    bool IsTenantAdmin);
+
+public sealed record TenantSummary(
+    Guid TenantPublicId,
+    string TenantName);
+
+public sealed record SelectTenantResponse(
+    string AccessToken,
+    DateTime AccessTokenExpiresAt,
+    string RefreshToken,
+    DateTime RefreshTokenExpiresAt,
+    int ExpiresInSeconds,
+    SelectedTenantInfo Tenant);
+
+public sealed record SelectedTenantInfo(Guid TenantPublicId, string TenantName);
+
+// -------------------- HTTP envelope helper --------------------
+
+internal static class CentralAuthApi
+{
+    public static async Task<InvitationApiResult<T>> ParseAsync<T>(
+        HttpResponseMessage resp, CancellationToken ct)
+    {
+        if (resp.IsSuccessStatusCode)
+        {
+            var value = await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+            return value is null
+                ? InvitationApiResult<T>.Failure("Generic.EmptyResponse",
+                    "La respuesta del servidor está vacía.", (int)resp.StatusCode)
+                : InvitationApiResult<T>.Success(value);
+        }
+
+        try
+        {
+            var envelope = await resp.Content.ReadFromJsonAsync<ErrorEnvelopeDto>(cancellationToken: ct);
+            return InvitationApiResult<T>.Failure(
+                envelope?.Code ?? "Generic.Failure",
+                envelope?.Message ?? "Error sin detalles.",
+                (int)resp.StatusCode);
+        }
+        catch
+        {
+            return InvitationApiResult<T>.Failure(
+                "Generic.Failure", $"Error HTTP {(int)resp.StatusCode}.", (int)resp.StatusCode);
+        }
+    }
+
+    private sealed record ErrorEnvelopeDto(string? Code, string? Message, string? TraceId);
+}

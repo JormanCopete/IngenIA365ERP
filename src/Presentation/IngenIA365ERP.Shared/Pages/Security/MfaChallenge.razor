@@ -2,66 +2,88 @@
 @layout MinimalLayout
 @using System.ComponentModel.DataAnnotations
 @using IngenIA365ERP.Shared.Services.Security
-@inject AuthClient AuthClient
+@inject CentralAuthClient AuthClient
 @inject NavigationManager Nav
 
-<PageTitle>Verificación MFA — IngenIA365ERP</PageTitle>
+@*
+    T079 — Segundo factor del login. El usuario llega aquí tras un login con
+    challenge=MfaRequired; el CentralAuthClient ya tiene el challengeToken
+    purpose=mfa-verify en memoria. POST a /api/auth/mfa/verify con el código TOTP.
 
-<div class="auth-card">
+    Refactorizado en US2.4 — reemplaza la versión Fase 0 que usaba el legacy
+    AuthClient con tenant en el body.
+*@
+
+<PageTitle>Verifica tu código — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 420px; margin: 48px auto;">
     <h1>Verificación en dos pasos</h1>
-    <p>Ingresa el código de 6 dígitos de tu autenticador o un código de respaldo.</p>
+    <p>Ingresa el código de 6 dígitos de tu app de autenticación.</p>
 
-    <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="mfa-challenge">
+    <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="mfaVerify">
         <DataAnnotationsValidator />
 
-        <label><InputCheckbox @bind-Value="_model.UseBackupCode" /> Usar código de respaldo</label>
+        <label>Código</label>
+        <InputText
+            @bind-Value="_model.Code"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            maxlength="8"
+            style="font-size: 20px; letter-spacing: 4px; text-align: center;" />
+        <ValidationMessage For="@(() => _model.Code)" />
 
-        @if (!_model.UseBackupCode)
-        {
-            <label>Código TOTP</label>
-            <InputText @bind-Value="_model.TotpCode" inputmode="numeric" maxlength="6" />
-        }
-        else
-        {
-            <label>Código de respaldo</label>
-            <InputText @bind-Value="_model.BackupCode" />
-        }
-
-        <button type="submit" disabled="@_busy">Verificar</button>
+        <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+            @(_busy ? "Verificando..." : "Verificar")
+        </button>
     </EditForm>
 
     @if (!string.IsNullOrEmpty(_error))
     {
-        <p class="error" role="alert">@_error</p>
+        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
     }
+
+    <p style="margin-top: 24px; font-size: 13px;">
+        <NavLink href="/security/login">Volver al inicio de sesión</NavLink>
+    </p>
 </div>
 
 @code {
-    [SupplyParameterFromQuery] public string? Token { get; set; }
-    private readonly Input _model = new();
+    private readonly MfaInput _model = new();
     private bool _busy;
     private string? _error;
 
     private async Task SubmitAsync()
     {
-        if (string.IsNullOrWhiteSpace(Token))
-        {
-            _error = "Sesión expirada. Vuelve a iniciar sesión.";
-            return;
-        }
         _busy = true;
         _error = null;
         try
         {
-            var ok = await AuthClient.VerifyMfaAsync(
-                Token, _model.UseBackupCode ? null : _model.TotpCode,
-                _model.UseBackupCode, _model.BackupCode, branchPublicId: null);
-            if (!ok)
+            var result = await AuthClient.MfaVerifyAsync(_model.Code!);
+            if (!result.IsSuccess || result.Value is null)
             {
-                _error = "Código inválido o expirado.";
+                _error = MapError(result.ErrorCode, result.ErrorMessage);
                 return;
             }
-            Nav.NavigateTo("/", forceLoad: true);
+
+            switch (result.Value.Challenge)
+            {
+                case "None":
+                    Nav.NavigateTo("/", forceLoad: true);
+                    break;
+                case "TenantSelection":
+                    Nav.NavigateTo("/security/select-tenant");
+                    break;
+                case "NoActiveMembership":
+                    Nav.NavigateTo("/security/no-membership");
+                    break;
+                default:
+                    _error = $"Respuesta inesperada: {result.Value.Challenge}";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
         }
         finally
         {
@@ -69,11 +91,19 @@
         }
     }
 
-    public sealed class Input
+    private static string MapError(string? code, string? message) => code switch
     {
-        public bool UseBackupCode { get; set; }
-        [RegularExpression("^[0-9]{6}$", ErrorMessage = "El código TOTP debe tener 6 dígitos.")]
-        public string? TotpCode { get; set; }
-        public string? BackupCode { get; set; }
+        "Identity.MfaInvalid" => "Código incorrecto. Verifica los dígitos en tu app.",
+        "Identity.ChallengeExpired" => "El tiempo expiró. Vuelve a iniciar sesión.",
+        "Identity.NoChallengeToken" => "Falta el token de challenge. Reinicia el login.",
+        "Identity.WrongTokenPurpose" => "El token no es válido para este paso.",
+        _ => message ?? "No se pudo verificar el código.",
+    };
+
+    public sealed class MfaInput
+    {
+        [Required(ErrorMessage = "Ingresa el código.")]
+        [StringLength(8, MinimumLength = 6, ErrorMessage = "El código tiene entre 6 y 8 dígitos.")]
+        public string? Code { get; set; }
     }
 }
