@@ -14,10 +14,16 @@ namespace IngenIA365ERP.Storage.Services;
 /// con jitter (FR-040). Tras agotar reintentos, propaga la excepción
 /// para que el orquestador (T119, US6) persista el fallo y reintente
 /// más tarde desde el worker.
+///
+/// <para>
+/// T042 (Feature 002): renombrado desde <c>MailKitEmailSender</c> para
+/// alinear el nombre con la abstracción (SMTP) en lugar del proveedor
+/// concreto (MailKit). El comportamiento es idéntico.
+/// </para>
 /// </summary>
-internal sealed class MailKitEmailSender(
+internal sealed class SmtpEmailSender(
     IOptions<SmtpSettings> settings,
-    ILogger<MailKitEmailSender> logger) : IEmailSender
+    ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     private readonly SmtpSettings _settings = settings.Value;
     private readonly Random _jitter = new();

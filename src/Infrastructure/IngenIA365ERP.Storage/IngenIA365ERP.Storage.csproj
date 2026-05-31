@@ -18,8 +18,12 @@
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- T116 — Templates de correo. Se copian al output para que el renderer
-         (NotificationTemplateRenderer, T117) los lea desde EmailTemplates/. -->
+    <!-- T116 — Templates de correo (US6/notificaciones). Se copian al output
+         para que NotificationTemplateRenderer (T117) los lea desde EmailTemplates/. -->
     <None Update="EmailTemplates\*.cshtml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- T042 (Feature 002) — Plantillas de identidad central. Interpolación
+         simple {{Placeholder}} (no Razor). Las consume IInvitationEmailDispatcher /
+         IPasswordResetEmailDispatcher / IPasswordChangedNotifier. -->
+    <None Update="Templates\*.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

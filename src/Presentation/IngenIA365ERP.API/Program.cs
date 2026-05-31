@@ -1,6 +1,7 @@
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Middleware;
+using IngenIA365ERP.API.Middleware.CentralIdentity;
 using IngenIA365ERP.API.Services;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -9,6 +10,7 @@ using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.Identity;
+using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
 using IngenIA365ERP.Persistence;
 using IngenIA365ERP.Storage;
@@ -94,7 +96,13 @@ try
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
 
     // === Identity & Security ===
+    // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);
+    // T048 (Feature 002) — identidad central federada sobre AdminDbContext.
+    // Registra IdentityCore<CentralUserIdentity>, BcryptPasswordHasher,
+    // PwnedPasswordService, CentralJwtIssuer, ICentralIdentityProvider.
+    // AdminDbContext ya queda registrado por AddPersistenceServices() abajo.
+    builder.Services.AddCentralIdentity(builder.Configuration);
 
     // T052/T058 — MFA challenge + enrollment stores en memoria (fallback dev).
     // Producción usa los respaldos en Redis vía AddCachingServices.
@@ -214,8 +222,12 @@ try
     app.UseSerilogRequestLogging();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");
-    app.UseTenantResolution();
+    // T048: orden estricto — Authentication primero para que TenantResolution
+    // pueda leer el claim active_tenant_id (T044). CentralIdentityChallenge
+    // envuelve respuestas 401 vacías en el envelope JSON canónico (T045).
     app.UseAuthentication();
+    app.UseCentralIdentityChallenge();
+    app.UseTenantResolution();
     app.UseAuthorization();
     // T074 — convierte cualquier 404 bajo /api/* en el envelope canónico,
     // haciendo indistinguible "endpoint no existe" vs "no tienes permiso".

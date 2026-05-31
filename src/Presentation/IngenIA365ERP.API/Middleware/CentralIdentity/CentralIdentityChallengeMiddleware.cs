@@ -39,3 +39,9 @@ public sealed class CentralIdentityChallengeMiddleware
         await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
     }
 }
+
+public static class CentralIdentityChallengeMiddlewareExtensions
+{
+    public static IApplicationBuilder UseCentralIdentityChallenge(this IApplicationBuilder app)
+        => app.UseMiddleware<CentralIdentityChallengeMiddleware>();
+}

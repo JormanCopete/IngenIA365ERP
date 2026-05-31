@@ -13,7 +13,7 @@ public static class DependencyInjection
     public static IServiceCollection AddStorageServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
-        services.AddScoped<IEmailSender, MailKitEmailSender>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         // T106 + T107 — Adjuntos cifrados (US5).
         services.Configure<AttachmentStorageSettings>(
