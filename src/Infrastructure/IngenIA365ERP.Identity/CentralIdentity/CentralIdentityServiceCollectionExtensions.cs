@@ -67,7 +67,10 @@ public static class CentralIdentityServiceCollectionExtensions
         });
 
         // 4. JWT issuer central — singleton (reutiliza JwtSettings + IRsaKeyProvider).
+        //    Doble registro: la abstracción ICentralJwtIssuer (consumida por
+        //    handlers de Application) apunta al mismo singleton concreto.
         services.AddSingleton<CentralJwtIssuer>();
+        services.AddSingleton<ICentralJwtIssuer>(sp => sp.GetRequiredService<CentralJwtIssuer>());
 
         // 5. ICentralIdentityProvider (la cara pública para Application).
         services.AddScoped<ICentralIdentityProvider, AspNetCoreIdentityProvider>();

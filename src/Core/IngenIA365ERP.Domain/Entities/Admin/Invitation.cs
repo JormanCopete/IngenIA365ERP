@@ -108,6 +108,17 @@ public class Invitation : AuditableEntity
         RevokedByUserId = byUserId;
     }
 
+    /// <summary>
+    /// Pending → Superseded. Se aplica cuando se emite una NUEVA invitación al
+    /// mismo email+tenant — la anterior queda obsoleta para evitar que el
+    /// destinatario use un token invalidado por la más reciente (T051).
+    /// </summary>
+    public void MarkSuperseded()
+    {
+        EnsurePending();
+        Status = InvitationStatus.Superseded;
+    }
+
     private void EnsurePending()
     {
         if (Status != InvitationStatus.Pending)

@@ -91,6 +91,11 @@ try
     // === Cross-cutting services consumed by Identity & Audit ===
     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
     builder.Services.AddSingleton<ICurrentUserService, CurrentUserService>();
+    // Feature 002 — accessor del JWT central (sub, email, active_tenant_id,
+    // tenant_admin, is_global_master_admin, purpose, mfa_verified).
+    builder.Services.AddSingleton<
+        IngenIA365ERP.Application.Common.Interfaces.Identity.ICurrentCentralUserContext,
+        CurrentCentralUserContextAccessor>();
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();

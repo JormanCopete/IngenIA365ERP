@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Identity.Configuration;
 using IngenIA365ERP.Identity.KeyManagement;
 using Microsoft.Extensions.Options;
@@ -28,7 +29,7 @@ namespace IngenIA365ERP.Identity.CentralIdentity;
 /// <c>AccessTokenIssuer</c> queda deprecated.
 /// </para>
 /// </summary>
-public class CentralJwtIssuer
+public class CentralJwtIssuer : ICentralJwtIssuer
 {
     private readonly JwtSettings _settings;
     private readonly IRsaKeyProvider _keyProvider;
@@ -155,26 +156,8 @@ public class CentralJwtIssuer
     }
 }
 
-/// <summary>Constantes de claim <c>purpose</c> aceptadas en el sistema.</summary>
-public static class CentralJwtPurposes
-{
-    public const string Full = "full";
-    public const string MfaVerify = "mfa-verify";
-    public const string MfaEnroll = "mfa-enroll";
-    public const string TenantSelect = "tenant-select";
-    public const string PasswordReset = "password-reset";
-
-    public static bool IsValid(string purpose) =>
-        purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset;
-}
-
-public sealed record CentralAccessTokenResult(
-    string Jwt,
-    DateTime ExpiresAt,
-    string Jti,
-    string Purpose);
-
-public sealed record CentralRefreshTokenResult(
-    string Token,
-    string HashHex,
-    DateTime ExpiresAt);
+// CentralJwtPurposes, CentralAccessTokenResult y CentralRefreshTokenResult
+// se promovieron a Application (ICentralJwtIssuer.cs) en US1.2 para que los
+// handlers de invitaciones/login puedan consumir tipos sin referenciar
+// Infrastructure. Quedan accesibles vía
+// IngenIA365ERP.Application.Common.Interfaces.Identity.*.
