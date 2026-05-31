@@ -1,7 +1,9 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Caching.Configuration;
 using IngenIA365ERP.Caching.Services;
+using IngenIA365ERP.Caching.Services.Identity;
 using IngenIA365ERP.Caching.Services.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,8 +20,8 @@ public static class DependencyInjection
         var redisSettings = configuration.GetSection(RedisSettings.SectionName).Get<RedisSettings>()
             ?? new RedisSettings();
 
-        services.AddSingleton<IConnectionMultiplexer>(
-            ConnectionMultiplexer.Connect(redisSettings.ConnectionString));
+        var multiplexer = ConnectionMultiplexer.Connect(redisSettings.ConnectionString);
+        services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 
         services.AddStackExchangeRedisCache(options =>
         {
@@ -38,6 +40,19 @@ public static class DependencyInjection
         // T052 — Cache de challenge MFA (post-login, pre-verify) y enrollment.
         services.AddScoped<IMfaChallengeStore, RedisMfaChallengeStore>();
         services.AddScoped<IMfaEnrollmentStore, RedisMfaEnrollmentStore>();
+
+        // Feature 002 (Chunk C.2) — identidad central:
+        // - TenantMembershipReader: cache 60s + JOIN a ADM_TenantMemberships/Tenants/MfaPolicies
+        //   con invalidación distribuida vía pub/sub Redis.
+        // - MembershipChangedNotifier: publica en canal 'membership-changed' al mutar.
+        // - LoginAttemptCounter: lockout progresivo por email (5/10/15/20 fallos).
+        services.AddScoped<ITenantMembershipReader, RedisTenantMembershipReader>();
+        services.AddScoped<IMembershipChangedNotifier, RedisMembershipChangedNotifier>();
+        services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+
+        // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
+        // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).
+        _ = RedisTenantMembershipReader.StartSubscriptionAsync(multiplexer);
 
         return services;
     }

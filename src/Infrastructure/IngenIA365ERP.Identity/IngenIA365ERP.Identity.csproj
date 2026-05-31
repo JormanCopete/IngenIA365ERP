@@ -24,5 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
+    <!-- Feature 002 (Chunk C.3) — Identity necesita CentralUserIdentity (bridge
+         IdentityUser<Guid>) que vive en Persistence (donde AdminDbContext lo persiste).
+         No crea ciclo: Persistence no referencia Identity. -->
+    <ProjectReference Include="..\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
   </ItemGroup>
 </Project>
