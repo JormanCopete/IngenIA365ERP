@@ -72,10 +72,34 @@ Todos los scripts son **idempotentes**: usan `IF NOT EXISTS` contra `sys.tables`
 
 ## MongoDB
 
-Bootstrap del audit log:
+Bootstrap del audit log. El archivo `database/migration/15_Audit_Mongodb_Bootstrap.json` es un **descriptor declarativo** (no un script ejecutable por `mongosh`); lo procesa el CLI `IngenIA365ERP.DbMigrator` con el subcomando `audit-bootstrap`, que aplica colecciones, índices, roles y usuarios MongoDB de forma idempotente.
 
-```bash
-mongosh "mongodb://<host>:27017" database/migration/15_Audit_Mongodb_Bootstrap.json
+**PowerShell (dev local en Windows)** — todo en una línea para evitar problemas con continuadores:
+
+```powershell
+$env:AUDIT_WRITER_PASSWORD='writer-pwd'; $env:AUDIT_READER_PASSWORD='reader-pwd'; dotnet run --project tools/IngenIA365ERP.DbMigrator -- audit-bootstrap --mongo-connection "mongodb://admin:****@localhost:27017/?authSource=admin"
 ```
 
-Crea la BD `IngenIA365ERP_Audit`, índices compuestos y TTL de 5 años. Idempotente.
+**Bash (CI / Linux)**:
+
+```bash
+export AUDIT_WRITER_PASSWORD='********'
+export AUDIT_READER_PASSWORD='********'
+dotnet run --project tools/IngenIA365ERP.DbMigrator -- audit-bootstrap \
+  --mongo-connection "mongodb://admin:****@localhost:27017/?authSource=admin"
+```
+
+> ⚠️ En PowerShell el `\` final NO continúa la línea (es sintaxis bash). Si lo usas, el CLI verá solo `audit-bootstrap` y reportará `--mongo-connection is required`. Usa backtick `` ` `` o el ejemplo de una línea.
+
+Lo que hace:
+
+- Crea la BD `IngenIA365ERP_Audit` (implícito) y la colección plantilla `audit_events_template`.
+- Aplica los índices del descriptor: `ix_tenant_occurredAt`, `ix_tenant_user_occurredAt`, `ix_tenant_entity_occurredAt`, y el TTL `ttl_occurredAt_5y` (5 años, SARLAFT — FR-023, SC-007).
+- Crea los roles `audit_appendOnly` (sin update/remove/drop — append-only) y `audit_readOnly` (consola US3).
+- Crea o actualiza los usuarios `audit_writer` y `audit_reader` con las contraseñas resueltas desde las env vars.
+
+**Idempotente**: una segunda corrida no produce cambios netos (los usuarios sí se "actualizan" para sincronizar password/roles con el estado declarado).
+
+**No usar `mongosh "..." 15_Audit_Mongodb_Bootstrap.json` directamente** — `mongosh` espera JavaScript y rechaza el JSON con `SyntaxError: Missing semicolon`.
+
+> **Nota runtime:** la API también incluye `AuditIndexBootstrap` (`IHostedService`) que garantiza los índices al arranque como defensa en profundidad — pero NO crea roles ni usuarios MongoDB (eso es admin-only y exclusivo del CLI).
