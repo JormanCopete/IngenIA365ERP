@@ -57,6 +57,10 @@ public static class DependencyInjection
         // Lua release atómico. Singleton — solo consume IConnectionMultiplexer.
         services.AddSingleton<IDistributedLock, RedisDistributedLock>();
 
+        // Feature 002 (US2) — refresh tokens del flujo central.
+        // Separado del IRefreshTokenStore legacy (Fase 0 con int UserId).
+        services.AddSingleton<ICentralRefreshTokenStore, RedisCentralRefreshTokenStore>();
+
         // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
         // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).
         _ = RedisTenantMembershipReader.StartSubscriptionAsync(multiplexer);

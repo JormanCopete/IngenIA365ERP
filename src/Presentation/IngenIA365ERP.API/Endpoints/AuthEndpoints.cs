@@ -34,9 +34,15 @@ public class AuthEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>();
 
         // === Anónimos ===
-        group.MapPost("/login", LoginAsync).AllowAnonymous().WithName("Auth_Login");
-        group.MapPost("/mfa/verify", VerifyMfaAsync).AllowAnonymous().WithName("Auth_VerifyMfa");
-        group.MapPost("/refresh", RefreshAsync).AllowAnonymous().WithName("Auth_Refresh");
+        // US2 (T071) — las 4 rutas /login, /mfa/verify, /refresh, /logout las
+        // sustituye CentralAuthModule con el flujo de identidad central
+        // (sin tenant en el request, tagged union de challenges). Estas rutas
+        // legacy quedan comentadas; cuando se cierre Phase 4b y el master
+        // admin pueda loguearse por el flujo central completo, AuthEndpoints
+        // entero se elimina.
+        // group.MapPost("/login", LoginAsync).AllowAnonymous().WithName("Auth_Login");
+        // group.MapPost("/mfa/verify", VerifyMfaAsync).AllowAnonymous().WithName("Auth_VerifyMfa");
+        // group.MapPost("/refresh", RefreshAsync).AllowAnonymous().WithName("Auth_Refresh");
 
         // === Dev-only: login en un solo paso (combina login + mfa/verify) ===
         // Útil para iteración local cuando MFA no está inscrito en el admin sembrado.
@@ -48,7 +54,8 @@ public class AuthEndpoints : ICarterModule
         }
 
         // === Autenticados ===
-        group.MapPost("/logout", LogoutAsync).RequireAuthorization().WithName("Auth_Logout");
+        // US2 (T071) — /logout también sustituido. Ver comentario de arriba.
+        // group.MapPost("/logout", LogoutAsync).RequireAuthorization().WithName("Auth_Logout");
         group.MapPost("/logout-all", LogoutAllAsync).RequireAuthorization().WithName("Auth_LogoutAll");
 
         group.MapPost("/mfa/enroll/start", EnrollMfaStartAsync).RequireAuthorization().WithName("Auth_EnrollMfaStart");

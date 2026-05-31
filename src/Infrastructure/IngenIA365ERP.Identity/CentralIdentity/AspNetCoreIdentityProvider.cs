@@ -243,6 +243,18 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         await _userManager.UpdateAsync(identity);
     }
 
+    public async Task SetDefaultTenantAsync(
+        Guid centralUserId, Guid? defaultTenantPublicId, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null) return;
+
+        if (identity.DefaultTenantId == defaultTenantPublicId) return; // no-op idempotente
+
+        identity.DefaultTenantId = defaultTenantPublicId;
+        await _userManager.UpdateAsync(identity);
+    }
+
     // -------------------- Helpers --------------------
 
     private static CentralUser ToDomain(CentralUserIdentity identity) => new()

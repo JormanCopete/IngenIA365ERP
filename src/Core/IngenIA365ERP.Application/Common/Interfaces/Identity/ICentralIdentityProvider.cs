@@ -85,6 +85,13 @@ public interface ICentralIdentityProvider
     /// <summary>Marca un login exitoso (actualiza LastLoginAt) — separado del
     /// registro append-only en <c>ADM_CentralUserLoginAttempts</c>.</summary>
     Task RecordSuccessfulLoginAsync(Guid centralUserId, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Actualiza <c>DefaultTenantId</c> del usuario. Pasa <c>null</c> para limpiar
+    /// la preferencia (FR-016 — invalidación silenciosa cuando la membresía con
+    /// la empresa por defecto ya no es Active, evitando preferencias zombi en BD).
+    /// </summary>
+    Task SetDefaultTenantAsync(Guid centralUserId, Guid? defaultTenantPublicId, CancellationToken ct);
 }
 
 // Result records — outcomes tipados para que el handler decida qué responder al cliente
