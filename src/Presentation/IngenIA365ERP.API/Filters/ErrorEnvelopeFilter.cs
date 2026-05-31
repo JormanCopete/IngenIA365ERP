@@ -66,6 +66,11 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
         var code = string.IsNullOrEmpty(error.Code) ? "Generic.Failure" : error.Code;
         var status = code switch
         {
+            // Feature 002 — códigos específicos con semántica HTTP distinta del default.
+            "Identity.Unauthenticated" => StatusCodes.Status401Unauthorized,
+            "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
+            "Invitation.LockBusy" => StatusCodes.Status409Conflict,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,
