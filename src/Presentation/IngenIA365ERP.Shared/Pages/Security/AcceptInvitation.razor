@@ -1,0 +1,254 @@
+@page "/auth/accept-invitation"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject InvitationClient InvitationClient
+@inject NavigationManager Nav
+
+@*
+    T064 — Pantalla de aceptación de invitación. Tres flujos según el preview:
+
+    1) isValid=false                       → mensaje específico del errorCode
+    2) isExistingCentralUser=true          → form "confirma con tu contraseña"
+                                             (rama ExistingCredentials)
+       (cuando haya sesión activa con email match: rama UseActiveSession con
+        un solo botón — TODO, ver T077 US2 cuando AuthClient esté wireado)
+    3) isExistingCentralUser=false         → form de registro con password meter
+                                             (rama Registration)
+
+    En éxito se navega al dashboard del tenant (placeholder /home; cuando
+    US2 implemente el routing por tenant se ajustará).
+*@
+
+<PageTitle>Aceptar invitación — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 480px; margin: 32px auto;">
+    @if (_state == ViewState.Loading)
+    {
+        <p>Cargando invitación...</p>
+    }
+    else if (_state == ViewState.InvalidToken)
+    {
+        <h1>No es posible aceptar esta invitación</h1>
+        <p class="error" role="alert">@_invalidMessage</p>
+        <p>
+            Si crees que esto es un error, contacta a quien te envió el correo
+            para que te emita una nueva invitación.
+        </p>
+        <NavLink href="/security/login" class="btn btn-link">Volver al inicio</NavLink>
+    }
+    else if (_preview is not null)
+    {
+        <h1>Únete a @_preview.TenantName</h1>
+        <p>
+            Te invitaron como <strong>@_preview.Email</strong>.
+            @if (_preview.InviteAsTenantAdmin)
+            {
+                <span>Te asignarán como <strong>administrador de la empresa</strong>.</span>
+            }
+        </p>
+
+        @if (_state == ViewState.ExistingConfirm)
+        {
+            <p>Esta cuenta ya está registrada. Confirma con tu contraseña para unirte.</p>
+            <EditForm Model="@_existing" OnValidSubmit="@SubmitExistingAsync" FormName="acceptExisting">
+                <DataAnnotationsValidator />
+
+                <label>Contraseña</label>
+                <InputText @bind-Value="_existing.Password" type="password" autocomplete="current-password" />
+                <ValidationMessage For="@(() => _existing.Password)" />
+
+                <button type="submit" disabled="@_busy">Confirmar y entrar</button>
+            </EditForm>
+        }
+        else if (_state == ViewState.NewRegistration)
+        {
+            <p>Para activar tu cuenta, crea una contraseña.</p>
+            <EditForm Model="@_registration" OnValidSubmit="@SubmitRegistrationAsync" FormName="acceptNew">
+                <DataAnnotationsValidator />
+
+                <label>Contraseña nueva</label>
+                <InputText
+                    @bind-Value="_registration.Password"
+                    type="password"
+                    autocomplete="new-password"
+                    @oninput="OnPasswordInput" />
+                <ValidationMessage For="@(() => _registration.Password)" />
+                <small style="color: @(PasswordMeterColor)">@PasswordMeterLabel</small>
+
+                <label>Repite la contraseña</label>
+                <InputText @bind-Value="_registration.PasswordRepeat" type="password" autocomplete="new-password" />
+                <ValidationMessage For="@(() => _registration.PasswordRepeat)" />
+
+                <button type="submit" disabled="@_busy">Crear cuenta y entrar</button>
+            </EditForm>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        }
+    }
+</div>
+
+@code {
+    private enum ViewState { Loading, InvalidToken, ExistingConfirm, NewRegistration }
+
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    private ViewState _state = ViewState.Loading;
+    private PreviewInvitationResponse? _preview;
+    private string? _invalidMessage;
+    private string? _error;
+    private bool _busy;
+
+    private readonly ExistingFormModel _existing = new();
+    private readonly RegistrationFormModel _registration = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _state = ViewState.InvalidToken;
+            _invalidMessage = "El enlace no contiene un token válido.";
+            return;
+        }
+
+        var result = await InvitationClient.PreviewAsync(Token);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _state = ViewState.InvalidToken;
+            _invalidMessage = MapPreviewError(result.ErrorCode, result.ErrorMessage);
+            return;
+        }
+
+        _preview = result.Value;
+        if (!_preview.IsValid)
+        {
+            _state = ViewState.InvalidToken;
+            _invalidMessage = MapInvitationErrorCode(_preview.ErrorCode);
+            return;
+        }
+
+        _state = _preview.IsExistingCentralUser
+            ? ViewState.ExistingConfirm
+            : ViewState.NewRegistration;
+    }
+
+    private async Task SubmitExistingAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
+                Token: Token!,
+                ExistingCredentials: new ExistingCredentialsInput(_existing.Password!)));
+            HandleAcceptResult(result);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SubmitRegistrationAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
+                Token: Token!,
+                Registration: new NewRegistrationInput(_registration.Password!)));
+            HandleAcceptResult(result);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void HandleAcceptResult(InvitationApiResult<AcceptInvitationResponse> result)
+    {
+        if (result.IsSuccess && result.Value is not null)
+        {
+            // TODO US2: persistir AccessToken+RefreshToken en AuthClient
+            // (cuando éste se registre y se conecte el flujo central). Por
+            // ahora redirigimos al login para que el usuario entre con sus
+            // nuevas credenciales recién creadas.
+            Nav.NavigateTo("/security/login", forceLoad: false);
+            return;
+        }
+
+        _error = result.ErrorCode switch
+        {
+            "Identity.InvalidCredentials" => "La contraseña no es correcta.",
+            "Identity.Password.Pwned" =>
+                "La contraseña aparece en filtraciones públicas; elige otra menos común.",
+            "Invitation.AlreadyAccepted" => "Esta invitación ya fue aceptada.",
+            "Invitation.Expired" => "La invitación expiró. Pide una nueva.",
+            "Invitation.Revoked" => "La invitación fue revocada por el administrador.",
+            "Invitation.LockBusy" =>
+                "Otra sesión está procesando la invitación. Reintenta en unos segundos.",
+            _ => result.ErrorMessage ?? "No fue posible completar la aceptación.",
+        };
+    }
+
+    private static string MapPreviewError(string? code, string? message) => code switch
+    {
+        "Invitation.NotFound" => "El enlace no corresponde a ninguna invitación.",
+        "Invitation.TokenMissing" => "El enlace no contiene un token válido.",
+        "Network.Error" => message ?? "No se pudo contactar al servidor.",
+        _ => message ?? "No fue posible cargar los datos de la invitación.",
+    };
+
+    private static string MapInvitationErrorCode(string? code) => code switch
+    {
+        "Invitation.Expired" => "Esta invitación expiró.",
+        "Invitation.Revoked" => "Esta invitación fue revocada.",
+        "Invitation.AlreadyAccepted" => "Esta invitación ya fue aceptada.",
+        "Invitation.Superseded" =>
+            "Esta invitación fue reemplazada por una más reciente; revisa el correo más nuevo.",
+        _ => "Esta invitación ya no es válida.",
+    };
+
+    // -------- Password meter (visual feedback) --------
+
+    private string PasswordMeterLabel { get; set; } = "Mínimo 12 caracteres.";
+    private string PasswordMeterColor { get; set; } = "#9ca3af";
+
+    private void OnPasswordInput(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        var pwd = e.Value as string ?? string.Empty;
+        var score = ScorePassword(pwd);
+        (PasswordMeterLabel, PasswordMeterColor) = score switch
+        {
+            < 12 => ("Demasiado corta — mínimo 12 caracteres.", "#dc2626"),
+            < 16 => ("Aceptable — considera 16+ caracteres.", "#f59e0b"),
+            _ => ("Buena longitud.", "#10b981"),
+        };
+    }
+
+    private static int ScorePassword(string pwd) => pwd?.Length ?? 0;
+
+    // -------- Form models --------
+
+    private sealed class ExistingFormModel
+    {
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        public string? Password { get; set; }
+    }
+
+    private sealed class RegistrationFormModel
+    {
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        [MinLength(12, ErrorMessage = "Mínimo 12 caracteres.")]
+        public string? Password { get; set; }
+
+        [Required(ErrorMessage = "Repite la contraseña.")]
+        [Compare(nameof(Password), ErrorMessage = "Las contraseñas no coinciden.")]
+        public string? PasswordRepeat { get; set; }
+    }
+}

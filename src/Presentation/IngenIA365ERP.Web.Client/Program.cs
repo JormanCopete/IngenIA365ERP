@@ -49,6 +49,10 @@ Console.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={apiBaseUrl}")
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILoadingService, LoadingService>();
 
+// Feature 002 (US1) — cliente del módulo de invitaciones consumido por
+// AcceptInvitation.razor. Usa el HttpClient 'api' configurado arriba.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClient>();
+
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
