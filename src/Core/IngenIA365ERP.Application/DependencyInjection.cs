@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Services;
 using IngenIA365ERP.Application.Invitations.Services;
 using Mapster;
@@ -47,6 +48,11 @@ public static class DependencyInjection
         // / IEmailSender que también son Scoped.
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
+
+        // Helper transversal — generador de tokens crypto-safe para flujos
+        // de un solo uso (invitaciones US1, password reset Phase 4b).
+        // Singleton: stateless, basado en RandomNumberGenerator + SHA-256.
+        services.AddSingleton<ISecureTokenGenerator, SecureTokenGenerator>();
 
         return services;
     }

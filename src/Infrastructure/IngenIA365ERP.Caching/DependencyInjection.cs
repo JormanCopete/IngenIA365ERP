@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Caching.Configuration;
@@ -49,6 +50,12 @@ public static class DependencyInjection
         services.AddScoped<ITenantMembershipReader, RedisTenantMembershipReader>();
         services.AddScoped<IMembershipChangedNotifier, RedisMembershipChangedNotifier>();
         services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+
+        // Feature 002 (US1.2.0) — lock distribuido para serializar trabajo
+        // crítico entre instancias (single-use estricto de invitations,
+        // password reset tokens, MFA enrollment confirms). SET NX PX +
+        // Lua release atómico. Singleton — solo consume IConnectionMultiplexer.
+        services.AddSingleton<IDistributedLock, RedisDistributedLock>();
 
         // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
         // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).
