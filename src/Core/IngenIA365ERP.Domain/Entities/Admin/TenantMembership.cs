@@ -10,8 +10,11 @@ namespace IngenIA365ERP.Domain.Entities.Admin;
 /// </summary>
 public class TenantMembership : AuditableEntity
 {
+    /// <summary>FK lógica a <c>ADM_CentralUsers.Id</c>. Sin navigation property porque
+    /// EF mapea el bridge <c>CentralUserIdentity</c> (Infrastructure), no
+    /// <c>CentralUser</c> POCO (Domain). El handler que necesita la entidad
+    /// completa la carga vía <c>ICentralIdentityProvider.FindByIdAsync</c>.</summary>
     public Guid CentralUserId { get; private set; }
-    public CentralUser? CentralUser { get; private set; }
 
     public Guid TenantId { get; private set; }
 

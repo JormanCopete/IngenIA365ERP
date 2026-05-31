@@ -76,6 +76,7 @@ public class CentralUser
 
     public DateTime? LastLoginAt { get; set; }
 
-    // Navigation
-    public ICollection<TenantMembership> Memberships { get; set; } = [];
+    // No EF navigation collection: ASP.NET Identity persiste el bridge
+    // CentralUserIdentity (Infrastructure), no este POCO de Domain.
+    // Las membresías se cargan vía ITenantMembershipReader (Application).
 }

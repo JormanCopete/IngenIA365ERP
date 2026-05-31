@@ -66,22 +66,22 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### DDL SQL Server
 
-- [ ] T014 Crear `database/schema/15a_Admin_CentralIdentity.sql` con tablas `ADM_CentralUsers` + tablas estándar de ASP.NET Identity (`ADM_CentralUserClaims`, `ADM_CentralUserLogins`, `ADM_CentralUserRoles`, `ADM_CentralUserTokens`, `ADM_Roles`, `ADM_RoleClaims`) idempotente con header de migración (contexto + problema + reversibilidad)
-- [ ] T015 [P] Crear `database/schema/15b_Admin_Memberships_Invitations.sql` con `ADM_TenantMemberships` (índice único `(CentralUserId, TenantId)`, filtrado por `IsTenantAdmin = 1`) y `ADM_Invitations` (UNIQUE TokenHash, índices por NormalizedEmail+TenantId+Status)
-- [ ] T016 [P] Crear `database/schema/15c_Admin_MfaPolicy_LoginAttempts.sql` con `ADM_TenantMfaPolicies` (UNIQUE TenantId) y `ADM_CentralUserLoginAttempts` (append-only, índice NormalizedEmail+Timestamp)
+- [X] T014 Crear `database/schema/15a_Admin_CentralIdentity.sql` con tablas `ADM_CentralUsers` + tablas estándar de ASP.NET Identity (`ADM_CentralUserClaims`, `ADM_CentralUserLogins`, `ADM_CentralUserRoles`, `ADM_CentralUserTokens`, `ADM_Roles`, `ADM_RoleClaims`) idempotente con header de migración (contexto + problema + reversibilidad)
+- [X] T015 [P] Crear `database/schema/15b_Admin_Memberships_Invitations.sql` con `ADM_TenantMemberships` (índice único `(CentralUserId, TenantId)`, filtrado por `IsTenantAdmin = 1`) y `ADM_Invitations` (UNIQUE TokenHash, índices por NormalizedEmail+TenantId+Status)
+- [X] T016 [P] Crear `database/schema/15c_Admin_MfaPolicy_LoginAttempts.sql` con `ADM_TenantMfaPolicies` (UNIQUE TenantId) y `ADM_CentralUserLoginAttempts` (append-only, índice NormalizedEmail+Timestamp)
 - [ ] T017 Crear `database/schema/15d_Tenant_Users_Refactor.sql` con DROP de columnas obsoletas de `SEC_Users` (`PasswordHash`, `PasswordSalt`, `MfaSecret`, `IsEmailVerified`, `FailedLoginAttempts`, `LockoutEndAt`, `MustChangePassword`, `LastPasswordChangeAt`, `LegacyLogin`, `IsSaasOperator`) y ADD `CentralUserId UNIQUEIDENTIFIER NOT NULL UNIQUE` + `CentralUserPublicEmail NVARCHAR(256) NULL`. **Header con warning "REQUIERE BD VIRGEN — irreversible sin restore"**
-- [ ] T018 [P] Crear `database/migration/16_Seed_Default_GlobalMasterAdmin.sql` idempotente: si `ADM_CentralUsers` está vacía, inserta un master admin con email/password tomados de variables de entorno y flag `IsGlobalMasterAdmin = 1`, `EmailConfirmed = 1`, `MustChangePassword = 0`; el hash BCrypt cost 11 se calcula offline y se inyecta vía script preprocesador (documentado en header)
+- [X] T018 [P] Crear `database/migration/16_Seed_Default_GlobalMasterAdmin.sql` idempotente: si `ADM_CentralUsers` está vacía, inserta un master admin con email/password tomados de variables de entorno y flag `IsGlobalMasterAdmin = 1`, `EmailConfirmed = 1`, `MustChangePassword = 0`; el hash BCrypt cost 11 se calcula offline y se inyecta vía script preprocesador (documentado en header)
 
 ### EF Core Configurations
 
-- [ ] T019 Crear `src/Infrastructure/IngenIA365ERP.Persistence/Contexts/AdminDbContext.cs` que herede `IdentityDbContext<CentralUserIdentity, IdentityRole<Guid>, Guid>` y exponga DbSets `TenantMemberships`, `Invitations`, `TenantMfaPolicies`, `CentralUserLoginAttempts`. NO tenant-aware (no implementa `IMultiTenantDbContext`)
-- [ ] T020 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/CentralUserConfiguration.cs` (mapeo Domain `CentralUser` → tabla `ADM_CentralUsers`, índices, conversión cifrada de `MfaSecret` con `IDataProtectionProvider`)
-- [ ] T021 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/TenantMembershipConfiguration.cs` (UNIQUE `(CentralUserId, TenantId)`, índice filtrado `WHERE IsTenantAdmin = 1`, `HasQueryFilter(e => !e.IsDeleted)`)
-- [ ] T022 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/InvitationConfiguration.cs` (UNIQUE `TokenHash`, conversión value object `InvitationToken`)
-- [ ] T023 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/TenantMfaPolicyConfiguration.cs`
-- [ ] T024 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/CentralUserLoginAttemptConfiguration.cs` (sin soft-delete; PK bigint)
+- [X] T019 Crear `src/Infrastructure/IngenIA365ERP.Persistence/Contexts/AdminDbContext.cs` que herede `IdentityDbContext<CentralUserIdentity, IdentityRole<Guid>, Guid>` y exponga DbSets `TenantMemberships`, `Invitations`, `TenantMfaPolicies`, `CentralUserLoginAttempts`. NO tenant-aware (no implementa `IMultiTenantDbContext`)
+- [X] T020 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/CentralUserConfiguration.cs` (mapeo Domain `CentralUser` → tabla `ADM_CentralUsers`, índices, conversión cifrada de `MfaSecret` con `IDataProtectionProvider`)
+- [X] T021 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/TenantMembershipConfiguration.cs` (UNIQUE `(CentralUserId, TenantId)`, índice filtrado `WHERE IsTenantAdmin = 1`, `HasQueryFilter(e => !e.IsDeleted)`)
+- [X] T022 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/InvitationConfiguration.cs` (UNIQUE `TokenHash`, conversión value object `InvitationToken`)
+- [X] T023 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/TenantMfaPolicyConfiguration.cs`
+- [X] T024 [P] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/CentralUserLoginAttemptConfiguration.cs` (sin soft-delete; PK bigint)
 - [ ] T025 Modificar `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Security/UserConfiguration.cs` (per-tenant `SEC_Users`): añadir mapeo de `CentralUserId` UNIQUE, retirar mapeos de columnas eliminadas en T017
-- [ ] T026 Registrar `AdminDbContext` con la connection string `IngenIA365ERP_Admin` en `src/Infrastructure/IngenIA365ERP.Persistence/DependencyInjection.cs`
+- [X] T026 Registrar `AdminDbContext` con la connection string `IngenIA365ERP_Admin` en `src/Infrastructure/IngenIA365ERP.Persistence/DependencyInjection.cs` (ya existía de Fase 0 — verificado, refactor a IdentityDbContext es transparente al DI)
 - [ ] T027 Generar migración EF Core inicial para `AdminDbContext` con `dotnet ef migrations add InitialCentralIdentity --context AdminDbContext --output-dir Migrations/Admin` y validar SQL generado contra T014-T017
 
 ### Application abstractions

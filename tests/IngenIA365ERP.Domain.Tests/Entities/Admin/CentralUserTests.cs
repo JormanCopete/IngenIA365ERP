@@ -29,7 +29,9 @@ public class CentralUserTests
         user.AccessFailedCount.Should().Be(0);
         user.SecurityStamp.Should().NotBeNullOrEmpty();
         user.ConcurrencyStamp.Should().NotBeNullOrEmpty();
-        user.Memberships.Should().BeEmpty();
+        // CentralUser POCO no tiene navigation a memberships — se cargan por
+        // ITenantMembershipReader (Application). Verificamos otro default crítico.
+        user.LastLoginAt.Should().BeNull();
     }
 
     [Fact]
