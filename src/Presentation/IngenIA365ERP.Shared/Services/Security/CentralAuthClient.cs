@@ -44,6 +44,14 @@ public sealed class CentralAuthClient
     /// </summary>
     public string? CurrentChallengeToken => _challengeToken;
 
+    /// <summary>
+    /// US3 — Lista de tenants devuelta en el último LoginResponse que llegó
+    /// con challenge=TenantSelection. <c>SelectTenant.razor</c> la consume
+    /// directamente para no requerir un request extra a <c>/api/sessions/active-tenants</c>
+    /// (que rechazaría el challenge token con purpose=tenant-select).
+    /// </summary>
+    public IReadOnlyList<ActiveTenantSummary>? LastLoginTenants { get; private set; }
+
     public bool IsAuthenticated =>
         !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
 
@@ -178,6 +186,12 @@ public sealed class CentralAuthClient
 
     private void RouteLoginResponse(LoginResponse body)
     {
+        // US3: si hay TenantSelection, retén la lista para SelectTenant.razor.
+        if (body.Challenge == "TenantSelection" && body.ActiveTenants is { Count: > 0 })
+        {
+            LastLoginTenants = body.ActiveTenants;
+        }
+
         if (body.Challenge == "None"
             && !string.IsNullOrWhiteSpace(body.AccessToken)
             && !string.IsNullOrWhiteSpace(body.RefreshToken))

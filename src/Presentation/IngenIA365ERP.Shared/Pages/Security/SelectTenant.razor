@@ -67,12 +67,10 @@
 
     protected override void OnInitialized()
     {
-        // En el flujo actual, esta página se llega desde Login.razor; las
-        // opciones se obtienen del último LoginResponse retenido por
-        // CentralAuthClient (TODO US2.5: persistirlas como propiedad pública
-        // del cliente). Por ahora, si se navegó directo aquí sin contexto,
-        // se muestra el estado vacío con redirect.
-        _tenants = Tenants;
+        // US3 — los tenants los retiene CentralAuthClient en LastLoginTenants
+        // tras el LoginResponse con challenge=TenantSelection. Si la lista
+        // está vacía (nav directa sin contexto), se muestra el estado vacío.
+        _tenants = AuthClient.LastLoginTenants ?? Tenants;
     }
 
     private async Task SelectAsync(Guid tenantPublicId)

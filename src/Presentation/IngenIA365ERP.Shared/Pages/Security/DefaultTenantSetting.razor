@@ -1,0 +1,123 @@
+@page "/profile/default-tenant"
+@layout MinimalLayout
+@using IngenIA365ERP.Shared.Services.Security
+@inject TenantSessionClient SessionClient
+@inject NavigationManager Nav
+
+@*
+    T090 (US3) — Configurar empresa por defecto. La preferencia se aplica
+    en el próximo login: si está válida, el usuario entra directo a esa
+    empresa sin pasar por TenantSelection.
+*@
+
+<PageTitle>Empresa por defecto — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+    <h1>Empresa por defecto</h1>
+    <p>
+        Elige a qué empresa entrarás automáticamente al iniciar sesión.
+        Puedes cambiarla o quitarla cuando quieras.
+    </p>
+
+    @if (_loading)
+    {
+        <p>Cargando...</p>
+    }
+    else if (_tenants is null || _tenants.Count == 0)
+    {
+        <p style="color: #6b7280;">No tienes membresías activas todavía.</p>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+            @foreach (var t in _tenants)
+            {
+                <div style="display: flex; align-items: center; gap: 12px;
+                            padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <div style="flex: 1;">
+                        <strong>@t.TenantName</strong>
+                        @if (t.IsDefault)
+                        {
+                            <span style="margin-left: 8px; padding: 2px 8px; background: #d1fae5;
+                                         color: #065f46; border-radius: 4px; font-size: 12px;">Default</span>
+                        }
+                    </div>
+                    @if (t.IsDefault)
+                    {
+                        <button @onclick="ClearDefaultAsync" disabled="@_busy">Quitar default</button>
+                    }
+                    else
+                    {
+                        <button @onclick="() => SetDefaultAsync(t.TenantPublicId)" disabled="@_busy">
+                            Establecer
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <p style="margin-top: 16px; color: #10b981;">@_message</p>
+    }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ActiveTenantInfo>? _tenants;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await SessionClient.GetActiveTenantsAsync();
+            if (result.IsSuccess) _tenants = result.Value;
+            else _error = result.ErrorMessage ?? "No se pudo cargar.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SetDefaultAsync(Guid tenantPublicId)
+    {
+        _busy = true; _message = null; _error = null;
+        try
+        {
+            var result = await SessionClient.SetDefaultAsync(tenantPublicId);
+            if (result.IsSuccess) _message = "Default actualizado.";
+            else _error = result.ErrorMessage ?? "No se pudo guardar.";
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ClearDefaultAsync()
+    {
+        _busy = true; _message = null; _error = null;
+        try
+        {
+            var result = await SessionClient.SetDefaultAsync(null);
+            if (result.IsSuccess) _message = "Default eliminado.";
+            else _error = result.ErrorMessage ?? "No se pudo guardar.";
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}

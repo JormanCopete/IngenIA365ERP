@@ -60,6 +60,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// US3 — cliente del módulo de sesiones (active-tenants, switch, default).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
