@@ -36,6 +36,14 @@ public sealed class CentralAuthClient
     public CentralAuthClient(HttpClient http) => _http = http;
 
     public string? CurrentAccessToken => _accessToken;
+
+    /// <summary>
+    /// JWT temporal scoped (purpose=mfa-verify, mfa-enroll, tenant-select)
+    /// retenido por el cliente para usar en el siguiente request. Útil para
+    /// Phase 4b — la página de enrollment MFA forzado usa este token.
+    /// </summary>
+    public string? CurrentChallengeToken => _challengeToken;
+
     public bool IsAuthenticated =>
         !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
 

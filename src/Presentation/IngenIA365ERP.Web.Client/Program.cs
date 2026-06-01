@@ -56,6 +56,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClie
 // consumido por Login.razor + MfaChallenge.razor + SelectTenant.razor.
 // Scoped para mantener tokens en memoria por sesión WASM.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthClient>();
+// Phase 4b — cliente del módulo de perfil y recuperación (MFA enrollment,
+// change password, forgot/reset). Reusa CentralAuthClient para resolver
+// qué token enviar (access full o challenge mfa-enroll).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();

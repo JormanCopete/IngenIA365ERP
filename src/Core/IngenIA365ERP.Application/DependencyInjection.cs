@@ -49,6 +49,11 @@ public static class DependencyInjection
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 
+        // Phase 4b — dispatcher del correo "olvidé mi contraseña".
+        services.AddScoped<
+            IngenIA365ERP.Application.Identity.Profile.Services.IPasswordResetEmailDispatcher,
+            IngenIA365ERP.Application.Identity.Profile.Services.PasswordResetEmailDispatcher>();
+
         // Helper transversal — generador de tokens crypto-safe para flujos
         // de un solo uso (invitaciones US1, password reset Phase 4b).
         // Singleton: stateless, basado en RandomNumberGenerator + SHA-256.

@@ -61,6 +61,10 @@ public static class DependencyInjection
         // Separado del IRefreshTokenStore legacy (Fase 0 con int UserId).
         services.AddSingleton<ICentralRefreshTokenStore, RedisCentralRefreshTokenStore>();
 
+        // Feature 002 · Phase 4b — secret + recovery codes pendientes entre
+        // BeginMfaEnrollment y ConfirmMfaEnrollment. TTL típico 10 min.
+        services.AddSingleton<IMfaPendingStore, RedisMfaPendingStore>();
+
         // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
         // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).
         _ = RedisTenantMembershipReader.StartSubscriptionAsync(multiplexer);

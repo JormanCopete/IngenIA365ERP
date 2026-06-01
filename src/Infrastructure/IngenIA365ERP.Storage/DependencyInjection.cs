@@ -30,6 +30,9 @@ public static class DependencyInjection
         // interpolación simple {{Key}}. Singleton: cachea cada plantilla.
         services.AddSingleton<IIdentityEmailTemplates, IdentityEmailTemplates>();
 
+        // Phase 4b — notificación post-cambio de contraseña.
+        services.AddScoped<IPasswordChangedNotifier, PasswordChangedNotifier>();
+
         // T119 — Background dispatcher de correo para notificaciones US6.
         services.AddHostedService<NotificationEmailDispatcher>();
         return services;

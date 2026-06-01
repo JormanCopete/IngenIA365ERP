@@ -49,6 +49,8 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
+    // --- Identidad central · Phase 4b (Profile & Recovery) ---
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     // Nota: DbSet<CentralUserIdentity> Users es heredado de IdentityDbContext;
     // no se expone via IAdminDbContext porque CentralUserIdentity es tipo de
     // Infrastructure (Application usa ICentralIdentityProvider).

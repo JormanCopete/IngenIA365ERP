@@ -1,0 +1,161 @@
+@page "/profile/mfa"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject ProfileClient ProfileClient
+@inject NavigationManager Nav
+
+@*
+    T079l — Enrollment voluntario de MFA desde el perfil.
+    Tres estados: NotStarted → Pending (mostrar QR/secret + input) → Enrolled.
+
+    TODO: agregar detección de "MFA ya activo" via /api/auth/me al cargar
+    + opción de Desactivar (con confirmación de password) — DisableMfa
+    backend ya está listo.
+*@
+
+<PageTitle>Activar MFA — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+    @if (_state == State.NotStarted)
+    {
+        <h1>Activar verificación en dos pasos</h1>
+        <p>
+            Protege tu cuenta con un código de 6 dígitos generado por tu app
+            de autenticación (Google Authenticator, Authy, Microsoft Authenticator).
+        </p>
+        <button @onclick="BeginAsync" disabled="@_busy" style="margin-top: 16px;">
+            @(_busy ? "Generando..." : "Comenzar")
+        </button>
+    }
+    else if (_state == State.Pending && _begin is not null)
+    {
+        <h1>Configura tu app</h1>
+        <ol>
+            <li>Abre tu app de autenticación y agrega una nueva cuenta.</li>
+            <li>
+                Escanea el código QR <em>o</em> ingresa el secret manualmente:
+                <code style="display: block; padding: 8px; background: #f3f4f6;
+                              margin: 8px 0; word-break: break-all;">@_begin.SecretBase32</code>
+                <small>otpauth URI: <code style="word-break: break-all;">@_begin.OtpAuthUri</code></small>
+            </li>
+            <li>Ingresa el código que muestra la app para confirmar.</li>
+        </ol>
+
+        <EditForm Model="@_confirm" OnValidSubmit="@ConfirmAsync" FormName="mfaConfirm">
+            <DataAnnotationsValidator />
+
+            <label>Código de la app</label>
+            <InputText
+                @bind-Value="_confirm.Code"
+                inputmode="numeric"
+                maxlength="8"
+                style="font-size: 20px; letter-spacing: 4px; text-align: center;" />
+            <ValidationMessage For="@(() => _confirm.Code)" />
+
+            <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+                @(_busy ? "Verificando..." : "Activar")
+            </button>
+        </EditForm>
+    }
+    else if (_state == State.Enrolled && _enrolledCodes is not null)
+    {
+        <h1>MFA activado ✓</h1>
+        <p>
+            La próxima vez que inicies sesión te pedirán el código de tu app.
+        </p>
+
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+                    padding: 12px 16px; margin: 16px 0;">
+            <strong>Guarda estos códigos de respaldo</strong> en un lugar seguro.
+            Los podrás usar para entrar si pierdes acceso a tu app. Se muestran
+            una sola vez:
+            <ul style="font-family: monospace; margin-top: 8px;">
+                @foreach (var c in _enrolledCodes)
+                {
+                    <li>@c</li>
+                }
+            </ul>
+        </div>
+
+        <NavLink href="/" class="btn">Volver al inicio</NavLink>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+    }
+</div>
+
+@code {
+    private enum State { NotStarted, Pending, Enrolled }
+
+    private State _state = State.NotStarted;
+    private BeginMfaEnrollResponse? _begin;
+    private IReadOnlyList<string>? _enrolledCodes;
+    private readonly ConfirmInput _confirm = new();
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>true cuando esta página atiende el enrollment FORZADO post-login
+    /// (purpose=mfa-enroll). Las subclases la override.</summary>
+    protected virtual bool UseChallengeToken => false;
+
+    /// <summary>URL al éxito. Override en la versión forzada para forzar reload.</summary>
+    protected virtual string SuccessUrl => "/";
+
+    private async Task BeginAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await ProfileClient.BeginMfaEnrollAsync(useChallengeToken: UseChallengeToken);
+            if (result.IsSuccess && result.Value is not null)
+            {
+                _begin = result.Value;
+                _state = State.Pending;
+                return;
+            }
+            _error = result.ErrorMessage ?? "No se pudo iniciar el enrollment.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await ProfileClient.ConfirmMfaEnrollAsync(
+                _confirm.Code!, useChallengeToken: UseChallengeToken);
+            if (result.IsSuccess && result.Value is not null)
+            {
+                _enrolledCodes = result.Value.RecoveryCodes;
+                _state = State.Enrolled;
+                return;
+            }
+            _error = result.ErrorCode switch
+            {
+                "Profile.Mfa.NoPendingEnrollment" => "El tiempo expiró. Reinicia el enrollment.",
+                "Profile.Mfa.InvalidCode" => "Código incorrecto. Verifica los dígitos.",
+                _ => result.ErrorMessage ?? "No se pudo confirmar.",
+            };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public sealed class ConfirmInput
+    {
+        [Required(ErrorMessage = "Ingresa el código.")]
+        [StringLength(8, MinimumLength = 6)]
+        public string? Code { get; set; }
+    }
+}

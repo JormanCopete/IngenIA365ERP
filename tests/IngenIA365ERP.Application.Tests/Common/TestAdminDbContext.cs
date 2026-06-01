@@ -18,6 +18,7 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,7 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<Invitation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<TenantMfaPolicy>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CentralUserLoginAttempt>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PasswordResetToken>(b => b.Ignore("RowVersion"));
     }
 
     public static TestAdminDbContext Create(string? dbName = null)

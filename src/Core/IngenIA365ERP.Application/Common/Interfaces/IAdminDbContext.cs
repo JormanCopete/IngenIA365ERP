@@ -37,5 +37,8 @@ public interface IAdminDbContext
     DbSet<TenantMfaPolicy> TenantMfaPolicies { get; }
     DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts { get; }
 
+    // --- Phase 4b (Profile & Recovery) ---
+    DbSet<PasswordResetToken> PasswordResetTokens { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
