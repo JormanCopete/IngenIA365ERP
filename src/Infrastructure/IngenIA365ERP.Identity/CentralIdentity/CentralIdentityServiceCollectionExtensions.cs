@@ -75,6 +75,10 @@ public static class CentralIdentityServiceCollectionExtensions
         // 5. ICentralIdentityProvider (la cara pública para Application).
         services.AddScoped<ICentralIdentityProvider, AspNetCoreIdentityProvider>();
 
+        // 6. Background jobs (T122 — Phase 8).
+        services.AddHostedService<Jobs.InvitationExpiryJob>();
+        services.AddHostedService<Jobs.PasswordResetTokenCleanupJob>();
+
         return services;
     }
 }

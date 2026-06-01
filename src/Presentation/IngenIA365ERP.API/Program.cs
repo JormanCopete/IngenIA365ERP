@@ -33,7 +33,13 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog();
+    // T123 — Serilog enrichers para central_user_id + active_tenant_id desde
+    // los claims del JWT. Se rehidrata desde DI para tener IHttpContextAccessor.
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .WriteTo.Console()
+        .WriteTo.File("logs/ingenia365erp-.log", rollingInterval: RollingInterval.Day)
+        .Enrich.With(new IngenIA365ERP.API.Logging.CentralIdentityLogEnricher(
+            services.GetRequiredService<IHttpContextAccessor>())));
 
     // Add services to the container
     builder.Services.AddEndpointsApiExplorer();
