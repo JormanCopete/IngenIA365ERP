@@ -1,0 +1,146 @@
+@page "/saas/register-tenant"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject SaasAdminClient Client
+@inject NavigationManager Nav
+
+@*
+    T120 (US5) — Master admin registra nueva empresa + envía invitación admin
+    en una sola operación. Tras éxito muestra confirmación con detalles.
+*@
+
+<PageTitle>Nueva empresa — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 640px;">
+    @if (_done && _result is not null)
+    {
+        <h1>Empresa registrada ✓</h1>
+        <p>
+            <strong>@_model.Name</strong> fue creada y se envió la invitación
+            de administrador a <strong>@_model.FirstAdminEmail</strong>.
+        </p>
+        <p>
+            La invitación expira el
+            <strong>@_result.InvitationExpiresAt.ToString("dd/MM/yyyy HH:mm 'UTC'")</strong>.
+        </p>
+        <button @onclick="Restart">Crear otra</button>
+    }
+    else
+    {
+        <h1>Registrar nueva empresa</h1>
+        <p>Crea el tenant y envía la invitación de admin en un solo paso.</p>
+
+        <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="masterRegister">
+            <DataAnnotationsValidator />
+
+            <label>Razón social</label>
+            <InputText @bind-Value="_model.LegalName" />
+            <ValidationMessage For="@(() => _model.LegalName)" />
+
+            <label>Nombre comercial</label>
+            <InputText @bind-Value="_model.Name" />
+            <ValidationMessage For="@(() => _model.Name)" />
+
+            <label>NIT</label>
+            <InputText @bind-Value="_model.Nit" />
+            <ValidationMessage For="@(() => _model.Nit)" />
+
+            <label>Schema (slug interno)</label>
+            <InputText @bind-Value="_model.SchemaName" placeholder="tenant_coop_xyz" />
+            <ValidationMessage For="@(() => _model.SchemaName)" />
+
+            <label>Correo de contacto</label>
+            <InputText @bind-Value="_model.ContactEmail" type="email" />
+            <ValidationMessage For="@(() => _model.ContactEmail)" />
+
+            <label>Correo del primer administrador</label>
+            <InputText @bind-Value="_model.FirstAdminEmail" type="email" />
+            <ValidationMessage For="@(() => _model.FirstAdminEmail)" />
+
+            <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+                @(_busy ? "Creando..." : "Crear empresa y enviar invitación")
+            </button>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        }
+    }
+</div>
+
+@code {
+    private readonly Input _model = new();
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+    private RegisterTenantWithAdminResponse? _result;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var body = new RegisterTenantWithAdminBody(
+                Name: _model.Name!,
+                SchemaName: _model.SchemaName!,
+                Subdomain: null,
+                Nit: _model.Nit!,
+                LegalName: _model.LegalName!,
+                LegalAddress: null,
+                TaxRegime: null,
+                ContactEmail: _model.ContactEmail!,
+                ContactPhone: null,
+                PlanType: "Basic",
+                MaxUsers: 50,
+                StorageLimitMb: 5000,
+                FirstAdminEmail: _model.FirstAdminEmail!);
+
+            var r = await Client.RegisterTenantWithAdminAsync(body);
+            if (r.IsSuccess && r.Value is not null)
+            {
+                _result = r.Value;
+                _done = true;
+                return;
+            }
+            _error = MapError(r.ErrorCode, r.ErrorMessage);
+        }
+        finally { _busy = false; }
+    }
+
+    private void Restart()
+    {
+        Nav.NavigateTo("/saas/register-tenant", forceLoad: true);
+    }
+
+    private static string MapError(string? code, string? message) => code switch
+    {
+        "Tenant.NitConflict" => "Ya existe una empresa con ese NIT.",
+        "Saas.MasterOnly" => "Solo el master admin puede ejecutar esta acción.",
+        _ => message ?? "No se pudo registrar la empresa.",
+    };
+
+    public sealed class Input
+    {
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(200)]
+        public string? Name { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(50)]
+        public string? SchemaName { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(20)]
+        public string? Nit { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(200)]
+        public string? LegalName { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")]
+        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        public string? ContactEmail { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")]
+        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        public string? FirstAdminEmail { get; set; }
+    }
+}

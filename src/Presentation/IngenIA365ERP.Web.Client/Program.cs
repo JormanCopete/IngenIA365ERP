@@ -64,6 +64,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
+// US5 — cliente master admin (register tenant + admin, force MFA reset).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
