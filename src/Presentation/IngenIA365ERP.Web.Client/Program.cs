@@ -62,6 +62,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
+// US4 — cliente de gestión de membresías y política MFA.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();

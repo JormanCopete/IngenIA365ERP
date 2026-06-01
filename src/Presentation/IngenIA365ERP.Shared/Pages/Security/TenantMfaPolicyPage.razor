@@ -1,0 +1,95 @@
+@page "/admin/tenant/{TenantPublicId:guid}/mfa-policy"
+@using IngenIA365ERP.Shared.Services.Security
+@inject MembershipsClient Client
+
+@*
+    T110 (US4) — Política "MFA obligatorio" del tenant. Toggle con confirmación.
+*@
+
+<PageTitle>Política MFA — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px;">
+    <h1>Política de doble factor</h1>
+
+    @if (_loading)
+    {
+        <p>Cargando...</p>
+    }
+    else
+    {
+        <p>
+            Estado actual:
+            <strong>@(_policy?.IsRequired == true ? "Obligatorio" : "Opcional")</strong>
+        </p>
+
+        @if (_policy?.IsRequired == true)
+        {
+            <p>
+                Todos los miembros sin MFA serán redirigidos a
+                <code>/auth/enroll-mfa-forced</code> en su próximo login.
+            </p>
+            <button @onclick="() => SetAsync(false)" disabled="@_busy">
+                Desactivar política
+            </button>
+        }
+        else
+        {
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+                        padding: 12px 16px; margin: 16px 0;">
+                <strong>Al activar:</strong> los miembros sin MFA deberán configurar
+                la app de autenticación en su próximo inicio de sesión antes de poder
+                continuar. Esto no expulsa a sesiones activas.
+            </div>
+            <button @onclick="() => SetAsync(true)" disabled="@_busy">
+                Activar política
+            </button>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <p style="margin-top: 16px; color: #10b981;">@_message</p>
+    }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TenantPublicId { get; set; }
+
+    private MfaPolicyResponse? _policy;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var r = await Client.GetMfaPolicyAsync(TenantPublicId);
+            if (r.IsSuccess) _policy = r.Value;
+            else _error = r.ErrorMessage ?? "No se pudo cargar.";
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SetAsync(bool required)
+    {
+        _busy = true; _message = null; _error = null;
+        try
+        {
+            var r = await Client.SetMfaPolicyAsync(TenantPublicId, required);
+            if (r.IsSuccess)
+                _message = required ? "Política activada." : "Política desactivada.";
+            else _error = r.ErrorMessage ?? "No se pudo guardar.";
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}
