@@ -60,7 +60,8 @@ public sealed class SwitchTenantCommandHandler(
         var refresh = jwtIssuer.IssueRefreshToken();
         var familyId = Guid.NewGuid();
         await refreshStore.StoreAsync(refresh.HashHex, new CentralRefreshSession(
-            centralUserId, target.TenantId, familyId, now, null, null, null),
+            centralUserId, target.TenantId, familyId, now, null, null, null,
+            user.SecurityStamp),
             RefreshTokenTtl, ct);
 
         await EmitAuditAsync(centralUserId, user.Email, fromTenantId, target.TenantId, now, ct);

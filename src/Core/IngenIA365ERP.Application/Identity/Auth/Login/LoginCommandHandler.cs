@@ -93,9 +93,18 @@ public sealed class LoginCommandHandler(
         // 5) Cargar membresías activas.
         var active = await memberships.GetActiveMembershipsAsync(user.Id, ct);
 
-        // 6) Cero membresías → NoActiveMembership (sin JWT).
+        // 6) Cero membresías.
+        //    - Master admin global: emite access token operativo sin tenant
+        //      (habilita /api/saas/tenants/* que solo exige purpose=full +
+        //      is_global_master_admin=true, no active_tenant_id).
+        //    - Cualquier otro usuario: NoActiveMembership.
         if (active.Count == 0)
         {
+            if (user.IsGlobalMasterAdmin)
+            {
+                return await IssueMasterOperationalAsync(user, ct);
+            }
+
             return Result.Success(new LoginResult(
                 Challenge: LoginChallenges.NoActiveMembership,
                 CentralUserId: user.Id,
@@ -214,6 +223,60 @@ public sealed class LoginCommandHandler(
     }
 
     /// <summary>
+    /// Emite access+refresh JWT para el master admin global cuando no tiene
+    /// membresías. El token queda con <c>active_tenant_id=null</c>,
+    /// <c>tenant_admin=null</c> y <c>is_global_master_admin=true</c> — habilita
+    /// los endpoints SaaS-globales (<c>/api/saas/tenants/*</c>) que solo
+    /// verifican <c>purpose=full</c> + master flag.
+    /// </summary>
+    private async Task<Result<LoginResult>> IssueMasterOperationalAsync(
+        Domain.Entities.Admin.CentralUser user,
+        CancellationToken ct)
+    {
+        var access = jwtIssuer.IssueAccessToken(
+            centralUserId: user.Id,
+            email: user.Email,
+            isGlobalMasterAdmin: true,
+            activeTenantId: null,
+            tenantAdmin: null,
+            mfaVerified: user.TwoFactorEnabled);
+
+        var refresh = jwtIssuer.IssueRefreshToken();
+
+        var familyId = Guid.NewGuid();
+        await refreshStore.StoreAsync(
+            tokenHashHex: refresh.HashHex,
+            session: new CentralRefreshSession(
+                CentralUserId: user.Id,
+                ActiveTenantPublicId: null,
+                FamilyId: familyId,
+                IssuedAt: clock.UtcNow,
+                IpAddress: null,
+                UserAgent: null,
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
+            ttl: RefreshTokenTtl,
+            ct: ct);
+
+        return Result.Success(new LoginResult(
+            Challenge: LoginChallenges.None,
+            CentralUserId: user.Id,
+            Email: user.Email,
+            IsGlobalMasterAdmin: true,
+            AccessToken: access.Jwt,
+            AccessTokenExpiresAt: access.ExpiresAt,
+            RefreshToken: refresh.Token,
+            RefreshTokenExpiresAt: refresh.ExpiresAt,
+            ExpiresInSeconds: (int)(access.ExpiresAt - clock.UtcNow).TotalSeconds,
+            AutoSelected: false,
+            ActiveTenantPublicId: null,
+            ActiveTenantName: null,
+            DefaultTenantPublicId: null,
+            ActiveTenants: Array.Empty<ActiveTenantSummary>(),
+            Message: "Sesión master admin sin tenant activo."));
+    }
+
+    /// <summary>
     /// Emite access+refresh JWT con <c>active_tenant_id</c> resuelto y persiste
     /// el refresh token en Redis. Llamado en autoSelected.
     /// </summary>
@@ -243,7 +306,8 @@ public sealed class LoginCommandHandler(
                 IssuedAt: clock.UtcNow,
                 IpAddress: null,
                 UserAgent: null,
-                ReplacedByTokenHashHex: null),
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
             ttl: RefreshTokenTtl,
             ct: ct);
 

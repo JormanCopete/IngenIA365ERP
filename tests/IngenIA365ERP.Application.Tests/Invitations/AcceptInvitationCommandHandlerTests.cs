@@ -30,6 +30,7 @@ public class AcceptInvitationCommandHandlerTests
     private readonly ICentralJwtIssuer _jwt;
     private readonly ITenantUserProvisioner _provisioner;
     private readonly IDistributedLock _distributedLock;
+    private readonly ICentralRefreshTokenStore _refreshStore = Substitute.For<ICentralRefreshTokenStore>();
     private readonly ICurrentCentralUserContext _currentUser;
     private readonly IAuditAppendOnlyWriter _auditWriter;
     private readonly IDateTimeService _clock;
@@ -287,6 +288,7 @@ public class AcceptInvitationCommandHandlerTests
             db: _db,
             centralIdentity: _identity,
             jwtIssuer: _jwt,
+            refreshStore: _refreshStore,
             tenantUserProvisioner: _provisioner,
             distributedLock: _distributedLock,
             tokens: _tokens,

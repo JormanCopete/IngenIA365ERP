@@ -47,6 +47,7 @@ public sealed class AcceptInvitationCommandHandler(
     IAdminDbContext db,
     ICentralIdentityProvider centralIdentity,
     ICentralJwtIssuer jwtIssuer,
+    ICentralRefreshTokenStore refreshStore,
     ITenantUserProvisioner tenantUserProvisioner,
     IDistributedLock distributedLock,
     ISecureTokenGenerator tokens,
@@ -57,6 +58,7 @@ public sealed class AcceptInvitationCommandHandler(
     : IRequestHandler<AcceptInvitationCommand, Result<AcceptInvitationResult>>
 {
     private static readonly TimeSpan LockTtl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
 
     public async Task<Result<AcceptInvitationResult>> Handle(
         AcceptInvitationCommand request, CancellationToken ct)
@@ -197,6 +199,21 @@ public sealed class AcceptInvitationCommandHandler(
             mfaVerified: false);
 
         var refresh = jwtIssuer.IssueRefreshToken();
+
+        // Sin este Store, el refresh devuelto sería un token muerto: /api/auth/refresh
+        // busca la sesión por hash en Redis y respondería Identity.RefreshToken.Invalid.
+        await refreshStore.StoreAsync(
+            refresh.HashHex,
+            new CentralRefreshSession(
+                CentralUserId: centralUserId,
+                ActiveTenantPublicId: tenant.PublicId,
+                FamilyId: Guid.NewGuid(),
+                IssuedAt: now,
+                IpAddress: null,
+                UserAgent: null,
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
+            RefreshTokenTtl, ct);
 
         // 10) Audit events (FR-024) — además del AuditBehavior automático que
         //     registra el command name, emitimos los eventos específicos del

@@ -115,7 +115,8 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
                 IssuedAt: now,
                 IpAddress: null,
                 UserAgent: null,
-                ReplacedByTokenHashHex: null),
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
             RefreshTokenTtl, ct);
 
         return Result.Success(new ConfirmMfaEnrollmentResult(

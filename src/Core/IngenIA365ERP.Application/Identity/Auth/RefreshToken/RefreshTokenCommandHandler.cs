@@ -73,6 +73,16 @@ public sealed class RefreshTokenCommandHandler(
                 "Identity.RefreshToken.Invalid", "Refresh token inválido.");
         }
 
+        // SecurityStamp regenerado (cambio/reset de contraseña, force-mfa-reset)
+        // ⇒ toda sesión emitida antes del cambio muere aquí. Un stamp null en la
+        // sesión (formato previo a este campo) también se rechaza — fail-secure.
+        if (!string.Equals(session.SecurityStamp, user.SecurityStamp, StringComparison.Ordinal))
+        {
+            await refreshStore.InvalidateFamilyAsync(session.FamilyId, ct);
+            return Result.Failure<RefreshTokenResult>(
+                "Identity.RefreshToken.Invalid", "Refresh token inválido o expirado.");
+        }
+
         // Verificar membresía con el tenant activo del refresh sigue active.
         bool? membershipAdmin = null;
         if (session.ActiveTenantPublicId.HasValue)

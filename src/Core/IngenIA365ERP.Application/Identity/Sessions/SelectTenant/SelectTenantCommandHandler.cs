@@ -84,7 +84,8 @@ public sealed class SelectTenantCommandHandler(
                 IssuedAt: now,
                 IpAddress: null,
                 UserAgent: null,
-                ReplacedByTokenHashHex: null),
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
             ttl: RefreshTokenTtl,
             ct: ct);
 
