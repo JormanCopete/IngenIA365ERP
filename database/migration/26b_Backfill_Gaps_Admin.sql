@@ -39,7 +39,23 @@ GO
 
 -- ===========================================================================
 -- Gap 6: ADM_Tenants — columnas del refactor + legacy nullable
+--   Incluye ademas las columnas base/auditoria y legales que un ADM_Tenants
+--   100% legacy (shape ErpTenantInfo de Fase 0) no tiene: sin ellas, todo
+--   SELECT del Tenant actual truena con Invalid column name (descubierto al
+--   correr los DDL contra una BD virgen en el integration test T118).
 -- ===========================================================================
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'PublicId') ALTER TABLE dbo.ADM_Tenants ADD PublicId UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_ADM_Tenants_PublicId DEFAULT NEWID();
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'Nit') ALTER TABLE dbo.ADM_Tenants ADD Nit NVARCHAR(20) NOT NULL CONSTRAINT DF_ADM_Tenants_Nit DEFAULT N'';
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'LegalName') ALTER TABLE dbo.ADM_Tenants ADD LegalName NVARCHAR(300) NOT NULL CONSTRAINT DF_ADM_Tenants_LegalName DEFAULT N'';
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'LegalAddress') ALTER TABLE dbo.ADM_Tenants ADD LegalAddress NVARCHAR(500) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'TaxRegime') ALTER TABLE dbo.ADM_Tenants ADD TaxRegime NVARCHAR(50) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'CreatedBy') ALTER TABLE dbo.ADM_Tenants ADD CreatedBy NVARCHAR(200) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'UpdatedAt') ALTER TABLE dbo.ADM_Tenants ADD UpdatedAt DATETIME2(0) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'UpdatedBy') ALTER TABLE dbo.ADM_Tenants ADD UpdatedBy NVARCHAR(200) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'IsDeleted') ALTER TABLE dbo.ADM_Tenants ADD IsDeleted BIT NOT NULL CONSTRAINT DF_ADM_Tenants_IsDeleted DEFAULT 0;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'DeletedAt') ALTER TABLE dbo.ADM_Tenants ADD DeletedAt DATETIME2(0) NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'DeletedBy') ALTER TABLE dbo.ADM_Tenants ADD DeletedBy NVARCHAR(200) NULL;
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'Subdomain') ALTER TABLE dbo.ADM_Tenants ADD Subdomain NVARCHAR(200) NULL;
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'PlanType') ALTER TABLE dbo.ADM_Tenants ADD PlanType NVARCHAR(50) NOT NULL CONSTRAINT DF_ADM_Tenants_PlanType DEFAULT N'Basic';
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ADM_Tenants') AND name = 'StorageLimitMb') ALTER TABLE dbo.ADM_Tenants ADD StorageLimitMb BIGINT NOT NULL CONSTRAINT DF_ADM_Tenants_StorageLimitMb DEFAULT 5120;
