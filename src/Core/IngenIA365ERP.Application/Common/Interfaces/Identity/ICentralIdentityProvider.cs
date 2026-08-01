@@ -22,6 +22,15 @@ public interface ICentralIdentityProvider
     Task<CentralUser?> FindByIdAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>
+    /// Resuelve en lote el email de un conjunto de usuarios (listados, p.ej.
+    /// miembros de un tenant) en una sola consulta. Ids inexistentes o
+    /// eliminados simplemente no aparecen en el diccionario resultante.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetEmailsByIdsAsync(
+        IReadOnlyCollection<Guid> centralUserIds,
+        CancellationToken ct);
+
+    /// <summary>
     /// Crea una identidad nueva con email + password (rama "usuario nuevo" en
     /// <c>AcceptInvitationCommand</c>). Internamente:
     /// (1) verifica password contra <see cref="IPwnedPasswordService"/>;

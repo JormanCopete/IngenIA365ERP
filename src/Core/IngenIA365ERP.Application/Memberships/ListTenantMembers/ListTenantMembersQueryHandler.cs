@@ -8,7 +8,8 @@ namespace IngenIA365ERP.Application.Memberships.ListTenantMembers;
 
 public sealed class ListTenantMembersQueryHandler(
     ICurrentCentralUserContext currentUser,
-    IAdminDbContext adminDb)
+    IAdminDbContext adminDb,
+    ICentralIdentityProvider centralIdentity)
     : IRequestHandler<ListTenantMembersQuery, Result<ListTenantMembersResult>>
 {
     public async Task<Result<ListTenantMembersResult>> Handle(
@@ -41,9 +42,18 @@ public sealed class ListTenantMembersQueryHandler(
                 m.Status,
                 m.IsTenantAdmin,
                 m.InvitedAt,
-                m.ActivatedAt))
+                m.ActivatedAt,
+                null))
             .ToListAsync(ct);
 
-        return Result.Success(new ListTenantMembersResult(items, total, page, pageSize));
+        // El email vive en ADM_CentralUsers (no expuesta via IAdminDbContext);
+        // se resuelve en lote por el provider — una sola consulta por página.
+        var emails = await centralIdentity.GetEmailsByIdsAsync(
+            items.Select(i => i.CentralUserId).Distinct().ToArray(), ct);
+        var withEmails = items
+            .Select(i => i with { Email = emails.GetValueOrDefault(i.CentralUserId) })
+            .ToList();
+
+        return Result.Success(new ListTenantMembersResult(withEmails, total, page, pageSize));
     }
 }

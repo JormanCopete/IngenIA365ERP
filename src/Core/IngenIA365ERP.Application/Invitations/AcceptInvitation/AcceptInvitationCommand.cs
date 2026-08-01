@@ -35,16 +35,26 @@ public sealed record NewRegistrationInput(string Password);
 public sealed record ExistingCredentialsInput(string Password);
 
 /// <summary>
-/// Resultado de la aceptación: JWT access + refresh con <c>active_tenant_id</c>
-/// ya seteado al tenant invitante, listos para sustituir al token actual del
-/// cliente. <c>CentralUserId</c> y <c>ActiveTenantPublicId</c> se devuelven
-/// para que la UI pueda enrutar al dashboard correcto.
+/// Resultado de la aceptación. La membresía queda SIEMPRE activa, pero la
+/// sesión emitida depende de las exigencias de MFA (FR-003b/FR-003c):
+/// <list type="bullet">
+///   <item><c>Challenge = "None"</c> — access + refresh operativos con
+///         <c>active_tenant_id</c> del tenant invitante.</item>
+///   <item><c>Challenge = "MfaRequired"</c> — el usuario tiene MFA activo y
+///         no lo verificó en este flujo: <c>ChallengeToken</c>
+///         (purpose=mfa-verify) para <c>/api/auth/mfa/verify</c>.</item>
+///   <item><c>Challenge = "MfaEnrollmentRequired"</c> — el tenant invitante
+///         exige MFA y el usuario no lo tiene: <c>ChallengeToken</c>
+///         (purpose=mfa-enroll) para el enrollment forzado.</item>
+/// </list>
 /// </summary>
 public sealed record AcceptInvitationResult(
-    string AccessToken,
-    DateTime AccessTokenExpiresAt,
-    string RefreshToken,
-    DateTime RefreshTokenExpiresAt,
+    string? AccessToken,
+    DateTime? AccessTokenExpiresAt,
+    string? RefreshToken,
+    DateTime? RefreshTokenExpiresAt,
     Guid CentralUserId,
     Guid ActiveTenantPublicId,
-    string ActiveTenantName);
+    string ActiveTenantName,
+    string Challenge = "None",
+    string? ChallengeToken = null);

@@ -111,6 +111,84 @@ public class AcceptInvitationCommandHandlerTests
         result.Error.Code.Should().Be("Identity.Password.Pwned");
     }
 
+    // ----- Gate MFA en la aceptación (FR-003b/FR-003c) -----
+
+    [Fact]
+    public async Task Rama_nueva_con_politica_MFA_activa_devuelve_MfaEnrollmentRequired_sin_tokens()
+    {
+        var plain = _tokens.Generate().PlainTokenBase64Url;
+        SeedPendingInvitation(_tokens.HashPlainToken(plain));
+
+        var policy = TenantMfaPolicy.CreateForTenant(TenantId);
+        policy.Enable(InviterId, FixedNow);
+        _db.TenantMfaPolicies.Add(policy);
+        _db.SaveChanges();
+
+        var newCentralUserId = Guid.NewGuid();
+        _identity.FindByEmailAsync(InvitedEmail, Arg.Any<CancellationToken>())
+            .Returns((Domain.Entities.Admin.CentralUser?)null);
+        _identity.CreateUserAsync(InvitedEmail, "password-de-12-chars", true, Arg.Any<CancellationToken>())
+            .Returns(new CreateCentralUserResult(true, newCentralUserId, Array.Empty<string>()));
+        _identity.FindByIdAsync(newCentralUserId, Arg.Any<CancellationToken>())
+            .Returns(new Domain.Entities.Admin.CentralUser
+            {
+                Id = newCentralUserId,
+                Email = InvitedEmail,
+                TwoFactorEnabled = false,
+            });
+        _jwt.IssueChallengeToken(
+                newCentralUserId, InvitedEmail, false, "mfa-enroll", Arg.Any<TimeSpan?>())
+            .Returns(new CentralAccessTokenResult("enroll-challenge-jwt", FixedNow.AddMinutes(5), "jti", "mfa-enroll"));
+
+        var result = await NewHandler().Handle(
+            new AcceptInvitationCommand(plain, Registration: new NewRegistrationInput("password-de-12-chars")),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Challenge.Should().Be("MfaEnrollmentRequired");
+        result.Value.ChallengeToken.Should().Be("enroll-challenge-jwt");
+        result.Value.AccessToken.Should().BeNull();
+        result.Value.RefreshToken.Should().BeNull();
+
+        // La membresía queda activa igual — el gate solo retiene la sesión.
+        _db.TenantMemberships.Single(m => m.CentralUserId == newCentralUserId)
+            .Status.Should().Be(MembershipStatus.Active);
+        await _refreshStore.DidNotReceive().StoreAsync(
+            Arg.Any<string>(), Arg.Any<CentralRefreshSession>(),
+            Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Rama_existente_con_MFA_activo_devuelve_MfaRequired_sin_tokens()
+    {
+        var plain = _tokens.Generate().PlainTokenBase64Url;
+        SeedPendingInvitation(_tokens.HashPlainToken(plain));
+
+        var existingId = Guid.NewGuid();
+        var existing = new Domain.Entities.Admin.CentralUser
+        {
+            Id = existingId,
+            Email = InvitedEmail,
+            TwoFactorEnabled = true,
+        };
+        _identity.FindByEmailAsync(InvitedEmail, Arg.Any<CancellationToken>()).Returns(existing);
+        _identity.FindByIdAsync(existingId, Arg.Any<CancellationToken>()).Returns(existing);
+        _identity.ValidatePasswordAsync(existingId, "right-password", Arg.Any<CancellationToken>())
+            .Returns(true);
+        _jwt.IssueChallengeToken(
+                existingId, InvitedEmail, false, "mfa-verify", Arg.Any<TimeSpan?>())
+            .Returns(new CentralAccessTokenResult("verify-challenge-jwt", FixedNow.AddMinutes(5), "jti", "mfa-verify"));
+
+        var result = await NewHandler().Handle(
+            new AcceptInvitationCommand(plain, ExistingCredentials: new ExistingCredentialsInput("right-password")),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Challenge.Should().Be("MfaRequired");
+        result.Value.ChallengeToken.Should().Be("verify-challenge-jwt");
+        result.Value.AccessToken.Should().BeNull();
+    }
+
     // ----- Rama EXISTING (credentials) -----
 
     [Fact]

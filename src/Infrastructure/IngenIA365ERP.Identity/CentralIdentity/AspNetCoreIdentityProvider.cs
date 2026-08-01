@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Persistence.Identity;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OtpNet;
 
@@ -138,18 +139,39 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return new ChangePasswordResult(true, []);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsByIdsAsync(
+        IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct)
+    {
+        if (centralUserIds.Count == 0)
+            return new Dictionary<Guid, string>();
+
+        var ids = centralUserIds.ToArray();
+        var rows = await _userManager.Users
+            .Where(u => ids.Contains(u.Id) && !u.IsDeleted)
+            .Select(u => new { u.Id, u.Email })
+            .ToListAsync(ct);
+        return rows.ToDictionary(r => r.Id, r => r.Email ?? string.Empty);
+    }
+
     // -------------------- MFA --------------------
 
-    public Task<MfaEnrollmentSetup> BeginMfaEnrollmentAsync(Guid centralUserId, CancellationToken ct)
+    public async Task<MfaEnrollmentSetup> BeginMfaEnrollmentAsync(Guid centralUserId, CancellationToken ct)
     {
         // El secret pendiente NO se persiste aquí — vive en Redis hasta confirm
         // (cache key 'mfa-pending:{id}' gestionada por Application — Chunk D/4b).
         var secretBytes = KeyGeneration.GenerateRandomKey(20);   // 160 bits, recomendado por RFC 6238
         var base32 = Base32Encoding.ToString(secretBytes);
 
+        // Etiqueta de cuenta: el email — es lo que la app de autenticación
+        // muestra al usuario. El GUID queda solo como fallback defensivo.
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        var accountLabel = string.IsNullOrWhiteSpace(identity?.Email)
+            ? centralUserId.ToString("N")
+            : identity!.Email!;
+
         // otpauth URI — la pantalla Blazor lo convierte a QR vía QRCoder.
         var otpAuthUri =
-            $"otpauth://totp/{Uri.EscapeDataString(TotpIssuer)}:{centralUserId:N}" +
+            $"otpauth://totp/{Uri.EscapeDataString(TotpIssuer)}:{Uri.EscapeDataString(accountLabel)}" +
             $"?secret={base32}" +
             $"&issuer={Uri.EscapeDataString(TotpIssuer)}" +
             $"&algorithm=SHA1&digits=6&period=30";
@@ -157,11 +179,11 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         // Recovery codes — el Application los almacena hasta confirm.
         var codes = GenerateRecoveryCodes(RecoveryCodeCount);
 
-        return Task.FromResult(new MfaEnrollmentSetup(
+        return new MfaEnrollmentSetup(
             SecretBase32: base32,
             OtpAuthUri: otpAuthUri,
             RecoveryCodes: codes,
-            ExpiresInSeconds: 600));
+            ExpiresInSeconds: 600);
     }
 
     public async Task<MfaConfirmResult> ConfirmMfaSetupAsync(

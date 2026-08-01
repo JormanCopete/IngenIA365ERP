@@ -27,4 +27,5 @@ public sealed record TenantMemberDto(
     MembershipStatus Status,
     bool IsTenantAdmin,
     DateTime InvitedAt,
-    DateTime? ActivatedAt);
+    DateTime? ActivatedAt,
+    string? Email = null);

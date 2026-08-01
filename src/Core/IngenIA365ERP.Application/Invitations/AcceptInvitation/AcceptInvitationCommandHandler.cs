@@ -190,30 +190,65 @@ public sealed class AcceptInvitationCommandHandler(
                 "Identity.UserNotFound", "Error interno al emitir el token de sesión.");
         }
 
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId: centralUserId,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            activeTenantId: tenant.PublicId,
-            tenantAdmin: membership.IsTenantAdmin,
-            mfaVerified: false);
+        // FR-003b/FR-003c: la aceptación no puede saltarse las exigencias de MFA
+        // salvo en la rama sesión-activa (ese JWT ya pasó los gates del login).
+        //  - Usuario con MFA y sin verificar en este flujo → challenge MfaRequired.
+        //  - Tenant con política "MFA obligatorio" y usuario sin MFA → challenge
+        //    MfaEnrollmentRequired (enrollment forzado).
+        // Antes se emitía sesión operativa full: ventana de hasta 12h sin MFA.
+        string? mfaChallenge = null;
+        string? challengePurpose = null;
+        if (!request.UseActiveSession)
+        {
+            if (user.TwoFactorEnabled)
+            {
+                mfaChallenge = "MfaRequired";
+                challengePurpose = CentralJwtPurposes.MfaVerify;
+            }
+            else if (await db.TenantMfaPolicies.AsNoTracking()
+                         .AnyAsync(p => p.TenantId == tenant.PublicId && p.IsRequired, ct))
+            {
+                mfaChallenge = "MfaEnrollmentRequired";
+                challengePurpose = CentralJwtPurposes.MfaEnroll;
+            }
+        }
 
-        var refresh = jwtIssuer.IssueRefreshToken();
+        CentralAccessTokenResult? access = null;
+        CentralRefreshTokenResult? refresh = null;
+        CentralAccessTokenResult? challengeToken = null;
 
-        // Sin este Store, el refresh devuelto sería un token muerto: /api/auth/refresh
-        // busca la sesión por hash en Redis y respondería Identity.RefreshToken.Invalid.
-        await refreshStore.StoreAsync(
-            refresh.HashHex,
-            new CentralRefreshSession(
-                CentralUserId: centralUserId,
-                ActiveTenantPublicId: tenant.PublicId,
-                FamilyId: Guid.NewGuid(),
-                IssuedAt: now,
-                IpAddress: null,
-                UserAgent: null,
-                ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
-            RefreshTokenTtl, ct);
+        if (mfaChallenge is null)
+        {
+            access = jwtIssuer.IssueAccessToken(
+                centralUserId: centralUserId,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                activeTenantId: tenant.PublicId,
+                tenantAdmin: membership.IsTenantAdmin,
+                mfaVerified: false);
+
+            refresh = jwtIssuer.IssueRefreshToken();
+
+            // Sin este Store, el refresh devuelto sería un token muerto: /api/auth/refresh
+            // busca la sesión por hash en Redis y respondería Identity.RefreshToken.Invalid.
+            await refreshStore.StoreAsync(
+                refresh.HashHex,
+                new CentralRefreshSession(
+                    CentralUserId: centralUserId,
+                    ActiveTenantPublicId: tenant.PublicId,
+                    FamilyId: Guid.NewGuid(),
+                    IssuedAt: now,
+                    IpAddress: null,
+                    UserAgent: null,
+                    ReplacedByTokenHashHex: null,
+                    SecurityStamp: user.SecurityStamp),
+                RefreshTokenTtl, ct);
+        }
+        else
+        {
+            challengeToken = jwtIssuer.IssueChallengeToken(
+                centralUserId, user.Email, user.IsGlobalMasterAdmin, challengePurpose!, null);
+        }
 
         // 10) Audit events (FR-024) — además del AuditBehavior automático que
         //     registra el command name, emitimos los eventos específicos del
@@ -243,13 +278,15 @@ public sealed class AcceptInvitationCommandHandler(
             invitation.PublicId, centralUserId, tenant.Name, membershipAuditAction);
 
         return Result.Success(new AcceptInvitationResult(
-            AccessToken: access.Jwt,
-            AccessTokenExpiresAt: access.ExpiresAt,
-            RefreshToken: refresh.Token,
-            RefreshTokenExpiresAt: refresh.ExpiresAt,
+            AccessToken: access?.Jwt,
+            AccessTokenExpiresAt: access?.ExpiresAt,
+            RefreshToken: refresh?.Token,
+            RefreshTokenExpiresAt: refresh?.ExpiresAt,
             CentralUserId: centralUserId,
             ActiveTenantPublicId: tenant.PublicId,
-            ActiveTenantName: tenant.Name));
+            ActiveTenantName: tenant.Name,
+            Challenge: mfaChallenge ?? "None",
+            ChallengeToken: challengeToken?.Jwt));
     }
 
     private static (string code, string message)? ValidateInvitation(Invitation invitation, DateTime now)
