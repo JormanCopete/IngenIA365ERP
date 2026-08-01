@@ -124,6 +124,71 @@ Pipeline en `.github/workflows/ci.yml`:
 - **Documentacion:** `MAPEO-BD-VIEJO-NUEVO.md`, `ANALISIS-FORMULARIOS.md`
 - **Migrador:** `tools/IngenIA365ERP.DataMigrator` para datos existentes
 
+## Identidad central v2 (feature 002-identidad-central-federada)
+
+A partir de v2 la autenticacion se rediseña: la credencial vive UNA SOLA VEZ en `IngenIA365ERP_Admin` (tablas `ADM_CentralUsers`, `ADM_TenantMemberships`, `ADM_Invitations`). El login ocurre en un dominio único sin combo box de cliente. Spec completa: [`specs/002-identidad-central-federada/`](specs/002-identidad-central-federada/).
+
+### Variables de entorno requeridas
+
+```bash
+# Bootstrap del master admin (solo se aplica si ADM_CentralUsers esta vacia)
+MASTER_ADMIN_EMAIL=master@tu-dominio.com
+MASTER_ADMIN_PASSWORD=<password fuerte; minimo 12 chars>
+
+# SMTP (override de appsettings si aplica)
+EmailSender__Smtp__Host=localhost     # MailHog en dev
+EmailSender__Smtp__Port=1025
+EmailSender__Smtp__Username=          # opcional
+EmailSender__Smtp__Password=          # opcional
+EmailSender__Smtp__FromAddress=no-reply@tu-dominio.com
+
+# Validación contra contraseñas comprometidas (HaveIBeenPwned)
+PwnedPassword__Enabled=true
+PwnedPassword__BaseUrl=https://api.pwnedpasswords.com
+```
+
+### Servicios Docker para desarrollo
+
+`docker compose up -d sqlserver mongodb redis mailhog` levanta el stack mínimo. La UI de MailHog en `http://localhost:8025` captura todos los correos de invitación y reset de contraseña para validación local.
+
+### Bootstrap inicial
+
+1. Aplicar DDL `database/schema/15a_*.sql` a `15e_*.sql` (orden) sobre BD virgen.
+2. Aplicar `database/migration/16_Seed_Default_GlobalMasterAdmin.sql` (lee `MASTER_ADMIN_EMAIL` y `MASTER_ADMIN_PASSWORD`).
+3. Bootstrap del audit log de MongoDB (idempotente):
+   ```powershell
+   $env:AUDIT_WRITER_PASSWORD='dev-writer'; $env:AUDIT_READER_PASSWORD='dev-reader'; dotnet run --project tools/IngenIA365ERP.DbMigrator -- audit-bootstrap --mongo-connection "mongodb://localhost:27017"
+   ```
+4. Arrancar la API. Login en `https://app.ingenia365.com` (o `https://localhost:5001` en dev) con las credenciales del master admin.
+
+### Flujos disponibles
+
+| User story | Rutas UI | Endpoints clave |
+|------------|----------|-----------------|
+| US1 Onboarding por invitación | `/auth/accept-invitation?token=...` | `POST /api/invitations/accept`, `GET .../preview`, `POST /api/tenants/{id}/invitations` |
+| US2 Login centralizado | `/security/login`, `/security/mfa-challenge`, `/security/no-membership` | `POST /api/auth/login`, `POST /api/auth/mfa/verify`, `POST /api/auth/refresh`, `GET /api/auth/me` |
+| Phase 4b Profile & Recovery | `/profile/mfa`, `/profile/password`, `/auth/forgot-password`, `/auth/reset-password` | `POST /api/profile/mfa/{enroll,confirm,disable}`, `POST /api/profile/password`, `POST /api/auth/password/{forgot,reset}` |
+| US3 Multi-empresa | `/security/select-tenant`, `/profile/default-tenant` | `GET /api/sessions/active-tenants`, `POST /api/sessions/{select,switch}-tenant`, `PUT /api/profile/default-tenant` |
+| US4 Admin de empresa | `/admin/tenant/{id}/members`, `/admin/tenant/{id}/mfa-policy` | `GET/POST /api/tenants/{id}/members/*`, `GET/PUT /api/tenants/{id}/mfa-policy` |
+| US5 Master admin | `/saas/register-tenant`, `/saas/force-mfa-reset` | `POST /api/saas/tenants/with-admin`, `POST /api/saas/users/{id}/force-mfa-reset` |
+
+### Background jobs (Phase 8)
+
+Registrados como `IHostedService` y corren automáticamente con la API:
+
+- **InvitationExpiryJob** — cada 1h: marca `Invitation Pending → Expired` las que pasaron `ExpiresAt`, revoca en cascada `TenantMembership` huérfanas en estado `Invited`.
+- **PasswordResetTokenCleanupJob** — cada 6h: purga tokens consumidos o expirados con > 30 días.
+
+### Load testing
+
+NBomber scenario configurado para validar SLO de login (100 req/s × 5 min, p95 < 800 ms):
+
+```bash
+LOADTEST_BASE_URL=http://localhost:5000 \
+RUN_LOAD_TESTS=1 \
+dotnet test tests/IngenIA365ERP.Load.Tests --filter "FullyQualifiedName~LoginThroughput"
+```
+
 ## Documentacion adicional
 
 - [`docs/CONFIGURACION-Y-AUTENTICACION.md`](docs/CONFIGURACION-Y-AUTENTICACION.md) — AppMode (Mock/Api), tenant resolution, tablas Identity, seed, cadenas de conexion, registracion DI, troubleshooting.

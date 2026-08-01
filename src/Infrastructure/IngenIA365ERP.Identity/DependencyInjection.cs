@@ -62,6 +62,9 @@ public static class DependencyInjection
         }
         else
         {
+            // Fail-fast en Production: una clave efímera invalidaría todos los
+            // tokens en cada reinicio, en silencio (hardening post-T118).
+            KeyManagement.RsaKeyGuard.ThrowIfProduction(jwtSettings.PrivateKeyPath);
             rsa = RSA.Create(2048);
         }
 

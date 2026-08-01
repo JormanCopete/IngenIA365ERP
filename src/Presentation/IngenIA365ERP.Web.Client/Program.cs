@@ -49,6 +49,24 @@ Console.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={apiBaseUrl}")
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILoadingService, LoadingService>();
 
+// Feature 002 (US1) — cliente del módulo de invitaciones consumido por
+// AcceptInvitation.razor. Usa el HttpClient 'api' configurado arriba.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClient>();
+// Feature 002 (US2) — cliente del flujo de autenticación central
+// consumido por Login.razor + MfaChallenge.razor + SelectTenant.razor.
+// Scoped para mantener tokens en memoria por sesión WASM.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthClient>();
+// Phase 4b — cliente del módulo de perfil y recuperación (MFA enrollment,
+// change password, forgot/reset). Reusa CentralAuthClient para resolver
+// qué token enviar (access full o challenge mfa-enroll).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// US3 — cliente del módulo de sesiones (active-tenants, switch, default).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
+// US4 — cliente de gestión de membresías y política MFA.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
+// US5 — cliente master admin (register tenant + admin, force MFA reset).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
+
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();

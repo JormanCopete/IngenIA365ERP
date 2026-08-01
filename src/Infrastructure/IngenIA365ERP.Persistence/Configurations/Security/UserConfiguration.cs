@@ -29,6 +29,18 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(e => e.IsSaasOperator).HasDefaultValue(false);
         builder.Property(e => e.MustChangePassword).HasDefaultValue(false);
 
+        // T025 (Feature 002) — las propiedades CentralUserId y
+        // CentralUserPublicEmail viven en Domain.User para que US1/US2 puedan
+        // referenciarlas sin tener que volver a tocar el modelo. Pero NO se
+        // mapean a SEC_Users hoy porque el script 15d (T017) aún no se ha
+        // ejecutado contra la BD — declarar el mapeo activo haría que EF
+        // generara SELECTs con columnas inexistentes y rompería todos los
+        // handlers legacy de Fase 0. Cuando se realice el cutover a identidad
+        // central (US1/US2 + ejecutar 15d), se retirarán estos Ignore y se
+        // activará el mapeo + UNIQUE index documentado en el script.
+        builder.Ignore(e => e.CentralUserId);
+        builder.Ignore(e => e.CentralUserPublicEmail);
+
         builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId);
 
         // El N:N User↔Role se materializa con la entidad explícita UserRole

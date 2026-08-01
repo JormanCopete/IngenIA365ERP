@@ -24,7 +24,19 @@ public class PrincipioVII_SoftDeleteAndAuditable
     private static readonly HashSet<string> AllowedAppendOnly =
     [
         // FR-010 — historial inmutable, FIFO; no participa de soft-delete.
-        "IngenIA365ERP.Domain.Entities.Security.PasswordHistory"
+        "IngenIA365ERP.Domain.Entities.Security.PasswordHistory",
+
+        // Feature 002-identidad-central-federada — Complexity Tracking del plan.md:
+        // CentralUser usa Guid Id por convención de ASP.NET Core Identity
+        // (IdentityUser<Guid>) y por eso NO puede heredar AuditableEntity (int Id).
+        // Los campos de audit + soft-delete están declarados manualmente; cumple el
+        // espíritu del principio VII aunque no la firma estructural.
+        "IngenIA365ERP.Domain.Entities.Admin.CentralUser",
+
+        // Feature 002 — data-model §5: telemetría append-only de intentos de login.
+        // No participa de soft-delete por diseño (FR-035, FR-042); su retención se
+        // gestiona por job de limpieza (1 año) — separado del modelo auditable.
+        "IngenIA365ERP.Domain.Entities.Admin.CentralUserLoginAttempt",
     ];
 
     [Fact]

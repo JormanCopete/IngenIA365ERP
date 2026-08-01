@@ -1,0 +1,107 @@
+@page "/security/select-tenant"
+@layout MinimalLayout
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+@inject NavigationManager Nav
+
+@*
+    Pantalla de selección de empresa cuando el login (o post-MFA) devolvió
+    challenge=TenantSelection. El CentralAuthClient guarda el challengeToken
+    purpose=tenant-select; al elegir → POST /api/sessions/select-tenant →
+    tokens operativos y redirect al dashboard.
+
+    Nota: las opciones se reciben desde el body del login response y el
+    cliente las debe haber retenido. Para simplificar el flujo, esta pantalla
+    re-solicita al usuario via AuthClient o muestra estado vacío.
+    Implementación pragmática: lista pre-rellenada del último login.
+*@
+
+<PageTitle>Selecciona tu empresa — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+    <h1>Selecciona tu empresa</h1>
+    <p>Estás vinculado a varias cooperativas. Elige con cuál vas a trabajar ahora.</p>
+
+    @if (_tenants is null || _tenants.Count == 0)
+    {
+        <p style="margin-top: 16px; color: #6b7280;">
+            No hay empresas para elegir. Vuelve a iniciar sesión.
+        </p>
+        <NavLink href="/security/login">Volver al inicio</NavLink>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
+            @foreach (var t in _tenants)
+            {
+                <button
+                    type="button"
+                    @onclick="() => SelectAsync(t.TenantPublicId)"
+                    disabled="@_busy"
+                    style="padding: 16px; text-align: left; border: 1px solid #e5e7eb;
+                           border-radius: 8px; background: white; cursor: pointer;">
+                    <strong>@t.TenantName</strong>
+                    @if (t.IsTenantAdmin)
+                    {
+                        <span style="margin-left: 8px; padding: 2px 8px; background: #dbeafe;
+                                     color: #1e40af; border-radius: 4px; font-size: 12px;">Admin</span>
+                    }
+                </button>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ActiveTenantSummary>? Tenants { get; set; }
+
+    private IReadOnlyList<ActiveTenantSummary>? _tenants;
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        // US3 — los tenants los retiene CentralAuthClient en LastLoginTenants
+        // tras el LoginResponse con challenge=TenantSelection. Si la lista
+        // está vacía (nav directa sin contexto), se muestra el estado vacío.
+        _tenants = AuthClient.LastLoginTenants ?? Tenants;
+    }
+
+    private async Task SelectAsync(Guid tenantPublicId)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await AuthClient.SelectTenantAsync(tenantPublicId);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                _error = MapError(result.ErrorCode, result.ErrorMessage);
+                return;
+            }
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string MapError(string? code, string? message) => code switch
+    {
+        "Membership.NotActive" => "Tu membresía con esa empresa ya no es vigente.",
+        "Identity.WrongTokenPurpose" => "Token inválido para este paso. Reinicia el login.",
+        "Identity.NoChallengeToken" => "Falta el token de challenge. Reinicia el login.",
+        _ => message ?? "No se pudo completar la selección.",
+    };
+}

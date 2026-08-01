@@ -1,6 +1,7 @@
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Middleware;
+using IngenIA365ERP.API.Middleware.CentralIdentity;
 using IngenIA365ERP.API.Services;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -9,6 +10,7 @@ using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.Identity;
+using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
 using IngenIA365ERP.Persistence;
 using IngenIA365ERP.Storage;
@@ -31,7 +33,13 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog();
+    // T123 — Serilog enrichers para central_user_id + active_tenant_id desde
+    // los claims del JWT. Se rehidrata desde DI para tener IHttpContextAccessor.
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .WriteTo.Console()
+        .WriteTo.File("logs/ingenia365erp-.log", rollingInterval: RollingInterval.Day)
+        .Enrich.With(new IngenIA365ERP.API.Logging.CentralIdentityLogEnricher(
+            services.GetRequiredService<IHttpContextAccessor>())));
 
     // Add services to the container
     builder.Services.AddEndpointsApiExplorer();
@@ -89,12 +97,23 @@ try
     // === Cross-cutting services consumed by Identity & Audit ===
     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
     builder.Services.AddSingleton<ICurrentUserService, CurrentUserService>();
+    // Feature 002 — accessor del JWT central (sub, email, active_tenant_id,
+    // tenant_admin, is_global_master_admin, purpose, mfa_verified).
+    builder.Services.AddSingleton<
+        IngenIA365ERP.Application.Common.Interfaces.Identity.ICurrentCentralUserContext,
+        CurrentCentralUserContextAccessor>();
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
 
     // === Identity & Security ===
+    // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);
+    // T048 (Feature 002) — identidad central federada sobre AdminDbContext.
+    // Registra IdentityCore<CentralUserIdentity>, BcryptPasswordHasher,
+    // PwnedPasswordService, CentralJwtIssuer, ICentralIdentityProvider.
+    // AdminDbContext ya queda registrado por AddPersistenceServices() abajo.
+    builder.Services.AddCentralIdentity(builder.Configuration);
 
     // T052/T058 — MFA challenge + enrollment stores en memoria (fallback dev).
     // Producción usa los respaldos en Redis vía AddCachingServices.
@@ -147,9 +166,21 @@ try
     // Application layer DI registration (MediatR, FluentValidation, Mapster)
     builder.Services.AddApplicationServices();
 
+    // Feature 002 — opciones del flujo de identidad central
+    // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
+    builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
+        builder.Configuration.GetSection(
+            IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions.SectionName));
+
     // Infrastructure layer DI registrations
     builder.Services.AddPersistenceServices(builder.Configuration);
-    // builder.Services.AddCachingServices(builder.Configuration);  // Using MemoryCacheService instead of Redis for local dev
+    // Feature 002 (US2+US3+US4+Phase 4b) — los handlers de identidad central
+    // requieren Redis para: IDistributedLock (single-use de invitaciones),
+    // ICentralRefreshTokenStore (family rotation), IMfaPendingStore (secret
+    // temporal de enrollment), ITenantMembershipReader (cache + pub/sub),
+    // IMembershipChangedNotifier (invalidación distribuida), ILoginAttemptCounter
+    // (lockout progresivo). El docker-compose levanta Redis en localhost:6379.
+    builder.Services.AddCachingServices(builder.Configuration);
 
     // T030 — Email (MailKit) y T025/T030a — Storage abstractions.
     builder.Services.AddStorageServices(builder.Configuration);
@@ -214,8 +245,12 @@ try
     app.UseSerilogRequestLogging();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");
-    app.UseTenantResolution();
+    // T048: orden estricto — Authentication primero para que TenantResolution
+    // pueda leer el claim active_tenant_id (T044). CentralIdentityChallenge
+    // envuelve respuestas 401 vacías en el envelope JSON canónico (T045).
     app.UseAuthentication();
+    app.UseCentralIdentityChallenge();
+    app.UseTenantResolution();
     app.UseAuthorization();
     // T074 — convierte cualquier 404 bajo /api/* en el envelope canónico,
     // haciendo indistinguible "endpoint no existe" vs "no tienes permiso".

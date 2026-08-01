@@ -13,7 +13,7 @@ public static class DependencyInjection
     public static IServiceCollection AddStorageServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
-        services.AddScoped<IEmailSender, MailKitEmailSender>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         // T106 + T107 — Adjuntos cifrados (US5).
         services.Configure<AttachmentStorageSettings>(
@@ -24,6 +24,14 @@ public static class DependencyInjection
         // T117 — Renderer de templates Razor para correo. Singleton: cachea
         // los .cshtml leídos del filesystem; thread-safe via ConcurrentDictionary.
         services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
+
+        // Feature 002 — plantillas HTML del flujo de identidad central
+        // (Invitation, PasswordReset, PasswordChanged) bajo Templates/ con
+        // interpolación simple {{Key}}. Singleton: cachea cada plantilla.
+        services.AddSingleton<IIdentityEmailTemplates, IdentityEmailTemplates>();
+
+        // Phase 4b — notificación post-cambio de contraseña.
+        services.AddScoped<IPasswordChangedNotifier, PasswordChangedNotifier>();
 
         // T119 — Background dispatcher de correo para notificaciones US6.
         services.AddHostedService<NotificationEmailDispatcher>();

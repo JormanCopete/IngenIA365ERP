@@ -1,104 +1,160 @@
-using IngenIA365ERP.Persistence.MultiTenancy;
+using System.Security.Claims;
+using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.API.Middleware;
 
+/// <summary>
+/// Resuelve el tenant activo de la solicitud a partir del JWT central
+/// (claim <c>active_tenant_id</c>, T044 — Feature 002).
+///
+/// <para>
+/// Cambio mayor respecto a Fase 0: ya NO se aceptan los headers
+/// <c>X-Tenant-Id</c>, el subdominio ni el query <c>?tenant=</c>. El JWT
+/// emitido por <c>CentralJwtIssuer</c> es la única fuente de verdad — si
+/// el claim no está presente el request está en el estado intermedio
+/// post-login pre-select-tenant y solo puede consumir los endpoints de
+/// sesión / auth / invitaciones.
+/// </para>
+///
+/// <para>
+/// Rutas exentas (NO requieren claim):
+/// <list type="bullet">
+///   <item><c>/api/auth/*</c> — login, refresh, logout, mfa/verify, me</item>
+///   <item><c>/api/sessions/*</c> — select-tenant, switch-tenant, set-default</item>
+///   <item><c>/api/invitations/*</c> — preview, accept (público pre-auth)</item>
+///   <item><c>/api/saas/*</c> — superficie master admin (no scoped a tenant)</item>
+///   <item><c>/api/admin/*</c> — legado master admin (carve-out Fase 0)</item>
+///   <item><c>/api/profile/mfa/enroll</c> y <c>/confirm</c> — el enrollment
+///     forzado (FR-003b) llega con challenge token <c>purpose=mfa-enroll</c>
+///     que por definición no porta tenant; ambos endpoints solo tocan
+///     <c>ADM_*</c> y quedan custodiados por <c>RequirePurpose</c></item>
+///   <item><c>/api/health</c>, <c>/swagger</c>, <c>/_framework</c>, <c>/_vs</c>, <c>/hubs/*</c></item>
+/// </list>
+/// </para>
+///
+/// <para>
+/// Respaldo master (FR-039 / FR-040a): el master global no tiene membresías y
+/// por lo tanto nunca porta <c>active_tenant_id</c>. Para rutas
+/// <c>/api/tenants/{tenantPublicId}/...</c> con JWT master autenticado, el
+/// tenant se resuelve desde el segmento de la ruta; la autorización sigue a
+/// cargo de <c>RequireTenantAdmin</c>/<c>RequireMasterAdmin</c> en el endpoint.
+/// </para>
+/// </summary>
 public class TenantResolutionMiddleware
 {
+    private const string ActiveTenantIdClaim = "active_tenant_id";
+
+    private static readonly string[] ExemptPrefixes =
+    [
+        "/api/auth/",
+        "/api/sessions/",
+        "/api/invitations/",
+        "/api/saas/",
+        "/api/admin",
+        "/api/profile/mfa/enroll",
+        "/api/profile/mfa/confirm",
+        "/api/health",
+        "/swagger",
+        "/_framework",
+        "/_vs",
+        "/hubs/",
+    ];
+
     private readonly RequestDelegate _next;
 
     public TenantResolutionMiddleware(RequestDelegate next) => _next = next;
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Endpoints anónimos — tenant viene en body (login) o token (refresh).
-        var path = context.Request.Path.Value?.ToLower() ?? "";
-        if (path.StartsWith("/api/admin") ||
-            path.StartsWith("/api/health") ||
-            path.StartsWith("/api/auth/login") ||
-            path.StartsWith("/api/auth/refresh") ||
-            path.StartsWith("/swagger") ||
-            path.StartsWith("/_framework") ||
-            path.StartsWith("/_vs"))
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+
+        if (IsExempt(path))
         {
             await _next(context);
             return;
         }
 
-        // T023 — Para requests autenticados, el tenant_id del JWT es la
-        // única fuente de verdad. Si el cliente envió X-Tenant-Id en el
-        // header y NO coincide con el claim, devolvemos 403: es un intento
-        // de saltar al schema de otra cooperativa (FR-002, SC-005).
-        string? tenantIdFromClaim = null;
-        if (context.User?.Identity?.IsAuthenticated == true)
+        // T044: única fuente de verdad — claim active_tenant_id del JWT validado.
+        // Sin autenticación o sin claim → respuesta tipada Session.TenantNotSelected.
+        // Excepción única (FR-039/FR-040a): master global sin claim opera
+        // /api/tenants/{id}/... resolviendo el tenant desde la ruta.
+        var claimValue = context.User?.FindFirst(ActiveTenantIdClaim)?.Value;
+        if ((string.IsNullOrWhiteSpace(claimValue) ||
+             !Guid.TryParse(claimValue, out var activeTenantId)) &&
+            !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)))
         {
-            tenantIdFromClaim = context.User.FindFirst("tenant_id")?.Value;
-            var headerTenant = context.Request.Headers["X-Tenant-Id"].FirstOrDefault();
-            if (!string.IsNullOrEmpty(headerTenant)
-                && !string.IsNullOrEmpty(tenantIdFromClaim)
-                && !string.Equals(headerTenant, tenantIdFromClaim, StringComparison.OrdinalIgnoreCase))
-            {
-                context.Response.StatusCode = 403;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    code = "Tenant.Forbidden",
-                    message = "El claim tenant_id no coincide con el header X-Tenant-Id. La operación fue rechazada.",
-                    traceId = context.TraceIdentifier
-                });
-                return;
-            }
-        }
-
-        // Estrategia 1: claim (más fuerte) — Estrategia 2: header — Estrategia 3: subdominio — Estrategia 4: query (dev).
-        string? tenantId = tenantIdFromClaim
-            ?? context.Request.Headers["X-Tenant-Id"].FirstOrDefault();
-
-        if (string.IsNullOrEmpty(tenantId))
-        {
-            var host = context.Request.Host.Host;
-            var parts = host.Split('.');
-            if (parts.Length >= 3 && parts[0] != "www" && parts[0] != "api")
-                tenantId = parts[0];
-        }
-
-        if (string.IsNullOrEmpty(tenantId)
-            && context.RequestServices.GetService<IWebHostEnvironment>()?.IsDevelopment() == true)
-            tenantId = context.Request.Query["tenant"].FirstOrDefault();
-
-        if (string.IsNullOrEmpty(tenantId))
-        {
-            context.Response.StatusCode = 400;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                code = "Tenant.Missing",
-                message = "No se pudo identificar la cooperativa. Envía el header X-Tenant-Id o usa el subdominio correcto.",
-                traceId = context.TraceIdentifier
-            });
+            await WriteTenantNotSelectedAsync(context);
             return;
         }
 
-        var tenantDbContext = context.RequestServices.GetRequiredService<TenantDbContext>();
-        var tenant = await tenantDbContext.Tenants
+        // Resolución: CentralJwtIssuer (T037) emite el claim con el PublicId (Guid)
+        // del tenant — el Id interno (int) nunca sale de la BD. IsDeleted está
+        // cubierto por HasQueryFilter en TenantConfiguration.
+        var adminDb = context.RequestServices.GetRequiredService<AdminDbContext>();
+        var tenant = await adminDb.Tenants
             .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Identifier == tenantId && t.IsActive);
+            .FirstOrDefaultAsync(t => t.PublicId == activeTenantId && t.IsActive);
 
-        if (tenant == null)
+        if (tenant is null)
         {
-            context.Response.StatusCode = 404;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                code = "Tenant.NotFound",
-                message = $"Cooperativa '{tenantId}' no encontrada o inactiva.",
-                traceId = context.TraceIdentifier
-            });
+            await WriteTenantNotFoundAsync(context, activeTenantId);
             return;
         }
 
         context.Items["TenantInfo"] = tenant;
         context.Items["TenantId"] = tenant.Id;
-        context.Items["TenantSchema"] = tenant.Schema;
+        context.Items["TenantPublicId"] = tenant.PublicId;
+        context.Items["TenantSchema"] = tenant.SchemaName;
 
         await _next(context);
+    }
+
+    private static bool IsMasterAdmin(ClaimsPrincipal? user) =>
+        bool.TryParse(user?.FindFirst("is_global_master_admin")?.Value, out var isMaster) && isMaster;
+
+    private static bool TryGetTenantIdFromPath(string path, out Guid tenantId)
+    {
+        tenantId = Guid.Empty;
+        const string prefix = "/api/tenants/";
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var rest = path[prefix.Length..];
+        var slash = rest.IndexOf('/');
+        var segment = slash < 0 ? rest : rest[..slash];
+        return Guid.TryParse(segment, out tenantId);
+    }
+
+    private static bool IsExempt(string path)
+    {
+        foreach (var prefix in ExemptPrefixes)
+        {
+            if (path.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
+    private static async Task WriteTenantNotSelectedAsync(HttpContext context)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            errorCode = "Session.TenantNotSelected",
+            message = "Se requiere seleccionar una empresa antes de consumir este recurso.",
+            traceId = context.TraceIdentifier,
+        });
+    }
+
+    private static async Task WriteTenantNotFoundAsync(HttpContext context, Guid tenantId)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            errorCode = "Tenant.NotFound",
+            message = $"La empresa indicada (Id={tenantId}) no existe o está inactiva.",
+            traceId = context.TraceIdentifier,
+        });
     }
 }
 

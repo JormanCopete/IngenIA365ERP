@@ -41,11 +41,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/001-cimientos-tecnicos/plan.md](specs/001-cimientos-tecnicos/plan.md)
+[specs/002-identidad-central-federada/plan.md](specs/002-identidad-central-federada/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/001-cimientos-tecnicos/spec.md)
-- [research.md](specs/001-cimientos-tecnicos/research.md)
-- [data-model.md](specs/001-cimientos-tecnicos/data-model.md)
-- [quickstart.md](specs/001-cimientos-tecnicos/quickstart.md)
-- [contracts/](specs/001-cimientos-tecnicos/contracts/)
+- [spec.md](specs/002-identidad-central-federada/spec.md)
+- [research.md](specs/002-identidad-central-federada/research.md)
+- [data-model.md](specs/002-identidad-central-federada/data-model.md)
+- [quickstart.md](specs/002-identidad-central-federada/quickstart.md)
+- [contracts/](specs/002-identidad-central-federada/contracts/)
 <!-- SPECKIT END -->

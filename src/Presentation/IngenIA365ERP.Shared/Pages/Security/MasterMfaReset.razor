@@ -1,0 +1,109 @@
+@page "/saas/force-mfa-reset"
+@layout MinimalLayout
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@inject SaasAdminClient Client
+
+@*
+    T121 (US5) — Master admin resetea MFA de un usuario por incidente
+    operativo. Requiere razón (10+ chars). Tras éxito el usuario perderá
+    MFA + todos sus refresh tokens activos.
+*@
+
+<PageTitle>Reset MFA — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px;">
+    @if (_done)
+    {
+        <h1>Reset aplicado ✓</h1>
+        <p>
+            El MFA de <code>@_model.CentralUserPublicId</code> fue reseteado
+            y se invalidaron sus sesiones activas. En su próximo login se le
+            pedirá configurar MFA de nuevo si el tenant lo exige.
+        </p>
+        <button @onclick="@(() => Restart())">Resetear otro</button>
+    }
+    else
+    {
+        <h1>Resetear MFA de usuario</h1>
+
+        <div style="background: #fee2e2; border-left: 4px solid #dc2626;
+                    padding: 12px 16px; margin: 16px 0; font-size: 13px;">
+            <strong>Acción operativa de alta sensibilidad.</strong> Se aplica
+            solo tras verificar la identidad del usuario por canal alterno.
+            Queda registrada en audit log con la razón que indiques.
+        </div>
+
+        <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="masterMfaReset">
+            <DataAnnotationsValidator />
+
+            <label>ID público del CentralUser</label>
+            <InputText
+                @bind-Value="_centralUserPublicIdString"
+                placeholder="00000000-0000-0000-0000-000000000000" />
+
+            <label>Razón del reset (mínimo 10 caracteres)</label>
+            <InputTextArea @bind-Value="_model.Reason" rows="3" />
+            <ValidationMessage For="@(() => _model.Reason)" />
+
+            <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+                @(_busy ? "Aplicando..." : "Resetear MFA")
+            </button>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        }
+    }
+</div>
+
+@code {
+    private readonly Input _model = new();
+    private string _centralUserPublicIdString = string.Empty;
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        if (!Guid.TryParse(_centralUserPublicIdString, out var id))
+        {
+            _error = "El Id del usuario no es un UUID válido.";
+            return;
+        }
+        _model.CentralUserPublicId = id;
+
+        _busy = true; _error = null;
+        try
+        {
+            var r = await Client.ForceMfaResetAsync(id, _model.Reason!);
+            if (r.IsSuccess) { _done = true; return; }
+            _error = MapError(r.ErrorCode, r.ErrorMessage);
+        }
+        finally { _busy = false; }
+    }
+
+    private void Restart()
+    {
+        _model.Reason = null;
+        _centralUserPublicIdString = string.Empty;
+        _done = false;
+    }
+
+    private static string MapError(string? code, string? message) => code switch
+    {
+        "Identity.UserNotFound" => "El usuario indicado no existe.",
+        "Saas.MasterOnly" => "Solo el master admin puede ejecutar este reset.",
+        _ => message ?? "No se pudo aplicar el reset.",
+    };
+
+    public sealed class Input
+    {
+        public Guid CentralUserPublicId { get; set; }
+
+        [Required(ErrorMessage = "Debes indicar la razón.")]
+        [MinLength(10, ErrorMessage = "Mínimo 10 caracteres.")]
+        public string? Reason { get; set; }
+    }
+}
