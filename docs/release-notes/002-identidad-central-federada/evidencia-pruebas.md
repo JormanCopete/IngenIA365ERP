@@ -86,13 +86,50 @@ Capturas tomadas con Playwright contra `http://localhost:5200`
   tick (~2 min tras arranque) con evento `Invitation.Expired`; tokens de
   reset consumidos >30 días purgados en el tick de ~5 min.
 
-## 5. Pendientes conocidos al cierre de esta evidencia
+## 5. T118 — Integration test master-register-tenant (2026-08-01)
+
+`EndToEnd_MasterRegisterTenant` **en verde** contra contenedores efímeros
+(Testcontainers: SQL Server 2022 + Mongo 7 + Redis 7), con la BD admin
+provisionada por los **DDL oficiales** (15a–15c, 15e + migración 26b) sobre
+un `ADM_Tenants` legacy de Fase 0 — el test valida también los scripts
+reales. Cubre: login del master sin tenants → `POST /api/saas/tenants/with-admin`
+→ correo de invitación capturado → preview (admin, válida) → accept rama
+registro → claims `active_tenant_id`/`tenant_admin`/`purpose=full` →
+membresía Active + IsTenantAdmin en BD → replay del token → 410 (FR-030).
+
+Hallazgo de robustez: la carga de claves RS256 usa `File.Exists` con path
+relativo y **cae en silencio a una clave aleatoria** si no lo encuentra —
+en prod un despliegue sin la clave montada emitiría tokens que mueren en
+cada reinicio. Endurecer (fail-fast) en el hardening de despliegue.
+
+## 6. T124 — Load test de login (2026-08-01, entorno dev local)
+
+Corrida NBomber: `Inject 100 rps × 5 min` sobre `POST /api/auth/login`
+(50 usuarios sintéticos, ~2.000 IPs rotadas vía `X-Real-IP`, API en Release
+con log Warning).
+
+| Métrica | Resultado | Criterio | Veredicto |
+|---|---|---|---|
+| Requests | 30.000/30.000 OK, 0 fallos | 0 errores 5xx / fail < 1% | ✅ |
+| Throughput | 100 RPS sostenidos 5 min | 100 logins/seg | ✅ |
+| p50 / p75 | 192 ms / 292 ms | — | sanos (~2× el piso BCrypt cost 11 ≈ 100 ms) |
+| **p95 / p99** | **2.265 ms / 2.781 ms** | p95 < 800 ms | ❌ **en esta máquina** |
+
+El incumplimiento de p95 es atribuible a saturación de CPU del equipo dev
+(API + SQL Server + MongoDB + Redis/WSL + Docker + el propio generador en la
+misma máquina; solo el hashing BCrypt cost 11 consume ~13 núcleos-segundo
+por segundo a 100 rps). **Repetir en el hardware objetivo (VPS de
+producción) para el veredicto SC-oficial.** Verificación colateral: el rate
+limiting anti-fuerza-bruta (10 logins/min/IP) respondió 429 al 100% de una
+carga mono-IP, como debe.
+
+## 7. Pendientes conocidos al cierre de esta evidencia
 
 - Persistencia de sesión ante F5 (storage in-memory pre-existente en Web/WASM).
 - `PermissionGate` con claims de permisos por tenant (`GET /me`).
 - TenantSwitcher del header (T091) y header con email real.
-- Tests T118 (integration master-register-tenant) y T124 (carga NBomber).
-- Observaciones de seguridad en discusión: accept emite token full con
-  política MFA activa; timing side-channel en forgot; etiqueta `otpauth://`
-  con GUID; `GET /members` sin emails; colección Mongo `audit_events_` para
-  eventos globales.
+- T124 en hardware dedicado (ver §6) y hardening del fallback de claves RS256 (ver §5).
+- Backlog de observaciones: timing side-channel en forgot; colección Mongo
+  `audit_events_` (sufijo vacío) para eventos globales. Resueltas el
+  2026-08-01: accept respeta política MFA, `otpauth://` con email,
+  `GET /members` con emails.

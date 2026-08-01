@@ -120,8 +120,14 @@ Sesión 2026-07-31:
 - Secuelas del cutover: persistencia ante F5 (storage in-memory pierde
   sesión en reload); `PermissionGate` necesita claims/`GET /me` del tenant;
   el header muestra "Usuario" genérico; falta el TenantSwitcher (T091).
-- Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`.
-- Tests pendientes: T118, T127 (evidencia con screenshots), T124 (carga).
+- Gaps formalizados en `26_Backfill_Gaps_Tenant.sql` + `26b_Backfill_Gaps_Admin.sql`;
+  T127 (evidencia con capturas) y T118 (integration test con Testcontainers)
+  **hechos**. T124 ejecutado: 30.000/30.000 OK a 100 RPS × 5 min, 0 fallos,
+  p50=192ms, pero p95=2265ms > 800ms en la máquina dev — repetir en el VPS
+  objetivo. Usuarios sintéticos `load.userNN@cooperativa.test` /
+  `LoadTest-Pwd-2026` sembrados en la BD admin local.
+- Hardening pendiente: fail-fast si `Keys/dev_private.pem` no resuelve (hoy
+  cae en silencio a clave RSA aleatoria).
 - Observaciones resueltas (2026-08-01): accept respeta MFA (challenge sin
   tokens cuando aplica, FR-003b/c); `otpauth://` con email; `GET /members`
   con email por miembro. En backlog: timing side-channel en forgot y la

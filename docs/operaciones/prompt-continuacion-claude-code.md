@@ -130,9 +130,23 @@ dotnet run --project src/Presentation/IngenIA365ERP.Web --launch-profile http
     del tenant — las páginas ERP que gateen por permiso necesitarán `GET /me`.
   - El header muestra "Usuario" genérico (no lee el claim `email`).
   - TenantSwitcher del header (T091) sigue sin existir.
-- **Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`** formal.
-- **Tests pendientes**: T118 (integration master-register-tenant),
-  T127 (evidencia quickstart con screenshots), T124 (load test NBomber).
+- ~~Gaps a migración formal~~ → **HECHO**: `26_Backfill_Gaps_Tenant.sql` +
+  `26b_Backfill_Gaps_Admin.sql` (los números 24/25 estaban tomados).
+- ~~T127~~ → **HECHO**: `docs/release-notes/002-identidad-central-federada/`
+  (evidencia + 8 capturas).
+- ~~T118~~ → **HECHO (2026-08-01)**: `EndToEnd_MasterRegisterTenant` en verde
+  con `CentralIdentityApiFixture` (Testcontainers + DDL oficiales + master
+  sembrado + IEmailSender capturador). Requiere Docker.
+- ~~T124~~ → **EJECUTADO (2026-08-01)**: 30.000/30.000 OK, 100 RPS × 5 min,
+  0 fallos; p50=192ms, pero **p95=2265ms > 800ms en la máquina dev**
+  (saturación de CPU compartida — BCrypt cost 11). Falta repetir en el VPS
+  objetivo para el veredicto SC. Los 50 usuarios `load.userNN@cooperativa.test`
+  / `LoadTest-Pwd-2026` quedaron sembrados en la BD admin local.
+  Correr con: `RUN_LOAD_TESTS=1 LOADTEST_BASE_URL=http://localhost:5100
+  dotnet test tests/IngenIA365ERP.Load.Tests --filter LoginThroughput`.
+- **Hardening pendiente**: la carga de claves RS256 cae en silencio a una
+  clave aleatoria si `Keys/dev_private.pem` no resuelve (path relativo al
+  cwd) — fail-fast en producción.
 - **Observaciones resueltas (2026-08-01)**: accept-invitation ahora respeta
   MFA (challenge `MfaRequired`/`MfaEnrollmentRequired` sin tokens si aplica —
   FR-003b/c); `otpauth://` etiqueta con el email; `GET /members` devuelve
