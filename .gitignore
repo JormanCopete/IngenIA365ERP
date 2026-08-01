@@ -273,3 +273,6 @@ database/migration/data/*.sql
 *.tgz
 .yarn-integrity
 speckit.constitution.md
+
+# Artefactos de Playwright MCP (pruebas de UI automatizadas)
+.playwright-mcp/

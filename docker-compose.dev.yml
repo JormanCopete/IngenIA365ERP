@@ -1,0 +1,55 @@
+# =============================================================================
+# docker-compose.dev.yml
+#
+# Alternativa Docker para desarrollo local del feature 002 (Identidad Central).
+# Levanta SOLO los servicios auxiliares que el setup local (SQL Server nativo
+# Windows + MongoDB nativo Windows) no cubre:
+#
+#   - redis     → mismo puerto (6379) que la instalación WSL local
+#   - smtp4dev  → mismo puerto SMTP (1025) y UI (8025) que `dotnet tool smtp4dev`
+#
+# El objetivo es que el `appsettings.Development.json` funcione idéntico tanto
+# si usás el stack local como si usás este compose — no hay que cambiar
+# connection strings al alternar.
+#
+# Levantar:
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Detener:
+#   docker compose -f docker-compose.dev.yml down
+#
+# Detener y borrar volúmenes:
+#   docker compose -f docker-compose.dev.yml down -v
+#
+# NOTA: SI ya tenés Redis en WSL o smtp4dev nativo escuchando en esos puertos,
+# apagálos antes de levantar este compose — o Docker fallará con "port in use".
+# =============================================================================
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ingenia365-dev-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  smtp4dev:
+    image: rnwood/smtp4dev:latest
+    container_name: ingenia365-dev-smtp4dev
+    ports:
+      - "1025:25"      # SMTP — igual que el nativo dotnet-tool
+      - "8025:80"      # Web UI — igual que el nativo dotnet-tool
+    volumes:
+      - smtp4dev-dev-data:/smtp4dev
+    restart: unless-stopped
+
+volumes:
+  redis-dev-data:
+  smtp4dev-dev-data:

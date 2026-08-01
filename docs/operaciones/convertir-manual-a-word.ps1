@@ -39,6 +39,11 @@ $inputs = @(
         Source = "docs\operaciones\manual-pruebas-identidad-central.md"
         Output = "docs\operaciones\Manual-Pruebas-Identidad-Central.docx"
         Title  = "Manual de Pruebas Técnico — Identidad Central"
+    },
+    @{
+        Source = "docs\operaciones\Guia-Prueba-Produccion-Identidad-Central.md"
+        Output = "docs\operaciones\Guia-Prueba-Produccion-Identidad-Central.docx"
+        Title  = "Guía de Prueba en Producción — Identidad Central"
     }
 )
 
