@@ -21,7 +21,19 @@ public static class DependencyInjection
         var redisSettings = configuration.GetSection(RedisSettings.SectionName).Get<RedisSettings>()
             ?? new RedisSettings();
 
-        var multiplexer = ConnectionMultiplexer.Connect(redisSettings.ConnectionString);
+        // ConnectionStrings:Redis tiene prioridad — es donde
+        // appsettings.Development.json guarda el valor con abortConnect=false.
+        var connectionStringFromConnStrings = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(connectionStringFromConnStrings))
+        {
+            redisSettings.ConnectionString = connectionStringFromConnStrings;
+        }
+
+        // Forzamos AbortOnConnectFail=false para tolerar el warm-up de WSL2 /
+        // Docker (~1–3s) sin tumbar el arranque de la API.
+        var redisConfig = ConfigurationOptions.Parse(redisSettings.ConnectionString);
+        redisConfig.AbortOnConnectFail = false;
+        var multiplexer = ConnectionMultiplexer.Connect(redisConfig);
         services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 
         services.AddStackExchangeRedisCache(options =>

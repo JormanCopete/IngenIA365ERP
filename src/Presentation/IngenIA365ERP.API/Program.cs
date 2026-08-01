@@ -174,7 +174,13 @@ try
 
     // Infrastructure layer DI registrations
     builder.Services.AddPersistenceServices(builder.Configuration);
-    // builder.Services.AddCachingServices(builder.Configuration);  // Using MemoryCacheService instead of Redis for local dev
+    // Feature 002 (US2+US3+US4+Phase 4b) — los handlers de identidad central
+    // requieren Redis para: IDistributedLock (single-use de invitaciones),
+    // ICentralRefreshTokenStore (family rotation), IMfaPendingStore (secret
+    // temporal de enrollment), ITenantMembershipReader (cache + pub/sub),
+    // IMembershipChangedNotifier (invalidación distribuida), ILoginAttemptCounter
+    // (lockout progresivo). El docker-compose levanta Redis en localhost:6379.
+    builder.Services.AddCachingServices(builder.Configuration);
 
     // T030 — Email (MailKit) y T025/T030a — Storage abstractions.
     builder.Services.AddStorageServices(builder.Configuration);
