@@ -28,8 +28,17 @@ public sealed class TenantSessionClient
     public async Task<InvitationApiResult<SwitchTenantResponse>> SwitchAsync(
         Guid tenantPublicId, CancellationToken ct = default)
     {
-        return await PostAuthenticatedAsync<SwitchTenantResponse>(
+        var parsed = await PostAuthenticatedAsync<SwitchTenantResponse>(
             "/api/sessions/switch-tenant", new { tenantPublicId }, ct);
+
+        // El switch re-emite el JWT con el nuevo active_tenant_id: la sesión de
+        // la app debe adoptarlo (storage + auth state) o los siguientes requests
+        // seguirían operando sobre el tenant anterior.
+        if (parsed.IsSuccess && parsed.Value is { } body)
+        {
+            await _auth.AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
+        }
+        return parsed;
     }
 
     public async Task<InvitationApiResult<EmptyResponse>> SetDefaultAsync(

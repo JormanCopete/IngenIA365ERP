@@ -4,7 +4,13 @@
 @code {
     protected override void OnInitialized()
     {
+        // Durante el prerender estático NO hay que redirigir: la sesión real
+        // (JWT central en storage) vive en el cliente y recién se conoce cuando
+        // el runtime interactivo arranca. Redirigir acá producía un 302 al
+        // login antes de que el WASM pudiera hidratar la sesión (cutover T077).
+        if (!RendererInfo.IsInteractive) return;
+
         var returnUrl = Uri.EscapeDataString(Navigation.Uri);
-        Navigation.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+        Navigation.NavigateTo($"/login?returnUrl={returnUrl}");
     }
 }

@@ -68,7 +68,9 @@
             switch (result.Value.Challenge)
             {
                 case "None":
-                    Nav.NavigateTo("/", forceLoad: true);
+                    // Sin forceLoad: el storage es in-memory y un full reload
+                    // reinicia el runtime WASM descartando la sesión adoptada.
+                    Nav.NavigateTo("/");
                     break;
                 case "TenantSelection":
                     Nav.NavigateTo("/security/select-tenant");

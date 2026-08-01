@@ -1,3 +1,4 @@
+@page "/login"
 @page "/security/login"
 @layout MinimalLayout
 @using System.ComponentModel.DataAnnotations
@@ -68,7 +69,7 @@
             {
                 case "None":
                     // autoSelected — el AuthClient ya almacenó access+refresh.
-                    Nav.NavigateTo("/", forceLoad: true);
+                    Nav.NavigateTo("/");
                     break;
                 case "MfaRequired":
                     Nav.NavigateTo("/security/mfa-challenge");

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace IngenIA365ERP.Shared.Services.Security;
 
@@ -23,7 +24,11 @@ namespace IngenIA365ERP.Shared.Services.Security;
 /// </summary>
 public sealed class CentralAuthClient
 {
+    private const string RefreshTokenKey = "refresh_token";
+
     private readonly HttpClient _http;
+    private readonly ISecureStorage _storage;
+    private readonly AuthenticationStateProvider _authState;
 
     // Operational session.
     private string? _accessToken;
@@ -33,7 +38,13 @@ public sealed class CentralAuthClient
     // Challenge token (temporary, scoped).
     private string? _challengeToken;
 
-    public CentralAuthClient(HttpClient http) => _http = http;
+    public CentralAuthClient(
+        HttpClient http, ISecureStorage storage, AuthenticationStateProvider authState)
+    {
+        _http = http;
+        _storage = storage;
+        _authState = authState;
+    }
 
     public string? CurrentAccessToken => _accessToken;
 
@@ -69,7 +80,7 @@ public sealed class CentralAuthClient
             var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {
-                RouteLoginResponse(body);
+                await RouteLoginResponseAsync(body);
             }
             return parsed;
         }
@@ -103,7 +114,7 @@ public sealed class CentralAuthClient
             var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {
-                RouteLoginResponse(body);
+                await RouteLoginResponseAsync(body);
             }
             return parsed;
         }
@@ -137,11 +148,7 @@ public sealed class CentralAuthClient
             var parsed = await CentralAuthApi.ParseAsync<SelectTenantResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {
-                _accessToken = body.AccessToken;
-                _accessTokenExpiresAt = body.AccessTokenExpiresAt;
-                _refreshToken = body.RefreshToken;
-                _challengeToken = null;
-                Authenticated?.Invoke(this, EventArgs.Empty);
+                await AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
             }
             return parsed;
         }
@@ -179,12 +186,40 @@ public sealed class CentralAuthClient
         _accessTokenExpiresAt = DateTime.MinValue;
         _refreshToken = null;
         _challengeToken = null;
+
+        _storage.Remove(AuthBearerHandler.TokenKey);
+        _storage.Remove(RefreshTokenKey);
+        (_authState as CustomAuthStateProvider)?.NotifyUserLogout();
         SignedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ---------- Adopción de sesión (cutover T077) ----------
+
+    /// <summary>
+    /// Convierte los tokens centrales en LA sesión de la app: persiste en las
+    /// keys que leen <c>CustomAuthStateProvider</c> y <c>AuthBearerHandler</c>
+    /// (<c>auth_token</c>/<c>refresh_token</c>) y notifica el cambio de estado
+    /// para que <c>AuthorizeRouteView</c> re-evalúe sin re-login.
+    /// </summary>
+    public async Task AdoptSessionAsync(
+        string accessToken, DateTime? accessTokenExpiresAt, string? refreshToken)
+    {
+        _accessToken = accessToken;
+        _accessTokenExpiresAt = accessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
+        _refreshToken = refreshToken;
+        _challengeToken = null;
+
+        await _storage.SetAsync(AuthBearerHandler.TokenKey, accessToken);
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+            await _storage.SetAsync(RefreshTokenKey, refreshToken);
+
+        (_authState as CustomAuthStateProvider)?.NotifyUserAuthentication(accessToken);
+        Authenticated?.Invoke(this, EventArgs.Empty);
     }
 
     // ---------- Routing del LoginResponse ----------
 
-    private void RouteLoginResponse(LoginResponse body)
+    private async Task RouteLoginResponseAsync(LoginResponse body)
     {
         // US3: si hay TenantSelection, retén la lista para SelectTenant.razor.
         if (body.Challenge == "TenantSelection" && body.ActiveTenants is { Count: > 0 })
@@ -196,11 +231,7 @@ public sealed class CentralAuthClient
             && !string.IsNullOrWhiteSpace(body.AccessToken)
             && !string.IsNullOrWhiteSpace(body.RefreshToken))
         {
-            _accessToken = body.AccessToken;
-            _accessTokenExpiresAt = body.AccessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
-            _refreshToken = body.RefreshToken;
-            _challengeToken = null;
-            Authenticated?.Invoke(this, EventArgs.Empty);
+            await AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
         }
         else if (!string.IsNullOrWhiteSpace(body.ChallengeToken))
         {
