@@ -262,6 +262,18 @@ internal static class CentralAuthApi
     {
         if (resp.IsSuccessStatusCode)
         {
+            // 204 No Content (change-password, forgot/reset, suspend/activate,
+            // mfa-policy, default-tenant, force-mfa-reset...) — no hay JSON que
+            // deserializar; ReadFromJsonAsync lanzaría JsonException.
+            if (resp.StatusCode == System.Net.HttpStatusCode.NoContent ||
+                resp.Content.Headers.ContentLength is 0)
+            {
+                return typeof(T) == typeof(EmptyResponse)
+                    ? InvitationApiResult<T>.Success((T)(object)new EmptyResponse())
+                    : InvitationApiResult<T>.Failure("Generic.EmptyResponse",
+                        "La respuesta del servidor está vacía.", (int)resp.StatusCode);
+            }
+
             var value = await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
             return value is null
                 ? InvitationApiResult<T>.Failure("Generic.EmptyResponse",
