@@ -77,6 +77,7 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         modelBuilder.ApplyConfiguration(new InvitationConfiguration());
         modelBuilder.ApplyConfiguration(new TenantMfaPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
 
         modelBuilder.ApplyBaseEntityConventions();
     }
