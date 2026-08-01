@@ -1,4 +1,4 @@
----
+﻿---
 
 description: "Task list for Identidad Central con Autorización Federada por Empresa"
 ---
@@ -12,6 +12,43 @@ description: "Task list for Identidad Central con Autorización Federada por Emp
 **Tests**: incluidos como parte natural del flujo (la constitución del proyecto exige pruebas en cada PR significativo; este es uno de ellos).
 
 **Organization**: tareas agrupadas por user story (P1 → P3) para permitir implementación incremental y entrega MVP tras US1+US2.
+
+---
+
+## Estado de cierre — 2026-08-01
+
+Las 5 user stories + Phase 4b + jobs quedaron **implementadas y verificadas
+end-to-end** (manual técnico completo por curl + UI Web con el cutover del
+login hecho). Evidencia con capturas y resultados:
+[`docs/release-notes/002-identidad-central-federada/evidencia-pruebas.md`](../../docs/release-notes/002-identidad-central-federada/evidencia-pruebas.md).
+Suites al cierre: Application 182/182 · Architecture 34/34 · T118 en verde
+con Testcontainers.
+
+Notas sobre checkboxes:
+
+- **T034** — cubierta por el store EF estándar (`AddEntityFrameworkStores`),
+  no por un `CentralUserStore` custom; el bridge es
+  `Persistence/Identity/CentralUserIdentity.cs` (T033).
+- **T120** — la página se materializó como `Security/MasterRegisterTenant.razor`
+  (registro de tenant + primera invitación admin en un solo formulario).
+- **T124** — ejecutada (30.000/30.000 OK, 100 RPS × 5 min, 0 fallos). El
+  criterio p95 < 800 ms **no se cumple en la máquina dev** (p95 = 2.265 ms
+  por saturación de CPU compartida); el veredicto SC-oficial requiere
+  repetirla en el VPS objetivo.
+
+**Siguen abiertas** (no bloquean el cierre del feature):
+
+- T017 / T025 / T027 — refactor destructivo de `SEC_Users` + migración EF
+  inicial: solo aplican sobre BD virgen en el cutover real de producción.
+- T062, T063, T074–T076, T079m, T087, T088, T103, T106, T107, T108, T116 —
+  tests unit/integration faltantes (la cobertura E2E equivalente está en la
+  evidencia; T118 dejó la fixture `CentralIdentityApiFixture` lista para
+  escribirlos).
+- T091 / T091a — TenantSwitcher del header + dirty-state (secuela de UI).
+- T128 — sweep final de todas las suites (pendiente de completar los
+  integration tests anteriores).
+
+---
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -94,7 +131,7 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Infrastructure implementations
 
-- [ ] T033 Crear `src/Infrastructure/IngenIA365ERP.Identity/Models/CentralUserIdentity.cs` heredando `IdentityUser<Guid>` con campos custom (DefaultTenantId, IsGlobalMasterAdmin, Status, CreatedAt, LastLoginAt) y método `ToDomain()` que produce un `CentralUser` POCO de Domain
+- [X] T033 Crear `src/Infrastructure/IngenIA365ERP.Identity/Models/CentralUserIdentity.cs` heredando `IdentityUser<Guid>` con campos custom (DefaultTenantId, IsGlobalMasterAdmin, Status, CreatedAt, LastLoginAt) y método `ToDomain()` que produce un `CentralUser` POCO de Domain
 - [ ] T034 Crear `src/Infrastructure/IngenIA365ERP.Identity/Stores/CentralUserStore.cs` implementando `IUserStore<CentralUserIdentity>` que persiste contra `AdminDbContext.CentralUsers`
 - [X] T035 [P] Crear `src/Infrastructure/IngenIA365ERP.Identity/CentralIdentity/BcryptPasswordHasher.cs` implementando `IPasswordHasher<CentralUserIdentity>` con BCrypt.Net-Next cost 11 (soporta detección de hashes con cost inferior + rehash on verify)
 - [X] T036 [P] Crear `src/Infrastructure/IngenIA365ERP.Identity/CentralIdentity/PwnedPasswordService.cs` con `HttpClient` named `pwned-passwords`, k-anonymity (SHA-1 → primeros 5 chars → GET `https://api.pwnedpasswords.com/range/{prefix}` → comparar sufijos), timeout 2s, fail-open con Warning loggeado
@@ -104,21 +141,21 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 - [X] T039a [P] Crear abstracción `IMembershipChangedNotifier` + impl `RedisMembershipChangedNotifier` en Caching. Publica payload `central:{guid}` en canal `membership-changed`. `PublishForTenantMembersAsync` resuelve los miembros activos del tenant y publica uno por cada.
 - [X] T040 [P] Crear `src/Infrastructure/IngenIA365ERP.Caching/Services/Identity/RedisLoginAttemptCounter.cs` con escalado progresivo según `research.md > D-11`. Locks por `login-locked:{email}` con TTL escalado. INCR atómico con TTL 24h en `login-attempts:{email}`.
 - [X] T041 Crear `src/Infrastructure/IngenIA365ERP.Identity/CentralIdentity/AspNetCoreIdentityProvider.cs` implementando `ICentralIdentityProvider` usando `UserManager<CentralUserIdentity>`. Inyecta `IPwnedPasswordService` en `CreateUserAsync` / `ChangePasswordAsync` / `AdminResetPasswordAsync`. MFA secret cifrado con `IDataProtectionProvider` (purpose `central-identity:mfa-secret`). Recovery codes vía `UserManager.GenerateNewTwoFactorRecoveryCodesAsync`. + `AddCentralIdentity()` DI extension lista (NO wired en Program.cs todavía).
-- [ ] T042 Mover el `NotificationEmailSender` actual de Storage a la nueva interfaz `IEmailSender` (renombrar a `SmtpEmailSender`) en `src/Infrastructure/IngenIA365ERP.Storage/Services/SmtpEmailSender.cs`; crear tres plantillas HTML en español en `src/Infrastructure/IngenIA365ERP.Storage/Templates/`:
+- [X] T042 Mover el `NotificationEmailSender` actual de Storage a la nueva interfaz `IEmailSender` (renombrar a `SmtpEmailSender`) en `src/Infrastructure/IngenIA365ERP.Storage/Services/SmtpEmailSender.cs`; crear tres plantillas HTML en español en `src/Infrastructure/IngenIA365ERP.Storage/Templates/`:
   - `InvitationEmail.html` con `{{Nombre}}`, `{{Empresa}}`, `{{Emisor}}`, `{{Enlace}}`, `{{Expira}}`
   - `PasswordResetEmail.html` con `{{Nombre}}`, `{{Enlace}}`, `{{Expira}}`, `{{IpAddress}}` (esta última útil para que el legítimo detecte requests no solicitados)
   - `PasswordChangedNotification.html` con `{{Nombre}}`, `{{FechaCambio}}`, `{{IpAddress}}`, `{{UserAgent}}` (notificación post-hoc; si el usuario NO cambió su password, debe usar el flujo de reset inmediatamente — incluir enlace al reset)
   Las tres se sirven con el subject correspondiente desde un `IInvitationEmailDispatcher` / `IPasswordResetEmailDispatcher` / `IPasswordChangedNotifier` (servicios delgados de Application que arman el `EmailMessage`).
-- [ ] T043 Wire `AddCentralIdentity()` extension en `src/Infrastructure/IngenIA365ERP.Identity/DependencyInjection.cs`: registra `IdentityCore<CentralUserIdentity>`, `AddRoles<IdentityRole<Guid>>`, `AddEntityFrameworkStores<AdminDbContext>`, sustituye `IPasswordHasher` por `BcryptPasswordHasher`, registra `ICentralIdentityProvider → AspNetCoreIdentityProvider`, `IPwnedPasswordService → PwnedPasswordService`, `ITenantMembershipReader → TenantMembershipReader`, `CentralJwtIssuer`. **Configurar `IdentityOptions` con `Lockout.AllowedForNewUsers = false` y `Lockout.MaxFailedAccessAttempts = int.MaxValue`** para deshabilitar el lockout interno de ASP.NET Identity y dejar al `LoginAttemptCounter` (Redis, T040) como única fuente de verdad para el bloqueo progresivo — evita interacción no coordinada entre dos mecanismos. (depende de T041)
+- [X] T043 Wire `AddCentralIdentity()` extension en `src/Infrastructure/IngenIA365ERP.Identity/DependencyInjection.cs`: registra `IdentityCore<CentralUserIdentity>`, `AddRoles<IdentityRole<Guid>>`, `AddEntityFrameworkStores<AdminDbContext>`, sustituye `IPasswordHasher` por `BcryptPasswordHasher`, registra `ICentralIdentityProvider → AspNetCoreIdentityProvider`, `IPwnedPasswordService → PwnedPasswordService`, `ITenantMembershipReader → TenantMembershipReader`, `CentralJwtIssuer`. **Configurar `IdentityOptions` con `Lockout.AllowedForNewUsers = false` y `Lockout.MaxFailedAccessAttempts = int.MaxValue`** para deshabilitar el lockout interno de ASP.NET Identity y dejar al `LoginAttemptCounter` (Redis, T040) como única fuente de verdad para el bloqueo progresivo — evita interacción no coordinada entre dos mecanismos. (depende de T041)
 
 ### Middleware + filters + DI principal
 
-- [ ] T044 Refactorizar `src/Presentation/IngenIA365ERP.API/Middleware/TenantResolutionMiddleware.cs`: dejar de leer header `X-Tenant-Id` y subdominio; leer claim `active_tenant_id` del JWT validado. Si el claim no está (estado intermedio post-login pre-select-tenant) y la ruta es de `/api/sessions/*` o `/api/auth/*` o `/api/invitations/*` → permitir sin tenant; en cualquier otra ruta → `401 Unauthorized` con `Session.TenantNotSelected`
+- [X] T044 Refactorizar `src/Presentation/IngenIA365ERP.API/Middleware/TenantResolutionMiddleware.cs`: dejar de leer header `X-Tenant-Id` y subdominio; leer claim `active_tenant_id` del JWT validado. Si el claim no está (estado intermedio post-login pre-select-tenant) y la ruta es de `/api/sessions/*` o `/api/auth/*` o `/api/invitations/*` → permitir sin tenant; en cualquier otra ruta → `401 Unauthorized` con `Session.TenantNotSelected`
 - [X] T045 [P] Crear `src/Presentation/IngenIA365ERP.API/Middleware/CentralIdentity/CentralIdentityChallengeMiddleware.cs` que traduzca `401` no autenticado a respuesta JSON `{ "errorCode": "Identity.Unauthenticated" }` consistente con el `ErrorEnvelopeFilter`. **NO wired en Program.cs todavía** (Chunk D).
 - [X] T046 [P] Crear filtro `src/Presentation/IngenIA365ERP.API/Filters/CentralIdentity/RequireTenantAdminAttribute.cs` con helper estático `Check(http, routeTenantPublicId)` que verifica claim `tenant_admin == true`, `active_tenant_id` igual al `{tenantPublicId}`, **y `purpose == full`**. Master admin pasa el filtro automáticamente.
 - [X] T047 [P] Crear filtro `src/Presentation/IngenIA365ERP.API/Filters/CentralIdentity/RequireMasterAdminAttribute.cs` con helper `Check(http)` que verifica claim `is_global_master_admin == true` **y `purpose == full`**.
 - [X] T047a [P] Crear filtro `src/Presentation/IngenIA365ERP.API/Filters/CentralIdentity/RequirePurposeAttribute.cs` con parámetro `params string[] allowedPurposes` para endpoints scoped (login challenges). Helper estático `IsAllowed(http, allowedPurposes)`.
-- [ ] T048 Wire DI completo en `src/Presentation/IngenIA365ERP.API/Program.cs`: `AddCentralIdentity()`, `AddAdminDbContext`, registrar `IEmailSender → SmtpEmailSender`, registrar middlewares en orden (Authentication → CentralIdentityChallenge → TenantResolution → Authorization)
+- [X] T048 Wire DI completo en `src/Presentation/IngenIA365ERP.API/Program.cs`: `AddCentralIdentity()`, `AddAdminDbContext`, registrar `IEmailSender → SmtpEmailSender`, registrar middlewares en orden (Authentication → CentralIdentityChallenge → TenantResolution → Authorization)
 
 ### Architecture tests (blindaje de los doce principios)
 
@@ -137,30 +174,30 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands, queries, validators, handlers
 
-- [ ] T051 [US1] Implementar `IssueTenantInvitationCommand` (record) + `IssueTenantInvitationCommandValidator` (email format, no IsTenantAdmin permitido) + handler que verifica que el emisor es tenant admin del tenant indicado, marca invitación previa pendiente como `Superseded`, genera token + hash, persiste `Invitation`, dispara envío de correo via `IEmailSender`. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/IssueTenantInvitationCommand.cs`
-- [ ] T052 [P] [US1] Implementar `IssueMasterInvitationCommand` + Validator (solo master admin emisor, `InviteAsTenantAdmin` opcional `true`) + handler análogo en `src/Core/IngenIA365ERP.Application/Invitations/IssueMasterInvitationCommand.cs`
-- [ ] T053 [P] [US1] Implementar `PreviewInvitationQuery` (input: token plano; output: `{ tenantPublicId, tenantName, email, isExistingCentralUser, inviteAsTenantAdmin, expiresAt, isValid, errorCode? }`) + handler en `src/Core/IngenIA365ERP.Application/Invitations/PreviewInvitationQuery.cs`. NO consume el token.
-- [ ] T054 [US1] Implementar `AcceptInvitationCommand` (input: token + `registration?` o `existingCredentials?` o `activeSessionCentralUserId?`) + Validator (XOR entre las tres opciones; si registration → password ≥ 12) + handler que: (a) toma lock Redis `lock:invitation:{tokenHash}` TTL 30s; (b) carga `Invitation` con `RowVersion`; (c) valida estado `Pending` y `ExpiresAt > now`; (d) decide rama nueva-vs-existente-vs-sesión-activa comparando contra `NormalizedEmail`; (e) en rama nueva → `ICentralIdentityProvider.CreateUserAsync` (con validación Pwned); (f) en rama existente con password → `ICentralIdentityProvider.ValidatePasswordAsync`; (g) **en rama sesión activa → el endpoint ya validó que el JWT del header `Authorization` pertenece al mismo email de la invitación; el handler salta la verificación de password (FR-029(b))**; (h) crea o reactiva `TenantMembership` (de `Revoked → Active` o nueva en `Active`); (i) provisiona fila en `SEC_Users` del tenant via `TenantUserProvisioner`; (j) marca `Invitation.Accepted` con UPDATE condicional sobre `RowVersion`; (k) emite JWT con `active_tenant_id` ya seteado (sustituye el de la sesión activa si lo hubiera); (l) emite eventos auditables. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/AcceptInvitationCommand.cs`
-- [ ] T055 [P] [US1] Implementar `RevokeInvitationCommand` + handler (verifica autoría: tenant admin de su empresa, o master) que marca `Pending → Revoked`. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/RevokeInvitationCommand.cs`
-- [ ] T056 [US1] Crear servicio `TenantUserProvisioner` en `src/Core/IngenIA365ERP.Application/Common/Services/TenantUserProvisioner.cs` con método `EnsureExistsAsync(centralUserId, centralUserEmail, tenantId)` que crea fila `SEC_Users` en la BD del tenant si no existe, o reactiva si existía soft-deleted. Inyectado en `AcceptInvitationCommandHandler`.
-- [ ] T057 [US1] Refactorizar `IEmailSender` consumer: `InvitationEmailDispatcher` en `src/Core/IngenIA365ERP.Application/Invitations/Services/InvitationEmailDispatcher.cs` que toma `Invitation` + `Tenant` + emisor y arma el `EmailMessage` con la plantilla `InvitationEmail.html` interpolando enlace `https://{baseUrl}/auth/accept-invitation?token={base64url}`
+- [X] T051 [US1] Implementar `IssueTenantInvitationCommand` (record) + `IssueTenantInvitationCommandValidator` (email format, no IsTenantAdmin permitido) + handler que verifica que el emisor es tenant admin del tenant indicado, marca invitación previa pendiente como `Superseded`, genera token + hash, persiste `Invitation`, dispara envío de correo via `IEmailSender`. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/IssueTenantInvitationCommand.cs`
+- [X] T052 [P] [US1] Implementar `IssueMasterInvitationCommand` + Validator (solo master admin emisor, `InviteAsTenantAdmin` opcional `true`) + handler análogo en `src/Core/IngenIA365ERP.Application/Invitations/IssueMasterInvitationCommand.cs`
+- [X] T053 [P] [US1] Implementar `PreviewInvitationQuery` (input: token plano; output: `{ tenantPublicId, tenantName, email, isExistingCentralUser, inviteAsTenantAdmin, expiresAt, isValid, errorCode? }`) + handler en `src/Core/IngenIA365ERP.Application/Invitations/PreviewInvitationQuery.cs`. NO consume el token.
+- [X] T054 [US1] Implementar `AcceptInvitationCommand` (input: token + `registration?` o `existingCredentials?` o `activeSessionCentralUserId?`) + Validator (XOR entre las tres opciones; si registration → password ≥ 12) + handler que: (a) toma lock Redis `lock:invitation:{tokenHash}` TTL 30s; (b) carga `Invitation` con `RowVersion`; (c) valida estado `Pending` y `ExpiresAt > now`; (d) decide rama nueva-vs-existente-vs-sesión-activa comparando contra `NormalizedEmail`; (e) en rama nueva → `ICentralIdentityProvider.CreateUserAsync` (con validación Pwned); (f) en rama existente con password → `ICentralIdentityProvider.ValidatePasswordAsync`; (g) **en rama sesión activa → el endpoint ya validó que el JWT del header `Authorization` pertenece al mismo email de la invitación; el handler salta la verificación de password (FR-029(b))**; (h) crea o reactiva `TenantMembership` (de `Revoked → Active` o nueva en `Active`); (i) provisiona fila en `SEC_Users` del tenant via `TenantUserProvisioner`; (j) marca `Invitation.Accepted` con UPDATE condicional sobre `RowVersion`; (k) emite JWT con `active_tenant_id` ya seteado (sustituye el de la sesión activa si lo hubiera); (l) emite eventos auditables. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/AcceptInvitationCommand.cs`
+- [X] T055 [P] [US1] Implementar `RevokeInvitationCommand` + handler (verifica autoría: tenant admin de su empresa, o master) que marca `Pending → Revoked`. Archivo: `src/Core/IngenIA365ERP.Application/Invitations/RevokeInvitationCommand.cs`
+- [X] T056 [US1] Crear servicio `TenantUserProvisioner` en `src/Core/IngenIA365ERP.Application/Common/Services/TenantUserProvisioner.cs` con método `EnsureExistsAsync(centralUserId, centralUserEmail, tenantId)` que crea fila `SEC_Users` en la BD del tenant si no existe, o reactiva si existía soft-deleted. Inyectado en `AcceptInvitationCommandHandler`.
+- [X] T057 [US1] Refactorizar `IEmailSender` consumer: `InvitationEmailDispatcher` en `src/Core/IngenIA365ERP.Application/Invitations/Services/InvitationEmailDispatcher.cs` que toma `Invitation` + `Tenant` + emisor y arma el `EmailMessage` con la plantilla `InvitationEmail.html` interpolando enlace `https://{baseUrl}/auth/accept-invitation?token={base64url}`
 
 ### Carter endpoints
 
-- [ ] T058 [US1] Crear `src/Presentation/IngenIA365ERP.API/Modules/InvitationsModule.cs` con rutas: `POST /api/tenants/{tenantPublicId}/invitations` `[RequireTenantAdmin]`, `POST /api/saas/invitations` `[RequireMasterAdmin]`, `GET /api/invitations/{token}/preview` `[AllowAnonymous]`, `POST /api/invitations/accept` `[AllowAnonymous]`, `DELETE /api/invitations/{publicId}` (autorización por handler)
+- [X] T058 [US1] Crear `src/Presentation/IngenIA365ERP.API/Modules/InvitationsModule.cs` con rutas: `POST /api/tenants/{tenantPublicId}/invitations` `[RequireTenantAdmin]`, `POST /api/saas/invitations` `[RequireMasterAdmin]`, `GET /api/invitations/{token}/preview` `[AllowAnonymous]`, `POST /api/invitations/accept` `[AllowAnonymous]`, `DELETE /api/invitations/{publicId}` (autorización por handler)
 
 ### Application + integration tests
 
-- [ ] T059 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/AcceptInvitationCommandHandlerTests.cs`: casos rama-nueva-éxito, rama-existente-éxito, password-débil, password-pwned, token-expirado, token-revocado, token-ya-aceptado, concurrencia-doble-aceptación (con NSubstitute mockeando ICentralIdentityProvider y lock)
-- [ ] T060 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/IssueTenantInvitationCommandValidatorTests.cs` (email inválido, IsTenantAdmin true → rechazo, emisor no admin → rechazo)
-- [ ] T061 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/RevokeInvitationCommandHandlerTests.cs` (revocación por admin de otro tenant → rechazo, revocación de invitación ya aceptada → rechazo)
+- [X] T059 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/AcceptInvitationCommandHandlerTests.cs`: casos rama-nueva-éxito, rama-existente-éxito, password-débil, password-pwned, token-expirado, token-revocado, token-ya-aceptado, concurrencia-doble-aceptación (con NSubstitute mockeando ICentralIdentityProvider y lock)
+- [X] T060 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/IssueTenantInvitationCommandValidatorTests.cs` (email inválido, IsTenantAdmin true → rechazo, emisor no admin → rechazo)
+- [X] T061 [P] [US1] Tests `tests/IngenIA365ERP.Application.Tests/Invitations/RevokeInvitationCommandHandlerTests.cs` (revocación por admin de otro tenant → rechazo, revocación de invitación ya aceptada → rechazo)
 - [ ] T062 [US1] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_InviteRegisterLogin.cs` con WebApplicationFactory + Testcontainers (SQL Server + Mongo + Redis efímeros + mock SMTP): flujo master invita → preview → accept rama nueva → login → membership activa, validando BD y `audit_events`
 - [ ] T063 [P] [US1] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_InvitationReplay.cs`: aceptar → reintentar mismo token → 410 Gone Invitation.AlreadyAccepted
 
 ### UI Blazor
 
-- [ ] T064 [US1] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/AcceptInvitation.razor` con ruta `/auth/accept-invitation` que: (a) llama `GET /api/invitations/{token}/preview` al `OnInitializedAsync`; (b) muestra mensaje "expirada"/"revocada"/"ya aceptada" si `isValid=false`; (c) si `isExistingCentralUser=true` Y hay JWT central válido en sesión Y el claim `email` del JWT coincide con `preview.email` (case-insensitive) → mostrar pantalla de un solo botón "Confirmar incorporación a {Empresa}" que llama a `/api/invitations/accept` sin requerir password (el backend reutiliza la sesión activa — FR-029(b)); (d) si `isExistingCentralUser=true` Y no hay sesión activa (o email no coincide) → formulario "confirma con tu contraseña"; (e) si `isExistingCentralUser=false` → formulario registro con password meter + retroalimentación en tiempo real; (f) POST a `/api/invitations/accept`; (g) en éxito → almacena JWT (sustituye el anterior si lo había) y navega al dashboard del tenant invitante
-- [ ] T065 [P] [US1] Crear `src/Presentation/IngenIA365ERP.Web.Client/Services/InvitationClient.cs` con métodos `PreviewAsync(token)`, `AcceptAsync(token, registration|existingCredentials)` consumiendo los endpoints REST
+- [X] T064 [US1] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/AcceptInvitation.razor` con ruta `/auth/accept-invitation` que: (a) llama `GET /api/invitations/{token}/preview` al `OnInitializedAsync`; (b) muestra mensaje "expirada"/"revocada"/"ya aceptada" si `isValid=false`; (c) si `isExistingCentralUser=true` Y hay JWT central válido en sesión Y el claim `email` del JWT coincide con `preview.email` (case-insensitive) → mostrar pantalla de un solo botón "Confirmar incorporación a {Empresa}" que llama a `/api/invitations/accept` sin requerir password (el backend reutiliza la sesión activa — FR-029(b)); (d) si `isExistingCentralUser=true` Y no hay sesión activa (o email no coincide) → formulario "confirma con tu contraseña"; (e) si `isExistingCentralUser=false` → formulario registro con password meter + retroalimentación en tiempo real; (f) POST a `/api/invitations/accept`; (g) en éxito → almacena JWT (sustituye el anterior si lo había) y navega al dashboard del tenant invitante
+- [X] T065 [P] [US1] Crear `src/Presentation/IngenIA365ERP.Web.Client/Services/InvitationClient.cs` con métodos `PreviewAsync(token)`, `AcceptAsync(token, registration|existingCredentials)` consumiendo los endpoints REST
 
 **Checkpoint US1**: las invitaciones se emiten, llegan por correo, se aceptan, crean identidad central y activan membresía. La función ya es demostrable aunque el login operativo todavía requiere el JWT emitido por la propia aceptación.
 
@@ -174,29 +211,29 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands + handlers
 
-- [ ] T066 [US2] Implementar `LoginCommand` (record: `Email`, `Password`, `IpAddress?`, `UserAgent?`) + Validator + handler: (a) consulta `LoginAttemptCounter` → si bloqueado → `423 Identity.Locked.Soft`; (b) `ICentralIdentityProvider.ValidatePasswordAsync`; (c) si falla → incrementar contador, registrar `CentralUserLoginAttempt(Result=InvalidPassword|UserNotFound|LockedOut|Disabled)`, retornar `Identity.InvalidCredentials`; (d) si éxito → registrar `CentralUserLoginAttempt(Result=Success)` y actualizar `LastLoginAt`; (e) cargar `ITenantMembershipReader.GetActiveMembershipsAsync`; (f) decidir challenge según count: 0 → `NoActiveMembership`; (g) consultar políticas MFA de los tenants — si AL MENOS UNO exige MFA y usuario sin MFA → `MfaEnrollmentRequired` + emitir `challengeToken` JWT 5min con claim `purpose=mfa-enroll` (válido SOLO para `/api/profile/mfa/enroll` y `/api/profile/mfa/confirm`); (h) si usuario con MFA → `MfaRequired` + emitir `challengeToken` JWT 5min con claim `purpose=mfa-verify` (válido SOLO para `/api/auth/mfa/verify`); (i) si MFA OK o no requerido y 1 tenant → emitir access+refresh **operativos** con `active_tenant_id` resuelto y `purpose=full` (default); (j) si >1 tenant → comprobar `DefaultTenantId` válido → entrar directo; (k) **si `DefaultTenantId` ya NO apunta a una membresía Active → UPDATE silencioso `ADM_CentralUsers.DefaultTenantId = NULL` + emitir evento auditable `Profile.DefaultTenantInvalidated.Cleared` (cumple FR-018, evita preferencias zombi en BD)**; (l) en otro caso retornar lista `activeTenants` con `challengeToken` con claim `purpose=tenant-select` (válido SOLO para `/api/sessions/select-tenant`). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/LoginCommand.cs`
-- [ ] T067 [P] [US2] Implementar `MfaVerifyCommand` (challengeToken + code) + handler que valida token, ejecuta `ICentralIdentityProvider.VerifyMfaAsync`, emite JWT operativo análogamente al login. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/MfaVerifyCommand.cs`
-- [ ] T068 [P] [US2] Implementar `RefreshTokenCommand` con family-rotation y blacklist (reutilizar patrón Fase 0). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/RefreshTokenCommand.cs`
-- [ ] T069 [P] [US2] Implementar `LogoutCommand` (invalida refresh actual + clears security stamp si aplica). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/LogoutCommand.cs`
-- [ ] T070 [P] [US2] Implementar `GetMeQuery` que devuelve `centralUserId`, `email`, `isGlobalMasterAdmin`, `mfaEnabled`, `activeTenant`, `availableTenants`, `defaultTenantPublicId`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/GetMeQuery.cs`
+- [X] T066 [US2] Implementar `LoginCommand` (record: `Email`, `Password`, `IpAddress?`, `UserAgent?`) + Validator + handler: (a) consulta `LoginAttemptCounter` → si bloqueado → `423 Identity.Locked.Soft`; (b) `ICentralIdentityProvider.ValidatePasswordAsync`; (c) si falla → incrementar contador, registrar `CentralUserLoginAttempt(Result=InvalidPassword|UserNotFound|LockedOut|Disabled)`, retornar `Identity.InvalidCredentials`; (d) si éxito → registrar `CentralUserLoginAttempt(Result=Success)` y actualizar `LastLoginAt`; (e) cargar `ITenantMembershipReader.GetActiveMembershipsAsync`; (f) decidir challenge según count: 0 → `NoActiveMembership`; (g) consultar políticas MFA de los tenants — si AL MENOS UNO exige MFA y usuario sin MFA → `MfaEnrollmentRequired` + emitir `challengeToken` JWT 5min con claim `purpose=mfa-enroll` (válido SOLO para `/api/profile/mfa/enroll` y `/api/profile/mfa/confirm`); (h) si usuario con MFA → `MfaRequired` + emitir `challengeToken` JWT 5min con claim `purpose=mfa-verify` (válido SOLO para `/api/auth/mfa/verify`); (i) si MFA OK o no requerido y 1 tenant → emitir access+refresh **operativos** con `active_tenant_id` resuelto y `purpose=full` (default); (j) si >1 tenant → comprobar `DefaultTenantId` válido → entrar directo; (k) **si `DefaultTenantId` ya NO apunta a una membresía Active → UPDATE silencioso `ADM_CentralUsers.DefaultTenantId = NULL` + emitir evento auditable `Profile.DefaultTenantInvalidated.Cleared` (cumple FR-018, evita preferencias zombi en BD)**; (l) en otro caso retornar lista `activeTenants` con `challengeToken` con claim `purpose=tenant-select` (válido SOLO para `/api/sessions/select-tenant`). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/LoginCommand.cs`
+- [X] T067 [P] [US2] Implementar `MfaVerifyCommand` (challengeToken + code) + handler que valida token, ejecuta `ICentralIdentityProvider.VerifyMfaAsync`, emite JWT operativo análogamente al login. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/MfaVerifyCommand.cs`
+- [X] T068 [P] [US2] Implementar `RefreshTokenCommand` con family-rotation y blacklist (reutilizar patrón Fase 0). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/RefreshTokenCommand.cs`
+- [X] T069 [P] [US2] Implementar `LogoutCommand` (invalida refresh actual + clears security stamp si aplica). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/LogoutCommand.cs`
+- [X] T070 [P] [US2] Implementar `GetMeQuery` que devuelve `centralUserId`, `email`, `isGlobalMasterAdmin`, `mfaEnabled`, `activeTenant`, `availableTenants`, `defaultTenantPublicId`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Auth/GetMeQuery.cs`
 
 ### Carter endpoint refactor
 
-- [ ] T071 [US2] Refactorizar `src/Presentation/IngenIA365ERP.API/Modules/AuthModule.cs`: eliminar parámetro `tenant` del request de login, mapear las nuevas respuestas typed (`autoSelected`, `challenge: NoActiveMembership|MfaRequired|MfaEnrollmentRequired|TenantSelection`), añadir endpoints `mfa/verify`, `refresh`, `logout`, `me`
+- [X] T071 [US2] Refactorizar `src/Presentation/IngenIA365ERP.API/Modules/AuthModule.cs`: eliminar parámetro `tenant` del request de login, mapear las nuevas respuestas typed (`autoSelected`, `challenge: NoActiveMembership|MfaRequired|MfaEnrollmentRequired|TenantSelection`), añadir endpoints `mfa/verify`, `refresh`, `logout`, `me`
 
 ### Tests
 
-- [ ] T072 [P] [US2] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Auth/LoginCommandHandlerTests.cs`: 0 membresías → NoActiveMembership; 1 membresía sin MFA → direct entry; 1 membresía con MFA → MfaRequired; >1 membresía sin default → TenantSelection; >1 con default válido → auto-select default; >1 con default inválido → TenantSelection sin default; credenciales inválidas → InvalidCredentials + incremento de contador; lockout → Identity.Locked.Soft; tenant exige MFA + usuario sin MFA → MfaEnrollmentRequired
-- [ ] T073 [P] [US2] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Auth/MfaVerifyCommandHandlerTests.cs` (código válido, código inválido, challenge expirado)
+- [X] T072 [P] [US2] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Auth/LoginCommandHandlerTests.cs`: 0 membresías → NoActiveMembership; 1 membresía sin MFA → direct entry; 1 membresía con MFA → MfaRequired; >1 membresía sin default → TenantSelection; >1 con default válido → auto-select default; >1 con default inválido → TenantSelection sin default; credenciales inválidas → InvalidCredentials + incremento de contador; lockout → Identity.Locked.Soft; tenant exige MFA + usuario sin MFA → MfaEnrollmentRequired
+- [X] T073 [P] [US2] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Auth/MfaVerifyCommandHandlerTests.cs` (código válido, código inválido, challenge expirado)
 - [ ] T074 [US2] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginSingleTenant.cs` (usuario invitado + aceptado → login → JWT con active_tenant_id correcto)
 - [ ] T075 [P] [US2] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginGenericErrors.cs` (email inexistente y password incorrecta devuelven el mismo mensaje)
 - [ ] T076 [P] [US2] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LockoutProgression.cs` (5 fallos consecutivos → 423 lockout 60s; 10 fallos → 5min; tras éxito el contador se resetea)
 
 ### UI Blazor
 
-- [ ] T077 [US2] Refactorizar `src/Presentation/IngenIA365ERP.Web/Pages/Auth/Login.razor`: eliminar combo box de cliente, dejar solo email + password; manejar respuestas `challenge` (redirigir según challenge) **almacenando el `challengeToken` recibido como JWT temporal scoped en el `IAuthTokenStore` del cliente (clave separada de la sesión operativa, ej. `challenge-jwt`) para que las subsecuentes llamadas lo envíen en `Authorization: Bearer`**; SI MfaRequired → `Pages/Auth/MfaChallenge.razor`; SI MfaEnrollmentRequired → `/auth/enroll-mfa-forced` (ver T079l — distinta del enrollment voluntario `/profile/mfa`; usa el `challenge-jwt` con purpose=mfa-enroll); SI TenantSelection → `Pages/Auth/SelectTenant.razor` (con `challenge-jwt` purpose=tenant-select); SI NoActiveMembership → `Pages/Auth/NoMembershipNotice.razor`
-- [ ] T078 [P] [US2] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/NoMembershipNotice.razor` con mensaje "No tienes acceso a ninguna empresa. Solicita una invitación." + botón "Cerrar sesión"
-- [ ] T079 [P] [US2] Crear/refactorizar `src/Presentation/IngenIA365ERP.Web/Pages/Auth/MfaChallenge.razor` para consumir `POST /api/auth/mfa/verify`
+- [X] T077 [US2] Refactorizar `src/Presentation/IngenIA365ERP.Web/Pages/Auth/Login.razor`: eliminar combo box de cliente, dejar solo email + password; manejar respuestas `challenge` (redirigir según challenge) **almacenando el `challengeToken` recibido como JWT temporal scoped en el `IAuthTokenStore` del cliente (clave separada de la sesión operativa, ej. `challenge-jwt`) para que las subsecuentes llamadas lo envíen en `Authorization: Bearer`**; SI MfaRequired → `Pages/Auth/MfaChallenge.razor`; SI MfaEnrollmentRequired → `/auth/enroll-mfa-forced` (ver T079l — distinta del enrollment voluntario `/profile/mfa`; usa el `challenge-jwt` con purpose=mfa-enroll); SI TenantSelection → `Pages/Auth/SelectTenant.razor` (con `challenge-jwt` purpose=tenant-select); SI NoActiveMembership → `Pages/Auth/NoMembershipNotice.razor`
+- [X] T078 [P] [US2] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/NoMembershipNotice.razor` con mensaje "No tienes acceso a ninguna empresa. Solicita una invitación." + botón "Cerrar sesión"
+- [X] T079 [P] [US2] Crear/refactorizar `src/Presentation/IngenIA365ERP.Web/Pages/Auth/MfaChallenge.razor` para consumir `POST /api/auth/mfa/verify`
 
 **Checkpoint US2**: con US1 + US2 completadas se tiene MVP funcional: alta por invitación + login centralizado (mono-empresa). Apto para piloto con una sola cooperativa.
 
@@ -210,31 +247,31 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands + handlers
 
-- [ ] T079a [US2] Implementar `BeginMfaEnrollmentCommand` (sin input — usa `central_user_id` del JWT) + handler que invoca `ICentralIdentityProvider.EnrollMfaAsync`, persiste el secret pendiente en una key Redis efímera `mfa-pending:{centralUserId}` TTL 10 min, devuelve `{ secretBase32, otpAuthUri, recoveryCodes[] }`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/BeginMfaEnrollmentCommand.cs`
-- [ ] T079b [P] [US2] Implementar `ConfirmMfaEnrollmentCommand` (input: `code` TOTP) + Validator + handler que carga secret pendiente desde Redis, llama `ICentralIdentityProvider.VerifyMfaAsync(secret, code)`, si OK persiste `MfaSecret` cifrado + `TwoFactorEnabled = true` + **genera recovery codes vía `UserManager<CentralUserIdentity>.GenerateNewTwoFactorRecoveryCodesAsync(user, count=10)` (estos se almacenan automáticamente en la tabla estándar `ADM_CentralUserTokens` creada en T014 — NO se requiere entidad de dominio ni tabla custom)** + limpia Redis + invalida caché de membresías + devuelve los códigos al cliente UNA SOLA VEZ. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ConfirmMfaEnrollmentCommand.cs`
-- [ ] T079c [P] [US2] Implementar `DisableMfaCommand` (input: `currentPassword`) + Validator + handler que: (a) valida currentPassword vía `ICentralIdentityProvider.ValidatePasswordAsync`; (b) consulta `ADM_TenantMfaPolicies` para todos los tenants del usuario — **si AL MENOS UNO tiene `IsRequired=true` → rechazar con `Profile.Mfa.RequiredByTenantPolicy(tenantName)` (cumple FR-003c en sentido inverso)**; (c) si todos los tenants permiten → desactivar MFA (clear `MfaSecret`, `TwoFactorEnabled=false`). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/DisableMfaCommand.cs`
-- [ ] T079d [P] [US2] Implementar `ChangePasswordCommand` (input: `currentPassword`, `newPassword`, `ipAddress?`, `userAgent?`) + Validator (newPassword ≥ 12, ≠ currentPassword) + handler: (a) valida currentPassword; (b) `IPwnedPasswordService.IsPwnedAsync(newPassword)` → si comprometida → `Profile.Password.Pwned`; (c) `ICentralIdentityProvider.ChangePasswordAsync` (regenera security stamp → invalida todos los refresh tokens del usuario); (d) envía notificación de seguridad vía `IPasswordChangedNotifier` (plantilla `PasswordChangedNotification.html` con IP + UA del cambio) — **fail-soft**: si el envío falla, log Warning pero NO se aborta el cambio; (e) audita `Profile.PasswordChanged`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ChangePasswordCommand.cs`
-- [ ] T079e [US2] Implementar `RequestPasswordResetCommand` (input: `email`, `ipAddress?`) + handler: (a) busca `CentralUser` por `NormalizedEmail`; (b) si existe → genera token 32 bytes random → Base64Url → hash SHA-256 → persiste en `ADM_PasswordResetTokens` con TTL 1 hora; (c) envía correo via `IEmailSender` con plantilla `PasswordResetEmail.html` y enlace `https://app.ingenia365.com/auth/reset-password?token={base64url}`; (d) **siempre retorna 202 Accepted aunque el email no exista, para no revelar existencia (alineado con FR-041)**; (e) audita `Profile.PasswordResetRequested` con email (sea o no existente). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/RequestPasswordResetCommand.cs`
-- [ ] T079f [US2] Implementar `ResetPasswordCommand` (input: `token`, `newPassword`) + Validator + handler: (a) toma lock Redis `lock:pwdreset:{tokenHash}` TTL 30s; (b) busca `ADM_PasswordResetTokens` por hash; (c) valida `ConsumedAt IS NULL AND ExpiresAt > now`; (d) `IPwnedPasswordService.IsPwnedAsync(newPassword)`; (e) `ICentralIdentityProvider.ChangePasswordAsync` (regenera security stamp); (f) UPDATE condicional `ConsumedAt = now WHERE RowVersion = @x`; (g) si Pwned o token inválido → mensajes diferenciados sin filtrar info sensible. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ResetPasswordCommand.cs`
+- [X] T079a [US2] Implementar `BeginMfaEnrollmentCommand` (sin input — usa `central_user_id` del JWT) + handler que invoca `ICentralIdentityProvider.EnrollMfaAsync`, persiste el secret pendiente en una key Redis efímera `mfa-pending:{centralUserId}` TTL 10 min, devuelve `{ secretBase32, otpAuthUri, recoveryCodes[] }`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/BeginMfaEnrollmentCommand.cs`
+- [X] T079b [P] [US2] Implementar `ConfirmMfaEnrollmentCommand` (input: `code` TOTP) + Validator + handler que carga secret pendiente desde Redis, llama `ICentralIdentityProvider.VerifyMfaAsync(secret, code)`, si OK persiste `MfaSecret` cifrado + `TwoFactorEnabled = true` + **genera recovery codes vía `UserManager<CentralUserIdentity>.GenerateNewTwoFactorRecoveryCodesAsync(user, count=10)` (estos se almacenan automáticamente en la tabla estándar `ADM_CentralUserTokens` creada en T014 — NO se requiere entidad de dominio ni tabla custom)** + limpia Redis + invalida caché de membresías + devuelve los códigos al cliente UNA SOLA VEZ. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ConfirmMfaEnrollmentCommand.cs`
+- [X] T079c [P] [US2] Implementar `DisableMfaCommand` (input: `currentPassword`) + Validator + handler que: (a) valida currentPassword vía `ICentralIdentityProvider.ValidatePasswordAsync`; (b) consulta `ADM_TenantMfaPolicies` para todos los tenants del usuario — **si AL MENOS UNO tiene `IsRequired=true` → rechazar con `Profile.Mfa.RequiredByTenantPolicy(tenantName)` (cumple FR-003c en sentido inverso)**; (c) si todos los tenants permiten → desactivar MFA (clear `MfaSecret`, `TwoFactorEnabled=false`). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/DisableMfaCommand.cs`
+- [X] T079d [P] [US2] Implementar `ChangePasswordCommand` (input: `currentPassword`, `newPassword`, `ipAddress?`, `userAgent?`) + Validator (newPassword ≥ 12, ≠ currentPassword) + handler: (a) valida currentPassword; (b) `IPwnedPasswordService.IsPwnedAsync(newPassword)` → si comprometida → `Profile.Password.Pwned`; (c) `ICentralIdentityProvider.ChangePasswordAsync` (regenera security stamp → invalida todos los refresh tokens del usuario); (d) envía notificación de seguridad vía `IPasswordChangedNotifier` (plantilla `PasswordChangedNotification.html` con IP + UA del cambio) — **fail-soft**: si el envío falla, log Warning pero NO se aborta el cambio; (e) audita `Profile.PasswordChanged`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ChangePasswordCommand.cs`
+- [X] T079e [US2] Implementar `RequestPasswordResetCommand` (input: `email`, `ipAddress?`) + handler: (a) busca `CentralUser` por `NormalizedEmail`; (b) si existe → genera token 32 bytes random → Base64Url → hash SHA-256 → persiste en `ADM_PasswordResetTokens` con TTL 1 hora; (c) envía correo via `IEmailSender` con plantilla `PasswordResetEmail.html` y enlace `https://app.ingenia365.com/auth/reset-password?token={base64url}`; (d) **siempre retorna 202 Accepted aunque el email no exista, para no revelar existencia (alineado con FR-041)**; (e) audita `Profile.PasswordResetRequested` con email (sea o no existente). Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/RequestPasswordResetCommand.cs`
+- [X] T079f [US2] Implementar `ResetPasswordCommand` (input: `token`, `newPassword`) + Validator + handler: (a) toma lock Redis `lock:pwdreset:{tokenHash}` TTL 30s; (b) busca `ADM_PasswordResetTokens` por hash; (c) valida `ConsumedAt IS NULL AND ExpiresAt > now`; (d) `IPwnedPasswordService.IsPwnedAsync(newPassword)`; (e) `ICentralIdentityProvider.ChangePasswordAsync` (regenera security stamp); (f) UPDATE condicional `ConsumedAt = now WHERE RowVersion = @x`; (g) si Pwned o token inválido → mensajes diferenciados sin filtrar info sensible. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/ResetPasswordCommand.cs`
 
 ### DDL + EF
 
-- [ ] T079g [P] [US2] Crear `database/schema/15e_Admin_PasswordResetTokens.sql` con tabla `ADM_PasswordResetTokens` (Id BIGINT IDENTITY, PublicId UNIQUEIDENTIFIER UNIQUE, CentralUserId UNIQUEIDENTIFIER NOT NULL FK, TokenHash BINARY(32) NOT NULL UNIQUE, RequesterIp NVARCHAR(45), CreatedAt DATETIMEOFFSET NOT NULL, ExpiresAt DATETIMEOFFSET NOT NULL, ConsumedAt DATETIMEOFFSET NULL, RowVersion ROWVERSION, auditable fields). Header idempotente.
-- [ ] T079h [P] [US2] Crear EF Configuration `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/PasswordResetTokenConfiguration.cs` + añadir `DbSet<PasswordResetToken> PasswordResetTokens` a `AdminDbContext` (T019)
+- [X] T079g [P] [US2] Crear `database/schema/15e_Admin_PasswordResetTokens.sql` con tabla `ADM_PasswordResetTokens` (Id BIGINT IDENTITY, PublicId UNIQUEIDENTIFIER UNIQUE, CentralUserId UNIQUEIDENTIFIER NOT NULL FK, TokenHash BINARY(32) NOT NULL UNIQUE, RequesterIp NVARCHAR(45), CreatedAt DATETIMEOFFSET NOT NULL, ExpiresAt DATETIMEOFFSET NOT NULL, ConsumedAt DATETIMEOFFSET NULL, RowVersion ROWVERSION, auditable fields). Header idempotente.
+- [X] T079h [P] [US2] Crear EF Configuration `src/Infrastructure/IngenIA365ERP.Persistence/Configuration/Admin/PasswordResetTokenConfiguration.cs` + añadir `DbSet<PasswordResetToken> PasswordResetTokens` a `AdminDbContext` (T019)
 
 ### Carter endpoints
 
-- [ ] T079i [US2] Crear `src/Presentation/IngenIA365ERP.API/Modules/ProfileModule.cs` con rutas:
+- [X] T079i [US2] Crear `src/Presentation/IngenIA365ERP.API/Modules/ProfileModule.cs` con rutas:
   - `POST /api/profile/mfa/enroll` con `[RequirePurpose("mfa-enroll", "full")]` — admite tanto el JWT scoped del login forzado como un JWT operativo (enrollment voluntario).
   - `POST /api/profile/mfa/confirm` con `[RequirePurpose("mfa-enroll", "full")]` — al éxito, **si el JWT era `mfa-enroll`, el handler invoca `CentralJwtIssuer.IssueAccessToken(...,purpose=full)` y devuelve el JWT operativo en la respuesta** (eleva la sesión de scope-limited a full sin requerir re-login).
   - `POST /api/profile/mfa/disable` con `[RequirePurpose("full")]`.
   - `POST /api/profile/password` con `[RequirePurpose("full")]`.
   Todos reenvían a `ISender.Send(...)` (depende de T079a-T079d, T079h, T047a)
-- [ ] T079j [P] [US2] Crear `src/Presentation/IngenIA365ERP.API/Modules/AuthRecoveryModule.cs` con rutas `[AllowAnonymous]`: `POST /api/auth/password/forgot`, `POST /api/auth/password/reset` (depende de T079e, T079f)
+- [X] T079j [P] [US2] Crear `src/Presentation/IngenIA365ERP.API/Modules/AuthRecoveryModule.cs` con rutas `[AllowAnonymous]`: `POST /api/auth/password/forgot`, `POST /api/auth/password/reset` (depende de T079e, T079f)
 
 ### Tests
 
-- [ ] T079k [P] [US2] Tests unitarios en `tests/IngenIA365ERP.Application.Tests/Identity/Profile/`:
+- [X] T079k [P] [US2] Tests unitarios en `tests/IngenIA365ERP.Application.Tests/Identity/Profile/`:
   - `ChangePasswordCommandHandlerTests.cs` (currentPassword erróneo → InvalidCredentials; newPassword Pwned → rechazo; éxito → security stamp regenerado mockeable; misma password → rechazo)
   - `DisableMfaCommandHandlerTests.cs` (al menos un tenant con MFA obligatoria → rechazo con nombre de tenant; ningún tenant exige → éxito)
   - `RequestPasswordResetCommandHandlerTests.cs` (email existente → token generado + email enviado; email inexistente → 202 sin enviar email + audit registrado; doble request rápido → reemplaza el token anterior)
@@ -243,7 +280,7 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### UI Blazor
 
-- [ ] T079l [US2] Crear páginas Blazor en `src/Presentation/IngenIA365ERP.Web/Pages/`:
+- [X] T079l [US2] Crear páginas Blazor en `src/Presentation/IngenIA365ERP.Web/Pages/`:
   - `Profile/MfaEnrollment.razor` (ruta `/profile/mfa`, voluntaria): muestra QR + recovery codes + input código; botón "Activar"; al éxito redirige al perfil. Si MFA ya activo → muestra estado + botón "Desactivar" (con confirmación de password).
   - `Auth/MfaEnrollmentForced.razor` (ruta `/auth/enroll-mfa-forced`, page guard): solo permite navegación a sí misma y a `/auth/logout` mientras la sesión tenga el flag `mfaEnrollmentRequired`. Mismo formulario que `MfaEnrollment.razor` pero con banner "La empresa {Nombre} requiere MFA. Configúralo para continuar." y sin opción de cancelar. Tras éxito → POST `/api/profile/mfa/confirm` → invalidar caché de membresías → redirigir al dashboard.
   - `Profile/ChangePassword.razor` (ruta `/profile/password`): formulario `currentPassword`/`newPassword`/`newPasswordConfirm` con password meter en tiempo real + advertencia clara "Esto afectará tu acceso a todas tus empresas y cerrará todas tus sesiones activas en otros dispositivos."
@@ -267,14 +304,14 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands + handlers
 
-- [ ] T080 [US3] Implementar `SelectTenantCommand` (input: tenantPublicId, challengeToken o JWT central sin tenant) + Validator + handler: valida membership Active, valida política MFA del tenant, emite JWT con `active_tenant_id` + `tenant_admin` + `mfa_verified`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/SelectTenantCommand.cs`
-- [ ] T081 [P] [US3] Implementar `SwitchTenantCommand` (input: tenantPublicId) + Validator + handler: similar a Select pero parte de un JWT con `active_tenant_id` ya seteado, valida membership Active en destino, emite nuevo JWT, registra evento `Session.TenantSwitched`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/SwitchTenantCommand.cs`
-- [ ] T082 [P] [US3] Implementar `GetMyActiveTenantsQuery` + handler que devuelve lista con `tenantPublicId`, `tenantName`, `isTenantAdmin`, `isDefault`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/GetMyActiveTenantsQuery.cs`
-- [ ] T083 [P] [US3] Implementar `SetDefaultTenantCommand` (input: tenantPublicId? — null para limpiar) + Validator (si no null, debe haber membership Active) + handler que actualiza `CentralUser.DefaultTenantId`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/SetDefaultTenantCommand.cs`
+- [X] T080 [US3] Implementar `SelectTenantCommand` (input: tenantPublicId, challengeToken o JWT central sin tenant) + Validator + handler: valida membership Active, valida política MFA del tenant, emite JWT con `active_tenant_id` + `tenant_admin` + `mfa_verified`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/SelectTenantCommand.cs`
+- [X] T081 [P] [US3] Implementar `SwitchTenantCommand` (input: tenantPublicId) + Validator + handler: similar a Select pero parte de un JWT con `active_tenant_id` ya seteado, valida membership Active en destino, emite nuevo JWT, registra evento `Session.TenantSwitched`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/SwitchTenantCommand.cs`
+- [X] T082 [P] [US3] Implementar `GetMyActiveTenantsQuery` + handler que devuelve lista con `tenantPublicId`, `tenantName`, `isTenantAdmin`, `isDefault`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Sessions/GetMyActiveTenantsQuery.cs`
+- [X] T083 [P] [US3] Implementar `SetDefaultTenantCommand` (input: tenantPublicId? — null para limpiar) + Validator (si no null, debe haber membership Active) + handler que actualiza `CentralUser.DefaultTenantId`. Archivo: `src/Core/IngenIA365ERP.Application/Identity/Profile/SetDefaultTenantCommand.cs`
 
 ### Carter endpoint
 
-- [ ] T084 [US3] Crear `src/Presentation/IngenIA365ERP.API/Modules/SessionsModule.cs` con rutas:
+- [X] T084 [US3] Crear `src/Presentation/IngenIA365ERP.API/Modules/SessionsModule.cs` con rutas:
   - `GET /api/sessions/active-tenants` con `[RequirePurpose("full")]`
   - `POST /api/sessions/select-tenant` con `[RequirePurpose("tenant-select", "full")]` (acepta el challenge JWT emitido por login)
   - `POST /api/sessions/switch-tenant` con `[RequirePurpose("full")]`
@@ -282,18 +319,18 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Tests
 
-- [ ] T085 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Sessions/SwitchTenantCommandHandlerTests.cs` (membership inactiva → 403; tenant exige MFA y usuario sin MFA → 403 Tenant.MfaPolicyEnforced; éxito → JWT re-emitido)
-- [ ] T086 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Profile/SetDefaultTenantCommandHandlerTests.cs` (membership no activa → 400; null → limpia preferencia)
+- [X] T085 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Sessions/SwitchTenantCommandHandlerTests.cs` (membership inactiva → 403; tenant exige MFA y usuario sin MFA → 403 Tenant.MfaPolicyEnforced; éxito → JWT re-emitido)
+- [X] T086 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Profile/SetDefaultTenantCommandHandlerTests.cs` (membership no activa → 400; null → limpia preferencia)
 - [ ] T087 [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MultiTenantSwitch.cs` (usuario en 3 tenants → selector → entra A → cambia a B → datos de B accesibles, de A bloqueados)
 - [ ] T088 [P] [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantCrossover.cs` (JWT con `active_tenant_id` manipulado a un tenant sin membership → 403 al primer endpoint que toque datos del tenant)
 
 ### UI Blazor
 
-- [ ] T089 [US3] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/SelectTenant.razor` (lista, click → select-tenant, manejo de auto-select por default)
-- [ ] T090 [P] [US3] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Profile/DefaultTenantSetting.razor` (dropdown con membresías activas + botón "Establecer como por defecto" / "Quitar default")
+- [X] T089 [US3] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Auth/SelectTenant.razor` (lista, click → select-tenant, manejo de auto-select por default)
+- [X] T090 [P] [US3] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Profile/DefaultTenantSetting.razor` (dropdown con membresías activas + botón "Establecer como por defecto" / "Quitar default")
 - [ ] T091 [US3] Crear `src/Presentation/IngenIA365ERP.Web.Client/Components/Header/TenantSwitcher.razor` visible cuando `availableTenants.Count > 1`, con detección de `hasUnsavedChanges` global vía `IFormDirtyStateService` (ver T091a) y modal de confirmación antes de invocar `/api/sessions/switch-tenant`
 - [ ] T091a [P] [US3] Crear servicio `IFormDirtyStateService` en `src/Presentation/IngenIA365ERP.Web.Client/Services/IFormDirtyStateService.cs` + implementación `InMemoryFormDirtyStateService` con: `Register(formId)`, `MarkDirty(formId)`, `MarkClean(formId)`, `bool HasDirtyForms`. Crear componente base `DirtyTrackingEditForm.razor` (wrapper de `EditForm`) que llama `OnFieldChanged → MarkDirty` y `OnValidSubmit → MarkClean` automáticamente. Documentar en `docs/desarrollo/dirty-state.md` cómo migrar formularios existentes para que el TenantSwitcher detecte cambios pendientes.
-- [ ] T092 [P] [US3] Crear `src/Presentation/IngenIA365ERP.Web.Client/Services/TenantSessionClient.cs` con métodos `GetActiveTenantsAsync`, `SelectAsync(tenantPublicId)`, `SwitchAsync(tenantPublicId)`, `SetDefaultAsync(tenantPublicId?)`
+- [X] T092 [P] [US3] Crear `src/Presentation/IngenIA365ERP.Web.Client/Services/TenantSessionClient.cs` con métodos `GetActiveTenantsAsync`, `SelectAsync(tenantPublicId)`, `SwitchAsync(tenantPublicId)`, `SetDefaultAsync(tenantPublicId?)`
 
 **Checkpoint US3**: multi-empresa completamente operativa. La pantalla `SelectTenant.razor` y el `TenantSwitcher.razor` cubren los flujos al login y en sesión activa.
 
@@ -307,25 +344,25 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands + handlers
 
-- [ ] T093 [US4] Implementar `SuspendMembershipCommand` + Validator + handler (Active → Suspended; verificar autoridad: admin tenant o master; **al éxito publica `IMembershipChangedNotifier.PublishAsync(centralUserId)` para invalidar caché en todas las instancias**). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/SuspendMembershipCommand.cs`
-- [ ] T094 [P] [US4] Implementar `ActivateMembershipCommand` + handler (Suspended → Active; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/ActivateMembershipCommand.cs`
-- [ ] T095 [P] [US4] Implementar `RevokeMembershipCommand` + Validator + handler (transición a Revoked; salvaguarda último admin si afectado es admin; soft-delete fila `SEC_Users`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/RevokeMembershipCommand.cs`
-- [ ] T096 [P] [US4] Implementar `PromoteToTenantAdminCommand` + handler (set `IsTenantAdmin = true`; emite evento `Membership.PromotedToAdmin`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/PromoteToTenantAdminCommand.cs`
-- [ ] T097 [US4] Implementar `DemoteFromTenantAdminCommand` + Validator + handler (salvaguarda último admin transaccional según `research.md > D-09`; rechaza con `Membership.LastAdminProtected` o `Membership.SelfDemoteBlocked.LastAdmin`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/DemoteFromTenantAdminCommand.cs`
-- [ ] T098 [P] [US4] Implementar `ListTenantMembersQuery` + handler (paginación, filtro por status). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/ListTenantMembersQuery.cs`
-- [ ] T099 [US4] Implementar `UpdateTenantMfaPolicyCommand` + Validator + handler (activa/desactiva; al cambiar publica `IMembershipChangedNotifier.PublishAsync` para CADA `centralUserId` con membresía Active en este tenant — invalida caché para que el flag `isMfaRequired` se recompute en próximos logins). Archivo: `src/Core/IngenIA365ERP.Application/Tenants/UpdateTenantMfaPolicyCommand.cs`
-- [ ] T100 [P] [US4] Implementar `GetTenantMfaPolicyQuery` + handler. Archivo: `src/Core/IngenIA365ERP.Application/Tenants/GetTenantMfaPolicyQuery.cs`
+- [X] T093 [US4] Implementar `SuspendMembershipCommand` + Validator + handler (Active → Suspended; verificar autoridad: admin tenant o master; **al éxito publica `IMembershipChangedNotifier.PublishAsync(centralUserId)` para invalidar caché en todas las instancias**). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/SuspendMembershipCommand.cs`
+- [X] T094 [P] [US4] Implementar `ActivateMembershipCommand` + handler (Suspended → Active; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/ActivateMembershipCommand.cs`
+- [X] T095 [P] [US4] Implementar `RevokeMembershipCommand` + Validator + handler (transición a Revoked; salvaguarda último admin si afectado es admin; soft-delete fila `SEC_Users`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/RevokeMembershipCommand.cs`
+- [X] T096 [P] [US4] Implementar `PromoteToTenantAdminCommand` + handler (set `IsTenantAdmin = true`; emite evento `Membership.PromotedToAdmin`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/PromoteToTenantAdminCommand.cs`
+- [X] T097 [US4] Implementar `DemoteFromTenantAdminCommand` + Validator + handler (salvaguarda último admin transaccional según `research.md > D-09`; rechaza con `Membership.LastAdminProtected` o `Membership.SelfDemoteBlocked.LastAdmin`; publica `IMembershipChangedNotifier`). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/DemoteFromTenantAdminCommand.cs`
+- [X] T098 [P] [US4] Implementar `ListTenantMembersQuery` + handler (paginación, filtro por status). Archivo: `src/Core/IngenIA365ERP.Application/Memberships/ListTenantMembersQuery.cs`
+- [X] T099 [US4] Implementar `UpdateTenantMfaPolicyCommand` + Validator + handler (activa/desactiva; al cambiar publica `IMembershipChangedNotifier.PublishAsync` para CADA `centralUserId` con membresía Active en este tenant — invalida caché para que el flag `isMfaRequired` se recompute en próximos logins). Archivo: `src/Core/IngenIA365ERP.Application/Tenants/UpdateTenantMfaPolicyCommand.cs`
+- [X] T100 [P] [US4] Implementar `GetTenantMfaPolicyQuery` + handler. Archivo: `src/Core/IngenIA365ERP.Application/Tenants/GetTenantMfaPolicyQuery.cs`
 
 ### Carter endpoints
 
-- [ ] T101 [US4] Crear `src/Presentation/IngenIA365ERP.API/Modules/MembershipsModule.cs` con rutas `GET /api/tenants/{tenantPublicId}/members`, `POST .../members/{publicId}/suspend`, `.../activate`, `.../revoke`, `.../promote-admin`, `.../demote-admin` (todas `[RequireTenantAdmin]` salvo cuando actor master)
-- [ ] T102 [P] [US4] Crear `src/Presentation/IngenIA365ERP.API/Modules/TenantMfaPolicyModule.cs` con `GET` / `PUT /api/tenants/{tenantPublicId}/mfa-policy`
+- [X] T101 [US4] Crear `src/Presentation/IngenIA365ERP.API/Modules/MembershipsModule.cs` con rutas `GET /api/tenants/{tenantPublicId}/members`, `POST .../members/{publicId}/suspend`, `.../activate`, `.../revoke`, `.../promote-admin`, `.../demote-admin` (todas `[RequireTenantAdmin]` salvo cuando actor master)
+- [X] T102 [P] [US4] Crear `src/Presentation/IngenIA365ERP.API/Modules/TenantMfaPolicyModule.cs` con `GET` / `PUT /api/tenants/{tenantPublicId}/mfa-policy`
 
 ### Tests
 
 - [ ] T103 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Memberships/PromoteToTenantAdminCommandHandlerTests.cs`
-- [ ] T104 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Memberships/DemoteLastAdminGuardTests.cs` (un admin: rechazo; dos admins: éxito; auto-degrade del último: rechazo específico)
-- [ ] T105 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Memberships/RevokeMembershipCommandHandlerTests.cs` (incluye salvaguarda último admin al revocar)
+- [X] T104 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Memberships/DemoteLastAdminGuardTests.cs` (un admin: rechazo; dos admins: éxito; auto-degrade del último: rechazo específico)
+- [X] T105 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Memberships/RevokeMembershipCommandHandlerTests.cs` (incluye salvaguarda último admin al revocar)
 - [ ] T106 [P] [US4] Tests `tests/IngenIA365ERP.Application.Tests/Tenants/UpdateTenantMfaPolicyCommandHandlerTests.cs`
 - [ ] T107 [US4] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MfaPolicyEnforcement.cs` (activar política → usuario sin MFA hace login → MfaEnrollmentRequired; configura MFA → entra)
 - [ ] T108 [P] [US4] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantAdminScope.cs` (admin de A intenta invitar/listar/modificar miembros de B → 403)
@@ -348,25 +385,25 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 ### Commands + handlers
 
-- [ ] T112 [US5] Implementar `RegisterTenantCommand` (refactor del existente de Fase 0 si lo hubiera; integra emisión automática de invitación marcada admin para `firstAdminEmail`) en `src/Core/IngenIA365ERP.Application/Saas/RegisterTenantCommand.cs`
-- [ ] T113 [P] [US5] Implementar `ListAllTenantsQuery` + handler con paginación y filtros (search, subscriptionStatus, mfaPolicyEnabled). Archivo: `src/Core/IngenIA365ERP.Application/Saas/ListAllTenantsQuery.cs`
-- [ ] T114 [P] [US5] Implementar `ForceMfaResetCommand` + Validator + handler que invoca `ICentralIdentityProvider.ResetMfaAsync`, regenera security stamp (invalida refresh tokens), audita con razón obligatoria. Archivo: `src/Core/IngenIA365ERP.Application/Saas/ForceMfaResetCommand.cs`
+- [X] T112 [US5] Implementar `RegisterTenantCommand` (refactor del existente de Fase 0 si lo hubiera; integra emisión automática de invitación marcada admin para `firstAdminEmail`) en `src/Core/IngenIA365ERP.Application/Saas/RegisterTenantCommand.cs`
+- [X] T113 [P] [US5] Implementar `ListAllTenantsQuery` + handler con paginación y filtros (search, subscriptionStatus, mfaPolicyEnabled). Archivo: `src/Core/IngenIA365ERP.Application/Saas/ListAllTenantsQuery.cs`
+- [X] T114 [P] [US5] Implementar `ForceMfaResetCommand` + Validator + handler que invoca `ICentralIdentityProvider.ResetMfaAsync`, regenera security stamp (invalida refresh tokens), audita con razón obligatoria. Archivo: `src/Core/IngenIA365ERP.Application/Saas/ForceMfaResetCommand.cs`
 
 ### Carter endpoint
 
-- [ ] T115 [US5] Crear `src/Presentation/IngenIA365ERP.API/Modules/SaasAdminModule.cs` con rutas `GET /api/saas/tenants`, `POST /api/saas/tenants`, `POST /api/saas/users/{centralUserPublicId}/force-mfa-reset`, todas `[RequireMasterAdmin]`
+- [X] T115 [US5] Crear `src/Presentation/IngenIA365ERP.API/Modules/SaasAdminModule.cs` con rutas `GET /api/saas/tenants`, `POST /api/saas/tenants`, `POST /api/saas/users/{centralUserPublicId}/force-mfa-reset`, todas `[RequireMasterAdmin]`
 
 ### Tests
 
 - [ ] T116 [P] [US5] Tests `tests/IngenIA365ERP.Application.Tests/Saas/RegisterTenantCommandHandlerTests.cs` (verifica que se crea tenant + invitación con `inviteAsTenantAdmin=true` en una sola transacción atómica)
-- [ ] T117 [P] [US5] Tests `tests/IngenIA365ERP.Application.Tests/Saas/ForceMfaResetCommandHandlerTests.cs` (reset → MfaSecret null + TwoFactorEnabled false + security stamp regenerado + refresh tokens invalidados)
-- [ ] T118 [US5] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MasterRegisterTenant.cs` (POST /api/saas/tenants → invitación enviada → admin acepta → entra como tenant admin)
+- [X] T117 [P] [US5] Tests `tests/IngenIA365ERP.Application.Tests/Saas/ForceMfaResetCommandHandlerTests.cs` (reset → MfaSecret null + TwoFactorEnabled false + security stamp regenerado + refresh tokens invalidados)
+- [X] T118 [US5] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MasterRegisterTenant.cs` (POST /api/saas/tenants → invitación enviada → admin acepta → entra como tenant admin)
 
 ### UI Blazor
 
-- [ ] T119 [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/Tenants.razor` (tabla con buscador, columnas: nombre, NIT, suscripción, admins, miembros activos, política MFA)
-- [ ] T120 [P] [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/MasterInvitations.razor` (formulario para emitir invitación a cualquier tenant marcable como admin)
-- [ ] T121 [P] [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/UserMfaReset.razor` (búsqueda de usuario por email + razón obligatoria + confirmación de reset)
+- [X] T119 [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/Tenants.razor` (tabla con buscador, columnas: nombre, NIT, suscripción, admins, miembros activos, política MFA)
+- [X] T120 [P] [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/MasterInvitations.razor` (formulario para emitir invitación a cualquier tenant marcable como admin)
+- [X] T121 [P] [US5] Crear `src/Presentation/IngenIA365ERP.Web/Pages/Saas/UserMfaReset.razor` (búsqueda de usuario por email + razón obligatoria + confirmación de reset)
 
 **Checkpoint US5**: el producto puede onboardear nuevas cooperativas y recuperarse de incidentes operativos de identidad sin tocar BD manualmente.
 
@@ -376,12 +413,12 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 **Purpose**: cierre de bordes — observabilidad, jobs, pruebas de carga, documentación.
 
-- [ ] T122 [P] Añadir job en background `InvitationExpiryJob` que cada hora: (a) marca `Pending → Expired` las invitaciones cuyo `ExpiresAt < UtcNow`; (b) **en cascada, si la `TenantMembership` correspondiente quedó en estado `Invited` (caso: invitación a un email ya con CentralUser que nunca aceptó), la marca también `Revoked` con razón `Invitation.Expired`**; (c) emite eventos auditables `Invitation.Expired` y, cuando aplique, `Membership.Revoked.InvitationExpired`. Archivo: `src/Infrastructure/IngenIA365ERP.Identity/Jobs/InvitationExpiryJob.cs` (registrado como `BackgroundService`). Análogamente, T122 incluye `PasswordResetTokenCleanupJob` que purga tokens consumidos o expirados > 30 días (mencionado en data-model §6).
-- [ ] T123 [P] Añadir enrichers Serilog para `central_user_id` y `active_tenant_id` extraídos del JWT en `src/Presentation/IngenIA365ERP.API/Program.cs` (vía `IHttpContextAccessor` + LoggingBehavior existente)
-- [ ] T124 Test de carga `tests/IngenIA365ERP.Load.Tests/Identity/LoginThroughputScenario.cs` con NBomber: 100 logins/segundo durante 5 minutos contra `POST /api/auth/login` con usuarios pre-creados. Aceptación: p95 < 800 ms, cero errores 5xx
-- [ ] T125 [P] Actualizar `docs/INDICE-DOCUMENTACION.md` añadiendo entrada de Fase 1 → feature 002 con enlaces a `specs/002-identidad-central-federada/{spec,plan,research,data-model,quickstart}.md`
-- [ ] T126 [P] Actualizar `README.md` con sección "Identidad central v2": instrucciones de bootstrap del master admin (variables de entorno), nuevo flujo de login (sin combo box), instrucciones de configuración SMTP y feature flag de Pwned Passwords
-- [ ] T127 Ejecutar `quickstart.md` end-to-end manualmente contra entorno dev con MailHog, capturar screenshots de cada user story, archivar en `docs/release-notes/002-identidad-central-federada/` como evidencia
+- [X] T122 [P] Añadir job en background `InvitationExpiryJob` que cada hora: (a) marca `Pending → Expired` las invitaciones cuyo `ExpiresAt < UtcNow`; (b) **en cascada, si la `TenantMembership` correspondiente quedó en estado `Invited` (caso: invitación a un email ya con CentralUser que nunca aceptó), la marca también `Revoked` con razón `Invitation.Expired`**; (c) emite eventos auditables `Invitation.Expired` y, cuando aplique, `Membership.Revoked.InvitationExpired`. Archivo: `src/Infrastructure/IngenIA365ERP.Identity/Jobs/InvitationExpiryJob.cs` (registrado como `BackgroundService`). Análogamente, T122 incluye `PasswordResetTokenCleanupJob` que purga tokens consumidos o expirados > 30 días (mencionado en data-model §6).
+- [X] T123 [P] Añadir enrichers Serilog para `central_user_id` y `active_tenant_id` extraídos del JWT en `src/Presentation/IngenIA365ERP.API/Program.cs` (vía `IHttpContextAccessor` + LoggingBehavior existente)
+- [X] T124 Test de carga `tests/IngenIA365ERP.Load.Tests/Identity/LoginThroughputScenario.cs` con NBomber: 100 logins/segundo durante 5 minutos contra `POST /api/auth/login` con usuarios pre-creados. Aceptación: p95 < 800 ms, cero errores 5xx
+- [X] T125 [P] Actualizar `docs/INDICE-DOCUMENTACION.md` añadiendo entrada de Fase 1 → feature 002 con enlaces a `specs/002-identidad-central-federada/{spec,plan,research,data-model,quickstart}.md`
+- [X] T126 [P] Actualizar `README.md` con sección "Identidad central v2": instrucciones de bootstrap del master admin (variables de entorno), nuevo flujo de login (sin combo box), instrucciones de configuración SMTP y feature flag de Pwned Passwords
+- [X] T127 Ejecutar `quickstart.md` end-to-end manualmente contra entorno dev con MailHog, capturar screenshots de cada user story, archivar en `docs/release-notes/002-identidad-central-federada/` como evidencia
 - [ ] T128 [P] Cross-check final: ejecutar `dotnet test` completo (Domain + Application + Architecture + Integration + Load) y validar que las 12 compuertas constitucionales siguen en verde tras todo el trabajo
 
 ---
