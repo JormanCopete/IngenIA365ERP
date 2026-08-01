@@ -39,9 +39,19 @@ public static class LoginThroughputScenario
     private static readonly string? UserCsvPath =
         Environment.GetEnvironmentVariable("LOADTEST_USER_CSV");
 
+    /// <summary>
+    /// Un único HttpClient compartido para todo el escenario: crear uno por
+    /// invocación (30.000 en la corrida de 5 min) agota puertos efímeros y
+    /// produce fallos falsos que no son del API.
+    /// </summary>
+    private static readonly HttpClient SharedClient = new()
+    {
+        BaseAddress = new Uri(BaseUrl),
+        Timeout = TimeSpan.FromSeconds(30),
+    };
+
     public static ScenarioProps Build()
     {
-        using var http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
         var users = LoadUsers();
 
         return Scenario.Create("login_throughput", async ctx =>
@@ -50,14 +60,23 @@ public static class LoginThroughputScenario
                 var user = users[(int)(ctx.InvocationNumber % users.Count)];
                 var body = new { email = user.Email, password = user.Password };
 
+                // El API limita POST /api/auth/login a 10/min POR IP (defensa
+                // anti-fuerza-bruta — verificada: sin esto el limiter responde
+                // 429 al 100% de la carga). El middleware resuelve la IP real
+                // desde X-Real-IP, así que rotamos ~2000 IPs sintéticas para
+                // simular clientes distribuidos: 100 rps / 2000 IPs = 3/min
+                // por IP, dentro del cupo — igual que producción real.
+                var n = ctx.InvocationNumber % 2000;
+                var syntheticIp = $"10.{n / 65536 % 256}.{n / 256 % 256}.{n % 256}";
+
                 var req = Http.CreateRequest("POST", "/api/auth/login")
-                    .WithHeader("Content-Type", "application/json")
+                    .WithHeader("Accept", "application/json")
+                    .WithHeader("X-Real-IP", syntheticIp)
                     .WithBody(new StringContent(
                         System.Text.Json.JsonSerializer.Serialize(body),
                         System.Text.Encoding.UTF8, "application/json"));
 
-                using var client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
-                var resp = await Http.Send(client, req);
+                var resp = await Http.Send(SharedClient, req);
                 return resp;
             })
             .WithLoadSimulations(

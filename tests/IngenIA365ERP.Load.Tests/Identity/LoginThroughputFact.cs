@@ -4,22 +4,24 @@ using Xunit;
 namespace IngenIA365ERP.Load.Tests.Identity;
 
 /// <summary>
-/// Wrapper xUnit del <see cref="LoginThroughputScenario"/>. Marcado como
-/// <c>Skip</c> por defecto — el load test requiere un entorno corriendo y
-/// se invoca explícitamente con:
+/// Wrapper xUnit del <see cref="LoginThroughputScenario"/>. Sin
+/// <c>RUN_LOAD_TESTS=1</c> es un no-op instantáneo (el load test necesita un
+/// entorno corriendo); con la env var exportada ejecuta la corrida real:
 /// <code>
-/// dotnet test --filter "FullyQualifiedName~LoginThroughput" --no-build
+/// RUN_LOAD_TESTS=1 LOADTEST_BASE_URL=http://localhost:5100 \
+/// dotnet test tests/IngenIA365ERP.Load.Tests --filter LoginThroughput
 /// </code>
-/// removiendo el SkipReason o exportando <c>RUN_LOAD_TESTS=1</c>.
+/// (El atributo Skip anterior era incondicional y la env var jamás se
+/// evaluaba — el test no se podía ejecutar de ninguna forma.)
 /// </summary>
 public sealed class LoginThroughputFact
 {
-    [Fact(Skip = "Load test — activar con RUN_LOAD_TESTS=1 + entorno corriendo.")]
+    [Fact]
     public void Runs_within_aceptance_thresholds()
     {
         if (Environment.GetEnvironmentVariable("RUN_LOAD_TESTS") != "1")
         {
-            return; // Defensa adicional por si Skip se ignora.
+            return; // No-op sin opt-in explícito.
         }
 
         var stats = NBomberRunner
