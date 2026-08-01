@@ -25,8 +25,20 @@ namespace IngenIA365ERP.API.Middleware;
 ///   <item><c>/api/invitations/*</c> — preview, accept (público pre-auth)</item>
 ///   <item><c>/api/saas/*</c> — superficie master admin (no scoped a tenant)</item>
 ///   <item><c>/api/admin/*</c> — legado master admin (carve-out Fase 0)</item>
+///   <item><c>/api/profile/mfa/enroll</c> y <c>/confirm</c> — el enrollment
+///     forzado (FR-003b) llega con challenge token <c>purpose=mfa-enroll</c>
+///     que por definición no porta tenant; ambos endpoints solo tocan
+///     <c>ADM_*</c> y quedan custodiados por <c>RequirePurpose</c></item>
 ///   <item><c>/api/health</c>, <c>/swagger</c>, <c>/_framework</c>, <c>/_vs</c>, <c>/hubs/*</c></item>
 /// </list>
+/// </para>
+///
+/// <para>
+/// Respaldo master (FR-039 / FR-040a): el master global no tiene membresías y
+/// por lo tanto nunca porta <c>active_tenant_id</c>. Para rutas
+/// <c>/api/tenants/{tenantPublicId}/...</c> con JWT master autenticado, el
+/// tenant se resuelve desde el segmento de la ruta; la autorización sigue a
+/// cargo de <c>RequireTenantAdmin</c>/<c>RequireMasterAdmin</c> en el endpoint.
 /// </para>
 /// </summary>
 public class TenantResolutionMiddleware
@@ -40,6 +52,8 @@ public class TenantResolutionMiddleware
         "/api/invitations/",
         "/api/saas/",
         "/api/admin",
+        "/api/profile/mfa/enroll",
+        "/api/profile/mfa/confirm",
         "/api/health",
         "/swagger",
         "/_framework",
@@ -63,9 +77,12 @@ public class TenantResolutionMiddleware
 
         // T044: única fuente de verdad — claim active_tenant_id del JWT validado.
         // Sin autenticación o sin claim → respuesta tipada Session.TenantNotSelected.
+        // Excepción única (FR-039/FR-040a): master global sin claim opera
+        // /api/tenants/{id}/... resolviendo el tenant desde la ruta.
         var claimValue = context.User?.FindFirst(ActiveTenantIdClaim)?.Value;
-        if (string.IsNullOrWhiteSpace(claimValue) ||
-            !Guid.TryParse(claimValue, out var activeTenantId))
+        if ((string.IsNullOrWhiteSpace(claimValue) ||
+             !Guid.TryParse(claimValue, out var activeTenantId)) &&
+            !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)))
         {
             await WriteTenantNotSelectedAsync(context);
             return;
@@ -91,6 +108,20 @@ public class TenantResolutionMiddleware
         context.Items["TenantSchema"] = tenant.SchemaName;
 
         await _next(context);
+    }
+
+    private static bool IsMasterAdmin(ClaimsPrincipal? user) =>
+        bool.TryParse(user?.FindFirst("is_global_master_admin")?.Value, out var isMaster) && isMaster;
+
+    private static bool TryGetTenantIdFromPath(string path, out Guid tenantId)
+    {
+        tenantId = Guid.Empty;
+        const string prefix = "/api/tenants/";
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var rest = path[prefix.Length..];
+        var slash = rest.IndexOf('/');
+        var segment = slash < 0 ? rest : rest[..slash];
+        return Guid.TryParse(segment, out tenantId);
     }
 
     private static bool IsExempt(string path)
