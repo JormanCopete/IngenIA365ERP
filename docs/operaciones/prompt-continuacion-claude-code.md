@@ -85,6 +85,7 @@ Sesión 2026-07-31 (esta):
 | Luis (miembro Solidaria) | `luis.martinez@coop.solidaria.test` / `Luis-Strong-Pwd-2026` — Id `619cc290-7c25-4ce3-96de-42a0f47781e6` — sin MFA |
 | Carla (miembro Solidaria) | `carla.gomez@coop.solidaria.test` / `Carla-Strong-Pwd-2026` — Id `02b3c560-6cdb-490e-ad94-2a10bd1e6fe3` — sin MFA (force-reset del master en prueba 7.1) |
 | Elena (miembro Solidaria, creada por UI) | `elena.vega@coop.solidaria.test` / `Elena-Strong-Pwd-2026` — sin MFA |
+| Gina (miembro Solidaria, flujo gated) | `gina.torres@coop.solidaria.test` / `Gina-Strong-Pwd-2026` — MFA activo, secret `BAVZ5IJWACDNYQRWUR2FSHV6V4NSWVUZ` |
 | Tenant 1 "Coop. Solidaria Dev" | `ea5aad63-f579-40b3-86b9-85d3bce6401d` — política MFA **ACTIVA** |
 | Tenant 2 "Coop. del Pacifico Dev" | `da51829f-c5b2-45da-9145-215120d810b7` — política MFA off — **default de Ana** |
 | Diego | NO existe — solo una invitación expirada (prueba del job 8.1) |
@@ -132,11 +133,13 @@ dotnet run --project src/Presentation/IngenIA365ERP.Web --launch-profile http
 - **Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`** formal.
 - **Tests pendientes**: T118 (integration master-register-tenant),
   T127 (evidencia quickstart con screenshots), T124 (load test NBomber).
-- **Observaciones a discutir**: accept-invitation emite token full aunque la
-  política MFA esté activa (ventana sin MFA hasta 12h); timing side-channel
-  en forgot (185ms vs 6ms); `otpauth://` etiqueta con GUID y no email;
-  `GET /members` no devuelve emails (la UI los necesita); eventos globales
-  caen en la colección Mongo `audit_events_` (sufijo vacío).
+- **Observaciones resueltas (2026-08-01)**: accept-invitation ahora respeta
+  MFA (challenge `MfaRequired`/`MfaEnrollmentRequired` sin tokens si aplica —
+  FR-003b/c); `otpauth://` etiqueta con el email; `GET /members` devuelve
+  `email` por miembro (batch vía `ICentralIdentityProvider.GetEmailsByIdsAsync`).
+- **Observaciones en backlog** (decididas como no-urgentes): timing
+  side-channel en forgot (185ms vs 6ms); eventos globales caen en la
+  colección Mongo `audit_events_` (sufijo vacío).
 
 ## Reglas para esta sesión
 

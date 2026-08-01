@@ -69,6 +69,7 @@ dotnet run --project src/Presentation/IngenIA365ERP.Web --launch-profile http
 | Luis (miembro Solidaria) | `luis.martinez@coop.solidaria.test` / `Luis-Strong-Pwd-2026` — Id `619cc290-7c25-4ce3-96de-42a0f47781e6` — sin MFA |
 | Carla (miembro Solidaria) | `carla.gomez@coop.solidaria.test` / `Carla-Strong-Pwd-2026` — Id `02b3c560-6cdb-490e-ad94-2a10bd1e6fe3` — sin MFA (el master se lo reseteó en la prueba 7.1) |
 | Elena (creada por UI) | `elena.vega@coop.solidaria.test` / `Elena-Strong-Pwd-2026` — sin MFA |
+| Gina (flujo gated) | `gina.torres@coop.solidaria.test` / `Gina-Strong-Pwd-2026` — MFA activo, secret `BAVZ5IJWACDNYQRWUR2FSHV6V4NSWVUZ` |
 | Tenant 1 "Coop. Solidaria Dev" | `ea5aad63-f579-40b3-86b9-85d3bce6401d` — política MFA **ACTIVA** |
 | Tenant 2 "Coop. del Pacifico Dev" | `da51829f-c5b2-45da-9145-215120d810b7` — política off — **default de Ana** |
 
@@ -121,10 +122,10 @@ Sesión 2026-07-31:
   el header muestra "Usuario" genérico; falta el TenantSwitcher (T091).
 - Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`.
 - Tests pendientes: T118, T127 (evidencia con screenshots), T124 (carga).
-- Observaciones a discutir: accept emite token full aunque la política MFA
-  esté activa (ventana sin MFA hasta 12h); timing side-channel en forgot;
-  `otpauth://` etiqueta con GUID; `GET /members` sin emails; eventos
-  globales en colección Mongo `audit_events_` (sufijo vacío).
+- Observaciones resueltas (2026-08-01): accept respeta MFA (challenge sin
+  tokens cuando aplica, FR-003b/c); `otpauth://` con email; `GET /members`
+  con email por miembro. En backlog: timing side-channel en forgot y la
+  colección Mongo `audit_events_` (sufijo vacío) para eventos globales.
 
 ## Qué quiero que hagas ahora
 
