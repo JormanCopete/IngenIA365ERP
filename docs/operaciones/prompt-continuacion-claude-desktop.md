@@ -112,11 +112,13 @@ Sesión 2026-07-31:
 
 ## Pendientes
 
-- **Cutover UI (el grande)**: `/login` sigue sirviendo el login VIEJO de
-  Fase 0 con combo de tenant; el guard cookie-auth del host Web rebota al
-  login viejo tras el MFA (la sesión JWT central no está puenteada con la
-  auth del server — T077 abierta). Diseñar puente JWT↔auth del host y
-  hacer el switch de ruta default.
+- ~~Cutover UI~~ → **HECHO (2026-08-01)**: `/login` sirve el login central
+  (el viejo quedó en `/legacy-login`); el JWT central pasa a ser la sesión de
+  la app (keys `auth_token`/`refresh_token` + notificación del auth state).
+  Verificado E2E: login → MFA → dashboard sin rebote → Salir → login central.
+- Secuelas del cutover: persistencia ante F5 (storage in-memory pierde
+  sesión en reload); `PermissionGate` necesita claims/`GET /me` del tenant;
+  el header muestra "Usuario" genérico; falta el TenantSwitcher (T091).
 - Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`.
 - Tests pendientes: T118, T127 (evidencia con screenshots), T124 (carga).
 - Observaciones a discutir: accept emite token full aunque la política MFA

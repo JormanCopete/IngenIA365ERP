@@ -117,11 +117,18 @@ dotnet run --project src/Presentation/IngenIA365ERP.Web --launch-profile http
 
 ## Pendientes (elegí uno para arrancar)
 
-- **Cutover UI (el grande)**: `/login` sigue sirviendo el Login VIEJO de
-  Fase 0 con combo de tenant (viola SC-001/FR-007); el guard cookie-auth del
-  host Web rebota al login viejo después del MFA porque la sesión JWT central
-  no está puenteada con la auth del server (T077 sigue abierta). Diseñar el
-  puente JWT↔circuit-auth y hacer el switch de ruta.
+- ~~Cutover UI~~ → **HECHO (2026-08-01)**: `/login` sirve el login central
+  (el viejo quedó en `/legacy-login`); `CentralAuthClient.AdoptSessionAsync`
+  persiste el JWT central en las keys `auth_token`/`refresh_token` que leen
+  `CustomAuthStateProvider` y `AuthBearerHandler`, y notifica el auth state.
+  Verificado E2E: login → MFA → dashboard sin rebote → Salir → login central.
+- **Secuelas del cutover** (siguientes iteraciones):
+  - Persistencia ante F5: `ISecureStorage` Web/WASM es in-memory — un reload
+    pierde la sesión (limitación pre-existente; nota en `Web/Program.cs`).
+  - `PermissionGate`/permisos finos: el JWT central no trae claims `perm`
+    del tenant — las páginas ERP que gateen por permiso necesitarán `GET /me`.
+  - El header muestra "Usuario" genérico (no lee el claim `email`).
+  - TenantSwitcher del header (T091) sigue sin existir.
 - **Portar gaps 1–7 a `database/migration/24_Backfill_Gaps.sql`** formal.
 - **Tests pendientes**: T118 (integration master-register-tenant),
   T127 (evidencia quickstart con screenshots), T124 (load test NBomber).
