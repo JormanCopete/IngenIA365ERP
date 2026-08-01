@@ -320,8 +320,11 @@ ELSE PRINT '= Id ya es INT — sin cambios';
 > por lo que EF buscaba `dbo.PasswordResetTokens` en vez de
 > `ADM_PasswordResetTokens` (`Invalid object name`).
 
-> **Ideal a futuro**: portar estos gaps a un script formal `24_Backfill_Gaps.sql`
-> en `database/migration/` para que forme parte del pipeline oficial.
+> **✔ Formalizados (2026-08-01)**: los 7 gaps ya viven como migraciones
+> oficiales idempotentes — `database/migration/26_Backfill_Gaps_Tenant.sql`
+> (gaps 1–5, BD `IngenIA365ERP`) y `26b_Backfill_Gaps_Admin.sql` (gaps 6–7,
+> BD `IngenIA365ERP_Admin`). El SQL inline de esta sección queda como
+> referencia histórica; para entornos nuevos ejecutá los scripts formales.
 
 ---
 
