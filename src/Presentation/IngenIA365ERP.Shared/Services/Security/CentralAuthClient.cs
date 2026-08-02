@@ -90,6 +90,14 @@ public sealed class CentralAuthClient
         }
     }
 
+    /// <summary>Feature 003 (US5, FR-116): adopta un challenge token emitido por
+    /// otro flujo (accept de invitación) para encadenar al paso MFA
+    /// (mfa-challenge / enroll-mfa-forced) sin re-login.</summary>
+    public void AdoptChallengeToken(string challengeToken)
+    {
+        _challengeToken = challengeToken;
+    }
+
     // ---------- MFA verify ----------
 
     public async Task<InvitationApiResult<LoginResponse>> MfaVerifyAsync(

@@ -120,9 +120,9 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Independent Test**: quickstart.md § US5.
 
-- [ ] T026 [P] [US5] Agregar el enlace "¿Olvidaste tu contraseña?" → `/auth/forgot-password` en `src/Presentation/IngenIA365ERP.Shared/Pages/Security/Login.razor`
-- [ ] T027 [US5] Exponer la adopción de sesión externa en `src/Presentation/IngenIA365ERP.Shared/Services/Security/CentralAuthClient.cs`: método público `AdoptChallengeToken(token)` (para que accept pueda encadenar al paso MFA) — `AdoptSessionAsync` ya es público desde el cutover; y en `InvitationClient.cs` exponer `challenge`/`challengeToken`/tokens del response de accept (DTO del 002 ya los envía)
-- [ ] T028 [US5] Reescribir el post-éxito de `src/Presentation/IngenIA365ERP.Shared/Pages/Security/AcceptInvitation.razor` (resuelve sus 2 TODO): `challenge=None` → `AdoptSessionAsync` + navegar a `/` (SC-105); `MfaRequired` → `AdoptChallengeToken` + `/security/mfa-challenge`; `MfaEnrollmentRequired` → `AdoptChallengeToken` + `/auth/enroll-mfa-forced`
+- [X] T026 [P] [US5] Agregar el enlace "¿Olvidaste tu contraseña?" → `/auth/forgot-password` en `src/Presentation/IngenIA365ERP.Shared/Pages/Security/Login.razor`
+- [X] T027 [US5] Exponer la adopción de sesión externa en `src/Presentation/IngenIA365ERP.Shared/Services/Security/CentralAuthClient.cs`: método público `AdoptChallengeToken(token)` (para que accept pueda encadenar al paso MFA) — `AdoptSessionAsync` ya es público desde el cutover; y en `InvitationClient.cs` exponer `challenge`/`challengeToken`/tokens del response de accept (DTO del 002 ya los envía)
+- [X] T028 [US5] Reescribir el post-éxito de `src/Presentation/IngenIA365ERP.Shared/Pages/Security/AcceptInvitation.razor` (resuelve sus 2 TODO): `challenge=None` → `AdoptSessionAsync` + navegar a `/` (SC-105); `MfaRequired` → `AdoptChallengeToken` + `/security/mfa-challenge`; `MfaEnrollmentRequired` → `AdoptChallengeToken` + `/auth/enroll-mfa-forced`
 - [X] T029 [US5] Header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor`: mostrar email y nombre de empresa activa reales vía `GetMeAsync` (T001), refrescando al evento `Authenticated` del client (login/switch/adopción)
 
 **Checkpoint US5**: SC-105 — de clic en el correo al tablero sin re-login.
