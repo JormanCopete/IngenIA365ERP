@@ -85,6 +85,8 @@ integración del 002.
 | `specs/003-identidad-remates-ui/tasks.md` | Tareas T001-T049 con estado. |
 | `specs/003-identidad-remates-ui/contracts/mfa-recovery-codes.md` | Canje one-shot en mfa/verify + regeneración con confirmación de identidad. |
 | `specs/003-identidad-remates-ui/contracts/mfa-reset-requests.md` | Listado paginado de solicitudes de reset MFA para el aprobador. |
+| `docs/operaciones/manual-pruebas-funcional-remates-identidad.md` | **Manual de pruebas funcional del feature 003**: 7 pruebas completas de principio a fin (switcher, navegación por rol, recovery codes, sesión ante F5, invitación E2E, reset de MFA, smoke de regresión) con escenarios felices, negativos y de borde, actores, tabla de credenciales viva y registro de resultados. Audiencia: QA funcional. |
+| `docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md` | Evidencia de cierre del 003: suites automatizadas, recorrido T047 con capturas y bugs corregidos en la corrida. |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
