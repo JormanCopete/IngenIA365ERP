@@ -48,6 +48,48 @@ public sealed class CentralAuthClient
 
     public string? CurrentAccessToken => _accessToken;
 
+    private bool _restoreAttempted;
+
+    /// <summary>
+    /// Feature 003 (US4, FR-113): rehidrata la sesión desde el storage del
+    /// navegador tras una recarga. Este servicio es scoped — un F5 lo
+    /// reconstruye con los campos vacíos aunque sessionStorage aún tenga los
+    /// tokens. Idempotente; retorna true si hay sesión utilizable.
+    /// </summary>
+    public async Task<bool> TryRestoreSessionAsync()
+    {
+        if (_accessToken is not null) return true;
+        if (_restoreAttempted) return false;
+        _restoreAttempted = true;
+
+        var stored = await _storage.GetAsync(AuthBearerHandler.TokenKey);
+        if (string.IsNullOrWhiteSpace(stored)) return false;
+
+        _accessToken = stored;
+        _accessTokenExpiresAt = ReadJwtExpiryUtc(stored) ?? DateTime.UtcNow.AddMinutes(5);
+        _refreshToken = await _storage.GetAsync(RefreshTokenKey);
+        return true;
+    }
+
+    private static DateTime? ReadJwtExpiryUtc(string jwt)
+    {
+        try
+        {
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return null;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            using var doc = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(payload));
+            return doc.RootElement.TryGetProperty("exp", out var exp)
+                ? DateTimeOffset.FromUnixTimeSeconds(exp.GetInt64()).UtcDateTime
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// JWT temporal scoped (purpose=mfa-verify, mfa-enroll, tenant-select)
     /// retenido por el cliente para usar en el siguiente request. Útil para
@@ -179,7 +221,7 @@ public sealed class CentralAuthClient
     public async Task<MeResponse?> GetMeAsync(bool forceRefresh = false, CancellationToken ct = default)
     {
         if (_me is not null && !forceRefresh) return _me;
-        if (string.IsNullOrWhiteSpace(_accessToken)) return null;
+        if (string.IsNullOrWhiteSpace(_accessToken) && !await TryRestoreSessionAsync()) return null;
 
         try
         {

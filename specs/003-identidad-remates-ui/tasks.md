@@ -161,7 +161,7 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 - [X] T044 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantAdminScope.cs` (admin de A sobre miembros de B → 401/403)
 - [X] T045 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Memberships/PromoteToTenantAdminCommandHandlerTests.cs` (promoción, idempotencia, notificación de caché)
 - [X] T046 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Tenants/UpdateTenantMfaPolicyCommandHandlerTests.cs` (activar/desactivar, invalidación de caché por miembro, auditoría FR-003d)
-- [ ] T047 Ejecutar quickstart.md completo (curl + Playwright) y archivar evidencia con capturas en `docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md`
+- [X] T047 Ejecutar quickstart.md completo (curl + Playwright) y archivar evidencia con capturas en `docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md`
 - [X] T048 Sweep final: `dotnet build` solución 0 errores + suites Domain/Application/Architecture/Integration completas en verde
 - [X] T049 [P] Actualizar `docs/operaciones/prompt-continuacion-claude-code.md`, `prompt-continuacion-claude-desktop.md` y `docs/INDICE-DOCUMENTACION.md` con el estado del feature 003
 

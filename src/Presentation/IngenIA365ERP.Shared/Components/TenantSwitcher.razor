@@ -54,7 +54,8 @@ else if (_tenants.Count == 1)
 
     private async Task LoadAsync()
     {
-        if (AuthClient.CurrentAccessToken is null) return;
+        // Tras un F5 el client es nuevo — rehidrata desde sessionStorage (US4).
+        if (!await AuthClient.TryRestoreSessionAsync()) return;
 
         var tenants = await Sessions.GetActiveTenantsAsync();
         if (!tenants.IsSuccess || tenants.Value is null) return;

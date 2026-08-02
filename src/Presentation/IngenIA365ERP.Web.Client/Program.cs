@@ -66,6 +66,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
+// aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
+// y la página crasheaba el runtime WASM al inyectarlo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

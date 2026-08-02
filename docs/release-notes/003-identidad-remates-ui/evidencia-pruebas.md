@@ -55,8 +55,58 @@ fallas en suites de la Fase 0 (`Audit`, `Attachments`, `Notifications`,
 archivos fue tocado por este feature (verificado con
 `git diff develop...HEAD -- tests/`); son deuda ambiental previa.
 
-## Pendiente
+## T047 — Recorrido del quickstart (2026-08-02, API 5100 + Web 5200 perfil http)
 
-- **T047**: recorrido manual del `quickstart.md` (curl + Playwright sobre la
-  Web en el perfil `http` puerto 5200) con capturas — requiere API + Web
-  levantadas en una sesión interactiva.
+### Por curl (backend real, BD de desarrollo)
+
+- **US3**: `POST /api/profile/mfa/recovery-codes/regenerate` con password de
+  Gina → 10 códigos; canje en `mfa/verify` con `useRecoveryCode=true` →
+  `challenge=None`, `recoveryCodesRemaining=9`; reuso del MISMO código →
+  422 `Identity.MfaInvalid`; un código del juego viejo tras regenerar → 422.
+- **T017**: `GET /api/auth/me` de Gina → `mfaEnabled=true`,
+  `recoveryCodesRemaining` correcto, empresa activa.
+- **Mongo** (`IngenIA365ERP_Audit.audit_events_`): eventos
+  `Profile.RecoveryCodesRegenerated`, `CentralUser.Mfa.RecoveryCodeUsed` y
+  `CentralUser.Mfa.RecoveryCodeFailed` con el email de Gina.
+
+### Por UI (Playwright — capturas en `capturas/`)
+
+| Escenario | Resultado | Captura |
+|---|---|---|
+| US5.1 — link "¿Olvidaste tu contraseña?" en el login | ✅ | `us5-login-forgot-link.png` |
+| US3 — toggle de recovery code en el desafío MFA | ✅ | `us3-mfa-challenge-toggle.png`, `us3-modo-recovery-code.png` |
+| US3 — Gina entra al dashboard canjeando un código | ✅ | `us1-gina-mono-empresa-sin-selector.png` |
+| US3 — `/profile/mfa` estado activo con contador (8) y regeneración con password (10 nuevos, una sola vez) | ✅ | `us3-profile-mfa-contador.png`, `us3-regeneracion-codigos.png` |
+| US1/US2 — Ana: header con email real, switcher con sus 2 cooperativas, NavMenu con "Mi Cuenta" + "Mi Cooperativa" | ✅ | `us1-us2-dashboard-ana-switcher.png` |
+| US1 — switch Pacífico → Solidaria sin re-login; claims del JWT verificados (`active_tenant_id`, `tenant_admin`) | ✅ | `us1-switch-solidaria.png` |
+| US1 — Gina mono-empresa: badge sin selector | ✅ | `us1-gina-mono-empresa-sin-selector.png` |
+| US2 — nav de Gina (no-admin) sin "Mi Cooperativa" ni consola SaaS | ✅ | `us6-consola-aprobaciones.png` |
+| US4 — F5 restaura sesión + empresa activa (tokens en `sessionStorage` con prefijo `ingenia365:`) | ✅ tras 2 fixes (abajo) | `us4-f5-sesion-restaurada.png`, `us4-f5-switcher-restaurado.png` |
+| US4/FR-114 — token adulterado → login limpio y storage purgado | ✅ | — |
+| US6.1 — `/security/mfa-enrollment` y `/security/change-password-required` → 404 | ✅ | — |
+| US6.2 — consola de aprobaciones carga con tabla de pendientes + formulario (sin GUIDs para aprobar) | ✅ tras fix DI (abajo) | `us6-consola-aprobaciones.png` |
+
+### Bugs encontrados y corregidos durante T047
+
+1. **F5 devolvía 302 → /login desde el servidor** (rompía todo US4): el
+   `[Authorize]` de las páginas propagaba el challenge de la cookie en la
+   petición HTTP inicial y el server redirigía antes de que el WASM hidratara
+   la sesión. Fix: `.AllowAnonymous()` en `MapRazorComponents` (Web/Program.cs)
+   — la guardia sigue en el cliente (`AuthorizeRouteView` + `RedirectToLogin`).
+2. **Tras F5 el TenantSwitcher/GetMe no funcionaban**: `CentralAuthClient` es
+   scoped y renacía sin token aunque `sessionStorage` lo tuviera. Fix:
+   `TryRestoreSessionAsync()` (rehidratación lazy desde el storage, con `exp`
+   del propio JWT) invocada desde `GetMeAsync` y el `TenantSwitcher`.
+3. **`/security/mfa-reset-approvals` crasheaba el runtime WASM**: la página
+   inyecta el `AuthClient` per-tenant de Fase 0 que nunca estuvo registrado en
+   el DI de Web.Client ni del host Web. Fix: registrado en ambos.
+
+### No cubierto en esta corrida de UI (cubierto por tests de integración)
+
+- US5.2/5.3 — accept de invitación adoptando sesión (cubierto por
+  `EndToEnd_InviteRegisterLogin` + `EndToEnd_MfaEnrollmentForced` y el flujo
+  E2E del 002 con Elena); el recorrido por correo real requiere emitir
+  invitaciones nuevas sobre la BD de desarrollo.
+- US6.2 completo (crear solicitud + doble aprobación con datos per-tenant) —
+  backend cubierto por `ListMfaResetRequestsQueryHandlerTests` y los
+  handlers de Fase 0 ya probados.

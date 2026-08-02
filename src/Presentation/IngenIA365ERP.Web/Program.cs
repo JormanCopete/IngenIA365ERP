@@ -67,6 +67,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
@@ -102,10 +103,17 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 
+// Feature 003 (US4, FR-113): la sesión vive SOLO en el cliente (JWT central en
+// sessionStorage) — el servidor no puede conocerla. Sin AllowAnonymous, el
+// [Authorize] de las páginas propaga el challenge de la cookie y un F5 sobre
+// una ruta protegida responde 302 → /login antes de que el WASM hidrate la
+// sesión. El shell se sirve anónimo; AuthorizeRouteView + RedirectToLogin
+// (Shared/Routes.razor) siguen protegiendo las rutas en el cliente.
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(
         typeof(IngenIA365ERP.Shared._Imports).Assembly,
-        typeof(IngenIA365ERP.Web.Client._Imports).Assembly);
+        typeof(IngenIA365ERP.Web.Client._Imports).Assembly)
+    .AllowAnonymous();
 
 app.Run();
