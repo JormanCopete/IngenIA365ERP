@@ -94,7 +94,7 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 - [X] T019 [US3] UI `src/Presentation/IngenIA365ERP.Shared/Pages/Security/MfaEnrollmentCentral.razor`: sección "Códigos de recuperación" (conteo desde `GetMeAsync`, botón regenerar con confirmación password/TOTP, muestra los 10 nuevos una sola vez); resuelve el TODO de detección "MFA ya activo" con `GetMeAsync`
 - [X] T020 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Auth/MfaVerifyCommandHandlerTests.cs`: canje válido → tokens + remaining y evento; canje inválido → `Identity.MfaInvalid` + lockout++; TOTP sin cambios de comportamiento
 - [X] T021 [P] [US3] Tests `tests/IngenIA365ERP.Application.Tests/Identity/Profile/RegenerateRecoveryCodesCommandHandlerTests.cs`: XOR de confirmación, password/TOTP inválidos, sin MFA → `Profile.Mfa.NotEnrolled`, éxito → 10 códigos + auditoría
-- [ ] T022 [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_RecoveryCodeRedeem.cs` sobre `CentralIdentityApiFixture`: enroll → canjear código → entra; reuso → 422; contador decrementa; regeneración invalida el juego viejo
+- [X] T022 [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_RecoveryCodeRedeem.cs` sobre `CentralIdentityApiFixture`: enroll → canjear código → entra; reuso → 422; contador decrementa; regeneración invalida el juego viejo
 
 **Checkpoint US3**: SC-103 — cero códigos reutilizables.
 
@@ -150,20 +150,20 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Purpose**: SC-107 (deuda de integración del feature 002 en cero, sobre `CentralIdentityApiFixture` — research D-10) + cierre de evidencia.
 
-- [ ] T036 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_InviteRegisterLogin.cs` (master invita → preview → accept rama nueva → login → membership activa + audit)
-- [ ] T037 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_InvitationReplay.cs` (accept → replay → 410 `Invitation.AlreadyAccepted`)
-- [ ] T038 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginSingleTenant.cs` (mono-tenant → JWT con `active_tenant_id` correcto)
-- [ ] T039 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginGenericErrors.cs` (email inexistente y password mala → misma respuesta, FR-041)
-- [ ] T040 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LockoutProgression.cs` (5 fallos → 423 60s; reset tras éxito)
-- [ ] T041 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MfaEnrollmentForced.cs` (política MFA → login → MfaEnrollmentRequired → enroll con challenge token → confirm → elevación)
-- [ ] T042 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MultiTenantSwitch.cs` (2 tenants → selector → A → switch a B → claims de B)
-- [ ] T043 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantCrossover.cs` (token con `active_tenant_id` sin membresía → rechazo)
-- [ ] T044 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantAdminScope.cs` (admin de A sobre miembros de B → 401/403)
-- [ ] T045 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Memberships/PromoteToTenantAdminCommandHandlerTests.cs` (promoción, idempotencia, notificación de caché)
-- [ ] T046 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Tenants/UpdateTenantMfaPolicyCommandHandlerTests.cs` (activar/desactivar, invalidación de caché por miembro, auditoría FR-003d)
+- [X] T036 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_InviteRegisterLogin.cs` (master invita → preview → accept rama nueva → login → membership activa + audit)
+- [X] T037 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_InvitationReplay.cs` (accept → replay → 410 `Invitation.AlreadyAccepted`)
+- [X] T038 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginSingleTenant.cs` (mono-tenant → JWT con `active_tenant_id` correcto)
+- [X] T039 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LoginGenericErrors.cs` (email inexistente y password mala → misma respuesta, FR-041)
+- [X] T040 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_LockoutProgression.cs` (5 fallos → 423 60s; reset tras éxito)
+- [X] T041 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MfaEnrollmentForced.cs` (política MFA → login → MfaEnrollmentRequired → enroll con challenge token → confirm → elevación)
+- [X] T042 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/EndToEnd_MultiTenantSwitch.cs` (2 tenants → selector → A → switch a B → claims de B)
+- [X] T043 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantCrossover.cs` (token con `active_tenant_id` sin membresía → rechazo)
+- [X] T044 [P] Test `tests/IngenIA365ERP.API.IntegrationTests/Identity/Security_TenantAdminScope.cs` (admin de A sobre miembros de B → 401/403)
+- [X] T045 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Memberships/PromoteToTenantAdminCommandHandlerTests.cs` (promoción, idempotencia, notificación de caché)
+- [X] T046 [P] Test unit `tests/IngenIA365ERP.Application.Tests/Tenants/UpdateTenantMfaPolicyCommandHandlerTests.cs` (activar/desactivar, invalidación de caché por miembro, auditoría FR-003d)
 - [ ] T047 Ejecutar quickstart.md completo (curl + Playwright) y archivar evidencia con capturas en `docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md`
-- [ ] T048 Sweep final: `dotnet build` solución 0 errores + suites Domain/Application/Architecture/Integration completas en verde
-- [ ] T049 [P] Actualizar `docs/operaciones/prompt-continuacion-claude-code.md`, `prompt-continuacion-claude-desktop.md` y `docs/INDICE-DOCUMENTACION.md` con el estado del feature 003
+- [X] T048 Sweep final: `dotnet build` solución 0 errores + suites Domain/Application/Architecture/Integration completas en verde
+- [X] T049 [P] Actualizar `docs/operaciones/prompt-continuacion-claude-code.md`, `prompt-continuacion-claude-desktop.md` y `docs/INDICE-DOCUMENTACION.md` con el estado del feature 003
 
 ---
 
