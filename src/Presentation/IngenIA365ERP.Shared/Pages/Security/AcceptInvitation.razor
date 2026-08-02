@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @using IngenIA365ERP.Shared.Services.Security
 @inject InvitationClient InvitationClient
+@inject CentralAuthClient AuthClient
 @inject NavigationManager Nav
 
 @*
@@ -145,7 +146,7 @@
             var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
                 Token: Token!,
                 ExistingCredentials: new ExistingCredentialsInput(_existing.Password!)));
-            HandleAcceptResult(result);
+            await HandleAcceptResultAsync(result);
         }
         finally
         {
@@ -162,7 +163,7 @@
             var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
                 Token: Token!,
                 Registration: new NewRegistrationInput(_registration.Password!)));
-            HandleAcceptResult(result);
+            await HandleAcceptResultAsync(result);
         }
         finally
         {
@@ -170,16 +171,33 @@
         }
     }
 
-    private void HandleAcceptResult(InvitationApiResult<AcceptInvitationResponse> result)
+    private async Task HandleAcceptResultAsync(InvitationApiResult<AcceptInvitationResponse> result)
     {
         if (result.IsSuccess && result.Value is not null)
         {
-            // TODO US2: persistir AccessToken+RefreshToken en AuthClient
-            // (cuando éste se registre y se conecte el flujo central). Por
-            // ahora redirigimos al login para que el usuario entre con sus
-            // nuevas credenciales recién creadas.
-            Nav.NavigateTo("/security/login", forceLoad: false);
-            return;
+            // Feature 003 (US5, FR-116/SC-105): del correo al tablero sin re-login.
+            var body = result.Value;
+            switch (body.Challenge)
+            {
+                case "None" when !string.IsNullOrWhiteSpace(body.AccessToken)
+                                 && !string.IsNullOrWhiteSpace(body.RefreshToken):
+                    await AuthClient.AdoptSessionAsync(
+                        body.AccessToken!, body.AccessTokenExpiresAt, body.RefreshToken!);
+                    Nav.NavigateTo("/");
+                    return;
+                case "MfaRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
+                    AuthClient.AdoptChallengeToken(body.ChallengeToken!);
+                    Nav.NavigateTo("/security/mfa-challenge");
+                    return;
+                case "MfaEnrollmentRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
+                    AuthClient.AdoptChallengeToken(body.ChallengeToken!);
+                    Nav.NavigateTo("/auth/enroll-mfa-forced");
+                    return;
+                default:
+                    // Sin tokens utilizables — fallback conservador al login.
+                    Nav.NavigateTo("/security/login", forceLoad: false);
+                    return;
+            }
         }
 
         _error = result.ErrorCode switch

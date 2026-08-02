@@ -41,11 +41,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/002-identidad-central-federada/plan.md](specs/002-identidad-central-federada/plan.md)
+[specs/003-identidad-remates-ui/plan.md](specs/003-identidad-remates-ui/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/002-identidad-central-federada/spec.md)
-- [research.md](specs/002-identidad-central-federada/research.md)
-- [data-model.md](specs/002-identidad-central-federada/data-model.md)
-- [quickstart.md](specs/002-identidad-central-federada/quickstart.md)
-- [contracts/](specs/002-identidad-central-federada/contracts/)
+- [spec.md](specs/003-identidad-remates-ui/spec.md)
+- [research.md](specs/003-identidad-remates-ui/research.md)
+- [data-model.md](specs/003-identidad-remates-ui/data-model.md)
+- [quickstart.md](specs/003-identidad-remates-ui/quickstart.md)
+- [contracts/](specs/003-identidad-remates-ui/contracts/)
 <!-- SPECKIT END -->

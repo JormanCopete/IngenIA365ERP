@@ -1,0 +1,114 @@
+@using IngenIA365ERP.Shared.Services
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+@inject TenantSessionClient Sessions
+@inject IFormDirtyStateService DirtyState
+@inject INotificationService Notifications
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+@implements IDisposable
+
+@*
+    Feature 003 (US1, FR-101..FR-104) — Control de empresa activa del header.
+    Con una sola membresía muestra el nombre; con varias, un selector que
+    invoca el switch-tenant (la adopción de la sesión nueva la hace
+    TenantSessionClient.SwitchAsync desde el cutover del 002). Antes de
+    cambiar consulta la guardia de formularios sucios (FR-103) y, si el
+    switch falla (membresía suspendida/revocada durante la sesión), informa
+    y conserva la sesión actual (FR-104).
+*@
+
+@if (_tenants.Count > 1)
+{
+    <select class="tenant-badge tenant-switcher" @key="_selectKey" value="@_activeTenantId"
+            @onchange="OnChangeAsync" disabled="@_switching"
+            title="Cambiar de empresa">
+        @foreach (var t in _tenants)
+        {
+            <option value="@t.TenantPublicId">@t.TenantName</option>
+        }
+    </select>
+}
+else if (_tenants.Count == 1)
+{
+    <span class="tenant-badge">@_tenants[0].TenantName</span>
+}
+
+@code {
+    private IReadOnlyList<ActiveTenantInfo> _tenants = [];
+    private Guid _activeTenantId;
+    private bool _switching;
+    private int _selectKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthClient.Authenticated += OnSessionChanged;
+        await LoadAsync();
+    }
+
+    private async void OnSessionChanged(object? sender, System.EventArgs e)
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync()
+    {
+        // Tras un F5 el client es nuevo — rehidrata desde sessionStorage (US4).
+        if (!await AuthClient.TryRestoreSessionAsync()) return;
+
+        var tenants = await Sessions.GetActiveTenantsAsync();
+        if (!tenants.IsSuccess || tenants.Value is null) return;
+        _tenants = tenants.Value;
+
+        var me = await AuthClient.GetMeAsync();
+        _activeTenantId = me?.ActiveTenant?.TenantPublicId
+            ?? _tenants.FirstOrDefault(t => t.IsDefault)?.TenantPublicId
+            ?? (_tenants.Count > 0 ? _tenants[0].TenantPublicId : Guid.Empty);
+    }
+
+    private async Task OnChangeAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var target) || target == _activeTenantId)
+            return;
+
+        if (DirtyState.HasDirtyForms)
+        {
+            var confirmed = await Js.InvokeAsync<bool>("confirm",
+                "Tienes cambios sin guardar. ¿Cambiar de empresa y descartarlos?");
+            if (!confirmed)
+            {
+                // Fuerza la reconstrucción del <select> para volver al valor actual.
+                _selectKey++;
+                StateHasChanged();
+                return;
+            }
+        }
+
+        _switching = true;
+        try
+        {
+            var result = await Sessions.SwitchAsync(target);
+            if (result.IsSuccess && result.Value is not null)
+            {
+                DirtyState.Clear();
+                _activeTenantId = target;
+                await AuthClient.GetMeAsync(forceRefresh: true);
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                // FR-104: informar y conservar la sesión/empresa actual.
+                _selectKey++;
+                await Notifications.ErrorAsync(
+                    result.ErrorMessage ?? "No se pudo cambiar de empresa. Tu membresía puede haber cambiado.");
+            }
+        }
+        finally
+        {
+            _switching = false;
+        }
+    }
+
+    public void Dispose() => AuthClient.Authenticated -= OnSessionChanged;
+}

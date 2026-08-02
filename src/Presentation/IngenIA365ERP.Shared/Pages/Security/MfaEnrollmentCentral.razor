@@ -3,15 +3,15 @@
 @using System.ComponentModel.DataAnnotations
 @using IngenIA365ERP.Shared.Services.Security
 @inject ProfileClient ProfileClient
+@inject CentralAuthClient AuthClient
 @inject NavigationManager Nav
 
 @*
     T079l — Enrollment voluntario de MFA desde el perfil.
-    Tres estados: NotStarted → Pending (mostrar QR/secret + input) → Enrolled.
-
-    TODO: agregar detección de "MFA ya activo" via /api/auth/me al cargar
-    + opción de Desactivar (con confirmación de password) — DisableMfa
-    backend ya está listo.
+    Estados: NotStarted → Pending (QR/secret + input) → Enrolled.
+    Feature 003 (T019): si MFA ya está activo (detectado vía GetMeAsync),
+    muestra el estado Active con el contador de recovery codes restantes
+    (FR-110) y la regeneración con confirmación de identidad (FR-111/FR-112).
 *@
 
 <PageTitle>Activar MFA — IngenIA365ERP</PageTitle>
@@ -42,7 +42,7 @@
             <li>Ingresa el código que muestra la app para confirmar.</li>
         </ol>
 
-        <EditForm Model="@_confirm" OnValidSubmit="@ConfirmAsync" FormName="mfaConfirm">
+        <DirtyTrackingEditForm Model="@_confirm" OnValidSubmit="@ConfirmAsync" FormName="mfaConfirm">
             <DataAnnotationsValidator />
 
             <label>Código de la app</label>
@@ -56,7 +56,7 @@
             <button type="submit" disabled="@_busy" style="margin-top: 16px;">
                 @(_busy ? "Verificando..." : "Activar")
             </button>
-        </EditForm>
+        </DirtyTrackingEditForm>
     }
     else if (_state == State.Enrolled && _enrolledCodes is not null)
     {
@@ -81,6 +81,69 @@
         <NavLink href="/" class="btn">Volver al inicio</NavLink>
     }
 
+    else if (_state == State.Active)
+    {
+        <h1>Verificación en dos pasos</h1>
+        <p>MFA está <strong>activo</strong> en tu cuenta.</p>
+
+        @if (_recoveryRemaining is int remaining)
+        {
+            <p role="status">
+                Códigos de recuperación disponibles: <strong>@remaining</strong>.
+                @if (remaining <= 3)
+                {
+                    <span> Te quedan pocos — regenera un juego nuevo.</span>
+                }
+            </p>
+        }
+
+        @if (_regenerated is not null)
+        {
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+                        padding: 12px 16px; margin: 16px 0;">
+                <strong>Nuevos códigos de recuperación.</strong> Los anteriores
+                quedaron invalidados. Guárdalos ahora — se muestran una sola vez:
+                <ul style="font-family: monospace; margin-top: 8px;">
+                    @foreach (var c in _regenerated)
+                    {
+                        <li>@c</li>
+                    }
+                </ul>
+            </div>
+        }
+        else if (!_showRegenerate)
+        {
+            <button @onclick="() => _showRegenerate = true" style="margin-top: 16px;">
+                Regenerar códigos de recuperación
+            </button>
+        }
+        else
+        {
+            <div style="margin-top: 16px;">
+                <p>
+                    Para confirmar tu identidad, ingresa tu contraseña actual
+                    <em>o</em> un código de tu app de autenticación (solo uno).
+                </p>
+                <DirtyTrackingEditForm Model="@_regen" OnValidSubmit="@RegenerateAsync" FormName="regenCodes">
+                    <label>Contraseña actual</label>
+                    <InputText type="password" @bind-Value="_regen.CurrentPassword"
+                               autocomplete="current-password" />
+
+                    <label style="margin-top: 8px;">o código TOTP</label>
+                    <InputText @bind-Value="_regen.TotpCode" inputmode="numeric" maxlength="8" />
+
+                    <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+                        @(_busy ? "Regenerando..." : "Regenerar códigos")
+                    </button>
+                </DirtyTrackingEditForm>
+            </div>
+        }
+
+        <p style="margin-top: 24px;">
+            <NavLink href="/">Volver al inicio</NavLink>
+        </p>
+    }
+
     @if (!string.IsNullOrEmpty(_error))
     {
         <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
@@ -88,14 +151,77 @@
 </div>
 
 @code {
-    private enum State { NotStarted, Pending, Enrolled }
+    private enum State { NotStarted, Pending, Enrolled, Active }
 
     private State _state = State.NotStarted;
     private BeginMfaEnrollResponse? _begin;
     private IReadOnlyList<string>? _enrolledCodes;
     private readonly ConfirmInput _confirm = new();
+    private readonly RegenInput _regen = new();
+    private IReadOnlyList<string>? _regenerated;
+    private int? _recoveryRemaining;
+    private bool _showRegenerate;
     private bool _busy;
     private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Detección "MFA ya activo" (solo en el flujo voluntario con sesión full).
+        if (UseChallengeToken) return;
+
+        var me = await AuthClient.GetMeAsync();
+        if (me?.MfaEnabled == true)
+        {
+            _state = State.Active;
+            _recoveryRemaining = me.RecoveryCodesRemaining;
+        }
+    }
+
+    private async Task RegenerateAsync()
+    {
+        var hasPassword = !string.IsNullOrWhiteSpace(_regen.CurrentPassword);
+        var hasTotp = !string.IsNullOrWhiteSpace(_regen.TotpCode);
+        if (hasPassword == hasTotp)
+        {
+            _error = "Ingresa tu contraseña actual o un código TOTP (exactamente uno).";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await ProfileClient.RegenerateRecoveryCodesAsync(
+                hasPassword ? _regen.CurrentPassword : null,
+                hasTotp ? _regen.TotpCode : null);
+            if (result.IsSuccess && result.Value is not null)
+            {
+                _regenerated = result.Value.RecoveryCodes;
+                _recoveryRemaining = _regenerated.Count;
+                _showRegenerate = false;
+                _regen.CurrentPassword = null;
+                _regen.TotpCode = null;
+                await AuthClient.GetMeAsync(forceRefresh: true);
+                return;
+            }
+            _error = result.ErrorCode switch
+            {
+                "Identity.InvalidCredentials" => "La confirmación de identidad no es válida.",
+                "Profile.Mfa.NotEnabled" => "MFA no está activo en tu cuenta.",
+                _ => result.ErrorMessage ?? "No se pudieron regenerar los códigos.",
+            };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public sealed class RegenInput
+    {
+        public string? CurrentPassword { get; set; }
+        public string? TotpCode { get; set; }
+    }
 
     /// <summary>true cuando esta página atiende el enrollment FORZADO post-login
     /// (purpose=mfa-enroll). Las subclases la override.</summary>

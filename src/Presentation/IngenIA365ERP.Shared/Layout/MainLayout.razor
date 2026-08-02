@@ -1,9 +1,11 @@
 @inherits LayoutComponentBase
+@using IngenIA365ERP.Shared.Services.Security
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject INotificationService NotificationService
 @inject ILoadingService LoadingService
+@inject CentralAuthClient CentralAuth
 @implements IDisposable
 
 <AuthorizeView>
@@ -29,12 +31,28 @@
                         </ToolbarItem>
                         <ToolbarItem Align="ItemAlign.Right">
                             <Template>
-                                <div class="toolbar-user">
+                                <div class="toolbar-user" style="position: relative;">
                                     <span class="e-icons e-people user-icon"></span>
-                                    <span class="user-name">@_userName</span>
-                                    <span class="tenant-badge">@_tenantId</span>
+                                    <span class="user-name" style="cursor: pointer;"
+                                          title="Mi cuenta" @onclick="ToggleAccountMenu">@_userName ▾</span>
+                                    <TenantSwitcher />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-logout"
                                               Content="Salir" OnClick="@Logout" />
+                                    @if (_accountMenuOpen)
+                                    {
+                                        <div class="account-menu"
+                                             style="position: absolute; top: 100%; right: 0; z-index: 1000;
+                                                    background: var(--surface, #fff); border: 1px solid #d0d0d0;
+                                                    border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+                                                    min-width: 220px; padding: 4px 0;">
+                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                               href="/profile/password" @onclick="CloseAccountMenu">Cambiar contraseña</a>
+                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                               href="/profile/mfa" @onclick="CloseAccountMenu">Autenticación MFA</a>
+                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                               href="/profile/default-tenant" @onclick="CloseAccountMenu">Empresa por defecto</a>
+                                        </div>
+                                    }
                                 </div>
                             </Template>
                         </ToolbarItem>
@@ -77,8 +95,8 @@
     private SfSidebar? _sidebar;
     private SfToast? _toast;
     private bool _sidebarOpen = true;
+    private bool _accountMenuOpen;
     private string _userName = "Usuario";
-    private string _tenantId = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,15 +104,34 @@
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
         {
-            _userName = user.Identity.Name ?? "Usuario";
-            _tenantId = user.FindFirst("tenantId")?.Value ?? "";
+            // Fallback inmediato desde los claims; GetMeAsync refina abajo.
+            _userName = user.FindFirst("email")?.Value ?? user.Identity.Name ?? "Usuario";
         }
+
+        CentralAuth.Authenticated += OnSessionChanged;
+        await RefreshIdentityAsync();
 
         NotificationService.OnNotify += ShowToast;
         LoadingService.OnChange += StateHasChanged;
     }
 
+    /// <summary>US5 (FR-117): identidad real del header vía GET /api/auth/me.</summary>
+    private async Task RefreshIdentityAsync()
+    {
+        var me = await CentralAuth.GetMeAsync();
+        if (me is not null && !string.IsNullOrWhiteSpace(me.Email))
+            _userName = me.Email;
+    }
+
+    private async void OnSessionChanged(object? sender, System.EventArgs e)
+    {
+        await RefreshIdentityAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+    private void ToggleAccountMenu() => _accountMenuOpen = !_accountMenuOpen;
+    private void CloseAccountMenu() => _accountMenuOpen = false;
 
     private async Task ShowToast(string title, string message, NotificationType type)
     {
@@ -126,6 +163,7 @@
 
     public void Dispose()
     {
+        CentralAuth.Authenticated -= OnSessionChanged;
         NotificationService.OnNotify -= ShowToast;
         LoadingService.OnChange -= StateHasChanged;
     }

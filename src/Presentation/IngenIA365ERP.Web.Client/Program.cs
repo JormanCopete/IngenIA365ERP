@@ -23,7 +23,9 @@ AppMode.Configure(builder.Configuration);
 // handlers would see a different in-memory Dictionary than the page does.
 // In WASM there is one user per app, so Singleton is safe.
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
-builder.Services.AddSingleton<ISecureStorage, WebAssemblySecureStorage>();
+// Feature 003 (US4, FR-113): sessionStorage-backed — la sesión sobrevive a F5
+// con alcance solo-pestaña. Reemplaza el diccionario en memoria (WebAssemblySecureStorage).
+builder.Services.AddSingleton<ISecureStorage, BrowserSessionSecureStorage>();
 builder.Services.AddSingleton<ITenantService, TenantService>();
 
 // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
@@ -49,6 +51,10 @@ Console.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={apiBaseUrl}")
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILoadingService, LoadingService>();
 
+// Feature 003 (US1) — estado de formularios sucios para la guardia del
+// TenantSwitcher (FR-103).
+builder.Services.AddScoped<IFormDirtyStateService, InMemoryFormDirtyStateService>();
+
 // Feature 002 (US1) — cliente del módulo de invitaciones consumido por
 // AcceptInvitation.razor. Usa el HttpClient 'api' configurado arriba.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClient>();
@@ -60,6 +66,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
+// aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
+// y la página crasheaba el runtime WASM al inyectarlo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

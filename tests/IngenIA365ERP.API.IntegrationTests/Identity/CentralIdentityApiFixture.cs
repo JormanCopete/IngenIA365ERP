@@ -134,6 +134,19 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
             await ExecuteSqlScriptAsync(adminConnection, Path.Combine(FindRepoRoot(), script));
         }
 
+        // El EnsureCreated del shape legacy deja IX_ADM_Tenants_Identifier como
+        // único NO filtrado: dos tenants con Identifier NULL (el registro del
+        // feature 002 no lo llena) chocan. La BD real no tiene ese índice —
+        // se re-crea filtrado para permitir NULLs múltiples.
+        await ExecuteSqlAsync(adminConnection, @"
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ADM_Tenants_Identifier'
+           AND object_id = OBJECT_ID('dbo.ADM_Tenants'))
+BEGIN
+    DROP INDEX IX_ADM_Tenants_Identifier ON dbo.ADM_Tenants;
+    CREATE UNIQUE INDEX IX_ADM_Tenants_Identifier
+        ON dbo.ADM_Tenants(Identifier) WHERE Identifier IS NOT NULL;
+END");
+
         var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await appDb.Database.EnsureCreatedAsync();
     }
@@ -153,6 +166,15 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
         }
         return dir?.FullName
             ?? throw new InvalidOperationException("No se encontró la raíz del repo (carpeta database/).");
+    }
+
+    private static async Task ExecuteSqlAsync(string connectionString, string sql)
+    {
+        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)

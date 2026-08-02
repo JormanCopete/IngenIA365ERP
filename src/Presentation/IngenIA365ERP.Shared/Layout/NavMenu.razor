@@ -166,6 +166,31 @@
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
         </NavMenuGroup>
 
+        @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
+        <NavMenuGroup Icon="e-user" Title="Mi Cuenta" Expanded="SidebarOpen">
+            <NavLink href="/profile/password" class="nav-subitem">Cambiar Contraseña</NavLink>
+            <NavLink href="/profile/mfa" class="nav-subitem">Autenticacion MFA</NavLink>
+            <NavLink href="/profile/default-tenant" class="nav-subitem">Empresa por Defecto</NavLink>
+        </NavMenuGroup>
+
+        @if (_isTenantAdmin && !string.IsNullOrEmpty(_activeTenantId))
+        {
+            <NavMenuGroup Icon="e-people" Title="Mi Cooperativa" Expanded="SidebarOpen">
+                <NavLink href="@($"/admin/tenant/{_activeTenantId}/members")" class="nav-subitem">Miembros</NavLink>
+                <NavLink href="@($"/admin/tenant/{_activeTenantId}/mfa-policy")" class="nav-subitem">Politica MFA</NavLink>
+                <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+            </NavMenuGroup>
+        }
+
+        @if (_isMaster)
+        {
+            <NavMenuGroup Icon="e-settings" Title="Consola SaaS" Expanded="SidebarOpen">
+                <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
+                <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
+                <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+            </NavMenuGroup>
+        }
+
         <NavMenuGroup Icon="e-print-layout" Title="Reportes" Expanded="SidebarOpen">
             <NavLink href="/reportes" class="nav-subitem">Centro de Reportes</NavLink>
             <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
@@ -181,4 +206,19 @@
 
 @code {
     [Parameter] public bool SidebarOpen { get; set; } = true;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isTenantAdmin;
+    private bool _isMaster;
+    private string _activeTenantId = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        _isTenantAdmin = bool.TryParse(user.FindFirst("tenant_admin")?.Value, out var admin) && admin;
+        _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
+        _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
+    }
 }

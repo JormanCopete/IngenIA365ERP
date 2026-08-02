@@ -48,6 +48,48 @@ public sealed class CentralAuthClient
 
     public string? CurrentAccessToken => _accessToken;
 
+    private bool _restoreAttempted;
+
+    /// <summary>
+    /// Feature 003 (US4, FR-113): rehidrata la sesión desde el storage del
+    /// navegador tras una recarga. Este servicio es scoped — un F5 lo
+    /// reconstruye con los campos vacíos aunque sessionStorage aún tenga los
+    /// tokens. Idempotente; retorna true si hay sesión utilizable.
+    /// </summary>
+    public async Task<bool> TryRestoreSessionAsync()
+    {
+        if (_accessToken is not null) return true;
+        if (_restoreAttempted) return false;
+        _restoreAttempted = true;
+
+        var stored = await _storage.GetAsync(AuthBearerHandler.TokenKey);
+        if (string.IsNullOrWhiteSpace(stored)) return false;
+
+        _accessToken = stored;
+        _accessTokenExpiresAt = ReadJwtExpiryUtc(stored) ?? DateTime.UtcNow.AddMinutes(5);
+        _refreshToken = await _storage.GetAsync(RefreshTokenKey);
+        return true;
+    }
+
+    private static DateTime? ReadJwtExpiryUtc(string jwt)
+    {
+        try
+        {
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return null;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            using var doc = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(payload));
+            return doc.RootElement.TryGetProperty("exp", out var exp)
+                ? DateTimeOffset.FromUnixTimeSeconds(exp.GetInt64()).UtcDateTime
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// JWT temporal scoped (purpose=mfa-verify, mfa-enroll, tenant-select)
     /// retenido por el cliente para usar en el siguiente request. Útil para
@@ -90,10 +132,18 @@ public sealed class CentralAuthClient
         }
     }
 
+    /// <summary>Feature 003 (US5, FR-116): adopta un challenge token emitido por
+    /// otro flujo (accept de invitación) para encadenar al paso MFA
+    /// (mfa-challenge / enroll-mfa-forced) sin re-login.</summary>
+    public void AdoptChallengeToken(string challengeToken)
+    {
+        _challengeToken = challengeToken;
+    }
+
     // ---------- MFA verify ----------
 
     public async Task<InvitationApiResult<LoginResponse>> MfaVerifyAsync(
-        string code, CancellationToken ct = default)
+        string code, bool useRecoveryCode = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_challengeToken))
         {
@@ -106,7 +156,7 @@ public sealed class CentralAuthClient
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/verify")
             {
-                Content = JsonContent.Create(new { code }),
+                Content = JsonContent.Create(new { code, useRecoveryCode }),
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
 
@@ -158,6 +208,36 @@ public sealed class CentralAuthClient
         }
     }
 
+    // ---------- Me (identidad de la sesión, T001 feature 003) ----------
+
+    private MeResponse? _me;
+
+    /// <summary>
+    /// Identidad de la sesión actual (<c>GET /api/auth/me</c>): email, empresa
+    /// activa con nombre, tenants disponibles, estado MFA y códigos de
+    /// recuperación restantes. Cacheado por sesión — se invalida al adoptar
+    /// una sesión nueva (login/switch/accept) y al cerrar sesión.
+    /// </summary>
+    public async Task<MeResponse?> GetMeAsync(bool forceRefresh = false, CancellationToken ct = default)
+    {
+        if (_me is not null && !forceRefresh) return _me;
+        if (string.IsNullOrWhiteSpace(_accessToken) && !await TryRestoreSessionAsync()) return null;
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<MeResponse>(resp, ct);
+            _me = parsed.IsSuccess ? parsed.Value : null;
+            return _me;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
     // ---------- Logout ----------
 
     public async Task LogoutAsync(CancellationToken ct = default)
@@ -186,6 +266,7 @@ public sealed class CentralAuthClient
         _accessTokenExpiresAt = DateTime.MinValue;
         _refreshToken = null;
         _challengeToken = null;
+        _me = null;
 
         _storage.Remove(AuthBearerHandler.TokenKey);
         _storage.Remove(RefreshTokenKey);
@@ -208,6 +289,7 @@ public sealed class CentralAuthClient
         _accessTokenExpiresAt = accessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
         _refreshToken = refreshToken;
         _challengeToken = null;
+        _me = null; // la identidad cacheada cambia con cada sesión adoptada
 
         await _storage.SetAsync(AuthBearerHandler.TokenKey, accessToken);
         if (!string.IsNullOrWhiteSpace(refreshToken))
@@ -263,7 +345,8 @@ public sealed record LoginResponse(
     Guid? ActiveTenantPublicId,
     string? ActiveTenantName,
     string? Message,
-    IReadOnlyList<TenantSummary>? TenantsRequiringMfa);
+    IReadOnlyList<TenantSummary>? TenantsRequiringMfa,
+    int? RecoveryCodesRemaining = null);
 
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,
@@ -283,6 +366,29 @@ public sealed record SelectTenantResponse(
     SelectedTenantInfo Tenant);
 
 public sealed record SelectedTenantInfo(Guid TenantPublicId, string TenantName);
+
+// -------------------- Me (GET /api/auth/me) --------------------
+
+public sealed record MeResponse(
+    Guid CentralUserId,
+    string Email,
+    bool IsGlobalMasterAdmin,
+    bool MfaEnabled,
+    MeActiveTenant? ActiveTenant,
+    IReadOnlyList<MeAvailableTenant> AvailableTenants,
+    Guid? DefaultTenantPublicId,
+    int? RecoveryCodesRemaining = null);
+
+public sealed record MeActiveTenant(
+    Guid TenantPublicId,
+    string TenantName,
+    bool IsTenantAdmin,
+    bool IsMfaRequiredByPolicy);
+
+public sealed record MeAvailableTenant(
+    Guid TenantPublicId,
+    string TenantName,
+    bool IsTenantAdmin);
 
 // -------------------- HTTP envelope helper --------------------
 

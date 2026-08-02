@@ -20,6 +20,7 @@ namespace IngenIA365ERP.Application.Identity.Auth.MfaVerify;
 /// </summary>
 public sealed record MfaVerifyCommand(
     string Code,
+    bool UseRecoveryCode = false,
     string? IpAddress = null,
     string? UserAgent = null
 ) : IRequest<Result<LoginResult>>;

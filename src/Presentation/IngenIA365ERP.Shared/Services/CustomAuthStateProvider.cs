@@ -22,7 +22,18 @@ namespace IngenIA365ERP.Shared.Services
                 return new AuthenticationState(_anonymous);
             }
 
-            return new AuthenticationState(BuildPrincipalFromJwt(token));
+            // Feature 003 (US4, FR-115): un token corrupto o ilegible en el
+            // storage del navegador degrada a anónimo (→ login) en lugar de
+            // romper el arranque de la app.
+            try
+            {
+                return new AuthenticationState(BuildPrincipalFromJwt(token));
+            }
+            catch (Exception)
+            {
+                _authService.ClearTokenSilently();
+                return new AuthenticationState(_anonymous);
+            }
         }
 
         public void NotifyUserAuthentication(string token)

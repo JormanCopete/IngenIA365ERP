@@ -17,7 +17,10 @@ public sealed record MeResult(
     bool MfaEnabled,
     ActiveTenantSummary? ActiveTenant,
     IReadOnlyList<AvailableTenantSummary> AvailableTenants,
-    Guid? DefaultTenantPublicId);
+    Guid? DefaultTenantPublicId,
+
+    // Feature 003 (FR-110): null cuando MFA no está activo.
+    int? RecoveryCodesRemaining = null);
 
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,

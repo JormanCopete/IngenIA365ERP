@@ -148,10 +148,14 @@ public sealed record NewRegistrationInput(string Password);
 public sealed record ExistingCredentialsInput(string Password);
 
 public sealed record AcceptInvitationResponse(
-    string AccessToken,
-    DateTime AccessTokenExpiresAt,
-    string RefreshToken,
-    DateTime RefreshTokenExpiresAt,
+    string? AccessToken,
+    DateTime? AccessTokenExpiresAt,
+    string? RefreshToken,
+    DateTime? RefreshTokenExpiresAt,
     Guid CentralUserId,
     Guid ActiveTenantPublicId,
-    string ActiveTenantName);
+    string ActiveTenantName,
+    // Feature 003 (US5, FR-116): el accept puede terminar en challenge MFA
+    // (MfaRequired / MfaEnrollmentRequired) en lugar de tokens operativos.
+    string Challenge = "None",
+    string? ChallengeToken = null);

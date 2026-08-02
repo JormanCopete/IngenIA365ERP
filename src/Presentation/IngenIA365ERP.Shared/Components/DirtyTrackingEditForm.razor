@@ -1,0 +1,59 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using IngenIA365ERP.Shared.Services
+@inject IFormDirtyStateService DirtyState
+@implements IDisposable
+
+@*
+    Feature 003 (US1, FR-103) — Wrapper de EditForm que reporta el estado
+    "sucio" al IFormDirtyStateService: cualquier campo modificado marca el
+    formulario como dirty; el submit válido (y el dispose de la página) lo
+    limpia. El TenantSwitcher consulta ese estado antes de cambiar de
+    empresa. Uso: reemplazar <EditForm Model=... OnValidSubmit=...> por
+    <DirtyTrackingEditForm Model=... OnValidSubmit=...> — el ChildContent
+    (validators, inputs, botones) no cambia.
+*@
+
+<EditForm EditContext="@_editContext" OnValidSubmit="@HandleValidSubmitAsync" FormName="@FormName">
+    @ChildContent
+</EditForm>
+
+@code {
+    private readonly string _formId = Guid.NewGuid().ToString("N");
+    private EditContext? _editContext;
+
+    [Parameter] public object? Model { get; set; }
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? FormName { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Model is null) return;
+        if (_editContext is not null && ReferenceEquals(_editContext.Model, Model)) return;
+
+        if (_editContext is not null)
+        {
+            _editContext.OnFieldChanged -= OnFieldChanged;
+            DirtyState.MarkClean(_formId);
+        }
+
+        _editContext = new EditContext(Model);
+        _editContext.OnFieldChanged += OnFieldChanged;
+    }
+
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+        => DirtyState.MarkDirty(_formId);
+
+    private async Task HandleValidSubmitAsync()
+    {
+        DirtyState.MarkClean(_formId);
+        await OnValidSubmit.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_editContext is not null)
+            _editContext.OnFieldChanged -= OnFieldChanged;
+        DirtyState.MarkClean(_formId);
+    }
+}

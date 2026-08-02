@@ -22,6 +22,8 @@ public static class AuditEventTypes
     public const string CentralUserMfaSuccess = "CentralUser.Mfa.Success";
     public const string CentralUserMfaFailed = "CentralUser.Mfa.Failed";
     public const string CentralUserMfaResetByMaster = "CentralUser.MfaResetByMaster";
+    public const string CentralUserMfaRecoveryCodeUsed = "CentralUser.Mfa.RecoveryCodeUsed";
+    public const string CentralUserMfaRecoveryCodeFailed = "CentralUser.Mfa.RecoveryCodeFailed";
 
     // -------------------- Invitations --------------------
     public const string InvitationIssuedByTenantAdmin = "Invitation.Issued.ByTenantAdmin";
@@ -52,6 +54,7 @@ public static class AuditEventTypes
     // -------------------- Profile + Recovery --------------------
     public const string ProfileMfaEnrolled = "Profile.MfaEnrolled";
     public const string ProfileMfaDisabled = "Profile.MfaDisabled";
+    public const string ProfileRecoveryCodesRegenerated = "Profile.RecoveryCodesRegenerated";
     public const string ProfilePasswordChanged = "Profile.PasswordChanged";
     public const string ProfilePasswordResetRequested = "Profile.PasswordResetRequested";
     public const string ProfilePasswordResetRequestedNoSuchEmail = "Profile.PasswordResetRequested.NoSuchEmail";

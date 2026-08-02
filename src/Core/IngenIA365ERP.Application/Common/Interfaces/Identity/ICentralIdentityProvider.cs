@@ -84,6 +84,18 @@ public interface ICentralIdentityProvider
     /// tenant lo exige" es responsabilidad del caller (handler de DisableMfaCommand).</summary>
     Task DisableMfaAsync(Guid centralUserId, CancellationToken ct);
 
+    /// <summary>Canjea un recovery code one-shot (FR-108). Si el código es válido
+    /// queda invalidado permanentemente; retorna <c>false</c> con código inválido,
+    /// ya usado, o usuario sin MFA activo.</summary>
+    Task<bool> RedeemRecoveryCodeAsync(Guid centralUserId, string code, CancellationToken ct);
+
+    /// <summary>Cantidad de recovery codes sin usar del usuario (FR-110).</summary>
+    Task<int> CountRecoveryCodesAsync(Guid centralUserId, CancellationToken ct);
+
+    /// <summary>Regenera el juego completo de recovery codes (FR-111): invalida
+    /// todos los anteriores y retorna los nuevos en claro (única vez que se muestran).</summary>
+    Task<IReadOnlyList<string>> RegenerateRecoveryCodesAsync(Guid centralUserId, CancellationToken ct);
+
     /// <summary>Reset administrativo de MFA (master admin, FR procedimiento operativo
     /// del spec). Limpia secret + recovery codes + flag; el siguiente login con
     /// política de tenant activa forzará re-enrollment.</summary>

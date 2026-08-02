@@ -80,10 +80,11 @@ public sealed class CentralAuthModule : ICarterModule
         CancellationToken ct) =>
         await sender.Send(new MfaVerifyCommand(
             Code: body.Code,
+            UseRecoveryCode: body.UseRecoveryCode,
             IpAddress: GetIp(http),
             UserAgent: GetUserAgent(http)), ct);
 
-    public sealed record MfaVerifyBody(string Code);
+    public sealed record MfaVerifyBody(string Code, bool UseRecoveryCode = false);
 
     // -------- Refresh --------
 

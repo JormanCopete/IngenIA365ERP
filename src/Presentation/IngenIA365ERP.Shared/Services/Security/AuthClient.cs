@@ -93,6 +93,19 @@ public sealed class AuthClient
         return body?.Status;
     }
 
+    /// <summary>Feature 003 (US6, FR-119): listado paginado de solicitudes de
+    /// reset de MFA para el aprobador (sin GUIDs a mano).</summary>
+    public async Task<MfaResetRequestListResponse?> ListMfaResetRequestsAsync(
+        string? status = "Pending", int page = 1, int pageSize = 20)
+    {
+        var url = $"/api/auth/mfa/reset/requests?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(status)) url += $"&status={status}";
+        var resp = await SendAuthenticatedAsync(() => new HttpRequestMessage(HttpMethod.Get, url));
+        return resp.IsSuccessStatusCode
+            ? await resp.Content.ReadFromJsonAsync<MfaResetRequestListResponse>()
+            : null;
+    }
+
     public async Task LogoutAsync()
     {
         if (!string.IsNullOrEmpty(_refreshToken))
@@ -217,3 +230,21 @@ public sealed record MfaEnrollmentStartResponse(string Secret, string QrCodeSvg,
 public sealed record MfaBackupCodesResponse(IReadOnlyList<string> BackupCodes);
 public sealed record MfaResetRequestResponse(Guid RequestPublicId, DateTime ExpiresAt);
 public sealed record MfaResetApprovalResponse(string Status);
+
+public sealed record MfaResetRequestListResponse(
+    IReadOnlyList<MfaResetRequestSummaryDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
+public sealed record MfaResetRequestSummaryDto(
+    Guid PublicId,
+    string TargetUserName,
+    string TargetEmail,
+    string RequestedByUserName,
+    string Reason,
+    DateTime RequestedAt,
+    DateTime ExpiresAt,
+    string Status,
+    bool HasFirstApproval,
+    bool HasSecondApproval);

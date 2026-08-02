@@ -64,6 +64,7 @@ public class AuthEndpoints : ICarterModule
 
         group.MapPost("/mfa/reset/request", RequestMfaResetAsync).RequireAuthorization().WithName("Auth_RequestMfaReset");
         group.MapPost("/mfa/reset/{requestPublicId:guid}/approve", ApproveMfaResetAsync).RequireAuthorization().WithName("Auth_ApproveMfaReset");
+        group.MapGet("/mfa/reset/requests", ListMfaResetRequestsAsync).RequireAuthorization().WithName("Auth_ListMfaResetRequests");
 
         group.MapPost("/password/change", ChangePasswordAsync).RequireAuthorization().WithName("Auth_ChangePassword");
     }
@@ -154,6 +155,23 @@ public class AuthEndpoints : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new ApproveMfaResetCommand(requestPublicId), ct);
+
+    private static async Task<object?> ListMfaResetRequestsAsync(
+        [FromQuery] string? status,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        ISender sender,
+        CancellationToken ct)
+    {
+        IngenIA365ERP.Domain.Entities.Security.MfaResetStatus? parsed = null;
+        if (!string.IsNullOrWhiteSpace(status)
+            && Enum.TryParse<IngenIA365ERP.Domain.Entities.Security.MfaResetStatus>(status, ignoreCase: true, out var s))
+        {
+            parsed = s;
+        }
+        return await sender.Send(new ListMfaResetRequestsQuery(
+            parsed, page ?? 1, pageSize ?? 20), ct);
+    }
 
     private static async Task<object?> ChangePasswordAsync(
         [FromBody] ChangePasswordRequestBody body,
