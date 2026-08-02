@@ -4,17 +4,24 @@
 > mensaje en Claude Desktop. Es autosuficiente: le da a Claude todo el
 > contexto necesario para seguir sin ver el repo local.
 >
-> **Actualizado 2026-07-31** tras la sesión que completó el manual técnico
-> completo (15 pasos), arregló 6 bugs y probó la UI Web parcialmente.
+> **Actualizado 2026-08-01**: la Fase 1 (feature 002) está CERRADA y
+> mergeada a `develop` (PR #3). El trabajo actual es el feature 003 —
+> Remates de Identidad Central (rama `003-identidad-remates-ui`).
 
 ---
 
 Estoy trabajando en **IngenIA365ERP**, un ERP SaaS multi-tenant para
 cooperativas colombianas (.NET 10, Clean Architecture, CQRS + MediatR,
-Blazor Hybrid, SQL Server + MongoDB + Redis). Estoy en la rama
-`002-identidad-central-federada` implementando la **Fase 1 — Identidad
-Central Federada** (login unificado, invitaciones, MFA, multi-empresa,
-master admin).
+Blazor Hybrid, SQL Server + MongoDB + Redis). La **Fase 1 — Identidad
+Central Federada** (feature 002) ya está cerrada y mergeada a `develop`.
+Ahora estoy en la rama `003-identidad-remates-ui` con el **feature 003 —
+Remates de Identidad Central**: TenantSwitcher en el header con guardia de
+cambios sin guardar, navegación por rol (cuenta / admin de empresa /
+consola SaaS), recovery codes canjeables en el desafío MFA + regeneración,
+sesión Web persistente ante F5 (sessionStorage solo-pestaña), adopción de
+sesión al aceptar invitación sin re-login, consola de aprobaciones de MFA
+reset con listado de pendientes, y la deuda de tests de integración del
+002 (11 archivos sobre `CentralIdentityApiFixture` con Testcontainers).
 
 El manual técnico de pruebas (15 pasos) ya se ejecutó **completo
 end-to-end por curl**: US1 onboarding, US2 login central, Phase 4b

@@ -8,16 +8,24 @@
 > asistente tiene acceso directo al filesystem (Read/Edit/Write/Bash) y
 > puede leer el repo. Le doy contexto de estado, no de código.
 >
-> **Actualizado 2026-07-31** tras la sesión que completó el manual técnico
-> completo (15 pasos), arregló 6 bugs y probó la UI Web parcialmente.
+> **Actualizado 2026-08-01**: la Fase 1 (feature 002) está CERRADA y
+> mergeada a `develop` (PR #3, commit 9cf1be0). El trabajo actual es el
+> **feature 003 — Remates de Identidad Central** en la rama
+> `003-identidad-remates-ui` (implementación casi completa; ver abajo).
 
 ---
 
-Estoy retomando la **Fase 1 — Identidad Central Federada** del proyecto
-**IngenIA365ERP** en la rama `002-identidad-central-federada`. El manual
-técnico de pruebas ya se ejecutó **completo end-to-end por curl** (US1–US5,
-Phase 4b, background jobs) y la UI Web se probó parcialmente. Antes de tocar
-nada, **leé estos archivos en este orden**:
+Estoy retomando el proyecto **IngenIA365ERP**. La **Fase 1 — Identidad
+Central Federada** (feature 002, rama `002-identidad-central-federada`) ya
+está cerrada y mergeada a `develop`. El trabajo en curso es el **feature
+003 — Remates de Identidad Central** en la rama `003-identidad-remates-ui`:
+TenantSwitcher en el header, navegación por rol, recovery codes canjeables,
+sesión Web persistente ante F5 (sessionStorage), adopción de sesión al
+aceptar invitación, consola de aprobaciones de MFA reset con listado, y la
+deuda de tests de integración del 002 (11 archivos nuevos sobre
+`CentralIdentityApiFixture`). Ver `specs/003-identidad-remates-ui/`
+(spec/plan/tasks) para el estado tarea por tarea. Antes de tocar nada,
+**leé estos archivos en este orden**:
 
 1. `CLAUDE.md` (raíz) — instrucciones del proyecto y stack.
 2. `.specify/memory/constitution.md` — los 12 principios vinculantes.

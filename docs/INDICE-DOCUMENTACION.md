@@ -68,6 +68,24 @@ reset MFA forzado.
 | `docs/release-notes/002-identidad-central-federada/evidencia-pruebas.md` | **Evidencia de cierre (T127)**: ejecución end-to-end completa (2026-07-26 → 2026-08-01), 9 bugs corregidos con sus commits, 8 capturas de la UI, resultados de T118 (integration) y T124 (carga NBomber) y pendientes al cierre. |
 | `docs/operaciones/convertir-manual-a-word.ps1` | Script PowerShell que usa pandoc para convertir ambos manuales `.md` a `.docx` editables en Word/LibreOffice/Google Docs. |
 
+### Fase 1 — Feature 003: Remates de Identidad Central (EN CURSO)
+Cierre funcional del feature 002: TenantSwitcher en el header con guardia de
+cambios sin guardar, navegación por rol, recovery codes canjeables en el
+desafío MFA + regeneración, sesión Web persistente ante F5 (sessionStorage),
+adopción de sesión al aceptar invitación, consola de aprobaciones de MFA
+reset con listado, limpieza de páginas duplicadas y la deuda de tests de
+integración del 002.
+| Archivo | Descripción |
+|---|---|
+| `specs/003-identidad-remates-ui/spec.md` | Spec funcional — 6 user stories (US1..US6), FR-101..FR-119, SC-101..SC-107. |
+| `specs/003-identidad-remates-ui/plan.md` | Plan técnico: cero DDL y cero paquetes nuevos; Constitution Check. |
+| `specs/003-identidad-remates-ui/research.md` | Decisiones D-01..D-10 (dirty-state, sessionStorage, claims para navegación, recovery codes nativos de Identity). |
+| `specs/003-identidad-remates-ui/data-model.md` | Sin entidades nuevas — proyecciones sobre las del 002. |
+| `specs/003-identidad-remates-ui/quickstart.md` | Recorridos de prueba por user story. |
+| `specs/003-identidad-remates-ui/tasks.md` | Tareas T001-T049 con estado. |
+| `specs/003-identidad-remates-ui/contracts/mfa-recovery-codes.md` | Canje one-shot en mfa/verify + regeneración con confirmación de identidad. |
+| `specs/003-identidad-remates-ui/contracts/mfa-reset-requests.md` | Listado paginado de solicitudes de reset MFA para el aprobador. |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|
