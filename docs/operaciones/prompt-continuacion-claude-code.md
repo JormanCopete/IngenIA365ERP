@@ -8,24 +8,22 @@
 > asistente tiene acceso directo al filesystem (Read/Edit/Write/Bash) y
 > puede leer el repo. Le doy contexto de estado, no de código.
 >
-> **Actualizado 2026-08-01**: la Fase 1 (feature 002) está CERRADA y
-> mergeada a `develop` (PR #3, commit 9cf1be0). El trabajo actual es el
-> **feature 003 — Remates de Identidad Central** en la rama
-> `003-identidad-remates-ui` (implementación casi completa; ver abajo).
+> **Actualizado 2026-08-02**: los features **002** (PR #3) y **003** (PR #4,
+> merge bd3a895) están CERRADOS y mergeados a `develop`. No hay feature en
+> curso — la próxima sesión arranca trabajo nuevo desde `develop`.
 
 ---
 
-Estoy retomando el proyecto **IngenIA365ERP**. La **Fase 1 — Identidad
-Central Federada** (feature 002, rama `002-identidad-central-federada`) ya
-está cerrada y mergeada a `develop`. El trabajo en curso es el **feature
-003 — Remates de Identidad Central** en la rama `003-identidad-remates-ui`:
-TenantSwitcher en el header, navegación por rol, recovery codes canjeables,
-sesión Web persistente ante F5 (sessionStorage), adopción de sesión al
-aceptar invitación, consola de aprobaciones de MFA reset con listado, y la
-deuda de tests de integración del 002 (11 archivos nuevos sobre
-`CentralIdentityApiFixture`). Ver `specs/003-identidad-remates-ui/`
-(spec/plan/tasks) para el estado tarea por tarea. Antes de tocar nada,
-**leé estos archivos en este orden**:
+Estoy retomando el proyecto **IngenIA365ERP**. Los features **002 —
+Identidad Central Federada** y **003 — Remates de Identidad Central** están
+cerrados y mergeados a `develop` (PRs #3 y #4). El 003 dejó: TenantSwitcher
+con guardia de cambios sin guardar, navegación por rol por claims, recovery
+codes canjeables + regeneración, sesión Web persistente ante F5
+(sessionStorage solo-pestaña), adopción de sesión al aceptar invitación,
+consola de aprobaciones de MFA reset con listado, y la deuda de tests de
+integración del 002 en cero (49/49 tareas; evidencia con capturas en
+`docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md`). Antes
+de tocar nada, **leé estos archivos en este orden**:
 
 1. `CLAUDE.md` (raíz) — instrucciones del proyecto y stack.
 2. `.specify/memory/constitution.md` — los 12 principios vinculantes.
@@ -94,6 +92,7 @@ Sesión 2026-07-31 (esta):
 | Carla (miembro Solidaria) | `carla.gomez@coop.solidaria.test` / `Carla-Strong-Pwd-2026` — Id `02b3c560-6cdb-490e-ad94-2a10bd1e6fe3` — sin MFA (force-reset del master en prueba 7.1) |
 | Elena (miembro Solidaria, creada por UI) | `elena.vega@coop.solidaria.test` / `Elena-Strong-Pwd-2026` — sin MFA |
 | Gina (miembro Solidaria, flujo gated) | `gina.torres@coop.solidaria.test` / `Gina-Strong-Pwd-2026` — MFA activo, secret `BAVZ5IJWACDNYQRWUR2FSHV6V4NSWVUZ` |
+| Gina — recovery codes (regenerados 2026-08-02, sin usar) | `FYY4F-RWNDD NXJDW-4KFGG X2MF8-FYDJ9 GW3YB-F5BDY CJCKR-HKYC6 VMJT5-WJ2BF WY39Q-C284P 85P2D-2GWRB 4MK4T-54X3G DRJMW-2FR5B` |
 | Tenant 1 "Coop. Solidaria Dev" | `ea5aad63-f579-40b3-86b9-85d3bce6401d` — política MFA **ACTIVA** |
 | Tenant 2 "Coop. del Pacifico Dev" | `da51829f-c5b2-45da-9145-215120d810b7` — política MFA off — **default de Ana** |
 | Diego | NO existe — solo una invitación expirada (prueba del job 8.1) |
