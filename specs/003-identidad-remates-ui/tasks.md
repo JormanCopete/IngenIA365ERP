@@ -135,12 +135,12 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Independent Test**: quickstart.md § US6.
 
-- [ ] T030 [US6] Crear `ListMfaResetRequestsQuery` (status filter, paginada) + handler en `src/Core/IngenIA365ERP.Application/Security/Auth/MfaReset/ListMfaResetRequestsQuery.cs`: proyección con `PublicId`, afectado y solicitante resueltos (username/email del `User` per-tenant), motivo, fechas, estado, aprobaciones — bajo el tenant context (principio IV; nunca `int Id` afuera)
-- [ ] T031 [US6] Mapear `GET /api/auth/mfa/reset/requests` (query params status/page/pageSize; guard de admin del tenant o master, el mismo de request/approve) en `src/Presentation/IngenIA365ERP.API/Endpoints/AuthEndpoints.cs`
-- [ ] T032 [P] [US6] Agregar `ListMfaResetRequestsAsync` a `src/Presentation/IngenIA365ERP.Shared/Services/Security/AuthClient.cs`
-- [ ] T033 [US6] Reescribir `src/Presentation/IngenIA365ERP.Shared/Pages/Security/MfaResetApprovals.razor`: tabla de pendientes (solicitante, afectado, motivo, fechas, expira) con acciones Aprobar/Rechazar sobre los endpoints existentes + formulario de alta de solicitud (absorbe `MfaResetRequests.razor`); estados resueltos desaparecen del filtro Pending
-- [ ] T034 [US6] Eliminar `src/Presentation/IngenIA365ERP.Shared/Pages/Security/MfaEnrollment.razor`, `ChangePasswordRequired.razor` y `MfaResetRequests.razor` + toda referencia residual (grep por sus rutas `/security/mfa-enrollment`, `/security/change-password-required`, `/security/mfa-reset-requests`)
-- [ ] T035 [P] [US6] Tests `tests/IngenIA365ERP.Application.Tests/Security/Auth/ListMfaResetRequestsQueryHandlerTests.cs`: filtro por status, paginación, proyección de nombres, aislamiento por tenant
+- [X] T030 [US6] Crear `ListMfaResetRequestsQuery` (status filter, paginada) + handler en `src/Core/IngenIA365ERP.Application/Security/Auth/MfaReset/ListMfaResetRequestsQuery.cs`: proyección con `PublicId`, afectado y solicitante resueltos (username/email del `User` per-tenant), motivo, fechas, estado, aprobaciones — bajo el tenant context (principio IV; nunca `int Id` afuera)
+- [X] T031 [US6] Mapear `GET /api/auth/mfa/reset/requests` (query params status/page/pageSize; guard de admin del tenant o master, el mismo de request/approve) en `src/Presentation/IngenIA365ERP.API/Endpoints/AuthEndpoints.cs`
+- [X] T032 [P] [US6] Agregar `ListMfaResetRequestsAsync` a `src/Presentation/IngenIA365ERP.Shared/Services/Security/AuthClient.cs`
+- [X] T033 [US6] Reescribir `src/Presentation/IngenIA365ERP.Shared/Pages/Security/MfaResetApprovals.razor`: tabla de pendientes (solicitante, afectado, motivo, fechas, expira) con acciones Aprobar/Rechazar sobre los endpoints existentes + formulario de alta de solicitud (absorbe `MfaResetRequests.razor`); estados resueltos desaparecen del filtro Pending
+- [X] T034 [US6] Eliminar `src/Presentation/IngenIA365ERP.Shared/Pages/Security/MfaEnrollment.razor`, `ChangePasswordRequired.razor` y `MfaResetRequests.razor` + toda referencia residual (grep por sus rutas `/security/mfa-enrollment`, `/security/change-password-required`, `/security/mfa-reset-requests`)
+- [X] T035 [P] [US6] Tests `tests/IngenIA365ERP.Application.Tests/Security/Auth/ListMfaResetRequestsQueryHandlerTests.cs`: filtro por status, paginación, proyección de nombres, aislamiento por tenant
 
 **Checkpoint US6**: SC-106 — aprobar sin identificadores técnicos; cero páginas duplicadas (FR-118, SC-102).
 
