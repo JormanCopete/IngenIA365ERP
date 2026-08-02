@@ -60,18 +60,38 @@ public sealed class MfaVerifyCommandHandler(
                 "El usuario no tiene MFA habilitado; reinicia el login.");
         }
 
-        // 2) Verificar el código TOTP.
-        var ok = await centralIdentity.VerifyMfaCodeAsync(centralUserId, request.Code, ct);
-        if (!ok)
+        // 2) Verificar el segundo factor: TOTP o recovery code one-shot (FR-108/FR-109).
+        //    El error hacia el cliente es genérico en ambas ramas; la auditoría distingue.
+        int? recoveryCodesRemaining = null;
+        if (request.UseRecoveryCode)
         {
-            await EmitAuditAsync(user.Id, user.Email,
-                AuditEventTypes.CentralUserMfaFailed, request, now, ct);
-            return Result.Failure<LoginResult>(
-                "Identity.MfaInvalid", "Código MFA inválido.");
-        }
+            var redeemed = await centralIdentity.RedeemRecoveryCodeAsync(centralUserId, request.Code, ct);
+            if (!redeemed)
+            {
+                await EmitAuditAsync(user.Id, user.Email,
+                    AuditEventTypes.CentralUserMfaRecoveryCodeFailed, request, now, ct);
+                return Result.Failure<LoginResult>(
+                    "Identity.MfaInvalid", "Código MFA inválido.");
+            }
 
-        await EmitAuditAsync(user.Id, user.Email,
-            AuditEventTypes.CentralUserMfaSuccess, request, now, ct);
+            recoveryCodesRemaining = await centralIdentity.CountRecoveryCodesAsync(centralUserId, ct);
+            await EmitAuditAsync(user.Id, user.Email,
+                AuditEventTypes.CentralUserMfaRecoveryCodeUsed, request, now, ct);
+        }
+        else
+        {
+            var ok = await centralIdentity.VerifyMfaCodeAsync(centralUserId, request.Code, ct);
+            if (!ok)
+            {
+                await EmitAuditAsync(user.Id, user.Email,
+                    AuditEventTypes.CentralUserMfaFailed, request, now, ct);
+                return Result.Failure<LoginResult>(
+                    "Identity.MfaInvalid", "Código MFA inválido.");
+            }
+
+            await EmitAuditAsync(user.Id, user.Email,
+                AuditEventTypes.CentralUserMfaSuccess, request, now, ct);
+        }
 
         // 3) Cargar membresías y decidir auto-select vs TenantSelection.
         //    Misma lógica que LoginCommandHandler.IssueOperationalOrSelectorAsync —
@@ -91,7 +111,7 @@ public sealed class MfaVerifyCommandHandler(
 
         if (active.Count == 1)
         {
-            return await IssueOperationalAsync(user, active[0], isAutoSelected: true, ct);
+            return await IssueOperationalAsync(user, active[0], isAutoSelected: true, recoveryCodesRemaining, ct);
         }
 
         if (user.DefaultTenantId.HasValue)
@@ -99,7 +119,7 @@ public sealed class MfaVerifyCommandHandler(
             var defaultMembership = active.FirstOrDefault(m => m.TenantId == user.DefaultTenantId.Value);
             if (defaultMembership is not null)
             {
-                return await IssueOperationalAsync(user, defaultMembership, isAutoSelected: true, ct);
+                return await IssueOperationalAsync(user, defaultMembership, isAutoSelected: true, recoveryCodesRemaining, ct);
             }
             // DefaultTenantId zombi → limpiar.
             await centralIdentity.SetDefaultTenantAsync(user.Id, null, ct);
@@ -124,13 +144,15 @@ public sealed class MfaVerifyCommandHandler(
                 .Select(m => new ActiveTenantSummary(m.TenantId, m.TenantName, m.IsTenantAdmin))
                 .ToList(),
             DefaultTenantPublicId: null,
-            AutoSelected: false));
+            AutoSelected: false,
+            RecoveryCodesRemaining: recoveryCodesRemaining));
     }
 
     private async Task<Result<LoginResult>> IssueOperationalAsync(
         Domain.Entities.Admin.CentralUser user,
         ActiveMembershipInfo membership,
         bool isAutoSelected,
+        int? recoveryCodesRemaining,
         CancellationToken ct)
     {
         var access = jwtIssuer.IssueAccessToken(
@@ -174,7 +196,8 @@ public sealed class MfaVerifyCommandHandler(
             ActiveTenants: new[]
             {
                 new ActiveTenantSummary(membership.TenantId, membership.TenantName, membership.IsTenantAdmin)
-            }));
+            },
+            RecoveryCodesRemaining: recoveryCodesRemaining));
     }
 
     private async Task EmitAuditAsync(

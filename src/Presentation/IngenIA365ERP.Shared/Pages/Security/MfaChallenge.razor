@@ -8,27 +8,29 @@
 @*
     T079 — Segundo factor del login. El usuario llega aquí tras un login con
     challenge=MfaRequired; el CentralAuthClient ya tiene el challengeToken
-    purpose=mfa-verify en memoria. POST a /api/auth/mfa/verify con el código TOTP.
-
-    Refactorizado en US2.4 — reemplaza la versión Fase 0 que usaba el legacy
-    AuthClient con tenant en el body.
+    purpose=mfa-verify en memoria. POST a /api/auth/mfa/verify con el código TOTP
+    o, en modo alterno (feature 003, FR-108/FR-109), un recovery code one-shot.
 *@
 
 <PageTitle>Verifica tu código — IngenIA365ERP</PageTitle>
 
 <div class="auth-card" style="max-width: 420px; margin: 48px auto;">
     <h1>Verificación en dos pasos</h1>
-    <p>Ingresa el código de 6 dígitos de tu app de autenticación.</p>
+    <p>
+        @(_useRecovery
+            ? "Ingresa uno de tus códigos de recuperación. Cada código sirve una sola vez."
+            : "Ingresa el código de 6 dígitos de tu app de autenticación.")
+    </p>
 
     <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="mfaVerify">
         <DataAnnotationsValidator />
 
-        <label>Código</label>
+        <label>@(_useRecovery ? "Código de recuperación" : "Código")</label>
         <InputText
             @bind-Value="_model.Code"
             autocomplete="one-time-code"
-            inputmode="numeric"
-            maxlength="8"
+            inputmode="@(_useRecovery ? "text" : "numeric")"
+            maxlength="20"
             style="font-size: 20px; letter-spacing: 4px; text-align: center;" />
         <ValidationMessage For="@(() => _model.Code)" />
 
@@ -42,7 +44,24 @@
         <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
     }
 
+    @if (_recoveryRemaining is int remaining)
+    {
+        <p role="status" style="margin-top: 12px; font-size: 13px;">
+            Te quedan <strong>@remaining</strong> códigos de recuperación.
+            @if (remaining <= 3)
+            {
+                <span> Considera regenerarlos desde tu perfil (Autenticación MFA).</span>
+            }
+        </p>
+    }
+
     <p style="margin-top: 24px; font-size: 13px;">
+        <a href="" @onclick="ToggleMode" @onclick:preventDefault>
+            @(_useRecovery ? "Usar el código de mi app de autenticación" : "¿No tienes tu app? Usa un código de recuperación")
+        </a>
+    </p>
+
+    <p style="margin-top: 8px; font-size: 13px;">
         <NavLink href="/security/login">Volver al inicio de sesión</NavLink>
     </p>
 </div>
@@ -50,20 +69,44 @@
 @code {
     private readonly MfaInput _model = new();
     private bool _busy;
+    private bool _useRecovery;
+    private int? _recoveryRemaining;
     private string? _error;
+
+    private void ToggleMode()
+    {
+        _useRecovery = !_useRecovery;
+        _model.Code = null;
+        _error = null;
+    }
 
     private async Task SubmitAsync()
     {
+        // Validación por modo (el DataAnnotations base solo exige no-vacío).
+        var code = _model.Code?.Trim() ?? string.Empty;
+        if (!_useRecovery && (code.Length < 6 || code.Length > 8))
+        {
+            _error = "El código tiene entre 6 y 8 dígitos.";
+            return;
+        }
+        if (_useRecovery && (code.Length < 5 || code.Length > 20))
+        {
+            _error = "El código de recuperación tiene entre 5 y 20 caracteres.";
+            return;
+        }
+
         _busy = true;
         _error = null;
         try
         {
-            var result = await AuthClient.MfaVerifyAsync(_model.Code!);
+            var result = await AuthClient.MfaVerifyAsync(code, useRecoveryCode: _useRecovery);
             if (!result.IsSuccess || result.Value is null)
             {
                 _error = MapError(result.ErrorCode, result.ErrorMessage);
                 return;
             }
+
+            _recoveryRemaining = result.Value.RecoveryCodesRemaining;
 
             switch (result.Value.Challenge)
             {
@@ -93,9 +136,11 @@
         }
     }
 
-    private static string MapError(string? code, string? message) => code switch
+    private string MapError(string? code, string? message) => code switch
     {
-        "Identity.MfaInvalid" => "Código incorrecto. Verifica los dígitos en tu app.",
+        "Identity.MfaInvalid" => _useRecovery
+            ? "Código de recuperación incorrecto o ya usado."
+            : "Código incorrecto. Verifica los dígitos en tu app.",
         "Identity.ChallengeExpired" => "El tiempo expiró. Vuelve a iniciar sesión.",
         "Identity.NoChallengeToken" => "Falta el token de challenge. Reinicia el login.",
         "Identity.WrongTokenPurpose" => "El token no es válido para este paso.",
@@ -105,7 +150,7 @@
     public sealed class MfaInput
     {
         [Required(ErrorMessage = "Ingresa el código.")]
-        [StringLength(8, MinimumLength = 6, ErrorMessage = "El código tiene entre 6 y 8 dígitos.")]
+        [StringLength(20, MinimumLength = 5, ErrorMessage = "El código tiene entre 5 y 20 caracteres.")]
         public string? Code { get; set; }
     }
 }

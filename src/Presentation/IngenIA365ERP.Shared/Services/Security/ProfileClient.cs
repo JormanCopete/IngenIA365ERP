@@ -75,6 +75,16 @@ public sealed class ProfileClient
             "/api/profile/mfa/disable", new { currentPassword }, ct);
     }
 
+    /// <summary>Feature 003 (FR-111): regenera los recovery codes confirmando
+    /// identidad con contraseña actual O TOTP (exactamente uno).</summary>
+    public async Task<InvitationApiResult<RegenerateRecoveryCodesResponse>> RegenerateRecoveryCodesAsync(
+        string? currentPassword, string? totpCode, CancellationToken ct = default)
+    {
+        return await PostAuthenticatedAsync<RegenerateRecoveryCodesResponse>(
+            "/api/profile/mfa/recovery-codes/regenerate",
+            new { currentPassword, totpCode }, ct);
+    }
+
     // -------------------- Change password --------------------
 
     public async Task<InvitationApiResult<EmptyResponse>> ChangePasswordAsync(
@@ -157,6 +167,9 @@ public sealed record BeginMfaEnrollResponse(
     string OtpAuthUri,
     IReadOnlyList<string> RecoveryCodes,
     int ExpiresInSeconds);
+
+public sealed record RegenerateRecoveryCodesResponse(
+    IReadOnlyList<string> RecoveryCodes);
 
 public sealed record ConfirmMfaEnrollResponse(
     IReadOnlyList<string> RecoveryCodes,

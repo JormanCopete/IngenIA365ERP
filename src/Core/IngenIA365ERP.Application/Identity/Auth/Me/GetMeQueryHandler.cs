@@ -53,6 +53,9 @@ public sealed class GetMeQueryHandler(
             MfaEnabled: user.TwoFactorEnabled,
             ActiveTenant: activeTenant,
             AvailableTenants: available,
-            DefaultTenantPublicId: user.DefaultTenantId));
+            DefaultTenantPublicId: user.DefaultTenantId,
+            RecoveryCodesRemaining: user.TwoFactorEnabled
+                ? await centralIdentity.CountRecoveryCodesAsync(centralUserId, ct)
+                : null));
     }
 }

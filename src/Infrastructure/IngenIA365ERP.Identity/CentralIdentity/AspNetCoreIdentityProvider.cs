@@ -235,6 +235,36 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return totp.VerifyTotp(code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
     }
 
+    public async Task<bool> RedeemRecoveryCodeAsync(Guid centralUserId, string code, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted || !identity.TwoFactorEnabled)
+            return false;
+
+        // RedeemTwoFactorRecoveryCodeAsync invalida el código en ADM_CentralUserTokens (one-shot).
+        var result = await _userManager.RedeemTwoFactorRecoveryCodeAsync(identity, code.Trim());
+        return result.Succeeded;
+    }
+
+    public async Task<int> CountRecoveryCodesAsync(Guid centralUserId, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted)
+            return 0;
+
+        return await _userManager.CountRecoveryCodesAsync(identity);
+    }
+
+    public async Task<IReadOnlyList<string>> RegenerateRecoveryCodesAsync(Guid centralUserId, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted || !identity.TwoFactorEnabled)
+            return [];
+
+        var codes = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(identity, RecoveryCodeCount);
+        return codes?.ToList() ?? [];
+    }
+
     public async Task DisableMfaAsync(Guid centralUserId, CancellationToken ct)
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());

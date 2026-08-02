@@ -118,6 +118,55 @@ public class MfaVerifyCommandHandlerTests
         result.Error.Code.Should().Be("Identity.Unauthenticated");
     }
 
+    // -------- Feature 003 (US3): recovery codes --------
+
+    [Fact]
+    public async Task Recovery_code_valido_emite_tokens_y_reporta_restantes()
+    {
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+        _identity.RedeemRecoveryCodeAsync(UserId, "AB12-CD34", Arg.Any<CancellationToken>()).Returns(true);
+        _identity.CountRecoveryCodesAsync(UserId, Arg.Any<CancellationToken>()).Returns(9);
+        _memberships.GetActiveMembershipsAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new[] { new ActiveMembershipInfo(TenantA, "Coop A", false, true) });
+
+        var result = await NewHandler().Handle(
+            new MfaVerifyCommand("AB12-CD34", UseRecoveryCode: true), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Challenge.Should().Be(LoginChallenges.None);
+        result.Value.AccessToken.Should().NotBeNullOrEmpty();
+        result.Value.RecoveryCodesRemaining.Should().Be(9);
+        await _identity.DidNotReceive().VerifyMfaCodeAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Recovery_code_invalido_devuelve_MfaInvalid_generico()
+    {
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+        _identity.RedeemRecoveryCodeAsync(UserId, "XXXX-YYYY", Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await NewHandler().Handle(
+            new MfaVerifyCommand("XXXX-YYYY", UseRecoveryCode: true), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Identity.MfaInvalid");
+    }
+
+    [Fact]
+    public async Task Verificacion_TOTP_no_reporta_recovery_codes_restantes()
+    {
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+        _identity.VerifyMfaCodeAsync(UserId, "123456", Arg.Any<CancellationToken>()).Returns(true);
+        _memberships.GetActiveMembershipsAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new[] { new ActiveMembershipInfo(TenantA, "Coop A", false, true) });
+
+        var result = await NewHandler().Handle(new MfaVerifyCommand("123456"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.RecoveryCodesRemaining.Should().BeNull();
+    }
+
     [Fact]
     public async Task Usuario_sin_MFA_devuelve_MfaNotEnabled()
     {

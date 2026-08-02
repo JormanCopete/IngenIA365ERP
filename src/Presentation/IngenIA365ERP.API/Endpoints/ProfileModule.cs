@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Identity.Profile.BeginMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.ChangePassword;
 using IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.DisableMfa;
+using IngenIA365ERP.Application.Identity.Profile.RegenerateRecoveryCodes;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -34,6 +35,9 @@ public sealed class ProfileModule : ICarterModule
         group.MapPost("/mfa/disable", DisableMfaAsync)
             .WithName("Profile_DisableMfa");
 
+        group.MapPost("/mfa/recovery-codes/regenerate", RegenerateRecoveryCodesAsync)
+            .WithName("Profile_RegenerateRecoveryCodes");
+
         // Password change (purpose=full).
         group.MapPost("/password", ChangePasswordAsync)
             .WithName("Profile_ChangePassword");
@@ -56,6 +60,14 @@ public sealed class ProfileModule : ICarterModule
         await sender.Send(new DisableMfaCommand(body.CurrentPassword), ct);
 
     public sealed record DisableMfaBody(string CurrentPassword);
+
+    private static async Task<object?> RegenerateRecoveryCodesAsync(
+        [FromBody] RegenerateRecoveryCodesBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new RegenerateRecoveryCodesCommand(
+            CurrentPassword: body.CurrentPassword,
+            TotpCode: body.TotpCode), ct);
+
+    public sealed record RegenerateRecoveryCodesBody(string? CurrentPassword, string? TotpCode);
 
     private static async Task<object?> ChangePasswordAsync(
         [FromBody] ChangePasswordBody body,

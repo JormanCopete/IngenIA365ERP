@@ -63,7 +63,10 @@ public sealed record LoginResult(
     string? Message = null,
 
     // MfaEnrollmentRequired: tenants que forzaron el enrollment.
-    IReadOnlyList<TenantSummary>? TenantsRequiringMfa = null);
+    IReadOnlyList<TenantSummary>? TenantsRequiringMfa = null,
+
+    // Feature 003 (FR-110): presente solo tras canjear un recovery code en mfa/verify.
+    int? RecoveryCodesRemaining = null);
 
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,

@@ -93,7 +93,7 @@ public sealed class CentralAuthClient
     // ---------- MFA verify ----------
 
     public async Task<InvitationApiResult<LoginResponse>> MfaVerifyAsync(
-        string code, CancellationToken ct = default)
+        string code, bool useRecoveryCode = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_challengeToken))
         {
@@ -106,7 +106,7 @@ public sealed class CentralAuthClient
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/verify")
             {
-                Content = JsonContent.Create(new { code }),
+                Content = JsonContent.Create(new { code, useRecoveryCode }),
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
 
@@ -295,7 +295,8 @@ public sealed record LoginResponse(
     Guid? ActiveTenantPublicId,
     string? ActiveTenantName,
     string? Message,
-    IReadOnlyList<TenantSummary>? TenantsRequiringMfa);
+    IReadOnlyList<TenantSummary>? TenantsRequiringMfa,
+    int? RecoveryCodesRemaining = null);
 
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,
