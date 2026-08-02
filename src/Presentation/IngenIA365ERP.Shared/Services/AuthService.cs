@@ -181,5 +181,11 @@ namespace IngenIA365ERP.Shared.Services
                 return null;
             }
         }
+
+        public void ClearTokenSilently()
+        {
+            _secureStorage.Remove(TokenKey);
+            _secureStorage.Remove(RefreshTokenKey);
+        }
     }
 }

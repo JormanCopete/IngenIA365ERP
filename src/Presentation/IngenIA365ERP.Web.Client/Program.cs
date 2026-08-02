@@ -23,7 +23,9 @@ AppMode.Configure(builder.Configuration);
 // handlers would see a different in-memory Dictionary than the page does.
 // In WASM there is one user per app, so Singleton is safe.
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
-builder.Services.AddSingleton<ISecureStorage, WebAssemblySecureStorage>();
+// Feature 003 (US4, FR-113): sessionStorage-backed — la sesión sobrevive a F5
+// con alcance solo-pestaña. Reemplaza el diccionario en memoria (WebAssemblySecureStorage).
+builder.Services.AddSingleton<ISecureStorage, BrowserSessionSecureStorage>();
 builder.Services.AddSingleton<ITenantService, TenantService>();
 
 // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.

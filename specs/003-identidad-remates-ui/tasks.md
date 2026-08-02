@@ -106,9 +106,9 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Independent Test**: quickstart.md § US4 (F5 conserva sesión y empresa; logout limpia; token adulterado degrada a login limpio).
 
-- [ ] T023 [US4] Crear `BrowserSessionSecureStorage : ISecureStorage` en `src/Presentation/IngenIA365ERP.Web.Client/Services/BrowserSessionSecureStorage.cs` sobre `window.sessionStorage` vía `IJSInProcessRuntime` (Set/Get/Remove/RemoveAll con try/catch → null si el storage no está disponible)
-- [ ] T024 [US4] Sustituir el registro de `WebAssemblySecureStorage` por `BrowserSessionSecureStorage` en `src/Presentation/IngenIA365ERP.Web.Client/Program.cs` (mismo lifetime Singleton por los DelegatingHandlers; documentar en comentario que host server y MAUI no cambian)
-- [ ] T025 [US4] Endurecer `src/Presentation/IngenIA365ERP.Shared/Services/CustomAuthStateProvider.cs`: un JWT ilegible/corrupto en storage (excepción de `JwtClaimsExtractor` o token expirado) degrada a estado anónimo y limpia las keys — nunca excepción cruda (FR-114)
+- [X] T023 [US4] Crear `BrowserSessionSecureStorage : ISecureStorage` en `src/Presentation/IngenIA365ERP.Web.Client/Services/BrowserSessionSecureStorage.cs` sobre `window.sessionStorage` vía `IJSInProcessRuntime` (Set/Get/Remove/RemoveAll con try/catch → null si el storage no está disponible)
+- [X] T024 [US4] Sustituir el registro de `WebAssemblySecureStorage` por `BrowserSessionSecureStorage` en `src/Presentation/IngenIA365ERP.Web.Client/Program.cs` (mismo lifetime Singleton por los DelegatingHandlers; documentar en comentario que host server y MAUI no cambian)
+- [X] T025 [US4] Endurecer `src/Presentation/IngenIA365ERP.Shared/Services/CustomAuthStateProvider.cs`: un JWT ilegible/corrupto en storage (excepción de `JwtClaimsExtractor` o token expirado) degrada a estado anónimo y limpia las keys — nunca excepción cruda (FR-114)
 
 **Checkpoint US4**: SC-104 — cero pérdidas de sesión por F5; cero artefactos tras logout.
 

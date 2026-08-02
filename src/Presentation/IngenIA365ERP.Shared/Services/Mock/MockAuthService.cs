@@ -70,5 +70,7 @@ namespace IngenIA365ERP.Shared.Services.Mock
                 return null;
             }
         }
+
+        public void ClearTokenSilently() => _secureStorage.Remove(TokenKey);
     }
 }
