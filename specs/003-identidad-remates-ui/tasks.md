@@ -1,4 +1,4 @@
----
+﻿---
 
 description: "Task list for Remates de Identidad Central — Switcher, Navegación y Recuperación"
 ---
@@ -40,7 +40,7 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Purpose**: la única pieza consumida por más de una historia.
 
-- [ ] T001 Agregar `GetMeAsync()` a `src/Presentation/IngenIA365ERP.Shared/Services/Security/CentralAuthClient.cs` (+ record `MeResponse` con email, isGlobalMasterAdmin, mfaEnabled, activeTenant {publicId, name}, availableTenants, defaultTenantPublicId, recoveryCodesRemaining?) consumiendo `GET /api/auth/me`; cachear por sesión en el client y limpiar el caché en `AdoptSessionAsync`/`LogoutAsync` para que el switch refresque la identidad. Consumidores: header (US5), sección de códigos (US3), detección "MFA ya activo" (TODO existente de MfaEnrollmentCentral).
+- [X] T001 Agregar `GetMeAsync()` a `src/Presentation/IngenIA365ERP.Shared/Services/Security/CentralAuthClient.cs` (+ record `MeResponse` con email, isGlobalMasterAdmin, mfaEnabled, activeTenant {publicId, name}, availableTenants, defaultTenantPublicId, recoveryCodesRemaining?) consumiendo `GET /api/auth/me`; cachear por sesión en el client y limpiar el caché en `AdoptSessionAsync`/`LogoutAsync` para que el switch refresque la identidad. Consumidores: header (US5), sección de códigos (US3), detección "MFA ya activo" (TODO existente de MfaEnrollmentCentral).
 
 **Checkpoint Foundational**: `GetMeAsync` disponible — US1..US6 pueden avanzar en paralelo.
 
@@ -52,12 +52,12 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Independent Test**: quickstart.md § US1 (Ana multi-empresa cambia con y sin formulario sucio; Luis mono-empresa no ve selector).
 
-- [ ] T002 [US1] Crear `IFormDirtyStateService` (`Register/MarkDirty/MarkClean/HasDirtyForms/Clear`) + `InMemoryFormDirtyStateService` en `src/Presentation/IngenIA365ERP.Shared/Services/IFormDirtyStateService.cs` (research D-02)
-- [ ] T003 [P] [US1] Crear wrapper `DirtyTrackingEditForm.razor` en `src/Presentation/IngenIA365ERP.Shared/Components/DirtyTrackingEditForm.razor` (marca dirty en `OnFieldChanged`, clean en submit válido y en `Dispose`)
-- [ ] T004 [US1] Registrar `IFormDirtyStateService` como scoped en `src/Presentation/IngenIA365ERP.Web/Program.cs`, `src/Presentation/IngenIA365ERP.Web.Client/Program.cs` y el host MAUI (`src/Presentation/IngenIA365ERP.App/MauiProgram.cs` si registra servicios de Shared)
-- [ ] T005 [US1] Crear `TenantSwitcher.razor` en `src/Presentation/IngenIA365ERP.Shared/Components/TenantSwitcher.razor`: carga `TenantSessionClient.GetActiveTenantsAsync()` al autenticarse; muestra solo el nombre si hay 1 membresía y selector si hay >1; al elegir consulta `IFormDirtyStateService.HasDirtyForms` → diálogo de confirmación existente → `SwitchAsync` → navegar a `/` sin forceLoad; si el switch falla (`Membership.NotActive`), toast accionable y conserva la sesión actual (FR-104)
-- [ ] T006 [US1] Montar `TenantSwitcher` en el header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor` (reemplaza el badge estático `@_tenantId`)
-- [ ] T007 [P] [US1] Migrar los formularios de identidad a `DirtyTrackingEditForm`: `src/Presentation/IngenIA365ERP.Shared/Pages/Security/ChangePassword.razor`, `MfaEnrollmentCentral.razor` y `DefaultTenantSetting.razor`
+- [X] T002 [US1] Crear `IFormDirtyStateService` (`Register/MarkDirty/MarkClean/HasDirtyForms/Clear`) + `InMemoryFormDirtyStateService` en `src/Presentation/IngenIA365ERP.Shared/Services/IFormDirtyStateService.cs` (research D-02)
+- [X] T003 [P] [US1] Crear wrapper `DirtyTrackingEditForm.razor` en `src/Presentation/IngenIA365ERP.Shared/Components/DirtyTrackingEditForm.razor` (marca dirty en `OnFieldChanged`, clean en submit válido y en `Dispose`)
+- [X] T004 [US1] Registrar `IFormDirtyStateService` como scoped en `src/Presentation/IngenIA365ERP.Web/Program.cs`, `src/Presentation/IngenIA365ERP.Web.Client/Program.cs` y el host MAUI (`src/Presentation/IngenIA365ERP.App/MauiProgram.cs` si registra servicios de Shared)
+- [X] T005 [US1] Crear `TenantSwitcher.razor` en `src/Presentation/IngenIA365ERP.Shared/Components/TenantSwitcher.razor`: carga `TenantSessionClient.GetActiveTenantsAsync()` al autenticarse; muestra solo el nombre si hay 1 membresía y selector si hay >1; al elegir consulta `IFormDirtyStateService.HasDirtyForms` → diálogo de confirmación existente → `SwitchAsync` → navegar a `/` sin forceLoad; si el switch falla (`Membership.NotActive`), toast accionable y conserva la sesión actual (FR-104)
+- [X] T006 [US1] Montar `TenantSwitcher` en el header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor` (reemplaza el badge estático `@_tenantId`)
+- [X] T007 [P] [US1] Migrar los formularios de identidad a `DirtyTrackingEditForm`: `src/Presentation/IngenIA365ERP.Shared/Pages/Security/ChangePassword.razor`, `MfaEnrollmentCentral.razor` y `DefaultTenantSetting.razor`
 
 **Checkpoint US1**: FR-019..FR-022 del 002 quedan con superficie completa (SC-101).
 
@@ -69,8 +69,8 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 
 **Independent Test**: quickstart.md § US2 (Luis regular / Ana admin / master ven exactamente sus opciones; ninguna entrada rota).
 
-- [ ] T008 [US2] Extender `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con las secciones por rol: **Cuenta** (Cambiar contraseña `/profile/password`, MFA `/profile/mfa`, Empresa por defecto `/profile/default-tenant`) para todo autenticado; **Mi cooperativa** (Miembros `/admin/tenant/{active_tenant_id}/members`, Política MFA `/admin/tenant/{active_tenant_id}/mfa-policy`) solo con claim `tenant_admin=true`; **Consola SaaS** (Registrar cooperativa `/saas/register-tenant`, Reset de MFA `/saas/force-mfa-reset`, Aprobaciones `/security/mfa-reset-approvals`) solo con `is_global_master_admin=true`; el `active_tenant_id` sale del `AuthenticationState`
-- [ ] T009 [US2] Agregar menú desplegable de cuenta en el header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor` (mismos enlaces de Cuenta + Salir existente), visible solo autenticado
+- [X] T008 [US2] Extender `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con las secciones por rol: **Cuenta** (Cambiar contraseña `/profile/password`, MFA `/profile/mfa`, Empresa por defecto `/profile/default-tenant`) para todo autenticado; **Mi cooperativa** (Miembros `/admin/tenant/{active_tenant_id}/members`, Política MFA `/admin/tenant/{active_tenant_id}/mfa-policy`) solo con claim `tenant_admin=true`; **Consola SaaS** (Registrar cooperativa `/saas/register-tenant`, Reset de MFA `/saas/force-mfa-reset`, Aprobaciones `/security/mfa-reset-approvals`) solo con `is_global_master_admin=true`; el `active_tenant_id` sale del `AuthenticationState`
+- [X] T009 [US2] Agregar menú desplegable de cuenta en el header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor` (mismos enlaces de Cuenta + Salir existente), visible solo autenticado
 
 **Checkpoint US2 (MVP)**: SC-102 — toda pantalla activa alcanzable y por rol correcto.
 
@@ -123,7 +123,7 @@ Sin tareas: el feature no agrega paquetes, configuración ni esquema
 - [ ] T026 [P] [US5] Agregar el enlace "¿Olvidaste tu contraseña?" → `/auth/forgot-password` en `src/Presentation/IngenIA365ERP.Shared/Pages/Security/Login.razor`
 - [ ] T027 [US5] Exponer la adopción de sesión externa en `src/Presentation/IngenIA365ERP.Shared/Services/Security/CentralAuthClient.cs`: método público `AdoptChallengeToken(token)` (para que accept pueda encadenar al paso MFA) — `AdoptSessionAsync` ya es público desde el cutover; y en `InvitationClient.cs` exponer `challenge`/`challengeToken`/tokens del response de accept (DTO del 002 ya los envía)
 - [ ] T028 [US5] Reescribir el post-éxito de `src/Presentation/IngenIA365ERP.Shared/Pages/Security/AcceptInvitation.razor` (resuelve sus 2 TODO): `challenge=None` → `AdoptSessionAsync` + navegar a `/` (SC-105); `MfaRequired` → `AdoptChallengeToken` + `/security/mfa-challenge`; `MfaEnrollmentRequired` → `AdoptChallengeToken` + `/auth/enroll-mfa-forced`
-- [ ] T029 [US5] Header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor`: mostrar email y nombre de empresa activa reales vía `GetMeAsync` (T001), refrescando al evento `Authenticated` del client (login/switch/adopción)
+- [X] T029 [US5] Header de `src/Presentation/IngenIA365ERP.Shared/Layout/MainLayout.razor`: mostrar email y nombre de empresa activa reales vía `GetMeAsync` (T001), refrescando al evento `Authenticated` del client (login/switch/adopción)
 
 **Checkpoint US5**: SC-105 — de clic en el correo al tablero sin re-login.
 

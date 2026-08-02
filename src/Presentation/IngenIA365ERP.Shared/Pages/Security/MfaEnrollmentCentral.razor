@@ -42,7 +42,7 @@
             <li>Ingresa el código que muestra la app para confirmar.</li>
         </ol>
 
-        <EditForm Model="@_confirm" OnValidSubmit="@ConfirmAsync" FormName="mfaConfirm">
+        <DirtyTrackingEditForm Model="@_confirm" OnValidSubmit="@ConfirmAsync" FormName="mfaConfirm">
             <DataAnnotationsValidator />
 
             <label>Código de la app</label>
@@ -56,7 +56,7 @@
             <button type="submit" disabled="@_busy" style="margin-top: 16px;">
                 @(_busy ? "Verificando..." : "Activar")
             </button>
-        </EditForm>
+        </DirtyTrackingEditForm>
     }
     else if (_state == State.Enrolled && _enrolledCodes is not null)
     {

@@ -54,6 +54,10 @@ Console.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={AppMode.ApiBa
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILoadingService, LoadingService>();
 
+// Feature 003 (US1) — estado de formularios sucios para la guardia del
+// TenantSwitcher (FR-103).
+builder.Services.AddScoped<IFormDirtyStateService, InMemoryFormDirtyStateService>();
+
 // Feature 002 — clientes de identidad central consumidos por las páginas de
 // IngenIA365ERP.Shared. El host server los necesita igual que el WASM
 // (Web.Client/Program.cs) porque el prerender instancia los componentes acá.

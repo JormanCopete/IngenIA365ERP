@@ -158,6 +158,36 @@ public sealed class CentralAuthClient
         }
     }
 
+    // ---------- Me (identidad de la sesión, T001 feature 003) ----------
+
+    private MeResponse? _me;
+
+    /// <summary>
+    /// Identidad de la sesión actual (<c>GET /api/auth/me</c>): email, empresa
+    /// activa con nombre, tenants disponibles, estado MFA y códigos de
+    /// recuperación restantes. Cacheado por sesión — se invalida al adoptar
+    /// una sesión nueva (login/switch/accept) y al cerrar sesión.
+    /// </summary>
+    public async Task<MeResponse?> GetMeAsync(bool forceRefresh = false, CancellationToken ct = default)
+    {
+        if (_me is not null && !forceRefresh) return _me;
+        if (string.IsNullOrWhiteSpace(_accessToken)) return null;
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<MeResponse>(resp, ct);
+            _me = parsed.IsSuccess ? parsed.Value : null;
+            return _me;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
     // ---------- Logout ----------
 
     public async Task LogoutAsync(CancellationToken ct = default)
@@ -186,6 +216,7 @@ public sealed class CentralAuthClient
         _accessTokenExpiresAt = DateTime.MinValue;
         _refreshToken = null;
         _challengeToken = null;
+        _me = null;
 
         _storage.Remove(AuthBearerHandler.TokenKey);
         _storage.Remove(RefreshTokenKey);
@@ -208,6 +239,7 @@ public sealed class CentralAuthClient
         _accessTokenExpiresAt = accessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
         _refreshToken = refreshToken;
         _challengeToken = null;
+        _me = null; // la identidad cacheada cambia con cada sesión adoptada
 
         await _storage.SetAsync(AuthBearerHandler.TokenKey, accessToken);
         if (!string.IsNullOrWhiteSpace(refreshToken))
@@ -283,6 +315,29 @@ public sealed record SelectTenantResponse(
     SelectedTenantInfo Tenant);
 
 public sealed record SelectedTenantInfo(Guid TenantPublicId, string TenantName);
+
+// -------------------- Me (GET /api/auth/me) --------------------
+
+public sealed record MeResponse(
+    Guid CentralUserId,
+    string Email,
+    bool IsGlobalMasterAdmin,
+    bool MfaEnabled,
+    MeActiveTenant? ActiveTenant,
+    IReadOnlyList<MeAvailableTenant> AvailableTenants,
+    Guid? DefaultTenantPublicId,
+    int? RecoveryCodesRemaining = null);
+
+public sealed record MeActiveTenant(
+    Guid TenantPublicId,
+    string TenantName,
+    bool IsTenantAdmin,
+    bool IsMfaRequiredByPolicy);
+
+public sealed record MeAvailableTenant(
+    Guid TenantPublicId,
+    string TenantName,
+    bool IsTenantAdmin);
 
 // -------------------- HTTP envelope helper --------------------
 
