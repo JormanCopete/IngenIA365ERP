@@ -65,6 +65,11 @@ public static class HealthCheckExtensions
             Predicate = check => check.Tags.Contains(ReadyTag),
             ResponseWriter = WriteJsonAsync
         });
+        // Ruta legacy Fase 0 (texto plano "Healthy") — equivalente a live.
+        app.MapHealthChecks("/api/health", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains(LiveTag)
+        });
         return app;
     }
 

@@ -1,5 +1,10 @@
 using System.Runtime.CompilerServices;
 
+// Cada clase de test levanta su propio set de contenedores + host con
+// migraciones completas; en paralelo se disputan Docker/CPU y aparecen
+// timeouts flaky. Serial = determinista (los tests pasan aislados).
+[assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
+
 namespace IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 /// <summary>

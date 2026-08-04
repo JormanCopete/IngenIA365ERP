@@ -109,7 +109,7 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 - [X] T029 [US2] Adaptar `src/Infrastructure/IngenIA365ERP.Persistence/MultiTenancy/TenantSchemaService.cs` al resultado del spike T025: creación de esquema + aplicación de migraciones del proveedor activo + `__EFMigrationsHistory` por esquema; usado tanto por el inicializador como por el alta de tenant en runtime (FR-014)
 - [X] T030 [P] [US2] Extender `tools/IngenIA365ERP.DbMigrator/` con comandos `migrate` (admin/tenants/all, `--tenant`) y `script` (`--provider`, `--idempotent`, salida a `database/schema/generated/{provider}/` con header estándar del principio XII) según contracts/cli.md (FR-012)
 - [X] T031 [P] [US2] Health checks por proveedor en `src/Presentation/IngenIA365ERP.API/Program.cs`: `AddNpgSql`/`AddSqlServer` dinámico con tags `db`,`ready`; `/health/live` sin dependencia de BD (FR-022, D-09)
-- [ ] T032 [P] [US2] Tests de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/Initializer_Tests.cs`: (a) BD contenedor pausado → arranca al reanudar dentro de la ventana; (b) ventana agotada → `Database.Unreachable`; (c) `AutoMigrate=false` + pendientes → `Database.MigrationsPending` enumeradas; (d) dos hosts concurrentes → una sola aplicación de migraciones (lock)
+- [X] T032 [P] [US2] Tests de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/Initializer_Tests.cs`: (a) BD contenedor pausado → arranca al reanudar dentro de la ventana; (b) ventana agotada → `Database.Unreachable`; (c) `AutoMigrate=false` + pendientes → `Database.MigrationsPending` enumeradas; (d) dos hosts concurrentes → una sola aplicación de migraciones (lock)
 - [ ] T033 [P] [US2] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/TenantProvisioning_Tests.cs`: alta de tenant en runtime sobre CADA motor → esquema creado + historial al día (FR-014; reusa el flujo `POST /api/saas/tenants/with-admin` del 002)
 - [ ] T034 [US2] Verificación manual quickstart §3 completo (retry, fail-fast pendientes, script DBA aplicado a mano produce esquema equivalente) — evidencia registrada
 
@@ -123,8 +123,8 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 
 **Independent Test**: quickstart §4 y §6 — 3 ejecuciones = mismo estado; fila maestra borrada se restaura sin tocar el resto; endpoint master siembra y audita; seed sobre esquema desactualizado → rechazo claro.
 
-- [ ] T035 [US3] Crear el contrato del framework en `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/IDataSeeder.cs` + `SeedContext.cs` + enums (`SeedCategory`, `SeedScope`) según data-model §2
-- [ ] T036 [US3] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/SeedOrchestrator.cs`: filtra por categoría/flags/ambiente, ordena por `Order`, transacción por seeder×alcance, itera `TenantDirectory` abriendo cada esquema por separado (principio IV), guard `Database.Seed.SchemaOutdated` vía `PendingMigrationsGuard` (FR-016, FR-018, FR-021)
+- [X] T035 [US3] Crear el contrato del framework en `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/IDataSeeder.cs` + `SeedContext.cs` + enums (`SeedCategory`, `SeedScope`) según data-model §2
+- [X] T036 [US3] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/SeedOrchestrator.cs`: filtra por categoría/flags/ambiente, ordena por `Order`, transacción por seeder×alcance, itera `TenantDirectory` abriendo cada esquema por separado (principio IV), guard `Database.Seed.SchemaOutdated` vía `PendingMigrationsGuard` (FR-016, FR-018, FR-021)
 - [X] T037 [US3] Migrar los seeders Phase 0 existentes (`DomainSecuritySeedData` y afines — ubicarlos con Grep) al framework como `RolesSeeder` (Order 20) y `PermissionsSeeder` (Order 30) en `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/` — 8 roles, 112 permisos, asignaciones base; idempotencia por clave natural; `CreatedBy="system:seed"`; eliminar el mecanismo viejo para no duplicar siembra
 - [X] T038 [P] [US3] Crear `CurrenciesSeeder` (Order 40), `DocumentTypesSeeder` (Order 50), `SystemParametersSeeder` (Order 10, Admin), `TenantParametersSeeder` (Order 70) en `.../Seeding/Parametric/` según inventario data-model §4
 - [X] T039 [P] [US3] Crear `ChartOfAccountsSeeder` (Order 60) con el plan de cuentas base PUC cooperativo en `.../Seeding/Parametric/ChartOfAccountsSeeder.cs` (fuente: catálogo PUC existente en el modelo contable; solo inserta faltantes)
@@ -134,8 +134,8 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 - [X] T043 [US3] Crear `src/Presentation/IngenIA365ERP.API/Modules/DatabaseAdminModule.cs`: `POST /api/saas/database/seed` + `GET /api/saas/database/status`, `[RequireMasterAdmin]` + purpose full, solo reenvían a `ISender` (contracts/database-admin.md)
 - [X] T044 [P] [US3] Extender `tools/IngenIA365ERP.DbMigrator/` con comando `seed` (`--category`, `--scope`, `--tenant`, `--confirm-test-seed`) reutilizando el orquestador (contracts/cli.md)
 - [X] T045 [P] [US3] Tests unitarios `tests/IngenIA365ERP.Application.Tests/Saas/RunDatabaseSeedCommandHandlerTests.cs` (validator: categoría/alcance inválidos, tenant inexistente, confirmación demo en Production; handler → runner con alcance correcto) + `tests/IngenIA365ERP.Application.Tests/Infrastructure/SeedOrchestratorTests.cs` (orden, filtro por categoría, no-update de existentes)
-- [ ] T046 [P] [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/Seed_IdempotencyTests.cs`: 3 ejecuciones = estado idéntico (conteos roles/permisos/monedas/PUC); fila borrada se restaura; registro modificado por cliente NO se pisa; seed sobre esquema desactualizado → `Database.Seed.SchemaOutdated` (SC-006, FR-016, FR-021)
-- [ ] T047 [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/DatabaseAdminEndpoint_Tests.cs`: endpoint seed con master → 200 + evento Mongo `Database.Seed.Executed`; sin master → 403; status reporta provider y pendientes (FR-019, principio X)
+- [X] T046 [P] [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/Seed_IdempotencyTests.cs`: 3 ejecuciones = estado idéntico (conteos roles/permisos/monedas/PUC); fila borrada se restaura; registro modificado por cliente NO se pisa; seed sobre esquema desactualizado → `Database.Seed.SchemaOutdated` (SC-006, FR-016, FR-021)
+- [X] T047 [US3] Test de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/DatabaseAdminEndpoint_Tests.cs`: endpoint seed con master → 200 + evento Mongo `Database.Seed.Executed`; sin master → 403; status reporta provider y pendientes (FR-019, principio X)
 
 **Checkpoint US3**: MVP completo — instalación en cualquier motor termina en sistema operable (roles, permisos, monedas, PUC listos).
 
@@ -150,7 +150,7 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 - [X] T048 [US4] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Demo/DemoDataSeeder.cs` (Order 900, Category Test, Scope Tenant): personas/asociados demo vía `COR_People` + hijas (principio V), productos, facturas y movimientos de ejemplo **insertados** (nunca editando asentados — principio XI); todo con `CreatedBy="system:seed-demo"` (FR-020)
 - [X] T049 [US4] Implementar la resolución del default por ambiente de `RunTestSeed` (on Development/QA, off Production; override explícito gana) en `DatabaseOptions`/orquestador + evento auditable `Database.Seed.TestSeedEnabledInProduction` al arranque cuando aplica (FR-017)
 - [X] T050 [P] [US4] Documentar el procedimiento de limpieza de datos demo (localización por `system:seed-demo`, script de mantenimiento técnico autorizado conforme principio XI) en `docs/operaciones/limpieza-datos-demo.md`
-- [ ] T051 [P] [US4] Tests de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/DemoSeed_Tests.cs`: Development → demo presente; Production default → ausente + log de omisión; Production con flag → presente + evento Mongo; idempotencia (SC-005)
+- [X] T051 [P] [US4] Tests de integración `tests/IngenIA365ERP.API.IntegrationTests/Database/DemoSeed_Tests.cs`: Development → demo presente; Production default → ausente + log de omisión; Production con flag → presente + evento Mongo; idempotencia (SC-005)
 
 **Checkpoint US4**: ambientes de capacitación habilitados sin riesgo para producción.
 
@@ -165,7 +165,7 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 - [X] T052 [US5] Parametrizar las fixtures de integración por `DB_PROVIDER` en `tests/IngenIA365ERP.API.IntegrationTests/Fixtures/` (incluida `CentralIdentityApiFixture`): `Testcontainers.MsSql` o `Testcontainers.PostgreSql` + **migraciones EF del proveedor en lugar de los DDL oficiales** (nueva fuente de verdad, D-11); master sembrado y capturador SMTP intactos
 - [X] T053 [P] [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Database/Provisioning_SmokeTests.cs`: migrar todo + seed paramétrico + inventario de tablas/columnas esperadas por módulo (COR/ACC/LND/PAY/INV/…) idéntico entre motores (clarificación #2, SC-008)
 - [X] T054 [P] [US5] Crear el check de paridad de migraciones (script `tools/scripts/check-migration-parity.ps1`: mismo conjunto de nombres lógicos en ambos ensamblados, diff ⇒ exit 1) e integrarlo como test en `tests/IngenIA365ERP.Architecture.Tests/Principles/Feature004_MultiProvider.cs` (SC-008)
-- [ ] T055 [US5] Ejecutar la matriz completa localmente: `DB_PROVIDER=PostgreSql` y `DB_PROVIDER=SqlServer` × (Application + Architecture + Integration) — 100 % verde en ambos; tiempos y resultados registrados (SC-003)
+- [X] T055 [US5] Ejecutar la matriz completa localmente: `DB_PROVIDER=PostgreSql` y `DB_PROVIDER=SqlServer` × (Application + Architecture + Integration) — 100 % verde en ambos; tiempos y resultados registrados (SC-003)
 - [X] T056 [P] [US5] Documentar la estrategia CI (matriz de proveedor como gate de PR, artefactos `script --idempotent` por release) en `docs/operaciones/ci-multi-motor.md` según contracts/cli.md
 
 **Checkpoint US5**: paridad = propiedad verificada, no promesa.
@@ -176,8 +176,8 @@ description: "Task list for Soporte Multi-Motor de Base de Datos (PostgreSQL / S
 
 - [X] T057 [P] Congelar el corpus DDL: `database/schema/README-CONGELADO.md` + `database/migration/README-CONGELADO.md` (referencia histórica, fuente de verdad hasta 2026-08, reemplazado por feature 004; D-13) y crear `database/schema/generated/{SqlServer,PostgreSql}/` con `.gitkeep` + primer script generado por release
 - [X] T058 [P] Actualizar documentación operativa: `docs/operaciones/setup-local-pruebas.md` (nuevo flujo: compose dual + AutoMigrate en lugar de DDL manual + gaps) e `docs/INDICE-DOCUMENTACION.md` (entrada feature 004)
-- [ ] T059 Ejecutar `quickstart.md` end-to-end completo (§0–§8) sobre ambos motores, capturar evidencia en `docs/release-notes/004-multi-motor-bd/evidencia-pruebas.md` (SC-001…SC-008)
-- [ ] T060 Sweep final: `dotnet test` completo (Domain + Application + Architecture + Integration en ambos providers) + verificación de las 12 compuertas constitucionales del plan
+- [X] T059 Ejecutar `quickstart.md` end-to-end completo (§0–§8) sobre ambos motores, capturar evidencia en `docs/release-notes/004-multi-motor-bd/evidencia-pruebas.md` (SC-001…SC-008)
+- [X] T060 Sweep final: `dotnet test` completo (Domain + Application + Architecture + Integration en ambos providers) + verificación de las 12 compuertas constitucionales del plan
 
 ---
 

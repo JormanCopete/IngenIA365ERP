@@ -357,8 +357,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
 
                     b.Property<string>("ContactEmail")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("ContactPhone")
                         .HasMaxLength(30)
@@ -388,10 +390,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("LegalAddress")
                         .HasMaxLength(300)
@@ -406,7 +412,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnType("character varying(50)");
 
                     b.Property<int>("MaxUsers")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(10);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -433,7 +441,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnType("character varying(50)");
 
                     b.Property<long>("StorageLimitMb")
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(5120L);
 
                     b.Property<string>("Subdomain")
                         .HasMaxLength(100)

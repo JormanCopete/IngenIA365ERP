@@ -44,15 +44,28 @@ Tiempo total instalación desde cero: **< 1 minuto** por motor (SC-002 ≪ 10 mi
 `database/schema/generated/PostgreSQL/{Admin,Application}_idempotent.sql` (25 KB / 592 KB)
 y `.../SqlServer/...` (25 KB / 572 KB).
 
-## Suites
+## Suites (sweep 2026-08-04)
 
-- Application.Tests: 229/229 (incluye validador de opciones, masker, RunDatabaseSeedCommand).
-- Architecture.Tests: 39/39.
-- API.IntegrationTests: matriz `DB_PROVIDER` — resultados en la sección SC-003 (completar al cierre de T055).
+- Domain.Tests: **80/80** · Application.Tests: **229/229** · Architecture.Tests: **39/39**.
+- API.IntegrationTests, matriz `DB_PROVIDER` (Testcontainers, serial):
+  - **PostgreSql: 54/65** · **SqlServer: 54/65** — los ~10 fallos son **IDÉNTICOS
+    en ambos motores** ⇒ ninguno es específico de motor (**veredicto de paridad
+    SC-003: cumplido para el alcance del 004**).
+  - Los fallos comunes son deuda preexistente de la suite (T128 del 002 quedó
+    abierta): (a) 5 tests legacy Fase 0 que esperan el contrato de login
+    pre-cutover (LoginFlow, RefreshRotation, PermissionEnforcement ×2, perf
+    p95 de auditoría); (b) tests de identidad multi-tenant que pasan AISLADOS
+    (verificado con `--filter`) pero fallan en corrida completa por estado
+    estático compartido entre hosts de test del mismo proceso (sospecha: la
+    suscripción pub/sub estática de la caché de membresías). Registrado como
+    tarea de saneamiento independiente.
+  - Los tests NUEVOS del 004 (Provisioning_SmokeTests ×3, Startup_FailFastTests ×4)
+    pasan en ambos motores.
 
 ## Pendientes al cierre de esta evidencia
 
-- T032/T033: tests de integración del inicializador (retry/lock/tenant runtime).
-- T034: escenario de reintento con BD caída (verificación manual quickstart §3a).
-- T055: matriz completa de integración en ambos motores (en ejecución).
-- T060: sweep final.
+- T033: test de integración del provisioning de tenant runtime por motor (cubierto
+  funcionalmente por el flujo de MasterRegisterTenant en la matriz; test dedicado pendiente).
+- T034: escenario manual de reintento con BD caída (quickstart §3a) — el caso
+  Unreachable está cubierto por test automatizado.
+- Saneamiento de la suite legacy (fuera del alcance 004 — tarea aparte).
