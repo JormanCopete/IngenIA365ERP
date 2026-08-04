@@ -27,18 +27,22 @@ public class TenantSchemaService
     private readonly string _operationalConnectionString;
     private readonly ILogger<TenantSchemaService> _logger;
 
+    private readonly Seeding.SeedOrchestrator? _seedOrchestrator;
+
     public TenantSchemaService(
         TenantDbContext tenantDb,
         ApplicationDbContext appDb,
         IDbProviderConfigurator configurator,
         IOptions<DatabaseOptions> options,
-        ILogger<TenantSchemaService>? logger = null)
+        ILogger<TenantSchemaService>? logger = null,
+        Seeding.SeedOrchestrator? seedOrchestrator = null)
     {
         _tenantDb = tenantDb;
         _appDb = appDb;
         _configurator = configurator;
         _operationalConnectionString = options.Value.GetActiveConnectionString();
         _logger = logger ?? NullLogger<TenantSchemaService>.Instance;
+        _seedOrchestrator = seedOrchestrator;
     }
 
     public async Task<ErpTenantInfo> CreateTenantAsync(string identifier, string name, string? planType = "Basic")
@@ -65,6 +69,18 @@ public class TenantSchemaService
 
         _logger.LogInformation("Tenant registrado: {Identifier} → esquema {Schema} ({Provider})",
             identifier, schemaName, _configurator.Provider);
+
+        // FR-019a: el alta de tenant siembra su esquema (parametrico siempre;
+        // demo segun la politica de ambiente/flag).
+        if (_seedOrchestrator is not null)
+        {
+            await _seedOrchestrator.RunAsync(
+                Seeding.SeedCategory.Parametric, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
+            if (_seedOrchestrator.EffectiveRunTestSeed())
+                await _seedOrchestrator.RunAsync(
+                    Seeding.SeedCategory.Test, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
+        }
+
         return tenant;
     }
 

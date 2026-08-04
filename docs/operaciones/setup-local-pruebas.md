@@ -1,5 +1,16 @@
 # Setup local — Pruebas de Identidad Central (Feature 002)
 
+> ⚠️ **ACTUALIZACIÓN feature 004 (2026-08)**: el aprovisionamiento manual de
+> esquema descrito abajo (migraciones 18–26b + gaps) quedó OBSOLETO para
+> instalaciones nuevas. El flujo vigente es:
+> `docker compose -f docker-compose.dev.yml up -d postgres redis smtp4dev` +
+> `dotnet run --project src/Presentation/IngenIA365ERP.API` — el inicializador
+> migra (EF, motor según `Database:Provider`; default dev: PostgreSQL en el
+> puerto **5433**) y siembra todo, incluido el master admin si defines
+> `MASTER_ADMIN_EMAIL`/`MASTER_ADMIN_PASSWORD`. Ver `README.md` §multi-motor y
+> `docs/operaciones/ci-multi-motor.md`. Lo que sigue queda como referencia del
+> entorno SQL Server legacy de la Fase 1.
+
 Guía pragmática para levantar el stack local en Windows y dejar la API lista
 para ejecutar los flujos del manual de pruebas
 (`manual-pruebas-identidad-central.md`).

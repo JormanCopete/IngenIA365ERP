@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.MultiTenancy;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,10 +65,37 @@ public sealed class ApiTestFixture : IAsyncLifetime
             _mongo.StartAsync(),
             _redis.StartAsync());
 
+        // BD admin separada dentro del mismo contenedor (feature 004: la crea
+        // el inicializador con las migraciones EF).
+        var adminConnection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(
+            _sql.GetConnectionString())
+        {
+            InitialCatalog = "IngenIA365ERP_AdminTest",
+        }.ConnectionString;
+
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            // Ambiente de test explicito (sin esto el host corre como Production:
+            // el RsaKeyGuard hace fail-fast y aplica appsettings.Production.json).
+            builder.UseEnvironment("Development");
+
+            // Claves RS256 reales del API (path relativo no resuelve bajo testhost).
+            var apiKeys = Path.Combine(FindRepoRoot(),
+                "src", "Presentation", "IngenIA365ERP.API", "Keys");
+            builder.UseSetting("JwtSettings:PrivateKeyPath", Path.Combine(apiKeys, "dev_private.pem"));
+            builder.UseSetting("JwtSettings:PublicKeyPath", Path.Combine(apiKeys, "dev_public.pem"));
+
+            // Feature 004: seccion Database — esta fixture legacy es SqlServer-only;
+            // el inicializador del host migra admin + operativa al arrancar.
+            builder.UseSetting("Database:Provider", "SqlServer");
+            builder.UseSetting("Database:ConnectionStrings:SqlServer", _sql.GetConnectionString());
+            builder.UseSetting("Database:AdminConnectionStrings:SqlServer", adminConnection);
+            builder.UseSetting("Database:AutoMigrate", "true");
+            builder.UseSetting("Database:Seed:RunParametricSeed", "true");
+            builder.UseSetting("Database:Seed:RunTestSeed", "false");
+
             builder.UseSetting("ConnectionStrings:DefaultConnection", _sql.GetConnectionString());
-            builder.UseSetting("ConnectionStrings:TenantConnection", _sql.GetConnectionString());
+            builder.UseSetting("ConnectionStrings:TenantConnection", adminConnection);
             builder.UseSetting("MongoDb:ConnectionString", _mongo.GetConnectionString());
             builder.UseSetting("MongoDb:DatabaseName", "IngenIA365ERP_Audit_Test");
             builder.UseSetting("ConnectionStrings:Redis", _redis.GetConnectionString());
@@ -76,20 +104,24 @@ public sealed class ApiTestFixture : IAsyncLifetime
             builder.UseSetting("Smtp:Port", "25");
         });
 
-        await EnsureSchemasAsync();
+        // Feature 004: el esquema lo aprovisiona el DatabaseInitializerHostedService
+        // (migraciones EF, fuente unica de verdad) al arrancar el host de test.
+        _ = Factory.Server;
+
         await SeedDemoTenantAndBranchAsync();
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
 
-    private async Task EnsureSchemasAsync()
+    private static string FindRepoRoot()
     {
-        using var scope = Factory.Services.CreateScope();
-        var tenantDb = scope.ServiceProvider.GetRequiredService<TenantDbContext>();
-        await tenantDb.Database.EnsureCreatedAsync();
-
-        var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await appDb.Database.EnsureCreatedAsync();
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "IngenIA365ERP.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        return dir?.FullName
+            ?? throw new InvalidOperationException("No se encontró la raíz del repo (IngenIA365ERP.slnx).");
     }
 
     private async Task SeedDemoTenantAndBranchAsync()

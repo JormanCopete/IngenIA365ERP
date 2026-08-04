@@ -56,6 +56,26 @@ public class Startup_FailFastTests
     }
 
     [Fact]
+    public async Task BdInaccesible_AgotadaLaVentana_FallaConDatabaseUnreachable()
+    {
+        // T032/FR-010: servidor inexistente + ventana corta → el inicializador
+        // reintenta y termina con Database.Unreachable (no MigrationFailed).
+        using var host = BuildHost(new()
+        {
+            ["Database:Provider"] = "SqlServer",
+            ["Database:ConnectionStrings:SqlServer"] =
+                "Server=localhost,59999;Database=Nope;Trusted_Connection=true;TrustServerCertificate=true;Connect Timeout=1",
+            ["Database:Startup:RetryWindowSeconds"] = "3",
+            ["Database:Startup:RetryIntervalSeconds"] = "1"
+        });
+
+        var act = () => host.StartAsync();
+
+        var ex = await act.Should().ThrowAsync<InvalidOperationException>();
+        ex.Which.Message.Should().Contain("Database.Unreachable");
+    }
+
+    [Fact]
     public async Task ConnectionStringDelProviderNoActivo_Ausente_ElHostArranca()
     {
         // FR-004: la cadena del proveedor NO seleccionado nunca es obligatoria.

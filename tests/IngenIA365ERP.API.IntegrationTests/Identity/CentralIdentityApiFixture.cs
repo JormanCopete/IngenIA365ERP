@@ -1,44 +1,51 @@
+using System.Data.Common;
 using IngenIA365ERP.Application.Common.Interfaces.Notifications;
-using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Identity;
-using IngenIA365ERP.Persistence.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using DotNet.Testcontainers.Containers;
 using Testcontainers.MongoDb;
 using Testcontainers.MsSql;
+using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
 /// <summary>
-/// Fixture para los integration tests del Feature 002 (Identidad Central).
-/// A diferencia de <c>ApiTestFixture</c> (Fase 0), esta fixture:
-/// <list type="bullet">
-///   <item>Configura la BD Admin (<c>ConnectionStrings:SqlServerAdmin</c>)
-///         contra el contenedor SQL en una base separada y le crea el schema
-///         <c>ADM_*</c> vía <c>AdminDbContext.EnsureCreated</c>.</item>
-///   <item>Siembra un master admin (<c>IsGlobalMasterAdmin = true</c>) vía
-///         <c>UserManager&lt;CentralUserIdentity&gt;</c> — ejercita el
-///         <c>BcryptPasswordHasher</c> real.</item>
-///   <item>Reemplaza <see cref="IEmailSender"/> por un capturador en memoria
-///         para poder extraer el token de invitación del correo sin SMTP.</item>
-/// </list>
+/// Fixture de integración de Identidad Central, PARAMETRIZADA POR PROVEEDOR
+/// desde el feature 004 (T052, D-11): la variable <c>DB_PROVIDER</c>
+/// (PostgreSql | SqlServer; default PostgreSql — clarificación #5) decide el
+/// contenedor. El esquema YA NO sale de los DDL congelados: lo aprovisiona el
+/// propio <c>DatabaseInitializerHostedService</c> de la aplicación con las
+/// migraciones EF del proveedor (la fuente única de verdad) + seed paramétrico
+/// — con lo cual cada corrida de la suite valida también el arranque real.
 /// </summary>
 public sealed class CentralIdentityApiFixture : IAsyncLifetime
 {
     public const string MasterEmail = "master@integration.test";
     public const string MasterPassword = "Master-Integration-2026!";
 
-    private readonly MsSqlContainer _sql = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-        .WithPassword("IngenIA365_Test2026!")
-        .Build();
+    public static readonly string ProviderKey =
+        (Environment.GetEnvironmentVariable("DB_PROVIDER") ?? "PostgreSql")
+            .Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
+        ? "SqlServer"
+        : "PostgreSQL";
+
+    private readonly IDatabaseContainer _db = ProviderKey == "SqlServer"
+        ? new MsSqlBuilder()
+            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+            .WithPassword("IngenIA365_Test2026!")
+            .Build()
+        : new PostgreSqlBuilder()
+            .WithImage("postgres:17")
+            .WithUsername("ingenia")
+            .WithPassword("IngenIA365_Test2026!")
+            .WithDatabase("ingenia365erp_test")
+            .Build();
 
     private readonly MongoDbContainer _mongo = new MongoDbBuilder()
         .WithImage("mongo:7")
@@ -54,26 +61,30 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await Task.WhenAll(
-            _sql.StartAsync(),
+            ((DotNet.Testcontainers.Containers.IContainer)_db).StartAsync(),
             _mongo.StartAsync(),
             _redis.StartAsync());
 
-        // BD admin SEPARADA en el mismo contenedor: si compartiera la BD de los
-        // contextos de tenant, EnsureCreated vería tablas existentes y saltaría
-        // la creación del schema ADM_*.
-        var adminConnection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(
-            _sql.GetConnectionString())
-        {
-            InitialCatalog = "IngenIA365ERP_AdminTest",
-        }.ConnectionString;
+        var operationalConnection = _db.GetConnectionString();
+        var adminConnection = WithDatabaseName(operationalConnection,
+            ProviderKey == "SqlServer" ? "IngenIA365ERP_AdminTest" : "ingenia365erp_admin_test");
 
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("ConnectionStrings:DefaultConnection", _sql.GetConnectionString());
-            // TenantConnection es la BD admin real: AdminDbContext y
-            // TenantDbContext se registran con ella (Persistence/DependencyInjection).
+            // Feature 004: la seccion Database gobierna el motor. AutoMigrate
+            // aprovisiona el esquema al arrancar el host de test (fuente de
+            // verdad = migraciones EF del proveedor).
+            builder.UseSetting("Database:Provider", ProviderKey);
+            builder.UseSetting($"Database:ConnectionStrings:{ProviderKey}", operationalConnection);
+            builder.UseSetting($"Database:AdminConnectionStrings:{ProviderKey}", adminConnection);
+            builder.UseSetting("Database:AutoMigrate", "true");
+            builder.UseSetting("Database:Seed:RunParametricSeed", "true");
+            builder.UseSetting("Database:Seed:RunTestSeed", "false");
+
+            // Claves legacy que otras piezas (health, herramientas Fase 0) aun leen.
+            builder.UseSetting("ConnectionStrings:DefaultConnection", operationalConnection);
             builder.UseSetting("ConnectionStrings:TenantConnection", adminConnection);
-            builder.UseSetting("ConnectionStrings:SqlServer", _sql.GetConnectionString());
+            builder.UseSetting("ConnectionStrings:SqlServer", operationalConnection);
             builder.UseSetting("ConnectionStrings:SqlServerAdmin", adminConnection);
             builder.UseSetting("MongoDb:ConnectionString", _mongo.GetConnectionString());
             builder.UseSetting("MongoDb:DatabaseName", "IngenIA365ERP_Audit_Test");
@@ -85,9 +96,7 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
 
             // Las claves RS256 se cargan con File.Exists sobre un path RELATIVO
             // ("Keys/dev_private.pem"). Bajo el test host el cwd es el bin de
-            // tests → el archivo no resuelve y tanto el emisor como el
-            // validador generan claves aleatorias DISTINTAS → 401 en todo
-            // endpoint autenticado. Path absoluto a las claves reales del API.
+            // tests → path absoluto a las claves reales del API.
             var apiKeys = Path.Combine(FindRepoRoot(),
                 "src", "Presentation", "IngenIA365ERP.API", "Keys");
             builder.UseSetting("JwtSettings:PrivateKeyPath",
@@ -101,99 +110,33 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
             });
         });
 
-        await EnsureSchemasAsync();
+        // Forzar arranque del host (dispara el DatabaseInitializerHostedService:
+        // espera BD → lock → migra admin + operativa → seed parametrico).
+        _ = Factory.Server;
+
         await SeedMasterAdminAsync();
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
 
-    private async Task EnsureSchemasAsync()
+    private static string WithDatabaseName(string connectionString, string database)
     {
-        using var scope = Factory.Services.CreateScope();
-
-        // TenantDbContext crea la BD admin de test + ADM_Tenants (shape legacy
-        // de Fase 0 vía ErpTenantInfo) — igual que un entorno real pre-feature-002.
-        var tenantDb = scope.ServiceProvider.GetRequiredService<TenantDbContext>();
-        await tenantDb.Database.EnsureCreatedAsync();
-
-        // El resto del schema admin sale de los DDL OFICIALES del feature 002
-        // (no de EF EnsureCreated, que chocaría con el ADM_Tenants legacy):
-        // 15a-15c/15e crean ADM_CentralUsers + memberships + invitations +
-        // políticas + reset tokens, y la migración 26b alinea ADM_Tenants y el
-        // Id de los reset tokens. Así el test también valida los scripts reales.
-        var adminConnection = ResolveAdminConnectionString();
-        foreach (var script in new[]
-                 {
-                     Path.Combine("database", "schema", "15a_Admin_CentralIdentity.sql"),
-                     Path.Combine("database", "schema", "15b_Admin_Memberships_Invitations.sql"),
-                     Path.Combine("database", "schema", "15c_Admin_MfaPolicy_LoginAttempts.sql"),
-                     Path.Combine("database", "schema", "15e_Admin_PasswordResetTokens.sql"),
-                     Path.Combine("database", "migration", "26b_Backfill_Gaps_Admin.sql"),
-                 })
-        {
-            await ExecuteSqlScriptAsync(adminConnection, Path.Combine(FindRepoRoot(), script));
-        }
-
-        // El EnsureCreated del shape legacy deja IX_ADM_Tenants_Identifier como
-        // único NO filtrado: dos tenants con Identifier NULL (el registro del
-        // feature 002 no lo llena) chocan. La BD real no tiene ese índice —
-        // se re-crea filtrado para permitir NULLs múltiples.
-        await ExecuteSqlAsync(adminConnection, @"
-IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ADM_Tenants_Identifier'
-           AND object_id = OBJECT_ID('dbo.ADM_Tenants'))
-BEGIN
-    DROP INDEX IX_ADM_Tenants_Identifier ON dbo.ADM_Tenants;
-    CREATE UNIQUE INDEX IX_ADM_Tenants_Identifier
-        ON dbo.ADM_Tenants(Identifier) WHERE Identifier IS NOT NULL;
-END");
-
-        var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await appDb.Database.EnsureCreatedAsync();
+        var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        var key = builder.ContainsKey("Database") ? "Database"
+                : builder.ContainsKey("Initial Catalog") ? "Initial Catalog" : "Database";
+        builder[key] = database;
+        return builder.ConnectionString;
     }
-
-    private string ResolveAdminConnectionString() =>
-        new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(_sql.GetConnectionString())
-        {
-            InitialCatalog = "IngenIA365ERP_AdminTest",
-        }.ConnectionString;
 
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "database")))
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "IngenIA365ERP.slnx")))
         {
             dir = dir.Parent;
         }
         return dir?.FullName
-            ?? throw new InvalidOperationException("No se encontró la raíz del repo (carpeta database/).");
-    }
-
-    private static async Task ExecuteSqlAsync(string connectionString, string sql)
-    {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
-    {
-        var sql = await File.ReadAllTextAsync(scriptPath);
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
-        await conn.OpenAsync();
-
-        // Split por batches GO (separador de sqlcmd, no es T-SQL).
-        var batches = Regex.Split(sql, @"^\s*GO\s*;?\s*$",
-            RegexOptions.Multiline | RegexOptions.IgnoreCase);
-        foreach (var batch in batches)
-        {
-            if (string.IsNullOrWhiteSpace(batch)) continue;
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = batch;
-            cmd.CommandTimeout = 120;
-            await cmd.ExecuteNonQueryAsync();
-        }
+            ?? throw new InvalidOperationException("No se encontró la raíz del repo (IngenIA365ERP.slnx).");
     }
 
     private async Task SeedMasterAdminAsync()
@@ -225,7 +168,7 @@ END");
     {
         Factory?.Dispose();
         await Task.WhenAll(
-            _sql.DisposeAsync().AsTask(),
+            ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),
             _mongo.DisposeAsync().AsTask(),
             _redis.DisposeAsync().AsTask());
     }

@@ -22,6 +22,9 @@
          (UserManager solo en Identity, AdminDbContext solo desde handlers admin, etc). -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Identity\IngenIA365ERP.Identity.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
+    <!-- Feature 004 (T054): el test de paridad compara los [Migration] de ambos proveedores. -->
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence.Migrations.SqlServer\IngenIA365ERP.Persistence.Migrations.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence.Migrations.PostgreSql\IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj" />
     <!-- AuditBootstrapDescriptor + EnvPasswordResolver — smoke tests del parser. -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
   </ItemGroup>

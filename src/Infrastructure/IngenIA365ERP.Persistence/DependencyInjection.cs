@@ -111,6 +111,13 @@ public static class DependencyInjection
         services.AddSingleton<Initialization.DatabaseReadiness>();
         services.AddScoped<Initialization.PendingMigrationsGuard>();
         services.AddSingleton<Seeding.SeedOrchestrator>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.SystemParametersSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CurrenciesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DocumentTypesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ChartOfAccountsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
+        services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
+        services.AddScoped<Application.Common.Interfaces.Database.IDatabaseStatusReader, Initialization.DatabaseStatusReader>();
         services.AddHostedService<Initialization.DatabaseInitializerHostedService>();
 
         return services;

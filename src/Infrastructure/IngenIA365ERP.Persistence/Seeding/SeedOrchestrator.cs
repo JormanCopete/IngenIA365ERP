@@ -38,8 +38,22 @@ public sealed class SeedOrchestrator(
         if (EffectiveRunTestSeed())
         {
             if (environment.IsProduction())
+            {
+                // FR-017: la activacion explicita de datos demo en Production
+                // queda en el log Y en la auditoria Mongo (TTL 5 anos).
                 logger.LogWarning(
-                    "Seed de PRUEBAS habilitado explícitamente en Production (Database:Seed:RunTestSeed=true) — evento auditable.");
+                    "Seed de PRUEBAS habilitado explícitamente en Production (Database:Seed:RunTestSeed=true).");
+                using var auditScope = serviceProvider.CreateScope();
+                var audit = auditScope.ServiceProvider
+                    .GetService<IngenIA365ERP.Application.Common.Interfaces.IAuditService>();
+                if (audit is not null)
+                    await audit.LogAsync(
+                        IngenIA365ERP.Application.Common.Audit.AuditEventTypes.DatabaseSeedTestSeedEnabledInProduction,
+                        entityType: "Database", entityId: "Seed",
+                        oldValues: null,
+                        newValues: new { RunTestSeed = true, Environment = environment.EnvironmentName },
+                        ct);
+            }
             await RunAsync(SeedCategory.Test, scope: null, tenantIdentifier: null, ct);
         }
         else
