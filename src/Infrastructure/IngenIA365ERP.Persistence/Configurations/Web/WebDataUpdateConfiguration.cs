@@ -12,7 +12,7 @@ public class WebDataUpdateConfiguration : IEntityTypeConfiguration<WebDataUpdate
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.IpAddress).HasMaxLength(50);

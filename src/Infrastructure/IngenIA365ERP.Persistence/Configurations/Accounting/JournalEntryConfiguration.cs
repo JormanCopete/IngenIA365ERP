@@ -11,7 +11,7 @@ public class JournalEntryConfiguration : IEntityTypeConfiguration<JournalEntry>
         builder.ToTable("ACC_JournalEntries");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.VoucherTypeCode).HasMaxLength(10).IsRequired();

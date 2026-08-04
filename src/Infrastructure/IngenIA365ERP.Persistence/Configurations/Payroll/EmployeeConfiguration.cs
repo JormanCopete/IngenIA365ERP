@@ -12,7 +12,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_PAY_Employees_PublicId");
 
         // PersonId is now NOT NULL (every Employee belongs to a Person)
@@ -62,7 +62,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.HasIndex(e => e.Status);
 
         // === Audit ===
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);
         builder.Property(e => e.DeletedBy).HasMaxLength(100);

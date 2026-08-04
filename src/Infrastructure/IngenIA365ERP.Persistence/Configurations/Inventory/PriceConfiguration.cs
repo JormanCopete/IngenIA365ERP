@@ -12,7 +12,7 @@ public class PriceConfiguration : IEntityTypeConfiguration<Price>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
         builder.HasIndex(e => new { e.PriceListTypeId, e.ProductId, e.CustomerType }).IsUnique();
 

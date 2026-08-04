@@ -11,7 +11,7 @@ public class MfaResetRequestConfiguration : IEntityTypeConfiguration<MfaResetReq
         builder.ToTable("SEC_MfaResetRequests");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.Reason).HasMaxLength(500).IsRequired();

@@ -12,7 +12,7 @@ public class HabeasDataConsentConfiguration : IEntityTypeConfiguration<HabeasDat
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique()
             .HasDatabaseName("UK_CMP_HabeasConsents_PublicId");
 
@@ -34,7 +34,7 @@ public class HabeasDataConsentConfiguration : IEntityTypeConfiguration<HabeasDat
             .HasForeignKey(e => e.PolicyVersionId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);
         builder.Property(e => e.DeletedBy).HasMaxLength(100);

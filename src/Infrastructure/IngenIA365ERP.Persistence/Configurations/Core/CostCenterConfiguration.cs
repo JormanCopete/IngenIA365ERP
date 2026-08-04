@@ -12,7 +12,7 @@ public class CostCenterConfiguration : IEntityTypeConfiguration<CostCenter>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_CostCenters_PublicId");
 
         builder.Property(e => e.LegacyCode).HasMaxLength(20);
@@ -25,7 +25,7 @@ public class CostCenterConfiguration : IEntityTypeConfiguration<CostCenter>
         builder.Property(e => e.PayrollStatus).HasMaxLength(30);
 
         // Audit
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);
         builder.Property(e => e.DeletedBy).HasMaxLength(100);

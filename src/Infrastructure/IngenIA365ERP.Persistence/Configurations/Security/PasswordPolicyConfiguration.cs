@@ -11,7 +11,7 @@ public class PasswordPolicyConfiguration : IEntityTypeConfiguration<PasswordPoli
         builder.ToTable("SEC_PasswordPolicies");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.MinLength).HasDefaultValue(12);

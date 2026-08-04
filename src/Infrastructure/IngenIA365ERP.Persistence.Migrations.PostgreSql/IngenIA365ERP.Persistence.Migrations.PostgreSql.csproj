@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IngenIA365ERP.Persistence.Migrations.PostgreSql</RootNamespace>
+    <!-- Feature 004 (D-02): arbol de migraciones EF exclusivo del proveedor
+         PostgreSQL. Las migraciones homologas de SQL Server viven en
+         IngenIA365ERP.Persistence.Migrations.SqlServer — toda migracion se
+         genera EN PAR (tools/scripts/add-migration.ps1). -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
+  </ItemGroup>
+</Project>

@@ -12,7 +12,7 @@ public class AmortizationConfiguration : IEntityTypeConfiguration<Amortization>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_Amortizations_PublicId");
 
         builder.Property(e => e.CrossInitialBalance).HasPrecision(18, 2);

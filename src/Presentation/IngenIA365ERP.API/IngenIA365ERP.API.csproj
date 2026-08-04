@@ -10,6 +10,10 @@
     <PackageReference Include="Microsoft.OpenApi" Version="2.4.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="AspNetCoreRateLimit" Version="5.*" />
+    <!-- Feature 004: health checks del motor activo (tag "ready"). Se registra
+         uno u otro segun Database:Provider. -->
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.*" />
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.*" />
     <PackageReference Include="QuestPDF" Version="2026.5.0" />
     <!-- Requerido por dotnet-ef tools (startup project). Pinned a 10.x para
          evitar carga del Design 8.0.0 transitivo. -->
@@ -21,6 +25,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
+    <!-- Feature 004: ambos arboles de migraciones viajan con la API; en runtime
+         el IDbProviderConfigurator elige cual usa Database.Migrate(). -->
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Persistence.Migrations.SqlServer\IngenIA365ERP.Persistence.Migrations.SqlServer.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Persistence.Migrations.PostgreSql\IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Identity\IngenIA365ERP.Identity.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Caching\IngenIA365ERP.Caching.csproj" />

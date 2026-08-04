@@ -12,7 +12,7 @@ public class CollectionNoticeParamConfiguration : IEntityTypeConfiguration<Colle
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_LND_CollectionNoticeParams_PublicId");
 
         builder.Property(e => e.NoticeCode).HasMaxLength(3).IsRequired();

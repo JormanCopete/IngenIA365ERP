@@ -1,22 +1,31 @@
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Persistence.Providers;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace IngenIA365ERP.Persistence.Configurations.Common;
 
 /// <summary>
 /// Conventions transversales que se aplican a todas las entidades del modelo:
-///  * <c>RowVersion</c> mapeado a <c>rowversion</c>/<c>timestamp</c> para concurrencia optimista (T011).
+///  * Concurrencia optimista portable por proveedor (feature 004, D-06):
+///    SQL Server → <c>ROWVERSION</c>; PostgreSQL → <c>xmin</c>. Delegada en
+///    <see cref="ProviderModelConventions.ApplyPortableRowVersion"/>.
+///  * Instantes UTC normalizados en ambos motores.
 ///  * Filtro global de soft-delete (T022) — solo materializa filas con <c>IsDeleted = false</c>.
 ///
-/// Llamada desde <c>ApplicationDbContext.OnModelCreating</c> después de
-/// <c>ApplyConfigurationsFromAssembly</c>, de modo que cualquier configuración
-/// específica de entidad se haya registrado antes y esta solo ajuste lo común.
+/// Llamada desde <c>OnModelCreating</c> después de aplicar las configuraciones
+/// específicas, de modo que esta solo ajuste lo común.
 /// </summary>
 public static class BaseEntityConfigurationExtensions
 {
-    public static void ApplyBaseEntityConventions(this ModelBuilder modelBuilder)
+    public static void ApplyBaseEntityConventions(this ModelBuilder modelBuilder, string? providerName)
     {
+        // Feature 004 — diferencias por motor centralizadas (cubre TODAS las
+        // entidades con byte[] RowVersion, incluidas las Admin).
+        ProviderModelConventions.ApplyPortableRowVersion(modelBuilder, providerName);
+        ProviderModelConventions.ApplyPortableIndexFilters(modelBuilder, providerName);
+        ProviderModelConventions.ApplyPortableColumnTypes(modelBuilder, providerName);
+        ProviderModelConventions.ApplyUtcDateTimeConvention(modelBuilder);
+
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             var clr = entityType.ClrType;
@@ -25,16 +34,6 @@ public static class BaseEntityConfigurationExtensions
             var isBase = typeof(BaseEntity).IsAssignableFrom(clr);
             var isBaseLong = typeof(BaseEntityLong).IsAssignableFrom(clr);
             if (!isBase && !isBaseLong) continue;
-
-            // T011 — Concurrencia optimista
-            var rowVersion = entityType.FindProperty(nameof(BaseEntity.RowVersion));
-            if (rowVersion is not null)
-            {
-                rowVersion.IsConcurrencyToken = true;
-                rowVersion.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.OnAddOrUpdate;
-                rowVersion.SetColumnType("rowversion");
-                rowVersion.IsNullable = false;
-            }
 
             // T022 — Filtro global de soft-delete.
             // Solo se aplica a entidades sin filtro explícito previo y que no son

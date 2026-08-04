@@ -12,7 +12,7 @@ public class SalaryChangeConfiguration : IEntityTypeConfiguration<SalaryChange>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.NewSalary).HasPrecision(18, 2);

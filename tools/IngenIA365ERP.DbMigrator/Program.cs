@@ -1,13 +1,29 @@
 using IngenIA365ERP.Audit.Bootstrap;
+using IngenIA365ERP.Persistence;
+using IngenIA365ERP.Persistence.DbContext;
+using IngenIA365ERP.Persistence.Initialization;
 using IngenIA365ERP.Persistence.MultiTenancy;
+using IngenIA365ERP.Persistence.Providers;
+using IngenIA365ERP.Persistence.Seeding;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Serilog;
 using Serilog.Extensions.Logging;
 
 namespace IngenIA365ERP.DbMigrator;
 
+/// <summary>
+/// CLI de operacion de base de datos (feature 004 — T030, contracts/cli.md).
+/// Lee la seccion "Database" (appsettings de la API + variables de entorno,
+/// con overrides --provider/--connection) y opera sobre el motor activo.
+/// </summary>
 class Program
 {
     static async Task<int> Main(string[] args)
@@ -22,96 +38,303 @@ class Program
             return 1;
         }
 
-        var command = args[0].ToLower();
+        var command = args[0].ToLowerInvariant();
 
-        // audit-bootstrap usa Mongo y NO SQL Server — atajo antes de validar --connection.
+        // audit-bootstrap usa Mongo — atajo antes de armar el stack relacional.
         if (command == "audit-bootstrap")
-        {
             return await RunAuditBootstrapAsync(args);
-        }
-
-        var connString = GetArg(args, "--connection");
-        if (string.IsNullOrEmpty(connString))
-        {
-            Log.Error("--connection is required");
-            return 1;
-        }
-
-        var dbOptions = new DbContextOptionsBuilder<TenantDbContext>()
-            .UseSqlServer(connString).Options;
 
         try
         {
+            await using var services = BuildServices(args);
+
             switch (command)
             {
+                case "migrate":
+                    return await RunMigrateAsync(services, args);
+
+                case "seed":
+                    return await RunSeedAsync(services, args);
+
+                case "script":
+                    return await RunScriptAsync(services, args);
+
                 case "create":
                 {
                     var tenant = GetArg(args, "--tenant");
                     var name = GetArg(args, "--name");
-                    var plan = GetArg(args, "--plan") ?? "Basic";
-
                     if (string.IsNullOrEmpty(tenant) || string.IsNullOrEmpty(name))
                     {
-                        Log.Error("--tenant and --name are required for 'create'");
+                        Log.Error("--tenant y --name son obligatorios para 'create'");
                         return 1;
                     }
-
-                    Log.Information("Creating tenant: {Tenant} ({Name})", tenant, name);
-                    using var db = new TenantDbContext(dbOptions);
-                    await db.Database.EnsureCreatedAsync();
-                    var service = new TenantSchemaService(db, connString);
-                    var info = await service.CreateTenantAsync(tenant, name, plan);
-                    Log.Information("Tenant created: {Id} -> schema [{Schema}]", info.Id, info.Schema);
-                    break;
+                    using var scope = services.CreateScope();
+                    var service = scope.ServiceProvider.GetRequiredService<TenantSchemaService>();
+                    var info = await service.CreateTenantAsync(tenant, name, GetArg(args, "--plan") ?? "Basic");
+                    Log.Information("Tenant creado: {Id} → esquema [{Schema}]", info.Id, info.Schema);
+                    return 0;
                 }
 
                 case "list":
                 {
-                    using var db = new TenantDbContext(dbOptions);
-                    var tenants = await db.Tenants.OrderBy(t => t.Identifier).ToListAsync();
-                    Log.Information("Found {Count} tenants:", tenants.Count);
+                    using var scope = services.CreateScope();
+                    var service = scope.ServiceProvider.GetRequiredService<TenantSchemaService>();
+                    var tenants = await service.ListTenantsAsync();
+                    Log.Information("{Count} tenant(s):", tenants.Count);
                     foreach (var t in tenants)
-                        Log.Information("  {Identifier} -> [{Schema}] ({Plan}, Active={Active})",
+                        Log.Information("  {Identifier} → [{Schema}] ({Plan}, Active={Active})",
                             t.Identifier, t.Schema, t.PlanType, t.IsActive);
-                    break;
+                    return 0;
                 }
 
                 case "drop":
                 {
                     var tenant = GetArg(args, "--tenant");
-                    var confirm = args.Contains("--confirm");
-
-                    if (string.IsNullOrEmpty(tenant))
+                    if (string.IsNullOrEmpty(tenant)) { Log.Error("--tenant es obligatorio para 'drop'"); return 1; }
+                    if (!args.Contains("--confirm"))
                     {
-                        Log.Error("--tenant is required for 'drop'");
+                        Log.Warning("Use --confirm para eliminar de verdad. Operación DESTRUCTIVA.");
                         return 1;
                     }
-                    if (!confirm)
-                    {
-                        Log.Warning("Use --confirm to actually drop the tenant. This is DESTRUCTIVE.");
-                        return 1;
-                    }
-
-                    using var db = new TenantDbContext(dbOptions);
-                    var service = new TenantSchemaService(db, connString);
+                    using var scope = services.CreateScope();
+                    var service = scope.ServiceProvider.GetRequiredService<TenantSchemaService>();
                     var dropped = await service.DropTenantAsync(tenant);
-                    Log.Information(dropped ? "Tenant dropped." : "Tenant not found.");
-                    break;
+                    Log.Information(dropped ? "Tenant eliminado." : "Tenant no encontrado.");
+                    return 0;
                 }
 
                 default:
-                    Log.Error("Unknown command: {Command}", command);
+                    Log.Error("Comando desconocido: {Command}", command);
                     PrintUsage();
                     return 1;
             }
-
-            return 0;
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "Operation failed");
+            Log.Fatal("La operación falló: {Message}", ex.Message);
             return 1;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Comandos feature 004
+    // ------------------------------------------------------------------
+
+    static async Task<int> RunMigrateAsync(ServiceProvider services, string[] args)
+    {
+        var scopeArg = (GetArg(args, "--scope") ?? "all").ToLowerInvariant();
+        using var scope = services.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        if (scopeArg is "admin" or "all")
+        {
+            var adminDb = sp.GetRequiredService<AdminDbContext>();
+            await MigrateContextAsync("admin", adminDb);
+        }
+
+        if (scopeArg is "tenants" or "all")
+        {
+            var appDb = sp.GetRequiredService<ApplicationDbContext>();
+            await MigrateContextAsync("operativa (dbo)", appDb);
+
+            var schemaService = sp.GetRequiredService<TenantSchemaService>();
+            var only = GetArg(args, "--tenant");
+            foreach (var tenant in await schemaService.ListTenantsAsync())
+            {
+                if (only is not null && !string.Equals(tenant.Identifier, only, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (string.IsNullOrWhiteSpace(tenant.Schema) ||
+                    tenant.Schema!.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Log.Information("Migrando esquema de tenant [{Schema}]…", tenant.Schema);
+                await schemaService.MigrateTenantSchemaAsync(tenant.Schema!, CancellationToken.None);
+            }
+        }
+
+        Log.Information("migrate completado.");
+        return 0;
+    }
+
+    static async Task MigrateContextAsync(string label, Microsoft.EntityFrameworkCore.DbContext db)
+    {
+        var pending = (await db.Database.CanConnectAsync()
+            ? await db.Database.GetPendingMigrationsAsync()
+            : db.Database.GetMigrations()).ToList();
+        if (pending.Count == 0)
+        {
+            Log.Information("BD {Label}: sin migraciones pendientes.", label);
+            return;
+        }
+        Log.Information("BD {Label}: aplicando {Count} migración(es): {List}", label, pending.Count, string.Join(", ", pending));
+        await db.Database.MigrateAsync();
+    }
+
+    static async Task<int> RunSeedAsync(ServiceProvider services, string[] args)
+    {
+        var categoryArg = GetArg(args, "--category");
+        if (!Enum.TryParse<SeedCategory>(categoryArg, ignoreCase: true, out var category))
+        {
+            Log.Error("--category es obligatorio: parametric | test");
+            return 1;
+        }
+
+        var orchestrator = services.GetRequiredService<SeedOrchestrator>();
+        var env = services.GetRequiredService<IHostEnvironment>();
+
+        if (category == SeedCategory.Test && env.IsProduction() && !args.Contains("--confirm-test-seed"))
+        {
+            Log.Error("Seed de pruebas en Production requiere --confirm-test-seed (FR-017).");
+            return 1;
+        }
+
+        SeedScope? scope = (GetArg(args, "--scope")?.ToLowerInvariant()) switch
+        {
+            "admin" => SeedScope.Admin,
+            "tenant" => SeedScope.Tenant,
+            _ => null
+        };
+
+        var results = await orchestrator.RunAsync(category, scope, GetArg(args, "--tenant"), CancellationToken.None);
+        foreach (var r in results)
+            Log.Information("  {Name} [{Scope}]: {Inserted} insertadas ({Tenants} objetivo/s)",
+                r.Name, r.Scope, r.Inserted, r.TenantsTouched);
+        Log.Information("seed completado ({Count} seeder/s).", results.Count);
+        return 0;
+    }
+
+    static async Task<int> RunScriptAsync(ServiceProvider services, string[] args)
+    {
+        using var scope = services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var options = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+        var providerKey = options.ProviderKey;
+
+        var outputDir = GetArg(args, "--output")
+            ?? Path.Combine("database", "schema", "generated", providerKey);
+        Directory.CreateDirectory(outputDir);
+
+        var from = GetArg(args, "--from");
+
+        foreach (var (label, db) in new (string, Microsoft.EntityFrameworkCore.DbContext)[]
+                 {
+                     ("Admin", sp.GetRequiredService<AdminDbContext>()),
+                     ("Application", sp.GetRequiredService<ApplicationDbContext>())
+                 })
+        {
+            var migrator = db.Database.GetService<IMigrator>();
+            var script = migrator.GenerateScript(
+                fromMigration: from, toMigration: null,
+                options: MigrationsSqlGenerationOptions.Idempotent);
+
+            var header = $"""
+                -- ============================================================
+                -- IngenIA365ERP — script idempotente para DBA (feature 004)
+                -- Contexto : {label}DbContext · Proveedor: {providerKey}
+                -- Generado : {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC
+                -- Desde    : {(from ?? "(inicio)")} → (última migración)
+                -- Ejecución: re-ejecutable sin efectos (IF NOT EXISTS / historial
+                --            __EFMigrationsHistory). Reversión: Down() de cada
+                --            migración (DbMigrator/dotnet-ef) o restore de backup.
+                -- REQUIERE BACKUP PREVIO en producción (principio XII).
+                -- ============================================================
+
+                """;
+
+            var file = Path.Combine(outputDir, $"{label}_idempotent.sql");
+            await File.WriteAllTextAsync(file, header + script);
+            Log.Information("Script {Label} → {File} ({Size:N0} bytes)", label, file, new FileInfo(file).Length);
+        }
+
+        return 0;
+    }
+
+    // ------------------------------------------------------------------
+    // Infraestructura CLI
+    // ------------------------------------------------------------------
+
+    static ServiceProvider BuildServices(string[] args)
+    {
+        var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Development";
+
+        var overrides = new Dictionary<string, string?>();
+        if (GetArg(args, "--provider") is { } provider)
+            overrides["Database:Provider"] = provider;
+        if (GetArg(args, "--connection") is { } conn)
+        {
+            // El override aplica al proveedor efectivo.
+            var key = (GetArg(args, "--provider") ?? "SqlServer").ToLowerInvariant().Contains("post")
+                ? "PostgreSQL" : "SqlServer";
+            overrides[$"Database:ConnectionStrings:{key}"] = conn;
+        }
+
+        var settingsDir = GetArg(args, "--settings-dir") ?? Path.Combine("src", "Presentation", "IngenIA365ERP.API");
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile(Path.Combine(settingsDir, "appsettings.json"), optional: true)
+            .AddJsonFile(Path.Combine(settingsDir, $"appsettings.{environmentName}.json"), optional: true)
+            .AddEnvironmentVariables()
+            .AddInMemoryCollection(overrides)
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging(b => b.AddSerilog());
+        services.AddSingleton<IHostEnvironment>(new CliHostEnvironment(environmentName));
+        // Dependencias de app que Persistence espera del host (interceptores de auditoria).
+        services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.ICurrentUserService, CliCurrentUserService>();
+        services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.ICurrentTenantService, CliCurrentTenantService>();
+        services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IAuditService, CliNoOpAuditService>();
+        services.AddPersistenceServices(configuration);
+        return services.BuildServiceProvider();
+    }
+
+    sealed class CliCurrentUserService : IngenIA365ERP.Application.Common.Interfaces.ICurrentUserService
+    {
+        public int? UserId => null;
+        public string? UserName => "system:cli";
+        public string? TenantId => null;
+        public IReadOnlyList<string> Roles => [];
+        public bool IsAuthenticated => false;
+    }
+
+    sealed class CliCurrentTenantService : IngenIA365ERP.Application.Common.Interfaces.ICurrentTenantService
+    {
+        public string? TenantId => null;
+        public string? TenantName => null;
+        public string? Schema => null;
+        public string? ConnectionString => null;
+    }
+
+    /// <summary>
+    /// La CLI opera esquema y seeds (que auditan por log/Serilog); la auditoria
+    /// Mongo de negocio pertenece al pipeline MediatR de la API — aqui no aplica.
+    /// </summary>
+    sealed class CliNoOpAuditService : IngenIA365ERP.Application.Common.Interfaces.IAuditService
+    {
+        public Task LogAsync(string action, string entityType, string entityId, object? oldValues, object? newValues, CancellationToken ct = default) => Task.CompletedTask;
+        public Task LogAsync(IngenIA365ERP.Application.Common.Interfaces.AuditLogCommand command, CancellationToken ct = default) => Task.CompletedTask;
+        public Task LogAccessAsync(IngenIA365ERP.Application.Common.Interfaces.AccessLogCommand command, CancellationToken ct = default) => Task.CompletedTask;
+        public Task FlushAsync() => Task.CompletedTask;
+        public Task<IngenIA365ERP.Application.Common.Models.PagedList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>> QueryAsync(IngenIA365ERP.Application.Common.Interfaces.AuditQueryParameters query, CancellationToken ct = default)
+            => throw new NotSupportedException("Consultas de auditoría no disponibles desde la CLI.");
+        public Task<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>> GetByEntityAsync(string entityType, string entityId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>>([]);
+        public Task<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>>([]);
+        public Task<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AccessLogEntry>>([]);
+        public Task<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>> GetLogsAsync(string entityType, string entityId, int page = 1, int pageSize = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IngenIA365ERP.Application.Common.Interfaces.AuditLogEntry>>([]);
+    }
+
+    sealed class CliHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+        public string ApplicationName { get; set; } = "IngenIA365ERP.DbMigrator";
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 
     static string? GetArg(string[] args, string name)
@@ -122,18 +345,24 @@ class Program
 
     static void PrintUsage()
     {
-        Console.WriteLine("IngenIA365ERP Database Schema Manager");
+        Console.WriteLine("IngenIA365ERP — operación de base de datos (multi-motor, feature 004)");
         Console.WriteLine();
-        Console.WriteLine("Tenant operations (SQL Server):");
-        Console.WriteLine("  dotnet run -- create --connection <conn> --tenant <id> --name <name> [--plan Basic]");
-        Console.WriteLine("  dotnet run -- list --connection <conn>");
-        Console.WriteLine("  dotnet run -- drop --connection <conn> --tenant <id> --confirm");
+        Console.WriteLine("La configuración sale de la sección Database (appsettings de la API +");
+        Console.WriteLine("variables de entorno). Overrides: --provider PostgreSQL|SqlServer,");
+        Console.WriteLine("--connection <conn> y --settings-dir <ruta>.");
+        Console.WriteLine();
+        Console.WriteLine("Migraciones y seeds:");
+        Console.WriteLine("  dotnet run -- migrate [--scope admin|tenants|all] [--tenant <id>]");
+        Console.WriteLine("  dotnet run -- seed --category parametric|test [--scope admin|tenant|all] [--tenant <id>] [--confirm-test-seed]");
+        Console.WriteLine("  dotnet run -- script [--from <migración>] [--output <dir>]");
+        Console.WriteLine();
+        Console.WriteLine("Tenants:");
+        Console.WriteLine("  dotnet run -- create --tenant <id> --name <nombre> [--plan Basic]");
+        Console.WriteLine("  dotnet run -- list");
+        Console.WriteLine("  dotnet run -- drop --tenant <id> --confirm");
         Console.WriteLine();
         Console.WriteLine("MongoDB audit bootstrap (idempotente):");
         Console.WriteLine("  dotnet run -- audit-bootstrap --mongo-connection <conn> [--file path]");
-        Console.WriteLine("    --mongo-connection: ej. mongodb://admin:****@localhost:27017/?authSource=admin");
-        Console.WriteLine("    --file:             default 'database/migration/15_Audit_Mongodb_Bootstrap.json'");
-        Console.WriteLine("    Requiere env vars: AUDIT_WRITER_PASSWORD, AUDIT_READER_PASSWORD");
     }
 
     static async Task<int> RunAuditBootstrapAsync(string[] args)

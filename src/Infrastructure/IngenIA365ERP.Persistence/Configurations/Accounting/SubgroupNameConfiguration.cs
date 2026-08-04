@@ -12,7 +12,7 @@ public class SubgroupNameConfiguration : IEntityTypeConfiguration<SubgroupName>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_SubgroupNames_PublicId");
 
         builder.Property(e => e.Name).HasMaxLength(100).IsRequired();

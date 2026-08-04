@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace IngenIA365ERP.Persistence.Migrations.Admin
+namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
 {
     /// <inheritdoc />
-    public partial class InitialCentralIdentity : Migration
+    public partial class InitialSchema : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -26,7 +26,7 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     Result = table.Column<int>(type: "int", nullable: false),
                     IpAddress = table.Column<string>(type: "nvarchar(45)", maxLength: 45, nullable: true),
                     UserAgent = table.Column<string>(type: "nvarchar(512)", maxLength: 512, nullable: true),
-                    Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
+                    Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LockoutAppliedSeconds = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -45,7 +45,7 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     IsGlobalMasterAdmin = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     Status = table.Column<int>(type: "int", nullable: false, defaultValue: 0),
                     LastLoginAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     UpdatedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
@@ -91,12 +91,12 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     AcceptedByCentralUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     RevokedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     RevokedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
@@ -104,6 +104,33 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ADM_Invitations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ADM_PasswordResetTokens",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CentralUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TokenHash = table.Column<byte[]>(type: "binary(32)", nullable: false),
+                    RequesterIp = table.Column<string>(type: "nvarchar(45)", maxLength: 45, nullable: true),
+                    ExpiresAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ConsumedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ADM_PasswordResetTokens", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -133,13 +160,13 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     Status = table.Column<int>(type: "int", nullable: false, defaultValue: 0),
                     IsTenantAdmin = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     InvitedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    InvitedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
+                    InvitedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ActivatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SuspendedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SuspendedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     RevokedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     RevokedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -167,12 +194,12 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     ActivatedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     DeactivatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeactivatedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
@@ -205,7 +232,11 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     ContactPhone = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
                     ActivatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SuspendedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    ConnectionString = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    ExpirationDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Identifier = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    LicenseType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -352,7 +383,7 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     IsHeadquarters = table.Column<bool>(type: "bit", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -391,7 +422,7 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     LastPaymentDate = table.Column<DateOnly>(type: "date", nullable: true),
                     NextBillingDate = table.Column<DateOnly>(type: "date", nullable: true),
                     PaymentMethod = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -426,7 +457,7 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                     ValueType = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false, defaultValue: "String"),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     ModulePrefix = table.Column<string>(type: "nvarchar(5)", maxLength: 5, nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -549,6 +580,27 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
                 name: "UX_ADM_Invitations_TokenHash",
                 schema: "dbo",
                 table: "ADM_Invitations",
+                column: "TokenHash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ADM_PasswordResetTokens_CentralUserId_ExpiresAt",
+                schema: "dbo",
+                table: "ADM_PasswordResetTokens",
+                columns: new[] { "CentralUserId", "ExpiresAt" },
+                filter: "[ConsumedAt] IS NULL AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ADM_PasswordResetTokens_PublicId",
+                schema: "dbo",
+                table: "ADM_PasswordResetTokens",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ADM_PasswordResetTokens_TokenHash",
+                schema: "dbo",
+                table: "ADM_PasswordResetTokens",
                 column: "TokenHash",
                 unique: true);
 
@@ -704,6 +756,10 @@ namespace IngenIA365ERP.Persistence.Migrations.Admin
 
             migrationBuilder.DropTable(
                 name: "ADM_Invitations",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "ADM_PasswordResetTokens",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

@@ -12,7 +12,7 @@ public class ApplicationCodebtorConfiguration : IEntityTypeConfiguration<Applica
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_LND_ApplicationCodebtors_PublicId");
 
         builder.Property(e => e.CodeudorCode).HasMaxLength(20).IsRequired();

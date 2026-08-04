@@ -79,7 +79,28 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
 
-        modelBuilder.ApplyBaseEntityConventions();
+        // Feature 004: columnas de interoperabilidad con el store multitenant.
+        // TenantDbContext (Finbuckle/ErpTenantInfo) mapea LA MISMA tabla
+        // ADM_Tenants con estas columnas adicionales; como este contexto es el
+        // dueño de las migraciones (MigrationsTarget.Admin), deben existir en
+        // su modelo aunque la entidad Admin Tenant no las use (shadow props).
+        modelBuilder.Entity<Tenant>(b =>
+        {
+            b.Property<string?>("Identifier").HasMaxLength(100);
+            b.Property<string?>("ConnectionString").HasMaxLength(500);
+            b.Property<string?>("LicenseType").HasMaxLength(50);
+            b.Property<DateTime?>("ExpirationDate");
+        });
+
+        modelBuilder.ApplyBaseEntityConventions(Database.ProviderName);
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Feature 004 (D-06): misma convencion de precision que el contexto
+        // operativo para paridad entre motores.
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+        base.ConfigureConventions(configurationBuilder);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

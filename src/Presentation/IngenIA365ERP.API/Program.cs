@@ -197,36 +197,39 @@ try
 
     var app = builder.Build();
 
+    // Feature 004 (T019/T020) — bitacora de arranque de base de datos.
+    // La validacion fail-fast de la seccion Database corre via ValidateOnStart
+    // al iniciar el host (Database.InvalidProvider / ConnectionStringMissing);
+    // aqui solo se deja constancia del proveedor efectivo. TODA cadena citada
+    // pasa por el masker (FR-006).
+    {
+        var dbOpts = app.Services
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<IngenIA365ERP.Persistence.Providers.DatabaseOptions>>()
+            .Value;
+        var providerOrigin = Environment.GetEnvironmentVariable("Database__Provider") is not null
+            ? "variable de entorno"
+            : "appsettings";
+        Log.Information(
+            "Base de datos: proveedor {Provider} (origen: {Origin}) — operativa {Conn} — admin {AdminConn} — AutoMigrate={AutoMigrate} RunParametricSeed={RunParametricSeed} RunTestSeed={RunTestSeed}",
+            dbOpts.ProviderKey,
+            providerOrigin,
+            IngenIA365ERP.Persistence.Providers.ConnectionStringMasker.Mask(dbOpts.GetActiveConnectionString()),
+            IngenIA365ERP.Persistence.Providers.ConnectionStringMasker.Mask(dbOpts.GetActiveAdminConnectionString()),
+            dbOpts.AutoMigrate,
+            dbOpts.Seed.RunParametricSeed,
+            dbOpts.Seed.RunTestSeed?.ToString() ?? "(default por ambiente)");
+    }
+
     // Initialize MongoDB collections and indexes
     var mongoInit = app.Services.GetRequiredService<MongoDbInitializer>();
     await mongoInit.InitializeDefaultAsync();
 
-    // Seed Identity data (roles, permissions, admin user)
-    if (app.Environment.IsDevelopment())
-    {
-        // Seeder legacy ASP.NET Identity (AspNetUsers/AspNetRoles). El flujo
-        // Phase 0+ vive en SEC_Users/SEC_Roles, no en estas tablas — el
-        // seeder se mantiene solo para retro-compatibilidad con código
-        // legacy que aún consume Identity. Su fallo NO debe derribar el
-        // host: si la BD de Identity está rara, logueamos y continuamos.
-        try
-        {
-            await IdentitySeedData.SeedAsync(app.Services);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex,
-                "IdentitySeedData (legacy ASP.NET Identity) falló al sembrar. " +
-                "El flujo Phase 0+ no depende de estas tablas — el host continúa.");
-        }
-
-        // T066/T067 (US2) — primero el catálogo y los roles built-in,
-        // para que DomainSecuritySeedData pueda asignar CompanyAdmin al admin.
-        await DomainPermissionCatalogSeeder.SeedAsync(app.Services);
-        await BuiltInRolesSeeder.SeedAsync(app.Services);
-        // Seed paralelo para SEC_Users (tabla de dominio usada por el flujo Phase 0/US1).
-        await DomainSecuritySeedData.SeedAsync(app.Services);
-    }
+    // Feature 004 (T037): los seeders Phase 0 (catálogo de permisos, roles
+    // built-in, SEC_Users admin) ya NO corren aquí — viven en el framework de
+    // seeding (PhaseZeroSecuritySeeder) y los dispara el
+    // DatabaseInitializerHostedService DESPUÉS de migrar. IdentitySeedData
+    // (AspNetUsers legacy) quedó retirado: sus tablas no existen en
+    // instalaciones greenfield.
 
     // Configure the HTTP request pipeline
     if (app.Environment.IsDevelopment())

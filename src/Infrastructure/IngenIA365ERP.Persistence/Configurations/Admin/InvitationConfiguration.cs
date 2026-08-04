@@ -17,7 +17,7 @@ public class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.Email).HasMaxLength(256).IsRequired();
@@ -38,7 +38,7 @@ public class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
             .HasDefaultValue(InvitationStatus.Pending);
 
         builder.Property(e => e.ExpiresAt).IsRequired();
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
 
         builder.HasIndex(e => new { e.NormalizedEmail, e.TenantId, e.Status })
             .HasFilter("[IsDeleted] = 0")

@@ -12,7 +12,7 @@ public class TreasuryInvoiceConfiguration : IEntityTypeConfiguration<TreasuryInv
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
         builder.HasIndex(e => new { e.InvoiceNumber, e.PersonId, e.AccountCode }).IsUnique();
 

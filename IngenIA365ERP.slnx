@@ -25,6 +25,11 @@
     <Project Path="src/Presentation/IngenIA365ERP.Web.Client/IngenIA365ERP.Web.Client.csproj" />
     <Project Path="src/Presentation/IngenIA365ERP.Shared/IngenIA365ERP.Shared.csproj" />
   </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj" />
+    <Project Path="src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj" />
+  </Folder>
 
   <!-- Tests -->
   <Folder Name="/Tests/">

@@ -223,10 +223,16 @@ public class IdentityAuthenticationService : IIdentityAuthenticationService
         return IdentityOpResult.Success();
     }
 
-    private async Task RecordLoginAttempt(string email, string tenantId, string ipAddress, string userAgent, bool success, string? failureReason)
+    private Task RecordLoginAttempt(string email, string tenantId, string ipAddress, string userAgent, bool success, string? failureReason)
     {
-        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $@"INSERT INTO SEC_LoginAttempts (Email, TenantId, IpAddress, UserAgent, AttemptedAt, Success, FailureReason)
-               VALUES ({email}, {tenantId}, {ipAddress}, {userAgent}, {DateTime.UtcNow}, {success}, {failureReason})");
+        // Feature 004 (T013): el INSERT crudo anterior referenciaba columnas que
+        // ya no existen en SEC_LoginAttempts (TenantId, Success) y no era portable
+        // entre motores. Este servicio es el flujo LEGACY pre-identidad-central
+        // (/legacy-login); la telemetria de intentos vive ahora en
+        // ADM_CentralUserLoginAttempts via el LoginCommandHandler central.
+        _logger.LogInformation(
+            "Legacy login attempt: {Email} tenant {TenantId} desde {IpAddress} — success={Success} reason={FailureReason} ua={UserAgent}",
+            email, tenantId, ipAddress, success, failureReason, userAgent);
+        return Task.CompletedTask;
     }
 }

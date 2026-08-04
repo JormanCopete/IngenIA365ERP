@@ -11,7 +11,7 @@ public class ChartOfAccountConfiguration : IEntityTypeConfiguration<ChartOfAccou
         builder.ToTable("ACC_ChartOfAccounts");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.LegacyCode).HasMaxLength(20);
