@@ -11,6 +11,10 @@ COPY src/Infrastructure/IngenIA365ERP.Identity/IngenIA365ERP.Identity.csproj src
 COPY src/Infrastructure/IngenIA365ERP.Audit/IngenIA365ERP.Audit.csproj src/Infrastructure/IngenIA365ERP.Audit/
 COPY src/Infrastructure/IngenIA365ERP.Caching/IngenIA365ERP.Caching.csproj src/Infrastructure/IngenIA365ERP.Caching/
 COPY src/Infrastructure/IngenIA365ERP.Legacy/IngenIA365ERP.Legacy.csproj src/Infrastructure/IngenIA365ERP.Legacy/
+# Feature 004: ensamblados de migraciones por proveedor. La API los referencia
+# para que ambos arboles viajen con la imagen y el motor se elija en runtime.
+COPY src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/
+COPY src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/
 COPY src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj src/Presentation/IngenIA365ERP.API/
 COPY src/Presentation/IngenIA365ERP.Shared/IngenIA365ERP.Shared.csproj src/Presentation/IngenIA365ERP.Shared/
 COPY src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj src/Presentation/IngenIA365ERP.Web/
@@ -37,9 +41,18 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
+# Usuario sin privilegios: si alguien logra ejecucion remota, no es root.
+RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin appuser \
+ && mkdir -p /app/storage/attachments /app/logs \
+ && chown -R 10001:10001 /app
+COPY --from=build --chown=10001:10001 /app/publish .
+USER 10001
 
-COPY --from=build /app/publish .
+EXPOSE 8080
+# TZ=UTC: los contenedores SIEMPRE en UTC. La conversion a America/Bogota ocurre
+# solo en presentacion/reportes (evita cierres contables corridos 5 horas).
+ENV ASPNETCORE_URLS=http://+:8080 \
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    TZ=UTC
 
 ENTRYPOINT ["dotnet", "IngenIA365ERP.API.dll"]

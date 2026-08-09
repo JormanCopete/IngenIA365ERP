@@ -5,6 +5,13 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  # Permite validar imagenes desde cualquier rama sin esperar a un merge.
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: "Publicar las imagenes en GHCR"
+        type: boolean
+        default: false
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -41,32 +48,63 @@ jobs:
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # main -> imagenes de produccion; develop -> imagenes de DEV/QA;
+    # workflow_dispatch -> validacion desde cualquier rama.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
 
+      # El despliegue es GitOps: Argo CD sincroniza por DIGEST inmutable, no por
+      # "latest". Estas etiquetas son solo para trazabilidad humana.
+      - name: Calcular etiquetas
+        id: meta
+        run: |
+          BRANCH="${GITHUB_REF_NAME//\//-}"
+          SHORT="${GITHUB_SHA::12}"
+          echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          # Solo main mueve "latest".
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "latest_api=,${API_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          fi
+          # En disparo manual solo se publica si se pidio explicitamente.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" != "true" ]; then
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Login to GHCR
+        if: steps.meta.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push API
         uses: docker/build-push-action@v5
         with:
           context: .
           file: src/Presentation/IngenIA365ERP.API/Dockerfile
-          push: true
-          tags: ${{ env.API_IMAGE }}:latest,${{ env.API_IMAGE }}:${{ github.sha }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_api }}${{ steps.meta.outputs.latest_api }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and Push Web
         uses: docker/build-push-action@v5
         with:
           context: .
           file: src/Presentation/IngenIA365ERP.Web/Dockerfile
-          push: true
-          tags: ${{ env.WEB_IMAGE }}:latest,${{ env.WEB_IMAGE }}:${{ github.sha }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_web }}${{ steps.meta.outputs.latest_web }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
