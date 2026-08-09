@@ -121,7 +121,7 @@ Leyenda: 🟠 público vía Cloudflare Tunnel · 🔒 solo Tailscale · 🛡️ 
 
 | Dominio | Servicio | Ambiente | Exposición |
 |---|---|---|---|
-| `ingenia365.com` | Redirect 301 → `app.` | PDN | 🟠 |
+| `ingenia365.com` + `www` | **Web institucional (WordPress en hosting administrado externo)** — fuera de la infraestructura del ERP a propósito: WordPress es el software más atacado de internet y no puede compartir nodo con un sistema financiero regulado | — | 🟠 (apunta al hosting, no a las VPS) |
 | **`app.ingenia365.com`** | **Web + `/api` — entrada única de todas las cooperativas** | PDN | 🟠 |
 | `api.ingenia365.com` | Alias solo `/api` (MAUI, integraciones) | PDN | 🟠 |
 | `master.ingenia365.com` | Consola SaaS (`/api/saas/*`) | PDN | 🟠 + 🛡️ |

@@ -18,6 +18,9 @@ env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/${{ github.repository }}/api
   WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+  # Imagen del DbMigrator: la usa el Job PreSync de Argo CD en produccion,
+  # donde AutoMigrate=false y el esquema se aplica antes de rotar los pods.
+  MIGRATOR_IMAGE: ghcr.io/${{ github.repository }}/migrator
 
 jobs:
   build-and-test:
@@ -66,10 +69,12 @@ jobs:
           SHORT="${GITHUB_SHA::12}"
           echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "tags_mig=${MIGRATOR_IMAGE}:${BRANCH},${MIGRATOR_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           # Solo main mueve "latest".
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             echo "latest_api=,${API_IMAGE}:latest" >> "$GITHUB_OUTPUT"
             echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "latest_mig=,${MIGRATOR_IMAGE}:latest" >> "$GITHUB_OUTPUT"
           fi
           # En disparo manual solo se publica si se pidio explicitamente.
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" != "true" ]; then
@@ -106,5 +111,15 @@ jobs:
           file: src/Presentation/IngenIA365ERP.Web/Dockerfile
           push: ${{ steps.meta.outputs.push == 'true' }}
           tags: ${{ steps.meta.outputs.tags_web }}${{ steps.meta.outputs.latest_web }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Migrator
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: tools/IngenIA365ERP.DbMigrator/Dockerfile
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_mig }}${{ steps.meta.outputs.latest_mig }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
