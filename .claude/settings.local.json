@@ -1,9 +1,7 @@
 {
   "permissions": {
-	"defaultMode": "bypassPermissions",
-    "skipDangerousModePermissionPrompt": true,
     "allow": [
-	  "Bash(*)",
+      "Bash(*)",
       "Read(*)",
       "Write(*)",
       "Edit(*)",
@@ -28,8 +26,32 @@
       "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al eliminar\"\\)|Notification.ShowErrorAsync\\(res, \"Error al eliminar\"\\)|g' {} +)",
       "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al crear\"\\)|Notification.ShowErrorAsync\\(res, \"Error al crear\"\\)|g' {} +)",
       "Bash(find . -name '*.razor' -exec sed -i 's|Notification\\\\.ErrorAsync\\(\"Error al actualizar\"\\)|Notification.ShowErrorAsync\\(res, \"Error al actualizar\"\\)|g' {} +)",
-      "Bash(awk -F: '{s+=$2} END {print \"total replacements: \" s}')"
+      "Bash(awk -F: '{s+=$2} END {print \"total replacements: \" s}')",
+      "PowerShell(Get-Service MSSQLSERVER, MongoDB)",
+      "PowerShell($r5100 = Test-NetConnection -ComputerName localhost -Port 5100 -InformationLevel Quiet -WarningAction SilentlyContinue; $r8025 = Test-NetConnection -ComputerName localhost -Port 8025 -InformationLevel Quiet -WarningAction SilentlyContinue; $r1025 = Test-NetConnection -ComputerName localhost -Port 1025 -InformationLevel Quiet -WarningAction SilentlyContinue; \"API 5100: $r5100 | smtp4dev UI 8025: $r8025 | SMTP 1025: $r1025\")",
+      "PowerShell(smtp4dev --smtpport 1025 --urls \"http://localhost:8025\")",
+      "PowerShell($deadline = \\(Get-Date\\).AddSeconds\\(150\\); $ok = $false; while \\(\\(Get-Date\\) -lt $deadline\\) { try { $h = Invoke-WebRequest -Uri \"http://localhost:5100/health\" -UseBasicParsing -TimeoutSec 3; if \\($h.StatusCode -eq 200\\) { $ok = $true; break } } catch { Start-Sleep -Seconds 5 } }; if \\($ok\\) { \"API UP — health: $\\($h.StatusCode\\) $\\($h.Content\\)\" } else { \"API no responde tras 150s\" })",
+      "PowerShell(try { $s = Invoke-WebRequest -Uri \"http://localhost:8025\" -UseBasicParsing -TimeoutSec 5; \"smtp4dev UI: $\\($s.StatusCode\\)\" } catch { \"smtp4dev UI aun no responde: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($body = @{ email = \"ana.perez@coop.solidaria.test\"; password = \"AnaCoop2026!Dev\" } | ConvertTo-Json; try { $r = Invoke-RestMethod -Uri \"http://localhost:5100/api/auth/login\" -Method POST -ContentType \"application/json\" -Body $body; $r | ConvertTo-Json -Depth 6 | Out-File -Encoding utf8 \"C:\\\\Users\\\\Jorman\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--OneDrive---INGENIA-365-PSNL-AplicacionesWeb-IngenIA365ERP\\\\97730895-2b99-4d0b-aee7-7c84a046f8c8\\\\scratchpad\\\\ana-login-1.json\"; \"challenge=$\\($r.challenge\\) autoSelected=$\\($r.autoSelected\\) tenant=$\\($r.activeTenantName\\) accessToken_len=$\\($r.accessToken.Length\\) refreshToken_len=$\\($r.refreshToken.Length\\)\" } catch { \"FALLO login: HTTP $\\($_.Exception.Response.StatusCode.value__\\) — $\\($_.ErrorDetails.Message\\)\" })",
+      "PowerShell(Test-NetConnection -ComputerName localhost -Port 6379 -WarningAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"{0,-25} PID {1,-8} {2}\" -f $_.LocalAddress, $_.OwningProcess, $p.ProcessName })",
+      "PowerShell(try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect\\(\"127.0.0.1\", 6379\\); $s = $c.GetStream\\(\\); $w = New-Object System.IO.StreamWriter\\($s\\); $w.NewLine = \"`r`n\"; $w.WriteLine\\(\"PING\"\\); $w.Flush\\(\\); Start-Sleep -Milliseconds 500; $buf = New-Object byte[] 256; $n = $s.Read\\($buf, 0, 256\\); \"Respuesta \\($n bytes\\): \" + [System.Text.Encoding]::ASCII.GetString\\($buf, 0, $n\\); $c.Close\\(\\) } catch { \"ERROR: $\\($_.Exception.Message\\) / Inner: $\\($_.Exception.InnerException.Message\\)\" })",
+      "PowerShell(try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect\\(\"127.0.0.1\", 6379\\); $s = $c.GetStream\\(\\); $w = New-Object System.IO.StreamWriter\\($s\\); $w.NewLine = \"`r`n\"; $w.WriteLine\\(\"PING\"\\); $w.Flush\\(\\); Start-Sleep -Milliseconds 500; $buf = New-Object byte[] 256; $n = $s.Read\\($buf, 0, 256\\); \"Respuesta \\($n bytes\\): \" + [System.Text.Encoding]::ASCII.GetString\\($buf, 0, $n\\).Trim\\(\\); $c.Close\\(\\) } catch { \"ERROR: $\\($_.Exception.InnerException.Message\\)\" })",
+      "PowerShell($body = @{ email = \"ana.perez@coop.solidaria.test\"; password = \"AnaCoop2026!Dev\" } | ConvertTo-Json; try { $r = Invoke-RestMethod -Uri \"http://localhost:5100/api/auth/login\" -Method POST -ContentType \"application/json\" -Body $body; $r | ConvertTo-Json -Depth 6 | Out-File -Encoding utf8 \"C:\\\\Users\\\\Jorman\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--OneDrive---INGENIA-365-PSNL-AplicacionesWeb-IngenIA365ERP\\\\97730895-2b99-4d0b-aee7-7c84a046f8c8\\\\scratchpad\\\\ana-login-1.json\"; \"challenge=$\\($r.challenge\\) | autoSelected=$\\($r.autoSelected\\) | tenant=$\\($r.activeTenantName\\) | accessToken chars=$\\($r.accessToken.Length\\) | refreshToken chars=$\\($r.refreshToken.Length\\)\" } catch { \"FALLO login: HTTP $\\($_.Exception.Response.StatusCode.value__\\) — $\\($_.ErrorDetails.Message\\)\" })",
+      "PowerShell($msgs = Invoke-RestMethod -Uri \"http://localhost:8025/api/Messages\" -Method GET; $list = if \\($msgs.results\\) { $msgs.results } else { $msgs }; \"Mensajes actuales en smtp4dev: $\\($list.Count\\)\"; $list | Select-Object -First 5 | ForEach-Object { \"  - [$\\($_.receivedDate\\)] to=$\\($_.to\\) subj=$\\($_.subject\\)\" })",
+      "PowerShell(Start-Sleep -Seconds 3; $msgs = Invoke-RestMethod -Uri \"http://localhost:8025/api/Messages\" -Method GET; $list = if \\($msgs.results\\) { $msgs.results } else { $msgs }; \"Total mensajes: $\\($list.Count\\)\"; $list | Sort-Object receivedDate -Descending | Select-Object -First 2 | ForEach-Object { \"  - [$\\($_.receivedDate\\)] to=$\\($_.to\\) subj=$\\($_.subject\\) id=$\\($_.id\\)\" })",
+      "PowerShell(sqlcmd -S localhost -E -C -I -d IngenIA365ERP_Admin -Q \"SELECT name FROM sys.tables WHERE name LIKE '%PasswordReset%' OR name LIKE '%ADM_%' ORDER BY name\" -h -1)",
+      "PowerShell(Get-Process IngenIA365ERP.API -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false; Start-Sleep -Seconds 2; \"Procesos API restantes: $\\(\\(Get-Process IngenIA365ERP.API -ErrorAction SilentlyContinue | Measure-Object\\).Count\\)\")",
+      "PowerShell($deadline = \\(Get-Date\\).AddSeconds\\(150\\); $up = $false; while \\(\\(Get-Date\\) -lt $deadline\\) { try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect\\(\"127.0.0.1\", 5100\\); $c.Close\\(\\); $up = $true; break } catch { Start-Sleep -Seconds 5 } }; if \\($up\\) { \"API escuchando en 5100\" } else { \"API no arrancó tras 150s\" })",
+      "PowerShell($html = Invoke-RestMethod -Uri \"http://localhost:8025/api/Messages/9d02b783-8183-4fb3-a085-44a27f908c83/html\" -Method GET; if \\($html -match 'token=\\([A-Za-z0-9_\\\\-]+\\)'\\) { $token = $Matches[1]; $token | Out-File -Encoding ascii \"C:\\\\Users\\\\Jorman\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--OneDrive---INGENIA-365-PSNL-AplicacionesWeb-IngenIA365ERP\\\\97730895-2b99-4d0b-aee7-7c84a046f8c8\\\\scratchpad\\\\reset-token.txt\"; \"Token extraído \\($\\($token.Length\\) chars\\): $\\($token.Substring\\(0,12\\)\\)...\" } else { \"NO se encontró token= en el HTML. Primeros 500 chars:\"; $html.Substring\\(0, [Math]::Min\\(500, $html.Length\\)\\) })",
+      "PowerShell(.specify/extensions/git/scripts/powershell/create-new-feature.ps1 -Json -ShortName \"multi-motor-bd\" \"Soporte multi-motor de base de datos \\(PostgreSQL / SQL Server\\) para IngenIA365ERP: seleccion de motor por configuracion, migraciones EF Core por proveedor, auto-migrate resiliente y seeding parametrico/demo configurable por ambiente\")",
+      "PowerShell(.specify/extensions/git/scripts/powershell/auto-commit.ps1 after_specify)",
+      "PowerShell(.specify/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly)",
+      "PowerShell(.specify/scripts/powershell/setup-plan.ps1 -Json)",
+      "PowerShell(.specify/scripts/powershell/setup-tasks.ps1 -Json)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "bypassPermissions",
+    "skipDangerousModePermissionPrompt": true
   }
 }

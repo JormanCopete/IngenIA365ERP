@@ -12,7 +12,7 @@ public class DianReportFormatConfiguration : IEntityTypeConfiguration<DianReport
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_DianReportFormats_PublicId");
 
         builder.Property(e => e.FormatCode).HasMaxLength(10);

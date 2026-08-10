@@ -16,7 +16,7 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.TenantId).IsRequired();
@@ -26,7 +26,7 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
             .HasDatabaseName("UX_ADM_TenantMfaPolicies_TenantId");
 
         builder.Property(e => e.IsRequired).HasDefaultValue(false);
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
 
         builder.Property(e => e.RowVersion).IsRowVersion();
 

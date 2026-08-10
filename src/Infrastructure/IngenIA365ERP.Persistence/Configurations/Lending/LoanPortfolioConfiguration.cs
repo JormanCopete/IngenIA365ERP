@@ -11,7 +11,7 @@ public class LoanPortfolioConfiguration : IEntityTypeConfiguration<LoanPortfolio
         builder.ToTable("LND_LoanPortfolios");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.IdentificationNumber).HasMaxLength(20).IsRequired();

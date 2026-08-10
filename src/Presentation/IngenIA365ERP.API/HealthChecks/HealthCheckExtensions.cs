@@ -35,12 +35,12 @@ public static class HealthCheckExtensions
         builder.AddCheck("self", () => HealthCheckResult.Healthy("alive"), tags: [LiveTag]);
 
         // ready: dependencias externas.
-        var sqlConn = configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrWhiteSpace(sqlConn))
-        {
-            builder.AddTypeActivatedCheck<SqlServerHealthCheck>(
-                "sqlserver", failureStatus: null, tags: [ReadyTag], args: [sqlConn]);
-        }
+        // Feature 004 (T031): el chequeo de BD es del PROVEEDOR ACTIVO
+        // (PostgreSQL o SQL Server segun Database:Provider) + gate del
+        // inicializador (no-listo hasta migrar/sembrar). Reemplaza al viejo
+        // check fijo de SQL Server sobre DefaultConnection.
+        builder.AddCheck<DatabaseInitializationHealthCheck>("db-init", tags: [ReadyTag]);
+        builder.AddCheck<ActiveDatabaseHealthCheck>("database", tags: [ReadyTag]);
         var mongoConn = configuration["MongoDb:ConnectionString"];
         if (!string.IsNullOrWhiteSpace(mongoConn))
         {
@@ -64,6 +64,11 @@ public static class HealthCheckExtensions
         {
             Predicate = check => check.Tags.Contains(ReadyTag),
             ResponseWriter = WriteJsonAsync
+        });
+        // Ruta legacy Fase 0 (texto plano "Healthy") — equivalente a live.
+        app.MapHealthChecks("/api/health", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains(LiveTag)
         });
         return app;
     }

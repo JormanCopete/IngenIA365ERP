@@ -11,7 +11,7 @@ public class AccountBalanceConfiguration : IEntityTypeConfiguration<AccountBalan
         builder.ToTable("ACC_AccountBalances");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.DebitAmount).HasPrecision(18, 2);

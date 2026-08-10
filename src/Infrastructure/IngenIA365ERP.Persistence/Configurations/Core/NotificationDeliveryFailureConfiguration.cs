@@ -13,7 +13,7 @@ public class NotificationDeliveryFailureConfiguration
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique()
             .HasDatabaseName("UK_COR_NotDeliveryFailures_PublicId");
 
@@ -30,7 +30,7 @@ public class NotificationDeliveryFailureConfiguration
             .HasForeignKey(e => e.NotificationId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);
         builder.Property(e => e.DeletedBy).HasMaxLength(100);

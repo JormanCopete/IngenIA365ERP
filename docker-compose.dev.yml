@@ -7,6 +7,9 @@
 #
 #   - redis     → mismo puerto (6379) que la instalación WSL local
 #   - smtp4dev  → mismo puerto SMTP (1025) y UI (8025) que `dotnet tool smtp4dev`
+#   - postgres  → motor por defecto de desarrollo desde el feature 004
+#                 (multi-motor). SQL Server sigue siendo el servicio nativo
+#                 Windows (puerto 1433) para probar la variante on-premise.
 #
 # El objetivo es que el `appsettings.Development.json` funcione idéntico tanto
 # si usás el stack local como si usás este compose — no hay que cambiar
@@ -40,6 +43,25 @@ services:
       timeout: 3s
       retries: 5
 
+  postgres:
+    image: postgres:17
+    container_name: ingenia365-dev-postgres
+    ports:
+      # 5433 en el host: la maquina dev tiene un PostgreSQL nativo ocupando 5432.
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ingenia
+      POSTGRES_PASSWORD: IngenIA365_Dev2026!
+      POSTGRES_DB: ingenia365erp
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingenia -d ingenia365erp"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   smtp4dev:
     image: rnwood/smtp4dev:latest
     container_name: ingenia365-dev-smtp4dev
@@ -52,4 +74,5 @@ services:
 
 volumes:
   redis-dev-data:
+  postgres-dev-data:
   smtp4dev-dev-data:

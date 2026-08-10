@@ -3,14 +3,24 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop]
+  # develop es la rama de integracion: sus PRs tambien deben pasar el CI.
+  # Sin esto, el codigo llegaba a develop sin ejecutar una sola prueba.
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  # Permite validar imagenes desde cualquier rama sin esperar a un merge.
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: "Publicar las imagenes en GHCR"
+        type: boolean
+        default: false
 
 env:
   DOTNET_VERSION: '10.0.x'
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository }}/api
-  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+  # OJO: los nombres de repositorio de un registro Docker DEBEN ir en minusculas,
+  # y github.repository conserva las mayusculas del nombre real
+  # (JormanCopete/IngenIA365ERP). Se normalizan en el paso "Calcular etiquetas".
 
 jobs:
   build-and-test:
@@ -23,11 +33,25 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore IngenIA365ERP.slnx
-
-      - name: Build
-        run: dotnet build IngenIA365ERP.slnx -c Release --no-restore
+      # Se compilan los proyectos explicitamente en vez de la solucion completa:
+      # IngenIA365ERP.App es MAUI y requiere el workload correspondiente, que los
+      # runners no traen (instalarlo son ~5 min por corrida para un proyecto que
+      # el CI no despliega). API y Web arrastran todo el grafo de backend.
+      - name: Restore y Build
+        run: |
+          set -e
+          for p in \
+            src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj \
+            src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj \
+            tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj \
+            tests/IngenIA365ERP.Domain.Tests/IngenIA365ERP.Domain.Tests.csproj \
+            tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj \
+            tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj
+          do
+            echo "::group::build $p"
+            dotnet build "$p" -c Release
+            echo "::endgroup::"
+          done
 
       - name: Test Domain
         run: dotnet test tests/IngenIA365ERP.Domain.Tests -c Release --no-build --verbosity normal
@@ -41,32 +65,89 @@ jobs:
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Siempre se CONSTRUYE (un Dockerfile roto debe detectarse en el PR, no
+    # despues de mergear). Solo se PUBLICA desde main/develop.
+    if: always() && needs.build-and-test.result == 'success'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
 
+      # El despliegue es GitOps: Argo CD sincroniza por DIGEST inmutable, no por
+      # "latest". Estas etiquetas son solo para trazabilidad humana.
+      - name: Calcular etiquetas
+        id: meta
+        run: |
+          # En un pull_request GITHUB_REF_NAME es "5/merge": no sirve como
+          # etiqueta de imagen. Se usa el nombre de la rama de origen.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BRANCH="pr-${GITHUB_REF_NAME%%/*}"
+          else
+            BRANCH="${GITHUB_REF_NAME//\//-}"
+          fi
+          SHORT="${GITHUB_SHA::12}"
+          # Normalizacion a minusculas: requisito del registro.
+          REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          API_IMAGE="${REGISTRY}/${REPO_LC}/api"
+          WEB_IMAGE="${REGISTRY}/${REPO_LC}/web"
+          MIGRATOR_IMAGE="${REGISTRY}/${REPO_LC}/migrator"
+          echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "tags_mig=${MIGRATOR_IMAGE}:${BRANCH},${MIGRATOR_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          # Solo main mueve "latest".
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "latest_api=,${API_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "latest_mig=,${MIGRATOR_IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          fi
+          # Solo se publica desde main/develop; en un PR se construye para
+          # validar, pero no se contamina el registro con imagenes sin mergear.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Login to GHCR
+        if: steps.meta.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push API
         uses: docker/build-push-action@v5
         with:
           context: .
           file: src/Presentation/IngenIA365ERP.API/Dockerfile
-          push: true
-          tags: ${{ env.API_IMAGE }}:latest,${{ env.API_IMAGE }}:${{ github.sha }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_api }}${{ steps.meta.outputs.latest_api }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and Push Web
         uses: docker/build-push-action@v5
         with:
           context: .
           file: src/Presentation/IngenIA365ERP.Web/Dockerfile
-          push: true
-          tags: ${{ env.WEB_IMAGE }}:latest,${{ env.WEB_IMAGE }}:${{ github.sha }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_web }}${{ steps.meta.outputs.latest_web }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Migrator
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: tools/IngenIA365ERP.DbMigrator/Dockerfile
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags_mig }}${{ steps.meta.outputs.latest_mig }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

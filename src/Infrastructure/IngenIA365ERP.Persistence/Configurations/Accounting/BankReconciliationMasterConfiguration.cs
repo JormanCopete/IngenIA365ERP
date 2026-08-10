@@ -12,7 +12,7 @@ public class BankReconciliationMasterConfiguration : IEntityTypeConfiguration<Ba
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_BankReconciliationMasters_PublicId");
 
         builder.Property(e => e.PeriodCode).HasMaxLength(10).IsRequired();

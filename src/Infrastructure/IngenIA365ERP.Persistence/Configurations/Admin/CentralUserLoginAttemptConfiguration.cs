@@ -21,7 +21,7 @@ public class CentralUserLoginAttemptConfiguration : IEntityTypeConfiguration<Cen
         builder.Property(e => e.Result).HasConversion<int>().IsRequired();
         builder.Property(e => e.IpAddress).HasMaxLength(45);
         builder.Property(e => e.UserAgent).HasMaxLength(512);
-        builder.Property(e => e.Timestamp).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.Timestamp);
 
         // Análisis de fuerza bruta por email (research D-11).
         builder.HasIndex(e => new { e.NormalizedEmail, e.Timestamp })

@@ -21,5 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
+    <!-- Feature 004: tests unitarios de piezas de infraestructura pura
+         (DatabaseOptions, masker, orquestador de seeds). Solo en tests —
+         Application (src) sigue sin referenciar Persistence. -->
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
   </ItemGroup>
 </Project>

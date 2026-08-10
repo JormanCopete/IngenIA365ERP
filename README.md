@@ -189,6 +189,37 @@ RUN_LOAD_TESTS=1 \
 dotnet test tests/IngenIA365ERP.Load.Tests --filter "FullyQualifiedName~LoginThroughput"
 ```
 
+## Base de datos multi-motor (feature 004-multi-motor-bd)
+
+El ERP corre sobre **PostgreSQL o SQL Server** eligiendo el motor por
+configuracion — misma build, cero recompilacion. PostgreSQL es el default de
+desarrollo y el motor de la modalidad SaaS; SQL Server es opcion on-premise.
+
+```jsonc
+"Database": {
+  "Provider": "PostgreSQL",            // "PostgreSQL" | "SqlServer"
+  "ConnectionStrings":      { "PostgreSQL": "...", "SqlServer": "..." },
+  "AdminConnectionStrings": { "PostgreSQL": "...", "SqlServer": "..." }, // opcional (deriva _Admin)
+  "AutoMigrate": true,                  // default: on en Dev/QA, off en Production
+  "Seed": { "RunParametricSeed": true, "RunTestSeed": null },  // demo: on Dev/QA, off Prod (opt-in)
+  "Startup": { "RetryWindowSeconds": 60, "RetryIntervalSeconds": 5 }
+}
+```
+
+- **Variables de entorno** (ganan a appsettings): `Database__Provider`,
+  `Database__ConnectionStrings__PostgreSQL`, `Database__AutoMigrate`, etc.
+  Solo la cadena del proveedor **activo** es obligatoria.
+- **Fail-fast**: provider invalido, cadena faltante o migraciones pendientes con
+  `AutoMigrate=false` impiden el arranque con un error accionable (`Database.*`).
+- **Motor local**: `docker compose -f docker-compose.dev.yml up -d postgres`
+  (puerto **5433** — la maquina dev tiene un PostgreSQL nativo en 5432).
+  SQL Server sigue siendo el servicio nativo de Windows.
+- **Migraciones**: viven por proveedor en
+  `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{SqlServer|PostgreSql}`
+  y SIEMPRE se generan en par: `.\tools\scripts\add-migration.ps1 -Name X -Context Application|Admin`.
+  El corpus DDL de `database/schema|migration` quedo congelado como referencia.
+- Contratos completos: [`specs/004-multi-motor-bd/contracts/`](specs/004-multi-motor-bd/contracts/).
+
 ## Documentacion adicional
 
 - [`docs/CONFIGURACION-Y-AUTENTICACION.md`](docs/CONFIGURACION-Y-AUTENTICACION.md) — AppMode (Mock/Api), tenant resolution, tablas Identity, seed, cadenas de conexion, registracion DI, troubleshooting.

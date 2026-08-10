@@ -64,4 +64,8 @@ public static class AuditEventTypes
 
     // -------------------- Tenant (SaaS) --------------------
     public const string TenantCreated = "Tenant.Created";
+
+    // -------------------- Database (feature 004 multi-motor) --------------------
+    public const string DatabaseSeedExecuted = "Database.Seed.Executed";
+    public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";
 }

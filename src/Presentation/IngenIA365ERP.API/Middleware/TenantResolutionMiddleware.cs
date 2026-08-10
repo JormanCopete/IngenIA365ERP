@@ -55,6 +55,7 @@ public class TenantResolutionMiddleware
         "/api/profile/mfa/enroll",
         "/api/profile/mfa/confirm",
         "/api/health",
+        "/health",     // /health/live y /health/ready (T031 — sin tenant)
         "/swagger",
         "/_framework",
         "/_vs",

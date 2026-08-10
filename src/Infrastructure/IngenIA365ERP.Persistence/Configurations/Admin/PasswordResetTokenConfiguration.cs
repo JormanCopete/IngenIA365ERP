@@ -15,7 +15,7 @@ public sealed class PasswordResetTokenConfiguration : IEntityTypeConfiguration<P
         builder.ToTable("ADM_PasswordResetTokens");
         builder.HasKey(e => e.Id);
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.CentralUserId).IsRequired();
@@ -31,7 +31,7 @@ public sealed class PasswordResetTokenConfiguration : IEntityTypeConfiguration<P
         builder.Property(e => e.ConsumedAt);
 
         // Auditoría (AuditableEntity).
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(256);
         builder.Property(e => e.UpdatedBy).HasMaxLength(256);
         builder.Property(e => e.DeletedBy).HasMaxLength(256);

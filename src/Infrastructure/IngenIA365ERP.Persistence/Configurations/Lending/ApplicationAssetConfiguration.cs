@@ -12,7 +12,7 @@ public class ApplicationAssetConfiguration : IEntityTypeConfiguration<Applicatio
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_LND_ApplicationAssets_PublicId");
 
         builder.Property(e => e.AssetType).HasMaxLength(2).IsRequired();

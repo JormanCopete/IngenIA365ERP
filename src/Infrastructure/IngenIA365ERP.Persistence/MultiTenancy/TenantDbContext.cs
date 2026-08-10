@@ -24,7 +24,7 @@ public class TenantDbContext : Microsoft.EntityFrameworkCore.DbContext
             e.Property(t => t.LicenseType).HasMaxLength(50).HasDefaultValue("Basic");
             e.Property(t => t.MaxUsers).HasDefaultValue(10);
             e.Property(t => t.ExpirationDate);
-            e.Property(t => t.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            e.Property(t => t.CreatedAt);
         });
     }
 }

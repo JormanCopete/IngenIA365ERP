@@ -12,7 +12,7 @@ public class FinancialReportValueConfiguration : IEntityTypeConfiguration<Financ
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_FinancialReportValues_PublicId");
 
         builder.Property(e => e.ValueCode).HasMaxLength(20);

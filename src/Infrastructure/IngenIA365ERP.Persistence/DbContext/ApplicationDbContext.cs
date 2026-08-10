@@ -36,6 +36,12 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         _currentUserService = currentUserService;
     }
 
+    /// <summary>
+    /// Esquema del tenant activo — participa de la clave de cache del modelo
+    /// (feature 004, SchemaModelCacheKeyFactory).
+    /// </summary>
+    public string? TenantSchema => _tenantInfo?.Schema;
+
     // === Core (42) ===
     public DbSet<Person> People => Set<Person>();
     public DbSet<Associate> Associates => Set<Associate>();
@@ -352,10 +358,21 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
         // Convenciones transversales (T011 RowVersion + T022 filtro soft-delete).
         // Se aplica después de las configuraciones específicas para que cualquier
-        // override por entidad ya esté registrado.
-        modelBuilder.ApplyBaseEntityConventions();
+        // override por entidad ya esté registrado. El provider activo decide el
+        // mapeo de concurrencia (feature 004: ROWVERSION vs xmin).
+        modelBuilder.ApplyBaseEntityConventions(Database.ProviderName);
 
         base.OnModelCreating(modelBuilder);
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Feature 004 (D-06): precision explicita uniforme entre motores.
+        // Sin esto, PostgreSQL usaria numeric ilimitado donde SQL Server usaba
+        // decimal(18,2) por default. Los HasPrecision/HasColumnType por entidad
+        // siguen ganando a esta convencion.
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+        base.ConfigureConventions(configurationBuilder);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

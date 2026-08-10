@@ -88,6 +88,22 @@ integración del 002.
 | `docs/operaciones/manual-pruebas-funcional-remates-identidad.md` | **Manual de pruebas funcional del feature 003**: 7 pruebas completas de principio a fin (switcher, navegación por rol, recovery codes, sesión ante F5, invitación E2E, reset de MFA, smoke de regresión) con escenarios felices, negativos y de borde, actores, tabla de credenciales viva y registro de resultados. Audiencia: QA funcional. |
 | `docs/release-notes/003-identidad-remates-ui/evidencia-pruebas.md` | Evidencia de cierre del 003: suites automatizadas, recorrido T047 con capturas y bugs corregidos en la corrida. |
 
+### Fase 1 — Feature 004: Multi-Motor de Base de Datos (EN CURSO)
+PostgreSQL o SQL Server por configuración (sección `Database`), misma build sin
+recompilar: migraciones EF por proveedor como fuente única de verdad (el corpus
+DDL de `database/schema|migration` quedó CONGELADO), inicializador de arranque
+con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
+`DbMigrator migrate/seed/script` y endpoint master `POST /api/saas/database/seed`.
+| Archivo | Descripción |
+|---|---|
+| `specs/004-multi-motor-bd/spec.md` | Spec — 5 user stories, FR-001..FR-025, SC-001..SC-008, 5 clarifications. |
+| `specs/004-multi-motor-bd/plan.md` | Plan técnico: Constitution Check 12/12, estructura, Complexity Tracking (transición del principio XII). |
+| `specs/004-multi-motor-bd/research.md` | Decisiones D-01..D-13 + resultado del spike de schema-per-tenant. |
+| `specs/004-multi-motor-bd/contracts/` | Configuración `Database`, endpoints `saas/database/*` y CLI. |
+| `docs/operaciones/ci-multi-motor.md` | Matriz de CI por proveedor y gate de paridad de migraciones. |
+| `docs/operaciones/limpieza-datos-demo.md` | Procedimiento para depurar datos `system:seed-demo`. |
+| `database/schema/README-CONGELADO.md` | Declaración de congelamiento del corpus DDL histórico. |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|

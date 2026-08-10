@@ -23,7 +23,7 @@ public class TenantMembershipConfiguration : IEntityTypeConfiguration<TenantMemb
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.CentralUserId).IsRequired();
@@ -32,7 +32,7 @@ public class TenantMembershipConfiguration : IEntityTypeConfiguration<TenantMemb
             .HasConversion<int>()
             .HasDefaultValue(MembershipStatus.Invited);
         builder.Property(e => e.IsTenantAdmin).HasDefaultValue(false);
-        builder.Property(e => e.InvitedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.InvitedAt);
 
         // FK lógica al bridge CentralUserIdentity (mismo Guid Id que ADM_CentralUsers).
         // Sin navigation property en Domain — ver TenantMembership.CentralUserId XML doc.

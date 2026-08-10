@@ -12,7 +12,7 @@ public class RateByTermConfiguration : IEntityTypeConfiguration<RateByTerm>
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_LND_RatesByTerm_PublicId");
 
         builder.Property(e => e.DiscountType).HasMaxLength(2).IsRequired();

@@ -24,11 +24,17 @@ public static class DependencyInjection
             ?? new JwtSettings();
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
 
-        // === ErpIdentityDbContext (SQL Server) ===
-        services.AddDbContext<ErpIdentityDbContext>(options =>
-            options.UseSqlServer(
-                configuration.GetConnectionString("SqlServer"),
-                b => b.MigrationsAssembly(typeof(ErpIdentityDbContext).Assembly.FullName)));
+        // === ErpIdentityDbContext (legacy, multi-motor desde feature 004) ===
+        // Mapea tablas del esquema operativo cuyo DDL gobiernan las migraciones
+        // de ApplicationDbContext — por eso NUNCA migra (MigrationsTarget.None).
+        // El proveedor y la cadena vienen de la seccion Database via el
+        // configurador unico registrado por AddPersistenceServices.
+        services.AddDbContext<ErpIdentityDbContext>((sp, options) =>
+        {
+            var configurator = sp.GetRequiredService<Persistence.Providers.IDbProviderConfigurator>();
+            var dbOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Persistence.Providers.DatabaseOptions>>().Value;
+            configurator.Configure(options, dbOptions.GetActiveConnectionString(), Persistence.Providers.MigrationsTarget.None);
+        });
 
         // === ASP.NET Core Identity ===
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
@@ -103,6 +109,11 @@ public static class DependencyInjection
         services.AddScoped<IIdentityAuthenticationService, IdentityAuthenticationService>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IEncryptionService, EncryptionService>();
+
+        // Feature 004 (T037): seeders Phase 0 integrados al framework de
+        // seeding — corren tras las migraciones del inicializador.
+        services.AddScoped<Persistence.Seeding.IDataSeeder, Seed.MasterAdminSeeder>();
+        services.AddScoped<Persistence.Seeding.IDataSeeder, Seed.PhaseZeroSecuritySeeder>();
 
         // === Fase 0 — US1 ===
         services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();

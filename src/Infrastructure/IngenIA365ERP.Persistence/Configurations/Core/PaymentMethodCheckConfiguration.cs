@@ -12,7 +12,7 @@ public class PaymentMethodCheckConfiguration : IEntityTypeConfiguration<PaymentM
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 
-        builder.Property(e => e.PublicId).HasDefaultValueSql("NEWID()");
+        builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_PaymentMethodChecks_PublicId");
 
         builder.Property(e => e.VoucherTypeCode).HasMaxLength(10).IsRequired();
@@ -27,7 +27,7 @@ public class PaymentMethodCheckConfiguration : IEntityTypeConfiguration<PaymentM
         builder.HasIndex(e => new { e.VoucherTypeCode, e.DocumentNumber, e.CheckNumber, e.BankCode }).IsUnique().HasDatabaseName("UK_COR_PaymentMethodChecks_Voucher_Doc_Check_Bank");
 
         // Audit
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);
         builder.Property(e => e.UpdatedBy).HasMaxLength(100);
         builder.Property(e => e.DeletedBy).HasMaxLength(100);

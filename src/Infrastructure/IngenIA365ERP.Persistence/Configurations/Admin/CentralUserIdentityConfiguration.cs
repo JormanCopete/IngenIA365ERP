@@ -23,7 +23,7 @@ public class CentralUserIdentityConfiguration : IEntityTypeConfiguration<Central
         builder.Property(e => e.MfaSecret).HasMaxLength(512);
         builder.Property(e => e.Status).HasDefaultValue(0);
         builder.Property(e => e.IsGlobalMasterAdmin).HasDefaultValue(false);
-        builder.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(256);
         builder.Property(e => e.UpdatedBy).HasMaxLength(256);
         builder.Property(e => e.DeletedBy).HasMaxLength(256);
