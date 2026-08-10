@@ -9,30 +9,43 @@
 #   docker run ... migrator seed --category parametric --scope all
 #   docker run ... migrator script --provider PostgreSQL
 
+# ── Etapa 0: manifiestos de proyecto ──
+# Ver la nota extensa en el Dockerfile de la API: se copian todos los .csproj
+# derivandolos del contexto en vez de enumerarlos, porque la lista manual se
+# desactualiza en silencio y rompe el restore dentro de la imagen.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS manifests
+WORKDIR /src
+COPY . .
+RUN find . -type f \
+      ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
+      ! -name '*.props' ! -name '*.targets' \
+      ! -iname 'nuget.config' ! -name 'packages.lock.json' \
+      -delete \
+ && find . -mindepth 1 -type d -empty -delete
+
 # ── Etapa 1: compilacion ──
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Los .csproj primero, para aprovechar la cache de restore.
-COPY IngenIA365ERP.slnx ./
-COPY src/Core/IngenIA365ERP.Domain/IngenIA365ERP.Domain.csproj src/Core/IngenIA365ERP.Domain/
-COPY src/Core/IngenIA365ERP.Application/IngenIA365ERP.Application.csproj src/Core/IngenIA365ERP.Application/
-COPY src/Infrastructure/IngenIA365ERP.Persistence/IngenIA365ERP.Persistence.csproj src/Infrastructure/IngenIA365ERP.Persistence/
-COPY src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/
-COPY src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/
-COPY src/Infrastructure/IngenIA365ERP.Audit/IngenIA365ERP.Audit.csproj src/Infrastructure/IngenIA365ERP.Audit/
-COPY tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj tools/IngenIA365ERP.DbMigrator/
-
+COPY --from=manifests /src .
 RUN dotnet restore tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj
 
+# Codigo fuente. legacy/ no es opcional: IngenIA365ERP.Legacy referencia
+# ERP.Core, que vive ahi.
 COPY src/ src/
-COPY tools/IngenIA365ERP.DbMigrator/ tools/IngenIA365ERP.DbMigrator/
+COPY tools/ tools/
+COPY legacy/ legacy/
 
 RUN dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj \
       -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
 # ── Etapa 2: ejecucion ──
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+# Base aspnet y NO runtime: aunque el DbMigrator es una app de consola, su grafo
+# de referencias (Application, Persistence, Identity) declara el framework
+# Microsoft.AspNetCore.App. Con la base "runtime" la imagen COMPILA pero al
+# ejecutarse muere con "No frameworks were found" — y lo haria dentro del Job
+# PreSync de produccion, con el despliegue ya en marcha.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # Usuario sin privilegios: este contenedor tiene credenciales de BD con permisos
