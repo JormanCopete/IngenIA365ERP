@@ -140,7 +140,11 @@ wwwroot/_content/
 *.apk
 *.aab
 *.ipa
+# OJO: "*.app" apunta a los paquetes de macOS, pero tambien coincide con el
+# NOMBRE del proyecto MAUI (IngenIA365ERP.App), por lo que su codigo fuente
+# quedaba fuera del control de versiones y el CI no podia compilar la solucion.
 *.app
+!src/Presentation/IngenIA365ERP.App/
 *.dSYM/
 Resources/Resource.designer.cs
 

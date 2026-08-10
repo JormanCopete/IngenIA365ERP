@@ -35,11 +35,25 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore IngenIA365ERP.slnx
-
-      - name: Build
-        run: dotnet build IngenIA365ERP.slnx -c Release --no-restore
+      # Se compilan los proyectos explicitamente en vez de la solucion completa:
+      # IngenIA365ERP.App es MAUI y requiere el workload correspondiente, que los
+      # runners no traen (instalarlo son ~5 min por corrida para un proyecto que
+      # el CI no despliega). API y Web arrastran todo el grafo de backend.
+      - name: Restore y Build
+        run: |
+          set -e
+          for p in \
+            src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj \
+            src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj \
+            tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj \
+            tests/IngenIA365ERP.Domain.Tests/IngenIA365ERP.Domain.Tests.csproj \
+            tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj \
+            tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj
+          do
+            echo "::group::build $p"
+            dotnet build "$p" -c Release
+            echo "::endgroup::"
+          done
 
       - name: Test Domain
         run: dotnet test tests/IngenIA365ERP.Domain.Tests -c Release --no-build --verbosity normal

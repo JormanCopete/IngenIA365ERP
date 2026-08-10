@@ -1,0 +1,99 @@
+using System.Reflection;
+using IngenIA365ERP.App.Services;
+using IngenIA365ERP.Shared.Services;
+using IngenIA365ERP.Shared.Services.Mock;
+using IngenIA365ERP.Shared.Configuration;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Syncfusion.Blazor;
+
+namespace IngenIA365ERP.App
+{
+    public static class MauiProgram
+    {
+        public static MauiApp CreateMauiApp()
+        {
+            // Register SyncFusion license
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("LICENSE_KEY_PLACEHOLDER");
+
+            var builder = MauiApp.CreateBuilder();
+            builder
+                .UseMauiApp<App>()
+                .ConfigureFonts(fonts =>
+                {
+                    fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                });
+
+            // Load embedded appsettings(.Development).json into the configuration root
+            var configBuilder = new ConfigurationBuilder();
+            AddEmbeddedJson(configBuilder, "appsettings.json", optional: false);
+#if DEBUG
+            AddEmbeddedJson(configBuilder, "appsettings.Development.json", optional: true);
+#endif
+            builder.Configuration.AddConfiguration(configBuilder.Build());
+
+            // Apply AppMode (Environment / DataSource / ApiBaseUrl)
+            AppMode.Configure(builder.Configuration);
+
+            // Add SyncFusion Blazor services
+            builder.Services.AddSyncfusionBlazor();
+
+            // Add device-specific services used by the IngenIA365ERP.Shared project
+            builder.Services.AddSingleton<IFormFactor, FormFactor>();
+            builder.Services.AddSingleton<Shared.Services.ISecureStorage, SecureStorageService>();
+            builder.Services.AddSingleton<ITenantService, TenantService>();
+
+            // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
+            builder.Services.AddTransient<AuthBearerHandler>();
+            builder.Services.AddTransient<TenantDelegatingHandler>();
+
+            // Named HttpClient used by all pages/services.
+            builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
+                .AddHttpMessageHandler<AuthBearerHandler>()
+                .AddHttpMessageHandler<TenantDelegatingHandler>();
+            builder.Services.AddSingleton(sp =>
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient("api"));
+
+            // Add authentication services
+            if (AppMode.UseMock)
+                builder.Services.AddSingleton<IAuthService, MockAuthService>();
+            else
+                builder.Services.AddSingleton<IAuthService, AuthService>();
+            System.Diagnostics.Debug.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={AppMode.ApiBaseUrl}");
+
+            builder.Services.AddSingleton<INotificationService, NotificationService>();
+            builder.Services.AddSingleton<ILoadingService, LoadingService>();
+
+            // Feature 003 (US1) — estado de formularios sucios (guardia del
+            // TenantSwitcher, FR-103). Singleton: MAUI es mono-usuario.
+            builder.Services.AddSingleton<IFormDirtyStateService, InMemoryFormDirtyStateService>();
+
+            builder.Services.AddSingleton<AuthenticationStateProvider, CustomAuthStateProvider>();
+            builder.Services.AddAuthorizationCore();
+
+            builder.Services.AddMauiBlazorWebView();
+
+#if DEBUG
+            builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Logging.AddDebug();
+#endif
+
+            return builder.Build();
+        }
+
+        private static void AddEmbeddedJson(IConfigurationBuilder cfg, string fileName, bool optional)
+        {
+            var assembly = typeof(MauiProgram).Assembly;
+            var resourceName = $"{assembly.GetName().Name}.{fileName}";
+            var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream is null)
+            {
+                if (!optional)
+                    throw new FileNotFoundException($"Embedded config not found: {resourceName}");
+                return;
+            }
+            cfg.AddJsonStream(stream);
+        }
+    }
+}
