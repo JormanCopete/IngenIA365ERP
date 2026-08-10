@@ -18,11 +18,9 @@ on:
 env:
   DOTNET_VERSION: '10.0.x'
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository }}/api
-  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
-  # Imagen del DbMigrator: la usa el Job PreSync de Argo CD en produccion,
-  # donde AutoMigrate=false y el esquema se aplica antes de rotar los pods.
-  MIGRATOR_IMAGE: ghcr.io/${{ github.repository }}/migrator
+  # OJO: los nombres de repositorio de un registro Docker DEBEN ir en minusculas,
+  # y github.repository conserva las mayusculas del nombre real
+  # (JormanCopete/IngenIA365ERP). Se normalizan en el paso "Calcular etiquetas".
 
 jobs:
   build-and-test:
@@ -89,6 +87,11 @@ jobs:
             BRANCH="${GITHUB_REF_NAME//\//-}"
           fi
           SHORT="${GITHUB_SHA::12}"
+          # Normalizacion a minusculas: requisito del registro.
+          REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          API_IMAGE="${REGISTRY}/${REPO_LC}/api"
+          WEB_IMAGE="${REGISTRY}/${REPO_LC}/web"
+          MIGRATOR_IMAGE="${REGISTRY}/${REPO_LC}/migrator"
           echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_mig=${MIGRATOR_IMAGE}:${BRANCH},${MIGRATOR_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
