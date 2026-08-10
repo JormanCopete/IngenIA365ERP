@@ -37,9 +37,15 @@ $secretPlain  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secretSecure))
 if ([string]::IsNullOrWhiteSpace($secretPlain)) { throw "El Secret Access Key no puede estar vacio." }
 
+# La region tambien va en el Secret: el CRD del plugin la exige como referencia
+# a una clave del secreto, NO como texto en el manifiesto.
+$region = Read-Host "  AWS_REGION [us-east-1]"
+if ([string]::IsNullOrWhiteSpace($region)) { $region = 'us-east-1' }
+
 # El Secret se arma como YAML con los valores en base64 y se envia por STDIN.
 $b64Key    = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($accessKey))
 $b64Secret = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secretPlain))
+$b64Region = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($region))
 
 Write-Host ""
 foreach ($d in $destinos) {
@@ -49,10 +55,15 @@ kind: Secret
 metadata:
   name: s3-backup-creds
   namespace: $($d.Namespace)
+  labels:
+    # Sin esta etiqueta, una rotacion posterior de credenciales no llega al
+    # sidecar de backup hasta reiniciar el pod.
+    cnpg.io/reload: ""
 type: Opaque
 data:
   ACCESS_KEY_ID: $b64Key
   ACCESS_SECRET_KEY: $b64Secret
+  AWS_REGION: $b64Region
 "@
     Write-Host ("  {0,-12} ({1}) ... " -f $d.Nombre, $d.Namespace) -NoNewline
     $salida = $yaml | ssh -i $KeyPath -o BatchMode=yes "root@$($d.Host)" "k3s kubectl apply -f -" 2>&1

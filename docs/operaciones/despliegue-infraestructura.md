@@ -49,6 +49,33 @@
 Grafana con dashboards en `America/Bogota`; retención de métricas 30 días
 (la auditoría SARLAFT de 5 años vive en MongoDB, aparte).
 
+### Cloudflare Tunnel y cierre de puertos (2026-08-10)
+
+| # | Paso | Resultado |
+|---|---|---|
+| 1 | DNS `ingenia365.com` migrado de GoDaddy a Cloudflare | ✅ sin caídas; correo M365, Teams e Intune intactos (verificado) |
+| 2 | SSL/TLS **Full (strict)** + TLS 1.2 mínimo + Always Use HTTPS | ✅ (HSTS deliberadamente apagado hasta estabilizar) |
+| 3 | Túnel `erp-pdn` (`d3214473-38cb…`) | ✅ 8 conexiones QUIC en 5 bordes de Cloudflare |
+| 4 | `cloudflared` en el clúster, 2 réplicas + PodDisruptionBudget | ✅ credencial copiada del disco al Secret sin intermediarios |
+| 5 | `app.ingenia365.com` → Traefik por el túnel | ✅ HTTP 404 (correcto: llega a Traefik, ERP aún sin desplegar) |
+| 6 | **IP de producción oculta** | ✅ internet ve `172.67.x.x` (Cloudflare), no `85.239.231.94` |
+| 7 | Tailscale SSH desactivado (interceptaba el puerto 22 pidiendo auth por navegador) | ✅ SSH por llave sobre la malla, 6/6 estable |
+| 8 | **SSH público cerrado** en ambos servidores | ✅ con interruptor de hombre muerto que reabría a los 10 min si fallaba |
+| 9 | Firewall activado en NONPROD (estaba desactivado) | ✅ **cero puertos expuestos a internet** |
+
+**Exposición final a internet**
+
+| Servidor | Puertos abiertos |
+|---|---|
+| PDN | Solo 80/443 (Caddy del panel; se cierran al migrarlo al clúster) |
+| NONPROD | **Ninguno** |
+
+Servicios verificados tras el cierre: panel HTTP 200, túnel respondiendo, Grafana accesible por la malla.
+
+> **Mejora anotada**: Tailscale SSH permite acceso sin llaves, autenticado por
+> identidad de la red y con grabación de sesión — atractivo para un producto
+> regulado. Requiere configurar la política ACL del tailnet.
+
 ### Pendientes que bloquean el avance (acción manual)
 
 | # | Acción | Desbloquea |
