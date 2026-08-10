@@ -67,9 +67,9 @@ jobs:
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
-    # main -> imagenes de produccion; develop -> imagenes de DEV/QA;
-    # workflow_dispatch -> validacion desde cualquier rama.
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    # Siempre se CONSTRUYE (un Dockerfile roto debe detectarse en el PR, no
+    # despues de mergear). Solo se PUBLICA desde main/develop.
+    if: always() && needs.build-and-test.result == 'success'
     permissions:
       contents: read
       packages: write
@@ -81,7 +81,13 @@ jobs:
       - name: Calcular etiquetas
         id: meta
         run: |
-          BRANCH="${GITHUB_REF_NAME//\//-}"
+          # En un pull_request GITHUB_REF_NAME es "5/merge": no sirve como
+          # etiqueta de imagen. Se usa el nombre de la rama de origen.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BRANCH="pr-${GITHUB_REF_NAME%%/*}"
+          else
+            BRANCH="${GITHUB_REF_NAME//\//-}"
+          fi
           SHORT="${GITHUB_SHA::12}"
           echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
@@ -92,11 +98,14 @@ jobs:
             echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
             echo "latest_mig=,${MIGRATOR_IMAGE}:latest" >> "$GITHUB_OUTPUT"
           fi
-          # En disparo manual solo se publica si se pidio explicitamente.
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" != "true" ]; then
-            echo "push=false" >> "$GITHUB_OUTPUT"
-          else
+          # Solo se publica desde main/develop; en un PR se construye para
+          # validar, pero no se contamina el registro con imagenes sin mergear.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Login to GHCR
