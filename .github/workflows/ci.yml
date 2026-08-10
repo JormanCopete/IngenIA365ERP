@@ -3,8 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop]
+  # develop es la rama de integracion: sus PRs tambien deben pasar el CI.
+  # Sin esto, el codigo llegaba a develop sin ejecutar una sola prueba.
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   # Permite validar imagenes desde cualquier rama sin esperar a un merge.
   workflow_dispatch:
     inputs:
