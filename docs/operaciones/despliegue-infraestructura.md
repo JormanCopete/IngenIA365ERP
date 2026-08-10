@@ -76,15 +76,48 @@ Servicios verificados tras el cierre: panel HTTP 200, túnel respondiendo, Grafa
 > identidad de la red y con grabación de sesión — atractivo para un producto
 > regulado. Requiere configurar la política ACL del tailnet.
 
+### GitOps y cadena de despliegue (2026-08-10)
+
+El despliegue **no usa SSH ni corre desde GitHub Actions**: Argo CD, dentro de
+cada clúster, lee el repositorio privado `ingenia365-gitops` y aplica lo que
+encuentra. Actions solo compila, prueba y publica imágenes.
+
+| # | Paso | Resultado |
+|---|---|---|
+| 1 | Repo GitOps privado con Kustomize (`base` + overlays dev/qa/pdn) | ✅ |
+| 2 | Llaves de despliegue **generadas en cada servidor** y registradas como *deploy key* de solo lectura | ✅ la clave privada nunca sale del servidor |
+| 3 | Aplicaciones `erp-dev` y `erp-qa` | ✅ sincronización automática (dev además con auto-reparación) |
+| 4 | Aplicación `erp-pdn` | ✅ **sincronización manual a propósito**: producción no se actualiza sola |
+| 5 | Cadena validada de extremo a extremo en `erp-dev` | ✅ PostgreSQL, Redis y MongoDB desplegados por Argo CD |
+| 6 | Claves de firma RS256 por ambiente (4096 bits en PDN, 2048 en dev/qa) | ✅ un token de DEV no vale en producción |
+| 7 | Imágenes `api`, `web` y `migrator` construidas en el CI | ✅ ver nota abajo |
+
+**Migraciones en producción**: `AutoMigrate=false`. El esquema lo aplica un Job
+`PreSync` de Argo CD con la imagen del `DbMigrator` **antes** de rotar los pods,
+de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
+
+> **Corrección del CI encontrada aquí**: las imágenes solo se construían *después*
+> de mergear, así que un `Dockerfile` roto se descubría tarde. Ahora se construyen
+> también en cada PR (sin publicarlas). El primer intento destapó dos fallos
+> reales y preexistentes: los `Dockerfile` no copiaban los proyectos de
+> migraciones del feature 004, y el nombre de las imágenes llevaba mayúsculas
+> (`JormanCopete/IngenIA365ERP`), que un registro Docker rechaza.
+
 ### Pendientes que bloquean el avance (acción manual)
 
 | # | Acción | Desbloquea |
 |---|---|---|
 | ✅ M1 | Tailscale en el PC de trabajo | hecho — SSH por la malla verificado |
 | ✅ M2 | HTTPS certificates en la tailnet | hecho — Argo CD publicado con TLS |
-| ⏳ M3 | **Autorizar `erp-nonprod` en la tailnet** | Publicar Grafana y Argo CD de nonprod |
-| ⏳ M4 | Migrar nameservers de `ingenia365.com` (GoDaddy → Cloudflare) — ver [guía](migracion-dns-cloudflare.md) | Cloudflare Tunnel y dominios públicos |
-| ⏳ M5 | Crear bucket en Backblaze B2 con **Object Lock** | Backups con PITR y retención SARLAFT |
+| ✅ M3 | Autorizar `erp-nonprod` en la tailnet | hecho — Grafana y Argo CD de nonprod publicados |
+| ✅ M4 | Migrar nameservers de `ingenia365.com` (GoDaddy → Cloudflare) — ver [guía](migracion-dns-cloudflare.md) | hecho — túnel y dominios operativos |
+| ⏳ M5 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado, y ejecutar `tools/scripts/crear-secreto-s3.ps1` | Backups con PITR y retención SARLAFT |
+| ⏳ M6 | **Rotar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Higiene de credenciales — independiente de M5 |
+| ⏳ M7 | Mergear el PR a `develop` | Publicación de imágenes en GHCR y primer despliegue del ERP |
+
+> **M5 usa S3 de AWS** por decisión del usuario (ya disponible), no Backblaze B2
+> como se había diseñado. El diseño con Object Lock sigue siendo el objetivo:
+> S3 ofrece Object Lock equivalente y conviene activarlo en el bucket nuevo.
 
 ## 1. Inventario real de servidores (verificado 2026-08-09)
 
