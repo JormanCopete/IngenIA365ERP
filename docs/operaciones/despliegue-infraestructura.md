@@ -111,9 +111,38 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 | ✅ M2 | HTTPS certificates en la tailnet | hecho — Argo CD publicado con TLS |
 | ✅ M3 | Autorizar `erp-nonprod` en la tailnet | hecho — Grafana y Argo CD de nonprod publicados |
 | ✅ M4 | Migrar nameservers de `ingenia365.com` (GoDaddy → Cloudflare) — ver [guía](migracion-dns-cloudflare.md) | hecho — túnel y dominios operativos |
-| ⏳ M5 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado, y ejecutar `tools/scripts/crear-secreto-s3.ps1` | Backups con PITR y retención SARLAFT |
-| ⏳ M6 | **Rotar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Higiene de credenciales — independiente de M5 |
-| ⏳ M7 | Mergear el PR a `develop` | Publicación de imágenes en GHCR y primer despliegue del ERP |
+| ✅ M5 | Mergear el PR a `develop` | hecho — imágenes publicadas y ERP desplegado en DEV y QA |
+| ✅ M6 | Repositorio y paquetes de GHCR en privado + Secret `ghcr-pull` | hecho — verificado con prueba de control (sin el secreto la descarga falla con 401) |
+| ⏳ M7 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado, y ejecutar `tools/scripts/crear-secreto-s3.ps1` | Backups con PITR y retención SARLAFT |
+| ⏳ M8 | **Rotar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Higiene de credenciales — independiente de M7 |
+| ⏳ M9 | Respaldo propio de **MongoDB** | La auditoría SARLAFT (5 años) vive en disco local del nodo, sin redundancia ni backup |
+
+### Estado de los ambientes (2026-08-11)
+
+| Ambiente | Estado | Sincronización |
+|---|---|---|
+| DEV | ✅ operativo, `Synced/Healthy`, 5/5 pods | automática con auto-reparación |
+| QA | ✅ operativo, `Synced/Healthy`, 5/5 pods | automática sin auto-reparación |
+| PDN | ⛔ **sin desplegar** | manual |
+
+### Flujo de ramas y ambientes
+
+| Rama | Etiqueta de imagen | Ambiente | Cómo llega |
+|---|---|---|---|
+| `develop` (por defecto) | `:develop` | DEV y QA | Argo CD sincroniza solo |
+| `release` | `:release` + `:latest` | **PRODUCCIÓN** | Argo CD **requiere aprobación manual** |
+
+Producción se despliega **desde `release`**, no desde `main`. Se promociona con un
+merge `develop → release`: eso publica las imágenes `:release`, y recién entonces
+alguien aprueba la sincronización en Argo CD. Son dos actos deliberados y
+separados — publicar una imagen no despliega nada por sí solo.
+
+`main` queda sin uso en este flujo; el CI la sigue construyendo por si se
+conserva como rama histórica.
+
+> Antes de la primera promoción a `release` conviene resolver M9. Desplegar
+> producción es empezar a acumular auditoría regulada de retención obligatoria
+> sin red de seguridad.
 
 > **M5 usa S3 de AWS** por decisión del usuario (ya disponible), no Backblaze B2
 > como se había diseñado. El diseño con Object Lock sigue siendo el objetivo:
