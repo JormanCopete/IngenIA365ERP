@@ -125,12 +125,24 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 | QA | ✅ operativo, `Synced/Healthy`, 5/5 pods | automática sin auto-reparación |
 | PDN | ⛔ **sin desplegar** | manual |
 
-**Producción está bloqueada por diseño y por etiqueta.** El overlay de PDN apunta a
-imágenes `:main`, y `main` está 68 commits por detrás de `develop`: esas imágenes
-no existen. Desplegar producción exige primero un merge `develop → main`.
+### Flujo de ramas y ambientes
 
-> Antes de ese merge conviene resolver M9. Desplegar producción es empezar a
-> acumular auditoría regulada de retención obligatoria sin red de seguridad.
+| Rama | Etiqueta de imagen | Ambiente | Cómo llega |
+|---|---|---|---|
+| `develop` (por defecto) | `:develop` | DEV y QA | Argo CD sincroniza solo |
+| `release` | `:release` + `:latest` | **PRODUCCIÓN** | Argo CD **requiere aprobación manual** |
+
+Producción se despliega **desde `release`**, no desde `main`. Se promociona con un
+merge `develop → release`: eso publica las imágenes `:release`, y recién entonces
+alguien aprueba la sincronización en Argo CD. Son dos actos deliberados y
+separados — publicar una imagen no despliega nada por sí solo.
+
+`main` queda sin uso en este flujo; el CI la sigue construyendo por si se
+conserva como rama histórica.
+
+> Antes de la primera promoción a `release` conviene resolver M9. Desplegar
+> producción es empezar a acumular auditoría regulada de retención obligatoria
+> sin red de seguridad.
 
 > **M5 usa S3 de AWS** por decisión del usuario (ya disponible), no Backblaze B2
 > como se había diseñado. El diseño con Object Lock sigue siendo el objetivo:

@@ -1,12 +1,17 @@
 name: CI/CD Pipeline
 
 on:
+  # Flujo de ramas:
+  #   develop -> integracion (despliega DEV y QA con la etiqueta :develop)
+  #   release -> PRODUCCION  (despliega PDN con la etiqueta :release)
+  # El overlay de produccion apunta a :release, asi que sin esta rama en la
+  # lista no existiria ninguna imagen que producción pueda desplegar.
   push:
-    branches: [main, develop]
-  # develop es la rama de integracion: sus PRs tambien deben pasar el CI.
-  # Sin esto, el codigo llegaba a develop sin ejecutar una sola prueba.
+    branches: [main, develop, release]
+  # Los PRs a estas ramas tambien deben pasar el CI. Sin esto, el codigo
+  # llegaba a develop sin ejecutar una sola prueba.
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, release]
   # Permite validar imagenes desde cualquier rama sin esperar a un merge.
   workflow_dispatch:
     inputs:
@@ -95,8 +100,10 @@ jobs:
           echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
           echo "tags_mig=${MIGRATOR_IMAGE}:${BRANCH},${MIGRATOR_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
-          # Solo main mueve "latest".
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
+          # "latest" lo mueve la rama de PRODUCCION, no main: es la unica lectura
+          # util de esa etiqueta ("lo que hay publicado para los clientes").
+          # El despliegue real igual va por digest, no por esta etiqueta.
+          if [ "$GITHUB_REF_NAME" = "release" ]; then
             echo "latest_api=,${API_IMAGE}:latest" >> "$GITHUB_OUTPUT"
             echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
             echo "latest_mig=,${MIGRATOR_IMAGE}:latest" >> "$GITHUB_OUTPUT"
