@@ -1,12 +1,10 @@
 # =============================================================================
 # crear-buckets-backup.ps1 - Crea y configura en AWS el bucket de respaldos del
-# ERP, el usuario IAM con permisos minimos, y deja la credencial instalada en
-# los tres clusteres.
+# ERP y, si hay permisos, el usuario IAM con su llave instalada en los clusteres.
 #
 # 🚨 LO IRREVERSIBLE: Object Lock SOLO puede habilitarse AL CREAR el bucket. En
-# uno existente exige abrir caso con AWS Support. Por eso este script crea un
-# bucket dedicado: `polly-carteravirtual-pdn` no lo tiene y ya no puede tenerlo.
-# Habilitarlo no obliga a bloquear nada; NO habilitarlo si es sin retorno.
+# uno existente exige abrir caso con AWS Support. Habilitarlo no obliga a
+# bloquear nada; NO habilitarlo si es sin retorno.
 #
 # UN SOLO BUCKET alcanza: con Object Lock habilitado, el sellado regulatorio
 # mensual aplica COMPLIANCE objeto por objeto mientras el resto del bucket usa
@@ -16,16 +14,15 @@
 #   ingenia365-erp/mongo/diario/     auditoria diaria      GOVERNANCE 40d
 #   ingenia365-erp/audit/<mes>/      sellado regulatorio   COMPLIANCE 5 anos
 #
-# SEGURIDAD: la llave secreta nunca se imprime. Se genera, viaja por STDIN sobre
-# SSH a los tres clusteres y se borra de memoria. Solo se muestra el Access Key
-# ID, que por si solo no sirve para nada.
+# ES RE-EJECUTABLE: si el bucket ya existe, completa lo que falte sin recrearlo.
 #
-# REQUISITOS: AWS CLI ya configurado. Este script NO pide ni maneja tus
-# credenciales de AWS: usa el perfil que le indiques.
+# SEGURIDAD: la llave secreta nunca se imprime. Se genera, viaja por STDIN sobre
+# SSH a los tres clusteres y se borra de memoria.
 #
 # Uso:
 #   .\tools\scripts\crear-buckets-backup.ps1 -Perfil ingenia365 -SoloVerificar
 #   .\tools\scripts\crear-buckets-backup.ps1 -Perfil ingenia365
+#   .\tools\scripts\crear-buckets-backup.ps1 -Perfil ingenia365 -OmitirIam
 # =============================================================================
 param(
     [string]$Bucket     = 'ingenia365-erp-backups',
@@ -36,6 +33,9 @@ param(
     # Perfil del AWS CLI. Sin esto se usa el perfil por defecto, que puede
     # apuntar a OTRA cuenta de AWS.
     [string]$Perfil     = '',
+    # Salta la parte de IAM: util cuando el usuario no tiene permisos para
+    # crear usuarios y la credencial se genera a mano desde la consola.
+    [switch]$OmitirIam,
     [switch]$SoloVerificar
 )
 
@@ -47,30 +47,72 @@ function Ok($t)       { Write-Host "      OK  $t" -ForegroundColor Green }
 function Nota($t)     { Write-Host "      --  $t" -ForegroundColor DarkGray }
 function Aviso($t)    { Write-Host "      !!  $t" -ForegroundColor Yellow }
 
+# $ErrorActionPreference NO alcanza para comandos nativos: si `aws` falla, la
+# ejecucion continua igual. Sin este envoltorio el script imprimia "OK" justo
+# despues de cada error y reportaba como configurado un bucket que no lo estaba.
+function Aws {
+    $salida = & aws @args
+    if ($LASTEXITCODE -ne 0) { throw "Fallo el comando: aws $($args -join ' ')" }
+    return $salida
+}
+
+# Igual que Aws pero sin abortar: para comprobaciones donde el fallo es una
+# respuesta valida ("no existe", "no configurado").
+function AwsTolerante {
+    $salida = & aws @args 2>$null
+    return @{ Ok = ($LASTEXITCODE -eq 0); Salida = $salida }
+}
+
+# Windows PowerShell 5.1 escribe UTF-8 CON BOM y el AWS CLI rechaza el archivo
+# con "Expected: '=', received: 'i'". Hay que escribirlo sin BOM explicitamente.
+function JsonTemporal($contenido) {
+    $ruta = [IO.Path]::GetTempFileName()
+    [IO.File]::WriteAllText($ruta, $contenido, (New-Object Text.UTF8Encoding($false)))
+    return $ruta
+}
+
 # --- 0. Preflight ------------------------------------------------------------
 Paso 0 "Comprobaciones previas"
 
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     throw "AWS CLI no esta instalado o no esta en el PATH. https://aws.amazon.com/cli/"
 }
-$identidad = aws sts get-caller-identity --output json | ConvertFrom-Json
+$identidad = Aws sts get-caller-identity --output json | ConvertFrom-Json
 $perfilUsado = if ($Perfil) { $Perfil } else { '(por defecto)' }
 Ok "AWS CLI autenticado como $($identidad.Arn)"
 Nota "Cuenta $($identidad.Account) - perfil $perfilUsado - region $Region"
 
-$existe = $true
-try { aws s3api head-bucket --bucket $Bucket 2>$null | Out-Null } catch { $existe = $false }
+$existe = (AwsTolerante s3api head-bucket --bucket $Bucket).Ok
 
+# --- Verificacion ------------------------------------------------------------
 if ($SoloVerificar) {
     Paso "V" "Estado (no se crea ni modifica nada)"
     if (-not $existe) { Nota "El bucket '$Bucket' no existe todavia"; Write-Host ""; return }
-    try {
-        $lock = aws s3api get-object-lock-configuration --bucket $Bucket --output json 2>$null | ConvertFrom-Json
-        $r = $lock.ObjectLockConfiguration.Rule.DefaultRetention
-        Ok "Object Lock: $($lock.ObjectLockConfiguration.ObjectLockEnabled) - $($r.Mode) $($r.Days)d"
-    } catch { Aviso "Sin Object Lock" }
-    $ver = aws s3api get-bucket-versioning --bucket $Bucket --output json | ConvertFrom-Json
+
+    $r = AwsTolerante s3api get-object-lock-configuration --bucket $Bucket --output json
+    if ($r.Ok) {
+        $lock = $r.Salida | ConvertFrom-Json
+        $ret = $lock.ObjectLockConfiguration.Rule.DefaultRetention
+        if ($ret) { Ok "Object Lock habilitado - retencion por defecto $($ret.Mode) $($ret.Days)d" }
+        else      { Aviso "Object Lock habilitado pero SIN retencion por defecto" }
+    } else { Aviso "Sin Object Lock" }
+
+    $ver = (Aws s3api get-bucket-versioning --bucket $Bucket --output json) | ConvertFrom-Json
     if ($ver.Status -eq 'Enabled') { Ok "Versionado activo" } else { Aviso "Versionado inactivo" }
+
+    if ((AwsTolerante s3api get-bucket-encryption --bucket $Bucket).Ok) { Ok "Cifrado por defecto" }
+    else { Aviso "SIN cifrado por defecto" }
+
+    $lc = AwsTolerante s3api get-bucket-lifecycle-configuration --bucket $Bucket --output json
+    if ($lc.Ok) {
+        $reglas = ($lc.Salida | ConvertFrom-Json).Rules
+        Ok "$($reglas.Count) regla(s) de ciclo de vida"
+        foreach ($x in $reglas) { Nota "  $($x.ID)" }
+    } else { Aviso "SIN reglas de ciclo de vida" }
+
+    if ((AwsTolerante iam get-user --user-name $UsuarioIam).Ok) { Ok "Usuario IAM '$UsuarioIam' existe" }
+    else { Aviso "Usuario IAM '$UsuarioIam' NO existe" }
+
     Write-Host ""
     return
 }
@@ -79,61 +121,43 @@ if ($SoloVerificar) {
 Paso 1 "Bucket de respaldos: $Bucket"
 
 if ($existe) {
-    Aviso "Ya existe: no se recrea"
-    $tieneLock = $false
-    try {
-        $lock = aws s3api get-object-lock-configuration --bucket $Bucket --output json 2>$null | ConvertFrom-Json
-        if ($lock.ObjectLockConfiguration.ObjectLockEnabled -eq 'Enabled') { $tieneLock = $true }
-    } catch { }
+    Nota "Ya existe: se completa lo que falte"
+    $r = AwsTolerante s3api get-object-lock-configuration --bucket $Bucket --output json
+    $tieneLock = $r.Ok -and (($r.Salida | ConvertFrom-Json).ObjectLockConfiguration.ObjectLockEnabled -eq 'Enabled')
     if (-not $tieneLock) {
         throw @"
 El bucket '$Bucket' existe pero NO tiene Object Lock, y no puede agregarse.
-Ese es justamente el motivo de crear un bucket dedicado.
-
-Elegi otro nombre (deben ser unicos en todo AWS) y volve a ejecutar:
-  .\tools\scripts\crear-buckets-backup.ps1 -Perfil $Perfil -Bucket ingenia365-erp-backups-co
+Ese es justamente el motivo de usar un bucket dedicado. Elegi otro nombre:
+  .\tools\scripts\crear-buckets-backup.ps1 -Perfil $Perfil -Bucket otro-nombre
 "@
     }
+    Ok "Object Lock habilitado"
 } else {
     # us-east-1 es la unica region que NO admite LocationConstraint.
-    try {
-        if ($Region -eq 'us-east-1') {
-            aws s3api create-bucket --bucket $Bucket --object-lock-enabled-for-bucket | Out-Null
-        } else {
-            aws s3api create-bucket --bucket $Bucket --region $Region `
-                --create-bucket-configuration "LocationConstraint=$Region" `
-                --object-lock-enabled-for-bucket | Out-Null
-        }
-    } catch {
-        throw @"
-No se pudo crear '$Bucket'. Causa habitual: el nombre ya esta tomado por otra
-cuenta (los nombres de bucket son unicos en TODO AWS, no por cuenta).
-
-Proba con otro y volve a ejecutar:
-  .\tools\scripts\crear-buckets-backup.ps1 -Perfil $Perfil -Bucket ingenia365-erp-backups-co
-
-Detalle: $($_.Exception.Message)
-"@
+    if ($Region -eq 'us-east-1') {
+        Aws s3api create-bucket --bucket $Bucket --object-lock-enabled-for-bucket | Out-Null
+    } else {
+        Aws s3api create-bucket --bucket $Bucket --region $Region `
+            --create-bucket-configuration "LocationConstraint=$Region" `
+            --object-lock-enabled-for-bucket | Out-Null
     }
     Ok "Creado CON Object Lock habilitado (irreversible: era ahora o nunca)"
 }
 
-# El versionado es requisito de Object Lock. Ademas es lo que permite que Barman
-# borre por retencion sin pelearse con el bloqueo: un DELETE crea un marcador y
-# la version bloqueada se retira sola cuando vence.
-aws s3api put-bucket-versioning --bucket $Bucket --versioning-configuration Status=Enabled | Out-Null
+# El versionado es requisito de Object Lock. Ademas permite que Barman borre por
+# retencion sin chocar con el bloqueo: el DELETE crea un marcador y la version
+# bloqueada se retira sola al vencer.
+Aws s3api put-bucket-versioning --bucket $Bucket --versioning-configuration Status=Enabled | Out-Null
 Ok "Versionado activo"
 
-aws s3api put-public-access-block --bucket $Bucket `
+Aws s3api put-public-access-block --bucket $Bucket `
     --public-access-block-configuration `
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" | Out-Null
 Ok "Acceso publico bloqueado"
 
-$cifrado = '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
-$tmpEnc = New-TemporaryFile
-Set-Content -Path $tmpEnc -Value $cifrado -Encoding utf8
-aws s3api put-bucket-encryption --bucket $Bucket --server-side-encryption-configuration "file://$tmpEnc" | Out-Null
-Remove-Item $tmpEnc -Force
+$tmp = JsonTemporal '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+Aws s3api put-bucket-encryption --bucket $Bucket --server-side-encryption-configuration "file://$tmp" | Out-Null
+Remove-Item $tmp -Force
 Ok "Cifrado en reposo por defecto"
 
 # GOVERNANCE y no COMPLIANCE por defecto: cubre el 99% de los casos reales
@@ -142,12 +166,10 @@ Ok "Cifrado en reposo por defecto"
 # marcha atras ni para el dueno de la cuenta, y se reserva al sellado mensual,
 # donde esa ausencia de salida ES el objetivo.
 # 40 dias = ventana de Barman (35d) + 5 de holgura.
-$lockCfg = '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":40}}}'
-$tmpLock = New-TemporaryFile
-Set-Content -Path $tmpLock -Value $lockCfg -Encoding utf8
-aws s3api put-object-lock-configuration --bucket $Bucket --object-lock-configuration "file://$tmpLock" | Out-Null
-Remove-Item $tmpLock -Force
-Ok "Object Lock GOVERNANCE 40 dias por defecto"
+$tmp = JsonTemporal '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":40}}}'
+Aws s3api put-object-lock-configuration --bucket $Bucket --object-lock-configuration "file://$tmp" | Out-Null
+Remove-Item $tmp -Force
+Ok "Retencion por defecto GOVERNANCE 40 dias"
 
 # --- 2. Ciclo de vida --------------------------------------------------------
 Paso 2 "Reglas de ciclo de vida"
@@ -172,23 +194,52 @@ $lifecycle = @"
   "Filter":{"Prefix":"$Prefijo/mongo/dev/"},"Expiration":{"Days":7}}
 ]}
 "@
-$tmpLc = New-TemporaryFile
-Set-Content -Path $tmpLc -Value $lifecycle -Encoding utf8
-aws s3api put-bucket-lifecycle-configuration --bucket $Bucket --lifecycle-configuration "file://$tmpLc" | Out-Null
-Remove-Item $tmpLc -Force
-Ok "Limpieza de basura invisible, sin expirar respaldos vivos"
+$tmp = JsonTemporal $lifecycle
+Aws s3api put-bucket-lifecycle-configuration --bucket $Bucket --lifecycle-configuration "file://$tmp" | Out-Null
+Remove-Item $tmp -Force
+Ok "5 reglas aplicadas, sin expirar respaldos vivos"
 Nota "El sellado mensual queda protegido: Object Lock gana sobre el ciclo de vida"
 
 # --- 3. Usuario IAM ----------------------------------------------------------
+if ($OmitirIam) {
+    Paso 3 "Usuario IAM: omitido por -OmitirIam"
+    Write-Host ""
+    Write-Host "  Bucket listo: $Bucket" -ForegroundColor Cyan
+    Write-Host "  Falta la credencial. Crea el usuario en la consola y ejecuta:" -ForegroundColor DarkGray
+    Write-Host "    .\tools\scripts\crear-secreto-s3.ps1" -ForegroundColor DarkGray
+    Write-Host ""
+    return
+}
+
 Paso 3 "Usuario IAM: $UsuarioIam"
 
-$existeUsr = $true
-try { aws iam get-user --user-name $UsuarioIam 2>$null | Out-Null } catch { $existeUsr = $false }
-if (-not $existeUsr) { aws iam create-user --user-name $UsuarioIam | Out-Null; Ok "Usuario creado" }
-else { Aviso "El usuario ya existe" }
+if (-not (AwsTolerante iam get-user --user-name $UsuarioIam).Ok) {
+    $r = AwsTolerante iam create-user --user-name $UsuarioIam
+    if (-not $r.Ok) {
+        throw @"
+Sin permisos de IAM: $($identidad.Arn) no puede crear usuarios.
+
+El bucket YA quedo configurado; solo falta la credencial. Dos caminos:
+
+  A) Crear el usuario a mano en la consola de AWS (IAM -> Users -> Create user,
+     nombre: $UsuarioIam), adjuntarle esta politica en linea, generar una
+     Access Key y ejecutar:
+         .\tools\scripts\crear-secreto-s3.ps1
+
+     La politica esta en docs/operaciones/politica-iam-respaldos.json
+
+  B) Que un usuario con permisos de IAM ejecute este script.
+
+Para no repetir lo ya hecho, volve a correrlo con -OmitirIam.
+"@
+    }
+    Ok "Usuario creado"
+} else {
+    Nota "El usuario ya existe"
+}
 
 # La denegacion de BypassGovernanceRetention es el corazon de esto: si estas
-# credenciales se filtran, NO pueden saltarse el bloqueo ni borrar los respaldos
+# credenciales se filtran, NO pueden saltarse el bloqueo ni borrar respaldos
 # antes de tiempo. La salida de emergencia vive en un rol aparte, fuera del
 # cluster y con MFA.
 $politica = @"
@@ -207,21 +258,21 @@ $politica = @"
   "Resource":"*"}
 ]}
 "@
-$tmpPol = New-TemporaryFile
-Set-Content -Path $tmpPol -Value $politica -Encoding utf8
-aws iam put-user-policy --user-name $UsuarioIam --policy-name "ingenia365-erp-backup" --policy-document "file://$tmpPol" | Out-Null
-Remove-Item $tmpPol -Force
+$tmp = JsonTemporal $politica
+Aws iam put-user-policy --user-name $UsuarioIam --policy-name "ingenia365-erp-backup" --policy-document "file://$tmp" | Out-Null
+Remove-Item $tmp -Force
 Ok "Permisos minimos: sin poder saltarse el bloqueo ni borrar versiones"
 
 # --- 4. Llave de acceso, directo al cluster ----------------------------------
 Paso 4 "Llave de acceso e instalacion en los clusteres"
 
-$previas = (aws iam list-access-keys --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKeyMetadata
+$previas = (Aws iam list-access-keys --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKeyMetadata
 if ($previas.Count -ge 2) {
     throw "El usuario ya tiene 2 llaves (maximo de AWS). Borra una: aws iam delete-access-key --user-name $UsuarioIam --access-key-id <ID>"
 }
 
-$llave = (aws iam create-access-key --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKey
+$llave = (Aws iam create-access-key --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKey
+if (-not $llave.SecretAccessKey) { throw "AWS no devolvio la llave secreta." }
 Ok "Llave creada: $($llave.AccessKeyId)"
 Nota "La llave secreta no se muestra: va directo al cluster por SSH"
 
