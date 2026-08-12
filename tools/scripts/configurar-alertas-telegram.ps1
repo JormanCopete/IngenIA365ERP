@@ -153,9 +153,13 @@ Ok "AlertmanagerConfig alertas-ingenia365"
 # --- 4. Conectarlo como configuracion principal ------------------------------
 Paso 4 "Reemplazando la configuracion que descartaba todo"
 
+# El JSON viaja por STDIN y no como argumento: PowerShell le quita las comillas
+# dobles a los argumentos de un comando nativo, asi que kubectl recibia
+# {spec:{...}} sin comillas y respondia "invalid character 's' looking for
+# beginning of object key string". Por STDIN el texto llega intacto.
 $parche = '{"spec":{"alertmanagerConfiguration":{"name":"alertas-ingenia365"}}}'
-$salida = ssh -i $KeyPath -o BatchMode=yes "root@$Host_" `
-    "k3s kubectl patch alertmanager monitoring-kube-prometheus-alertmanager -n $Namespace --type=merge --patch '$parche'" 2>&1
+$salida = $parche | ssh -i $KeyPath -o BatchMode=yes "root@$Host_" `
+    "k3s kubectl patch alertmanager monitoring-kube-prometheus-alertmanager -n $Namespace --type=merge --patch-file=/dev/stdin" 2>&1
 if ($LASTEXITCODE -ne 0) { throw "No se pudo conectar la configuracion: $salida" }
 Ok "Alertmanager apunta a la nueva configuracion"
 

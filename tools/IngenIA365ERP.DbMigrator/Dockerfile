@@ -20,6 +20,7 @@ RUN find . -type f \
       ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
       ! -name '*.props' ! -name '*.targets' \
       ! -iname 'nuget.config' ! -name 'packages.lock.json' \
+      ! -name 'global.json' \
       -delete \
  && find . -mindepth 1 -type d -empty -delete
 
