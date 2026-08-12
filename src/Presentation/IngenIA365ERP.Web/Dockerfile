@@ -2,7 +2,7 @@
 # Ver la nota extensa en el Dockerfile de la API: se copian todos los .csproj
 # derivandolos del contexto en vez de enumerarlos, porque la lista manual se
 # desactualiza en silencio y rompe el restore dentro de la imagen.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS manifests
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS manifests
 WORKDIR /src
 COPY . .
 RUN find . -type f \
@@ -14,7 +14,7 @@ RUN find . -type f \
  && find . -mindepth 1 -type d -empty -delete
 
 # ── Stage 1: Build ──
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY --from=manifests /src .
@@ -30,8 +30,18 @@ COPY legacy/ legacy/
 # Nota: NO se instala el workload wasm-tools a proposito. Con el, el publish de
 # Blazor hace relinking nativo con emscripten (necesita Python y mucha RAM). Sin
 # el se usa el runtime WebAssembly prearmado: build mas rapido y sin dependencias.
+# SIN --no-restore, y no es un descuido.
+#
+# El script de arranque _framework/blazor.web.js llega en el paquete
+# microsoft.aspnetcore.app.internal.assets, que el SDK resuelve durante el
+# RESTORE DEL PUBLISH, no en el restore inicial del proyecto. Con --no-restore
+# ese paquete nunca se descarga y el publish sale sin el script, sin una sola
+# advertencia: la imagen se construye, arranca, responde 200 en / y el navegador
+# muestra una pantalla en blanco.
+#
+# Medido: en el contenedor el paquete ni siquiera aparecia en project.assets.json.
 WORKDIR /src/src/Presentation/IngenIA365ERP.Web
-RUN dotnet publish -c Release -o /app/publish --no-restore
+RUN dotnet publish -c Release -o /app/publish
 
 # COMPROBACION QUE ROMPE LA CONSTRUCCION A PROPOSITO.
 #
