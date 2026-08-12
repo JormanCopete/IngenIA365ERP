@@ -260,7 +260,7 @@ $politica = @"
   "Resource":"arn:aws:s3:::$Bucket/*"},
  {"Sid":"NuncaSaltarseElBloqueo","Effect":"Deny",
   "Action":["s3:BypassGovernanceRetention","s3:PutBucketObjectLockConfiguration",
-            "s3:PutBucketVersioning","s3:PutBucketLifecycleConfiguration","s3:DeleteBucket",
+            "s3:PutBucketVersioning","s3:PutLifecycleConfiguration","s3:DeleteBucket",
             "s3:DeleteObjectVersion"],
   "Resource":"*"}
 ]}
