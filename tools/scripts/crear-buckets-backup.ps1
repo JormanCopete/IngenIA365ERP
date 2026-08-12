@@ -42,10 +42,17 @@ param(
     [string]$Region     = 'us-east-1',
     [string]$UsuarioIam = 'ingenia365-erp-backup',
     [string]$KeyPath    = "$env:USERPROFILE\.ssh\ingenia365_deploy",
+    # Perfil del AWS CLI. Sin esto el script usa el perfil por defecto, que
+    # puede apuntar a OTRA cuenta de AWS distinta de la del bucket.
+    [string]$Perfil     = '',
     [switch]$SoloVerificar
 )
 
 $ErrorActionPreference = 'Stop'
+
+# AWS_PROFILE lo respetan todas las invocaciones del CLI, asi que basta fijarlo
+# una vez en lugar de propagar --profile comando por comando.
+if ($Perfil) { $env:AWS_PROFILE = $Perfil }
 
 function Paso($n, $t) { Write-Host ""; Write-Host "  [$n] $t" -ForegroundColor Cyan }
 function Ok($t)       { Write-Host "      OK  $t" -ForegroundColor Green }
@@ -60,10 +67,31 @@ if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     throw "AWS CLI no esta instalado o no esta en el PATH. https://aws.amazon.com/cli/"
 }
 $identidad = aws sts get-caller-identity --output json | ConvertFrom-Json
+$perfilUsado = if ($Perfil) { $Perfil } else { '(por defecto)' }
 Ok "AWS CLI autenticado como $($identidad.Arn)"
+Nota "Cuenta $($identidad.Account) - perfil $perfilUsado"
 
 try { aws s3api head-bucket --bucket $Bucket 2>$null | Out-Null }
-catch { throw "El bucket '$Bucket' no existe o no tenes acceso con estas credenciales." }
+catch {
+    $perfiles = (aws configure list-profiles 2>$null) -join ', '
+    if (-not $perfiles) { $perfiles = '(ninguno configurado)' }
+    throw @"
+El bucket '$Bucket' no es accesible desde la cuenta $($identidad.Account).
+
+Causa habitual: el bucket vive en OTRA cuenta de AWS. Este script no elige
+cuenta: usa la que tenga configurada el AWS CLI.
+
+Perfiles disponibles: $perfiles
+
+Como seguir:
+  1. Configurar un perfil para la cuenta duena del bucket:
+       aws configure --profile ingenia365
+  2. Volver a ejecutar indicandolo:
+       .\tools\scripts\crear-buckets-backup.ps1 -SoloVerificar -Perfil ingenia365
+
+Si el bucket tampoco existe en esa cuenta, hay que decidir otro destino.
+"@
+}
 Ok "Bucket '$Bucket' accesible"
 
 # --- 1. Diagnostico del bucket compartido ------------------------------------
