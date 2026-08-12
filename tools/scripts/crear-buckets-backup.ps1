@@ -47,19 +47,25 @@ function Ok($t)       { Write-Host "      OK  $t" -ForegroundColor Green }
 function Nota($t)     { Write-Host "      --  $t" -ForegroundColor DarkGray }
 function Aviso($t)    { Write-Host "      !!  $t" -ForegroundColor Yellow }
 
+# Ruta del ejecutable, resuelta una sola vez. Invocarlo por ruta y no por nombre
+# es lo que evita que las funciones de abajo se llamen a si mismas: PowerShell no
+# distingue mayusculas en los nombres de funcion, asi que una funcion llamada
+# `Aws` intercepta la invocacion de `aws` y recursa hasta CallDepthOverflow.
+$script:AwsExe = (Get-Command aws -CommandType Application | Select-Object -First 1).Source
+
 # $ErrorActionPreference NO alcanza para comandos nativos: si `aws` falla, la
 # ejecucion continua igual. Sin este envoltorio el script imprimia "OK" justo
 # despues de cada error y reportaba como configurado un bucket que no lo estaba.
-function Aws {
-    $salida = & aws @args
+function EjecutarAws {
+    $salida = & $script:AwsExe @args
     if ($LASTEXITCODE -ne 0) { throw "Fallo el comando: aws $($args -join ' ')" }
     return $salida
 }
 
-# Igual que Aws pero sin abortar: para comprobaciones donde el fallo es una
-# respuesta valida ("no existe", "no configurado").
-function AwsTolerante {
-    $salida = & aws @args 2>$null
+# Igual, pero sin abortar: para comprobaciones donde el fallo es una respuesta
+# valida ("no existe", "no configurado").
+function IntentarAws {
+    $salida = & $script:AwsExe @args 2>$null
     return @{ Ok = ($LASTEXITCODE -eq 0); Salida = $salida }
 }
 
@@ -77,19 +83,19 @@ Paso 0 "Comprobaciones previas"
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     throw "AWS CLI no esta instalado o no esta en el PATH. https://aws.amazon.com/cli/"
 }
-$identidad = Aws sts get-caller-identity --output json | ConvertFrom-Json
+$identidad = EjecutarAws sts get-caller-identity --output json | ConvertFrom-Json
 $perfilUsado = if ($Perfil) { $Perfil } else { '(por defecto)' }
 Ok "AWS CLI autenticado como $($identidad.Arn)"
 Nota "Cuenta $($identidad.Account) - perfil $perfilUsado - region $Region"
 
-$existe = (AwsTolerante s3api head-bucket --bucket $Bucket).Ok
+$existe = (IntentarAws s3api head-bucket --bucket $Bucket).Ok
 
 # --- Verificacion ------------------------------------------------------------
 if ($SoloVerificar) {
     Paso "V" "Estado (no se crea ni modifica nada)"
     if (-not $existe) { Nota "El bucket '$Bucket' no existe todavia"; Write-Host ""; return }
 
-    $r = AwsTolerante s3api get-object-lock-configuration --bucket $Bucket --output json
+    $r = IntentarAws s3api get-object-lock-configuration --bucket $Bucket --output json
     if ($r.Ok) {
         $lock = $r.Salida | ConvertFrom-Json
         $ret = $lock.ObjectLockConfiguration.Rule.DefaultRetention
@@ -97,20 +103,20 @@ if ($SoloVerificar) {
         else      { Aviso "Object Lock habilitado pero SIN retencion por defecto" }
     } else { Aviso "Sin Object Lock" }
 
-    $ver = (Aws s3api get-bucket-versioning --bucket $Bucket --output json) | ConvertFrom-Json
+    $ver = (EjecutarAws s3api get-bucket-versioning --bucket $Bucket --output json) | ConvertFrom-Json
     if ($ver.Status -eq 'Enabled') { Ok "Versionado activo" } else { Aviso "Versionado inactivo" }
 
-    if ((AwsTolerante s3api get-bucket-encryption --bucket $Bucket).Ok) { Ok "Cifrado por defecto" }
+    if ((IntentarAws s3api get-bucket-encryption --bucket $Bucket).Ok) { Ok "Cifrado por defecto" }
     else { Aviso "SIN cifrado por defecto" }
 
-    $lc = AwsTolerante s3api get-bucket-lifecycle-configuration --bucket $Bucket --output json
+    $lc = IntentarAws s3api get-bucket-lifecycle-configuration --bucket $Bucket --output json
     if ($lc.Ok) {
         $reglas = ($lc.Salida | ConvertFrom-Json).Rules
         Ok "$($reglas.Count) regla(s) de ciclo de vida"
         foreach ($x in $reglas) { Nota "  $($x.ID)" }
     } else { Aviso "SIN reglas de ciclo de vida" }
 
-    if ((AwsTolerante iam get-user --user-name $UsuarioIam).Ok) { Ok "Usuario IAM '$UsuarioIam' existe" }
+    if ((IntentarAws iam get-user --user-name $UsuarioIam).Ok) { Ok "Usuario IAM '$UsuarioIam' existe" }
     else { Aviso "Usuario IAM '$UsuarioIam' NO existe" }
 
     Write-Host ""
@@ -122,7 +128,7 @@ Paso 1 "Bucket de respaldos: $Bucket"
 
 if ($existe) {
     Nota "Ya existe: se completa lo que falte"
-    $r = AwsTolerante s3api get-object-lock-configuration --bucket $Bucket --output json
+    $r = IntentarAws s3api get-object-lock-configuration --bucket $Bucket --output json
     $tieneLock = $r.Ok -and (($r.Salida | ConvertFrom-Json).ObjectLockConfiguration.ObjectLockEnabled -eq 'Enabled')
     if (-not $tieneLock) {
         throw @"
@@ -135,9 +141,9 @@ Ese es justamente el motivo de usar un bucket dedicado. Elegi otro nombre:
 } else {
     # us-east-1 es la unica region que NO admite LocationConstraint.
     if ($Region -eq 'us-east-1') {
-        Aws s3api create-bucket --bucket $Bucket --object-lock-enabled-for-bucket | Out-Null
+        EjecutarAws s3api create-bucket --bucket $Bucket --object-lock-enabled-for-bucket | Out-Null
     } else {
-        Aws s3api create-bucket --bucket $Bucket --region $Region `
+        EjecutarAws s3api create-bucket --bucket $Bucket --region $Region `
             --create-bucket-configuration "LocationConstraint=$Region" `
             --object-lock-enabled-for-bucket | Out-Null
     }
@@ -147,16 +153,16 @@ Ese es justamente el motivo de usar un bucket dedicado. Elegi otro nombre:
 # El versionado es requisito de Object Lock. Ademas permite que Barman borre por
 # retencion sin chocar con el bloqueo: el DELETE crea un marcador y la version
 # bloqueada se retira sola al vencer.
-Aws s3api put-bucket-versioning --bucket $Bucket --versioning-configuration Status=Enabled | Out-Null
+EjecutarAws s3api put-bucket-versioning --bucket $Bucket --versioning-configuration Status=Enabled | Out-Null
 Ok "Versionado activo"
 
-Aws s3api put-public-access-block --bucket $Bucket `
+EjecutarAws s3api put-public-access-block --bucket $Bucket `
     --public-access-block-configuration `
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" | Out-Null
 Ok "Acceso publico bloqueado"
 
 $tmp = JsonTemporal '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
-Aws s3api put-bucket-encryption --bucket $Bucket --server-side-encryption-configuration "file://$tmp" | Out-Null
+EjecutarAws s3api put-bucket-encryption --bucket $Bucket --server-side-encryption-configuration "file://$tmp" | Out-Null
 Remove-Item $tmp -Force
 Ok "Cifrado en reposo por defecto"
 
@@ -167,7 +173,7 @@ Ok "Cifrado en reposo por defecto"
 # donde esa ausencia de salida ES el objetivo.
 # 40 dias = ventana de Barman (35d) + 5 de holgura.
 $tmp = JsonTemporal '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":40}}}'
-Aws s3api put-object-lock-configuration --bucket $Bucket --object-lock-configuration "file://$tmp" | Out-Null
+EjecutarAws s3api put-object-lock-configuration --bucket $Bucket --object-lock-configuration "file://$tmp" | Out-Null
 Remove-Item $tmp -Force
 Ok "Retencion por defecto GOVERNANCE 40 dias"
 
@@ -195,7 +201,7 @@ $lifecycle = @"
 ]}
 "@
 $tmp = JsonTemporal $lifecycle
-Aws s3api put-bucket-lifecycle-configuration --bucket $Bucket --lifecycle-configuration "file://$tmp" | Out-Null
+EjecutarAws s3api put-bucket-lifecycle-configuration --bucket $Bucket --lifecycle-configuration "file://$tmp" | Out-Null
 Remove-Item $tmp -Force
 Ok "5 reglas aplicadas, sin expirar respaldos vivos"
 Nota "El sellado mensual queda protegido: Object Lock gana sobre el ciclo de vida"
@@ -213,8 +219,8 @@ if ($OmitirIam) {
 
 Paso 3 "Usuario IAM: $UsuarioIam"
 
-if (-not (AwsTolerante iam get-user --user-name $UsuarioIam).Ok) {
-    $r = AwsTolerante iam create-user --user-name $UsuarioIam
+if (-not (IntentarAws iam get-user --user-name $UsuarioIam).Ok) {
+    $r = IntentarAws iam create-user --user-name $UsuarioIam
     if (-not $r.Ok) {
         throw @"
 Sin permisos de IAM: $($identidad.Arn) no puede crear usuarios.
@@ -259,19 +265,19 @@ $politica = @"
 ]}
 "@
 $tmp = JsonTemporal $politica
-Aws iam put-user-policy --user-name $UsuarioIam --policy-name "ingenia365-erp-backup" --policy-document "file://$tmp" | Out-Null
+EjecutarAws iam put-user-policy --user-name $UsuarioIam --policy-name "ingenia365-erp-backup" --policy-document "file://$tmp" | Out-Null
 Remove-Item $tmp -Force
 Ok "Permisos minimos: sin poder saltarse el bloqueo ni borrar versiones"
 
 # --- 4. Llave de acceso, directo al cluster ----------------------------------
 Paso 4 "Llave de acceso e instalacion en los clusteres"
 
-$previas = (Aws iam list-access-keys --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKeyMetadata
+$previas = (EjecutarAws iam list-access-keys --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKeyMetadata
 if ($previas.Count -ge 2) {
     throw "El usuario ya tiene 2 llaves (maximo de AWS). Borra una: aws iam delete-access-key --user-name $UsuarioIam --access-key-id <ID>"
 }
 
-$llave = (Aws iam create-access-key --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKey
+$llave = (EjecutarAws iam create-access-key --user-name $UsuarioIam --output json | ConvertFrom-Json).AccessKey
 if (-not $llave.SecretAccessKey) { throw "AWS no devolvio la llave secreta." }
 Ok "Llave creada: $($llave.AccessKeyId)"
 Nota "La llave secreta no se muestra: va directo al cluster por SSH"
