@@ -2,18 +2,19 @@
 # Ver la nota extensa en el Dockerfile de la API: se copian todos los .csproj
 # derivandolos del contexto en vez de enumerarlos, porque la lista manual se
 # desactualiza en silencio y rompe el restore dentro de la imagen.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS manifests
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS manifests
 WORKDIR /src
 COPY . .
 RUN find . -type f \
       ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
       ! -name '*.props' ! -name '*.targets' \
       ! -iname 'nuget.config' ! -name 'packages.lock.json' \
+      ! -name 'global.json' \
       -delete \
  && find . -mindepth 1 -type d -empty -delete
 
 # ── Stage 1: Build ──
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY --from=manifests /src .
@@ -29,19 +30,39 @@ COPY legacy/ legacy/
 # Nota: NO se instala el workload wasm-tools a proposito. Con el, el publish de
 # Blazor hace relinking nativo con emscripten (necesita Python y mucha RAM). Sin
 # el se usa el runtime WebAssembly prearmado: build mas rapido y sin dependencias.
+# SIN --no-restore, y no es un descuido.
+#
+# El script de arranque _framework/blazor.web.js llega en el paquete
+# microsoft.aspnetcore.app.internal.assets, que el SDK resuelve durante el
+# RESTORE DEL PUBLISH, no en el restore inicial del proyecto. Con --no-restore
+# ese paquete nunca se descarga y el publish sale sin el script, sin una sola
+# advertencia: la imagen se construye, arranca, responde 200 en / y el navegador
+# muestra una pantalla en blanco.
+#
+# Medido: en el contenedor el paquete ni siquiera aparecia en project.assets.json.
 WORKDIR /src/src/Presentation/IngenIA365ERP.Web
-RUN dotnet publish -c Release -o /app/publish --no-restore
+RUN dotnet publish -c Release -o /app/publish
 
-# El publish "hosted" del host deja el index.html con el marcador de fingerprint
-# SIN resolver (#[.{fingerprint}]); el publish del Client si lo resuelve. Se publica
-# el Client y se usa su index.html ya resuelto (los hashes son deterministas por
-# contenido, asi que coinciden).
-WORKDIR /src
-RUN dotnet publish src/Presentation/IngenIA365ERP.Web.Client/IngenIA365ERP.Web.Client.csproj \
-      -c Release -o /app/client --no-restore \
- && if [ -f /app/client/wwwroot/index.html ]; then \
-      cp /app/client/wwwroot/index.html /app/publish/wwwroot/index.html; \
-    fi
+# COMPROBACION QUE ROMPE LA CONSTRUCCION A PROPOSITO.
+#
+# App.razor arranca la aplicacion con @Assets["_framework/blazor.web.js"]. Ese
+# script NO es un archivo del proyecto: llega en el paquete
+# microsoft.aspnetcore.app.internal.assets, cuya version resuelve el SDK. Si el
+# SDK del contenedor difiere del de desarrollo, el publish sale SIN el y sin
+# ninguna advertencia.
+#
+# El resultado es la peor clase de fallo: la imagen se construye, el contenedor
+# arranca, / responde HTTP 200 con el HTML del shell, la sonda de disponibilidad
+# lo da por sano... y el navegador muestra una pantalla en blanco porque pide el
+# script de arranque y recibe un 404. Paso exactamente eso en produccion.
+#
+# Comprobar el manifiesto convierte ese silencio en un fallo de construccion.
+RUN test -f /app/publish/IngenIA365ERP.Web.staticwebassets.endpoints.json \
+ && grep -q 'blazor\.web\.js' /app/publish/IngenIA365ERP.Web.staticwebassets.endpoints.json \
+ || { echo "ERROR: el publish no incluye _framework/blazor.web.js."; \
+      echo "La aplicacion arrancaria y mostraria una pantalla en blanco."; \
+      echo "Revisar que el SDK del contenedor cumpla el global.json."; \
+      exit 1; }
 
 # ── Stage 2: Runtime ──
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
