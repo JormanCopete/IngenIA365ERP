@@ -1,0 +1,25 @@
+{
+  "//": [
+    "Fija el SDK para que la maquina de desarrollo, Docker y el CI compilen",
+    "IDENTICO. Sin esto, cada entorno usaba el SDK que tuviera instalado y el",
+    "resultado no era el mismo: el contenedor producia una Blazor Web App SIN",
+    "_framework/blazor.web.js, porque ese script llega en el paquete",
+    "microsoft.aspnetcore.app.internal.assets, cuya version resuelve el SDK.",
+    "La aplicacion arrancaba, respondia HTTP 200 en / y quedaba en pantalla",
+    "negra: el navegador pedia el script de arranque y recibia un 404.",
+    "",
+    "MEDIDO: el SDK 10.0.302 genera blazor.web.js; el 10.0.400 NO lo genera.",
+    "El contenedor usaba un SDK mas NUEVO que el de desarrollo, no mas viejo.",
+    "",
+    "rollForward latestPatch: admite parches de la banda 10.0.3xx pero NO salta",
+    "a 10.0.4xx. Un primer intento con latestFeature no fijaba nada en la",
+    "practica: permitia justamente el SDK que rompe la aplicacion.",
+    "",
+    "Revisar al actualizar: si una banda posterior vuelve a generar el script,",
+    "conviene subir esta version en vez de quedarse anclado."
+  ],
+  "sdk": {
+    "version": "10.0.302",
+    "rollForward": "latestPatch"
+  }
+}

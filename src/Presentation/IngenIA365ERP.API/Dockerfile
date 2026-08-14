@@ -8,18 +8,19 @@
 #
 # No sacrifica la cache: si solo cambia codigo .cs, el resultado de esta etapa es
 # identico byte a byte y BuildKit reutiliza la capa de restore.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS manifests
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS manifests
 WORKDIR /src
 COPY . .
 RUN find . -type f \
       ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
       ! -name '*.props' ! -name '*.targets' \
       ! -iname 'nuget.config' ! -name 'packages.lock.json' \
+      ! -name 'global.json' \
       -delete \
  && find . -mindepth 1 -type d -empty -delete
 
 # ── Stage 1: Build ──
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY --from=manifests /src .

@@ -13,18 +13,19 @@
 # Ver la nota extensa en el Dockerfile de la API: se copian todos los .csproj
 # derivandolos del contexto en vez de enumerarlos, porque la lista manual se
 # desactualiza en silencio y rompe el restore dentro de la imagen.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS manifests
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS manifests
 WORKDIR /src
 COPY . .
 RUN find . -type f \
       ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
       ! -name '*.props' ! -name '*.targets' \
       ! -iname 'nuget.config' ! -name 'packages.lock.json' \
+      ! -name 'global.json' \
       -delete \
  && find . -mindepth 1 -type d -empty -delete
 
 # ── Etapa 1: compilacion ──
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY --from=manifests /src .
