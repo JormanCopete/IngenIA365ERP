@@ -34,4 +34,8 @@
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Caching\IngenIA365ERP.Caching.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

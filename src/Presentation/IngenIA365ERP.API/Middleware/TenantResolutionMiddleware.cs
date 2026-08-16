@@ -55,6 +55,12 @@ public class TenantResolutionMiddleware
         "/api/profile/mfa/enroll",
         "/api/profile/mfa/confirm",
         "/api/health",
+        // Contenido que se sirve ANTES de iniciar sesión, en la propia pantalla
+        // de entrada. Por definición no hay empresa seleccionada todavía: sin
+        // esta exención el panel promocional del login nunca carga, porque el
+        // middleware corta con Session.TenantNotSelected antes de llegar al
+        // endpoint, aunque el endpoint esté marcado AllowAnonymous.
+        "/api/publico/",
         "/health",     // /health/live y /health/ready (T031 — sin tenant)
         "/swagger",
         "/_framework",
@@ -125,7 +131,13 @@ public class TenantResolutionMiddleware
         return Guid.TryParse(segment, out tenantId);
     }
 
-    private static bool IsExempt(string path)
+    /// <summary>
+    /// internal en vez de private para poder probar la lista de exencion sin
+    /// levantar el servidor completo. Un endpoint anonimo que no figure aca
+    /// responde 401 Session.TenantNotSelected aunque este marcado
+    /// AllowAnonymous: el middleware corta antes de llegar al endpoint.
+    /// </summary>
+    internal static bool IsExempt(string path)
     {
         foreach (var prefix in ExemptPrefixes)
         {
