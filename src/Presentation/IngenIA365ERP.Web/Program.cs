@@ -68,6 +68,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionC
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddCascadingAuthenticationState();

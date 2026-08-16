@@ -40,5 +40,8 @@ public interface IAdminDbContext
     // --- Phase 4b (Profile & Recovery) ---
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
 
+    // --- Preferencias de interfaz por usuario ---
+    DbSet<UserSetting> UserSettings { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

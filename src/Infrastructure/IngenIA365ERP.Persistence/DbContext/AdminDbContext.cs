@@ -51,6 +51,7 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
     // --- Identidad central · Phase 4b (Profile & Recovery) ---
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     // Nota: DbSet<CentralUserIdentity> Users es heredado de IdentityDbContext;
     // no se expone via IAdminDbContext porque CentralUserIdentity es tipo de
     // Infrastructure (Application usa ICentralIdentityProvider).
@@ -78,6 +79,12 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         modelBuilder.ApplyConfiguration(new TenantMfaPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
+
+        // Preferencias de interfaz por usuario. Este contexto NO usa
+        // ApplyConfigurationsFromAssembly, así que una configuration que no se
+        // registre acá simplemente no existe para EF y la tabla nunca aparece
+        // en la migración.
+        modelBuilder.ApplyConfiguration(new UserSettingConfiguration());
 
         // Feature 004: columnas de interoperabilidad con el store multitenant.
         // TenantDbContext (Finbuckle/ErpTenantInfo) mapea LA MISMA tabla

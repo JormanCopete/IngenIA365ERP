@@ -1,0 +1,185 @@
+@page "/perfil/preferencias"
+@using IngenIA365ERP.Shared.Services.Security
+@inject PreferenciasClient ClientePreferencias
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>Preferencias — IngenIA365ERP</PageTitle>
+
+<div class="preferencias">
+    <header class="preferencias-encabezado">
+        <h2>Preferencias</h2>
+        <p class="texto-apoyo">
+            Se guardan en tu cuenta: las vas a encontrar igual desde cualquier equipo.
+        </p>
+    </header>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_error ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    <section class="tarjeta grupo">
+        <h3>Apariencia</h3>
+        <p class="texto-apoyo">Aplica en todas las cooperativas donde trabajes.</p>
+
+        <fieldset class="opciones">
+            <legend>Tema</legend>
+            @foreach (var o in Temas)
+            {
+                <label class="opcion @(_tema == o.Valor ? "opcion-activa" : "")">
+                    <input type="radio" name="tema" value="@o.Valor"
+                           checked="@(_tema == o.Valor)"
+                           @onchange="@(() => CambiarAsync("ui.tema", o.Valor))" />
+                    <span>@o.Titulo</span>
+                    <small>@o.Detalle</small>
+                </label>
+            }
+        </fieldset>
+
+        <fieldset class="opciones">
+            <legend>Densidad</legend>
+            @foreach (var o in Densidades)
+            {
+                <label class="opcion @(_densidad == o.Valor ? "opcion-activa" : "")">
+                    <input type="radio" name="densidad" value="@o.Valor"
+                           checked="@(_densidad == o.Valor)"
+                           @onchange="@(() => CambiarAsync("ui.densidad", o.Valor))" />
+                    <span>@o.Titulo</span>
+                    <small>@o.Detalle</small>
+                </label>
+            }
+        </fieldset>
+    </section>
+
+    <section class="tarjeta grupo">
+        <h3>Accesibilidad</h3>
+
+        <fieldset class="opciones">
+            <legend>Tamaño del texto</legend>
+            @foreach (var o in Escalas)
+            {
+                <label class="opcion @(_escala == o.Valor ? "opcion-activa" : "")">
+                    <input type="radio" name="escala" value="@o.Valor"
+                           checked="@(_escala == o.Valor)"
+                           @onchange="@(() => CambiarAsync("ui.escala", o.Valor))" />
+                    <span>@o.Titulo</span>
+                    <small>@o.Detalle</small>
+                </label>
+            }
+        </fieldset>
+
+        <fieldset class="opciones">
+            <legend>Contraste</legend>
+            @foreach (var o in Contrastes)
+            {
+                <label class="opcion @(_contraste == o.Valor ? "opcion-activa" : "")">
+                    <input type="radio" name="contraste" value="@o.Valor"
+                           checked="@(_contraste == o.Valor)"
+                           @onchange="@(() => CambiarAsync("ui.contraste", o.Valor))" />
+                    <span>@o.Titulo</span>
+                    <small>@o.Detalle</small>
+                </label>
+            }
+        </fieldset>
+    </section>
+
+    <section class="tarjeta grupo">
+        <h3>Vista previa</h3>
+        <p class="texto-apoyo">Así se ven los campos y las cifras con lo que elegiste.</p>
+        <div class="vista-previa">
+            <label for="vp-monto">Monto del aporte</label>
+            <input id="vp-monto" type="text" value="1.250.000" readonly />
+            <div class="vp-pastillas">
+                <span class="pastilla" style="background:var(--riesgo-a);color:var(--acento-texto);">A</span>
+                <span class="pastilla" style="background:var(--riesgo-b);color:var(--acento-texto);">B</span>
+                <span class="pastilla" style="background:var(--riesgo-c);color:var(--acento-texto);">C</span>
+                <span class="pastilla" style="background:var(--riesgo-d);color:var(--acento-texto);">D</span>
+                <span class="pastilla" style="background:var(--riesgo-e);color:var(--acento-texto);">E</span>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    private sealed record Opcion(string Valor, string Titulo, string Detalle);
+
+    private static readonly Opcion[] Temas =
+    [
+        new("claro",  "Claro",  "Para oficinas con buena luz."),
+        new("oscuro", "Oscuro", "Cansa menos la vista en jornadas largas."),
+    ];
+
+    private static readonly Opcion[] Densidades =
+    [
+        new("comoda",   "Cómoda",   "Más aire entre los elementos."),
+        new("compacta", "Compacta", "Más filas visibles sin desplazarse."),
+    ];
+
+    private static readonly Opcion[] Escalas =
+    [
+        new("normal",     "Normal",     "Tamaño estándar."),
+        new("grande",     "Grande",     "Un 12% más grande."),
+        new("muy-grande", "Muy grande", "Un 25% más grande."),
+    ];
+
+    private static readonly Opcion[] Contrastes =
+    [
+        new("normal", "Normal", "Bordes y textos secundarios suaves."),
+        new("alto",   "Alto",   "Bordes marcados y textos más oscuros."),
+    ];
+
+    private string? _tema;
+    private string? _densidad;
+    private string? _escala;
+    private string? _contraste;
+    private string? _mensaje;
+    private bool _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // En OnAfterRender y no en OnInitialized: leer las preferencias exige
+        // JS, y durante el prerenderizado del servidor todavía no hay navegador.
+        if (!firstRender) return;
+
+        var locales = await ClientePreferencias.LeerLocalesAsync();
+        _tema = locales.Tema;
+        _densidad = locales.Densidad ?? "comoda";
+        _escala = locales.Escala ?? "normal";
+        _contraste = locales.Contraste ?? "normal";
+        StateHasChanged();
+
+        // El servidor manda sobre lo local: puede traer lo que el usuario
+        // configuró en otro equipo.
+        var remoto = await ClientePreferencias.SincronizarAsync();
+        if (remoto.IsSuccess && remoto.Value is { } p)
+        {
+            _tema = p.Tema ?? _tema;
+            _densidad = p.Densidad ?? _densidad;
+            _escala = p.Escala ?? _escala;
+            _contraste = p.Contraste ?? _contraste;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CambiarAsync(string clave, string valor)
+    {
+        switch (clave)
+        {
+            case "ui.tema": _tema = valor; break;
+            case "ui.densidad": _densidad = valor; break;
+            case "ui.escala": _escala = valor; break;
+            case "ui.contraste": _contraste = valor; break;
+        }
+
+        var r = await ClientePreferencias.EstablecerAsync(new Dictionary<string, string?> { [clave] = valor });
+
+        // El cambio visual ya ocurrió: EstablecerAsync aplica en el navegador
+        // antes de llamar al servidor. Si el guardado falla hay que decirlo, o
+        // el usuario creería que quedó guardado porque lo está viendo aplicado.
+        _error = !r.IsSuccess;
+        _mensaje = r.IsSuccess
+            ? "Preferencia guardada."
+            : $"Se aplicó en este equipo, pero no se pudo guardar en tu cuenta: {r.ErrorMessage}";
+        StateHasChanged();
+    }
+}

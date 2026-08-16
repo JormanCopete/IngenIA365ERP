@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Identity.Profile.BeginMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.ChangePassword;
 using IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.DisableMfa;
+using IngenIA365ERP.Application.Identity.Profile.Preferencias;
 using IngenIA365ERP.Application.Identity.Profile.RegenerateRecoveryCodes;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -41,6 +42,17 @@ public sealed class ProfileModule : ICarterModule
         // Password change (purpose=full).
         group.MapPost("/password", ChangePasswordAsync)
             .WithName("Profile_ChangePassword");
+
+        // Preferencias de interfaz. No llevan RequirePermission: cada usuario
+        // sólo puede leer y escribir las suyas, y el handler saca la identidad
+        // del token, nunca de la petición. Exigir un permiso además obligaría a
+        // concederlo a los 8 roles para algo que no es una facultad sino un
+        // ajuste personal.
+        group.MapGet("/preferencias", GetPreferenciasAsync)
+            .WithName("Profile_GetPreferencias");
+
+        group.MapPut("/preferencias", SavePreferenciasAsync)
+            .WithName("Profile_SavePreferencias");
     }
 
     // ---------- Handlers ----------
@@ -81,4 +93,15 @@ public sealed class ProfileModule : ICarterModule
             UserAgent: http.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null), ct);
 
     public sealed record ChangePasswordBody(string CurrentPassword, string NewPassword);
+
+    private static async Task<object?> GetPreferenciasAsync(
+        ISender sender, CancellationToken ct) =>
+        await sender.Send(new GetMyPreferencesQuery(), ct);
+
+    private static async Task<object?> SavePreferenciasAsync(
+        [FromBody] SavePreferenciasBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new SaveMyPreferencesCommand(
+            body.Preferencias ?? new Dictionary<string, string?>()), ct);
+
+    public sealed record SavePreferenciasBody(Dictionary<string, string?>? Preferencias);
 }
