@@ -126,6 +126,19 @@ con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
 |---|---|
 | REPORTE-FINAL-MIGRACION.md | Resumen completo Fases 1-3 |
 
+## Operaciones e Infraestructura
+
+| Archivo | Ubicación | Descripción |
+|---|---|---|
+| **estado-y-pendientes.md** | docs/operaciones/ | **Estado de los tres ambientes y lista de pendientes priorizada. Empezar por acá.** |
+| despliegue-infraestructura.md | docs/operaciones/ | Diseño de la infraestructura y bitácora de instalación |
+| migracion-dns-cloudflare.md | docs/operaciones/ | Guía paso a paso de la migración de DNS |
+| politica-iam-respaldos.json | docs/operaciones/ | Política IAM del usuario de respaldos (permisos mínimos) |
+
+Los manifiestos de Kubernetes, el diseño de respaldos (`backups.md`) y el manual
+operativo de MongoDB (`mongo-replica-set.md`) viven en el repositorio **privado**
+`ingenia365-gitops`.
+
 ## Base de Datos
 | Archivo | Ubicación | Descripción |
 |---|---|---|
