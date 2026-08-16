@@ -28,12 +28,13 @@ Clean Architecture en 4 capas:
 
 ## Totales
 - 113 endpoints REST
-- 136 páginas Blazor funcionales
+- 138 páginas Blazor funcionales
 - 16 reportes PDF
 - 382 archivos Application
-- 270 entidades, 270 EF Core Configurations, 140 DbSets
-- 45 tests automatizados
+- 272 entidades, 272 EF Core Configurations, 142 DbSets
+- 398 tests automatizados
 - 0 errores de compilación
+- Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/tokens.css` — única fuente de color; las pantallas no declaran literales
 
 ## Cómo Empezar
 Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md` para la documentación completa por fase.

@@ -69,6 +69,33 @@ entre sí y solo se notaría al intentar restaurar.
 - Claves de firma RS256 distintas por ambiente: un token de DEV no vale en
   producción.
 
+### Interfaz
+
+- **Sistema de diseño único** en
+  `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/tokens.css`. Las pantallas
+  no declaran colores propios: se migraron 467 literales repartidos en 65
+  archivos, más 45 escritos con nombre CSS (`color:red`). Cambiar la identidad
+  visual del producto entero es cambiar ese archivo.
+- **Tema claro/oscuro, densidad, escala tipográfica y contraste alto**,
+  aplicados antes del primer pintado para que no haya destello. Se guardan en la
+  cuenta del usuario (`ADM_UserSettings`), no sólo en el navegador.
+- **Contraste verificado**: las 44 combinaciones de color y tema cumplen WCAG AA
+  (mínimo 4,5:1). La comprobación se hizo midiendo estilos calculados en un
+  navegador real, no leyendo el CSS.
+- **Login a dos columnas** con panel promocional administrable desde
+  `/administracion/promociones`. Si no hay contenido o la consulta falla, el
+  panel no se dibuja y el login funciona igual.
+
+Defectos que la migración sacó a la luz, ya corregidos:
+
+| Defecto | Efecto |
+|---|---|
+| `.kpi-value` en `#fff` sobre tarjeta blanca | Las cifras del dashboard eran invisibles en modo claro |
+| `--ifx-*` y `--sf-grid-header-bg` nunca definidos | Cada `var(--ifx-border, #ccc)` caía siempre al literal |
+| Calificación A–E con dos paletas distintas | La misma categoría se pintaba de un color en una pantalla y de otro en otra |
+| Paneles azul oscuro incrustados | Restos de un tema anterior dentro de una aplicación clara |
+| `auth-card` sin definir en ningún CSS | 14 pantallas del flujo de autenticación sin estilos |
+
 ---
 
 ## 2. Pendientes
@@ -183,6 +210,39 @@ el objetivo original de no depender de los límites de Actions.
 `blazor.web.js`**. No se investigó si es un cambio intencional que requiere
 ajustar el código o una regresión. Revisar al actualizar en vez de quedar
 anclados sin saber por qué.
+
+### Pendientes de la mejora visual
+
+#### V1 — `Microsoft.OpenApi` con vulnerabilidad de gravedad alta
+
+La restauración avisa `NU1903` sobre `Microsoft.OpenApi 2.4.1`
+(GHSA-v5pm-xwqc-g5wc). Afecta a `IngenIA365ERP.API`. Subir a la versión
+corregida y comprobar que el documento OpenAPI se sigue generando.
+
+#### V2 — MAUI no registra los clientes de `Services/Security`
+
+`MauiProgram.cs` no registra `CentralAuthClient` ni ninguno de los demás, así
+que las ~20 pantallas de seguridad —incluidas las nuevas de preferencias y
+promociones— fallan al inyectarlos en la app de escritorio y móvil. Es una
+condición anterior a esta mejora, pero ahora afecta a más pantallas.
+
+#### V3 — El CI no compila MAUI
+
+Se excluyó porque exige un workload pesado. Un cambio en `Shared` puede romper
+la app sin que nadie se entere; hoy se verifica a mano. Evaluar un job aparte,
+aunque corra sólo en la rama `release`.
+
+#### V4 — Fase 4 de la mejora visual sin abordar
+
+Quedan las pantallas de alto tráfico: tablas, formularios largos y el propio
+dashboard. Los tokens ya están, falta aplicar el criterio de espaciado y
+jerarquía pantalla por pantalla.
+
+#### V5 — Página de inicio y favoritos guardados pero no consumidos
+
+`ui.pagina-inicio` y `ui.favoritos` se guardan y validan en el servidor, pero
+todavía ninguna pantalla los lee: falta redirigir tras iniciar sesión y pintar
+los favoritos en el menú.
 
 ---
 
