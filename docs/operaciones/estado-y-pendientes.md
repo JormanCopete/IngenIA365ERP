@@ -86,6 +86,20 @@ entre sí y solo se notaría al intentar restaurar.
   `/administracion/promociones`. Si no hay contenido o la consulta falla, el
   panel no se dibuja y el login funciona igual.
 
+- **Hoja de componentes** (`componentes.css`): las 199 pantallas estaban escritas
+  contra clases que nunca se declararon —`.page-header` aparecía 129 veces sin
+  existir—, y el estilo embebido era el parche. Ya no hay ninguna página con
+  bloque `<style>` propio.
+
+| Indicador | Antes | Después |
+|---|---:|---:|
+| Clases sin definición aplicable | 29 (224 usos) | 12 (12 usos) |
+| Clases definidas por varias páginas a la vez | 12 | 0 |
+| Páginas con bloque `<style>` embebido | 25 | 0 |
+| Declaraciones `style=` embebidas | 924 | 307 |
+| Medidas en píxeles literales | 1498 | 256 |
+| Hojas de estilo con ámbito | 8 | 49 |
+
 Defectos que la migración sacó a la luz, ya corregidos:
 
 | Defecto | Efecto |
@@ -95,6 +109,9 @@ Defectos que la migración sacó a la luz, ya corregidos:
 | Calificación A–E con dos paletas distintas | La misma categoría se pintaba de un color en una pantalla y de otro en otra |
 | Paneles azul oscuro incrustados | Restos de un tema anterior dentro de una aplicación clara |
 | `auth-card` sin definir en ningún CSS | 14 pantallas del flujo de autenticación sin estilos |
+| `.info-card` y `.label` definidas por 14 páginas | La misma pantalla cambiaba de aspecto según de dónde vinieras |
+| Reglas de navegación sin `::deep` | Los encabezados de grupo de la barra lateral, centrados en vez de alineados, en todas las pantallas |
+| SyncFusion dimensionado por `fluent2.css` | Los filtros se quedaban en 30px con «texto muy grande», justo para quien activó esa opción |
 
 ---
 
@@ -232,11 +249,14 @@ Se excluyó porque exige un workload pesado. Un cambio en `Shared` puede romper
 la app sin que nadie se entere; hoy se verifica a mano. Evaluar un job aparte,
 aunque corra sólo en la rama `release`.
 
-#### V4 — Fase 4 de la mejora visual sin abordar
+#### V4 — Archivos huérfanos de OneDrive
 
-Quedan las pantallas de alto tráfico: tablas, formularios largos y el propio
-dashboard. Los tokens ya están, falta aplicar el criterio de espaciado y
-jerarquía pantalla por pantalla.
+154 archivos `.fuse_hidden*` (~1 MB) en `src/Presentation`, con el contenido
+anterior a la migración de color. No están versionados, no los referencia ningún
+proyecto y no compilan, pero conservan los literales que ya no deberían existir y
+van a ensuciar cualquier auditoría por `grep`. Conviene borrarlos **desde el
+explorador con OneDrive pausado**: la carpeta está sincronizada y el borrado se
+propaga a la nube.
 
 #### V5 — Página de inicio y favoritos guardados pero no consumidos
 

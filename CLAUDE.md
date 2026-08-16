@@ -34,7 +34,10 @@ Clean Architecture en 4 capas:
 - 272 entidades, 272 EF Core Configurations, 142 DbSets
 - 398 tests automatizados
 - 0 errores de compilación
-- Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/tokens.css` — única fuente de color; las pantallas no declaran literales
+- Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
+  - `tokens.css` — única fuente de color, densidad, escala y contraste
+  - `componentes.css` — clases de pantalla (`.pagina`, `.page-header`, `.toolbar`, `.info-card`, `.kpi-card`, `.data-grid`…)
+  - Ninguna pantalla declara colores literales ni bloques `<style>` propios
 
 ## Cómo Empezar
 Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md` para la documentación completa por fase.
