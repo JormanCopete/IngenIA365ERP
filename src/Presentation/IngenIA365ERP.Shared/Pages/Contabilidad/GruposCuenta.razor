@@ -6,62 +6,64 @@
 
 <PageTitle>Grupos de Cuenta - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Grupos de Cuenta</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Grupos de Cuenta</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="AccountGroupItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="GroupNumber" HeaderText="Numero Grupo" Width="150" />
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+            <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="180" />
+            <GridColumn Field="Level" HeaderText="Nivel" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as AccountGroupItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+
+    <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Numero Grupo *</label>
+                        <SfTextBox @bind-Value="_model.GroupNumber" Placeholder="Numero del grupo" />
+                    </div>
+                    <div>
+                        <label>Descripcion *</label>
+                        <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion del grupo" />
+                    </div>
+                    <div>
+                        <label>Cuenta Contable</label>
+                        <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
+                    </div>
+                    <div>
+                        <label>Nivel</label>
+                        <SfNumericTextBox TValue="int?" @bind-Value="_model.Level"
+                            Placeholder="1" Min="1" Max="10" Step="1" />
+                    </div>
+                </div>
+            </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+            <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        </DialogButtons>
+    </SfDialog>
+
+    <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+        Message="Esta seguro de eliminar este registro?" />
 </div>
-
-<SfGrid @ref="_grid" TValue="AccountGroupItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="GroupNumber" HeaderText="Numero Grupo" Width="150" />
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
-        <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="180" />
-        <GridColumn Field="Level" HeaderText="Nivel" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as AccountGroupItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
-
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Numero Grupo *</label>
-                    <SfTextBox @bind-Value="_model.GroupNumber" Placeholder="Numero del grupo" />
-                </div>
-                <div>
-                    <label>Descripcion *</label>
-                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion del grupo" />
-                </div>
-                <div>
-                    <label>Cuenta Contable</label>
-                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
-                </div>
-                <div>
-                    <label>Nivel</label>
-                    <SfNumericTextBox TValue="int?" @bind-Value="_model.Level"
-                        Placeholder="1" Min="1" Max="10" Step="1" />
-                </div>
-            </div>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
-    </DialogButtons>
-</SfDialog>
-
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
 
 @code {
     private SfGrid<AccountGroupItem>? _grid;

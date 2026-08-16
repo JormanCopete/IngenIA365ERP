@@ -4,7 +4,7 @@
           Header="Buscar Persona" CssClass="search-dialog">
     <DialogTemplates>
         <Content>
-            <div class="search-filters" style="display:flex;gap:8px;margin-bottom:12px;">
+            <div class="search-filters">
                 <SfTextBox @bind-Value="_searchId" Placeholder="No. Identificacion" CssClass="e-small" />
                 <SfTextBox @bind-Value="_searchName" Placeholder="Nombre" CssClass="e-small" />
                 <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="@Search">Buscar</SfButton>

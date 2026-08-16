@@ -1,0 +1,64 @@
+/* Aportes — lo que no cubre componentes.css.
+   Antes vivía en un <style> dentro del .razor, que Blazor inyecta en el
+   documento y por tanto se pisaba con el de las otras pantallas. */
+
+/* Panel de superficie sobre el lienzo de la página. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-lg);
+    background: var(--superficie-1);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+}
+
+/* El campo de búsqueda crece y el botón queda pegado a su derecha. */
+.campo-busqueda {
+    flex: 1;
+    min-width: 200px;
+}
+
+.resultado {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+}
+
+.asociado {
+    margin: 0;
+    color: var(--exito-texto);
+}
+
+.saldo-actual {
+    color: var(--info-texto);
+}
+
+/* Aporte y retiro no son "dos números": es plata que entra y plata que sale.
+   El color lo dice antes de leer la etiqueta. */
+.kpi-value.valor-exito   { color: var(--exito-texto); }
+.kpi-value.valor-peligro { color: var(--peligro-texto); }
+.kpi-value.valor-info    { color: var(--info-texto); }
+
+/* Pastillas de tipo de movimiento. La geometría la pone .badge global; acá
+   solo el relleno semántico. */
+.badge-aporte {
+    background: var(--exito);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+.badge-retiro-aporte {
+    background: var(--peligro);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+/* Formulario dentro de un SfDialog. Repetido en siete pantallas del grupo:
+   candidato a subir a componentes.css. */
+.campos-dialogo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-sm);
+}

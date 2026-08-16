@@ -7,9 +7,10 @@
 
 <PageTitle>Credito #@(_detail?.PortfolioNumber) - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+<div class="pagina">
+<div class="page-header">
     <h3>Credito #@(_detail?.PortfolioNumber ?? 0) - @(_detail?.PersonName ?? "Cargando...")</h3>
-    <div style="display:flex;gap:8px;">
+    <div>
         <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
                   OnClick='@(() => Nav.NavigateTo("/cartera/creditos"))'>Volver a Cartera</SfButton>
         @if (_detail is not null && _detail.CurrentBalance > 0)
@@ -22,29 +23,29 @@
 
 @if (_loading)
 {
-    <div style="display:flex;justify-content:center;padding:40px;">
+    <div class="cargando">
         <SfSpinner Visible="true" />
     </div>
 }
 else if (_detail is not null)
 {
     <!-- Summary cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="kpi-grid">
         <div class="kpi-card">
             <span class="kpi-label">Monto Aprobado</span>
             <span class="kpi-value">@_detail.ApprovedAmount.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Saldo Actual</span>
-            <span class="kpi-value" style="@(_detail.CurrentBalance > 0 ? "color:var(--alerta-texto)" : "color:var(--exito-texto)")">@_detail.CurrentBalance.ToString("N0")</span>
+            <span class="kpi-value" style="color:@(_detail.CurrentBalance > 0 ? "var(--alerta-texto)" : "var(--exito-texto)")">@_detail.CurrentBalance.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Cuotas Pagadas</span>
             <span class="kpi-value">@_detail.PaidInstallments / @_detail.TermMonths</span>
         </div>
-        <div class="kpi-card" style="@(_detail.DaysOverdue > 0 ? "border-color:var(--peligro)" : "")">
+        <div class="kpi-card @(_detail.DaysOverdue > 0 ? "en-mora" : "")">
             <span class="kpi-label">Dias en Mora</span>
-            <span class="kpi-value" style="@(_detail.DaysOverdue > 0 ? "color:var(--peligro-texto)" : "color:var(--exito-texto)")">@_detail.DaysOverdue</span>
+            <span class="kpi-value" style="color:@(_detail.DaysOverdue > 0 ? "var(--peligro-texto)" : "var(--exito-texto)")">@_detail.DaysOverdue</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Clasificacion</span>
@@ -63,19 +64,19 @@ else if (_detail is not null)
             <TabItem>
                 <ChildContent><TabHeader Text="Resumen" IconCss="e-icons e-description" /></ChildContent>
                 <ContentTemplate>
-                    <div style="padding:16px;">
-                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:600px;">
-                            <span style="color:var(--texto-tenue);">Numero:</span><span>@_detail.PortfolioNumber</span>
-                            <span style="color:var(--texto-tenue);">Asociado:</span><span>@_detail.PersonName</span>
-                            <span style="color:var(--texto-tenue);">Documento:</span><span>@_detail.IdentificationNumber</span>
-                            <span style="color:var(--texto-tenue);">Linea de Credito:</span><span>@_detail.CreditLineName</span>
-                            <span style="color:var(--texto-tenue);">Desembolso:</span><span>@_detail.DisbursementDate</span>
-                            <span style="color:var(--texto-tenue);">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
-                            <span style="color:var(--texto-tenue);">Ultimo Pago:</span><span>@(_detail.LastPaymentDate?.ToString() ?? "Sin pagos")</span>
-                            <span style="color:var(--texto-tenue);">Periodicidad:</span><span>@GetPeriodicityText(_detail.PaymentPeriodicity)</span>
-                            <span style="color:var(--texto-tenue);">Tipo Garantia:</span><span>@_detail.GuaranteeType</span>
-                            <span style="color:var(--texto-tenue);">Tipo Descuento:</span><span>@_detail.DeductionType</span>
-                            <span style="color:var(--texto-tenue);">Cuota:</span><span>@_detail.InstallmentAmount.ToString("N0")</span>
+                    <div class="contenido-tab">
+                        <div class="lista-datos">
+                            <span class="texto-tenue">Numero:</span><span>@_detail.PortfolioNumber</span>
+                            <span class="texto-tenue">Asociado:</span><span>@_detail.PersonName</span>
+                            <span class="texto-tenue">Documento:</span><span>@_detail.IdentificationNumber</span>
+                            <span class="texto-tenue">Linea de Credito:</span><span>@_detail.CreditLineName</span>
+                            <span class="texto-tenue">Desembolso:</span><span>@_detail.DisbursementDate</span>
+                            <span class="texto-tenue">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
+                            <span class="texto-tenue">Ultimo Pago:</span><span>@(_detail.LastPaymentDate?.ToString() ?? "Sin pagos")</span>
+                            <span class="texto-tenue">Periodicidad:</span><span>@GetPeriodicityText(_detail.PaymentPeriodicity)</span>
+                            <span class="texto-tenue">Tipo Garantia:</span><span>@_detail.GuaranteeType</span>
+                            <span class="texto-tenue">Tipo Descuento:</span><span>@_detail.DeductionType</span>
+                            <span class="texto-tenue">Cuota:</span><span>@_detail.InstallmentAmount.ToString("N0")</span>
                         </div>
                     </div>
                 </ContentTemplate>
@@ -85,7 +86,7 @@ else if (_detail is not null)
             <TabItem>
                 <ChildContent><TabHeader Text="@($"Cuotas ({_detail.Installments.Count})")" IconCss="e-icons e-list-unordered" /></ChildContent>
                 <ContentTemplate>
-                    <div style="padding:16px;">
+                    <div class="contenido-tab">
                         <SfGrid TValue="InstallmentRow" DataSource="_detail.Installments" AllowPaging="true"
                                 AllowSorting="true" GridLines="GridLine.Both">
                             <GridPageSettings PageSize="24" />
@@ -110,7 +111,7 @@ else if (_detail is not null)
                                                 _ => "color:var(--peligro-texto)"
                                             };
                                         }
-                                        <span style="@stColor;font-weight:bold;">@inst?.Status</span>
+                                        <span class="estado-cuota" style="@stColor">@inst?.Status</span>
                                     </Template>
                                 </GridColumn>
                             </GridColumns>
@@ -123,7 +124,7 @@ else if (_detail is not null)
             <TabItem>
                 <ChildContent><TabHeader Text="@($"Movimientos ({_detail.RecentTransactions.Count})")" IconCss="e-icons e-edit" /></ChildContent>
                 <ContentTemplate>
-                    <div style="padding:16px;">
+                    <div class="contenido-tab">
                         <SfGrid TValue="TransactionRow" DataSource="_detail.RecentTransactions" AllowPaging="true"
                                 AllowSorting="true" GridLines="GridLine.Both">
                             <GridPageSettings PageSize="20" />
@@ -145,29 +146,15 @@ else if (_detail is not null)
             <TabItem>
                 <ChildContent><TabHeader Text="Garantias" IconCss="e-icons e-lock" /></ChildContent>
                 <ContentTemplate>
-                    <div style="padding:16px;">
-                        <p style="color:var(--texto-tenue);">Garantias asociadas al credito se mostraran aqui.</p>
+                    <div class="contenido-tab">
+                        <p class="texto-tenue">Garantias asociadas al credito se mostraran aqui.</p>
                     </div>
                 </ContentTemplate>
             </TabItem>
         </TabItems>
     </SfTab>
 }
-
-<style>
-    .kpi-card {
-        background: var(--sf-card-bg, var(--superficie-1));
-        border: 1px solid var(--borde);
-        border-radius: 8px;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-    .kpi-value { font-size: 22px; font-weight: bold; color: var(--acento); }
-    .kpi-label { font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-</style>
+</div>
 
 @code {
     [Parameter] public Guid PortfolioId { get; set; }

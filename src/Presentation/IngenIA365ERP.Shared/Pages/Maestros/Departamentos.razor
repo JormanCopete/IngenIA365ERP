@@ -7,9 +7,9 @@
 
 <PageTitle>Departamentos - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Departamentos</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfDropDownList TValue="Guid?" TItem="LookupOption"
                         @bind-Value="_filterCountry"
                         DataSource="@_countries"
@@ -50,7 +50,7 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                <div class="pagina">
                     <div>
                         <label>Pais <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDropDownList TValue="Guid?" TItem="LookupOption"

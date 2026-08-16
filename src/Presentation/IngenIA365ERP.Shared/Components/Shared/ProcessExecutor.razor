@@ -4,7 +4,7 @@
 <div class="process-executor">
     @if (_state == ProcessState.Ready)
     {
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div class="actions">
             @ParameterContent
             <SfButton CssClass="e-info" IconCss="e-icons e-preview" OnClick="LoadPreview">Vista Previa</SfButton>
         </div>
@@ -23,7 +23,7 @@
             <GridPageSettings PageSize="20" />
             @PreviewColumns
         </SfGrid>
-        <div style="margin-top:16px;display:flex;gap:8px;">
+        <div class="actions">
             <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="ShowConfirm">Ejecutar Proceso</SfButton>
             <SfButton CssClass="e-flat" OnClick="Reset">Cancelar</SfButton>
         </div>
@@ -41,18 +41,18 @@
         <div class="process-result">
             @ResultTemplate(_result)
         </div>
-        <div style="margin-top:16px;">
+        <div class="actions">
             <SfButton CssClass="e-flat" IconCss="e-icons e-reload" OnClick="Reset">Nuevo Proceso</SfButton>
         </div>
     }
 
     @if (_state == ProcessState.Error)
     {
-        <div class="e-error" style="color:var(--peligro-texto);padding:12px;border:1px solid var(--peligro);border-radius:4px;">
-            <span class="e-icons e-circle-close" style="margin-right:8px;"></span>
+        <div class="e-error aviso aviso-error">
+            <span class="e-icons e-circle-close"></span>
             @_errorMessage
         </div>
-        <div style="margin-top:16px;">
+        <div class="actions">
             <SfButton CssClass="e-flat" OnClick="Reset">Reintentar</SfButton>
         </div>
     }

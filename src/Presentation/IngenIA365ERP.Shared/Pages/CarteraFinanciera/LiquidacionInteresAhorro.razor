@@ -10,7 +10,7 @@
     <h3>Liquidacion de Intereses de Ahorros</h3>
 </div>
 
-<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+<div class="toolbar" style="margin-bottom:var(--pad-lg);">
     <div>
         <label>Fecha de Liquidacion</label>
         <SfDatePicker TValue="DateTime?" @bind-Value="_liquidationDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
@@ -33,7 +33,7 @@
         </GridColumns>
     </PreviewColumns>
     <ResultTemplate>
-        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div class="rejilla-tarjetas">
             <div class="info-card"><span class="label">Cuentas Procesadas</span><span>@context.AccountsProcessed</span></div>
             <div class="info-card"><span class="label">Total Intereses</span><span>@context.TotalInterest.ToString("N2")</span></div>
             <div class="info-card"><span class="label">Fecha Liquidacion</span><span>@context.LiquidationDate</span></div>
@@ -67,8 +67,3 @@
         public string LiquidationDate { get; set; } = "";
     }
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-</style>

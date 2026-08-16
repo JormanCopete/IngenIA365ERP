@@ -1,0 +1,34 @@
+/* Detalle de crédito — lo que no cubre componentes.css.
+   El <style> que tenía la página redefinía .kpi-card, .kpi-value y .kpi-label
+   sueltas en el documento: cualquier pantalla cargada después le cambiaba el
+   aspecto a ésta, y al revés. Esas tres salen ahora de componentes.css. */
+
+.cargando {
+    display: flex;
+    justify-content: center;
+    padding: var(--gap-xl);
+}
+
+/* Relleno del contenido de una pestaña de SfTab, que viene sin aire propio. */
+.contenido-tab {
+    padding: var(--pad-lg);
+}
+
+/* Ficha de dos columnas: etiqueta a la izquierda, dato a la derecha. */
+.lista-datos {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gap-md);
+    max-width: 600px;
+}
+
+/* Un crédito en mora se señala en el borde de la tarjeta, no sólo en la cifra:
+   el recuadro rojo se ve antes de leer el número. */
+.kpi-card.en-mora {
+    border-color: var(--peligro);
+}
+
+/* El estado de la cuota se busca recorriendo la columna en vertical. */
+.estado-cuota {
+    font-weight: var(--peso-fuerte);
+}

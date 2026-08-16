@@ -58,14 +58,14 @@
             <InputText @bind-Value="_model.FirstAdminEmail" type="email" />
             <ValidationMessage For="@(() => _model.FirstAdminEmail)" />
 
-            <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+            <button type="submit" disabled="@_busy">
                 @(_busy ? "Creando..." : "Crear empresa y enviar invitación")
             </button>
         </EditForm>
 
         @if (!string.IsNullOrEmpty(_error))
         {
-            <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+            <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
         }
     }
 </div>

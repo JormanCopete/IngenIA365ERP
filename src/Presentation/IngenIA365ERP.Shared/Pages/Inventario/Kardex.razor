@@ -6,130 +6,130 @@
 
 <PageTitle>Kardex - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Kardex de Inventario</h3>
-</div>
-
-<!-- Product search -->
-<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:flex-end;">
-    <div style="flex:1;min-width:280px;">
-        <label>Producto</label>
-        <div style="display:flex;gap:8px;">
-            <SfTextBox @bind-Value="_productSearch" Placeholder="Buscar por codigo o nombre de producto" />
-            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="SearchProduct">Buscar</SfButton>
-        </div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Kardex de Inventario</h3>
     </div>
+
+    <!-- Product search -->
+    <div class="toolbar">
+        <div style="flex:1;min-width:280px;">
+            <label>Producto</label>
+            <div class="acciones">
+                <SfTextBox @bind-Value="_productSearch" Placeholder="Buscar por codigo o nombre de producto" />
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="SearchProduct">Buscar</SfButton>
+            </div>
+        </div>
+        @if (_selectedProduct is not null)
+        {
+            <div>
+                <label>Bodega</label>
+                <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_filterWarehouse"
+                                DataSource="_warehouseOptions" Placeholder="Todas" CssClass="e-small">
+                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Desde</label>
+                <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
+            </div>
+            <div>
+                <label>Hasta</label>
+                <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
+            </div>
+            <SfButton CssClass="e-primary e-small" OnClick="LoadMovements">Filtrar</SfButton>
+        }
+    </div>
+
+    <!-- Product selector results -->
+    <SfDialog @bind-Visible="_showProductResults" Header="Seleccionar Producto" Width="650px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div style="padding:var(--pad-md);">
+                    <SfGrid TValue="ProductItem" DataSource="_productResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnProductChosen" TValue="ProductItem" />
+                        <GridColumns>
+                            <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="280" />
+                            <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
+                            <GridColumn Field="CurrentStock" HeaderText="Stock Total" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                        </GridColumns>
+                    </SfGrid>
+                </div>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+
     @if (_selectedProduct is not null)
     {
-        <div>
-            <label>Bodega</label>
-            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_filterWarehouse"
-                            DataSource="_warehouseOptions" Placeholder="Todas" CssClass="e-small">
-                <DropDownListFieldSettings Text="Name" Value="Value" />
-            </SfDropDownList>
-        </div>
-        <div>
-            <label>Desde</label>
-            <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
-        </div>
-        <div>
-            <label>Hasta</label>
-            <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
-        </div>
-        <SfButton CssClass="e-primary e-small" OnClick="LoadMovements">Filtrar</SfButton>
-    }
-</div>
-
-<!-- Product selector results -->
-<SfDialog @bind-Visible="_showProductResults" Header="Seleccionar Producto" Width="650px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <SfGrid TValue="ProductItem" DataSource="_productResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnProductChosen" TValue="ProductItem" />
-                    <GridColumns>
-                        <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" />
-                        <GridColumn Field="Name" HeaderText="Nombre" Width="280" />
-                        <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
-                        <GridColumn Field="CurrentStock" HeaderText="Stock Total" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
-
-@if (_selectedProduct is not null)
-{
-    <!-- Product info + stock summary -->
-    <div style="background:var(--superficie-0);padding:16px;border-radius:4px;margin-bottom:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <!-- Product info + stock summary -->
+        <div class="panel-producto">
             <div>
-                <span style="font-size:12px;color:var(--texto-secundario);">Producto seleccionado</span><br/>
-                <strong style="font-size:16px;">@_selectedProduct.ProductCode - @_selectedProduct.Name</strong>
-                <span style="margin-left:12px;color:var(--texto-tenue);">(@_selectedProduct.UnitOfMeasure)</span>
+                <span class="label">Producto seleccionado</span>
+                <strong class="titulo">@_selectedProduct.ProductCode - @_selectedProduct.Name</strong>
+                <span class="texto-tenue medida">(@_selectedProduct.UnitOfMeasure)</span>
             </div>
             <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" OnClick="ClearProduct">Cambiar producto</SfButton>
         </div>
-    </div>
 
-    <!-- Stock per warehouse KPI cards -->
-    @if (_stockSummary.Count > 0)
-    {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
-            @foreach (var ws in _stockSummary)
-            {
-                <div style="background:var(--superficie-1);border:1px solid var(--borde);border-radius:6px;padding:16px;text-align:center;">
-                    <span style="font-size:12px;color:var(--texto-secundario);">@ws.WarehouseName</span><br/>
-                    <strong style="font-size:22px;color:@(ws.Stock >= 0 ? "var(--exito)" : "var(--peligro)");">@ws.Stock.ToString("N2")</strong>
-                    <br/><span style="font-size:11px;color:var(--texto-tenue);">Costo prom: @ws.AverageCost.ToString("N2")</span>
+        <!-- Stock per warehouse KPI cards -->
+        @if (_stockSummary.Count > 0)
+        {
+            <div class="kpi-grid">
+                @foreach (var ws in _stockSummary)
+                {
+                    <div class="kpi-card">
+                        <span class="kpi-label">@ws.WarehouseName</span>
+                        <strong class="kpi-value" style="color:@(ws.Stock >= 0 ? "var(--exito)" : "var(--peligro)");">@ws.Stock.ToString("N2")</strong>
+                        <span class="kpi-label">Costo prom: @ws.AverageCost.ToString("N2")</span>
+                    </div>
+                }
+                <div class="kpi-card tarjeta-total">
+                    <span class="kpi-label">Stock Total</span>
+                    <strong class="kpi-value">@_stockSummary.Sum(s => s.Stock).ToString("N2")</strong>
+                    <span class="kpi-label">Todas las bodegas</span>
                 </div>
-            }
-            <div style="background:var(--info);color:var(--acento-texto);border-radius:6px;padding:16px;text-align:center;">
-                <span style="font-size:12px;opacity:0.8;">Stock Total</span><br/>
-                <strong style="font-size:22px;">@_stockSummary.Sum(s => s.Stock).ToString("N2")</strong>
-                <br/><span style="font-size:11px;opacity:0.7;">Todas las bodegas</span>
             </div>
+        }
+
+        <!-- Movements grid -->
+        <div class="page-header">
+            <h4>Movimientos</h4>
+            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-export-excel" OnClick="ExportToExcel">Exportar a Excel</SfButton>
         </div>
+
+        <SfGrid @ref="_movementsGrid" TValue="KardexMovement" DataSource="@_movements"
+                AllowPaging="true" AllowSorting="true" AllowExcelExport="true">
+            <GridPageSettings PageSize="25" />
+            <GridColumns>
+                <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="dd/MM/yyyy" />
+                <GridColumn Field="DocumentType" HeaderText="Tipo Doc" Width="90" TextAlign="TextAlign.Center" />
+                <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="100" TextAlign="TextAlign.Right" />
+                <GridColumn Field="WarehouseName" HeaderText="Bodega" Width="140" />
+                <GridColumn Field="EntryQty" HeaderText="Entrada" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="ExitQty" HeaderText="Salida" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Balance" HeaderText="Saldo" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="UnitCost" HeaderText="Costo Unit" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+        </SfGrid>
+
+        @if (_movements.Count == 0 && !_loading)
+        {
+            <div class="estado-vacio">
+                <span class="e-icons e-description icono"></span>
+                No se encontraron movimientos para los filtros seleccionados.
+            </div>
+        }
     }
-
-    <!-- Movements grid -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h4 style="margin:0;">Movimientos</h4>
-        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-export-excel" OnClick="ExportToExcel">Exportar a Excel</SfButton>
-    </div>
-
-    <SfGrid @ref="_movementsGrid" TValue="KardexMovement" DataSource="@_movements"
-            AllowPaging="true" AllowSorting="true" AllowExcelExport="true">
-        <GridPageSettings PageSize="25" />
-        <GridColumns>
-            <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="dd/MM/yyyy" />
-            <GridColumn Field="DocumentType" HeaderText="Tipo Doc" Width="90" TextAlign="TextAlign.Center" />
-            <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="100" TextAlign="TextAlign.Right" />
-            <GridColumn Field="WarehouseName" HeaderText="Bodega" Width="140" />
-            <GridColumn Field="EntryQty" HeaderText="Entrada" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="ExitQty" HeaderText="Salida" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Balance" HeaderText="Saldo" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="UnitCost" HeaderText="Costo Unit" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-        </GridColumns>
-    </SfGrid>
-
-    @if (_movements.Count == 0 && !_loading)
+    else
     {
-        <div style="text-align:center;padding:40px;color:var(--texto-tenue);">
-            <span class="e-icons e-description" style="font-size:48px;display:block;margin-bottom:12px;"></span>
-            No se encontraron movimientos para los filtros seleccionados.
+        <div class="estado-vacio">
+            <span class="e-icons e-search icono"></span>
+            <p>Busque y seleccione un producto para ver su kardex.</p>
         </div>
     }
-}
-else
-{
-    <div style="text-align:center;padding:60px;color:var(--texto-tenue);">
-        <span class="e-icons e-search" style="font-size:48px;display:block;margin-bottom:12px;"></span>
-        <p>Busque y seleccione un producto para ver su kardex.</p>
-    </div>
-}
+</div>
 
 @code {
     private string _productSearch = "";

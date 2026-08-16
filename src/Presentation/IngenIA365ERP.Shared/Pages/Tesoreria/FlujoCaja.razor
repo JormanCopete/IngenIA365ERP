@@ -6,87 +6,89 @@
 
 <PageTitle>Flujo de Caja - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Flujo de Caja</h3>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Flujo de Caja</h3>
+    </div>
+
+    <div class="toolbar">
+        <div>
+            <label>Anio *</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2020" Max="2030" Width="120px" />
+        </div>
+        <div>
+            <label>Mes Desde</label>
+            <SfNumericTextBox TValue="int?" @bind-Value="_monthFrom" Min="1" Max="12" Width="100px" Placeholder="1" />
+        </div>
+        <div>
+            <label>Mes Hasta</label>
+            <SfNumericTextBox TValue="int?" @bind-Value="_monthTo" Min="1" Max="12" Width="100px" Placeholder="12" />
+        </div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Consultar</SfButton>
+    </div>
+
+    @if (_items.Count > 0)
+    {
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <span class="kpi-label">Total Ingresos</span>
+                <span class="kpi-value" style="color:var(--exito-texto);">@_totalIncome.ToString("N0")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Total Egresos</span>
+                <span class="kpi-value" style="color:var(--peligro-texto);">@_totalExpense.ToString("N0")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Flujo Neto</span>
+                <span class="kpi-value" style="color:@(_netFlow >= 0 ? "var(--exito)" : "var(--peligro)");">@_netFlow.ToString("N0")</span>
+            </div>
+        </div>
+
+        <SfChart Title="Flujo de Caja Mensual" Width="100%" Height="400px">
+            <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category">
+                <ChartAxisLabelStyle FontSize="11px" />
+            </ChartPrimaryXAxis>
+            <ChartPrimaryYAxis LabelFormat="N0" />
+            <ChartSeriesCollection>
+                <ChartSeries DataSource="@_items" XName="Period" YName="TotalIncome" Name="Ingresos"
+                    Type="ChartSeriesType.StackingColumn" Fill="var(--exito)" />
+                <ChartSeries DataSource="@_items" XName="Period" YName="TotalExpense" Name="Egresos"
+                    Type="ChartSeriesType.StackingColumn" Fill="var(--peligro)" />
+                <ChartSeries DataSource="@_items" XName="Period" YName="NetFlow" Name="Flujo Neto"
+                    Type="ChartSeriesType.Line" Fill="var(--info)" Width="3">
+                    <ChartMarker Visible="true" Width="8" Height="8" />
+                </ChartSeries>
+            </ChartSeriesCollection>
+            <ChartLegendSettings Visible="true" Position="LegendPosition.Bottom" />
+            <ChartTooltipSettings Enable="true" Format="${series.name}: ${point.y:N0}" />
+        </SfChart>
+
+        <h4>Detalle por Mes</h4>
+        <SfGrid TValue="CashFlowItem" DataSource="@_items" AllowSorting="true">
+            <GridColumns>
+                <GridColumn Field="Period" HeaderText="Periodo" Width="180" />
+                <GridColumn Field="TotalIncome" HeaderText="Ingresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalExpense" HeaderText="Egresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
+                <GridColumn Field="NetFlow" HeaderText="Flujo Neto" Width="160" Format="N0" TextAlign="TextAlign.Right">
+                    <Template>
+                        @{
+                            var item = context as CashFlowItem;
+                            var color = (item?.NetFlow ?? 0) >= 0 ? "var(--exito-texto)" : "var(--peligro-texto)";
+                            <span style="color:@color;font-weight:var(--peso-fuerte);">@item?.NetFlow.ToString("N0")</span>
+                        }
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </SfGrid>
+    }
+    else
+    {
+        <div class="module-placeholder">
+            <span class="e-icons e-chart placeholder-icon"></span>
+            <p>Seleccione los parametros y haga clic en Consultar para ver el flujo de caja.</p>
+        </div>
+    }
 </div>
-
-<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Anio *</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2020" Max="2030" Width="120px" />
-    </div>
-    <div>
-        <label>Mes Desde</label>
-        <SfNumericTextBox TValue="int?" @bind-Value="_monthFrom" Min="1" Max="12" Width="100px" Placeholder="1" />
-    </div>
-    <div>
-        <label>Mes Hasta</label>
-        <SfNumericTextBox TValue="int?" @bind-Value="_monthTo" Min="1" Max="12" Width="100px" Placeholder="12" />
-    </div>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Consultar</SfButton>
-</div>
-
-@if (_items.Count > 0)
-{
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-        <div class="kpi-card">
-            <span class="kpi-label">Total Ingresos</span>
-            <span class="kpi-value" style="color:var(--exito-texto);">@_totalIncome.ToString("N0")</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Total Egresos</span>
-            <span class="kpi-value" style="color:var(--peligro-texto);">@_totalExpense.ToString("N0")</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Flujo Neto</span>
-            <span class="kpi-value" style="color:@(_netFlow >= 0 ? "var(--exito)" : "var(--peligro)");">@_netFlow.ToString("N0")</span>
-        </div>
-    </div>
-
-    <SfChart Title="Flujo de Caja Mensual" Width="100%" Height="400px">
-        <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category">
-            <ChartAxisLabelStyle FontSize="11px" />
-        </ChartPrimaryXAxis>
-        <ChartPrimaryYAxis LabelFormat="N0" />
-        <ChartSeriesCollection>
-            <ChartSeries DataSource="@_items" XName="Period" YName="TotalIncome" Name="Ingresos"
-                Type="ChartSeriesType.StackingColumn" Fill="var(--exito)" />
-            <ChartSeries DataSource="@_items" XName="Period" YName="TotalExpense" Name="Egresos"
-                Type="ChartSeriesType.StackingColumn" Fill="var(--peligro)" />
-            <ChartSeries DataSource="@_items" XName="Period" YName="NetFlow" Name="Flujo Neto"
-                Type="ChartSeriesType.Line" Fill="var(--info)" Width="3">
-                <ChartMarker Visible="true" Width="8" Height="8" />
-            </ChartSeries>
-        </ChartSeriesCollection>
-        <ChartLegendSettings Visible="true" Position="LegendPosition.Bottom" />
-        <ChartTooltipSettings Enable="true" Format="${series.name}: ${point.y:N0}" />
-    </SfChart>
-
-    <h4 style="margin-top:24px;">Detalle por Mes</h4>
-    <SfGrid TValue="CashFlowItem" DataSource="@_items" AllowSorting="true">
-        <GridColumns>
-            <GridColumn Field="Period" HeaderText="Periodo" Width="180" />
-            <GridColumn Field="TotalIncome" HeaderText="Ingresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
-            <GridColumn Field="TotalExpense" HeaderText="Egresos" Width="160" Format="N0" TextAlign="TextAlign.Right" />
-            <GridColumn Field="NetFlow" HeaderText="Flujo Neto" Width="160" Format="N0" TextAlign="TextAlign.Right">
-                <Template>
-                    @{
-                        var item = context as CashFlowItem;
-                        var color = (item?.NetFlow ?? 0) >= 0 ? "var(--exito-texto)" : "var(--peligro-texto)";
-                        <span style="color:@color;font-weight:600;">@item?.NetFlow.ToString("N0")</span>
-                    }
-                </Template>
-            </GridColumn>
-        </GridColumns>
-    </SfGrid>
-}
-else
-{
-    <div style="text-align:center;padding:40px;color:var(--texto-tenue);">
-        <span class="e-icons e-chart" style="font-size:48px;"></span>
-        <p>Seleccione los parametros y haga clic en Consultar para ver el flujo de caja.</p>
-    </div>
-}
 
 @code {
     private List<CashFlowItem> _items = [];

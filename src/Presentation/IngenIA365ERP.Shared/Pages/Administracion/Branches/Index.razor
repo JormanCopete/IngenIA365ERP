@@ -7,7 +7,9 @@
 <PageTitle>Sucursales — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>Sucursales</h1>
+    <div class="page-header">
+        <h1>Sucursales</h1>
+    </div>
 
     <div class="toolbar">
         <input type="search" placeholder="Buscar por código o nombre…" @bind="_search" @bind:event="oninput" />
@@ -17,7 +19,7 @@
     </div>
 
     @if (_loading) { <p>Cargando…</p> }
-    else if (_error is not null) { <p class="error">@_error</p> }
+    else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
     else if (_items.Count == 0) { <p>Sin resultados.</p> }
     else
     {
@@ -39,11 +41,13 @@
                         <td>@(b.IsHeadquarters ? "★" : "")</td>
                         <td>@(b.IsActive ? "Activa" : "Inactiva")</td>
                         <td>
-                            <button @onclick="() => Edit(b.PublicId)">Editar</button>
-                            @if (b.IsActive && !b.IsHeadquarters)
-                            {
-                                <button @onclick="() => DeactivateAsync(b.PublicId)">Desactivar</button>
-                            }
+                            <div class="acciones">
+                                <button @onclick="() => Edit(b.PublicId)">Editar</button>
+                                @if (b.IsActive && !b.IsHeadquarters)
+                                {
+                                    <button @onclick="() => DeactivateAsync(b.PublicId)">Desactivar</button>
+                                }
+                            </div>
                         </td>
                     </tr>
                 }

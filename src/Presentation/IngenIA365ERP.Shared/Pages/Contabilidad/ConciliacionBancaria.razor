@@ -6,178 +6,180 @@
 
 <PageTitle>Conciliacion Bancaria - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Conciliacion Bancaria</h3>
-</div>
-
-<!-- Header controls -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Cuenta Bancaria</label>
-        <SfDropDownList TValue="string" TItem="BankAccountOption" @bind-Value="_selectedAccount"
-                        DataSource="_bankAccounts" CssClass="e-small" Width="300px" Placeholder="Seleccione cuenta">
-            <DropDownListFieldSettings Text="Display" Value="Code" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Anio</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
-                          CssClass="e-small" Width="90px" />
-    </div>
-    <div>
-        <label>Mes</label>
-        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-reload" OnClick="LoadReconciliation">Cargar</SfButton>
-    <SfButton CssClass="e-success e-small" IconCss="e-icons e-save" OnClick="SaveReconciliation"
-              Disabled="@(!_hasData)">Guardar</SfButton>
-</div>
-
-@if (_hasData)
-{
-    <!-- Summary cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
-        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
-            <span style="font-size:12px;color:var(--texto-secundario);">Saldo Contable</span><br/>
-            <strong style="font-size:18px;">@_summary.BookBalance.ToString("N2")</strong>
-        </div>
-        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
-            <span style="font-size:12px;color:var(--texto-secundario);">Saldo Banco</span><br/>
-            <strong style="font-size:18px;">@_summary.BankBalance.ToString("N2")</strong>
-        </div>
-        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
-            <span style="font-size:12px;color:var(--texto-secundario);">Partidas Pendientes (DB)</span><br/>
-            <strong style="font-size:18px;color:@(_summary.PendingDebits != 0 ? "orange" : "inherit");">@_summary.PendingDebits.ToString("N2")</strong>
-        </div>
-        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
-            <span style="font-size:12px;color:var(--texto-secundario);">Partidas Pendientes (CR)</span><br/>
-            <strong style="font-size:18px;color:@(_summary.PendingCredits != 0 ? "orange" : "inherit");">@_summary.PendingCredits.ToString("N2")</strong>
-        </div>
-        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:@(_summary.Difference == 0 ? "var(--exito-fondo)" : "var(--peligro-fondo)");">
-            <span style="font-size:12px;color:var(--texto-secundario);">Diferencia</span><br/>
-            <strong style="font-size:18px;color:@(_summary.Difference == 0 ? "green" : "red");">@_summary.Difference.ToString("N2")</strong>
-        </div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conciliacion Bancaria</h3>
     </div>
 
-    <!-- Two-panel layout -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-        <!-- Left panel: Accounting entries -->
+    <!-- Header controls -->
+    <div class="toolbar">
         <div>
-            <h4 style="margin:0 0 8px 0;">Movimientos Contables</h4>
-            <SfGrid @ref="_bookGrid" TValue="ReconciliationItem" DataSource="_bookItems"
-                    AllowPaging="true" AllowSorting="true" Height="400">
-                <GridPageSettings PageSize="20" />
-                <GridColumns>
-                    <GridColumn HeaderText="" Width="50" TextAlign="TextAlign.Center">
-                        <Template>
-                            @{
-                                var item = context as ReconciliationItem;
-                            }
-                            <SfCheckBox TChecked="bool" @bind-Checked="item!.IsReconciled"
-                                        ValueChange="@((Syncfusion.Blazor.Buttons.ChangeEventArgs<bool> e) => OnReconcileToggle(item, e.Checked))" />
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Field="TransactionDate" HeaderText="Fecha" Width="100" Format="d" Type="ColumnType.Date" />
-                    <GridColumn Field="DocumentRef" HeaderText="Ref" Width="100" />
-                    <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
-                    <GridColumn Field="Debit" HeaderText="Debito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-                    <GridColumn Field="Credit" HeaderText="Credito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-                </GridColumns>
-                <GridAggregates>
-                    <GridAggregate>
-                        <GridAggregateColumns>
-                            <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>
-                                    @{ var sum = (context as AggregateTemplateContext); }
-                                    <span><b>@sum?.Sum</b></span>
-                                </FooterTemplate>
-                            </GridAggregateColumn>
-                            <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>
-                                    @{ var sum = (context as AggregateTemplateContext); }
-                                    <span><b>@sum?.Sum</b></span>
-                                </FooterTemplate>
-                            </GridAggregateColumn>
-                        </GridAggregateColumns>
-                    </GridAggregate>
-                </GridAggregates>
-            </SfGrid>
+            <label>Cuenta Bancaria</label>
+            <SfDropDownList TValue="string" TItem="BankAccountOption" @bind-Value="_selectedAccount"
+                            DataSource="_bankAccounts" CssClass="e-small" Width="300px" Placeholder="Seleccione cuenta">
+                <DropDownListFieldSettings Text="Display" Value="Code" />
+            </SfDropDownList>
         </div>
-
-        <!-- Right panel: Bank statement -->
         <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h4 style="margin:0;">Extracto Bancario</h4>
-                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-upload" OnClick="@(() => _showImportDialog = true)">Importar</SfButton>
-            </div>
-            <SfGrid TValue="BankStatementItem" DataSource="_bankItems"
-                    AllowPaging="true" AllowSorting="true" Height="400">
-                <GridPageSettings PageSize="20" />
-                <GridColumns>
-                    <GridColumn Field="TransactionDate" HeaderText="Fecha" Width="100" Format="d" Type="ColumnType.Date" />
-                    <GridColumn Field="Reference" HeaderText="Referencia" Width="120" />
-                    <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
-                    <GridColumn Field="Debit" HeaderText="Debito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-                    <GridColumn Field="Credit" HeaderText="Credito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-                    <GridColumn Field="StatusText" HeaderText="Estado" Width="100">
-                        <Template>
-                            @{
-                                var item = context as BankStatementItem;
-                                var badge = item?.IsMatched == true ? "e-badge e-badge-success" : "e-badge e-badge-warning";
-                                var text = item?.IsMatched == true ? "Cruzado" : "Pendiente";
-                            }
-                            <span class="@badge">@text</span>
-                        </Template>
-                    </GridColumn>
-                </GridColumns>
-                <GridAggregates>
-                    <GridAggregate>
-                        <GridAggregateColumns>
-                            <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>
-                                    @{ var sum = (context as AggregateTemplateContext); }
-                                    <span><b>@sum?.Sum</b></span>
-                                </FooterTemplate>
-                            </GridAggregateColumn>
-                            <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>
-                                    @{ var sum = (context as AggregateTemplateContext); }
-                                    <span><b>@sum?.Sum</b></span>
-                                </FooterTemplate>
-                            </GridAggregateColumn>
-                        </GridAggregateColumns>
-                    </GridAggregate>
-                </GridAggregates>
-            </SfGrid>
+            <label>Anio</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
+                              CssClass="e-small" Width="90px" />
         </div>
+        <div>
+            <label>Mes</label>
+            <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-reload" OnClick="LoadReconciliation">Cargar</SfButton>
+        <SfButton CssClass="e-success e-small" IconCss="e-icons e-save" OnClick="SaveReconciliation"
+                  Disabled="@(!_hasData)">Guardar</SfButton>
     </div>
-}
-else
-{
-    <div style="text-align:center;padding:60px;color:var(--texto-tenue);">
-        <span class="e-icons e-bank" style="font-size:48px;display:block;margin-bottom:16px;"></span>
-        <p>Seleccione una cuenta bancaria, anio y mes, luego haga clic en "Cargar" para iniciar la conciliacion.</p>
-    </div>
-}
 
-<!-- Import dialog (placeholder) -->
-<SfDialog @bind-Visible="_showImportDialog" Header="Importar Extracto Bancario" Width="500px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:16px;text-align:center;color:var(--texto-tenue);">
-                <span class="e-icons e-upload" style="font-size:36px;display:block;margin-bottom:12px;"></span>
-                <p>Funcionalidad de importacion de extracto bancario en desarrollo.</p>
-                <p>Formatos soportados: CSV, OFX, MT940</p>
+    @if (_hasData)
+    {
+        <!-- Summary cards -->
+        <div class="rejilla-tarjetas">
+            <div class="info-card">
+                <span class="label">Saldo Contable</span>
+                <strong class="kpi-value">@_summary.BookBalance.ToString("N2")</strong>
             </div>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _showImportDialog = false)" />
-    </DialogButtons>
-</SfDialog>
+            <div class="info-card">
+                <span class="label">Saldo Banco</span>
+                <strong class="kpi-value">@_summary.BankBalance.ToString("N2")</strong>
+            </div>
+            <div class="info-card">
+                <span class="label">Partidas Pendientes (DB)</span>
+                <strong class="kpi-value @(_summary.PendingDebits != 0 ? "cifra-alerta" : "")">@_summary.PendingDebits.ToString("N2")</strong>
+            </div>
+            <div class="info-card">
+                <span class="label">Partidas Pendientes (CR)</span>
+                <strong class="kpi-value @(_summary.PendingCredits != 0 ? "cifra-alerta" : "")">@_summary.PendingCredits.ToString("N2")</strong>
+            </div>
+            <div class="info-card @(_summary.Difference == 0 ? "tarjeta-ok" : "tarjeta-error")">
+                <span class="label">Diferencia</span>
+                <strong class="kpi-value @(_summary.Difference == 0 ? "cifra-ok" : "cifra-error")">@_summary.Difference.ToString("N2")</strong>
+            </div>
+        </div>
+
+        <!-- Two-panel layout -->
+        <div class="panel-doble">
+            <!-- Left panel: Accounting entries -->
+            <div>
+                <h4 class="titulo-panel">Movimientos Contables</h4>
+                <SfGrid @ref="_bookGrid" TValue="ReconciliationItem" DataSource="_bookItems"
+                        AllowPaging="true" AllowSorting="true" Height="400">
+                    <GridPageSettings PageSize="20" />
+                    <GridColumns>
+                        <GridColumn HeaderText="" Width="50" TextAlign="TextAlign.Center">
+                            <Template>
+                                @{
+                                    var item = context as ReconciliationItem;
+                                }
+                                <SfCheckBox TChecked="bool" @bind-Checked="item!.IsReconciled"
+                                            ValueChange="@((Syncfusion.Blazor.Buttons.ChangeEventArgs<bool> e) => OnReconcileToggle(item, e.Checked))" />
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="TransactionDate" HeaderText="Fecha" Width="100" Format="d" Type="ColumnType.Date" />
+                        <GridColumn Field="DocumentRef" HeaderText="Ref" Width="100" />
+                        <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
+                        <GridColumn Field="Debit" HeaderText="Debito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="Credit" HeaderText="Credito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                    </GridColumns>
+                    <GridAggregates>
+                        <GridAggregate>
+                            <GridAggregateColumns>
+                                <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>
+                                        @{ var sum = (context as AggregateTemplateContext); }
+                                        <span><b>@sum?.Sum</b></span>
+                                    </FooterTemplate>
+                                </GridAggregateColumn>
+                                <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>
+                                        @{ var sum = (context as AggregateTemplateContext); }
+                                        <span><b>@sum?.Sum</b></span>
+                                    </FooterTemplate>
+                                </GridAggregateColumn>
+                            </GridAggregateColumns>
+                        </GridAggregate>
+                    </GridAggregates>
+                </SfGrid>
+            </div>
+
+            <!-- Right panel: Bank statement -->
+            <div>
+                <div class="page-header cabecera-panel">
+                    <h4>Extracto Bancario</h4>
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-upload" OnClick="@(() => _showImportDialog = true)">Importar</SfButton>
+                </div>
+                <SfGrid TValue="BankStatementItem" DataSource="_bankItems"
+                        AllowPaging="true" AllowSorting="true" Height="400">
+                    <GridPageSettings PageSize="20" />
+                    <GridColumns>
+                        <GridColumn Field="TransactionDate" HeaderText="Fecha" Width="100" Format="d" Type="ColumnType.Date" />
+                        <GridColumn Field="Reference" HeaderText="Referencia" Width="120" />
+                        <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
+                        <GridColumn Field="Debit" HeaderText="Debito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="Credit" HeaderText="Credito" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="StatusText" HeaderText="Estado" Width="100">
+                            <Template>
+                                @{
+                                    var item = context as BankStatementItem;
+                                    var badge = item?.IsMatched == true ? "e-badge e-badge-success" : "e-badge e-badge-warning";
+                                    var text = item?.IsMatched == true ? "Cruzado" : "Pendiente";
+                                }
+                                <span class="@badge">@text</span>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                    <GridAggregates>
+                        <GridAggregate>
+                            <GridAggregateColumns>
+                                <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>
+                                        @{ var sum = (context as AggregateTemplateContext); }
+                                        <span><b>@sum?.Sum</b></span>
+                                    </FooterTemplate>
+                                </GridAggregateColumn>
+                                <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>
+                                        @{ var sum = (context as AggregateTemplateContext); }
+                                        <span><b>@sum?.Sum</b></span>
+                                    </FooterTemplate>
+                                </GridAggregateColumn>
+                            </GridAggregateColumns>
+                        </GridAggregate>
+                    </GridAggregates>
+                </SfGrid>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="module-placeholder">
+            <span class="e-icons e-bank placeholder-icon"></span>
+            <p>Seleccione una cuenta bancaria, anio y mes, luego haga clic en "Cargar" para iniciar la conciliacion.</p>
+        </div>
+    }
+
+    <!-- Import dialog (placeholder) -->
+    <SfDialog @bind-Visible="_showImportDialog" Header="Importar Extracto Bancario" Width="500px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div class="aviso-importar texto-tenue">
+                    <span class="e-icons e-upload icono-importar"></span>
+                    <p>Funcionalidad de importacion de extracto bancario en desarrollo.</p>
+                    <p>Formatos soportados: CSV, OFX, MT940</p>
+                </div>
+            </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _showImportDialog = false)" />
+        </DialogButtons>
+    </SfDialog>
+</div>
 
 @code {
     private SfGrid<ReconciliationItem>? _bookGrid;

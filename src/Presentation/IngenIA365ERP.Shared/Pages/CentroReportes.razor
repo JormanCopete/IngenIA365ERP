@@ -4,173 +4,164 @@
 
 <PageTitle>Centro de Reportes - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Centro de Reportes</h3>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Centro de Reportes</h3>
+    </div>
 
-<!-- Contabilidad -->
-<div class="report-section">
-    <h4 class="report-section-title">
-        <span class="e-icons e-money" style="margin-right:8px;"></span>Contabilidad
-    </h4>
-    <div class="report-cards">
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-description"></span></div>
-            <div class="report-card-body">
-                <h5>Balance General</h5>
-                <p>Estado de situacion financiera: activos, pasivos y patrimonio a una fecha de corte.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/balance-general")'>Generar</SfButton>
+    <!-- Contabilidad -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-money"></span>Contabilidad
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                <div class="report-card-body">
+                    <h5>Balance General</h5>
+                    <p>Estado de situacion financiera: activos, pasivos y patrimonio a una fecha de corte.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/balance-general")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Estado de Resultados</h5>
+                    <p>Ingresos, gastos y utilidad o perdida neta del periodo seleccionado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/estado-resultados")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Libro Mayor</h5>
+                    <p>Movimientos detallados por cuenta contable con saldos acumulados.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/libro-mayor")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Balance de Prueba</h5>
+                    <p>Sumas y saldos de todas las cuentas del plan contable.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/balance-prueba")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
+                <div class="report-card-body">
+                    <h5>Certificados de Retencion</h5>
+                    <p>Certificados de retencion en la fuente, ICA e IVA para terceros.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/certificados-retencion")'>Generar</SfButton>
+                </div>
             </div>
         </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
-            <div class="report-card-body">
-                <h5>Estado de Resultados</h5>
-                <p>Ingresos, gastos y utilidad o perdida neta del periodo seleccionado.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/estado-resultados")'>Generar</SfButton>
+    </div>
+
+    <!-- Cartera -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-bank"></span>Cartera Financiera
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
+                <div class="report-card-body">
+                    <h5>Extracto de Credito</h5>
+                    <p>Estado de cuenta detallado de un credito: tabla de amortizacion y pagos realizados.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/extracto-credito")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-clock"></span></div>
+                <div class="report-card-body">
+                    <h5>Cartera por Edades</h5>
+                    <p>Clasificacion de la cartera por antigueedad: vigente, 1-30, 31-60, 61-90, 91-180, 180+ dias.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/cartera-edades")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-review"></span></div>
+                <div class="report-card-body">
+                    <h5>Calificacion de Cartera</h5>
+                    <p>Calificacion de riesgo de la cartera segun normatividad de la Supersolidaria.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/calificacion")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-paste"></span></div>
+                <div class="report-card-body">
+                    <h5>Extracto de Ahorro</h5>
+                    <p>Estado de cuenta de ahorros con movimientos y saldos.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/extracto-ahorro")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-file-text"></span></div>
+                <div class="report-card-body">
+                    <h5>Certificado CDT</h5>
+                    <p>Certificado de deposito a termino con condiciones, intereses y vencimiento.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cdt/certificados")'>Generar</SfButton>
+                </div>
             </div>
         </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
-            <div class="report-card-body">
-                <h5>Libro Mayor</h5>
-                <p>Movimientos detallados por cuenta contable con saldos acumulados.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/libro-mayor")'>Generar</SfButton>
+    </div>
+
+    <!-- Nomina -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-people"></span>Nomina
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                <div class="report-card-body">
+                    <h5>Comprobante de Pago</h5>
+                    <p>Comprobante individual de pago de nomina por empleado y periodo.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/comprobante-nomina")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Resumen de Nomina</h5>
+                    <p>Consolidado de la nomina del periodo: devengados, deducciones y neto a pagar.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/resumen")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
+                <div class="report-card-body">
+                    <h5>Certificado Laboral</h5>
+                    <p>Certificacion de vinculacion laboral, cargo y salario del empleado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/certificado-laboral")'>Generar</SfButton>
+                </div>
             </div>
         </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-table"></span></div>
-            <div class="report-card-body">
-                <h5>Balance de Prueba</h5>
-                <p>Sumas y saldos de todas las cuentas del plan contable.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/balance-prueba")'>Generar</SfButton>
+    </div>
+
+    <!-- Inventario -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-box"></span>Inventario
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Inventario Valorizado</h5>
+                    <p>Existencias por producto con costo unitario y valor total por bodega.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/inventario-valorizado")'>Generar</SfButton>
+                </div>
             </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
-            <div class="report-card-body">
-                <h5>Certificados de Retencion</h5>
-                <p>Certificados de retencion en la fuente, ICA e IVA para terceros.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/certificados-retencion")'>Generar</SfButton>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-print-layout"></span></div>
+                <div class="report-card-body">
+                    <h5>Factura de Venta</h5>
+                    <p>Impresion o reimpresion de facturas de venta emitidas.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturas")'>Generar</SfButton>
+                </div>
             </div>
         </div>
     </div>
 </div>
-
-<!-- Cartera -->
-<div class="report-section">
-    <h4 class="report-section-title">
-        <span class="e-icons e-bank" style="margin-right:8px;"></span>Cartera Financiera
-    </h4>
-    <div class="report-cards">
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
-            <div class="report-card-body">
-                <h5>Extracto de Credito</h5>
-                <p>Estado de cuenta detallado de un credito: tabla de amortizacion y pagos realizados.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/extracto-credito")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-clock"></span></div>
-            <div class="report-card-body">
-                <h5>Cartera por Edades</h5>
-                <p>Clasificacion de la cartera por antigueedad: vigente, 1-30, 31-60, 61-90, 91-180, 180+ dias.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/cartera-edades")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-review"></span></div>
-            <div class="report-card-body">
-                <h5>Calificacion de Cartera</h5>
-                <p>Calificacion de riesgo de la cartera segun normatividad de la Supersolidaria.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/calificacion")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-paste"></span></div>
-            <div class="report-card-body">
-                <h5>Extracto de Ahorro</h5>
-                <p>Estado de cuenta de ahorros con movimientos y saldos.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/extracto-ahorro")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-file-text"></span></div>
-            <div class="report-card-body">
-                <h5>Certificado CDT</h5>
-                <p>Certificado de deposito a termino con condiciones, intereses y vencimiento.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cdt/certificados")'>Generar</SfButton>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Nomina -->
-<div class="report-section">
-    <h4 class="report-section-title">
-        <span class="e-icons e-people" style="margin-right:8px;"></span>Nomina
-    </h4>
-    <div class="report-cards">
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-description"></span></div>
-            <div class="report-card-body">
-                <h5>Comprobante de Pago</h5>
-                <p>Comprobante individual de pago de nomina por empleado y periodo.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/comprobante-nomina")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-table"></span></div>
-            <div class="report-card-body">
-                <h5>Resumen de Nomina</h5>
-                <p>Consolidado de la nomina del periodo: devengados, deducciones y neto a pagar.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/resumen")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
-            <div class="report-card-body">
-                <h5>Certificado Laboral</h5>
-                <p>Certificacion de vinculacion laboral, cargo y salario del empleado.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/certificado-laboral")'>Generar</SfButton>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Inventario -->
-<div class="report-section">
-    <h4 class="report-section-title">
-        <span class="e-icons e-box" style="margin-right:8px;"></span>Inventario
-    </h4>
-    <div class="report-cards">
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
-            <div class="report-card-body">
-                <h5>Inventario Valorizado</h5>
-                <p>Existencias por producto con costo unitario y valor total por bodega.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/inventario-valorizado")'>Generar</SfButton>
-            </div>
-        </div>
-        <div class="report-card">
-            <div class="report-card-icon"><span class="e-icons e-print-layout"></span></div>
-            <div class="report-card-body">
-                <h5>Factura de Venta</h5>
-                <p>Impresion o reimpresion de facturas de venta emitidas.</p>
-                <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturas")'>Generar</SfButton>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    .report-section { margin-bottom: 32px; }
-    .report-section-title { font-size: 18px; font-weight: 600; color: var(--acento); margin-bottom: 16px; display: flex; align-items: center; border-bottom: 1px solid var(--borde); padding-bottom: 8px; }
-    .report-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .report-card { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie-1); transition: border-color 0.2s; }
-    .report-card:hover { border-color: var(--acento); }
-    .report-card-icon { font-size: 28px; color: var(--acento); padding-top: 2px; flex-shrink: 0; }
-    .report-card-body h5 { margin: 0 0 6px 0; font-size: 15px; }
-    .report-card-body p { margin: 0 0 12px 0; font-size: 13px; color: var(--texto-tenue); line-height: 1.4; }
-</style>

@@ -40,7 +40,10 @@
     letter-spacing: 0;
 }
 
+/* `position: relative` es el ancla del menú de cuenta, que se posiciona
+   absoluto respecto de este bloque. Estaba en línea en el .razor. */
 .toolbar-user {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--gap-sm);
@@ -56,12 +59,14 @@
     font-weight: var(--peso-medio);
     color: var(--texto-primario);
     font-size: var(--texto-sm);
+    cursor: pointer;
 }
 
 /* La cooperativa activa se destaca en dorado: en un sistema multi-tenant,
    saber en cuál estás parado antes de tocar un asiento contable evita el peor
    tipo de error. */
-.tenant-badge {
+/* ::deep: la pastilla la pinta TenantSwitcher, que es otro componente. */
+::deep .tenant-badge, .tenant-badge {
     background: var(--realce-suave);
     color: var(--realce-texto);
     padding: 2px var(--pad-sm);
@@ -87,7 +92,8 @@
     background: var(--superficie-1);
 }
 
-.loading-overlay {
+/* ::deep: la capa de carga tambien la renderiza LoadingOverlay por su cuenta. */
+::deep .loading-overlay, .loading-overlay {
     position: fixed;
     inset: 0;
     background: rgba(23, 19, 28, .55);
@@ -126,7 +132,7 @@
     .erp-content {
         padding: var(--pad-md);
     }
-    .user-name, .tenant-badge {
+    .user-name, ::deep .tenant-badge, .tenant-badge {
         display: none;
     }
 }

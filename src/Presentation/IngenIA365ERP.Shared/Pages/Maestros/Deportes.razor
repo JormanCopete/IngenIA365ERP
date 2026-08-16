@@ -38,7 +38,7 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                <div class="pagina">
                     <div>
                         <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del deporte"
@@ -60,7 +60,7 @@
                                         ShowClearButton="true">
                             <DropDownListFieldSettings Text="Name" Value="PublicId" />
                         </SfDropDownList>
-                        <small style="color:var(--texto-tenue);font-size:11px;">
+                        <small class="hint">
                             Si no aparecen comites, primero registre uno en
                             <a href="/maestros/comites" target="_blank">Maestros - Comites</a>.
                         </small>

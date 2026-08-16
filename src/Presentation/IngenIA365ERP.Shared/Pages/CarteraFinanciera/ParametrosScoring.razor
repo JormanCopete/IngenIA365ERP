@@ -34,7 +34,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Codigo Criterio *</label>
                     <SfTextBox @bind-Value="_model.CriterionCode" Placeholder="Codigo (max 2)" MaxLength="2" />

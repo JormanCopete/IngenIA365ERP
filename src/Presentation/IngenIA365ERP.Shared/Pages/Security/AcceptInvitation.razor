@@ -23,7 +23,7 @@
 
 <PageTitle>Aceptar invitación — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 480px; margin: 32px auto;">
+<div class="auth-card" style="max-width: 480px; margin: var(--gap-xl) auto;">
     @if (_state == ViewState.Loading)
     {
         <p>Cargando invitación...</p>
@@ -87,7 +87,7 @@
 
         @if (!string.IsNullOrEmpty(_error))
         {
-            <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+            <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
         }
     }
 </div>

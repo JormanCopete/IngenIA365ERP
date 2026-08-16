@@ -1,0 +1,36 @@
+/* Selección de empresa tras el login: cada empresa es un botón del ancho de la
+   tarjeta. Iba resuelto con `style=` en el bucle, así que el hover no existía y
+   no había ninguna señal de que la fila fuera pulsable. */
+
+.lista-empresas {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    margin-top: var(--pad-xl);
+}
+
+.empresa-opcion {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: var(--pad-lg);
+    text-align: left;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color var(--dur-rapida) var(--curva),
+                background var(--dur-rapida) var(--curva);
+}
+
+.empresa-opcion:hover:not(:disabled) {
+    border-color: var(--acento);
+    background: var(--acento-suave);
+}
+
+.empresa-opcion:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}

@@ -1,0 +1,41 @@
+/* Alta de CDT — lo que no cubre componentes.css. */
+
+/* Formulario de alta sobre superficie. El tope de ancho es deliberado: son
+   seis campos, y estirados a 1600px la etiqueta queda a un palmo del control. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-lg);
+    padding: var(--pad-xl);
+    background: var(--superficie-1);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    max-width: 700px;
+}
+
+.asociado {
+    margin: 0;
+    color: var(--exito-texto);
+}
+
+/* La proyección se calcula sola mientras se escribe: se separa del formulario
+   con un escalón de superficie para que se lea como resultado, no como campo. */
+.proyeccion {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-lg);
+    background: var(--superficie-2);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+}
+
+.proyeccion > h4 {
+    margin: 0;
+}
+
+.kpi-value.valor-info  { color: var(--info-texto); }
+.kpi-value.valor-exito { color: var(--exito-texto); }
+
+/* La fecha de vencimiento no es una cifra: con el tamaño de cifra se parte. */
+.kpi-value.valor-texto { font-size: var(--texto-md); }

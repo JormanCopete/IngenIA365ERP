@@ -12,7 +12,7 @@
 
 <PageTitle>Empresa por defecto — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+<div class="auth-card" style="max-width: 520px; margin: calc(var(--gap-xl) * 1.5) auto;">
     <h1>Empresa por defecto</h1>
     <p>
         Elige a qué empresa entrarás automáticamente al iniciar sesión.
@@ -25,21 +25,19 @@
     }
     else if (_tenants is null || _tenants.Count == 0)
     {
-        <p style="color: var(--texto-secundario);">No tienes membresías activas todavía.</p>
+        <p class="muted">No tienes membresías activas todavía.</p>
     }
     else
     {
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+        <div class="lista-empresas">
             @foreach (var t in _tenants)
             {
-                <div style="display: flex; align-items: center; gap: 12px;
-                            padding: 12px; border: 1px solid var(--borde); border-radius: 8px;">
-                    <div style="flex: 1;">
+                <div class="empresa-fila">
+                    <div class="empresa-nombre">
                         <strong>@t.TenantName</strong>
                         @if (t.IsDefault)
                         {
-                            <span style="margin-left: 8px; padding: 2px 8px; background: var(--exito-fondo);
-                                         color: var(--exito-texto); border-radius: 4px; font-size: 12px;">Default</span>
+                            <span class="pastilla pastilla-exito">Default</span>
                         }
                     </div>
                     @if (t.IsDefault)
@@ -59,11 +57,11 @@
 
     @if (!string.IsNullOrEmpty(_message))
     {
-        <p style="margin-top: 16px; color: var(--exito-texto);">@_message</p>
+        <p class="aviso aviso-ok" role="status" style="margin-top: var(--pad-lg);">@_message</p>
     }
     @if (!string.IsNullOrEmpty(_error))
     {
-        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
     }
 </div>
 

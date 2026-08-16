@@ -3,13 +3,19 @@
     min-height: 100vh;
 }
 
+/* Misma barra de error que MainLayout, con los mismos tokens: antes esta copia
+   se pintaba con `lightyellow` literal, así que en tema oscuro aparecía un
+   bloque amarillo brillante con texto ilegible encima. */
 #blazor-error-ui {
-    background: lightyellow;
+    color-scheme: light only;
+    background: var(--alerta-fondo);
+    border-top: 2px solid var(--alerta);
+    color: var(--texto-secundario);
     bottom: 0;
-    box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    padding: var(--pad-md) var(--pad-xl);
     position: fixed;
     width: 100%;
     z-index: 1000;
@@ -18,6 +24,6 @@
 #blazor-error-ui .dismiss {
     cursor: pointer;
     position: absolute;
-    right: 0.75rem;
-    top: 0.5rem;
+    right: var(--pad-md);
+    top: var(--pad-sm);
 }

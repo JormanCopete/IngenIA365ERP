@@ -1,0 +1,637 @@
+/* =============================================================================
+   Componentes de pantalla
+   =============================================================================
+
+   Esta hoja define las clases que las 191 pantallas YA USABAN sin que
+   existieran. `.page-header` aparece 129 veces —en todas las pantallas— y no
+   estaba declarada en ningún sitio; cada página compensaba con un `style=`
+   embebido, y de ahí salían las 924 declaraciones en línea y la sensación de
+   que cada pantalla es distinta.
+
+   Peor todavía: `.info-card` y `.label` estaban definidas por CATORCE páginas
+   distintas, cada una en su bloque <style>. Blazor inyecta esos bloques en el
+   documento, así que la definición que manda es la de la última página que se
+   haya cargado. La misma pantalla se veía distinta según de dónde vinieras.
+   Acá se define una sola vez.
+
+   Reglas de esta hoja:
+     · Ni un color literal. Todo sale de tokens.css, o el elemento deja de
+       responder al cambio de tema y al modo de alto contraste.
+     · Ni una medida en píxeles fija para espaciado. Se usan --pad-* y --gap-*,
+       que la densidad remapea.
+     · Las alturas de control salen de --alto-control, derivado de la escala
+       tipográfica: con texto grande, una altura fija recorta el contenido.
+   ========================================================================== */
+
+/* --- 1. Contenedor de página ---------------------------------------------- */
+
+/* Envoltorio de una pantalla completa. Sustituye al
+   `padding:10px;display:flex;flex-direction:column;gap:16px` que estaba
+   repetido 75 veces palabra por palabra. */
+.pagina,
+.admin-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-lg);
+    padding: var(--pad-lg);
+    /* Sin tope, en un monitor ancho una tabla de doce columnas se estira hasta
+       que el ojo pierde la fila al recorrerla. */
+    max-width: 1600px;
+}
+
+/* Encabezado de pantalla: título a la izquierda, acciones a la derecha, y en
+   pantalla angosta las acciones bajan en vez de comprimir el título. */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--gap-md);
+}
+
+.page-header > h1,
+.page-header > h2,
+.page-header > h3 {
+    margin: 0;
+}
+
+/* Todo lo que no sea el título del encabezado se agrupa a la derecha. */
+.page-header > div {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--gap-sm);
+}
+
+/* Barra de filtros y búsqueda. `align-items: end` porque sus controles suelen
+   venir con etiqueta encima y deben quedar alineados por la base, no por el
+   centro. */
+.toolbar {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: var(--gap-sm);
+}
+
+.toolbar label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}
+
+/* Excepción para las casillas. Apilar en columna es correcto cuando la
+   etiqueta va ENCIMA del campo, pero una casilla va AL LADO de su texto: en
+   columna el cuadro queda arriba del rótulo y, con align-items por defecto,
+   el navegador lo estira a todo el ancho de la fila. Se detectó en dos
+   pantallas de edición y se resuelve una vez acá en vez de parchear cada una. */
+.toolbar label:has(> input[type="checkbox"]),
+.toolbar label:has(> input[type="radio"]),
+.campo-check {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--gap-sm);
+}
+
+.campo-check {
+    display: flex;
+}
+
+/* El cuadro nunca crece: sin esto, dentro de un contenedor flex se estira. */
+.toolbar input[type="checkbox"],
+.toolbar input[type="radio"],
+.campo-check input[type="checkbox"],
+.campo-check input[type="radio"] {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.actions,
+.acciones {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--gap-sm);
+}
+
+/* --- 2. Superficies ------------------------------------------------------- */
+
+/* Bloque de dato suelto: una etiqueta y su valor. El ancho mínimo evita que en
+   una fila de seis queden columnas de 40px con el texto partido letra a letra. */
+.info-card {
+    padding: var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-1);
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+}
+
+/* `.label` es un nombre desafortunadamente genérico y ya está en 53 sitios;
+   se acota a los contenedores donde tiene sentido para no pisar etiquetas de
+   formulario ajenas. */
+.info-card > .label,
+.kpi-card > .label {
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+}
+
+/* Tarjeta de cifra. La variante del panel de inicio, con icono al lado, la
+   define Dashboard.razor.css: al ser CSS con ámbito su especificidad es mayor
+   y gana sobre esta sin necesidad de !important. */
+.kpi-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--gap-xs);
+    padding: var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-1);
+}
+
+.kpi-value {
+    font-size: calc(1.375rem * var(--escala));
+    font-weight: var(--peso-fuerte);
+    color: var(--acento);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+}
+
+/* Rejilla de cifras: reparte el ancho en columnas iguales. Con "texto muy
+   grande" un número fijo de columnas dejaría las cifras cortadas, por eso
+   auto-fit y no un número. */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--gap-md);
+}
+
+/* Fila de tarjetas de dato suelto. A DIFERENCIA de .kpi-grid esto es flex, no
+   rejilla, y la diferencia importa: `auto-fit` reparte TODO el ancho entre las
+   tarjetas que haya, así que tres datos sueltos en un contenedor de 1600px se
+   convierten en tres cajas de 500px con el número perdido en el centro. Acá
+   cada tarjeta se queda del tamaño de su contenido (su min-width de 140px) y
+   la fila termina donde termina el dato. */
+.rejilla-tarjetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap-md);
+}
+
+/* --- 3. Formularios ------------------------------------------------------- */
+
+/* `.form-grid` es el nombre que ya usaban tres pantallas de Habeas Data sin que
+   estuviera definido en ninguna parte; se acepta como sinónimo en vez de
+   renombrarlas. */
+.rejilla-campos,
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--gap-md);
+}
+
+/* En esas pantallas la etiqueta ENVUELVE al control (<label>Canal<select/></label>),
+   así que sin esto el rótulo y su campo quedan uno al lado del otro. */
+.form-grid > label,
+.rejilla-campos > label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    color: var(--texto-secundario);
+}
+
+/* Un campo que ocupa toda la fila: una dirección o una observación no caben en
+   media columna. */
+.campo-ancho {
+    grid-column: 1 / -1;
+}
+
+.etiqueta-campo,
+.campo > label {
+    display: block;
+    margin-bottom: var(--gap-xs);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    color: var(--texto-secundario);
+}
+
+/* --- 4. Tablas crudas ----------------------------------------------------- */
+
+/* Las que no usan SfGrid. Catorce pantallas escriben <table> a mano y hasta
+   ahora salían sin bordes ni relleno. */
+.data-grid,
+table.tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-grid th,
+.data-grid td,
+table.tabla th,
+table.tabla td {
+    padding: var(--pad-sm) var(--pad-md);
+    border-bottom: 1px solid var(--borde);
+    text-align: left;
+    vertical-align: top;
+}
+
+.data-grid th,
+table.tabla th {
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    color: var(--texto-secundario);
+    background: var(--superficie-0);
+    /* El encabezado se queda fijo al desplazar: en un libro mayor de 400 filas,
+       sin esto se pierde de vista qué columna es cuál. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.data-grid tbody tr:hover,
+table.tabla tbody tr:hover {
+    background: var(--acento-suave);
+}
+
+/* Las columnas de dinero se leen alineadas a la derecha; comparar magnitudes
+   con los importes alineados a la izquierda obliga a contar dígitos. */
+.data-grid td.monto,
+.data-grid th.monto,
+table.tabla td.monto,
+table.tabla th.monto,
+.columna-monto {
+    text-align: right;
+}
+
+/* --- 5. Texto auxiliar ---------------------------------------------------- */
+
+.muted,
+.texto-apoyo,
+.hint {
+    color: var(--texto-secundario);
+    font-size: var(--texto-sm);
+}
+
+.texto-tenue {
+    color: var(--texto-tenue);
+}
+
+/* --- 6. Botones ----------------------------------------------------------- */
+
+/* Los botones nativos que no pasan por SyncFusion. `.primary` está en 14
+   pantallas y no existía: se veía el botón gris del sistema operativo justo en
+   la acción principal de cada pantalla. */
+.boton,
+.boton-principal,
+.boton-secundario,
+.boton-peligro,
+button.primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-xs);
+    height: var(--alto-control);
+    padding: 0 var(--pad-lg);
+    border: 1px solid transparent;
+    border-radius: var(--radio-sm);
+    font: inherit;
+    font-weight: var(--peso-medio);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--dur-rapida) var(--curva),
+                border-color var(--dur-rapida) var(--curva);
+}
+
+.boton-principal,
+button.primary {
+    background: var(--acento);
+    color: var(--acento-texto);
+}
+
+.boton-principal:hover:not(:disabled),
+button.primary:hover:not(:disabled) {
+    background: var(--acento-hover);
+}
+
+.boton,
+.boton-secundario {
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    border-color: var(--borde-fuerte);
+}
+
+.boton:hover:not(:disabled),
+.boton-secundario:hover:not(:disabled) {
+    background: var(--acento-suave);
+}
+
+.boton-peligro {
+    background: var(--superficie-1);
+    color: var(--peligro-texto);
+    border-color: var(--peligro);
+}
+
+.boton-peligro:hover:not(:disabled) {
+    background: var(--peligro-fondo);
+}
+
+.boton:disabled,
+.boton-principal:disabled,
+.boton-secundario:disabled,
+.boton-peligro:disabled,
+button.primary:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+/* --- 7. Campos nativos ---------------------------------------------------- */
+
+/* Los <input> fuera del flujo de autenticación no tenían ningún estilo: se veía
+   el control por defecto del navegador junto a los de SyncFusion, en la misma
+   fila.
+
+   El `:not([class*="e-"])` NO es cosmético: SyncFusion pinta el borde en el
+   <span class="e-input-group"> que envuelve al campo y deja el <input> interno
+   con `border-width: 0` y `background: none` (regla `.e-input-group
+   input.e-input`, especificidad 0,2,1). Sin el filtro, estas reglas empatan en
+   especificidad y ganan por orden de carga —componentes.css va después de
+   fluent2.css—, así que cada SfTextBox / SfNumericTextBox / SfDatePicker /
+   SfDropDownList y cada caja de filtro de SfGrid que quede dentro de un
+   .pagina, .admin-page o .toolbar sale con DOS bordes, fondo propio y altura
+   fija. Todo control de SyncFusion lleva clases con prefijo `e-`; ningún campo
+   nativo de la app lo hace. */
+/* El `:not([type])` tampoco es cosmético: <InputText> de Blazor NO emite
+   atributo type —por eso para un campo de contraseña hay que pasárselo por
+   AdditionalAttributes—, así que `input[type="text"]` no alcanza a ninguno de
+   los formularios de edición del ERP, que usan <InputText> en todas partes.
+   app.css ya había tropezado con esto y lo resolvió en el login con
+   `.auth-card input:not([type])`. */
+.pagina input[type="text"]:not([class*="e-"]), .admin-page input[type="text"]:not([class*="e-"]),
+.pagina input[type="search"]:not([class*="e-"]), .admin-page input[type="search"]:not([class*="e-"]),
+.pagina input[type="number"]:not([class*="e-"]), .admin-page input[type="number"]:not([class*="e-"]),
+.pagina input[type="date"]:not([class*="e-"]), .admin-page input[type="date"]:not([class*="e-"]),
+.pagina input[type="email"]:not([class*="e-"]), .admin-page input[type="email"]:not([class*="e-"]),
+.pagina input[type="password"]:not([class*="e-"]), .admin-page input[type="password"]:not([class*="e-"]),
+.pagina input:not([type]):not([class*="e-"]), .admin-page input:not([type]):not([class*="e-"]),
+.pagina select:not([class*="e-"]), .admin-page select:not([class*="e-"]),
+.toolbar input[type="text"]:not([class*="e-"]),
+.toolbar input[type="search"]:not([class*="e-"]),
+.toolbar input[type="number"]:not([class*="e-"]),
+.toolbar input[type="date"]:not([class*="e-"]),
+.toolbar input:not([type]):not([class*="e-"]),
+.toolbar select:not([class*="e-"]) {
+    height: var(--alto-control);
+    padding: 0 var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    font: inherit;
+}
+
+.pagina textarea:not([class*="e-"]), .admin-page textarea:not([class*="e-"]) {
+    padding: var(--pad-sm) var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    font: inherit;
+    resize: vertical;
+}
+
+.pagina input:not([class*="e-"]):focus-visible, .admin-page input:not([class*="e-"]):focus-visible,
+.pagina select:not([class*="e-"]):focus-visible, .admin-page select:not([class*="e-"]):focus-visible,
+.pagina textarea:not([class*="e-"]):focus-visible, .admin-page textarea:not([class*="e-"]):focus-visible {
+    outline: none;
+    border-color: var(--borde-foco);
+    box-shadow: var(--sombra-foco);
+}
+
+input[type="checkbox"], input[type="radio"] {
+    accent-color: var(--acento);
+}
+
+/* --- 7b. Que SyncFusion siga la densidad y la escala ----------------------- */
+
+/* Sus controles los dimensiona fluent2.css con valores fijos, así que se
+   quedaban en 30px mientras los campos nativos de al lado crecían a 45px con
+   "texto muy grande". En una barra de filtros que mezcla ambos se veía como un
+   error de maquetación, y quien eligió texto grande seguía sin poder leer el
+   filtro de SyncFusion.
+
+   `box-sizing: border-box` no es opcional: sin él el grupo suma sus dos bordes
+   y queda 2px más alto que el campo nativo de al lado.
+
+   Se excluyen los controles que CRECEN con su contenido —el área de texto
+   multilínea y la selección múltiple, que apila fichas—: ahí una altura fija
+   recorta lo que el usuario acaba de escribir o elegir. */
+.pagina    .e-input-group:not(.e-multi-line-input):not(.e-multi-select),
+.admin-page .e-input-group:not(.e-multi-line-input):not(.e-multi-select),
+.toolbar   .e-input-group:not(.e-multi-line-input):not(.e-multi-select) {
+    box-sizing: border-box;
+    height: var(--alto-control);
+}
+
+.pagina    .e-input-group:not(.e-multi-line-input):not(.e-multi-select) .e-input,
+.admin-page .e-input-group:not(.e-multi-line-input):not(.e-multi-select) .e-input,
+.toolbar   .e-input-group:not(.e-multi-line-input):not(.e-multi-select) .e-input {
+    height: 100%;
+}
+
+/* --- 8. Módulo sin construir ---------------------------------------------- */
+
+/* Siete pantallas son marcadores de módulo pendiente. Que se vean deliberadas
+   y no rotas: quien entra debe entender que falta construirlo, no creer que la
+   pantalla falló al cargar. */
+.module-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-md);
+    min-height: 40vh;
+    padding: var(--pad-xl);
+    text-align: center;
+    color: var(--texto-secundario);
+}
+
+.placeholder-icon {
+    display: grid;
+    place-items: center;
+    /* Tambien crece con la escala: quien pidio texto grande no quiere un icono
+       diminuto al lado de un texto de 20px. */
+    width: calc(64px * var(--escala));
+    height: calc(64px * var(--escala));
+    border-radius: 50%;
+    background: var(--acento-suave);
+    color: var(--acento);
+    font-size: calc(28px * var(--escala));
+}
+
+/* --- 9. Centro de reportes ------------------------------------------------ */
+
+.report-section {
+    margin-bottom: var(--gap-xl);
+}
+
+.report-section-title {
+    font-size: var(--texto-lg);
+    font-weight: var(--peso-medio);
+    margin-bottom: var(--gap-md);
+    color: var(--texto-primario);
+}
+
+.report-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--gap-md);
+}
+
+.report-card {
+    display: flex;
+    gap: var(--gap-md);
+    padding: var(--pad-lg);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-1);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color var(--dur-rapida) var(--curva),
+                box-shadow var(--dur-rapida) var(--curva);
+}
+
+.report-card:hover {
+    border-color: var(--acento);
+    box-shadow: var(--sombra-2);
+    text-decoration: none;
+}
+
+.report-card-icon {
+    flex-shrink: 0;
+    font-size: calc(28px * var(--escala));
+    color: var(--acento);
+    padding-top: 2px;
+}
+
+.report-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+}
+
+/* --- 10. Menú de cuenta --------------------------------------------------- */
+
+/* `.nav-subitem` estaba definida sólo en NavMenu.razor.css, que es CSS con
+   ámbito: MainLayout la usa para el menú desplegable de la cuenta y ahí no
+   aplicaba nada. Se define aparte, sin tocar la de la barra lateral —que va
+   sobre fondo oscuro y necesita otros colores. */
+.account-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1000;
+    min-width: 240px;
+    padding: var(--pad-xs) 0;
+    background: var(--superficie-1);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    box-shadow: var(--sombra-3);
+}
+
+.account-menu .nav-subitem {
+    display: block;
+    padding: var(--pad-sm) var(--pad-lg);
+    color: var(--texto-primario);
+    text-decoration: none;
+}
+
+.account-menu .nav-subitem:hover {
+    background: var(--acento-suave);
+    color: var(--texto-marca);
+    text-decoration: none;
+}
+
+/* --- 11. Estados y avisos ------------------------------------------------- */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px var(--pad-sm);
+    border-radius: 999px;
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    background: var(--superficie-0);
+    color: var(--texto-secundario);
+    border: 1px solid var(--borde);
+}
+
+.aviso {
+    padding: var(--pad-md);
+    border-radius: var(--radio);
+    font-size: var(--texto-sm);
+    border: 1px solid transparent;
+}
+
+.aviso-ok      { background: var(--exito-fondo);   color: var(--exito-texto);   border-color: var(--exito); }
+.aviso-error   { background: var(--peligro-fondo); color: var(--peligro-texto); border-color: var(--peligro); }
+.aviso-alerta  { background: var(--alerta-fondo);  color: var(--alerta-texto);  border-color: var(--alerta); }
+.aviso-info    { background: var(--info-fondo);    color: var(--info-texto);    border-color: var(--info); }
+
+.reload {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--texto-enlace);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* --- 12. Utilidad --------------------------------------------------------- */
+
+/* Presente para lectores de pantalla, ausente en pantalla. Para encabezados de
+   columnas de acciones y textos que dan contexto sin ocupar espacio. */
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* --- 13. Pantallas angostas ----------------------------------------------- */
+
+@media (max-width: 768px) {
+    .pagina,
+    .admin-page {
+        padding: var(--pad-md);
+        gap: var(--gap-md);
+    }
+
+    /* En un teléfono el título y las acciones no caben en una línea; el
+       encabezado se apila y las acciones ocupan el ancho completo. */
+    .page-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .toolbar > * {
+        flex: 1 1 100%;
+    }
+}

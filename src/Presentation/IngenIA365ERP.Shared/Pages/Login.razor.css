@@ -1,3 +1,7 @@
+/* Login heredado (/legacy-login). Mantiene su tarjeta sobre el degradado
+   morado, pero sin medidas ni colores literales: el degradado sale de la rampa
+   de marca y todo lo demás de los tokens semánticos. */
+
 .login-page {
     min-height: 100vh;
     display: flex;
@@ -5,85 +9,89 @@
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, var(--morado-900) 0%, var(--morado-800) 50%, var(--morado-600) 100%);
-    padding: 20px;
+    padding: var(--gap-lg);
 }
 
 .login-card {
     background: var(--superficie-2);
-    border-radius: 12px;
-    padding: 40px;
+    border-radius: var(--radio-lg);
+    padding: var(--pad-xl);
     width: 100%;
     max-width: 420px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    box-shadow: var(--sombra-3);
 }
 
 .login-header {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: var(--gap-xl);
 }
 
 .login-logo {
     font-size: 48px;
-    color: var(--info-texto);
+    color: var(--acento);
     display: block;
-    margin-bottom: 12px;
+    margin-bottom: var(--gap-md);
 }
 
 .login-header h1 {
-    color: var(--acento-texto);
-    font-size: 1.5rem;
-    margin: 0 0 4px;
+    color: var(--texto-primario);
+    font-size: calc(1.5rem * var(--escala));
+    margin: 0 0 var(--gap-xs);
 }
 
 .login-header p {
     color: var(--texto-tenue);
-    font-size: 0.85rem;
+    font-size: var(--texto-sm);
     margin: 0;
 }
 
 .login-error {
-    background: rgba(244,67,54,0.1);
+    background: var(--peligro-fondo);
     color: var(--peligro-texto);
-    padding: 10px 14px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    margin-bottom: 16px;
+    padding: var(--pad-sm) var(--pad-md);
+    border-radius: var(--radio);
+    font-size: var(--texto-sm);
+    margin-bottom: var(--pad-lg);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--gap-sm);
 }
 
 .form-field {
-    margin-bottom: 18px;
+    margin-bottom: var(--gap-lg);
 }
 
 .form-field label {
     display: block;
-    font-size: 0.8rem;
-    color: var(--texto-tenue);
-    margin-bottom: 6px;
-    font-weight: 500;
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+    margin-bottom: var(--gap-xs);
+    font-weight: var(--peso-medio);
 }
 
+/* La altura sale de --alto-control: con "texto grande" una altura fija en px
+   recorta el contenido del botón. */
 .login-btn {
-    margin-top: 8px;
-    height: 42px;
-    font-weight: 600;
+    margin-top: var(--gap-sm);
+    height: var(--alto-control);
+    font-weight: var(--peso-fuerte);
 }
 
 .login-footer {
     text-align: center;
-    margin-top: 20px;
+    margin-top: var(--gap-lg);
 }
 
 .login-footer a {
-    color: var(--info-texto);
-    font-size: 0.85rem;
+    color: var(--texto-enlace);
+    font-size: var(--texto-sm);
     text-decoration: none;
 }
 
+/* Va sobre el degradado morado, no sobre una superficie: usa el token del
+   texto tenue del lateral, que está calculado para fondo oscuro. */
 .login-brand {
-    margin-top: 24px;
-    color: rgba(255,255,255,0.4);
-    font-size: 0.8rem;
+    margin-top: var(--pad-xl);
+    color: var(--lateral-texto-tenue);
+    font-size: var(--texto-sm);
 }

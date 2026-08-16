@@ -7,91 +7,93 @@
 
 <PageTitle>Nuevo CDT - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>Nuevo Certificado de Deposito a Termino</h3>
-    <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
-              OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
-</div>
-
-<div style="background:var(--superficie-1);border-radius:8px;padding:24px;max-width:700px;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-        <!-- Person search -->
-        <div style="grid-column:1/3;">
-            <label>Titular - Documento</label>
-            <div style="display:flex;gap:8px;">
-                <SfTextBox @bind-Value="_personCode" Placeholder="Documento del asociado..." />
-                <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
-            </div>
-            @if (_personName is not null)
-            {
-                <p style="color:var(--exito-texto);margin:4px 0;">@_personName</p>
-            }
-        </div>
-
-        <!-- CDT Type -->
-        <div style="grid-column:1/3;">
-            <label>Tipo de CDT</label>
-            <SfDropDownList TValue="string" TItem="CdtParamItem" @bind-Value="_selectedCdtParamId"
-                            DataSource="_cdtParams" CssClass="e-small">
-                <DropDownListFieldSettings Text="Text" Value="Value" />
-                <DropDownListEvents TValue="string" TItem="CdtParamItem" ValueChange="OnCdtTypeChanged" />
-            </SfDropDownList>
-        </div>
-
-        <!-- Amount -->
-        <div>
-            <label>Monto</label>
-            <SfNumericTextBox TValue="decimal" @bind-Value="_amount" Min="0" Format="N0"
-                              ValueChange="RecalculateProjection" />
-            @if (_selectedParam is not null)
-            {
-                <small style="color:var(--texto-tenue);">Min: @(_selectedParam.MinAmount?.ToString("N0") ?? "N/A") - Max: @(_selectedParam.MaxAmount?.ToString("N0") ?? "N/A")</small>
-            }
-        </div>
-
-        <!-- Term -->
-        <div>
-            <label>Plazo (dias)</label>
-            <SfNumericTextBox TValue="int" @bind-Value="_termDays" Min="1" Format="N0"
-                              ValueChange="RecalculateProjection" />
-        </div>
-
-        <!-- Auto renewal -->
-        <div style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" @bind="_autoRenewal" id="cbAutoRenewal" />
-            <label for="cbAutoRenewal">Renovacion automatica</label>
-        </div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Nuevo Certificado de Deposito a Termino</h3>
+        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                  OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
     </div>
 
-    <!-- Rate and projection -->
-    @if (_projectedRate > 0 || _amount > 0)
-    {
-        <div style="margin-top:20px;padding:16px;background:var(--superficie-2);border-radius:8px;">
-            <h4 style="margin-top:0;">Proyeccion de Intereses</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
-                <div class="kpi-card">
-                    <span class="kpi-label">Tasa Anual</span>
-                    <span class="kpi-value" style="color:var(--info-texto);">@_projectedRate.ToString("N2")%</span>
+    <div class="panel">
+        <div class="rejilla-campos">
+            <!-- Person search -->
+            <div class="campo-ancho">
+                <label>Titular - Documento</label>
+                <div class="acciones">
+                    <SfTextBox @bind-Value="_personCode" Placeholder="Documento del asociado..." />
+                    <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
                 </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Interes al Vencimiento</span>
-                    <span class="kpi-value" style="color:var(--exito-texto);">@_projectedInterest.ToString("N0")</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Total a Recibir</span>
-                    <span class="kpi-value">@((_amount + _projectedInterest).ToString("N0"))</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Fecha Vencimiento</span>
-                    <span class="kpi-value" style="font-size:14px;">@DateOnly.FromDateTime(DateTime.Now).AddDays(_termDays)</span>
-                </div>
+                @if (_personName is not null)
+                {
+                    <p class="asociado">@_personName</p>
+                }
+            </div>
+
+            <!-- CDT Type -->
+            <div class="campo-ancho">
+                <label>Tipo de CDT</label>
+                <SfDropDownList TValue="string" TItem="CdtParamItem" @bind-Value="_selectedCdtParamId"
+                                DataSource="_cdtParams" CssClass="e-small">
+                    <DropDownListFieldSettings Text="Text" Value="Value" />
+                    <DropDownListEvents TValue="string" TItem="CdtParamItem" ValueChange="OnCdtTypeChanged" />
+                </SfDropDownList>
+            </div>
+
+            <!-- Amount -->
+            <div>
+                <label>Monto</label>
+                <SfNumericTextBox TValue="decimal" @bind-Value="_amount" Min="0" Format="N0"
+                                  ValueChange="RecalculateProjection" />
+                @if (_selectedParam is not null)
+                {
+                    <small class="texto-tenue">Min: @(_selectedParam.MinAmount?.ToString("N0") ?? "N/A") - Max: @(_selectedParam.MaxAmount?.ToString("N0") ?? "N/A")</small>
+                }
+            </div>
+
+            <!-- Term -->
+            <div>
+                <label>Plazo (dias)</label>
+                <SfNumericTextBox TValue="int" @bind-Value="_termDays" Min="1" Format="N0"
+                                  ValueChange="RecalculateProjection" />
+            </div>
+
+            <!-- Auto renewal -->
+            <div class="acciones">
+                <input type="checkbox" @bind="_autoRenewal" id="cbAutoRenewal" />
+                <label for="cbAutoRenewal">Renovacion automatica</label>
             </div>
         </div>
-    }
 
-    <div style="margin-top:20px;display:flex;gap:12px;">
-        <SfButton CssClass="e-flat" OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Cancelar</SfButton>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="CreateCertificate">Crear CDT</SfButton>
+        <!-- Rate and projection -->
+        @if (_projectedRate > 0 || _amount > 0)
+        {
+            <div class="proyeccion">
+                <h4>Proyeccion de Intereses</h4>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Tasa Anual</span>
+                        <span class="kpi-value valor-info">@_projectedRate.ToString("N2")%</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Interes al Vencimiento</span>
+                        <span class="kpi-value valor-exito">@_projectedInterest.ToString("N0")</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total a Recibir</span>
+                        <span class="kpi-value">@((_amount + _projectedInterest).ToString("N0"))</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Fecha Vencimiento</span>
+                        <span class="kpi-value valor-texto">@DateOnly.FromDateTime(DateTime.Now).AddDays(_termDays)</span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="acciones">
+            <SfButton CssClass="e-flat" OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Cancelar</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="CreateCertificate">Crear CDT</SfButton>
+        </div>
     </div>
 </div>
 

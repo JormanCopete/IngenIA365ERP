@@ -34,11 +34,11 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfTextBox @bind-Value="_model.CompanyCode" Placeholder="Codigo Empresa" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.DeductionClass" Placeholder="Clase de Descuento" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.Periodicity" Placeholder="Periodicidad" FloatLabelType="FloatLabelType.Always" />
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--gap-md);">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.StartDay" Placeholder="Dia Inicio" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.EndDay" Placeholder="Dia Fin" FloatLabelType="FloatLabelType.Always" />
                     <SfTextBox @bind-Value="_model.DayCount" Placeholder="Dias" FloatLabelType="FloatLabelType.Always" />

@@ -1,0 +1,15 @@
+/* Fila de filtros del diálogo de búsqueda.
+
+   NO puede usar `.toolbar` del contrato: esa clase lleva `flex-wrap: wrap`, y
+   SyncFusion declara `.e-input-group, .e-input-group.e-control-wrapper
+   { width: 100% }`. Con envoltura, el tamaño hipotético de cada SfTextBox es el
+   ancho completo de la fila, así que cada campo y el botón se van a su propia
+   línea en vez de repartirse el ancho. Sin envoltura los tres se encogen y
+   quedan en una sola fila, que es como estaba. */
+
+.search-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin-bottom: var(--gap-md);
+}

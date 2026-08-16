@@ -13,87 +13,93 @@
 
 <PageTitle>Reset de MFA — IngenIA365ERP</PageTitle>
 
-<h1>Reset administrativo del MFA</h1>
-<p>Cada solicitud necesita dos aprobaciones de administradores distintos del solicitante y expira en 24 horas.</p>
-
-<h2 style="margin-top: 24px;">Solicitudes pendientes</h2>
-
-@if (_loading)
-{
-    <p>Cargando solicitudes...</p>
-}
-else if (_items.Count == 0)
-{
-    <p>No hay solicitudes pendientes.</p>
-}
-else
-{
-    <div style="overflow-x: auto;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Afectado</th>
-                    <th>Solicitante</th>
-                    <th>Motivo</th>
-                    <th>Solicitada</th>
-                    <th>Expira</th>
-                    <th>Aprobaciones</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var r in _items)
-                {
-                    <tr>
-                        <td>@r.TargetUserName <small>(@r.TargetEmail)</small></td>
-                        <td>@r.RequestedByUserName</td>
-                        <td>@r.Reason</td>
-                        <td>@r.RequestedAt.ToLocalTime().ToString("g")</td>
-                        <td>@r.ExpiresAt.ToLocalTime().ToString("g")</td>
-                        <td>@((r.HasFirstApproval ? 1 : 0) + (r.HasSecondApproval ? 1 : 0)) / 2</td>
-                        <td>
-                            <button disabled="@_busy" @onclick="() => ApproveAsync(r.PublicId)">Aprobar</button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+<div class="pagina">
+    <div class="page-header">
+        <h1>Reset administrativo del MFA</h1>
     </div>
-}
+    <p>Cada solicitud necesita dos aprobaciones de administradores distintos del solicitante y expira en 24 horas.</p>
 
-@if (!string.IsNullOrEmpty(_status))
-{
-    <p role="status">Resultado: <strong>@_status</strong></p>
-}
+    <h2>Solicitudes pendientes</h2>
 
-<h2 style="margin-top: 32px;">Nueva solicitud</h2>
+    @if (_loading)
+    {
+        <p>Cargando solicitudes...</p>
+    }
+    else if (_items.Count == 0)
+    {
+        <p>No hay solicitudes pendientes.</p>
+    }
+    else
+    {
+        @* Siete columnas con fechas y motivo no entran en un portátil: la tabla
+           se desplaza dentro de su caja, no arrastra la página entera. *@
+        <div class="tabla-desplazable">
+            <table class="table tabla">
+                <thead>
+                    <tr>
+                        <th>Afectado</th>
+                        <th>Solicitante</th>
+                        <th>Motivo</th>
+                        <th>Solicitada</th>
+                        <th>Expira</th>
+                        <th>Aprobaciones</th>
+                        <th><span class="visualmente-oculto">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _items)
+                    {
+                        <tr>
+                            <td>@r.TargetUserName <small>(@r.TargetEmail)</small></td>
+                            <td>@r.RequestedByUserName</td>
+                            <td>@r.Reason</td>
+                            <td>@r.RequestedAt.ToLocalTime().ToString("g")</td>
+                            <td>@r.ExpiresAt.ToLocalTime().ToString("g")</td>
+                            <td>@((r.HasFirstApproval ? 1 : 0) + (r.HasSecondApproval ? 1 : 0)) / 2</td>
+                            <td>
+                                <button disabled="@_busy" @onclick="() => ApproveAsync(r.PublicId)">Aprobar</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 
-<EditForm Model="@_model" OnValidSubmit="@SubmitRequestAsync" FormName="mfa-reset-request">
-    <DataAnnotationsValidator />
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p role="status">Resultado: <strong>@_status</strong></p>
+    }
 
-    <label>PublicId del usuario afectado</label>
-    <InputText @bind-Value="_model.TargetUserPublicId" />
-    <ValidationMessage For="@(() => _model.TargetUserPublicId)" />
+    <h2>Nueva solicitud</h2>
 
-    <label>Justificación</label>
-    <InputTextArea @bind-Value="_model.Reason" rows="3" />
-    <ValidationMessage For="@(() => _model.Reason)" />
+    <EditForm Model="@_model" OnValidSubmit="@SubmitRequestAsync" FormName="mfa-reset-request">
+        <DataAnnotationsValidator />
 
-    <label>PublicId del adjunto de evidencia (opcional)</label>
-    <InputText @bind-Value="_model.EvidenceAttachmentPublicId" />
+        <label>PublicId del usuario afectado</label>
+        <InputText @bind-Value="_model.TargetUserPublicId" />
+        <ValidationMessage For="@(() => _model.TargetUserPublicId)" />
 
-    <button type="submit" disabled="@_busy">Crear solicitud</button>
-</EditForm>
+        <label>Justificación</label>
+        <InputTextArea @bind-Value="_model.Reason" rows="3" />
+        <ValidationMessage For="@(() => _model.Reason)" />
 
-@if (_lastRequestId is not null)
-{
-    <p>Solicitud creada: <code>@_lastRequestId</code> (expira el @_lastExpiresAt:O)</p>
-}
+        <label>PublicId del adjunto de evidencia (opcional)</label>
+        <InputText @bind-Value="_model.EvidenceAttachmentPublicId" />
 
-@if (!string.IsNullOrEmpty(_error))
-{
-    <p class="error" role="alert">@_error</p>
-}
+        <button type="submit" class="primary" disabled="@_busy">Crear solicitud</button>
+    </EditForm>
+
+    @if (_lastRequestId is not null)
+    {
+        <p>Solicitud creada: <code>@_lastRequestId</code> (expira el @_lastExpiresAt:O)</p>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error aviso aviso-error" role="alert">@_error</p>
+    }
+</div>
 
 @code {
     private readonly Input _model = new();

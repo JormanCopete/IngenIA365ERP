@@ -1,0 +1,63 @@
+/* Estilos propios de presupuestos.
+
+   El formulario de doce meses y la barra de ejecución no encajan en ninguna
+   clase de componentes.css: son de esta pantalla. */
+
+/* Columna del diálogo de presupuesto: no usa .rejilla-campos porque adentro
+   lleva sus propias rejillas y un título de sección, que en dos columnas
+   quedarían al lado de los campos en vez de encima. */
+.columna-formulario {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-lg);
+}
+
+/* Campo de cuenta con lupa. No usa `.acciones` porque esa clase trae
+   `flex-wrap: wrap` y el envoltorio de SyncFusion declara `width: 100%`: con
+   wrap el botón de búsqueda cae bajo el campo en vez de quedar a su lado. */
+.campo-con-boton {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--gap-xs);
+}
+
+/* Doce meses en cuatro columnas: tres filas de trimestre, que es como se
+   revisa un presupuesto anual. */
+.rejilla-meses {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--gap-md);
+}
+
+@media (max-width: 768px) {
+    .rejilla-meses {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.titulo-seccion {
+    margin: var(--gap-sm) 0 0 0;
+}
+
+.total-anual {
+    text-align: right;
+    font-size: var(--texto-lg);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Barra de ejecución presupuestal dentro de la grilla. El color lo pone la
+   fila según el porcentaje —verde, ámbar o rojo—, así que acá va sólo la
+   geometría. */
+.barra-progreso {
+    height: 8px;
+    width: 100%;
+    background: var(--borde);
+    border-radius: var(--radio-sm);
+    overflow: hidden;
+}
+
+.barra-progreso-relleno {
+    height: 100%;
+    border-radius: var(--radio-sm);
+}

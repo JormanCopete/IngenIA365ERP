@@ -7,9 +7,9 @@
 
 <PageTitle>Mora y Cobro - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+<div class="page-header">
     <h3>Mora y Gestion de Cobro</h3>
-    <div style="display:flex;gap:8px;">
+    <div>
         <SfButton CssClass="e-warning" IconCss="e-icons e-refresh" OnClick="@(() => _showCalculate = true)">Calcular Mora</SfButton>
     </div>
 </div>
@@ -17,7 +17,7 @@
 <!-- KPI Dashboard -->
 @if (_summary is not null)
 {
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="kpi-grid" style="margin-bottom:var(--gap-lg);">
         <div class="kpi-card">
             <span class="kpi-label">Total en Mora</span>
             <span class="kpi-value" style="color:var(--peligro-texto);">$@_summary.TotalOverdueAmount.ToString("N0")</span>
@@ -37,7 +37,7 @@
     </div>
 
     <!-- Classification distribution -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--gap-sm);margin-bottom:var(--gap-lg);">
         <div class="class-card" style="border-left:4px solid var(--exito);">
             <span class="class-label">A - Normal</span>
             <span class="class-count">@_summary.ClassA creditos</span>
@@ -67,16 +67,16 @@
 }
 
 <!-- Filters -->
-<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+<div class="toolbar" style="margin-bottom:var(--gap-md);">
     <SfDropDownList TValue="string" TItem="ClassItem" @bind-Value="_classFilter"
                     DataSource="_classOptions" Width="180px" CssClass="e-small" Placeholder="Clasificacion">
         <DropDownListFieldSettings Text="Text" Value="Value" />
         <DropDownListEvents TValue="string" TItem="ClassItem" ValueChange="OnFilterChanged" />
     </SfDropDownList>
-    <div style="display:flex;gap:4px;align-items:center;">
-        <label style="font-size:13px;">Dias mora desde:</label>
+    <div class="actions">
+        <label>Dias mora desde:</label>
         <SfNumericTextBox TValue="int?" @bind-Value="_daysFrom" Width="80px" CssClass="e-small" Min="0" />
-        <label style="font-size:13px;">hasta:</label>
+        <label>hasta:</label>
         <SfNumericTextBox TValue="int?" @bind-Value="_daysTo" Width="80px" CssClass="e-small" Min="0" />
     </div>
     <SfTextBox @bind-Value="_searchTerm" Placeholder="Buscar por cedula" Width="180px" CssClass="e-small" />
@@ -100,7 +100,7 @@
                     var row = context as DefaultPortfolioRow;
                     var color = row?.DaysOverdue switch { > 180 => "var(--riesgo-e-txt)", > 90 => "var(--riesgo-d-txt)", > 60 => "var(--riesgo-c-txt)", > 30 => "var(--riesgo-b-txt)", _ => "var(--riesgo-leve-txt)" };
                 }
-                <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
+                <span style="color:@color;font-weight:var(--peso-fuerte);">@row?.DaysOverdue</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(DefaultPortfolioRow.Classification)" HeaderText="Cat." Width="60" TextAlign="TextAlign.Center">
@@ -109,7 +109,7 @@
                     var row = context as DefaultPortfolioRow;
                     var catColor = row?.Classification switch { "A" => "var(--riesgo-a)", "B" => "var(--riesgo-b)", "C" => "var(--riesgo-c)", "D" => "var(--riesgo-d)", "E" => "var(--riesgo-e)", _ => "var(--riesgo-nd)" };
                 }
-                <span style="background:@catColor;color:var(--acento-texto);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Classification</span>
+                <span class="badge" style="background:@catColor;color:var(--acento-texto);border-color:@catColor;">@row?.Classification</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(DefaultPortfolioRow.CapitalBalance)" HeaderText="Cap.Mora" Width="120" TextAlign="TextAlign.Right" Format="N0" />
@@ -124,7 +124,7 @@
           ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:var(--gap-md);">
                 <p>Este proceso calculara la mora para todos los creditos activos.</p>
                 <div>
                     <label>Fecha de Calculo *</label>
@@ -146,11 +146,11 @@
         <Content>
             @if (_calcResult is not null)
             {
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <span style="color:var(--texto-tenue);">Creditos procesados:</span><span>@_calcResult.PortfoliosProcessed</span>
-                    <span style="color:var(--texto-tenue);">Nuevas moras:</span><span style="color:var(--peligro-texto);">@_calcResult.NewDefaults</span>
-                    <span style="color:var(--texto-tenue);">Moras actualizadas:</span><span style="color:var(--alerta-texto);">@_calcResult.UpdatedDefaults</span>
-                    <span style="color:var(--texto-tenue);">Moras limpiadas:</span><span style="color:var(--exito-texto);">@_calcResult.ClearedDefaults</span>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--gap-sm);">
+                    <span class="texto-tenue">Creditos procesados:</span><span>@_calcResult.PortfoliosProcessed</span>
+                    <span class="texto-tenue">Nuevas moras:</span><span style="color:var(--peligro-texto);">@_calcResult.NewDefaults</span>
+                    <span class="texto-tenue">Moras actualizadas:</span><span style="color:var(--alerta-texto);">@_calcResult.UpdatedDefaults</span>
+                    <span class="texto-tenue">Moras limpiadas:</span><span style="color:var(--exito-texto);">@_calcResult.ClearedDefaults</span>
                 </div>
             }
         </Content>
@@ -159,31 +159,6 @@
         <DialogButton Content="Cerrar" CssClass="e-primary" IsPrimary="true" OnClick="@(() => _showResult = false)" />
     </DialogButtons>
 </SfDialog>
-
-<style>
-    .kpi-card {
-        background: var(--sf-card-bg, var(--superficie-1));
-        border: 1px solid var(--borde);
-        border-radius: 8px;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-    .kpi-value { font-size: 22px; font-weight: bold; color: var(--acento); }
-    .kpi-label { font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-    .class-card {
-        background: var(--superficie-2);
-        padding: 10px 12px;
-        border-radius: 6px;
-        display: flex;
-        flex-direction: column;
-    }
-    .class-label { font-size: 13px; font-weight: bold; color: var(--texto-secundario); }
-    .class-count { font-size: 12px; color: var(--texto-tenue); }
-    .class-amount { font-size: 14px; color: var(--texto-primario); margin-top: 2px; }
-</style>
 
 @code {
     private List<DefaultPortfolioRow> _defaults = [];

@@ -12,9 +12,11 @@
 <PermissionGate Required="AuditLog.View">
     <ChildContent>
         <div class="admin-page">
-            <h1>Registro de auditoría</h1>
+            <div class="page-header">
+                <h1>Registro de auditoría</h1>
+            </div>
 
-            <div class="toolbar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:end;">
+            <div class="toolbar">
                 <label>Usuario
                     <input type="text" placeholder="UserId" @bind="_userId" />
                 </label>
@@ -44,7 +46,7 @@
             </div>
 
             @if (_loading) { <p>Cargando…</p> }
-            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
             else if (_items.Count == 0) { <p>Sin resultados para los filtros aplicados.</p> }
             else
             {
@@ -80,7 +82,7 @@
                     </tbody>
                 </table>
 
-                <div style="display:flex; gap:8px; margin-top:12px;">
+                <div class="actions">
                     <button @onclick="PrevPageAsync" disabled="@(_page <= 1 || _loading)">‹ Anterior</button>
                     <button @onclick="NextPageAsync" disabled="@(_page >= TotalPages || _loading)">Siguiente ›</button>
                 </div>

@@ -6,35 +6,37 @@
 
 <PageTitle>Puntos de Venta - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Puntos de Venta</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Puntos de Venta</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="SalesPointItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="PointCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="UserId" HeaderText="Usuario" Width="150" />
-        <GridColumn Field="PrinterName" HeaderText="Impresora" Width="150" />
-        <GridColumn Field="Status" HeaderText="Estado" Width="80" TextAlign="TextAlign.Right" />
-        <GridColumn Field="BaseAmount" HeaderText="Base" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as SalesPointItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="SalesPointItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="PointCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="UserId" HeaderText="Usuario" Width="150" />
+            <GridColumn Field="PrinterName" HeaderText="Impresora" Width="150" />
+            <GridColumn Field="Status" HeaderText="Estado" Width="80" TextAlign="TextAlign.Right" />
+            <GridColumn Field="BaseAmount" HeaderText="Base" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as SalesPointItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Codigo Punto *</label>
                     <SfNumericTextBox TValue="int" @bind-Value="_model.PointCode" Placeholder="Codigo punto de venta" Min="0" />

@@ -21,7 +21,7 @@
             </PermissionGate>
 
             @if (_loading) { <p>Cargando…</p> }
-            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
             else if (_items.Count == 0) { <p>Aún no hay versiones publicadas.</p> }
             else
             {

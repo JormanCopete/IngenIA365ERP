@@ -6,39 +6,41 @@
 
 <PageTitle>Productos - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Productos</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Productos</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="ProductItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
-        <GridColumn Field="ShortName" HeaderText="Resumido" Width="150" />
-        <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
-        <GridColumn Field="CostPrice" HeaderText="Costo" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="SalePrice" HeaderText="Precio Venta" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="VatRate" HeaderText="% IVA" Width="80" Format="N3" TextAlign="TextAlign.Right" />
-        <GridColumn Field="CurrentStock" HeaderText="Stock" Width="80" TextAlign="TextAlign.Right" />
-        <GridColumn Field="IsActive" HeaderText="Activo" Width="80" DisplayAsCheckBox="true" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as ProductItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="ProductItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
+            <GridColumn Field="ShortName" HeaderText="Resumido" Width="150" />
+            <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
+            <GridColumn Field="CostPrice" HeaderText="Costo" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="SalePrice" HeaderText="Precio Venta" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="VatRate" HeaderText="% IVA" Width="80" Format="N3" TextAlign="TextAlign.Right" />
+            <GridColumn Field="CurrentStock" HeaderText="Stock" Width="80" TextAlign="TextAlign.Right" />
+            <GridColumn Field="IsActive" HeaderText="Activo" Width="80" DisplayAsCheckBox="true" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as ProductItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Codigo *</label>
                     <SfNumericTextBox TValue="int" @bind-Value="_model.ProductCode" Placeholder="Codigo producto" Min="0" />

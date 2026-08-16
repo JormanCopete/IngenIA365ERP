@@ -1,0 +1,17 @@
+/* La tabla de solicitudes tiene siete columnas, dos de ellas con fecha y hora
+   completas. En un portátil no entran: el desplazamiento horizontal se queda
+   dentro de esta caja en lugar de mover la página entera. */
+
+.tabla-desplazable {
+    overflow-x: auto;
+}
+
+/* El formulario de alta apila etiqueta + campo; sin esto los <label> quedan
+   pegados al control anterior. */
+.pagina label {
+    display: block;
+    margin-top: var(--gap-md);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    color: var(--texto-secundario);
+}

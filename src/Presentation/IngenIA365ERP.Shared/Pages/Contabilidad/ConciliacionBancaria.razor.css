@@ -1,0 +1,74 @@
+/* Estilos propios de la conciliación bancaria.
+
+   Las tarjetas de resumen, la barra de filtros y el estado vacío ya salen de
+   componentes.css. Acá queda sólo lo que es de esta pantalla: la comparación
+   a dos columnas y el color de estado de las cifras. */
+
+/* Libro contra extracto, lado a lado. Es el gesto central de la pantalla:
+   conciliar es comparar dos listas, y separarlas en pestañas obligaría a
+   recordar la de al lado. */
+.panel-doble {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--pad-lg);
+}
+
+/* En pantalla angosta dos columnas dejan cada grilla en 180px: se apilan. */
+@media (max-width: 768px) {
+    .panel-doble {
+        grid-template-columns: 1fr;
+    }
+}
+
+.titulo-panel {
+    margin: 0 0 var(--gap-sm) 0;
+}
+
+.cabecera-panel {
+    margin-bottom: var(--gap-sm);
+}
+
+/* `.page-header` de componentes.css sólo anula el margen de h1/h2/h3, y el
+   encabezado de este panel es un h4: sin esto conserva el `margin-bottom` de
+   app.css y la cabecera derecha queda un renglón más baja que la izquierda,
+   con las dos grillas que hay que comparar desalineadas. */
+.cabecera-panel > h4 {
+    margin: 0;
+}
+
+/* Cifras con estado. Antes eran `orange`, `green` y `red` literales, que no
+   cambian con el tema ni con el modo de alto contraste. */
+.cifra-alerta {
+    color: var(--alerta-texto);
+}
+
+.cifra-ok {
+    color: var(--exito-texto);
+}
+
+.cifra-error {
+    color: var(--peligro-texto);
+}
+
+/* La tarjeta de diferencia tiñe el fondo completo: es el indicador de si la
+   conciliación cierra, y debe verse sin buscarlo. */
+.tarjeta-ok {
+    background: var(--exito-fondo);
+    border-color: var(--exito);
+}
+
+.tarjeta-error {
+    background: var(--peligro-fondo);
+    border-color: var(--peligro);
+}
+
+/* Aviso de importación de extracto pendiente de construir. */
+.aviso-importar {
+    text-align: center;
+}
+
+.icono-importar {
+    display: block;
+    font-size: calc(2rem * var(--escala));
+    margin-bottom: var(--gap-md);
+}

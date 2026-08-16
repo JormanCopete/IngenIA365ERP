@@ -7,137 +7,139 @@
 
 <PageTitle>Extracto de Credito - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Extracto de Credito</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
-        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_loanData is null)">PDF</SfButton>
-    </div>
-</div>
-
-<!-- Person Search -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Documento / NIT</label>
-        <SfTextBox @bind-Value="_personId" Placeholder="Ej: 1234567890" Width="200px" CssClass="e-small" />
-    </div>
-    <SfButton CssClass="e-outline e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar Asociado</SfButton>
-    @if (_loans is not null && _loans.Count > 0)
-    {
+<div class="pagina">
+    <div class="page-header">
+        <h3>Extracto de Credito</h3>
         <div>
-            <label>Credito</label>
-            <SfDropDownList TValue="string" TItem="LoanOption" @bind-Value="_selectedLoan" DataSource="_loans"
-                            CssClass="e-small" Width="280px" Placeholder="Seleccione un credito">
-                <DropDownListFieldSettings Text="Display" Value="LoanId" />
-                <DropDownListEvents TValue="string" TItem="LoanOption" ValueChange="OnLoanChanged" />
-            </SfDropDownList>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+            <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_loanData is null)">PDF</SfButton>
         </div>
+    </div>
+
+    <!-- Person Search -->
+    <div class="toolbar">
+        <div>
+            <label>Documento / NIT</label>
+            <SfTextBox @bind-Value="_personId" Placeholder="Ej: 1234567890" Width="200px" CssClass="e-small" />
+        </div>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar Asociado</SfButton>
+        @if (_loans is not null && _loans.Count > 0)
+        {
+            <div>
+                <label>Credito</label>
+                <SfDropDownList TValue="string" TItem="LoanOption" @bind-Value="_selectedLoan" DataSource="_loans"
+                                CssClass="e-small" Width="280px" Placeholder="Seleccione un credito">
+                    <DropDownListFieldSettings Text="Display" Value="LoanId" />
+                    <DropDownListEvents TValue="string" TItem="LoanOption" ValueChange="OnLoanChanged" />
+                </SfDropDownList>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_personName))
+    {
+        <div style="padding:var(--pad-sm) var(--pad-md);background:var(--superficie-1);border:1px solid var(--borde);border-radius:var(--radio-sm);">
+            <strong>@_personName</strong> <span class="texto-tenue" style="margin-left:var(--gap-sm);">Doc: @_personId</span>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
+
+    @if (_loanData is not null)
+    {
+        <!-- Loan Summary -->
+        <div class="rejilla-tarjetas">
+            <div class="info-card">
+                <span class="label">Monto Aprobado</span>
+                <span>@_loanData.ApprovedAmount.ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Saldo Capital</span>
+                <span style="font-weight:var(--peso-fuerte);">@_loanData.OutstandingBalance.ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Tasa</span>
+                <span>@_loanData.InterestRate.ToString("N2")%</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Plazo</span>
+                <span>@_loanData.Term meses</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Fecha Desembolso</span>
+                <span>@_loanData.DisbursementDate.ToString("dd/MM/yyyy")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Estado</span>
+                <span style="color:@(_loanData.Status == "Vigente" ? "var(--exito)" : "var(--alerta)");">@_loanData.Status</span>
+            </div>
+        </div>
+
+        <!-- Amortization Table -->
+        <h4>Tabla de Amortizacion</h4>
+        <SfGrid TValue="AmortizationRow" DataSource="_loanData.Amortization" AllowPaging="true" AllowSorting="true">
+            <GridPageSettings PageSize="24" />
+            <GridColumns>
+                <GridColumn Field="InstallmentNumber" HeaderText="Cuota" Width="80" TextAlign="TextAlign.Center" />
+                <GridColumn Field="DueDate" HeaderText="Fecha Vencimiento" Width="140" Format="d" />
+                <GridColumn Field="Principal" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Interest" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalPayment" HeaderText="Cuota Total" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="RemainingBalance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Status" HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
+                    <Template>
+                        @{
+                            var row = context as AmortizationRow;
+                            var cssColor = row?.Status switch
+                            {
+                                "Pagada" => "var(--exito-texto)",
+                                "Vencida" => "var(--peligro-texto)",
+                                _ => "var(--texto-tenue)"
+                            };
+                        }
+                        <span style="color:@cssColor;font-weight:var(--peso-fuerte);">@row?.Status</span>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="Principal" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                        <GridAggregateColumn Field="Interest" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                        <GridAggregateColumn Field="TotalPayment" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+
+        <!-- Payments -->
+        @if (_loanData.Payments is not null && _loanData.Payments.Count > 0)
+        {
+            <h4>Pagos Realizados</h4>
+            <SfGrid TValue="PaymentRow" DataSource="_loanData.Payments" AllowPaging="true">
+                <GridPageSettings PageSize="12" />
+                <GridColumns>
+                    <GridColumn Field="PaymentDate" HeaderText="Fecha Pago" Width="140" Format="d" />
+                    <GridColumn Field="ReceiptNumber" HeaderText="No. Recibo" Width="140" />
+                    <GridColumn Field="PrincipalPaid" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="InterestPaid" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="LateFee" HeaderText="Mora" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="TotalPaid" HeaderText="Total Pagado" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                </GridColumns>
+            </SfGrid>
+        }
     }
 </div>
-
-@if (!string.IsNullOrEmpty(_personName))
-{
-    <div style="margin-bottom:12px;padding:8px 12px;background:var(--superficie-1);border:1px solid var(--borde);border-radius:4px;">
-        <strong>@_personName</strong> <span style="color:var(--texto-tenue);margin-left:8px;">Doc: @_personId</span>
-    </div>
-}
-
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
-}
-
-@if (_loanData is not null)
-{
-    <!-- Loan Summary -->
-    <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="info-card">
-            <span class="label">Monto Aprobado</span>
-            <span>@_loanData.ApprovedAmount.ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Saldo Capital</span>
-            <span style="font-weight:bold;">@_loanData.OutstandingBalance.ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Tasa</span>
-            <span>@_loanData.InterestRate.ToString("N2")%</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Plazo</span>
-            <span>@_loanData.Term meses</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Fecha Desembolso</span>
-            <span>@_loanData.DisbursementDate.ToString("dd/MM/yyyy")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Estado</span>
-            <span style="color:@(_loanData.Status == "Vigente" ? "var(--exito)" : "var(--alerta)");">@_loanData.Status</span>
-        </div>
-    </div>
-
-    <!-- Amortization Table -->
-    <h4 style="margin:16px 0 8px;">Tabla de Amortizacion</h4>
-    <SfGrid TValue="AmortizationRow" DataSource="_loanData.Amortization" AllowPaging="true" AllowSorting="true">
-        <GridPageSettings PageSize="24" />
-        <GridColumns>
-            <GridColumn Field="InstallmentNumber" HeaderText="Cuota" Width="80" TextAlign="TextAlign.Center" />
-            <GridColumn Field="DueDate" HeaderText="Fecha Vencimiento" Width="140" Format="d" />
-            <GridColumn Field="Principal" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Interest" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="TotalPayment" HeaderText="Cuota Total" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="RemainingBalance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Status" HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
-                <Template>
-                    @{
-                        var row = context as AmortizationRow;
-                        var cssColor = row?.Status switch
-                        {
-                            "Pagada" => "var(--exito-texto)",
-                            "Vencida" => "var(--peligro-texto)",
-                            _ => "var(--texto-tenue)"
-                        };
-                    }
-                    <span style="color:@cssColor;font-weight:600;">@row?.Status</span>
-                </Template>
-            </GridColumn>
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="Principal" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                    <GridAggregateColumn Field="Interest" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                    <GridAggregateColumn Field="TotalPayment" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-
-    <!-- Payments -->
-    @if (_loanData.Payments is not null && _loanData.Payments.Count > 0)
-    {
-        <h4 style="margin:24px 0 8px;">Pagos Realizados</h4>
-        <SfGrid TValue="PaymentRow" DataSource="_loanData.Payments" AllowPaging="true">
-            <GridPageSettings PageSize="12" />
-            <GridColumns>
-                <GridColumn Field="PaymentDate" HeaderText="Fecha Pago" Width="140" Format="d" />
-                <GridColumn Field="ReceiptNumber" HeaderText="No. Recibo" Width="140" />
-                <GridColumn Field="PrincipalPaid" HeaderText="Capital" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="InterestPaid" HeaderText="Interes" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="LateFee" HeaderText="Mora" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="TotalPaid" HeaderText="Total Pagado" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-            </GridColumns>
-        </SfGrid>
-    }
-}
 
 @code {
     private string _personId = "";
@@ -277,8 +279,3 @@
         public decimal TotalPaid { get; set; }
     }
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 130px; }
-    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-</style>

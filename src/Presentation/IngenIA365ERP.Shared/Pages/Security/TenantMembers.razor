@@ -9,85 +9,89 @@
 
 <PageTitle>Miembros — IngenIA365ERP</PageTitle>
 
-<h1>Miembros de la empresa</h1>
+<div class="pagina">
+    <div class="page-header">
+        <h1>Miembros de la empresa</h1>
+    </div>
 
-@if (_loading)
-{
-    <p>Cargando...</p>
-}
-else if (_members is null || _members.Items.Count == 0)
-{
-    <p>No hay miembros para mostrar.</p>
-}
-else
-{
-    @if (_activeAdminsCount == 1)
+    @if (_loading)
     {
-        <div style="background: var(--alerta-fondo); border-left: 4px solid var(--alerta);
-                    padding: 12px 16px; margin-bottom: 16px;">
-            <strong>Queda 1 administrador activo</strong> en la empresa. No podrás
-            revocarlo ni degradarlo hasta que otro miembro sea promovido a admin.
-        </div>
+        <p>Cargando...</p>
+    }
+    else if (_members is null || _members.Items.Count == 0)
+    {
+        <p>No hay miembros para mostrar.</p>
+    }
+    else
+    {
+        @if (_activeAdminsCount == 1)
+        {
+            <div class="aviso aviso-alerta">
+                <strong>Queda 1 administrador activo</strong> en la empresa. No podrás
+                revocarlo ni degradarlo hasta que otro miembro sea promovido a admin.
+            </div>
+        }
+
+        <table class="tabla">
+            <thead>
+                <tr>
+                    <th>CentralUser</th>
+                    <th>Estado</th>
+                    <th>Rol</th>
+                    <th>Invitado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in _members.Items)
+                {
+                    <tr>
+                        <td style="font-family: var(--fuente-mono); font-size: var(--texto-sm);">
+                            @m.CentralUserId.ToString("N")[..8]
+                        </td>
+                        <td>@StatusLabel(m.Status)</td>
+                        <td>
+                            @if (m.IsTenantAdmin)
+                            {
+                                <span class="pastilla pastilla-info">Admin</span>
+                            }
+                        </td>
+                        <td>@m.InvitedAt.ToString("dd/MM/yyyy")</td>
+                        <td>
+                            <div class="acciones">
+                                @if (m.Status == 1)
+                                {
+                                    <button @onclick="() => SuspendAsync(m.MembershipPublicId)" disabled="@_busy">Suspender</button>
+                                }
+                                @if (m.Status == 2)
+                                {
+                                    <button @onclick="() => ActivateAsync(m.MembershipPublicId)" disabled="@_busy">Reactivar</button>
+                                }
+                                @if (m.Status != 3)
+                                {
+                                    <button @onclick="() => RevokeAsync(m.MembershipPublicId)" disabled="@_busy">Revocar</button>
+                                }
+                                @if (m.IsTenantAdmin && m.Status == 1)
+                                {
+                                    <button @onclick="() => DemoteAsync(m.MembershipPublicId)" disabled="@_busy">Degradar</button>
+                                }
+                                else if (!m.IsTenantAdmin && m.Status == 1)
+                                {
+                                    <button @onclick="() => PromoteAsync(m.MembershipPublicId)" disabled="@_busy">Promover</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="background: var(--superficie-0);">
-                <th style="padding: 8px; text-align: left;">CentralUser</th>
-                <th>Estado</th>
-                <th>Rol</th>
-                <th>Invitado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var m in _members.Items)
-            {
-                <tr style="border-bottom: 1px solid var(--borde);">
-                    <td style="padding: 8px; font-family: monospace; font-size: 12px;">
-                        @m.CentralUserId.ToString("N")[..8]
-                    </td>
-                    <td>@StatusLabel(m.Status)</td>
-                    <td>
-                        @if (m.IsTenantAdmin)
-                        {
-                            <span style="padding: 2px 8px; background: var(--info-fondo);
-                                         color: var(--info-texto); border-radius: 4px; font-size: 12px;">Admin</span>
-                        }
-                    </td>
-                    <td>@m.InvitedAt.ToString("dd/MM/yyyy")</td>
-                    <td>
-                        @if (m.Status == 1)
-                        {
-                            <button @onclick="() => SuspendAsync(m.MembershipPublicId)" disabled="@_busy">Suspender</button>
-                        }
-                        @if (m.Status == 2)
-                        {
-                            <button @onclick="() => ActivateAsync(m.MembershipPublicId)" disabled="@_busy">Reactivar</button>
-                        }
-                        @if (m.Status != 3)
-                        {
-                            <button @onclick="() => RevokeAsync(m.MembershipPublicId)" disabled="@_busy">Revocar</button>
-                        }
-                        @if (m.IsTenantAdmin && m.Status == 1)
-                        {
-                            <button @onclick="() => DemoteAsync(m.MembershipPublicId)" disabled="@_busy">Degradar</button>
-                        }
-                        else if (!m.IsTenantAdmin && m.Status == 1)
-                        {
-                            <button @onclick="() => PromoteAsync(m.MembershipPublicId)" disabled="@_busy">Promover</button>
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
-@if (!string.IsNullOrEmpty(_error))
-{
-    <p class="error" role="alert">@_error</p>
-}
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error aviso aviso-error" role="alert">@_error</p>
+    }
+</div>
 
 @code {
     [Parameter] public Guid TenantPublicId { get; set; }

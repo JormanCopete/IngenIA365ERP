@@ -6,6 +6,7 @@
 
 <PageTitle>Codigos de Movimiento - IngenIA365ERP</PageTitle>
 
+<div class="pagina">
 <div class="page-header">
     <h3>Codigos de Movimiento</h3>
     <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
@@ -29,11 +30,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="campos-dialogo">
                 <div>
                     <label>Codigo *</label>
                     <SfTextBox @bind-Value="_model.Code" Placeholder="Codigo (max 3)" MaxLength="3" />

@@ -1,0 +1,47 @@
+/* Movimiento de inventario — solo lo propio de esta pantalla.
+   La rejilla de campos, la tabla y el encabezado salen de componentes.css. */
+
+/* .page-header desmargina h1–h3; el título de sección es h4 porque el h3 ya lo
+   ocupa el título del documento. */
+.page-header > h4 {
+    margin: 0;
+}
+
+/* Columnas de la tabla de detalle que no son ni texto ni monto: el número de
+   línea y el botón de borrar van centrados. */
+.columna-num {
+    text-align: center;
+}
+
+.fila-vacia {
+    padding: var(--gap-lg);
+    text-align: center;
+}
+
+/* Pie de totales: se alinea a la derecha, contra la columna de importes que
+   resume. Las cifras usan cifras tabulares para que los tres totales queden
+   alineados entre sí. */
+.barra-totales {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--pad-xl);
+    padding: var(--pad-md);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-0);
+}
+
+.barra-totales > div {
+    text-align: right;
+}
+
+.barra-totales .label {
+    display: block;
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}
+
+.barra-totales strong {
+    font-size: var(--texto-lg);
+    font-variant-numeric: tabular-nums;
+}

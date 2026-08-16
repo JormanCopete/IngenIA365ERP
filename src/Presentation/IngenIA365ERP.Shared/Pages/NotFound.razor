@@ -3,6 +3,12 @@
 @attribute [AllowAnonymous]
 @layout MinimalLayout
 
-<h3>Pagina no encontrada</h3>
-<p>Lo sentimos, el contenido que busca no existe.</p>
-<p><a href="/">Volver al inicio</a></p>
+@* MinimalLayout no aporta relleno: sin contenedor el texto quedaba pegado al
+   borde de la ventana. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Pagina no encontrada</h3>
+    </div>
+    <p>Lo sentimos, el contenido que busca no existe.</p>
+    <p><a href="/">Volver al inicio</a></p>
+</div>

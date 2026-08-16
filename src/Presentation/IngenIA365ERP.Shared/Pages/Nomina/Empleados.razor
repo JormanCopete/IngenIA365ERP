@@ -9,9 +9,9 @@
 
 <PageTitle>Empleados - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Empleados</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar por documento, nombre o apellido..." @bind-Value="_search"
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
@@ -38,7 +38,7 @@
                     var css = emp?.StatusText == "Activo" ? "e-badge e-badge-success"
                             : emp?.StatusText == "Retirado" ? "e-badge e-badge-danger"
                             : "e-badge e-badge-warning";
-                    <span class="@css" style="padding:2px 8px;font-size:11px;">@emp?.StatusText</span>
+                    <span class="@css" style="padding:2px var(--pad-sm);font-size:var(--texto-xs);">@emp?.StatusText</span>
                 }
             </Template>
         </GridColumn>
@@ -66,8 +66,8 @@
           Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:16px;">
-                <p style="margin-bottom:12px;color:var(--texto-secundario);">
+            <div class="panel-pestana">
+                <p class="muted" style="margin-bottom:var(--gap-md);">
                     Para registrar un empleado, primero seleccione la persona.
                     Si la persona no existe, debe crearla en
                     <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
@@ -93,7 +93,7 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Identificacion" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                            <div class="rejilla-campos panel-pestana">
                                 <div>
                                     <label>Tipo Documento <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfDropDownList TValue="string" TItem="CodeOption"
@@ -131,7 +131,7 @@
                                     <SfTextBox @bind-Value="_personModel.LastName"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Razon Social (juridica)</label>
                                     <SfTextBox @bind-Value="_personModel.BusinessName"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
@@ -153,8 +153,8 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Contacto" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <div style="grid-column:span 2;">
+                            <div class="rejilla-campos panel-pestana">
+                                <div class="campo-ancho">
                                     <label>Direccion</label>
                                     <SfTextBox @bind-Value="_personModel.Address"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
@@ -197,7 +197,7 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Demografia" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                            <div class="rejilla-campos panel-pestana">
                                 <div>
                                     <label>Genero</label>
                                     <SfDropDownList TValue="string" TItem="CodeOption"
@@ -236,7 +236,7 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Datos Laborales" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                            <div class="rejilla-campos panel-pestana">
                                 <div>
                                     <label>Salario Base <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfNumericTextBox TValue="decimal" @bind-Value="_employeeModel.BaseSalary"
@@ -275,7 +275,7 @@
                                         <DropDownListFieldSettings Text="Name" Value="PublicId" />
                                     </SfDropDownList>
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>ARL (Riesgos Laborales)</label>
                                     <SfDropDownList TValue="Guid?" TItem="LookupOption"
                                                     @bind-Value="_employeeModel.WorkRiskProviderPublicId"
@@ -293,8 +293,8 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Banca Nomina" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <p style="grid-column:span 2;color:var(--texto-tenue);font-size:12px;">
+                            <div class="rejilla-campos panel-pestana">
+                                <p class="campo-ancho hint">
                                     Cuenta donde se consigna el salario del empleado por nomina.
                                 </p>
                                 <div>
@@ -315,7 +315,7 @@
                                         <DropDownListFieldSettings Text="Name" Value="Value" />
                                     </SfDropDownList>
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Numero de Cuenta</label>
                                     <SfTextBox @bind-Value="_employeeModel.PayrollBankAccountNumber"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "25" } })" />
@@ -339,9 +339,9 @@
           Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:16px;">
+            <div class="panel-pestana">
                 <p>¿Esta seguro de terminar el contrato de <strong>@_terminating?.FullName</strong>?</p>
-                <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+                <div style="display:flex;flex-direction:column;gap:var(--gap-md);margin-top:var(--gap-md);">
                     <div>
                         <label>Fecha de Terminacion <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />

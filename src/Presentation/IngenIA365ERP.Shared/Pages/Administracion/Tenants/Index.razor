@@ -7,7 +7,9 @@
 <PageTitle>Cooperativas — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>Cooperativas (Tenants)</h1>
+    <div class="page-header">
+        <h1>Cooperativas (Tenants)</h1>
+    </div>
 
     <div class="toolbar">
         <input type="search" placeholder="Buscar por nombre, NIT o subdominio…" @bind="_search" @bind:event="oninput" />
@@ -22,7 +24,7 @@
     }
     else if (_error is not null)
     {
-        <p class="error">@_error</p>
+        <p class="error aviso aviso-error" role="alert">@_error</p>
     }
     else if (_items.Count == 0)
     {
@@ -57,15 +59,17 @@
                         </td>
                         <td>@t.BranchCount</td>
                         <td>
-                            <button @onclick="() => Edit(t.PublicId)">Editar</button>
-                            @if (t.IsSuspended)
-                            {
-                                <button @onclick="() => ActivateAsync(t.PublicId)">Reactivar</button>
-                            }
-                            else
-                            {
-                                <button @onclick="() => OpenSuspend(t.PublicId)">Suspender</button>
-                            }
+                            <div class="acciones">
+                                <button @onclick="() => Edit(t.PublicId)">Editar</button>
+                                @if (t.IsSuspended)
+                                {
+                                    <button @onclick="() => ActivateAsync(t.PublicId)">Reactivar</button>
+                                }
+                                else
+                                {
+                                    <button @onclick="() => OpenSuspend(t.PublicId)">Suspender</button>
+                                }
+                            </div>
                         </td>
                     </tr>
                 }

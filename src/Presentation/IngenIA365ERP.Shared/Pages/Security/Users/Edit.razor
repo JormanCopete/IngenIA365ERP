@@ -9,25 +9,27 @@
 <PageTitle>@(_isNew ? "Nuevo usuario" : "Editar usuario") — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>@(_isNew ? "Registrar usuario" : "Editar usuario")</h1>
+    <div class="page-header">
+        <h1>@(_isNew ? "Registrar usuario" : "Editar usuario")</h1>
+    </div>
 
     <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="user-edit">
         <DataAnnotationsValidator />
 
         @if (_isNew)
         {
-            <div class="row">
+            <div class="row toolbar">
                 <label>Usuario<InputText @bind-Value="_model.Username" /></label>
                 <label>Contraseña inicial<InputText type="password" @bind-Value="_model.InitialPassword" /></label>
             </div>
         }
-        <div class="row">
+        <div class="row toolbar">
             <label>Correo<InputText @bind-Value="_model.Email" /></label>
             <label>Cédula<InputText @bind-Value="_model.IdentificationNumber" /></label>
         </div>
 
         <ValidationSummary />
-        @if (_error is not null) { <p class="error">@_error</p> }
+        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
 
         <div class="actions">
             <button type="submit" class="primary" disabled="@_saving">Guardar</button>
@@ -39,7 +41,7 @@
     {
         <hr />
         <h2>Acciones administrativas</h2>
-        <div class="row">
+        <div class="row toolbar">
             <input type="password" placeholder="Nueva contraseña" @bind="_newPassword" />
             <button @onclick="ResetPasswordAsync">Reset password</button>
         </div>

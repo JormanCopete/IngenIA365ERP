@@ -7,88 +7,90 @@
 
 <PageTitle>Comprobantes Contables - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Comprobantes Contables</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick='@(() => Nav.NavigateTo("/contabilidad/comprobantes"))'>Nuevo Comprobante</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Comprobantes Contables</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick='@(() => Nav.NavigateTo("/contabilidad/comprobantes"))'>Nuevo Comprobante</SfButton>
+    </div>
 
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Desde</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Desde</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Hasta</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Tipo</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_typeFilter" DataSource="_typeOptions" CssClass="e-small" Width="180px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Estado</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_statusFilter" DataSource="_statusOptions" CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
     </div>
-    <div>
-        <label>Hasta</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Tipo</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_typeFilter" DataSource="_typeOptions" CssClass="e-small" Width="180px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Estado</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_statusFilter" DataSource="_statusOptions" CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
-</div>
 
-<SfGrid @ref="_grid" TValue="DocItem" DataSource="_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridPageSettings PageSize="20" />
-    <GridColumns>
-        <GridColumn Field="VoucherTypeCode" HeaderText="Tipo" Width="100" />
-        <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="120" />
-        <GridColumn Field="DocumentDate" HeaderText="Fecha" Width="130" Format="d" Type="ColumnType.Date" />
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
-        <GridColumn Field="TotalDebit" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="TotalCredit" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
-            <Template>
-                @{
-                    var d = context as DocItem;
-                    var badge = d?.IsVoided == true ? "e-badge e-badge-danger"
-                              : d?.IsClosed == true ? "e-badge e-badge-success"
-                              : "e-badge e-badge-warning";
-                    var text = d?.IsVoided == true ? "Anulado"
-                             : d?.IsClosed == true ? "Contabilizado"
-                             : "Borrador";
-                }
-                <span class="@badge">@text</span>
-            </Template>
-        </GridColumn>
-        <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var d = context as DocItem;
-                }
-                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
-                          OnClick="@(() => Nav.NavigateTo($"/contabilidad/comprobantes/{d!.PublicId}"))" />
-            </Template>
-        </GridColumn>
-    </GridColumns>
-    <GridAggregates>
-        <GridAggregate>
-            <GridAggregateColumns>
-                <GridAggregateColumn Field="TotalDebit" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>Total: @sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-                <GridAggregateColumn Field="TotalCredit" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>Total: @sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-            </GridAggregateColumns>
-        </GridAggregate>
-    </GridAggregates>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="DocItem" DataSource="_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridPageSettings PageSize="20" />
+        <GridColumns>
+            <GridColumn Field="VoucherTypeCode" HeaderText="Tipo" Width="100" />
+            <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="120" />
+            <GridColumn Field="DocumentDate" HeaderText="Fecha" Width="130" Format="d" Type="ColumnType.Date" />
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+            <GridColumn Field="TotalDebit" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TotalCredit" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+                <Template>
+                    @{
+                        var d = context as DocItem;
+                        var badge = d?.IsVoided == true ? "e-badge e-badge-danger"
+                                  : d?.IsClosed == true ? "e-badge e-badge-success"
+                                  : "e-badge e-badge-warning";
+                        var text = d?.IsVoided == true ? "Anulado"
+                                 : d?.IsClosed == true ? "Contabilizado"
+                                 : "Borrador";
+                    }
+                    <span class="@badge">@text</span>
+                </Template>
+            </GridColumn>
+            <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var d = context as DocItem;
+                    }
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                              OnClick="@(() => Nav.NavigateTo($"/contabilidad/comprobantes/{d!.PublicId}"))" />
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="TotalDebit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>Total: @sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="TotalCredit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>Total: @sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+</div>
 
 @code {
     private SfGrid<DocItem>? _grid;

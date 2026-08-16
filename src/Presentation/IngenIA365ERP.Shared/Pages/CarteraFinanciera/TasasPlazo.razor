@@ -38,25 +38,25 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Linea de Credito" FloatLabelType="FloatLabelType.Always" />
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountStart" Placeholder="Monto Desde" Format="N2" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="decimal" @bind-Value="_model.AmountEnd" Placeholder="Monto Hasta" Format="N2" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.TermStart" Placeholder="Plazo Desde" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.TermEnd" Placeholder="Plazo Hasta" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.SeniorityStart" Placeholder="Antiguedad Desde" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.SeniorityEnd" Placeholder="Antiguedad Hasta" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tasa" Format="N3" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.MaxTerm" Placeholder="Plazo Maximo" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="decimal" @bind-Value="_model.MaxAmount" Placeholder="Monto Maximo" Format="N2" FloatLabelType="FloatLabelType.Always" />
                     <SfTextBox @bind-Value="_model.GuaranteeType" Placeholder="Tipo Garantia" FloatLabelType="FloatLabelType.Always" />
                 </div>

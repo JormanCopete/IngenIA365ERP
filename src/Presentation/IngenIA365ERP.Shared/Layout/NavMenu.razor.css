@@ -87,23 +87,27 @@
     font-weight: var(--peso-medio);
 }
 
-.nav-item .e-icons {
+::deep .nav-item .e-icons, .nav-item .e-icons {
     font-size: 18px;
     width: 28px;
     text-align: center;
     flex-shrink: 0;
 }
 
-.nav-group-toggle {
+/* ::deep para alcanzar el marcado de NavMenuGroup. El CSS con ambito de Blazor
+   solo aplica al componente que lo declara: sin esto, el encabezado de cada
+   grupo plegable de la barra lateral queda centrado en vez de alineado a la
+   izquierda, y el chevron sin tamano. Se ve en todas las pantallas. */
+::deep .nav-group-toggle, .nav-group-toggle {
     justify-content: flex-start;
 }
 
-.nav-group-title {
+::deep .nav-group-title, .nav-group-title {
     flex: 1;
     text-align: left;
 }
 
-.nav-chevron {
+::deep .nav-chevron, .nav-chevron {
     font-size: 12px !important;
     width: auto !important;
     opacity: .6;

@@ -6,37 +6,39 @@
 
 <PageTitle>Cuentas IVA - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Cuentas IVA</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas IVA</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="VatAccountItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="ProductGroupId" HeaderText="Grupo" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="TransactionTypeId" HeaderText="Tipo Movto" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="WarehouseId" HeaderText="Bodega" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="LocationId" HeaderText="Ubicacion" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="VatRate" HeaderText="Tasa IVA" Width="100" Format="N3" TextAlign="TextAlign.Right" />
-        <GridColumn Field="AccountType" HeaderText="Tipo" Width="80" />
-        <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="130" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as VatAccountItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="VatAccountItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="ProductGroupId" HeaderText="Grupo" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TransactionTypeId" HeaderText="Tipo Movto" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="WarehouseId" HeaderText="Bodega" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="LocationId" HeaderText="Ubicacion" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="VatRate" HeaderText="Tasa IVA" Width="100" Format="N3" TextAlign="TextAlign.Right" />
+            <GridColumn Field="AccountType" HeaderText="Tipo" Width="80" />
+            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="130" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as VatAccountItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Grupo de Producto *</label>
                     <SfNumericTextBox TValue="int" @bind-Value="_model.ProductGroupId" Placeholder="Id grupo" Min="0" />

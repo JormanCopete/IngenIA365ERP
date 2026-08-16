@@ -1,0 +1,17 @@
+/* Las dos filas de porcentajes (Salud/Pension/ARL y CCF/SENA/ICBF) se disenaron
+   a tres columnas. `.rejilla-campos` usa minmax(240px,1fr) y en el dialogo de
+   650px solo caben dos, asi que la tercera tarifa quedaba huerfana en una fila
+   aparte. Se conserva `.rejilla-campos` para el display y el gap del contrato y
+   aca solo se fija el numero de columnas. minmax(0,1fr) —y no 1fr— para que los
+   campos se encojan en vez de desbordar el dialogo. */
+.rejilla-tres {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* En un telefono el dialogo baja al ancho de la pantalla y tres columnas dejan
+   cada porcentaje en unos 90px: se apilan. */
+@media (max-width: 640px) {
+    .rejilla-tres {
+        grid-template-columns: 1fr;
+    }
+}

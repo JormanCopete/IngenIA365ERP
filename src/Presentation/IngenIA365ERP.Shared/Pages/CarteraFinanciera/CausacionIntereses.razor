@@ -6,50 +6,52 @@
 
 <PageTitle>Causacion de Intereses - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Causacion de Intereses de Cartera</h3>
-</div>
-
-<!-- Parameters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;flex-wrap:wrap;">
-    <div>
-        <label>Fecha de Causacion</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_accrualDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
+<div class="pagina">
+    <div class="page-header">
+        <h3>Causacion de Intereses de Cartera</h3>
     </div>
-    <div>
-        <label>Linea de Credito (opcional)</label>
-        <SfDropDownList TValue="string" TItem="CreditLineOption" @bind-Value="_selectedCreditLine"
-                        DataSource="_creditLines" CssClass="e-small" Width="250px" AllowFiltering="true">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-</div>
 
-<ProcessExecutor TPreview="AccrualPreviewLine" TResult="AccrualResult"
-                 GetPreviewUrl="GetPreviewUrl"
-                 GetExecuteUrl="@(() => "/api/lending/accruals")"
-                 GetRequestBody="GetRequestBody">
-    <PreviewColumns>
-        <GridColumns>
-            <GridColumn Field="PortfolioNumber" HeaderText="No. Obligacion" Width="140" />
-            <GridColumn Field="PersonName" HeaderText="Asociado" Width="250" />
-            <GridColumn Field="CreditLine" HeaderText="Linea" Width="180" />
-            <GridColumn Field="Balance" HeaderText="Saldo" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Rate" HeaderText="Tasa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Days" HeaderText="Dias" Width="80" TextAlign="TextAlign.Center" />
-            <GridColumn Field="ProjectedInterest" HeaderText="Interes Proyectado" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="ProjectedDefault" HeaderText="Interes Mora" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-        </GridColumns>
-    </PreviewColumns>
-    <ResultTemplate>
-        <div style="display:flex;gap:24px;flex-wrap:wrap;">
-            <div class="info-card"><span class="label">Obligaciones Procesadas</span><span>@context.PortfoliosProcessed</span></div>
-            <div class="info-card"><span class="label">Total Intereses</span><span>@context.TotalInterest.ToString("N2")</span></div>
-            <div class="info-card"><span class="label">Total Mora</span><span>@context.TotalDefaultInterest.ToString("N2")</span></div>
-            <div class="info-card"><span class="label">Fecha Causacion</span><span>@context.AccrualDate</span></div>
+    <!-- Parameters -->
+    <div class="toolbar">
+        <div>
+            <label>Fecha de Causacion</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_accrualDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
         </div>
-    </ResultTemplate>
-</ProcessExecutor>
+        <div>
+            <label>Linea de Credito (opcional)</label>
+            <SfDropDownList TValue="string" TItem="CreditLineOption" @bind-Value="_selectedCreditLine"
+                            DataSource="_creditLines" CssClass="e-small" Width="250px" AllowFiltering="true">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+    </div>
+
+    <ProcessExecutor TPreview="AccrualPreviewLine" TResult="AccrualResult"
+                     GetPreviewUrl="GetPreviewUrl"
+                     GetExecuteUrl="@(() => "/api/lending/accruals")"
+                     GetRequestBody="GetRequestBody">
+        <PreviewColumns>
+            <GridColumns>
+                <GridColumn Field="PortfolioNumber" HeaderText="No. Obligacion" Width="140" />
+                <GridColumn Field="PersonName" HeaderText="Asociado" Width="250" />
+                <GridColumn Field="CreditLine" HeaderText="Linea" Width="180" />
+                <GridColumn Field="Balance" HeaderText="Saldo" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Rate" HeaderText="Tasa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Days" HeaderText="Dias" Width="80" TextAlign="TextAlign.Center" />
+                <GridColumn Field="ProjectedInterest" HeaderText="Interes Proyectado" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="ProjectedDefault" HeaderText="Interes Mora" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+        </PreviewColumns>
+        <ResultTemplate>
+            <div class="rejilla-tarjetas">
+                <div class="info-card"><span class="label">Obligaciones Procesadas</span><span>@context.PortfoliosProcessed</span></div>
+                <div class="info-card"><span class="label">Total Intereses</span><span>@context.TotalInterest.ToString("N2")</span></div>
+                <div class="info-card"><span class="label">Total Mora</span><span>@context.TotalDefaultInterest.ToString("N2")</span></div>
+                <div class="info-card"><span class="label">Fecha Causacion</span><span>@context.AccrualDate</span></div>
+            </div>
+        </ResultTemplate>
+    </ProcessExecutor>
+</div>
 
 @code {
     private DateTime? _accrualDate = DateTime.Today;
@@ -119,8 +121,3 @@
 
     private record CreditLineOption(string Value, string Name);
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-</style>

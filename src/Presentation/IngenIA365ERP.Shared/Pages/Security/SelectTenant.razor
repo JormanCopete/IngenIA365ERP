@@ -18,33 +18,31 @@
 
 <PageTitle>Selecciona tu empresa — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+<div class="auth-card" style="max-width: 520px; margin: calc(var(--gap-xl) * 1.5) auto;">
     <h1>Selecciona tu empresa</h1>
     <p>Estás vinculado a varias cooperativas. Elige con cuál vas a trabajar ahora.</p>
 
     @if (_tenants is null || _tenants.Count == 0)
     {
-        <p style="margin-top: 16px; color: var(--texto-secundario);">
+        <p class="muted" style="margin-top: var(--pad-lg);">
             No hay empresas para elegir. Vuelve a iniciar sesión.
         </p>
         <NavLink href="/security/login">Volver al inicio</NavLink>
     }
     else
     {
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
+        <div class="lista-empresas">
             @foreach (var t in _tenants)
             {
                 <button
                     type="button"
+                    class="empresa-opcion"
                     @onclick="() => SelectAsync(t.TenantPublicId)"
-                    disabled="@_busy"
-                    style="padding: 16px; text-align: left; border: 1px solid var(--borde);
-                           border-radius: 8px; background: var(--superficie-1); cursor: pointer;">
+                    disabled="@_busy">
                     <strong>@t.TenantName</strong>
                     @if (t.IsTenantAdmin)
                     {
-                        <span style="margin-left: 8px; padding: 2px 8px; background: var(--info-fondo);
-                                     color: var(--info-texto); border-radius: 4px; font-size: 12px;">Admin</span>
+                        <span class="pastilla pastilla-info">Admin</span>
                     }
                 </button>
             }
@@ -53,7 +51,7 @@
 
     @if (!string.IsNullOrEmpty(_error))
     {
-        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
     }
 </div>
 

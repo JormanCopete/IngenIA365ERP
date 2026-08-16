@@ -7,9 +7,10 @@
 
 <PageTitle>Cartera de Creditos - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+<div class="pagina">
+<div class="page-header">
     <h3>Cartera de Creditos</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox @bind-Value="_searchTerm" Placeholder="Buscar por cedula o numero credito" Width="250px"
                    CssClass="e-small" />
         <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
@@ -49,7 +50,7 @@
                         _ => "var(--riesgo-a-txt)"
                     };
                 }
-                <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
+                <span class="dias-mora" style="color:@color">@row?.DaysOverdue</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(PortfolioRow.Category)" HeaderText="Cat." Width="60" TextAlign="TextAlign.Center">
@@ -66,12 +67,13 @@
                         _ => "var(--riesgo-nd)"
                     };
                 }
-                <span style="background:@catColor;color:var(--acento-texto);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Category</span>
+                <span class="badge badge-categoria" style="background:@catColor">@row?.Category</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(PortfolioRow.StatusText)" HeaderText="Estado" Width="120" />
     </GridColumns>
 </SfGrid>
+</div>
 
 @code {
     private List<PortfolioRow> _portfolios = [];

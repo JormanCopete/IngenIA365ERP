@@ -7,49 +7,51 @@
 
 <PageTitle>Tarjetas Debito - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Tarjetas Debito</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Emitir Tarjeta</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tarjetas Debito</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Emitir Tarjeta</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="DebitCardItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="PersonName" HeaderText="Titular" Width="220" />
-        <GridColumn Field="MaskedCardNumber" HeaderText="Numero Tarjeta" Width="180" />
-        <GridColumn Field="AccountNumber" HeaderText="Cuenta Vinculada" Width="150" />
-        <GridColumn Field="Balance" HeaderText="Saldo" Width="140" Format="N0" TextAlign="TextAlign.Right" />
-        <GridColumn Field="StatusText" HeaderText="Estado" Width="140">
-            <Template>
-                @{
-                    var item = context as DebitCardItem;
-                    var badgeClass = item?.Status switch
-                    {
-                        "A" => "e-badge e-badge-success",
-                        "B" => "e-badge e-badge-warning",
-                        "D" => "e-badge e-badge-danger",
-                        _ => "e-badge e-badge-info"
-                    };
-                    <span class="@badgeClass">@item?.StatusText</span>
-                }
-            </Template>
-        </GridColumn>
-        <GridColumn HeaderText="Acciones" Width="120" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as DebitCardItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye"
-                        OnClick="@(() => Navigation.NavigateTo($"/debito/tarjetas/{item!.PublicId}"))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="DebitCardItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="PersonName" HeaderText="Titular" Width="220" />
+            <GridColumn Field="MaskedCardNumber" HeaderText="Numero Tarjeta" Width="180" />
+            <GridColumn Field="AccountNumber" HeaderText="Cuenta Vinculada" Width="150" />
+            <GridColumn Field="Balance" HeaderText="Saldo" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="140">
+                <Template>
+                    @{
+                        var item = context as DebitCardItem;
+                        var badgeClass = item?.Status switch
+                        {
+                            "A" => "e-badge e-badge-success",
+                            "B" => "e-badge e-badge-warning",
+                            "D" => "e-badge e-badge-danger",
+                            _ => "e-badge e-badge-info"
+                        };
+                        <span class="@badgeClass">@item?.StatusText</span>
+                    }
+                </Template>
+            </GridColumn>
+            <GridColumn HeaderText="Acciones" Width="120" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as DebitCardItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye"
+                            OnClick="@(() => Navigation.NavigateTo($"/debito/tarjetas/{item!.PublicId}"))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="Emitir Nueva Tarjeta" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div style="padding:var(--pad-md);display:flex;flex-direction:column;gap:var(--pad-lg);">
                 <div>
                     <label>Persona (PublicId) *</label>
                     <SfTextBox @bind-Value="_model.PersonPublicId" Placeholder="GUID de la persona" />

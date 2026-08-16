@@ -7,91 +7,93 @@
 
 <PageTitle>Balance General - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Balance General</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
-        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Balance General</h3>
+        <div>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+            <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+        </div>
     </div>
+
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Ano</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Mes</label>
+            <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Sucursal</label>
+            <SfDropDownList TValue="string" TItem="BranchOption" @bind-Value="_branch" DataSource="_branches" CssClass="e-small" Width="200px" Placeholder="Todas">
+                <DropDownListFieldSettings Text="Name" Value="Code" />
+            </SfDropDownList>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
+
+    @if (_data is not null && _data.Count > 0)
+    {
+        <!-- Summary Cards -->
+        <div class="rejilla-tarjetas">
+            <div class="info-card">
+                <span class="label">Total Activos</span>
+                <span style="color:var(--exito-texto);">@_data.Where(d => d.Group == "Activos").Sum(d => d.Balance).ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Total Pasivos</span>
+                <span style="color:var(--peligro-texto);">@_data.Where(d => d.Group == "Pasivos").Sum(d => d.Balance).ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Patrimonio</span>
+                <span style="color:var(--info-texto);">@_data.Where(d => d.Group == "Patrimonio").Sum(d => d.Balance).ToString("N2")</span>
+            </div>
+        </div>
+
+        <SfGrid @ref="_grid" TValue="BalanceLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
+                AllowGrouping="true" AllowExcelExport="true">
+            <GridGroupSettings Columns="@(new[] { "Group" })" />
+            <GridPageSettings PageSize="50" />
+            <GridColumns>
+                <GridColumn Field="Group" HeaderText="Grupo" Width="140" />
+                <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
+                <GridColumn Field="AccountName" HeaderText="Nombre" Width="300" />
+                <GridColumn Field="Balance" HeaderText="Saldo" Width="180" Format="N2" TextAlign="TextAlign.Right">
+                    <Template>
+                        @{
+                            var line = context as BalanceLine;
+                            var color = line?.Balance >= 0 ? "" : "color:var(--peligro-texto);";
+                        }
+                        <span style="@color">@line?.Balance.ToString("N2")</span>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="Balance" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+    }
+    else if (!_loading && _data is not null)
+    {
+        <p class="texto-tenue">No se encontraron datos para el periodo seleccionado.</p>
+    }
 </div>
-
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Ano</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Mes</label>
-        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Sucursal</label>
-        <SfDropDownList TValue="string" TItem="BranchOption" @bind-Value="_branch" DataSource="_branches" CssClass="e-small" Width="200px" Placeholder="Todas">
-            <DropDownListFieldSettings Text="Name" Value="Code" />
-        </SfDropDownList>
-    </div>
-</div>
-
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
-}
-
-@if (_data is not null && _data.Count > 0)
-{
-    <!-- Summary Cards -->
-    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="info-card">
-            <span class="label">Total Activos</span>
-            <span style="color:var(--exito-texto);">@_data.Where(d => d.Group == "Activos").Sum(d => d.Balance).ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Total Pasivos</span>
-            <span style="color:var(--peligro-texto);">@_data.Where(d => d.Group == "Pasivos").Sum(d => d.Balance).ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Patrimonio</span>
-            <span style="color:var(--info-texto);">@_data.Where(d => d.Group == "Patrimonio").Sum(d => d.Balance).ToString("N2")</span>
-        </div>
-    </div>
-
-    <SfGrid @ref="_grid" TValue="BalanceLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
-            AllowGrouping="true" AllowExcelExport="true">
-        <GridGroupSettings Columns="@(new[] { "Group" })" />
-        <GridPageSettings PageSize="50" />
-        <GridColumns>
-            <GridColumn Field="Group" HeaderText="Grupo" Width="140" />
-            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
-            <GridColumn Field="AccountName" HeaderText="Nombre" Width="300" />
-            <GridColumn Field="Balance" HeaderText="Saldo" Width="180" Format="N2" TextAlign="TextAlign.Right">
-                <Template>
-                    @{
-                        var line = context as BalanceLine;
-                        var color = line?.Balance >= 0 ? "" : "color:var(--peligro-texto);";
-                    }
-                    <span style="@color">@line?.Balance.ToString("N2")</span>
-                </Template>
-            </GridColumn>
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="Balance" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-}
-else if (!_loading && _data is not null)
-{
-    <p style="color:var(--texto-tenue);">No se encontraron datos para el periodo seleccionado.</p>
-}
 
 @code {
     private SfGrid<BalanceLine>? _grid;
@@ -169,8 +171,3 @@ else if (!_loading && _data is not null)
     private record MonthOption(int Value, string Name);
     private record BranchOption(string Code, string Name);
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
-</style>

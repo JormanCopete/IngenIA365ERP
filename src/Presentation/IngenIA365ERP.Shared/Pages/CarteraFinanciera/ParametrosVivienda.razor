@@ -36,25 +36,25 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfTextBox @bind-Value="_model.PersonCode" Placeholder="Codigo Persona" FloatLabelType="FloatLabelType.Always" />
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Linea de Credito" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="long" @bind-Value="_model.PortfolioNumber" Placeholder="No. Cartera" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.HousingClass" Placeholder="Clase Vivienda" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.HousingType" Placeholder="Tipo Vivienda" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfTextBox @bind-Value="_model.SocialInterest" Placeholder="Interes Social" FloatLabelType="FloatLabelType.Always" />
                     <SfTextBox @bind-Value="_model.HasSubsidy" Placeholder="Tiene Subsidio" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.NetworkEntity" Placeholder="Entidad Red" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="long" @bind-Value="_model.NetworkValue" Placeholder="Valor Red" Format="N0" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.DisbursementType" Placeholder="Tipo Desembolso" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.CurrencyType" Placeholder="Tipo Moneda" FloatLabelType="FloatLabelType.Always" />
                 </div>

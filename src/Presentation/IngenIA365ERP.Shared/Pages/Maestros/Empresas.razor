@@ -7,9 +7,9 @@
 
 <PageTitle>Empresas - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Empresas</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar por nombre o NIT..." @bind-Value="_search" Width="280px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
         <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Empresa</SfButton>
@@ -44,7 +44,7 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                <div class="rejilla-campos" style="padding:var(--pad-md);">
                     <div>
                         <label>NIT / Documento <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT"
@@ -56,18 +56,18 @@
                         <SfTextBox @bind-Value="_model.TaxIdCheckDigit" Placeholder="Digito"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
                     </div>
-                    <div style="grid-column:span 2;">
+                    <div class="campo-ancho">
                         <label>Nombre / Razon Social <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre completo de la empresa"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
-                    <div style="grid-column:span 2;">
+                    <div class="campo-ancho">
                         <label>Nombre Corto</label>
                         <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre comercial"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "60" } })" />
                     </div>
-                    <div style="grid-column:span 2;">
+                    <div class="campo-ancho">
                         <label>Direccion</label>
                         <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
@@ -82,7 +82,7 @@
                         <SfTextBox @bind-Value="_model.City" Placeholder="Ciudad"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                     </div>
-                    <div style="grid-column:span 2;">
+                    <div class="campo-ancho">
                         <label>Departamento</label>
                         <SfTextBox @bind-Value="_model.Department" Placeholder="Departamento"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
