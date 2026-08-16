@@ -1,0 +1,293 @@
+@page "/administracion/promociones"
+@using System.ComponentModel.DataAnnotations
+@using IngenIA365ERP.Shared.Services.Security
+@using Microsoft.AspNetCore.Components.Forms
+@inject PromocionesClient ClientePromos
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>Contenido promocional — IngenIA365ERP</PageTitle>
+
+<div class="promos">
+    <header class="promos-encabezado">
+        <div>
+            <h2>Contenido promocional</h2>
+            <p class="texto-apoyo">
+                Se muestra en la pantalla de inicio de sesión, antes de entrar.
+                Cualquiera puede verlo: no publiques información reservada.
+            </p>
+        </div>
+        <button class="boton-principal" type="button" @onclick="Nueva">Nueva pieza</button>
+    </header>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_error ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    @if (_edicion is not null)
+    {
+        <section class="tarjeta editor">
+            <h3>@(_edicion.PublicId is null ? "Nueva pieza" : "Editar pieza")</h3>
+
+            <EditForm Model="_edicion" OnValidSubmit="GuardarAsync" FormName="promo">
+                <DataAnnotationsValidator />
+
+                <label for="p-titulo">Título</label>
+                <InputText id="p-titulo" @bind-Value="_edicion.Titulo" />
+                <ValidationMessage For="() => _edicion.Titulo" />
+
+                <label for="p-texto">Texto</label>
+                <InputTextArea id="p-texto" rows="3" @bind-Value="_edicion.Texto" />
+                <ValidationMessage For="() => _edicion.Texto" />
+
+                <div class="fila">
+                    <div>
+                        <label for="p-textoenlace">Texto del botón</label>
+                        <InputText id="p-textoenlace" @bind-Value="_edicion.TextoEnlace" />
+                    </div>
+                    <div>
+                        <label for="p-enlace">Enlace (https o ruta interna)</label>
+                        <InputText id="p-enlace" @bind-Value="_edicion.Enlace" />
+                        <ValidationMessage For="() => _edicion.Enlace" />
+                    </div>
+                </div>
+
+                <label for="p-imagen">Imagen (máximo @(PromocionesClient.MaximoBytesImagen / 1024) KB)</label>
+                <InputFile id="p-imagen" OnChange="CargarImagenAsync" accept="image/png,image/jpeg,image/webp,image/avif" />
+                @if (_edicion.ImagenBase64 is { Length: > 0 })
+                {
+                    <p class="texto-apoyo">Imagen cargada (@(_edicion.ImagenBase64.Length * 3 / 4 / 1024) KB).</p>
+                }
+
+                <label for="p-alt">Descripción de la imagen</label>
+                <InputText id="p-alt" @bind-Value="_edicion.ImagenTextoAlternativo" />
+                <p class="texto-apoyo">
+                    Se lee en voz alta a quien usa lector de pantalla. Obligatoria si hay imagen.
+                </p>
+
+                <div class="fila">
+                    <div>
+                        <label for="p-orden">Orden</label>
+                        <InputNumber id="p-orden" @bind-Value="_edicion.Orden" />
+                    </div>
+                    <div>
+                        <label for="p-desde">Vigente desde</label>
+                        <InputDate id="p-desde" @bind-Value="_edicion.VigenteDesde" />
+                    </div>
+                    <div>
+                        <label for="p-hasta">Vigente hasta</label>
+                        <InputDate id="p-hasta" @bind-Value="_edicion.VigenteHasta" />
+                    </div>
+                </div>
+
+                <label class="casilla">
+                    <InputCheckbox @bind-Value="_edicion.Publicado" />
+                    <span>Publicada</span>
+                </label>
+
+                <div class="acciones">
+                    <button class="boton-principal" type="submit" disabled="@_ocupado">
+                        @(_ocupado ? "Guardando…" : "Guardar")
+                    </button>
+                    <button class="boton-secundario" type="button" @onclick="@(() => { _edicion = null; })">Cancelar</button>
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    <section class="tarjeta">
+        @if (_piezas.Count == 0)
+        {
+            <p class="texto-apoyo">Todavía no hay piezas. El login se muestra sin panel promocional.</p>
+        }
+        else
+        {
+            <table class="tabla-promos">
+                <thead>
+                    <tr>
+                        <th scope="col">Orden</th>
+                        <th scope="col">Título</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Vigencia</th>
+                        <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _piezas)
+                    {
+                        <tr @key="p.PublicId">
+                            <td>@p.Orden</td>
+                            <td>
+                                @p.Titulo
+                                @if (p.TieneImagen)
+                                {
+                                    <span class="pastilla pastilla-tenue">con imagen</span>
+                                }
+                            </td>
+                            <td>
+                                @* Estado con texto además del color: quien no distingue
+                                   bien los colores no puede leer una pastilla sola. *@
+                                <span class="pastilla @(p.Publicado ? "pastilla-exito" : "pastilla-tenue")">
+                                    @(p.Publicado ? "Publicada" : "Borrador")
+                                </span>
+                            </td>
+                            <td>@Vigencia(p)</td>
+                            <td class="celda-acciones">
+                                <button class="boton-secundario" type="button" @onclick="() => Editar(p)">Editar</button>
+                                <button class="boton-peligro" type="button" @onclick="() => EliminarAsync(p)">Eliminar</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
+
+@code {
+    private List<PromoAdmin> _piezas = [];
+    private Edicion? _edicion;
+    private string? _mensaje;
+    private bool _error;
+    private bool _ocupado;
+
+    protected override async Task OnInitializedAsync() => await RecargarAsync();
+
+    private async Task RecargarAsync()
+    {
+        var r = await ClientePromos.ListarAsync();
+        if (r.IsSuccess && r.Value is not null)
+        {
+            _piezas = [.. r.Value];
+        }
+        else
+        {
+            _error = true;
+            _mensaje = r.ErrorMessage ?? "No se pudo cargar el contenido promocional.";
+        }
+    }
+
+    private void Nueva() => _edicion = new Edicion { Orden = _piezas.Count + 1 };
+
+    private void Editar(PromoAdmin p) => _edicion = new Edicion
+    {
+        PublicId = p.PublicId,
+        Titulo = p.Titulo,
+        Texto = p.Texto,
+        TextoEnlace = p.TextoEnlace,
+        Enlace = p.Enlace,
+        ImagenTextoAlternativo = p.ImagenTextoAlternativo,
+        Orden = p.Orden,
+        Publicado = p.Publicado,
+        VigenteDesde = p.VigenteDesde,
+        VigenteHasta = p.VigenteHasta,
+        // ImagenBase64 queda nulo a propósito: nulo significa "no tocar la
+        // imagen". Si se enviara vacío, editar el título borraría la imagen.
+    };
+
+    private async Task CargarImagenAsync(InputFileChangeEventArgs e)
+    {
+        var archivo = e.File;
+        var tope = PromocionesClient.MaximoBytesImagen;
+
+        // Se corta acá y no sólo en el servidor: subir 10 MB para que los
+        // rechacen es gastar la conexión del usuario sin necesidad.
+        if (archivo.Size > tope)
+        {
+            _error = true;
+            _mensaje = $"La imagen pesa {archivo.Size / 1024} KB y el máximo es {tope / 1024} KB.";
+            return;
+        }
+
+        using var flujo = archivo.OpenReadStream(tope);
+        using var memoria = new MemoryStream();
+        await flujo.CopyToAsync(memoria);
+
+        _edicion!.ImagenBase64 = Convert.ToBase64String(memoria.ToArray());
+        _edicion.ImagenTipoMime = archivo.ContentType;
+        _error = false;
+        _mensaje = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _ocupado = true;
+        try
+        {
+            var r = await ClientePromos.GuardarAsync(new
+            {
+                publicId = _edicion!.PublicId,
+                titulo = _edicion.Titulo,
+                texto = _edicion.Texto,
+                textoEnlace = _edicion.TextoEnlace,
+                enlace = _edicion.Enlace,
+                imagenBase64 = _edicion.ImagenBase64,
+                imagenTipoMime = _edicion.ImagenTipoMime,
+                imagenTextoAlternativo = _edicion.ImagenTextoAlternativo,
+                orden = _edicion.Orden,
+                publicado = _edicion.Publicado,
+                vigenteDesde = _edicion.VigenteDesde,
+                vigenteHasta = _edicion.VigenteHasta,
+            });
+
+            _error = !r.IsSuccess;
+            _mensaje = r.IsSuccess ? "Pieza guardada." : r.ErrorMessage;
+            if (r.IsSuccess)
+            {
+                _edicion = null;
+                await RecargarAsync();
+            }
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private async Task EliminarAsync(PromoAdmin p)
+    {
+        var r = await ClientePromos.EliminarAsync(p.PublicId);
+        _error = !r.IsSuccess;
+        _mensaje = r.IsSuccess ? $"Se eliminó «{p.Titulo}»." : r.ErrorMessage;
+        if (r.IsSuccess) await RecargarAsync();
+    }
+
+    private static string Vigencia(PromoAdmin p) => (p.VigenteDesde, p.VigenteHasta) switch
+    {
+        (null, null) => "Sin límite",
+        ({ } d, null) => $"Desde {d:dd/MM/yyyy}",
+        (null, { } h) => $"Hasta {h:dd/MM/yyyy}",
+        ({ } d, { } h) => $"{d:dd/MM/yyyy} – {h:dd/MM/yyyy}",
+    };
+
+    public sealed class Edicion
+    {
+        public Guid? PublicId { get; set; }
+
+        [Required(ErrorMessage = "El título es obligatorio.")]
+        [MaxLength(120, ErrorMessage = "Máximo 120 caracteres.")]
+        public string Titulo { get; set; } = string.Empty;
+
+        [MaxLength(400, ErrorMessage = "Máximo 400 caracteres.")]
+        public string? Texto { get; set; }
+
+        [MaxLength(60)]
+        public string? TextoEnlace { get; set; }
+
+        [MaxLength(500)]
+        [RegularExpression(@"^$|^https://.+|^/(?!/).*",
+            ErrorMessage = "Usa https:// o una ruta interna que empiece por /.")]
+        public string? Enlace { get; set; }
+
+        public string? ImagenBase64 { get; set; }
+        public string? ImagenTipoMime { get; set; }
+
+        [MaxLength(200)]
+        public string? ImagenTextoAlternativo { get; set; }
+
+        public int Orden { get; set; }
+        public bool Publicado { get; set; }
+        public DateTime? VigenteDesde { get; set; }
+        public DateTime? VigenteHasta { get; set; }
+    }
+}

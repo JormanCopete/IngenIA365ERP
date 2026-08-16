@@ -43,5 +43,8 @@ public interface IAdminDbContext
     // --- Preferencias de interfaz por usuario ---
     DbSet<UserSetting> UserSettings { get; }
 
+    // --- Contenido promocional de la pantalla de inicio de sesion ---
+    DbSet<PromoContenido> PromoContenidos { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

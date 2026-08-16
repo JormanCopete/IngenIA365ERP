@@ -71,6 +71,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>
 // y la página crasheaba el runtime WASM al inyectarlo.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

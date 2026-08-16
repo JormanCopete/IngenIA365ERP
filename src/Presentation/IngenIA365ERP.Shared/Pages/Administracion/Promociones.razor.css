@@ -1,0 +1,202 @@
+.promos {
+    max-width: 1100px;
+}
+
+.promos-encabezado {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--gap-lg);
+    flex-wrap: wrap;
+    margin-bottom: var(--gap-lg);
+}
+
+.promos-encabezado h2 {
+    margin: 0 0 var(--gap-xs);
+}
+
+.texto-apoyo {
+    margin: 0;
+    color: var(--texto-secundario);
+    font-size: var(--texto-sm);
+}
+
+.editor {
+    margin-bottom: var(--gap-lg);
+}
+
+.editor h3 {
+    margin: 0 0 var(--gap-md);
+}
+
+.editor label {
+    display: block;
+    margin-top: var(--gap-md);
+    margin-bottom: var(--gap-xs);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+    color: var(--texto-secundario);
+}
+
+.editor input[type="text"],
+.editor input[type="number"],
+.editor input[type="date"],
+.editor textarea {
+    width: 100%;
+    padding: 0 var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    font: inherit;
+}
+
+.editor input[type="text"],
+.editor input[type="number"],
+.editor input[type="date"] {
+    height: var(--alto-control);
+}
+
+.editor textarea {
+    padding: var(--pad-sm) var(--pad-md);
+    resize: vertical;
+}
+
+/* Rejilla que se reacomoda sola: con "texto muy grande" tres columnas fijas
+   dejarían las etiquetas cortadas. */
+.fila {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--gap-md);
+}
+
+.casilla {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin-top: var(--gap-lg);
+}
+
+.casilla input {
+    accent-color: var(--acento);
+}
+
+.acciones {
+    display: flex;
+    gap: var(--gap-sm);
+    margin-top: var(--gap-lg);
+}
+
+.boton-principal,
+.boton-secundario,
+.boton-peligro {
+    height: var(--alto-control);
+    padding: 0 var(--pad-lg);
+    border-radius: var(--radio-sm);
+    border: 1px solid transparent;
+    font: inherit;
+    font-weight: var(--peso-medio);
+    cursor: pointer;
+    transition: background var(--dur-rapida) var(--curva);
+}
+
+.boton-principal {
+    background: var(--acento);
+    color: var(--acento-texto);
+}
+
+.boton-principal:hover:not(:disabled) {
+    background: var(--acento-hover);
+}
+
+.boton-principal:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.boton-secundario {
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    border-color: var(--borde-fuerte);
+}
+
+.boton-secundario:hover {
+    background: var(--acento-suave);
+}
+
+.boton-peligro {
+    background: var(--superficie-1);
+    color: var(--peligro-texto);
+    border-color: var(--peligro);
+}
+
+.boton-peligro:hover {
+    background: var(--peligro-fondo);
+}
+
+.tabla-promos {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabla-promos th,
+.tabla-promos td {
+    text-align: left;
+    padding: var(--pad-md);
+    border-bottom: 1px solid var(--borde);
+    vertical-align: top;
+}
+
+.tabla-promos th {
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+    font-weight: var(--peso-medio);
+}
+
+.celda-acciones {
+    display: flex;
+    gap: var(--gap-sm);
+    justify-content: flex-end;
+}
+
+.pastilla-exito {
+    background: var(--exito-fondo);
+    color: var(--exito-texto);
+}
+
+.pastilla-tenue {
+    background: var(--superficie-0);
+    color: var(--texto-secundario);
+    border: 1px solid var(--borde);
+    margin-left: var(--gap-sm);
+}
+
+.aviso {
+    padding: var(--pad-md);
+    border-radius: var(--radio);
+    margin-bottom: var(--gap-lg);
+    font-size: var(--texto-sm);
+}
+
+.aviso-ok {
+    background: var(--exito-fondo);
+    color: var(--exito-texto);
+    border: 1px solid var(--exito);
+}
+
+.aviso-error {
+    background: var(--peligro-fondo);
+    color: var(--peligro-texto);
+    border: 1px solid var(--peligro);
+}
+
+/* Visible para lectores de pantalla, no en pantalla. La columna de acciones
+   necesita encabezado aunque no se dibuje. */
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}

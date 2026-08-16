@@ -35,11 +35,21 @@ $proveedorPrevio = $env:Database__Provider
 foreach ($t in $targets) {
     Write-Host "==> [$($t.Label)] dotnet ef migrations add $Name --context $contextClass" -ForegroundColor Cyan
     $env:Database__Provider = $t.Provider
+
+    # Windows PowerShell 5.1 convierte CUALQUIER escritura a stderr de un
+    # ejecutable nativo en error terminante cuando ErrorActionPreference es
+    # 'Stop'. Basta una advertencia de NuGet para abortar una migracion que en
+    # realidad iba a funcionar. El exito se juzga por $LASTEXITCODE, que es lo
+    # unico que dotnet-ef promete.
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     dotnet ef migrations add $Name `
         --context $contextClass `
         --project $t.Project `
         --startup-project $startup `
         --output-dir $Context
+    $ErrorActionPreference = $previo
+
     if ($LASTEXITCODE -ne 0) {
         $env:Database__Provider = $proveedorPrevio
         Write-Host "FALLO en $($t.Label) — corrige y re-ejecuta. NO dejes la migracion en un solo proveedor." -ForegroundColor Red
