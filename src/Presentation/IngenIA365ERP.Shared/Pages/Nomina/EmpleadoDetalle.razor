@@ -34,7 +34,7 @@
         <span class="@statusBadge" style="font-size:14px;padding:4px 12px;">@statusText</span>
         @if (_employee.Status == -1 && _employee.TerminationDate.HasValue)
         {
-            <span style="margin-left:8px;color:#888;font-size:13px;">
+            <span style="margin-left:8px;color:var(--texto-tenue);font-size:13px;">
                 Terminado el @_employee.TerminationDate.Value.ToString("dd/MM/yyyy")
                 @if (!string.IsNullOrEmpty(_employee.TerminationCause))
                 {
@@ -53,7 +53,7 @@
 }
 else if (_employee is null)
 {
-    <div style="text-align:center;padding:60px;color:#888;">
+    <div style="text-align:center;padding:60px;color:var(--texto-tenue);">
         <span class="e-icons e-people" style="font-size:48px;display:block;margin-bottom:12px;"></span>
         <p>Empleado no encontrado.</p>
     </div>
@@ -98,7 +98,7 @@ else
                             <SfTextBox Value="@_employee.Address" Readonly="true" CssClass="e-disabled" />
                         </div>
                     </div>
-                    <div style="padding:0 20px 12px;color:#888;font-size:12px;">
+                    <div style="padding:0 20px 12px;color:var(--texto-tenue);font-size:12px;">
                         Los datos personales se administran desde el modulo
                         <a href="/maestros/personas">Maestros - Personas</a>. Aqui son de solo lectura.
                     </div>
@@ -113,13 +113,13 @@ else
                 <ContentTemplate>
                     <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">
                         <div>
-                            <label>Salario Base <span style="color:red">*</span></label>
+                            <label>Salario Base <span style="color:var(--peligro-texto)">*</span></label>
                             <SfNumericTextBox TValue="decimal" @bind-Value="_labor.BaseSalary"
                                               Format="N2" Min="0" Step="50000m"
                                               ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => MarkChanged())" />
                         </div>
                         <div>
-                            <label>Tipo de Contrato <span style="color:red">*</span></label>
+                            <label>Tipo de Contrato <span style="color:var(--peligro-texto)">*</span></label>
                             <SfDropDownList TValue="int" TItem="ContractTypeOption"
                                             @bind-Value="_labor.ContractType"
                                             DataSource="@_contractTypes" Placeholder="Seleccione">
@@ -224,7 +224,7 @@ else
                         </SfGrid>
                         @if (_employee.SalaryHistory.Count == 0)
                         {
-                            <div style="text-align:center;padding:30px;color:#888;">Sin registros de cambios salariales.</div>
+                            <div style="text-align:center;padding:30px;color:var(--texto-tenue);">Sin registros de cambios salariales.</div>
                         }
                     </div>
                 </ContentTemplate>
@@ -249,7 +249,7 @@ else
                         </SfGrid>
                         @if (_employee.RecentEntries.Count == 0)
                         {
-                            <div style="text-align:center;padding:30px;color:#888;">Sin movimientos recientes.</div>
+                            <div style="text-align:center;padding:30px;color:var(--texto-tenue);">Sin movimientos recientes.</div>
                         }
                     </div>
                 </ContentTemplate>
@@ -269,7 +269,7 @@ else
                 </p>
                 <div style="display:flex;flex-direction:column;gap:12px;">
                     <div>
-                        <label>Fecha de Terminacion <span style="color:red">*</span></label>
+                        <label>Fecha de Terminacion <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />
                     </div>
                     <div>

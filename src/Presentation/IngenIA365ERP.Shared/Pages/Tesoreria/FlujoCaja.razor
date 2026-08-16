@@ -31,15 +31,15 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
         <div class="kpi-card">
             <span class="kpi-label">Total Ingresos</span>
-            <span class="kpi-value" style="color:#4caf50;">@_totalIncome.ToString("N0")</span>
+            <span class="kpi-value" style="color:var(--exito-texto);">@_totalIncome.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Total Egresos</span>
-            <span class="kpi-value" style="color:#f44336;">@_totalExpense.ToString("N0")</span>
+            <span class="kpi-value" style="color:var(--peligro-texto);">@_totalExpense.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Flujo Neto</span>
-            <span class="kpi-value" style="color:@(_netFlow >= 0 ? "#4caf50" : "#f44336");">@_netFlow.ToString("N0")</span>
+            <span class="kpi-value" style="color:@(_netFlow >= 0 ? "var(--exito)" : "var(--peligro)");">@_netFlow.ToString("N0")</span>
         </div>
     </div>
 
@@ -50,11 +50,11 @@
         <ChartPrimaryYAxis LabelFormat="N0" />
         <ChartSeriesCollection>
             <ChartSeries DataSource="@_items" XName="Period" YName="TotalIncome" Name="Ingresos"
-                Type="ChartSeriesType.StackingColumn" Fill="#4caf50" />
+                Type="ChartSeriesType.StackingColumn" Fill="var(--exito)" />
             <ChartSeries DataSource="@_items" XName="Period" YName="TotalExpense" Name="Egresos"
-                Type="ChartSeriesType.StackingColumn" Fill="#f44336" />
+                Type="ChartSeriesType.StackingColumn" Fill="var(--peligro)" />
             <ChartSeries DataSource="@_items" XName="Period" YName="NetFlow" Name="Flujo Neto"
-                Type="ChartSeriesType.Line" Fill="#2196f3" Width="3">
+                Type="ChartSeriesType.Line" Fill="var(--info)" Width="3">
                 <ChartMarker Visible="true" Width="8" Height="8" />
             </ChartSeries>
         </ChartSeriesCollection>
@@ -72,7 +72,7 @@
                 <Template>
                     @{
                         var item = context as CashFlowItem;
-                        var color = (item?.NetFlow ?? 0) >= 0 ? "#4caf50" : "#f44336";
+                        var color = (item?.NetFlow ?? 0) >= 0 ? "var(--exito-texto)" : "var(--peligro-texto)";
                         <span style="color:@color;font-weight:600;">@item?.NetFlow.ToString("N0")</span>
                     }
                 </Template>
@@ -82,7 +82,7 @@
 }
 else
 {
-    <div style="text-align:center;padding:40px;color:#999;">
+    <div style="text-align:center;padding:40px;color:var(--texto-tenue);">
         <span class="e-icons e-chart" style="font-size:48px;"></span>
         <p>Seleccione los parametros y haga clic en Consultar para ver el flujo de caja.</p>
     </div>

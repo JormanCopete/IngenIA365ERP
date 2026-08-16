@@ -13,7 +13,7 @@
     @if (_state == ProcessState.LoadingPreview)
     {
         <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                       TrackColor="#333" ProgressColor="#00bcd4" />
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
         <p>Cargando vista previa...</p>
     }
 
@@ -32,7 +32,7 @@
     @if (_state == ProcessState.Processing)
     {
         <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                       TrackColor="#333" ProgressColor="#4caf50" />
+                       TrackColor="var(--borde)" ProgressColor="var(--exito)" />
         <p>Procesando... Por favor espere.</p>
     }
 
@@ -48,7 +48,7 @@
 
     @if (_state == ProcessState.Error)
     {
-        <div class="e-error" style="color:#f44336;padding:12px;border:1px solid #f44336;border-radius:4px;">
+        <div class="e-error" style="color:var(--peligro-texto);padding:12px;border:1px solid var(--peligro);border-radius:4px;">
             <span class="e-icons e-circle-close" style="margin-right:8px;"></span>
             @_errorMessage
         </div>

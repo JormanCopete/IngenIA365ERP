@@ -36,19 +36,19 @@ else if (_detail is not null)
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Saldo Actual</span>
-            <span class="kpi-value" style="@(_detail.CurrentBalance > 0 ? "color:#f39c12" : "color:#27ae60")">@_detail.CurrentBalance.ToString("N0")</span>
+            <span class="kpi-value" style="@(_detail.CurrentBalance > 0 ? "color:var(--alerta-texto)" : "color:var(--exito-texto)")">@_detail.CurrentBalance.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Cuotas Pagadas</span>
             <span class="kpi-value">@_detail.PaidInstallments / @_detail.TermMonths</span>
         </div>
-        <div class="kpi-card" style="@(_detail.DaysOverdue > 0 ? "border-color:#e74c3c" : "")">
+        <div class="kpi-card" style="@(_detail.DaysOverdue > 0 ? "border-color:var(--peligro)" : "")">
             <span class="kpi-label">Dias en Mora</span>
-            <span class="kpi-value" style="@(_detail.DaysOverdue > 0 ? "color:#e74c3c" : "color:#27ae60")">@_detail.DaysOverdue</span>
+            <span class="kpi-value" style="@(_detail.DaysOverdue > 0 ? "color:var(--peligro-texto)" : "color:var(--exito-texto)")">@_detail.DaysOverdue</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Clasificacion</span>
-            @{ var catColor = _detail.Category switch { "A" => "#27ae60", "B" => "#f39c12", "C" => "#e67e22", "D" => "#e74c3c", "E" => "#8b0000", _ => "#888" }; }
+            @{ var catColor = _detail.Category switch { "A" => "var(--riesgo-a-txt)", "B" => "var(--riesgo-b-txt)", "C" => "var(--riesgo-c-txt)", "D" => "var(--riesgo-d-txt)", "E" => "var(--riesgo-e-txt)", _ => "var(--riesgo-nd-txt)" }; }
             <span class="kpi-value" style="color:@catColor">@_detail.Category</span>
         </div>
         <div class="kpi-card">
@@ -65,17 +65,17 @@ else if (_detail is not null)
                 <ContentTemplate>
                     <div style="padding:16px;">
                         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:600px;">
-                            <span style="color:#888;">Numero:</span><span>@_detail.PortfolioNumber</span>
-                            <span style="color:#888;">Asociado:</span><span>@_detail.PersonName</span>
-                            <span style="color:#888;">Documento:</span><span>@_detail.IdentificationNumber</span>
-                            <span style="color:#888;">Linea de Credito:</span><span>@_detail.CreditLineName</span>
-                            <span style="color:#888;">Desembolso:</span><span>@_detail.DisbursementDate</span>
-                            <span style="color:#888;">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
-                            <span style="color:#888;">Ultimo Pago:</span><span>@(_detail.LastPaymentDate?.ToString() ?? "Sin pagos")</span>
-                            <span style="color:#888;">Periodicidad:</span><span>@GetPeriodicityText(_detail.PaymentPeriodicity)</span>
-                            <span style="color:#888;">Tipo Garantia:</span><span>@_detail.GuaranteeType</span>
-                            <span style="color:#888;">Tipo Descuento:</span><span>@_detail.DeductionType</span>
-                            <span style="color:#888;">Cuota:</span><span>@_detail.InstallmentAmount.ToString("N0")</span>
+                            <span style="color:var(--texto-tenue);">Numero:</span><span>@_detail.PortfolioNumber</span>
+                            <span style="color:var(--texto-tenue);">Asociado:</span><span>@_detail.PersonName</span>
+                            <span style="color:var(--texto-tenue);">Documento:</span><span>@_detail.IdentificationNumber</span>
+                            <span style="color:var(--texto-tenue);">Linea de Credito:</span><span>@_detail.CreditLineName</span>
+                            <span style="color:var(--texto-tenue);">Desembolso:</span><span>@_detail.DisbursementDate</span>
+                            <span style="color:var(--texto-tenue);">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
+                            <span style="color:var(--texto-tenue);">Ultimo Pago:</span><span>@(_detail.LastPaymentDate?.ToString() ?? "Sin pagos")</span>
+                            <span style="color:var(--texto-tenue);">Periodicidad:</span><span>@GetPeriodicityText(_detail.PaymentPeriodicity)</span>
+                            <span style="color:var(--texto-tenue);">Tipo Garantia:</span><span>@_detail.GuaranteeType</span>
+                            <span style="color:var(--texto-tenue);">Tipo Descuento:</span><span>@_detail.DeductionType</span>
+                            <span style="color:var(--texto-tenue);">Cuota:</span><span>@_detail.InstallmentAmount.ToString("N0")</span>
                         </div>
                     </div>
                 </ContentTemplate>
@@ -105,9 +105,9 @@ else if (_detail is not null)
                                             var inst = context as InstallmentRow;
                                             var stColor = inst?.Status switch
                                             {
-                                                "Pagada" => "color:#27ae60",
-                                                "Parcial" => "color:#f39c12",
-                                                _ => "color:#e74c3c"
+                                                "Pagada" => "color:var(--exito-texto)",
+                                                "Parcial" => "color:var(--alerta-texto)",
+                                                _ => "color:var(--peligro-texto)"
                                             };
                                         }
                                         <span style="@stColor;font-weight:bold;">@inst?.Status</span>
@@ -146,7 +146,7 @@ else if (_detail is not null)
                 <ChildContent><TabHeader Text="Garantias" IconCss="e-icons e-lock" /></ChildContent>
                 <ContentTemplate>
                     <div style="padding:16px;">
-                        <p style="color:#888;">Garantias asociadas al credito se mostraran aqui.</p>
+                        <p style="color:var(--texto-tenue);">Garantias asociadas al credito se mostraran aqui.</p>
                     </div>
                 </ContentTemplate>
             </TabItem>
@@ -156,8 +156,8 @@ else if (_detail is not null)
 
 <style>
     .kpi-card {
-        background: var(--sf-card-bg, #1e1e2e);
-        border: 1px solid #333;
+        background: var(--sf-card-bg, var(--superficie-1));
+        border: 1px solid var(--borde);
         border-radius: 8px;
         padding: 12px;
         display: flex;
@@ -165,8 +165,8 @@ else if (_detail is not null)
         align-items: center;
         text-align: center;
     }
-    .kpi-value { font-size: 22px; font-weight: bold; color: #00bcd4; }
-    .kpi-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .kpi-value { font-size: 22px; font-weight: bold; color: var(--acento); }
+    .kpi-label { font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
 </style>
 
 @code {

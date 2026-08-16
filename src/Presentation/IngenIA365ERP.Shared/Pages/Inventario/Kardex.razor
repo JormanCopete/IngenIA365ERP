@@ -63,12 +63,12 @@
 @if (_selectedProduct is not null)
 {
     <!-- Product info + stock summary -->
-    <div style="background:var(--sf-grid-header-bg, #f5f5f5);padding:16px;border-radius:4px;margin-bottom:20px;">
+    <div style="background:var(--superficie-0);padding:16px;border-radius:4px;margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
             <div>
-                <span style="font-size:12px;color:#666;">Producto seleccionado</span><br/>
+                <span style="font-size:12px;color:var(--texto-secundario);">Producto seleccionado</span><br/>
                 <strong style="font-size:16px;">@_selectedProduct.ProductCode - @_selectedProduct.Name</strong>
-                <span style="margin-left:12px;color:#888;">(@_selectedProduct.UnitOfMeasure)</span>
+                <span style="margin-left:12px;color:var(--texto-tenue);">(@_selectedProduct.UnitOfMeasure)</span>
             </div>
             <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" OnClick="ClearProduct">Cambiar producto</SfButton>
         </div>
@@ -80,13 +80,13 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
             @foreach (var ws in _stockSummary)
             {
-                <div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:16px;text-align:center;">
-                    <span style="font-size:12px;color:#666;">@ws.WarehouseName</span><br/>
-                    <strong style="font-size:22px;color:@(ws.Stock >= 0 ? "#2e7d32" : "#c62828");">@ws.Stock.ToString("N2")</strong>
-                    <br/><span style="font-size:11px;color:#999;">Costo prom: @ws.AverageCost.ToString("N2")</span>
+                <div style="background:var(--superficie-1);border:1px solid var(--borde);border-radius:6px;padding:16px;text-align:center;">
+                    <span style="font-size:12px;color:var(--texto-secundario);">@ws.WarehouseName</span><br/>
+                    <strong style="font-size:22px;color:@(ws.Stock >= 0 ? "var(--exito)" : "var(--peligro)");">@ws.Stock.ToString("N2")</strong>
+                    <br/><span style="font-size:11px;color:var(--texto-tenue);">Costo prom: @ws.AverageCost.ToString("N2")</span>
                 </div>
             }
-            <div style="background:#1565c0;color:#fff;border-radius:6px;padding:16px;text-align:center;">
+            <div style="background:var(--info);color:var(--acento-texto);border-radius:6px;padding:16px;text-align:center;">
                 <span style="font-size:12px;opacity:0.8;">Stock Total</span><br/>
                 <strong style="font-size:22px;">@_stockSummary.Sum(s => s.Stock).ToString("N2")</strong>
                 <br/><span style="font-size:11px;opacity:0.7;">Todas las bodegas</span>
@@ -117,7 +117,7 @@
 
     @if (_movements.Count == 0 && !_loading)
     {
-        <div style="text-align:center;padding:40px;color:#888;">
+        <div style="text-align:center;padding:40px;color:var(--texto-tenue);">
             <span class="e-icons e-description" style="font-size:48px;display:block;margin-bottom:12px;"></span>
             No se encontraron movimientos para los filtros seleccionados.
         </div>
@@ -125,7 +125,7 @@
 }
 else
 {
-    <div style="text-align:center;padding:60px;color:#888;">
+    <div style="text-align:center;padding:60px;color:var(--texto-tenue);">
         <span class="e-icons e-search" style="font-size:48px;display:block;margin-bottom:12px;"></span>
         <p>Busque y seleccione un producto para ver su kardex.</p>
     </div>

@@ -44,7 +44,7 @@ else if (_detail is not null)
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Interes Proyectado</span>
-            <span class="kpi-value" style="color:#27ae60;">@_detail.ProjectedInterest.ToString("N0")</span>
+            <span class="kpi-value" style="color:var(--exito-texto);">@_detail.ProjectedInterest.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Vencimiento</span>
@@ -53,7 +53,7 @@ else if (_detail is not null)
         <div class="kpi-card">
             <span class="kpi-label">Estado</span>
             @{
-                var statusColor = _detail.Status switch { "V" => "#27ae60", "E" => "#f39c12", "C" => "#e74c3c", "R" => "#3498db", _ => "#888" };
+                var statusColor = _detail.Status switch { "V" => "var(--exito-texto)", "E" => "var(--alerta-texto)", "C" => "var(--peligro-texto)", "R" => "var(--info-texto)", _ => "var(--texto-tenue)" };
             }
             <span class="kpi-value" style="color:@statusColor">@_detail.StatusText</span>
         </div>
@@ -67,13 +67,13 @@ else if (_detail is not null)
                 <ContentTemplate>
                     <div style="padding:16px;">
                         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:600px;">
-                            <span style="color:#888;">Titular:</span><span>@_detail.PersonName</span>
-                            <span style="color:#888;">Documento:</span><span>@_detail.PersonCode</span>
-                            <span style="color:#888;">No. CDT:</span><span>@_detail.CertificateNumber</span>
-                            <span style="color:#888;">Emision:</span><span>@_detail.IssueDate</span>
-                            <span style="color:#888;">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
-                            <span style="color:#888;">Tipo Renovacion:</span><span>@GetRenewalText(_detail.RenewalType)</span>
-                            <span style="color:#888;">Capitalizado:</span><span>@(_detail.IsCapitalized ? "Si" : "No")</span>
+                            <span style="color:var(--texto-tenue);">Titular:</span><span>@_detail.PersonName</span>
+                            <span style="color:var(--texto-tenue);">Documento:</span><span>@_detail.PersonCode</span>
+                            <span style="color:var(--texto-tenue);">No. CDT:</span><span>@_detail.CertificateNumber</span>
+                            <span style="color:var(--texto-tenue);">Emision:</span><span>@_detail.IssueDate</span>
+                            <span style="color:var(--texto-tenue);">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
+                            <span style="color:var(--texto-tenue);">Tipo Renovacion:</span><span>@GetRenewalText(_detail.RenewalType)</span>
+                            <span style="color:var(--texto-tenue);">Capitalizado:</span><span>@(_detail.IsCapitalized ? "Si" : "No")</span>
                         </div>
                     </div>
                 </ContentTemplate>
@@ -107,14 +107,14 @@ else if (_detail is not null)
         <Content>
             <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
                 <p>CDT #@(_detail?.CertificateNumber) por valor de <strong>@(_detail?.Amount.ToString("N0"))</strong></p>
-                <p>Interes proyectado: <strong style="color:#27ae60;">@(_detail?.ProjectedInterest.ToString("N0"))</strong></p>
+                <p>Interes proyectado: <strong style="color:var(--exito-texto);">@(_detail?.ProjectedInterest.ToString("N0"))</strong></p>
                 <div style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" @bind="_renewWithInterest" id="cbCapitalize" />
                     <label for="cbCapitalize">Capitalizar intereses (sumar al nuevo CDT)</label>
                 </div>
                 @if (_renewWithInterest && _detail is not null)
                 {
-                    <p style="color:#3498db;">Nuevo monto: <strong>@((_detail.Amount + _detail.ProjectedInterest).ToString("N0"))</strong></p>
+                    <p style="color:var(--info-texto);">Nuevo monto: <strong>@((_detail.Amount + _detail.ProjectedInterest).ToString("N0"))</strong></p>
                 }
             </div>
         </Content>
@@ -130,7 +130,7 @@ else if (_detail is not null)
     <DialogTemplates>
         <Content>
             <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
-                <p style="color:#e74c3c;">Esta accion cancelara el CDT antes de su vencimiento.</p>
+                <p style="color:var(--peligro-texto);">Esta accion cancelara el CDT antes de su vencimiento.</p>
                 <p>Se puede aplicar una penalizacion sobre los intereses acumulados.</p>
                 <label>Motivo de cancelacion</label>
                 <SfTextBox @bind-Value="_cancelReason" Placeholder="Motivo..." />

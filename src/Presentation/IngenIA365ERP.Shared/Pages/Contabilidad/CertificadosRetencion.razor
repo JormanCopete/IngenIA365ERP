@@ -23,12 +23,12 @@
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_genResult is not null)
 {
-    <div style="margin-bottom:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;">
+    <div style="margin-bottom:16px;padding:12px;border:1px solid var(--exito);border-radius:4px;">
         <p>Se generaron <b>@_genResult.CertificatesGenerated</b> certificados para el ano @_genResult.Year.</p>
         <p>Total retencion: <b>@_genResult.TotalWithholding.ToString("N2")</b></p>
     </div>
@@ -64,10 +64,10 @@
 }
 else if (!_loading && _certificates is not null)
 {
-    <p style="color:#999;">No se encontraron certificados para el ano @_year.</p>
+    <p style="color:var(--texto-tenue);">No se encontraron certificados para el ano @_year.</p>
 }
 
-<hr style="border-color:#444;margin:24px 0;" />
+<hr style="border-color:var(--borde);margin:24px 0;" />
 
 <!-- Individual Search -->
 <h4>Consulta Individual</h4>
@@ -93,7 +93,7 @@ else if (!_loading && _certificates is not null)
 
 @if (_individualCert is not null)
 {
-    <div style="margin-top:16px;padding:16px;border:1px solid #444;border-radius:4px;">
+    <div style="margin-top:16px;padding:16px;border:1px solid var(--borde);border-radius:4px;">
         <h5>Certificado de @_individualCert.PersonName</h5>
         <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;">
             <div class="info-card"><span class="label">NIT / CC</span><span>@_individualCert.TaxId</span></div>
@@ -221,6 +221,6 @@ else if (!_loading && _certificates is not null)
 }
 
 <style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
 </style>

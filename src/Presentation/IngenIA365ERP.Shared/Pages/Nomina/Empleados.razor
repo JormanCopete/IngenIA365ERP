@@ -67,7 +67,7 @@
     <DialogTemplates>
         <Content>
             <div style="padding:16px;">
-                <p style="margin-bottom:12px;color:#666;">
+                <p style="margin-bottom:12px;color:var(--texto-secundario);">
                     Para registrar un empleado, primero seleccione la persona.
                     Si la persona no existe, debe crearla en
                     <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
@@ -95,7 +95,7 @@
                         <ContentTemplate>
                             <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
                                 <div>
-                                    <label>Tipo Documento <span style="color:red">*</span></label>
+                                    <label>Tipo Documento <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfDropDownList TValue="string" TItem="CodeOption"
                                                     @bind-Value="_personModel.IdType"
                                                     DataSource="@_idTypes">
@@ -103,7 +103,7 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Numero Documento <span style="color:red">*</span></label>
+                                    <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.TaxId"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                                 </div>
@@ -122,12 +122,12 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Nombres <span style="color:red">*</span></label>
+                                    <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.FirstName"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
                                 <div>
-                                    <label>Apellidos <span style="color:red">*</span></label>
+                                    <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.LastName"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
@@ -238,12 +238,12 @@
                         <ContentTemplate>
                             <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
                                 <div>
-                                    <label>Salario Base <span style="color:red">*</span></label>
+                                    <label>Salario Base <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfNumericTextBox TValue="decimal" @bind-Value="_employeeModel.BaseSalary"
                                                       Format="N2" Min="0" Step="50000m" Placeholder="0,00" />
                                 </div>
                                 <div>
-                                    <label>Tipo de Contrato <span style="color:red">*</span></label>
+                                    <label>Tipo de Contrato <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfDropDownList TValue="int" TItem="ContractTypeOption"
                                                     @bind-Value="_employeeModel.ContractType"
                                                     DataSource="@_contractTypes">
@@ -251,7 +251,7 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Fecha de Ingreso <span style="color:red">*</span></label>
+                                    <label>Fecha de Ingreso <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfDatePicker TValue="DateTime" @bind-Value="_employeeModel.HireDate" Format="dd/MM/yyyy" />
                                 </div>
                                 <div></div>
@@ -294,7 +294,7 @@
                         <ChildContent><TabHeader Text="Banca Nomina" /></ChildContent>
                         <ContentTemplate>
                             <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <p style="grid-column:span 2;color:#888;font-size:12px;">
+                                <p style="grid-column:span 2;color:var(--texto-tenue);font-size:12px;">
                                     Cuenta donde se consigna el salario del empleado por nomina.
                                 </p>
                                 <div>
@@ -343,7 +343,7 @@
                 <p>¿Esta seguro de terminar el contrato de <strong>@_terminating?.FullName</strong>?</p>
                 <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
                     <div>
-                        <label>Fecha de Terminacion <span style="color:red">*</span></label>
+                        <label>Fecha de Terminacion <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />
                     </div>
                     <div>

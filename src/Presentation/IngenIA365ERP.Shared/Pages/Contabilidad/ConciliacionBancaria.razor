@@ -40,24 +40,24 @@
 {
     <!-- Summary cards -->
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
-        <div style="padding:16px;border:1px solid #e0e0e0;border-radius:4px;background:#f9f9f9;">
-            <span style="font-size:12px;color:#666;">Saldo Contable</span><br/>
+        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
+            <span style="font-size:12px;color:var(--texto-secundario);">Saldo Contable</span><br/>
             <strong style="font-size:18px;">@_summary.BookBalance.ToString("N2")</strong>
         </div>
-        <div style="padding:16px;border:1px solid #e0e0e0;border-radius:4px;background:#f9f9f9;">
-            <span style="font-size:12px;color:#666;">Saldo Banco</span><br/>
+        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
+            <span style="font-size:12px;color:var(--texto-secundario);">Saldo Banco</span><br/>
             <strong style="font-size:18px;">@_summary.BankBalance.ToString("N2")</strong>
         </div>
-        <div style="padding:16px;border:1px solid #e0e0e0;border-radius:4px;background:#f9f9f9;">
-            <span style="font-size:12px;color:#666;">Partidas Pendientes (DB)</span><br/>
+        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
+            <span style="font-size:12px;color:var(--texto-secundario);">Partidas Pendientes (DB)</span><br/>
             <strong style="font-size:18px;color:@(_summary.PendingDebits != 0 ? "orange" : "inherit");">@_summary.PendingDebits.ToString("N2")</strong>
         </div>
-        <div style="padding:16px;border:1px solid #e0e0e0;border-radius:4px;background:#f9f9f9;">
-            <span style="font-size:12px;color:#666;">Partidas Pendientes (CR)</span><br/>
+        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:var(--superficie-0);">
+            <span style="font-size:12px;color:var(--texto-secundario);">Partidas Pendientes (CR)</span><br/>
             <strong style="font-size:18px;color:@(_summary.PendingCredits != 0 ? "orange" : "inherit");">@_summary.PendingCredits.ToString("N2")</strong>
         </div>
-        <div style="padding:16px;border:1px solid #e0e0e0;border-radius:4px;background:@(_summary.Difference == 0 ? "#e8f5e9" : "#ffebee");">
-            <span style="font-size:12px;color:#666;">Diferencia</span><br/>
+        <div style="padding:16px;border:1px solid var(--borde);border-radius:4px;background:@(_summary.Difference == 0 ? "var(--exito-fondo)" : "var(--peligro-fondo)");">
+            <span style="font-size:12px;color:var(--texto-secundario);">Diferencia</span><br/>
             <strong style="font-size:18px;color:@(_summary.Difference == 0 ? "green" : "red");">@_summary.Difference.ToString("N2")</strong>
         </div>
     </div>
@@ -157,7 +157,7 @@
 }
 else
 {
-    <div style="text-align:center;padding:60px;color:#888;">
+    <div style="text-align:center;padding:60px;color:var(--texto-tenue);">
         <span class="e-icons e-bank" style="font-size:48px;display:block;margin-bottom:16px;"></span>
         <p>Seleccione una cuenta bancaria, anio y mes, luego haga clic en "Cargar" para iniciar la conciliacion.</p>
     </div>
@@ -167,7 +167,7 @@ else
 <SfDialog @bind-Visible="_showImportDialog" Header="Importar Extracto Bancario" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:16px;text-align:center;color:#888;">
+            <div style="padding:16px;text-align:center;color:var(--texto-tenue);">
                 <span class="e-icons e-upload" style="font-size:36px;display:block;margin-bottom:12px;"></span>
                 <p>Funcionalidad de importacion de extracto bancario en desarrollo.</p>
                 <p>Formatos soportados: CSV, OFX, MT940</p>

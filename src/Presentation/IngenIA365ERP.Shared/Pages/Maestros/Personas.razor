@@ -77,7 +77,7 @@
                             <ContentTemplate>
                                 <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
                                     <div>
-                                        <label>Tipo Documento <span style="color:red">*</span></label>
+                                        <label>Tipo Documento <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfDropDownList TValue="string" TItem="CodeOption"
                                                         @bind-Value="_model.IdType"
                                                         DataSource="@_idTypes"
@@ -86,7 +86,7 @@
                                         </SfDropDownList>
                                     </div>
                                     <div>
-                                        <label>Numero Documento <span style="color:red">*</span></label>
+                                        <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.TaxId" Placeholder="Numero de identificacion"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                                         <ValidationMessage For="@(() => _model.TaxId)" />
@@ -106,13 +106,13 @@
                                         </SfDropDownList>
                                     </div>
                                     <div>
-                                        <label>Nombres <span style="color:red">*</span></label>
+                                        <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.FirstName" Placeholder="Nombres"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.FirstName)" />
                                     </div>
                                     <div>
-                                        <label>Apellidos <span style="color:red">*</span></label>
+                                        <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.LastName" Placeholder="Apellidos"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.LastName)" />
@@ -228,7 +228,7 @@
                             <ChildContent><TabHeader Text="Roles" /></ChildContent>
                             <ContentTemplate>
                                 <div style="padding:16px;">
-                                    <p style="color:#888;font-size:12px;margin-bottom:16px;">
+                                    <p style="color:var(--texto-tenue);font-size:12px;margin-bottom:16px;">
                                         Marque los roles que aplican a esta persona. La especializacion de cada rol
                                         (datos de asociado, datos laborales, datos del vendedor) se administra en
                                         sus modulos correspondientes (Asociados, Empleados, Vendedores).

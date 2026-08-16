@@ -12,7 +12,7 @@
 </div>
 
 <!-- Step 1: Search Person -->
-<div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+<div style="background:var(--superficie-2);padding:16px;border-radius:8px;margin-bottom:16px;">
     <h5 style="margin:0 0 12px;">1. Buscar Asociado</h5>
     <div style="display:flex;gap:8px;align-items:end;">
         <div style="flex:1;">
@@ -23,10 +23,10 @@
     </div>
     @if (_searchResults.Count > 0)
     {
-        <div style="margin-top:8px;max-height:150px;overflow-y:auto;border:1px solid #333;border-radius:4px;">
+        <div style="margin-top:8px;max-height:150px;overflow-y:auto;border:1px solid var(--borde);border-radius:4px;">
             @foreach (var p in _searchResults)
             {
-                <div style="padding:6px 12px;cursor:pointer;border-bottom:1px solid #333;"
+                <div style="padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--borde);"
                      @onclick="() => SelectPerson(p)">
                     <strong>@p.FullName</strong> - @p.IdentificationNumber
                 </div>
@@ -38,11 +38,11 @@
 <!-- Step 2: Select Credit -->
 @if (_selectedPerson is not null)
 {
-    <div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+    <div style="background:var(--superficie-2);padding:16px;border-radius:8px;margin-bottom:16px;">
         <h5 style="margin:0 0 8px;">2. Creditos de @_selectedPerson.FullName</h5>
         @if (_portfolios.Count == 0)
         {
-            <p style="color:#888;">No tiene creditos activos.</p>
+            <p style="color:var(--texto-tenue);">No tiene creditos activos.</p>
         }
         else
         {
@@ -64,7 +64,7 @@
 <!-- Step 3: Installments + Payment -->
 @if (_selectedPortfolio is not null)
 {
-    <div style="background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:16px;">
+    <div style="background:var(--superficie-2);padding:16px;border-radius:8px;margin-bottom:16px;">
         <h5 style="margin:0 0 8px;">3. Cuotas Pendientes - Credito #@_selectedPortfolio.PortfolioNumber</h5>
         @if (_installments.Count > 0)
         {
@@ -80,7 +80,7 @@
                 </GridColumns>
             </SfGrid>
 
-            <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;background:#111;padding:12px;border-radius:8px;">
+            <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;background:var(--superficie-2);padding:12px;border-radius:8px;">
                 <div>
                     <label>Total Pendiente</label>
                     <SfNumericTextBox TValue="decimal" Value="@_totalPending" Readonly="true" Format="N0" CssClass="e-disabled" />
@@ -118,19 +118,19 @@
 <!-- Step 4: Receipt -->
 @if (_receipt is not null)
 {
-    <div style="background:#0a2a0a;border:1px solid #27ae60;padding:16px;border-radius:8px;margin-top:16px;">
-        <h4 style="color:#27ae60;margin:0 0 12px;">Pago Aplicado Exitosamente</h4>
+    <div style="background:var(--exito-fondo);border:1px solid var(--exito);padding:16px;border-radius:8px;margin-top:16px;">
+        <h4 style="color:var(--exito-texto);margin:0 0 12px;">Pago Aplicado Exitosamente</h4>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:500px;">
-            <span style="color:#888;">Recibo No.:</span><span>@_receipt.DocumentNumber</span>
-            <span style="color:#888;">Capital:</span><span>@_receipt.PaidCapital.ToString("N0")</span>
-            <span style="color:#888;">Interes:</span><span>@_receipt.PaidInterest.ToString("N0")</span>
-            <span style="color:#888;">Mora:</span><span>@_receipt.PaidDefault.ToString("N0")</span>
-            <span style="color:#888;">Total Pagado:</span><span style="font-weight:bold;">@((_receipt.PaidCapital + _receipt.PaidInterest + _receipt.PaidDefault).ToString("N0"))</span>
-            <span style="color:#888;">Cuotas Cubiertas:</span><span>@_receipt.InstallmentsCovered</span>
-            <span style="color:#888;">Sobrante:</span><span>@_receipt.Remaining.ToString("N0")</span>
+            <span style="color:var(--texto-tenue);">Recibo No.:</span><span>@_receipt.DocumentNumber</span>
+            <span style="color:var(--texto-tenue);">Capital:</span><span>@_receipt.PaidCapital.ToString("N0")</span>
+            <span style="color:var(--texto-tenue);">Interes:</span><span>@_receipt.PaidInterest.ToString("N0")</span>
+            <span style="color:var(--texto-tenue);">Mora:</span><span>@_receipt.PaidDefault.ToString("N0")</span>
+            <span style="color:var(--texto-tenue);">Total Pagado:</span><span style="font-weight:bold;">@((_receipt.PaidCapital + _receipt.PaidInterest + _receipt.PaidDefault).ToString("N0"))</span>
+            <span style="color:var(--texto-tenue);">Cuotas Cubiertas:</span><span>@_receipt.InstallmentsCovered</span>
+            <span style="color:var(--texto-tenue);">Sobrante:</span><span>@_receipt.Remaining.ToString("N0")</span>
             @if (_receipt.IsFullyPaid)
             {
-                <span style="grid-column:span 2;color:#27ae60;font-weight:bold;font-size:16px;">CREDITO CANCELADO TOTALMENTE</span>
+                <span style="grid-column:span 2;color:var(--exito-texto);font-weight:bold;font-size:16px;">CREDITO CANCELADO TOTALMENTE</span>
             }
         </div>
     </div>

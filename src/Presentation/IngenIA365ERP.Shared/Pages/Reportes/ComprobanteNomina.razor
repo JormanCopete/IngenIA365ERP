@@ -45,21 +45,21 @@
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_payslip is not null)
 {
     <!-- Employee Header -->
-    <div style="padding:16px;border:1px solid #333;border-radius:8px;margin-bottom:16px;background:#1e1e2e;">
+    <div style="padding:16px;border:1px solid var(--borde);border-radius:8px;margin-bottom:16px;background:var(--superficie-1);">
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;">
             <div>
                 <h4 style="margin:0 0 4px;">@_payslip.EmployeeName</h4>
-                <span style="color:#999;">Doc: @_payslip.DocumentNumber | Cargo: @_payslip.Position</span>
+                <span style="color:var(--texto-tenue);">Doc: @_payslip.DocumentNumber | Cargo: @_payslip.Position</span>
             </div>
             <div style="text-align:right;">
-                <span style="color:#999;">Periodo:</span> @_payslip.PeriodLabel<br />
-                <span style="color:#999;">Salario Base:</span> @_payslip.BaseSalary.ToString("N2")
+                <span style="color:var(--texto-tenue);">Periodo:</span> @_payslip.PeriodLabel<br />
+                <span style="color:var(--texto-tenue);">Salario Base:</span> @_payslip.BaseSalary.ToString("N2")
             </div>
         </div>
     </div>
@@ -67,7 +67,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
         <!-- Devengados -->
         <div>
-            <h4 style="color:#4caf50;margin-bottom:8px;">Devengados</h4>
+            <h4 style="color:var(--exito-texto);margin-bottom:8px;">Devengados</h4>
             <SfGrid TValue="PayslipLine" DataSource="_payslip.Earnings" AllowSorting="false">
                 <GridColumns>
                     <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
@@ -78,7 +78,7 @@
                     <GridAggregate>
                         <GridAggregateColumns>
                             <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:#4caf50;">@s?.Sum</b></FooterTemplate>
+                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:var(--exito-texto);">@s?.Sum</b></FooterTemplate>
                             </GridAggregateColumn>
                         </GridAggregateColumns>
                     </GridAggregate>
@@ -88,7 +88,7 @@
 
         <!-- Deducciones -->
         <div>
-            <h4 style="color:#f44336;margin-bottom:8px;">Deducciones</h4>
+            <h4 style="color:var(--peligro-texto);margin-bottom:8px;">Deducciones</h4>
             <SfGrid TValue="PayslipLine" DataSource="_payslip.Deductions" AllowSorting="false">
                 <GridColumns>
                     <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
@@ -99,7 +99,7 @@
                     <GridAggregate>
                         <GridAggregateColumns>
                             <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:#f44336;">@s?.Sum</b></FooterTemplate>
+                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:var(--peligro-texto);">@s?.Sum</b></FooterTemplate>
                             </GridAggregateColumn>
                         </GridAggregateColumns>
                     </GridAggregate>
@@ -109,14 +109,14 @@
     </div>
 
     <!-- Net Pay -->
-    <div style="margin-top:24px;padding:20px;border:2px solid #00bcd4;border-radius:8px;text-align:center;">
-        <span style="font-size:14px;color:#999;">NETO A PAGAR</span>
-        <h2 style="margin:4px 0 0;color:#00bcd4;">@_payslip.NetPay.ToString("N2")</h2>
+    <div style="margin-top:24px;padding:20px;border:2px solid var(--acento);border-radius:8px;text-align:center;">
+        <span style="font-size:14px;color:var(--texto-tenue);">NETO A PAGAR</span>
+        <h2 style="margin:4px 0 0;color:var(--acento);">@_payslip.NetPay.ToString("N2")</h2>
     </div>
 }
 else if (!_loading && _searched)
 {
-    <p style="color:#999;">No se encontro comprobante de nomina para los parametros seleccionados.</p>
+    <p style="color:var(--texto-tenue);">No se encontro comprobante de nomina para los parametros seleccionados.</p>
 }
 
 @code {

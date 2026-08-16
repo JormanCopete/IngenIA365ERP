@@ -70,7 +70,7 @@
             <Template>
                 @{
                     var item = context as BalanceItem;
-                    var color = item?.NewBalance >= 0 ? "inherit" : "red";
+                    var color = item?.NewBalance >= 0 ? "inherit" : "var(--peligro-texto)";
                 }
                 <span style="color:@color;font-weight:bold;">@item?.NewBalance.ToString("N2")</span>
             </Template>

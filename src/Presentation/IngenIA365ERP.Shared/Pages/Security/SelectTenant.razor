@@ -24,7 +24,7 @@
 
     @if (_tenants is null || _tenants.Count == 0)
     {
-        <p style="margin-top: 16px; color: #6b7280;">
+        <p style="margin-top: 16px; color: var(--texto-secundario);">
             No hay empresas para elegir. Vuelve a iniciar sesión.
         </p>
         <NavLink href="/security/login">Volver al inicio</NavLink>
@@ -38,13 +38,13 @@
                     type="button"
                     @onclick="() => SelectAsync(t.TenantPublicId)"
                     disabled="@_busy"
-                    style="padding: 16px; text-align: left; border: 1px solid #e5e7eb;
-                           border-radius: 8px; background: white; cursor: pointer;">
+                    style="padding: 16px; text-align: left; border: 1px solid var(--borde);
+                           border-radius: 8px; background: var(--superficie-1); cursor: pointer;">
                     <strong>@t.TenantName</strong>
                     @if (t.IsTenantAdmin)
                     {
-                        <span style="margin-left: 8px; padding: 2px 8px; background: #dbeafe;
-                                     color: #1e40af; border-radius: 4px; font-size: 12px;">Admin</span>
+                        <span style="margin-left: 8px; padding: 2px 8px; background: var(--info-fondo);
+                                     color: var(--info-texto); border-radius: 4px; font-size: 12px;">Admin</span>
                     }
                 </button>
             }

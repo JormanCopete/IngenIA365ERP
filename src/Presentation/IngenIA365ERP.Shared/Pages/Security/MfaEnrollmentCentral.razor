@@ -35,7 +35,7 @@
             <li>Abre tu app de autenticación y agrega una nueva cuenta.</li>
             <li>
                 Escanea el código QR <em>o</em> ingresa el secret manualmente:
-                <code style="display: block; padding: 8px; background: #f3f4f6;
+                <code style="display: block; padding: 8px; background: var(--superficie-0);
                               margin: 8px 0; word-break: break-all;">@_begin.SecretBase32</code>
                 <small>otpauth URI: <code style="word-break: break-all;">@_begin.OtpAuthUri</code></small>
             </li>
@@ -65,7 +65,7 @@
             La próxima vez que inicies sesión te pedirán el código de tu app.
         </p>
 
-        <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+        <div style="background: var(--alerta-fondo); border-left: 4px solid var(--alerta);
                     padding: 12px 16px; margin: 16px 0;">
             <strong>Guarda estos códigos de respaldo</strong> en un lugar seguro.
             Los podrás usar para entrar si pierdes acceso a tu app. Se muestran
@@ -99,7 +99,7 @@
 
         @if (_regenerated is not null)
         {
-            <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+            <div style="background: var(--alerta-fondo); border-left: 4px solid var(--alerta);
                         padding: 12px 16px; margin: 16px 0;">
                 <strong>Nuevos códigos de recuperación.</strong> Los anteriores
                 quedaron invalidados. Guárdalos ahora — se muestran una sola vez:

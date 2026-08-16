@@ -5,7 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>IngenIA365ERP</title>
     <base href="/" />
-    <link href="_content/Syncfusion.Blazor.Themes/fluent2-dark.css" rel="stylesheet" />
+    <!-- Preferencias antes de pintar: evita el destello blanco al abrir la app
+         con tema oscuro. Mismo criterio que en el host web (App.razor). -->
+    <script>
+        (function () {
+            try {
+                var p = JSON.parse(localStorage.getItem('erp-preferencias') || '{}');
+                var r = document.documentElement;
+                r.setAttribute('data-tema', p.tema || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro'));
+                if (p.densidad)  r.setAttribute('data-densidad', p.densidad);
+                if (p.escala)    r.setAttribute('data-escala', p.escala);
+                if (p.contraste) r.setAttribute('data-contraste', p.contraste);
+            } catch (e) {
+                document.documentElement.setAttribute('data-tema', 'claro');
+            }
+        })();
+    </script>
+
+    <!-- La app de escritorio y móvil comparte las pantallas con la web, así que
+         comparte también el sistema de diseño. Inter va embebida en el paquete
+         para que funcione sin conexión. -->
+    <link id="sf-tema-claro" href="_content/Syncfusion.Blazor.Themes/fluent2.css" rel="stylesheet" />
+    <link id="sf-tema-oscuro" href="_content/Syncfusion.Blazor.Themes/fluent2-dark.css" rel="stylesheet" disabled />
+    <script>
+        (function () {
+            var oscuro = document.documentElement.getAttribute('data-tema') === 'oscuro';
+            document.getElementById('sf-tema-claro').disabled = oscuro;
+            document.getElementById('sf-tema-oscuro').disabled = !oscuro;
+        })();
+    </script>
+
+    <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/tokens.css" />
     <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/app.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="IngenIA365ERP.App.styles.css" />
@@ -20,6 +50,7 @@
 
     <script src="_framework/blazor.webview.js" autostart="false"></script>
 
+    <script src="_content/IngenIA365ERP.Shared/js/preferencias.js"></script>
 </body>
 
 </html>

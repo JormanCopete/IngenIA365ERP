@@ -33,7 +33,7 @@
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_data is not null && _data.Count > 0)
@@ -48,9 +48,9 @@
             <span class="label">Total Unidades</span>
             <span>@_data.Sum(d => d.Stock).ToString("N2")</span>
         </div>
-        <div class="info-card" style="border-color:#00bcd4;">
+        <div class="info-card" style="border-color:var(--acento);">
             <span class="label">Valor Total Inventario</span>
-            <span style="font-weight:bold;color:#00bcd4;">@_data.Sum(d => d.TotalValue).ToString("N2")</span>
+            <span style="font-weight:bold;color:var(--acento);">@_data.Sum(d => d.TotalValue).ToString("N2")</span>
         </div>
     </div>
 
@@ -68,7 +68,7 @@
                 <Template>
                     @{
                         var row = context as InventoryRow;
-                        var color = row?.Stock <= 0 ? "color:#f44336;" : "";
+                        var color = row?.Stock <= 0 ? "color:var(--peligro-texto);" : "";
                     }
                     <span style="@color">@row?.Stock.ToString("N2")</span>
                 </Template>
@@ -97,7 +97,7 @@
 }
 else if (!_loading && _data is not null)
 {
-    <p style="color:#999;">No se encontraron productos en inventario.</p>
+    <p style="color:var(--texto-tenue);">No se encontraron productos en inventario.</p>
 }
 
 @code {
@@ -198,6 +198,6 @@ else if (!_loading && _data is not null)
 }
 
 <style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
 </style>

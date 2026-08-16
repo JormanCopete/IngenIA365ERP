@@ -37,15 +37,15 @@
 
 @if (!string.IsNullOrEmpty(_personName))
 {
-    <div style="margin-bottom:12px;padding:8px 12px;background:#1e1e2e;border:1px solid #333;border-radius:4px;">
-        <strong>@_personName</strong> <span style="color:#999;margin-left:8px;">Doc: @_personId</span>
+    <div style="margin-bottom:12px;padding:8px 12px;background:var(--superficie-1);border:1px solid var(--borde);border-radius:4px;">
+        <strong>@_personName</strong> <span style="color:var(--texto-tenue);margin-left:8px;">Doc: @_personId</span>
     </div>
 }
 
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_loanData is not null)
@@ -74,7 +74,7 @@
         </div>
         <div class="info-card">
             <span class="label">Estado</span>
-            <span style="color:@(_loanData.Status == "Vigente" ? "#4caf50" : "#ff9800");">@_loanData.Status</span>
+            <span style="color:@(_loanData.Status == "Vigente" ? "var(--exito)" : "var(--alerta)");">@_loanData.Status</span>
         </div>
     </div>
 
@@ -95,9 +95,9 @@
                         var row = context as AmortizationRow;
                         var cssColor = row?.Status switch
                         {
-                            "Pagada" => "#4caf50",
-                            "Vencida" => "#f44336",
-                            _ => "#999"
+                            "Pagada" => "var(--exito-texto)",
+                            "Vencida" => "var(--peligro-texto)",
+                            _ => "var(--texto-tenue)"
                         };
                     }
                     <span style="color:@cssColor;font-weight:600;">@row?.Status</span>
@@ -279,6 +279,6 @@
 }
 
 <style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 130px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 130px; }
+    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
 </style>

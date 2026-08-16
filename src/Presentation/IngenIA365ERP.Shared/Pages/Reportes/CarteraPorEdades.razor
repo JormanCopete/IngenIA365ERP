@@ -15,12 +15,12 @@
     </div>
 </div>
 
-<p style="color:#999;margin-bottom:16px;">Corte actual: @DateTime.Today.ToString("dd/MM/yyyy")</p>
+<p style="color:var(--texto-tenue);margin-bottom:16px;">Corte actual: @DateTime.Today.ToString("dd/MM/yyyy")</p>
 
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_data is not null && _data.Count > 0)
@@ -29,42 +29,42 @@
     <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
         <div class="info-card">
             <span class="label">Vigente</span>
-            <span style="color:#4caf50;">@_data.Sum(d => d.Current).ToString("N2")</span>
+            <span style="color:var(--exito-texto);">@_data.Sum(d => d.Current).ToString("N2")</span>
         </div>
         <div class="info-card">
             <span class="label">1-30 dias</span>
-            <span style="color:#8bc34a;">@_data.Sum(d => d.Days1to30).ToString("N2")</span>
+            <span style="color:var(--exito-texto);">@_data.Sum(d => d.Days1to30).ToString("N2")</span>
         </div>
         <div class="info-card">
             <span class="label">31-60 dias</span>
-            <span style="color:#ff9800;">@_data.Sum(d => d.Days31to60).ToString("N2")</span>
+            <span style="color:var(--alerta-texto);">@_data.Sum(d => d.Days31to60).ToString("N2")</span>
         </div>
         <div class="info-card">
             <span class="label">61-90 dias</span>
-            <span style="color:#ff5722;">@_data.Sum(d => d.Days61to90).ToString("N2")</span>
+            <span style="color:var(--peligro-texto);">@_data.Sum(d => d.Days61to90).ToString("N2")</span>
         </div>
         <div class="info-card">
             <span class="label">91-180 dias</span>
-            <span style="color:#e91e63;">@_data.Sum(d => d.Days91to180).ToString("N2")</span>
+            <span style="color:var(--peligro-texto);">@_data.Sum(d => d.Days91to180).ToString("N2")</span>
         </div>
         <div class="info-card">
             <span class="label">180+ dias</span>
-            <span style="color:#f44336;">@_data.Sum(d => d.DaysOver180).ToString("N2")</span>
+            <span style="color:var(--peligro-texto);">@_data.Sum(d => d.DaysOver180).ToString("N2")</span>
         </div>
-        <div class="info-card" style="border-color:#00bcd4;">
+        <div class="info-card" style="border-color:var(--acento);">
             <span class="label">Total Cartera</span>
             <span style="font-weight:bold;">@_data.Sum(d => d.Total).ToString("N2")</span>
         </div>
     </div>
 
     <!-- Chart -->
-    <div style="margin-bottom:24px;padding:16px;border:1px solid #333;border-radius:8px;">
+    <div style="margin-bottom:24px;padding:16px;border:1px solid var(--borde);border-radius:8px;">
         <SfChart>
             <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" Title="Rango de Antiguedad" />
             <ChartPrimaryYAxis Title="Monto ($)" LabelFormat="N0" />
             <ChartSeriesCollection>
                 <ChartSeries DataSource="@_chartData" XName="Bucket" YName="Amount"
-                             Type="ChartSeriesType.Column" Fill="#00bcd4" ColumnWidth="0.6">
+                             Type="ChartSeriesType.Column" Fill="var(--acento)" ColumnWidth="0.6">
                     <ChartSeriesAnimation Enable="true" Duration="800" />
                 </ChartSeries>
             </ChartSeriesCollection>
@@ -124,7 +124,7 @@
 }
 else if (!_loading && _data is not null)
 {
-    <p style="color:#999;">No se encontraron datos de cartera.</p>
+    <p style="color:var(--texto-tenue);">No se encontraron datos de cartera.</p>
 }
 
 @code {
@@ -202,6 +202,6 @@ else if (!_loading && _data is not null)
 }
 
 <style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 120px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 120px; }
+    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
 </style>

@@ -52,7 +52,7 @@
                 <DataAnnotationsValidator />
                 <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
                     <div>
-                        <label>Pais <span style="color:red">*</span></label>
+                        <label>Pais <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDropDownList TValue="Guid?" TItem="LookupOption"
                                         @bind-Value="_model.CountryPublicId"
                                         DataSource="@_countries"
@@ -63,13 +63,13 @@
                         <ValidationMessage For="@(() => _model.CountryPublicId)" />
                     </div>
                     <div>
-                        <label>Codigo <span style="color:red">*</span></label>
+                        <label>Codigo <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Code" Placeholder="Ej: VAC, ANT, CUN..."
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "10" } })" />
                         <ValidationMessage For="@(() => _model.Code)" />
                     </div>
                     <div>
-                        <label>Nombre <span style="color:red">*</span></label>
+                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del departamento"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />

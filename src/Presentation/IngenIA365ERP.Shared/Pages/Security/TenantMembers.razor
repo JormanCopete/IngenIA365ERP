@@ -23,7 +23,7 @@ else
 {
     @if (_activeAdminsCount == 1)
     {
-        <div style="background: #fef3c7; border-left: 4px solid #f59e0b;
+        <div style="background: var(--alerta-fondo); border-left: 4px solid var(--alerta);
                     padding: 12px 16px; margin-bottom: 16px;">
             <strong>Queda 1 administrador activo</strong> en la empresa. No podrás
             revocarlo ni degradarlo hasta que otro miembro sea promovido a admin.
@@ -32,7 +32,7 @@ else
 
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
-            <tr style="background: #f3f4f6;">
+            <tr style="background: var(--superficie-0);">
                 <th style="padding: 8px; text-align: left;">CentralUser</th>
                 <th>Estado</th>
                 <th>Rol</th>
@@ -43,7 +43,7 @@ else
         <tbody>
             @foreach (var m in _members.Items)
             {
-                <tr style="border-bottom: 1px solid #e5e7eb;">
+                <tr style="border-bottom: 1px solid var(--borde);">
                     <td style="padding: 8px; font-family: monospace; font-size: 12px;">
                         @m.CentralUserId.ToString("N")[..8]
                     </td>
@@ -51,8 +51,8 @@ else
                     <td>
                         @if (m.IsTenantAdmin)
                         {
-                            <span style="padding: 2px 8px; background: #dbeafe;
-                                         color: #1e40af; border-radius: 4px; font-size: 12px;">Admin</span>
+                            <span style="padding: 2px 8px; background: var(--info-fondo);
+                                         color: var(--info-texto); border-radius: 4px; font-size: 12px;">Admin</span>
                         }
                     </td>
                     <td>@m.InvitedAt.ToString("dd/MM/yyyy")</td>

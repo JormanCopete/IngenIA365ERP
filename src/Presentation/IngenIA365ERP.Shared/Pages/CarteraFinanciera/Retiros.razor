@@ -12,7 +12,7 @@
 </div>
 
 <!-- Quick withdrawal form -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
+<div style="background:var(--superficie-1);border-radius:8px;padding:20px;margin-bottom:20px;">
     <h4 style="margin-top:0;">Registro Rapido de Retiro</h4>
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
@@ -26,7 +26,7 @@
 
     @if (_personName is not null)
     {
-        <p style="margin:8px 0;color:#27ae60;">Asociado: <strong>@_personName</strong></p>
+        <p style="margin:8px 0;color:var(--exito-texto);">Asociado: <strong>@_personName</strong></p>
 
         @if (_personAccounts.Count > 0)
         {
@@ -40,8 +40,8 @@
                     </SfDropDownList>
                 </div>
                 <div>
-                    <span style="color:#888;">Saldo: </span>
-                    <strong style="color:#f39c12;">@_selectedBalance.ToString("N0")</strong>
+                    <span style="color:var(--texto-tenue);">Saldo: </span>
+                    <strong style="color:var(--alerta-texto);">@_selectedBalance.ToString("N0")</strong>
                 </div>
                 <div style="min-width:150px;">
                     <label>Monto a Retirar</label>
@@ -56,12 +56,12 @@
 
             @if (_withdrawAmount > _selectedBalance && _selectedBalance > 0)
             {
-                <p style="color:#e74c3c;margin-top:8px;">El monto excede el saldo disponible.</p>
+                <p style="color:var(--peligro-texto);margin-top:8px;">El monto excede el saldo disponible.</p>
             }
         }
         else
         {
-            <p style="color:#f39c12;">El asociado no tiene cuentas de ahorro activas.</p>
+            <p style="color:var(--alerta-texto);">El asociado no tiene cuentas de ahorro activas.</p>
         }
     }
 </div>
@@ -88,7 +88,7 @@
 </SfGrid>
 
 <style>
-    .badge-retiro { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-retiro { background:var(--peligro); color:var(--acento-texto); padding:2px 10px; border-radius:12px; font-size:12px; }
 </style>
 
 @code {

@@ -77,7 +77,7 @@
 <div style="overflow-x:auto;">
     <table class="e-table" style="width:100%;border-collapse:collapse;">
         <thead>
-            <tr style="background:var(--sf-grid-header-bg, #f5f5f5);">
+            <tr style="background:var(--superficie-0);">
                 <th style="width:40px;text-align:center;">#</th>
                 <th style="width:140px;">Cuenta</th>
                 <th style="width:200px;">Nombre Cuenta</th>
@@ -95,8 +95,8 @@
             {
                 var idx = i;
                 var line = _lines[idx];
-                <tr style="border-bottom:1px solid #e0e0e0;">
-                    <td style="text-align:center;color:#888;">@(idx + 1)</td>
+                <tr style="border-bottom:1px solid var(--borde);">
+                    <td style="text-align:center;color:var(--texto-tenue);">@(idx + 1)</td>
                     <td>
                         <div style="display:flex;gap:4px;">
                             <SfTextBox @bind-Value="line.AccountCode" Placeholder="Cuenta" CssClass="e-small"
@@ -105,7 +105,7 @@
                                       Disabled="@(!IsEditable)" OnClick="@(() => OpenAccountSearch(idx))" />
                         </div>
                     </td>
-                    <td><span style="font-size:12px;color:#666;">@line.AccountName</span></td>
+                    <td><span style="font-size:12px;color:var(--texto-secundario);">@line.AccountName</span></td>
                     <td>
                         <div style="display:flex;gap:4px;">
                             <SfTextBox @bind-Value="line.PersonCode" Placeholder="NIT" CssClass="e-small"
@@ -151,24 +151,24 @@
             }
             @if (_lines.Count == 0)
             {
-                <tr><td colspan="@(IsEditable ? 10 : 9)" style="text-align:center;padding:20px;color:#888;">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
+                <tr><td colspan="@(IsEditable ? 10 : 9)" style="text-align:center;padding:20px;color:var(--texto-tenue);">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
             }
         </tbody>
     </table>
 </div>
 
 <!-- Totals footer -->
-<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
+<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--superficie-0);border-radius:4px;">
     <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Debitos</span><br/>
+        <span style="font-size:12px;color:var(--texto-secundario);">Total Debitos</span><br/>
         <strong style="font-size:16px;">@TotalDebit.ToString("N2")</strong>
     </div>
     <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Creditos</span><br/>
+        <span style="font-size:12px;color:var(--texto-secundario);">Total Creditos</span><br/>
         <strong style="font-size:16px;">@TotalCredit.ToString("N2")</strong>
     </div>
     <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Diferencia</span><br/>
+        <span style="font-size:12px;color:var(--texto-secundario);">Diferencia</span><br/>
         <strong style="font-size:16px;color:@(IsBalanced ? "green" : "red");">@Difference.ToString("N2")</strong>
     </div>
 </div>

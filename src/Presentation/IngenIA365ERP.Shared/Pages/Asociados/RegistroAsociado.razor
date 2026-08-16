@@ -63,7 +63,7 @@
     <DialogTemplates>
         <Content>
             <div style="padding:16px;">
-                <p style="margin-bottom:12px;color:#666;">
+                <p style="margin-bottom:12px;color:var(--texto-secundario);">
                     Para registrar un asociado, primero seleccione la persona.
                     Si la persona aun no existe, debe crearla en
                     <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
@@ -98,15 +98,15 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Numero Documento <span style="color:red">*</span></label>
+                                    <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.TaxId" />
                                 </div>
                                 <div>
-                                    <label>Nombres <span style="color:red">*</span></label>
+                                    <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.FirstName" />
                                 </div>
                                 <div>
-                                    <label>Apellidos <span style="color:red">*</span></label>
+                                    <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.LastName" />
                                 </div>
                                 <div style="grid-column:span 2;">
@@ -263,7 +263,7 @@
                         <ChildContent><TabHeader Text="Banca Deposito" /></ChildContent>
                         <ContentTemplate>
                             <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <p style="grid-column:span 2;color:#888;font-size:12px;">
+                                <p style="grid-column:span 2;color:var(--texto-tenue);font-size:12px;">
                                     Cuenta donde se depositan excedentes y aportes al asociado.
                                 </p>
                                 <div>

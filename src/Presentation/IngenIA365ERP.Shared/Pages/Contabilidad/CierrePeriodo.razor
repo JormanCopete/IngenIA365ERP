@@ -28,7 +28,7 @@
 @if (_loading)
 {
     <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
+                   TrackColor="var(--borde)" ProgressColor="var(--acento)" />
 }
 
 @if (_preview is not null)
@@ -62,7 +62,7 @@
     </div>
 
     <!-- Checklist -->
-    <div style="margin-bottom:16px;padding:12px;border:1px solid #444;border-radius:4px;">
+    <div style="margin-bottom:16px;padding:12px;border:1px solid var(--borde);border-radius:4px;">
         <h5>Validaciones</h5>
         <ul style="list-style:none;padding:0;">
             <li>@CheckIcon(_preview.DraftDocumentCount == 0) Sin comprobantes en borrador</li>
@@ -138,8 +138,8 @@
     ];
 
     private static MarkupString CheckIcon(bool ok) =>
-        new(ok ? "<span style='color:#4caf50;margin-right:8px;'>&#10004;</span>"
-               : "<span style='color:#f44336;margin-right:8px;'>&#10008;</span>");
+        new(ok ? "<span style='color:var(--exito-texto);margin-right:8px;'>&#10004;</span>"
+               : "<span style='color:var(--peligro-texto);margin-right:8px;'>&#10008;</span>");
 
     private async Task LoadPreview()
     {
@@ -236,8 +236,8 @@
 }
 
 <style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
-    .text-danger { color: #f44336; font-weight: bold; }
-    .text-success { color: #4caf50; font-weight: bold; }
+    .info-card { padding: 12px; border: 1px solid var(--borde); border-radius: 4px; min-width: 140px; }
+    .info-card .label { display: block; font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
+    .text-danger { color: var(--peligro-texto); font-weight: bold; }
+    .text-success { color: var(--exito-texto); font-weight: bold; }
 </style>

@@ -12,7 +12,7 @@
 </div>
 
 <!-- Person search -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
+<div style="background:var(--superficie-1);border-radius:8px;padding:20px;margin-bottom:20px;">
     <h4 style="margin-top:0;">Buscar Asociado</h4>
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
@@ -25,13 +25,13 @@
     @if (_preview is not null)
     {
         <div style="margin-top:16px;">
-            <p style="margin:4px 0;">Asociado: <strong style="color:#3498db;">@_preview.PersonName</strong></p>
+            <p style="margin:4px 0;">Asociado: <strong style="color:var(--info-texto);">@_preview.PersonName</strong></p>
 
             <!-- Product summary -->
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px;">
-                <div class="kpi-card" style="@(_preview.ActiveLoansCount > 0 ? "border-color:#e74c3c" : "")">
+                <div class="kpi-card" style="@(_preview.ActiveLoansCount > 0 ? "border-color:var(--peligro)" : "")">
                     <span class="kpi-label">Creditos Vigentes</span>
-                    <span class="kpi-value" style="color:@(_preview.ActiveLoansCount > 0 ? "#e74c3c" : "#27ae60")">@_preview.ActiveLoansCount</span>
+                    <span class="kpi-value" style="color:@(_preview.ActiveLoansCount > 0 ? "var(--peligro)" : "var(--exito)")">@_preview.ActiveLoansCount</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Saldo Ahorros</span>
@@ -41,18 +41,18 @@
                     <span class="kpi-label">Saldo Aportes</span>
                     <span class="kpi-value">@_preview.ContributionBalance.ToString("N0")</span>
                 </div>
-                <div class="kpi-card" style="@(_preview.CdtCount > 0 ? "border-color:#f39c12" : "")">
+                <div class="kpi-card" style="@(_preview.CdtCount > 0 ? "border-color:var(--alerta)" : "")">
                     <span class="kpi-label">CDTs Vigentes</span>
-                    <span class="kpi-value" style="color:@(_preview.CdtCount > 0 ? "#f39c12" : "#27ae60")">@_preview.CdtCount</span>
+                    <span class="kpi-value" style="color:@(_preview.CdtCount > 0 ? "var(--alerta)" : "var(--exito)")">@_preview.CdtCount</span>
                 </div>
             </div>
 
             @if (!_preview.CanWithdraw)
             {
                 <!-- Blocking reasons -->
-                <div style="margin-top:16px;padding:16px;background:#2c1a1a;border:1px solid #e74c3c;border-radius:8px;">
-                    <h4 style="color:#e74c3c;margin-top:0;">No es posible procesar el retiro</h4>
-                    <ul style="color:#e74c3c;margin:0;">
+                <div style="margin-top:16px;padding:16px;background:var(--peligro-fondo);border:1px solid var(--peligro);border-radius:8px;">
+                    <h4 style="color:var(--peligro-texto);margin-top:0;">No es posible procesar el retiro</h4>
+                    <ul style="color:var(--peligro-texto);margin:0;">
                         @foreach (var reason in _preview.BlockingReasons)
                         {
                             <li>@reason</li>
@@ -63,8 +63,8 @@
             else
             {
                 <!-- Can withdraw -->
-                <div style="margin-top:16px;padding:16px;background:#1a2c1a;border:1px solid #27ae60;border-radius:8px;">
-                    <h4 style="color:#27ae60;margin-top:0;">El asociado puede retirarse</h4>
+                <div style="margin-top:16px;padding:16px;background:var(--exito-fondo);border:1px solid var(--exito);border-radius:8px;">
+                    <h4 style="color:var(--exito-texto);margin-top:0;">El asociado puede retirarse</h4>
                     <p>Total a devolver (aportes + ahorros): <strong>@((_preview.SavingsBalance + _preview.ContributionBalance).ToString("N0"))</strong></p>
 
                     <div style="margin-top:12px;">
@@ -108,7 +108,7 @@
     <DialogTemplates>
         <Content>
             <div style="padding:8px;">
-                <p style="color:#e74c3c;font-weight:bold;">Esta accion es irreversible.</p>
+                <p style="color:var(--peligro-texto);font-weight:bold;">Esta accion es irreversible.</p>
                 <p>Se marcara al asociado <strong>@_preview?.PersonName</strong> como RETIRADO.</p>
                 <p>Motivo: <strong>@(_withdrawalReasons.FirstOrDefault(r => r.Value == _selectedReasonId)?.Text ?? "-")</strong></p>
             </div>

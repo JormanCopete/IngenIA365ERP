@@ -25,7 +25,7 @@
     }
     else if (_tenants is null || _tenants.Count == 0)
     {
-        <p style="color: #6b7280;">No tienes membresías activas todavía.</p>
+        <p style="color: var(--texto-secundario);">No tienes membresías activas todavía.</p>
     }
     else
     {
@@ -33,13 +33,13 @@
             @foreach (var t in _tenants)
             {
                 <div style="display: flex; align-items: center; gap: 12px;
-                            padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            padding: 12px; border: 1px solid var(--borde); border-radius: 8px;">
                     <div style="flex: 1;">
                         <strong>@t.TenantName</strong>
                         @if (t.IsDefault)
                         {
-                            <span style="margin-left: 8px; padding: 2px 8px; background: #d1fae5;
-                                         color: #065f46; border-radius: 4px; font-size: 12px;">Default</span>
+                            <span style="margin-left: 8px; padding: 2px 8px; background: var(--exito-fondo);
+                                         color: var(--exito-texto); border-radius: 4px; font-size: 12px;">Default</span>
                         }
                     </div>
                     @if (t.IsDefault)
@@ -59,7 +59,7 @@
 
     @if (!string.IsNullOrEmpty(_message))
     {
-        <p style="margin-top: 16px; color: #10b981;">@_message</p>
+        <p style="margin-top: 16px; color: var(--exito-texto);">@_message</p>
     }
     @if (!string.IsNullOrEmpty(_error))
     {

@@ -1,13 +1,18 @@
+/* Estructura principal: barra lateral morada + área de trabajo clara.
+   El morado ancla la identidad en el lateral y la barra superior queda clara,
+   para que el contraste del área donde se leen cifras sea el máximo posible.
+   Teñir también el área de trabajo se ve más "diseñado" pero cansa a las dos
+   horas, y este es un software de jornada completa. */
+
 .erp-layout {
     display: flex;
     min-height: 100vh;
-    background: var(--content-bg, #1e1e2e);
+    background: var(--superficie-0);
 }
 
 ::deep .erp-sidebar {
-    background: var(--sidebar-bg, #111827) !important;
-    border-right: 1px solid rgba(255,255,255,0.05);
-    box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+    background: var(--lateral-fondo) !important;
+    border-right: none;
 }
 
 .erp-main {
@@ -19,80 +24,87 @@
 }
 
 ::deep .erp-toolbar {
-    background: var(--sidebar-bg, #111827) !important;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    min-height: 48px;
+    background: var(--superficie-1) !important;
+    border-bottom: 1px solid var(--borde);
+    min-height: 52px;
 }
 
 ::deep .erp-toolbar .e-toolbar-item .e-tbar-btn {
-    color: var(--text-primary, #e0e0e0);
+    color: var(--texto-secundario);
 }
 
 .toolbar-title {
-    font-weight: 700;
-    font-size: 1.05rem;
-    color: var(--accent, #00bcd4);
-    letter-spacing: 0.5px;
+    font-weight: var(--peso-medio);
+    font-size: var(--texto-lg);
+    color: var(--texto-primario);
+    letter-spacing: 0;
 }
 
 .toolbar-user {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 8px;
+    gap: var(--gap-sm);
+    padding: 0 var(--pad-sm);
 }
 
 .user-icon {
     font-size: 18px;
-    color: var(--accent, #00bcd4);
+    color: var(--texto-secundario);
 }
 
 .user-name {
-    font-weight: 500;
-    color: var(--text-primary, #e0e0e0);
-    font-size: 0.9rem;
+    font-weight: var(--peso-medio);
+    color: var(--texto-primario);
+    font-size: var(--texto-sm);
 }
 
+/* La cooperativa activa se destaca en dorado: en un sistema multi-tenant,
+   saber en cuál estás parado antes de tocar un asiento contable evita el peor
+   tipo de error. */
 .tenant-badge {
-    background: rgba(0,188,212,0.15);
-    color: var(--accent, #00bcd4);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    background: var(--realce-suave);
+    color: var(--realce-texto);
+    padding: 2px var(--pad-sm);
+    border-radius: var(--radio-pill);
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-medio);
+    white-space: nowrap;
 }
 
 .erp-content {
     flex: 1;
-    padding: 1.5rem;
+    padding: var(--pad-xl);
     overflow-y: auto;
-    background: var(--content-bg, #1e1e2e);
+    background: var(--superficie-0);
 }
 
 .erp-footer {
-    padding: 8px 16px;
+    padding: var(--pad-sm) var(--pad-lg);
     text-align: center;
-    font-size: 0.75rem;
-    color: var(--text-secondary, #9e9e9e);
-    border-top: 1px solid rgba(255,255,255,0.05);
-    background: var(--sidebar-bg, #111827);
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+    border-top: 1px solid var(--borde);
+    background: var(--superficie-1);
 }
 
 .loading-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(23, 19, 28, .55);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10000;
 }
 
+/* Barra de error de Blazor: se deja deliberadamente fuera del sistema de temas.
+   Aparece cuando algo se rompió, y en ese momento conviene que resalte contra
+   la interfaz en vez de integrarse con ella. */
 #blazor-error-ui {
     color-scheme: light only;
-    background: lightyellow;
+    background: var(--alerta-fondo);
+    border-top: 2px solid var(--alerta);
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     box-sizing: border-box;
     display: none;
     left: 0;
@@ -100,7 +112,7 @@
     position: fixed;
     width: 100%;
     z-index: 1000;
-    color: #333;
+    color: var(--texto-secundario);
 }
 
 #blazor-error-ui .dismiss {
@@ -112,7 +124,7 @@
 
 @media (max-width: 767px) {
     .erp-content {
-        padding: 1rem;
+        padding: var(--pad-md);
     }
     .user-name, .tenant-badge {
         display: none;

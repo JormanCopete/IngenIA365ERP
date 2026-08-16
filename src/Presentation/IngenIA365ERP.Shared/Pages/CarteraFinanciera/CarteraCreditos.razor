@@ -41,12 +41,12 @@
                     var row = context as PortfolioRow;
                     var color = row?.DaysOverdue switch
                     {
-                        > 180 => "#8b0000",
-                        > 90 => "#e74c3c",
-                        > 60 => "#e67e22",
-                        > 30 => "#f39c12",
-                        > 0 => "#f1c40f",
-                        _ => "#27ae60"
+                        > 180 => "var(--riesgo-e-txt)",
+                        > 90 => "var(--riesgo-d-txt)",
+                        > 60 => "var(--riesgo-c-txt)",
+                        > 30 => "var(--riesgo-b-txt)",
+                        > 0 => "var(--riesgo-leve-txt)",
+                        _ => "var(--riesgo-a-txt)"
                     };
                 }
                 <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
@@ -58,15 +58,15 @@
                     var row = context as PortfolioRow;
                     var catColor = row?.Category switch
                     {
-                        "A" => "#27ae60",
-                        "B" => "#f39c12",
-                        "C" => "#e67e22",
-                        "D" => "#e74c3c",
-                        "E" => "#8b0000",
-                        _ => "#888"
+                        "A" => "var(--riesgo-a)",
+                        "B" => "var(--riesgo-b)",
+                        "C" => "var(--riesgo-c)",
+                        "D" => "var(--riesgo-d)",
+                        "E" => "var(--riesgo-e)",
+                        _ => "var(--riesgo-nd)"
                     };
                 }
-                <span style="background:@catColor;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Category</span>
+                <span style="background:@catColor;color:var(--acento-texto);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Category</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(PortfolioRow.StatusText)" HeaderText="Estado" Width="120" />

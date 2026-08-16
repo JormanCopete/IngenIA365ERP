@@ -12,7 +12,7 @@
 </div>
 
 <!-- Person search -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
+<div style="background:var(--superficie-1);border-radius:8px;padding:20px;margin-bottom:20px;">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
             <label>Documento del Asociado</label>
@@ -24,19 +24,19 @@
     @if (_balance is not null)
     {
         <div style="margin-top:16px;">
-            <p style="margin:4px 0;color:#27ae60;">Asociado: <strong>@_balance.PersonName</strong></p>
+            <p style="margin:4px 0;color:var(--exito-texto);">Asociado: <strong>@_balance.PersonName</strong></p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px;">
                 <div class="kpi-card">
                     <span class="kpi-label">Total Aportes</span>
-                    <span class="kpi-value" style="color:#27ae60;">@_balance.TotalContributions.ToString("N0")</span>
+                    <span class="kpi-value" style="color:var(--exito-texto);">@_balance.TotalContributions.ToString("N0")</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Total Retiros</span>
-                    <span class="kpi-value" style="color:#e74c3c;">@_balance.TotalReductions.ToString("N0")</span>
+                    <span class="kpi-value" style="color:var(--peligro-texto);">@_balance.TotalReductions.ToString("N0")</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Saldo Actual</span>
-                    <span class="kpi-value" style="color:#3498db;font-size:20px;">@_balance.CurrentBalance.ToString("N0")</span>
+                    <span class="kpi-value" style="color:var(--info-texto);font-size:20px;">@_balance.CurrentBalance.ToString("N0")</span>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@
         <Content>
             <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
                 <label>Asociado: <strong>@_balance?.PersonName</strong></label>
-                <label>Saldo actual: <strong style="color:#3498db;">@(_balance?.CurrentBalance.ToString("N0") ?? "0")</strong></label>
+                <label>Saldo actual: <strong style="color:var(--info-texto);">@(_balance?.CurrentBalance.ToString("N0") ?? "0")</strong></label>
                 <label>Monto a Retirar</label>
                 <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
                 <label>Referencia (opcional)</label>
@@ -112,8 +112,8 @@
 </SfDialog>
 
 <style>
-    .badge-aporte { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
-    .badge-retiro-aporte { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-aporte { background:var(--exito); color:var(--acento-texto); padding:2px 10px; border-radius:12px; font-size:12px; }
+    .badge-retiro-aporte { background:var(--peligro); color:var(--acento-texto); padding:2px 10px; border-radius:12px; font-size:12px; }
 </style>
 
 @code {

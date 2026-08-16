@@ -27,12 +27,12 @@
 
 @if (_bulkResult is not null)
 {
-    <div style="margin-bottom:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;">
+    <div style="margin-bottom:16px;padding:12px;border:1px solid var(--exito);border-radius:4px;">
         <p>Se generaron <b>@_bulkResult.StatementsGenerated</b> extractos para el periodo @_bulkResult.Year-@_bulkResult.Month.ToString("D2").</p>
     </div>
 }
 
-<hr style="border-color:#444;margin:24px 0;" />
+<hr style="border-color:var(--borde);margin:24px 0;" />
 
 <!-- Individual Statement -->
 <h4>Consulta Individual</h4>
@@ -58,7 +58,7 @@
 
 @if (_statement is not null)
 {
-    <div style="margin-top:24px;padding:16px;border:1px solid #444;border-radius:4px;">
+    <div style="margin-top:24px;padding:16px;border:1px solid var(--borde);border-radius:4px;">
         <h4>Extracto de @_statement.PersonName</h4>
         <p>Identificacion: @_statement.IdentificationNumber | Periodo: @_statement.Year-@_statement.Month.ToString("D2")</p>
 

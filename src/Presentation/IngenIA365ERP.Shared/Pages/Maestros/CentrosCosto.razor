@@ -41,7 +41,7 @@
                 <DataAnnotationsValidator />
                 <div style="padding:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
                     <div style="grid-column:span 2;">
-                        <label>Nombre <span style="color:red">*</span></label>
+                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del centro de costo"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
@@ -58,7 +58,7 @@
                             <DropDownListEvents TValue="Guid?" TItem="CompanyOption"
                                                 ValueChange="OnCompanyChanged" />
                         </SfDropDownList>
-                        <small style="color:#888;font-size:11px;">
+                        <small style="color:var(--texto-tenue);font-size:11px;">
                             Si la empresa no aparece, primero registrela en
                             <a href="/maestros/empresas" target="_blank">Maestros - Empresas</a>.
                         </small>

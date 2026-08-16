@@ -20,7 +20,7 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
         <div class="kpi-card">
             <span class="kpi-label">Total en Mora</span>
-            <span class="kpi-value" style="color:#e74c3c;">$@_summary.TotalOverdueAmount.ToString("N0")</span>
+            <span class="kpi-value" style="color:var(--peligro-texto);">$@_summary.TotalOverdueAmount.ToString("N0")</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Cartera Total</span>
@@ -28,7 +28,7 @@
         </div>
         <div class="kpi-card">
             <span class="kpi-label">% Cartera en Riesgo</span>
-            <span class="kpi-value" style="@(_summary.PortfolioAtRiskPct > 5 ? "color:#e74c3c" : "color:#f39c12")">@_summary.PortfolioAtRiskPct.ToString("N2")%</span>
+            <span class="kpi-value" style="@(_summary.PortfolioAtRiskPct > 5 ? "color:var(--peligro-texto)" : "color:var(--alerta-texto)")">@_summary.PortfolioAtRiskPct.ToString("N2")%</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Creditos en Mora</span>
@@ -38,27 +38,27 @@
 
     <!-- Classification distribution -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px;">
-        <div class="class-card" style="border-left:4px solid #27ae60;">
+        <div class="class-card" style="border-left:4px solid var(--exito);">
             <span class="class-label">A - Normal</span>
             <span class="class-count">@_summary.ClassA creditos</span>
             <span class="class-amount">$@_summary.AmountA.ToString("N0")</span>
         </div>
-        <div class="class-card" style="border-left:4px solid #f39c12;">
+        <div class="class-card" style="border-left:4px solid var(--alerta);">
             <span class="class-label">B - Aceptable</span>
             <span class="class-count">@_summary.ClassB creditos</span>
             <span class="class-amount">$@_summary.AmountB.ToString("N0")</span>
         </div>
-        <div class="class-card" style="border-left:4px solid #e67e22;">
+        <div class="class-card" style="border-left:4px solid var(--riesgo-c);">
             <span class="class-label">C - Apreciable</span>
             <span class="class-count">@_summary.ClassC creditos</span>
             <span class="class-amount">$@_summary.AmountC.ToString("N0")</span>
         </div>
-        <div class="class-card" style="border-left:4px solid #e74c3c;">
+        <div class="class-card" style="border-left:4px solid var(--peligro);">
             <span class="class-label">D - Significativo</span>
             <span class="class-count">@_summary.ClassD creditos</span>
             <span class="class-amount">$@_summary.AmountD.ToString("N0")</span>
         </div>
-        <div class="class-card" style="border-left:4px solid #8b0000;">
+        <div class="class-card" style="border-left:4px solid var(--riesgo-e);">
             <span class="class-label">E - Incobrable</span>
             <span class="class-count">@_summary.ClassE creditos</span>
             <span class="class-amount">$@_summary.AmountE.ToString("N0")</span>
@@ -98,7 +98,7 @@
             <Template>
                 @{
                     var row = context as DefaultPortfolioRow;
-                    var color = row?.DaysOverdue switch { > 180 => "#8b0000", > 90 => "#e74c3c", > 60 => "#e67e22", > 30 => "#f39c12", _ => "#f1c40f" };
+                    var color = row?.DaysOverdue switch { > 180 => "var(--riesgo-e-txt)", > 90 => "var(--riesgo-d-txt)", > 60 => "var(--riesgo-c-txt)", > 30 => "var(--riesgo-b-txt)", _ => "var(--riesgo-leve-txt)" };
                 }
                 <span style="color:@color;font-weight:bold;">@row?.DaysOverdue</span>
             </Template>
@@ -107,9 +107,9 @@
             <Template>
                 @{
                     var row = context as DefaultPortfolioRow;
-                    var catColor = row?.Classification switch { "A" => "#27ae60", "B" => "#f39c12", "C" => "#e67e22", "D" => "#e74c3c", "E" => "#8b0000", _ => "#888" };
+                    var catColor = row?.Classification switch { "A" => "var(--riesgo-a)", "B" => "var(--riesgo-b)", "C" => "var(--riesgo-c)", "D" => "var(--riesgo-d)", "E" => "var(--riesgo-e)", _ => "var(--riesgo-nd)" };
                 }
-                <span style="background:@catColor;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Classification</span>
+                <span style="background:@catColor;color:var(--acento-texto);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">@row?.Classification</span>
             </Template>
         </GridColumn>
         <GridColumn Field="@nameof(DefaultPortfolioRow.CapitalBalance)" HeaderText="Cap.Mora" Width="120" TextAlign="TextAlign.Right" Format="N0" />
@@ -147,10 +147,10 @@
             @if (_calcResult is not null)
             {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <span style="color:#888;">Creditos procesados:</span><span>@_calcResult.PortfoliosProcessed</span>
-                    <span style="color:#888;">Nuevas moras:</span><span style="color:#e74c3c;">@_calcResult.NewDefaults</span>
-                    <span style="color:#888;">Moras actualizadas:</span><span style="color:#f39c12;">@_calcResult.UpdatedDefaults</span>
-                    <span style="color:#888;">Moras limpiadas:</span><span style="color:#27ae60;">@_calcResult.ClearedDefaults</span>
+                    <span style="color:var(--texto-tenue);">Creditos procesados:</span><span>@_calcResult.PortfoliosProcessed</span>
+                    <span style="color:var(--texto-tenue);">Nuevas moras:</span><span style="color:var(--peligro-texto);">@_calcResult.NewDefaults</span>
+                    <span style="color:var(--texto-tenue);">Moras actualizadas:</span><span style="color:var(--alerta-texto);">@_calcResult.UpdatedDefaults</span>
+                    <span style="color:var(--texto-tenue);">Moras limpiadas:</span><span style="color:var(--exito-texto);">@_calcResult.ClearedDefaults</span>
                 </div>
             }
         </Content>
@@ -162,8 +162,8 @@
 
 <style>
     .kpi-card {
-        background: var(--sf-card-bg, #1e1e2e);
-        border: 1px solid #333;
+        background: var(--sf-card-bg, var(--superficie-1));
+        border: 1px solid var(--borde);
         border-radius: 8px;
         padding: 12px;
         display: flex;
@@ -171,18 +171,18 @@
         align-items: center;
         text-align: center;
     }
-    .kpi-value { font-size: 22px; font-weight: bold; color: #00bcd4; }
-    .kpi-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .kpi-value { font-size: 22px; font-weight: bold; color: var(--acento); }
+    .kpi-label { font-size: 12px; color: var(--texto-tenue); margin-bottom: 4px; }
     .class-card {
-        background: #1a1a2e;
+        background: var(--superficie-2);
         padding: 10px 12px;
         border-radius: 6px;
         display: flex;
         flex-direction: column;
     }
-    .class-label { font-size: 13px; font-weight: bold; color: #ccc; }
-    .class-count { font-size: 12px; color: #888; }
-    .class-amount { font-size: 14px; color: #fff; margin-top: 2px; }
+    .class-label { font-size: 13px; font-weight: bold; color: var(--texto-secundario); }
+    .class-count { font-size: 12px; color: var(--texto-tenue); }
+    .class-amount { font-size: 14px; color: var(--texto-primario); margin-top: 2px; }
 </style>
 
 @code {

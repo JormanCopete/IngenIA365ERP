@@ -13,7 +13,7 @@
               OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
 </div>
 
-<div style="background:#1e1e2e;border-radius:8px;padding:24px;max-width:700px;">
+<div style="background:var(--superficie-1);border-radius:8px;padding:24px;max-width:700px;">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <!-- Person search -->
         <div style="grid-column:1/3;">
@@ -24,7 +24,7 @@
             </div>
             @if (_personName is not null)
             {
-                <p style="color:#27ae60;margin:4px 0;">@_personName</p>
+                <p style="color:var(--exito-texto);margin:4px 0;">@_personName</p>
             }
         </div>
 
@@ -45,7 +45,7 @@
                               ValueChange="RecalculateProjection" />
             @if (_selectedParam is not null)
             {
-                <small style="color:#888;">Min: @(_selectedParam.MinAmount?.ToString("N0") ?? "N/A") - Max: @(_selectedParam.MaxAmount?.ToString("N0") ?? "N/A")</small>
+                <small style="color:var(--texto-tenue);">Min: @(_selectedParam.MinAmount?.ToString("N0") ?? "N/A") - Max: @(_selectedParam.MaxAmount?.ToString("N0") ?? "N/A")</small>
             }
         </div>
 
@@ -66,16 +66,16 @@
     <!-- Rate and projection -->
     @if (_projectedRate > 0 || _amount > 0)
     {
-        <div style="margin-top:20px;padding:16px;background:#16213e;border-radius:8px;">
+        <div style="margin-top:20px;padding:16px;background:var(--superficie-2);border-radius:8px;">
             <h4 style="margin-top:0;">Proyeccion de Intereses</h4>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
                 <div class="kpi-card">
                     <span class="kpi-label">Tasa Anual</span>
-                    <span class="kpi-value" style="color:#3498db;">@_projectedRate.ToString("N2")%</span>
+                    <span class="kpi-value" style="color:var(--info-texto);">@_projectedRate.ToString("N2")%</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Interes al Vencimiento</span>
-                    <span class="kpi-value" style="color:#27ae60;">@_projectedInterest.ToString("N0")</span>
+                    <span class="kpi-value" style="color:var(--exito-texto);">@_projectedInterest.ToString("N0")</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Total a Recibir</span>

@@ -46,7 +46,7 @@
                 <DataAnnotationsValidator />
                 <div style="padding:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
                     <div>
-                        <label>NIT / Documento <span style="color:red">*</span></label>
+                        <label>NIT / Documento <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                         <ValidationMessage For="@(() => _model.TaxId)" />
@@ -57,7 +57,7 @@
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
                     </div>
                     <div style="grid-column:span 2;">
-                        <label>Nombre / Razon Social <span style="color:red">*</span></label>
+                        <label>Nombre / Razon Social <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre completo de la empresa"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
