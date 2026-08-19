@@ -19,6 +19,7 @@ using IngenIA365ERP.API.Hubs;
 using IngenIA365ERP.API.HealthChecks;
 using Microsoft.OpenApi;  // En OpenApi 2.x los tipos se movieron de Microsoft.OpenApi.Models a la raiz Microsoft.OpenApi
 using Serilog;
+using IngenIA365ERP.Persistence.Configuration;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -32,6 +33,19 @@ try
     QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
     var builder = WebApplication.CreateBuilder(args);
+
+    // === Infraestructura de la maquina (local / docker / wsl) ===
+    // Se agregan DESPUES de CreateBuilder para que ganen sobre appsettings, y
+    // se vuelven a poner las variables de entorno encima al final: en un
+    // cluster la configuracion llega por variables y un archivo del
+    // repositorio no puede pisarla.
+    builder.Configuration.AgregarInfraestructuraDeLaMaquina(builder.Environment.EnvironmentName);
+    var destinosResueltos = InfraestructuraConfiguracion.Resolver(builder.Configuration);
+    if (destinosResueltos.Count > 0)
+    {
+        builder.Configuration.AddInMemoryCollection(destinosResueltos);
+    }
+    builder.Configuration.AddEnvironmentVariables();
 
     // T123 — Serilog enrichers para central_user_id + active_tenant_id desde
     // los claims del JWT. Se rehidrata desde DI para tener IHttpContextAccessor.
@@ -218,6 +232,8 @@ try
             dbOpts.AutoMigrate,
             dbOpts.Seed.RunParametricSeed,
             dbOpts.Seed.RunTestSeed?.ToString() ?? "(default por ambiente)");
+
+        Log.Information("{Resumen}", InfraestructuraConfiguracion.Describir(app.Configuration));
     }
 
     // Initialize MongoDB collections and indexes
