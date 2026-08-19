@@ -18,98 +18,132 @@ cómodo es tener la base y el correo instalados en el sistema, pero **Redis no
 tiene build oficial para Windows** y termina levantándose en WSL o en un
 contenedor. Un interruptor global obligaría a mover todo junto.
 
-## Cómo se decide, de menor a mayor prioridad
+## Cuántos archivos hay, y por qué esos
 
 ```
-1. appsettings.json                             base común
-2. appsettings.Development.json                 el ambiente
-3. appsettings.Development.Windows.json         ← tu sistema operativo (versionado)
-4. appsettings.Development.local.json           ← tu máquina (NO versionado)
-5. Variables de entorno                         ← siempre ganan
+appsettings.json                     comun a todos los ambientes
+appsettings.Development.json         tu maquina  ← aca vive Infraestructura
+appsettings.Production.json          desplegado
+appsettings.Development.local.json   opcional, por maquina, git lo ignora
 ```
 
-Los pasos 3 y 4 son los nuevos. El 3 se elige solo según el sistema operativo
-donde arranques: `Windows`, `Linux` o `macOS`. El 5 va último a propósito: en un
-clúster la configuración llega por variables, y ningún archivo del repositorio
-puede pisarla.
+**Cuatro, y sólo uno es obligatorio tocar.** No hay archivo por sistema
+operativo: la elección no depende de si usás Windows o Mac sino de cómo tenés
+montado *tu* equipo, y para eso alcanza el `.local.json`. Tampoco hay
+`appsettings.QA.json`: QA no declaraba nada que el despliegue no inyecte ya por
+variables de entorno.
 
-## Valores por defecto de cada sistema
+Orden de precedencia, de menor a mayor:
 
-| Servicio | Windows | Linux | macOS |
-|---|---|---|---|
-| PostgreSQL | Docker | Local | Local |
-| SQL Server | Local | Docker | Docker |
-| Redis | Docker | Local | Local |
-| MongoDB | Local | Local | Local |
-| SMTP | Docker | Docker | Docker |
+```
+appsettings.json
+appsettings.Development.json
+appsettings.Development.local.json     ← tu maquina
+variables de entorno                   ← siempre ganan
+```
 
-Dos elecciones que no son arbitrarias:
+## Los ambientes desplegados no leen nada de esto
 
-- **SQL Server en macOS no puede ser `Local`**: no existe build nativo. En Apple
-  Silicon corre en contenedor y no hay alternativa.
-- **PostgreSQL en Windows quedó en `Docker`** aunque la preferencia sea local,
-  porque es donde están hoy los datos sembrados. Ver más abajo cómo cambiarlo.
+Ojo con un detalle que no es obvio: **la VPS de DEV corre con
+`ASPNETCORE_ENVIRONMENT=Development`**, así que lee el *mismo*
+`appsettings.Development.json` que tu portátil, con sus catálogos apuntando a
+`localhost`.
 
-## Ajustar tu máquina
+Por eso la sección `Infraestructura` **se ignora por completo dentro de un
+contenedor**. La guardia mira `DOTNET_RUNNING_IN_CONTAINER`, que fijan las
+imágenes base de .NET, y no el nombre del ambiente:
 
-Copiá `appsettings.Development.local.json.ejemplo` como
-`appsettings.Development.local.json`. Git lo ignora. Sólo hace falta declarar lo
-que cambia; el resto se hereda.
+- Fiarse del nombre del ambiente dejaría al pod de DEV resolviendo contra
+  `localhost`.
+- Fiarse de que las variables de entorno ganen por orden funciona hoy, pero se
+  rompe el día que alguien olvide una.
+
+Con la guardia, la sección es inerte en cualquier despliegue, se llame como se
+llame el ambiente. En el arranque se ve así:
+
+```
+Infraestructura: en contenedor — la configuración llega por variables de entorno.
+```
+
+## Valores por defecto
+
+| Servicio | Valor | Por qué |
+|---|---|---|
+| PostgreSQL | `Local` | Instalado en el sistema, puerto 5432 |
+| SQL Server | `Local` | Autenticación de Windows, sin contraseñas |
+| Redis | `Docker` | No hay build oficial para Windows |
+| MongoDB | `Local` | Servicio de Windows, puerto 27017 |
+| SMTP | `Docker` | smtp4dev captura el correo en el 1025 |
+
+## Preparar el PostgreSQL local
+
+El PostgreSQL del puerto 5432 y el del contenedor (5433) son instalaciones
+**distintas y sin relación**. Antes de usar el local hay que crear el rol y las
+dos bases:
+
+```bash
+.\tools\scripts\preparar-postgres-local.ps1
+```
+
+Pide dos contraseñas por consola —la del superusuario `postgres` y la que querés
+para el rol `ingenia`— y no guarda ninguna: no viajan por la línea de comandos
+ni quedan en el historial.
+
+Si usás para el rol la misma contraseña que ya figura en
+`appsettings.Development.json`, no hay que tocar nada más. Si usás otra, ponela
+en `appsettings.Development.local.json`:
 
 ```jsonc
 {
   "Infraestructura": {
-    "Destinos": { "Redis": "Wsl" },
-    "Redis": { "Wsl": "172.24.80.1:6379,abortConnect=false" }
+    "PostgreSQL": {
+      "Local": {
+        "Operativa": "Host=localhost;Port=5432;Database=ingenia365erp;Username=ingenia;Password=TU_CLAVE",
+        "Admin":     "Host=localhost;Port=5432;Database=ingenia365erp_admin;Username=ingenia;Password=TU_CLAVE"
+      }
+    }
   }
 }
 ```
 
-> **La IP de WSL cambia al reiniciar.** Si Redis en WSL responde en
-> `localhost:6379` —lo habitual con WSL2— usá esa dirección y te evitás el
-> problema. La IP del adaptador `vEthernet (WSL)` sólo hace falta cuando el
-> servicio escucha exclusivamente en la interfaz de WSL. Se consulta con
-> `wsl hostname -I`.
+**Los datos no se copian solos.** `AutoMigrate` crea el esquema y los seeders
+cargan los paramétricos, pero el administrador maestro hay que volver a
+sembrarlo:
 
-## Pasar PostgreSQL a local en Windows
+```bash
+MASTER_ADMIN_EMAIL="tu.correo@ingenia365.com" MASTER_ADMIN_PASSWORD="tu-clave" dotnet run --project src/Presentation/IngenIA365ERP.API
+```
 
-El PostgreSQL del puerto 5432 y el del contenedor (5433) son instalaciones
-**distintas y sin relación**: las bases del ERP están en el contenedor. Para
-mover el desarrollo al local hacen falta tres pasos, en este orden:
-
-1. Crear las bases en el PostgreSQL local:
-   ```sql
-   CREATE DATABASE ingenia365erp;
-   CREATE DATABASE ingenia365erp_admin;
-   ```
-2. Ajustar usuario y contraseña en `Infraestructura:PostgreSQL:Local` (el
-   catálogo trae `ingenia`, que es el del contenedor).
-3. Cambiar `Infraestructura:Destinos:PostgreSQL` a `Local`.
-
-Al arrancar, `AutoMigrate` crea el esquema, pero **los datos no se copian**: el
-administrador maestro y las cooperativas que hayas creado siguen en el
-contenedor. Hay que volver a sembrarlos, o volcar y restaurar.
+Lo que ya tengas en el contenedor sigue intacto: es otra instalación.
 
 ## Verificar contra qué estás corriendo
 
 La API lo dice en cada arranque, y por eso se agregó:
 
 ```
-Infraestructura (Windows): MongoDB=Local · PostgreSQL=Docker · Redis=Docker · Smtp=Docker · SqlServer=Local
-Base de datos: proveedor PostgreSQL (origen: appsettings) — operativa host=localhost;port=5433;…
+Infraestructura (Windows): MongoDB=Local · PostgreSQL=Local · Redis=Docker · Smtp=Docker · SqlServer=Local
+Base de datos: proveedor PostgreSQL (origen: appsettings) — operativa host=localhost;port=5432;…
 ```
 
-Con tres motores encendidos a la vez en la misma máquina, «¿esto es el local o
-el del contenedor?» no es una pregunta ociosa. Ahora la responde el propio log.
+Con varios motores encendidos a la vez en la misma máquina, «¿esto es el local o
+el del contenedor?» no es una pregunta ociosa.
 
-## Si te equivocás en el nombre
+## Si algo no conecta
 
-Falla al arrancar, con el detalle:
+El fallo es explícito y con reintentos, no un timeout mudo:
+
+```
+Base de datos no disponible aún (host=localhost;port=5432;database=postgres;…)
+  — intento 1: 28P01: la autentificación password falló para el usuario «ingenia».
+```
+
+Y si el destino está mal escrito, ni siquiera arranca:
 
 ```
 Infraestructura:Destinos:Redis apunta a 'Kubernetes'. 'Kubernetes' no es un destino
 conocido. Los habituales son Local, Docker y Wsl. Definidos para Redis: Docker,
-Local, Wsl. Revisá appsettings.<Ambiente>.Windows.json o el .local.json de esta máquina.
+Local, Wsl. Revisá la sección Infraestructura de appsettings.<Ambiente>.json o el
+appsettings.<Ambiente>.local.json de esta máquina.
 ```
 
 Es deliberado que no arranque en vez de seguir con un valor por defecto: un
@@ -121,5 +155,4 @@ la base equivocada, y eso es peor que no arrancar.
 En `InfraestructuraConfiguracion.Resolver` hay un `switch` por servicio. Cada
 rama traduce el destino elegido a **la clave que el consumidor ya leía**. Ése es
 el punto del diseño: ni Caching, ni Audit, ni Storage, ni Persistence saben que
-esto existe: siguen leyendo `ConnectionStrings:Redis` como siempre. Por eso un
-ambiente que no declare la sección `Infraestructura` no cambia en nada.
+esto existe — siguen leyendo `ConnectionStrings:Redis` como siempre.

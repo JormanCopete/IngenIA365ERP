@@ -161,6 +161,55 @@ public class InfraestructuraConfiguracionTests
     }
 
     [Fact]
+    public void DentroDeUnContenedor_NoResuelveNada()
+    {
+        // La VPS de DEV corre con ASPNETCORE_ENVIRONMENT=Development, o sea que
+        // lee el MISMO appsettings.Development.json que un portatil, con sus
+        // catalogos apuntando a localhost. La guardia es por contenedor y no
+        // por nombre de ambiente justamente por eso.
+        var previo = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+
+            var pares = CatalogoCompleto();
+            pares["Infraestructura:Destinos:PostgreSQL"] = "Local";
+            pares["Infraestructura:Destinos:Redis"] = "Docker";
+
+            InfraestructuraConfiguracion.EstaEnContenedor().Should().BeTrue();
+            InfraestructuraConfiguracion.Resolver(Configurar(pares)).Should().BeEmpty(
+                "en un contenedor la configuración la inyecta el despliegue");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", previo);
+        }
+    }
+
+    [Fact]
+    public void DentroDeUnContenedor_UnDestinoInvalidoTampocoRompeElArranque()
+    {
+        // Un catálogo pensado para desarrollo no puede tumbar un pod. La
+        // guardia se evalúa ANTES de validar, no después.
+        var previo = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+
+            var pares = CatalogoCompleto();
+            pares["Infraestructura:Destinos:Redis"] = "DestinoQueNoExiste";
+
+            var accion = () => InfraestructuraConfiguracion.Resolver(Configurar(pares));
+
+            accion.Should().NotThrow();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", previo);
+        }
+    }
+
+    [Fact]
     public void ElSistemaOperativoActualCoincideConElNombreDeArchivo()
     {
         // Si esto devolviera algo distinto, el archivo por sistema operativo

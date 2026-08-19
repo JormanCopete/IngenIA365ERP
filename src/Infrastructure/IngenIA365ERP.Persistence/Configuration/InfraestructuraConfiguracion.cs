@@ -19,28 +19,29 @@ namespace IngenIA365ERP.Persistence.Configuration;
 public static class InfraestructuraConfiguracion
 {
     /// <summary>
-    /// Agrega los archivos por sistema operativo y el de la máquina.
+    /// Agrega el archivo de configuración propio de esta máquina.
+    ///
+    /// <para>
+    /// Es UN solo archivo, no uno por sistema operativo: la elección no depende
+    /// de la familia del sistema sino de cómo tenga montado cada quien su
+    /// equipo. Dos personas con Windows pueden querer cosas distintas, y la
+    /// misma persona cambia de idea al cambiar de máquina.
+    /// </para>
     ///
     /// <para>
     /// El orden es el que manda: lo último agregado gana. Por eso hay que
     /// re-agregar las variables de entorno DESPUÉS de llamar a esto, o un
-    /// archivo del repositorio terminaría pisando lo que inyecta Kubernetes.
+    /// archivo local terminaría pisando lo que inyecta el despliegue.
     /// </para>
     /// </summary>
-    /// <param name="nombreAmbiente">Development, Staging, Production…</param>
+    /// <param name="nombreAmbiente">Development, QA, Production…</param>
     public static IConfigurationBuilder AgregarInfraestructuraDeLaMaquina(
         this IConfigurationBuilder builder, string nombreAmbiente)
     {
-        var so = SistemaOperativoActual();
-
-        // appsettings.Development.Windows.json — versionado: son las opciones
-        // razonables por defecto para quien trabaje en ese sistema.
-        builder.AddJsonFile($"appsettings.{nombreAmbiente}.{so}.json",
-            optional: true, reloadOnChange: true);
-
         // appsettings.Development.local.json — NO versionado: cada máquina
-        // ajusta lo suyo (la IP de WSL, un puerto ocupado) sin pelearse con el
-        // resto del equipo por el mismo archivo.
+        // ajusta lo suyo (la IP de WSL, un puerto ocupado, una instancia con
+        // otro usuario) sin pelearse con el resto del equipo por el mismo
+        // archivo.
         builder.AddJsonFile($"appsettings.{nombreAmbiente}.local.json",
             optional: true, reloadOnChange: true);
 
@@ -48,7 +49,8 @@ public static class InfraestructuraConfiguracion
     }
 
     /// <summary>
-    /// Nombre del sistema operativo tal como aparece en el nombre de archivo.
+    /// Sistema operativo, sólo para el resumen de arranque. Ya no elige
+    /// archivo: la configuración por máquina va en un único .local.json.
     /// </summary>
     public static string SistemaOperativoActual() =>
         OperatingSystem.IsWindows() ? "Windows"
@@ -70,6 +72,21 @@ public static class InfraestructuraConfiguracion
     public static Dictionary<string, string?> Resolver(IConfiguration configuracion)
     {
         var resueltos = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+        // Dentro de un contenedor esta sección no significa nada: "Local",
+        // "Docker" y "Wsl" son categorías de una máquina de desarrollo. La
+        // configuración real la inyecta el despliegue por variables.
+        //
+        // La guardia es por contenedor y NO por nombre de ambiente a propósito:
+        // la VPS de DEV corre con ASPNETCORE_ENVIRONMENT=Development, o sea que
+        // lee el MISMO appsettings.Development.json que un portátil. Confiar en
+        // el nombre del ambiente dejaría a ese pod resolviendo contra
+        // localhost; confiar en que las variables de entorno ganen por orden
+        // funciona, pero se rompe el día que alguien olvide una. Esto no
+        // depende de ninguna de las dos cosas.
+        if (EstaEnContenedor())
+            return resueltos;
+
         var seccion = configuracion.GetSection(InfraestructuraOptions.SectionName);
         if (!seccion.Exists())
             return resueltos;
@@ -114,6 +131,16 @@ public static class InfraestructuraConfiguracion
         return resueltos;
     }
 
+    /// <summary>
+    /// Las imágenes base de .NET fijan DOTNET_RUNNING_IN_CONTAINER=true. Se
+    /// acepta también la variante ASPNETCORE_ por si la imagen es más vieja.
+    /// </summary>
+    public static bool EstaEnContenedor() =>
+        string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+            "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_RUNNING_IN_CONTAINER"),
+            "true", StringComparison.OrdinalIgnoreCase);
+
     private static void ProyectarBase(
         Dictionary<string, string?> resueltos,
         Dictionary<string, InfraestructuraOptions.DestinoBaseDatos> catalogo,
@@ -151,8 +178,8 @@ public static class InfraestructuraConfiguracion
         throw new InvalidOperationException(
             $"Infraestructura:Destinos:{servicio} apunta a '{destino}'. {pista} " +
             $"Definidos para {servicio}: {disponibles}. " +
-            $"Revisá appsettings.<Ambiente>.{SistemaOperativoActual()}.json " +
-            "o el .local.json de esta máquina.");
+            "Revisá la sección Infraestructura de appsettings.<Ambiente>.json " +
+            "o el appsettings.<Ambiente>.local.json de esta máquina.");
     }
 
     /// <summary>
@@ -163,6 +190,9 @@ public static class InfraestructuraConfiguracion
     /// </summary>
     public static string Describir(IConfiguration configuracion)
     {
+        if (EstaEnContenedor())
+            return "Infraestructura: en contenedor — la configuración llega por variables de entorno.";
+
         var seccion = configuracion.GetSection(InfraestructuraOptions.SectionName);
         if (!seccion.Exists())
             return "Infraestructura: sin sección — se usan las cadenas de conexión tal cual.";
