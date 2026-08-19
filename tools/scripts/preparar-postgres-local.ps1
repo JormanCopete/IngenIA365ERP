@@ -39,6 +39,79 @@ function Leer-Secreto([string]$mensaje) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 }
 
+# El resultado de la ultima invocacion, para poder mostrar el error REAL de psql
+# en vez de un mensaje generico adivinando la causa.
+$script:UltimaSalida = ''
+
+# -----------------------------------------------------------------------------
+# Ejecuta psql y devuelve SOLO el codigo de salida.
+#
+# El `$null =` no es cosmetico. Sin el, la funcion emite al pipeline la salida
+# de psql Y el codigo, o sea un arreglo; entonces `(Invocar-Psql ...) -ne 0`
+# compara un arreglo contra cero, PowerShell lo interpreta como filtro, devuelve
+# los elementos distintos de cero —el texto que imprimio psql— y el `if` se
+# dispara aunque el comando haya funcionado. Es exactamente lo que pasaba: la
+# conexion era correcta y el script reportaba que no habia podido conectar.
+# -----------------------------------------------------------------------------
+function Invocar-Psql {
+    param(
+        [Parameter(Mandatory)][string]$Base,
+        [Parameter(Mandatory)][string]$Sql,
+        [Parameter(Mandatory)][string]$Clave
+    )
+
+    # Windows PowerShell 5.1 convierte cualquier escritura a stderr de un
+    # ejecutable nativo en error terminante cuando ErrorActionPreference es
+    # 'Stop'. psql escribe avisos por ahi. El exito se juzga por $LASTEXITCODE.
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:PGPASSWORD = $Clave
+    try {
+        $salida = & $psql.FullName `
+            -h localhost -p $Puerto -U $Superusuario -d $Base `
+            -v ON_ERROR_STOP=1 -c $Sql 2>&1
+        $script:UltimaSalida = ($salida | ForEach-Object { "$_" }) -join [Environment]::NewLine
+        return $LASTEXITCODE
+    }
+    finally {
+        $env:PGPASSWORD = $null
+        $ErrorActionPreference = $previo
+    }
+}
+
+# Igual que la anterior pero devuelve el TEXTO de una consulta de un solo valor.
+function Consultar-Psql {
+    param(
+        [Parameter(Mandatory)][string]$Base,
+        [Parameter(Mandatory)][string]$Sql,
+        [Parameter(Mandatory)][string]$Clave
+    )
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:PGPASSWORD = $Clave
+    try {
+        $salida = & $psql.FullName `
+            -h localhost -p $Puerto -U $Superusuario -d $Base -tAc $Sql 2>$null
+        return ("$salida").Trim()
+    }
+    finally {
+        $env:PGPASSWORD = $null
+        $ErrorActionPreference = $previo
+    }
+}
+
+function Mostrar-ErrorDePsql([string]$queIntentaba) {
+    Write-Host ""
+    Write-Host "Fallo al $queIntentaba. Esto respondio PostgreSQL:" -ForegroundColor Red
+    if ([string]::IsNullOrWhiteSpace($script:UltimaSalida)) {
+        Write-Host "  (sin salida; revisa que el servicio este escuchando en el puerto $Puerto)" -ForegroundColor Yellow
+    }
+    else {
+        $script:UltimaSalida -split [Environment]::NewLine |
+            ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+    }
+}
+
 Write-Host ""
 Write-Host "Contrasena del superusuario '$Superusuario' en localhost:$Puerto" -ForegroundColor Cyan
 Write-Host "(la que definiste al instalar PostgreSQL; no se guarda en ningun lado)" -ForegroundColor DarkGray
@@ -50,72 +123,86 @@ Write-Host "Si usas la misma que ya figura en appsettings.Development.json para 
 Write-Host "destino Docker, no hay que tocar ninguna configuracion despues." -ForegroundColor DarkGray
 $claveRol = Leer-Secreto "Contrasena para $Rol"
 
-# ErrorActionPreference vuelve a Continue alrededor de las llamadas nativas:
-# en Windows PowerShell 5.1 cualquier escritura a stderr de un ejecutable se
-# convierte en error terminante con 'Stop', y psql escribe avisos por ahi.
-function Invocar-Psql([string]$base, [string]$sql) {
-    $previo = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $env:PGPASSWORD = $claveSuper
-    try {
-        & $psql.FullName -h localhost -p $Puerto -U $Superusuario -d $base -v ON_ERROR_STOP=1 -c $sql
-        return $LASTEXITCODE
-    }
-    finally {
-        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
-        $ErrorActionPreference = $previo
-    }
+if ([string]::IsNullOrWhiteSpace($claveRol)) {
+    Write-Host "La contrasena del rol no puede quedar vacia." -ForegroundColor Red
+    exit 1
 }
 
 Write-Host ""
 Write-Host "==> Verificando acceso..." -ForegroundColor Cyan
-if ((Invocar-Psql 'postgres' 'SELECT 1') -ne 0) {
-    Write-Host ""
-    Write-Host "No pude conectar como '$Superusuario'. Revisa la contrasena y que el" -ForegroundColor Red
-    Write-Host "servicio de PostgreSQL este escuchando en el puerto $Puerto." -ForegroundColor Red
+if ((Invocar-Psql -Base 'postgres' -Sql 'SELECT 1' -Clave $claveSuper) -ne 0) {
+    Mostrar-ErrorDePsql "conectar como '$Superusuario'"
     exit 1
 }
+Write-Host "    conexion OK." -ForegroundColor Green
 
 # El rol se crea con la contrasena escapada como literal de cadena de SQL: una
 # comilla simple dentro de la contrasena romperia la sentencia.
 $claveEscapada = $claveRol.Replace("'", "''")
 
-Write-Host "==> Creando el rol '$Rol' (si ya existe, solo le actualiza la contrasena)..." -ForegroundColor Cyan
+Write-Host "==> Rol '$Rol' (si ya existe, solo se le actualiza la contrasena)..." -ForegroundColor Cyan
 $sqlRol = @"
 DO `$`$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$Rol') THEN
         ALTER ROLE $Rol WITH LOGIN CREATEDB PASSWORD '$claveEscapada';
-        RAISE NOTICE 'rol % actualizado', '$Rol';
     ELSE
         CREATE ROLE $Rol WITH LOGIN CREATEDB PASSWORD '$claveEscapada';
-        RAISE NOTICE 'rol % creado', '$Rol';
     END IF;
 END
 `$`$;
 "@
-if ((Invocar-Psql 'postgres' $sqlRol) -ne 0) { exit 1 }
+if ((Invocar-Psql -Base 'postgres' -Sql $sqlRol -Clave $claveSuper) -ne 0) {
+    Mostrar-ErrorDePsql "crear el rol '$Rol'"
+    exit 1
+}
+Write-Host "    listo." -ForegroundColor Green
 
-foreach ($base in @($BaseOperativa, $BaseAdmin)) {
-    Write-Host "==> Base '$base'..." -ForegroundColor Cyan
-    # CREATE DATABASE no admite IF NOT EXISTS: se consulta antes.
-    $previo = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $env:PGPASSWORD = $claveSuper
-    $existe = (& $psql.FullName -h localhost -p $Puerto -U $Superusuario -d postgres -tAc `
-        "SELECT 1 FROM pg_database WHERE datname = '$base'") 2>$null
-    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
-    $ErrorActionPreference = $previo
+foreach ($nombreBase in @($BaseOperativa, $BaseAdmin)) {
+    Write-Host "==> Base '$nombreBase'..." -ForegroundColor Cyan
 
-    if ("$existe".Trim() -eq '1') {
+    # CREATE DATABASE no admite IF NOT EXISTS: hay que consultar antes.
+    $existe = Consultar-Psql -Base 'postgres' -Clave $claveSuper `
+        -Sql "SELECT 1 FROM pg_database WHERE datname = '$nombreBase'"
+
+    if ($existe -eq '1') {
         Write-Host "    ya existia; se le asigna '$Rol' como duenio." -ForegroundColor DarkGray
-        if ((Invocar-Psql 'postgres' "ALTER DATABASE $base OWNER TO $Rol;") -ne 0) { exit 1 }
+        if ((Invocar-Psql -Base 'postgres' -Sql "ALTER DATABASE $nombreBase OWNER TO $Rol;" -Clave $claveSuper) -ne 0) {
+            Mostrar-ErrorDePsql "cambiar el duenio de '$nombreBase'"
+            exit 1
+        }
     }
     else {
-        if ((Invocar-Psql 'postgres' "CREATE DATABASE $base OWNER $Rol;") -ne 0) { exit 1 }
+        if ((Invocar-Psql -Base 'postgres' -Sql "CREATE DATABASE $nombreBase OWNER $Rol;" -Clave $claveSuper) -ne 0) {
+            Mostrar-ErrorDePsql "crear la base '$nombreBase'"
+            exit 1
+        }
         Write-Host "    creada." -ForegroundColor Green
     }
+
+    # El ERP usa el schema 'dbo' (herencia de SQL Server) y lo crea EF, pero el
+    # rol necesita poder crearlo.
+    if ((Invocar-Psql -Base $nombreBase -Sql "GRANT ALL ON DATABASE $nombreBase TO $Rol; GRANT CREATE ON SCHEMA public TO $Rol;" -Clave $claveSuper) -ne 0) {
+        Mostrar-ErrorDePsql "otorgar permisos sobre '$nombreBase'"
+        exit 1
+    }
 }
+
+Write-Host ""
+Write-Host "==> Comprobando que el rol '$Rol' pueda entrar de verdad..." -ForegroundColor Cyan
+$previo = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$env:PGPASSWORD = $claveRol
+$null = & $psql.FullName -h localhost -p $Puerto -U $Rol -d $BaseOperativa -tAc 'SELECT 1' 2>&1
+$codigoRol = $LASTEXITCODE
+$env:PGPASSWORD = $null
+$ErrorActionPreference = $previo
+
+if ($codigoRol -ne 0) {
+    Write-Host "    El rol se creo pero NO pudo conectarse. Revisa pg_hba.conf." -ForegroundColor Red
+    exit 1
+}
+Write-Host "    '$Rol' conecta correctamente a '$BaseOperativa'." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Listo. El PostgreSQL local quedo preparado." -ForegroundColor Green
