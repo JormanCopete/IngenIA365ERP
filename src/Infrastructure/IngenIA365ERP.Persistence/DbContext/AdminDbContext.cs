@@ -112,6 +112,21 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         base.ConfigureConventions(configurationBuilder);
     }
 
+    /// <summary>
+    /// Asigna una propiedad SOMBRA solo si viene vacia. Son columnas que
+    /// existen en la tabla pero no en la entidad, asi que ningun handler puede
+    /// tocarlas ni notar que faltan.
+    /// </summary>
+    private static void RellenarSiVacia(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        string propiedadSombra,
+        string valor)
+    {
+        var propiedad = entry.Property(propiedadSombra);
+        if (string.IsNullOrWhiteSpace(propiedad.CurrentValue as string))
+            propiedad.CurrentValue = valor;
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -121,6 +136,34 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         {
             if (entry.State == EntityState.Added)
             {
+                // Identifier es propiedad SOMBRA: la declara este contexto para
+                // que exista la columna, pero no esta en la entidad Tenant, asi
+                // que ningun handler puede asignarla. TenantDbContext (Finbuckle)
+                // mapea LA MISMA tabla y la lee como NO nulable, de modo que una
+                // cooperativa creada por la aplicacion dejaba la columna en NULL
+                // y la siguiente lectura de Finbuckle reventaba con
+                // InvalidCastException al arrancar, antes de servir nada.
+                //
+                // Se rellena aca y no en cada handler justamente porque es
+                // invisible desde el modelo: quien escriba el proximo camino de
+                // alta no tiene forma de saber que existe.
+                if (entry.Entity is Tenant tenantNuevo)
+                {
+                    // Las cuatro que ErpTenantInfo declara obligatorias en
+                    // TenantDbContext.OnModelCreating son Identifier, Name,
+                    // SchemaName y LicenseType. Name y SchemaName ya son NOT NULL
+                    // en la tabla; las otras dos son sombra y quedaban vacias.
+                    RellenarSiVacia(entry, "Identifier",
+                        !string.IsNullOrWhiteSpace(tenantNuevo.Subdomain)
+                            ? tenantNuevo.Subdomain
+                            : tenantNuevo.SchemaName);
+
+                    RellenarSiVacia(entry, "LicenseType",
+                        !string.IsNullOrWhiteSpace(tenantNuevo.PlanType)
+                            ? tenantNuevo.PlanType
+                            : "Basic");
+                }
+                
                 if (entry.Entity is AuditableEntity addedAud)
                 {
                     addedAud.CreatedAt = now;

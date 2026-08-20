@@ -34,4 +34,8 @@
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+  </ItemGroup>
+
 </Project>

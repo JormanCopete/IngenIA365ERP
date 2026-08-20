@@ -29,6 +29,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // === Auth-related, sí registradas ===
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
     public DbSet<UserTenantAssignment> UserTenantAssignments => Set<UserTenantAssignment>();

@@ -180,6 +180,9 @@ public interface IApplicationDbContext
     // Security
     DbSet<User> Users { get; }
     DbSet<Role> Roles { get; }
+
+    // Parametros de configuracion de la cooperativa (COR_SystemSettings).
+    DbSet<SystemSetting> SystemSettings { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<LoginAttempt> LoginAttempts { get; }
     DbSet<UserTenantAssignment> UserTenantAssignments { get; }

@@ -1,14 +1,194 @@
 @page "/admin/parametros"
+@using IngenIA365ERP.Shared.Services.Security
+@inject ParametrosClient ClienteParametros
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
-<PageTitle>Parametros del Sistema - IngenIA365ERP</PageTitle>
+<PageTitle>Parámetros del Sistema — IngenIA365ERP</PageTitle>
 
-<div class="module-placeholder">
-    <div class="placeholder-icon">
-        <span class="e-icons e-lock"></span>
+<div class="pagina">
+    <div class="page-header">
+        <div>
+            <h2>Parámetros del Sistema</h2>
+            <p class="texto-apoyo">
+                Configuración de esta cooperativa. Cambian el comportamiento contable
+                y regional de todo el ERP.
+            </p>
+        </div>
+        <div>
+            <label class="campo-check">
+                <input type="checkbox" @bind="_soloModificados" />
+                <span>Sólo los que se hayan cambiado</span>
+            </label>
+        </div>
     </div>
-    <h2>Parametros del Sistema</h2>
-    <p>Modulo en construccion</p>
-    <SfProgressBar Type="ProgressType.Linear" Value="0" Minimum="0" Maximum="100"
-                   Height="4" TrackColor="var(--borde)" ProgressColor="var(--acento)" IsIndeterminate="true" />
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_error ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    @if (_cargando)
+    {
+        <p class="texto-apoyo">Cargando…</p>
+    }
+    else if (_parametros.Count == 0)
+    {
+        <div class="tarjeta">
+            <p class="texto-apoyo">
+                No hay parámetros para esta cooperativa. Los crea el sembrador
+                paramétrico al aprovisionar el esquema; no se pueden crear desde acá.
+            </p>
+        </div>
+    }
+    else
+    {
+        @foreach (var grupo in Visibles.GroupBy(p => p.Modulo ?? "General").OrderBy(g => g.Key))
+        {
+            <section class="tarjeta">
+                <h3>@NombreModulo(grupo.Key)</h3>
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th scope="col">Parámetro</th>
+                            <th scope="col">Valor</th>
+                            <th scope="col">Tipo</th>
+                            <th scope="col">Última modificación</th>
+                            <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in grupo.OrderBy(x => x.Clave))
+                        {
+                            <tr @key="p.PublicId">
+                                <td>
+                                    <strong>@NombreCorto(p.Clave)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(p.Descripcion))
+                                    {
+                                        <div class="texto-apoyo">@p.Descripcion</div>
+                                    }
+                                    <div class="texto-tenue clave-tecnica">@p.Clave</div>
+                                </td>
+                                <td>
+                                    <input type="text" value="@Editado(p)"
+                                           @oninput="e => Cambiar(p, e.Value?.ToString())"
+                                           aria-label="@($"Valor de {p.Clave}")" />
+                                </td>
+                                <td><span class="badge">@p.TipoValor</span></td>
+                                <td class="texto-apoyo">
+                                    @if (p.ActualizadoEn is { } fecha)
+                                    {
+                                        @($"{fecha:dd/MM/yyyy HH:mm}")
+                                        @if (!string.IsNullOrWhiteSpace(p.ActualizadoPor))
+                                        {
+                                            <div>@p.ActualizadoPor</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>Sin cambios</span>
+                                    }
+                                </td>
+                                <td class="celda-acciones">
+                                    <button class="boton-principal" type="button"
+                                            disabled="@(!Modificado(p) || _guardando == p.PublicId)"
+                                            @onclick="() => GuardarAsync(p)">
+                                        @(_guardando == p.PublicId ? "Guardando…" : "Guardar")
+                                    </button>
+                                    @if (Modificado(p))
+                                    {
+                                        <button class="boton-secundario" type="button"
+                                                @onclick="() => Descartar(p)">Descartar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+    }
 </div>
+
+@code {
+    private List<Parametro> _parametros = [];
+    private readonly Dictionary<Guid, string?> _ediciones = [];
+    private bool _cargando = true;
+    private bool _soloModificados;
+    private Guid? _guardando;
+    private string? _mensaje;
+    private bool _error;
+
+    private IEnumerable<Parametro> Visibles =>
+        _soloModificados ? _parametros.Where(Modificado) : _parametros;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        var r = await ClienteParametros.ListarAsync();
+        _cargando = false;
+
+        if (r.IsSuccess && r.Value is not null)
+        {
+            _parametros = [.. r.Value];
+            _ediciones.Clear();
+        }
+        else
+        {
+            _error = true;
+            _mensaje = r.ErrorMessage ?? "No se pudieron cargar los parámetros.";
+        }
+    }
+
+    // El valor mostrado es el editado si se tocó, y el original si no. Guardar
+    // el borrador aparte permite descartar sin recargar toda la pantalla.
+    private string? Editado(Parametro p) =>
+        _ediciones.TryGetValue(p.PublicId, out var v) ? v : p.Valor;
+
+    private bool Modificado(Parametro p) =>
+        _ediciones.TryGetValue(p.PublicId, out var v) && v != p.Valor;
+
+    private void Cambiar(Parametro p, string? valor) => _ediciones[p.PublicId] = valor;
+
+    private void Descartar(Parametro p) => _ediciones.Remove(p.PublicId);
+
+    private async Task GuardarAsync(Parametro p)
+    {
+        _guardando = p.PublicId;
+        try
+        {
+            var r = await ClienteParametros.ActualizarAsync(p.PublicId, Editado(p));
+            _error = !r.IsSuccess;
+            _mensaje = r.IsSuccess
+                ? $"«{NombreCorto(p.Clave)}» actualizado."
+                : r.ErrorMessage;
+
+            // Se recarga en vez de parchear en memoria: el servidor sella quién
+            // y cuándo, y esa columna se muestra en la tabla.
+            if (r.IsSuccess) await CargarAsync();
+        }
+        finally
+        {
+            _guardando = null;
+        }
+    }
+
+    /// <summary>"Accounting.DecimalPlaces" → "Decimal Places".</summary>
+    private static string NombreCorto(string clave)
+    {
+        var ultimo = clave.Contains('.') ? clave[(clave.LastIndexOf('.') + 1)..] : clave;
+        return System.Text.RegularExpressions.Regex.Replace(ultimo, "(?<!^)([A-Z])", " $1");
+    }
+
+    private static string NombreModulo(string prefijo) => prefijo switch
+    {
+        "COR" => "General",
+        "ACC" => "Contabilidad",
+        "CAR" => "Cartera",
+        "INV" => "Inventario",
+        "PAY" => "Nómina",
+        "TRE" => "Tesorería",
+        _ => prefijo,
+    };
+}

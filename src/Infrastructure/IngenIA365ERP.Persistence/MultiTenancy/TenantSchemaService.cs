@@ -193,17 +193,45 @@ public class TenantSchemaService
     /// [dbo]. (SQL Server), dbo. / "dbo". (PostgreSQL) y N'dbo'/'dbo' en
     /// llamadas a procedimientos del historial.
     /// </summary>
+    /// <summary>
+    /// Reescribe el script de migracion para que apunte al esquema del tenant.
+    /// </summary>
+    /// <remarks>
+    /// La sentencia CREATE SCHEMA se trata APARTE. Los reemplazos de abajo
+    /// buscan "dbo". / dbo. / 'dbo', o sea el esquema usado como CALIFICADOR,
+    /// siempre seguido de un punto o entre comillas. Pero el script trae
+    /// tambien `CREATE SCHEMA dbo;` —sin punto y sin comillas—, que no encaja
+    /// en ningun patron y sobrevivia sin traducir. El resultado era que
+    /// aprovisionar una cooperativa intentaba crear el esquema dbo, que ya
+    /// existe, y fallaba con 42P06; el esquema del tenant NO se creaba nunca.
+    /// Se emite con IF NOT EXISTS para que reaprovisionar sea idempotente.
+    /// </remarks>
     internal static string TranslateSchema(string script, string schemaName, DatabaseProvider provider)
     {
-        return provider == DatabaseProvider.PostgreSql
-            ? script
+        if (provider == DatabaseProvider.PostgreSql)
+        {
+            script = Regex.Replace(
+                script,
+                @"CREATE\s+SCHEMA\s+(IF\s+NOT\s+EXISTS\s+)?""?dbo""?",
+                $"CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"",
+                RegexOptions.IgnoreCase);
+
+            return script
                 .Replace("\"dbo\".", $"\"{schemaName}\".", StringComparison.Ordinal)
                 .Replace(" dbo.", $" \"{schemaName}\".", StringComparison.Ordinal)
-                .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal)
-            : script
-                .Replace("[dbo].", $"[{schemaName}].", StringComparison.Ordinal)
-                .Replace("N'dbo'", $"N'{schemaName}'", StringComparison.Ordinal)
                 .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal);
+        }
+
+        script = Regex.Replace(
+            script,
+            @"CREATE\s+SCHEMA\s+\[?dbo\]?",
+            $"CREATE SCHEMA [{schemaName}]",
+            RegexOptions.IgnoreCase);
+
+        return script
+            .Replace("[dbo].", $"[{schemaName}].", StringComparison.Ordinal)
+            .Replace("N'dbo'", $"N'{schemaName}'", StringComparison.Ordinal)
+            .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal);
     }
 
     internal static IEnumerable<string> SplitBatches(string script, DatabaseProvider provider)

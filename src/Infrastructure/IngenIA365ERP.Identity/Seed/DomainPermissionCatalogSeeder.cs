@@ -60,6 +60,13 @@ public static class DomainPermissionCatalogSeeder
         // Security — Permission catalog (read-only)
         ("Security.Permissions",   "View",     "Ver catálogo de permisos del sistema"),
 
+        // Security — Parametros del sistema (COR_SystemSettings). Cambian el
+        // comportamiento contable y regional de toda la cooperativa, asi que
+        // se separan de Users y Roles: ver la configuracion no debe implicar
+        // poder cambiarla.
+        ("Security.Parameters",    "View",     "Ver parámetros de configuración de la cooperativa"),
+        ("Security.Parameters",    "Update",   "Cambiar el valor de un parámetro del sistema"),
+
         // Security — MFA reset (doble aprobación)
         ("Security.MfaReset",      "Request",  "Solicitar reset administrativo de MFA para otro usuario"),
         ("Security.MfaReset",      "Approve",  "Aprobar solicitud de reset de MFA"),
