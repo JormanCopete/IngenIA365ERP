@@ -71,6 +71,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
