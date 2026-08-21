@@ -154,6 +154,10 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<TenantSchemaService>();
 
+        // Para los handlers que escriben en una cooperativa que no es la de la
+        // peticion: aceptar una invitacion, aprovisionar un esquema.
+        services.AddScoped<ITenantDbContextFactory, TenantDbContextFactory>();
+
         // Directorio de tenants (BD IngenIA365ERP_Admin) accesible desde Application
         // sin acoplar a EF/Persistence.
         services.AddScoped<ITenantDirectory, TenantDirectory>();

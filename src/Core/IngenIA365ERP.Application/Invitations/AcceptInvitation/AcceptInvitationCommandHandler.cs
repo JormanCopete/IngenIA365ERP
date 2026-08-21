@@ -161,7 +161,7 @@ public sealed class AcceptInvitationCommandHandler(
             centralUserId,
             invitation.Email,
             tenant.PublicId,
-            tenant.Id,
+            tenant.SchemaName,
             invitation.InviteAsTenantAdmin,
             ct);
         if (provisioning.IsFailure)

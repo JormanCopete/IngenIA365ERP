@@ -31,11 +31,11 @@ namespace IngenIA365ERP.Application.Common.Services;
 /// </summary>
 public interface ITenantUserProvisioner
 {
-    /// <param name="tenantInternalId">
-    /// Id interno de la cooperativa. Hace falta para encontrar SUS roles: los
-    /// roles se discriminan por <c>Role.TenantId</c>, y los de
-    /// <c>TenantId == null</c> son las plantillas SaaS — asignar una de esas
-    /// daria permisos fuera de la cooperativa.
+    /// <param name="tenantSchema">
+    /// Esquema de la cooperativa destino, tal como esta en
+    /// <c>ADM_Tenants.SchemaName</c>. Es obligatorio y no se deduce del ambiente:
+    /// esta ruta la invoca la aceptacion de una invitacion, que es anonima y no
+    /// tiene cooperativa activa. La cooperativa la dice la invitacion.
     /// </param>
     /// <param name="asTenantAdmin">
     /// Si la invitacion era para administrar la cooperativa. Decide el rol.
@@ -44,13 +44,13 @@ public interface ITenantUserProvisioner
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
-        int tenantInternalId,
+        string tenantSchema,
         bool asTenantAdmin,
         CancellationToken ct);
 }
 
 internal sealed class TenantUserProvisioner(
-    IApplicationDbContext db,
+    ITenantDbContextFactory fabrica,
     IDateTimeService clock,
     ILogger<TenantUserProvisioner> logger) : ITenantUserProvisioner
 {
@@ -63,7 +63,7 @@ internal sealed class TenantUserProvisioner(
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
-        int tenantInternalId,
+        string tenantSchema,
         bool asTenantAdmin,
         CancellationToken ct)
     {
@@ -74,7 +74,19 @@ internal sealed class TenantUserProvisioner(
             return Result.Failure<int>("Provisioning.InvalidEmail",
                 "El email del usuario central no puede estar vacío.");
 
+        if (string.IsNullOrWhiteSpace(tenantSchema))
+            return Result.Failure<int>("Provisioning.InvalidSchema",
+                "Hace falta el esquema de la cooperativa destino.");
+
         var normalized = centralUserEmail.Trim();
+
+        // El contexto se abre sobre el esquema de la cooperativa destino, no se
+        // toma del contenedor. El XML doc de arriba declaraba esa precondicion
+        // desde el principio —"asume que el contexto ya apunta al schema del
+        // tenant destino"— y no la cumplia nadie: esta ruta es anonima y el
+        // contenedor no tiene cooperativa que resolver.
+        await using var ambito = fabrica.Abrir(tenantSchema);
+        var db = ambito.Db;
 
         // IgnoreQueryFilters: queremos detectar también las filas soft-deleted
         // para reactivarlas en lugar de crear una nueva (idempotencia tras
@@ -114,7 +126,7 @@ internal sealed class TenantUserProvisioner(
                     centralUserId, tenantId, existing.Id);
             }
 
-            await AsegurarRolAsync(existing.Id, tenantInternalId, asTenantAdmin, ct);
+                await AsegurarRolAsync(db, existing.Id, tenantSchema, asTenantAdmin, ct);
             return Result.Success(existing.Id);
         }
 
@@ -140,7 +152,7 @@ internal sealed class TenantUserProvisioner(
             "SEC_Users provisionado para CentralUser {CentralUserId} en tenant {TenantId} (nuevo UserId={UserId}).",
             centralUserId, tenantId, newUser.Id);
 
-        await AsegurarRolAsync(newUser.Id, tenantInternalId, asTenantAdmin, ct);
+        await AsegurarRolAsync(db, newUser.Id, tenantSchema, asTenantAdmin, ct);
         return Result.Success(newUser.Id);
     }
 
@@ -168,25 +180,23 @@ internal sealed class TenantUserProvisioner(
     /// </para>
     /// </summary>
     private async Task AsegurarRolAsync(
-        int userId, int tenantInternalId, bool asTenantAdmin, CancellationToken ct)
+        IApplicationDbContext db, int userId, string tenantSchema, bool asTenantAdmin,
+        CancellationToken ct)
     {
         var codigo = asTenantAdmin ? RolAdministrador : RolPorDefecto;
 
         var rolId = await db.Roles
-            .Where(r => r.TenantId == tenantInternalId
-                     && r.Code == codigo
-                     && r.IsActive
-                     && !r.IsDeleted)
+            .Where(r => r.Code == codigo && r.IsActive && !r.IsDeleted)
             .Select(r => (int?)r.Id)
             .FirstOrDefaultAsync(ct);
 
         if (rolId is null)
         {
             logger.LogWarning(
-                "La cooperativa {TenantInternalId} no tiene el rol {Codigo}, asi que el usuario " +
+                "El esquema {Esquema} no tiene el rol {Codigo}, asi que el usuario " +
                 "{UserId} queda sin permisos. Suele significar que nunca se aprovisiono: " +
                 "POST /api/saas/tenants/{{publicId}}/provision es idempotente y lo arregla.",
-                tenantInternalId, codigo, userId);
+                tenantSchema, codigo, userId);
             return;
         }
 
@@ -205,7 +215,7 @@ internal sealed class TenantUserProvisioner(
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Usuario {UserId} asignado al rol {Codigo} de la cooperativa {TenantInternalId}.",
-            userId, codigo, tenantInternalId);
+            "Usuario {UserId} asignado al rol {Codigo} de la cooperativa {Esquema}.",
+            userId, codigo, tenantSchema);
     }
 }
