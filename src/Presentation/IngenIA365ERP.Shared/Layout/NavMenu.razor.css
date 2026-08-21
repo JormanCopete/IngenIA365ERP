@@ -3,7 +3,22 @@
    claro y oscuro: el lateral es morado profundo en ambos modos, así que la
    identidad no cambia al cambiar de tema. */
 
+/* El fondo oscuro se pinta AQUI, en el mismo componente que fija los colores
+   de texto claros del menu. Antes vivia solo en MainLayout.razor.css, como
+   `::deep .erp-sidebar`: un selector que tiene que atravesar el marcado de un
+   componente de terceros para llegar al elemento. Si deja de alcanzarlo, el
+   fondo desaparece pero los colores claros se quedan, y el menu entero queda
+   blanco sobre blanco: ilegible. Que fondo y texto salgan de la misma regla,
+   sobre el propio elemento del componente, hace imposible que se separen.
+
+   El literal de respaldo en var() es a proposito. La version anterior a los
+   tokens decia `var(--sidebar-bg, #111827)` y el refactor lo perdio: sin
+   respaldo, una variable que no resuelva no deja el fondo oscuro, lo deja
+   transparente. */
 .nav-menu {
+    background: var(--lateral-fondo, #3a1450);
+    color: var(--lateral-texto, #ede8f2);
+    min-height: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;

@@ -11,7 +11,7 @@
 }
 
 ::deep .erp-sidebar {
-    background: var(--lateral-fondo) !important;
+    background: var(--lateral-fondo, #3a1450) !important;
     border-right: none;
 }
 
