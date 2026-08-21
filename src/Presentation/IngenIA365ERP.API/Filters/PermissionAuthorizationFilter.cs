@@ -1,3 +1,4 @@
+using IngenIA365ERP.API.Filters.CentralIdentity;
 using Microsoft.AspNetCore.Http;
 
 namespace IngenIA365ERP.API.Filters;
@@ -17,8 +18,20 @@ namespace IngenIA365ERP.API.Filters;
 ///
 /// <para>
 /// Si el usuario no está autenticado y el endpoint requiere permiso, también
-/// se responde 404 — la <c>RequireAuthorization()</c> de Carter ya debería
-/// haber emitido 401, pero por defensa-en-profundidad el filtro lo cubre.
+/// se responde 404 — la <c>RequireAuthorization()</c> de Carter ya emitió 401
+/// antes de llegar aquí, pero por defensa-en-profundidad el filtro lo cubre.
+/// </para>
+///
+/// <para>
+/// <b>Atajo del administrador maestro</b>: el emisor de identidad central
+/// (<c>CentralJwtIssuer</c>) no emite claims <c>perm</c> — sólo los emite el
+/// emisor heredado, al que la interfaz ya no llega. Sin este atajo, el maestro
+/// veía 404 en TODO endpoint con permiso: podía registrar una cooperativa
+/// (esa ruta se guarda con <see cref="RequireMasterAdminAttribute"/>) pero no
+/// volver a listarla. Se reutiliza esa misma guardia, que es la que el resto
+/// del proyecto ya usa para lo global-SaaS, en vez de inventar otra: exige
+/// <c>purpose=full</c>, así que un token a medio autenticar —MFA pendiente,
+/// por ejemplo— NO pasa por aquí.
 /// </para>
 /// </summary>
 public sealed class PermissionAuthorizationFilter : IEndpointFilter
@@ -33,6 +46,14 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
             ?? [];
 
         if (requirements.Count == 0)
+        {
+            return await next(context);
+        }
+
+        // Antes de mirar los `perm`: el maestro global no los lleva en el token.
+        // Esto NO relaja el aislamiento entre cooperativas — el tenant sigue
+        // saliendo de TenantResolutionMiddleware, no de este filtro.
+        if (RequireMasterAdminAttribute.Check(context.HttpContext).IsAllowed)
         {
             return await next(context);
         }
