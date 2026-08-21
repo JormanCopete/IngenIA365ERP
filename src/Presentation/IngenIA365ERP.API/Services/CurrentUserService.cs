@@ -28,8 +28,39 @@ public class CurrentUserService : ICurrentUserService
         User?.FindFirst("name")?.Value
         ?? User?.Identity?.Name;
 
-    public string? TenantId =>
-        User?.FindFirst("tenant_id")?.Value;
+    /// <summary>
+    /// Id INTERNO de la cooperativa activa, como cadena. No el PublicId.
+    ///
+    /// <para>
+    /// Es lo que esperan quienes lo consumen: <c>ListRolesQueryHandler</c> hace
+    /// <c>int.TryParse</c> sobre esto, y <c>AssignRoleCommandHandler</c> lo usa
+    /// como parte de la clave de cache de permisos.
+    /// </para>
+    ///
+    /// <para>
+    /// Leia el claim <c>tenant_id</c>, que el emisor de identidad central nunca
+    /// pone —emite <c>active_tenant_id</c>, y con el PublicId—, asi que siempre
+    /// devolvia null: el listado de roles colapsaba a las plantillas y la
+    /// invalidacion de cache escribia en una clave vacia, compartida entre
+    /// cooperativas. Ahora sale de donde el Id interno ya esta resuelto.
+    /// </para>
+    /// </summary>
+    public string? TenantId
+    {
+        get
+        {
+            var items = _httpContextAccessor.HttpContext?.Items;
+            if (items is not null &&
+                items.TryGetValue("TenantId", out var resuelto) &&
+                resuelto is int id)
+            {
+                return id.ToString();
+            }
+
+            // Tokens del emisor heredado, que si trae el claim.
+            return User?.FindFirst("tenant_id")?.Value;
+        }
+    }
 
     public IReadOnlyList<string> Roles =>
         User?.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList()

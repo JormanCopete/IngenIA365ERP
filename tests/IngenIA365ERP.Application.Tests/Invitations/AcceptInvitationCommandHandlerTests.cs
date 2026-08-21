@@ -357,7 +357,8 @@ public class AcceptInvitationCommandHandlerTests
     private void SetupDefaultProvisioner()
     {
         _provisioner.EnsureExistsAsync(
-                Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(),
+                Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(42));
     }
 

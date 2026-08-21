@@ -111,6 +111,10 @@ try
     // === Cross-cutting services consumed by Identity & Audit ===
     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
     builder.Services.AddSingleton<ICurrentUserService, CurrentUserService>();
+
+    // Scoped: abre DbContexts. Lo consume PermissionAuthorizationFilter
+    // por peticion, no en el arranque.
+    builder.Services.AddScoped<IngenIA365ERP.API.Services.PermisosDeLaPeticion>();
     // Feature 002 — accessor del JWT central (sub, email, active_tenant_id,
     // tenant_admin, is_global_master_admin, purpose, mfa_verified).
     builder.Services.AddSingleton<

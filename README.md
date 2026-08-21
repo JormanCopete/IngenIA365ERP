@@ -10,7 +10,7 @@ ERP Financiero SaaS para cooperativas colombianas. Migrado desde SOLIDO (VB.NET/
 - **BD Transaccional:** SQL Server (schema-per-tenant)
 - **BD Auditoria:** MongoDB (batching, TTL 5 anos)
 - **Cache:** Redis
-- **Auth:** JWT RS256, RBAC con 112 permisos, 8 roles
+- **Auth:** JWT RS256, RBAC con 40 permisos, 4 roles built-in
 - **Reportes:** QuestPDF (15 reportes PDF)
 - **Testing:** xUnit + FluentAssertions + ArchUnitNET
 

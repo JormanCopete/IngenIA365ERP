@@ -31,10 +31,21 @@ namespace IngenIA365ERP.Application.Common.Services;
 /// </summary>
 public interface ITenantUserProvisioner
 {
+    /// <param name="tenantInternalId">
+    /// Id interno de la cooperativa. Hace falta para encontrar SUS roles: los
+    /// roles se discriminan por <c>Role.TenantId</c>, y los de
+    /// <c>TenantId == null</c> son las plantillas SaaS — asignar una de esas
+    /// daria permisos fuera de la cooperativa.
+    /// </param>
+    /// <param name="asTenantAdmin">
+    /// Si la invitacion era para administrar la cooperativa. Decide el rol.
+    /// </param>
     Task<Result<int>> EnsureExistsAsync(
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
+        int tenantInternalId,
+        bool asTenantAdmin,
         CancellationToken ct);
 }
 
@@ -45,11 +56,15 @@ internal sealed class TenantUserProvisioner(
 {
     private const string ProvisionerActor = "TenantUserProvisioner";
     private const string CentralManagedPasswordSentinel = "central-managed";
+    private const string RolAdministrador = "CompanyAdmin";
+    private const string RolPorDefecto = "ReadOnly";
 
     public async Task<Result<int>> EnsureExistsAsync(
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
+        int tenantInternalId,
+        bool asTenantAdmin,
         CancellationToken ct)
     {
         if (centralUserId == Guid.Empty)
@@ -99,6 +114,7 @@ internal sealed class TenantUserProvisioner(
                     centralUserId, tenantId, existing.Id);
             }
 
+            await AsegurarRolAsync(existing.Id, tenantInternalId, asTenantAdmin, ct);
             return Result.Success(existing.Id);
         }
 
@@ -124,6 +140,72 @@ internal sealed class TenantUserProvisioner(
             "SEC_Users provisionado para CentralUser {CentralUserId} en tenant {TenantId} (nuevo UserId={UserId}).",
             centralUserId, tenantId, newUser.Id);
 
+        await AsegurarRolAsync(newUser.Id, tenantInternalId, asTenantAdmin, ct);
         return Result.Success(newUser.Id);
+    }
+
+    /// <summary>
+    /// Le da a la fila recien provisionada un rol dentro de SU cooperativa.
+    ///
+    /// <para>
+    /// Sin esto el usuario existe y no puede hacer nada: el provisionado creaba
+    /// la fila en <c>SEC_Users</c> y se detenia ahi, sin escribir en
+    /// <c>SEC_UserRoles</c>. Y la unica via de asignar roles en caliente
+    /// (<c>POST /api/admin/users/{id}/roles</c>) exige el permiso
+    /// <c>Security.Users.AssignRole</c>, que sale de tener un rol: bloqueo
+    /// circular que solo rompia el administrador maestro a mano.
+    /// </para>
+    ///
+    /// <para>
+    /// Quien fue invitado a administrar recibe <c>CompanyAdmin</c>; el resto,
+    /// <c>ReadOnly</c>, que es lo conservador y se cambia desde la pantalla de
+    /// usuarios. Nunca se toca un rol plantilla.
+    /// </para>
+    ///
+    /// <para>
+    /// No falla la invitacion si el rol no esta: que alguien no pueda entrar a
+    /// una pantalla se arregla; que la invitacion se pierda, no.
+    /// </para>
+    /// </summary>
+    private async Task AsegurarRolAsync(
+        int userId, int tenantInternalId, bool asTenantAdmin, CancellationToken ct)
+    {
+        var codigo = asTenantAdmin ? RolAdministrador : RolPorDefecto;
+
+        var rolId = await db.Roles
+            .Where(r => r.TenantId == tenantInternalId
+                     && r.Code == codigo
+                     && r.IsActive
+                     && !r.IsDeleted)
+            .Select(r => (int?)r.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (rolId is null)
+        {
+            logger.LogWarning(
+                "La cooperativa {TenantInternalId} no tiene el rol {Codigo}, asi que el usuario " +
+                "{UserId} queda sin permisos. Suele significar que nunca se aprovisiono: " +
+                "POST /api/saas/tenants/{{publicId}}/provision es idempotente y lo arregla.",
+                tenantInternalId, codigo, userId);
+            return;
+        }
+
+        var yaLoTiene = await db.UserRoles
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == rolId.Value, ct);
+        if (yaLoTiene) return;
+
+        db.UserRoles.Add(new UserRole
+        {
+            UserId = userId,
+            RoleId = rolId.Value,
+            AssignedAt = clock.UtcNow,
+            AssignedBy = ProvisionerActor,
+            CreatedBy = ProvisionerActor,
+        });
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Usuario {UserId} asignado al rol {Codigo} de la cooperativa {TenantInternalId}.",
+            userId, codigo, tenantInternalId);
     }
 }

@@ -16,7 +16,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
 - **Backend**: .NET 10.0.5, Minimal APIs con Carter, CQRS con MediatR
 - **Frontend**: Blazor Hybrid MAUI + Web + WebAssembly, SyncFusion 33.1.44
 - **BD**: SQL Server (transaccional) + MongoDB (auditoría) + Redis (caché)
-- **Auth**: JWT RS256, 8 roles, 112 permisos
+- **Auth**: JWT RS256, 4 roles built-in, 40 permisos
 - **Multi-tenancy**: Schema-per-tenant
 - **Reportes**: QuestPDF (16 reportes)
 

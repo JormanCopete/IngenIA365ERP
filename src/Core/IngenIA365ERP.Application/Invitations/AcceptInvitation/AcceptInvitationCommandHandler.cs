@@ -158,7 +158,12 @@ public sealed class AcceptInvitationCommandHandler(
         // 7) Provisionar SEC_Users en el tenant (asunción multi-tenancy, ver
         //    XML doc del handler).
         var provisioning = await tenantUserProvisioner.EnsureExistsAsync(
-            centralUserId, invitation.Email, tenant.PublicId, ct);
+            centralUserId,
+            invitation.Email,
+            tenant.PublicId,
+            tenant.Id,
+            invitation.InviteAsTenantAdmin,
+            ct);
         if (provisioning.IsFailure)
         {
             return Result.Failure<AcceptInvitationResult>(provisioning.Error.Code, provisioning.Error.Message);

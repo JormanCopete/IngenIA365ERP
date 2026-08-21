@@ -1,4 +1,5 @@
 using IngenIA365ERP.API.Filters.CentralIdentity;
+using IngenIA365ERP.API.Services;
 using Microsoft.AspNetCore.Http;
 
 namespace IngenIA365ERP.API.Filters;
@@ -67,7 +68,59 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
             return await next(context);
         }
 
+        // El token central no lleva claims `perm`, asi que para todo el mundo
+        // salvo el maestro la comprobacion de arriba siempre da falsa. Aqui se
+        // resuelven de verdad, contra la cooperativa activa.
+        if (await TienePermisosResueltosAsync(context.HttpContext, requirements))
+        {
+            return await next(context);
+        }
+
         return NotFoundEnvelope(context.HttpContext);
+    }
+
+    /// <summary>
+    /// Resolución por petición. Devuelve false ante cualquier problema —nunca
+    /// propaga— porque una excepción aquí subiría como 500 y delataría que el
+    /// endpoint existe, que es justo lo que la indistinguibilidad 404 evita.
+    /// Fallar cerrado deja al usuario sin acceso; fallar abierto se lo da a
+    /// quien no debe.
+    /// </summary>
+    private static async Task<bool> TienePermisosResueltosAsync(
+        HttpContext http, IReadOnlyList<RequirePermissionAttribute> requisitos)
+    {
+        var servicios = http.RequestServices;
+        if (servicios is null) return false;
+
+        try
+        {
+            var servicio = servicios.GetService<PermisosDeLaPeticion>();
+            if (servicio is null) return false;
+
+            var concedidos = await servicio.ResolverAsync(http, http.RequestAborted);
+            if (concedidos.Count == 0) return false;
+
+            var conjunto = new HashSet<string>(concedidos, StringComparer.OrdinalIgnoreCase);
+            return requisitos.All(r => conjunto.Contains(r.PermissionCode));
+        }
+        catch (Exception ex)
+        {
+            // El propio registro va en try: si el contenedor no puede darnos un
+            // logger, eso no puede convertirse en la excepcion que tumbe la
+            // autorizacion. Denegar y seguir.
+            try
+            {
+                servicios.GetService<ILoggerFactory>()?
+                    .CreateLogger<PermissionAuthorizationFilter>()
+                    .LogError(ex, "Fallo al resolver permisos de la peticion. Se responde 404.");
+            }
+            catch
+            {
+                // Sin registro posible. El 404 de abajo sigue siendo lo correcto.
+            }
+
+            return false;
+        }
     }
 
     /// <summary>
