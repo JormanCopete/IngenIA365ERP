@@ -12,7 +12,7 @@ namespace IngenIA365ERP.Persistence.Initialization;
 /// </summary>
 public sealed class PendingMigrationsGuard(
     AdminDbContext adminDb,
-    ApplicationDbContext appDb,
+    DbContextOptions<ApplicationDbContext> appDbOptions,
     TenantSchemaService tenantSchemaService)
 {
     public sealed record PendingReport(
@@ -37,6 +37,10 @@ public sealed class PendingMigrationsGuard(
     {
         var adminReachable = await adminDb.Database.CanConnectAsync(ct);
         var admin = await SafePendingAsync(adminDb, ct);
+        // Anclado a dbo: el historial vive en dbo.__EFMigrationsHistory en los dos
+        // proveedores, asi que un modelo apuntando al esquema de una cooperativa
+        // leeria el historial de dbo y concluiria "sin pendientes" sin tocar nada.
+        await using var appDb = new ApplicationDbContext(appDbOptions);
         var application = await SafePendingAsync(appDb, ct);
 
         var tenants = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);

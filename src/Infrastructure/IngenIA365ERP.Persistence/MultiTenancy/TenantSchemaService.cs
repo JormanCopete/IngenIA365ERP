@@ -22,7 +22,16 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 public class TenantSchemaService
 {
     private readonly TenantDbContext _tenantDb;
-    private readonly ApplicationDbContext _appDb;
+    /// <summary>
+    /// Opciones, no un contexto del contenedor. En cuanto el esquema se resuelve
+    /// por peticion, el contexto que da el contenedor apunta a la cooperativa en
+    /// curso — y este servicio necesita SIEMPRE el arbol de migraciones de dbo.
+    /// Con el contexto ambiente, aprovisionar la cooperativa B desde una peticion
+    /// de la A generaria el script ya calificado con el esquema de A: TranslateSchema
+    /// busca la cadena literal "dbo" y no encontraria nada que traducir, asi que las
+    /// 289 tablas de B se crearian DENTRO de A. Sin excepcion y sin log.
+    /// </summary>
+    private readonly DbContextOptions<ApplicationDbContext> _appDbOptions;
     private readonly IDbProviderConfigurator _configurator;
     private readonly string _operationalConnectionString;
     private readonly ILogger<TenantSchemaService> _logger;
@@ -31,14 +40,14 @@ public class TenantSchemaService
 
     public TenantSchemaService(
         TenantDbContext tenantDb,
-        ApplicationDbContext appDb,
+        DbContextOptions<ApplicationDbContext> appDbOptions,
         IDbProviderConfigurator configurator,
         IOptions<DatabaseOptions> options,
         ILogger<TenantSchemaService>? logger = null,
         Seeding.SeedOrchestrator? seedOrchestrator = null)
     {
         _tenantDb = tenantDb;
-        _appDb = appDb;
+        _appDbOptions = appDbOptions;
         _configurator = configurator;
         _operationalConnectionString = options.Value.GetActiveConnectionString();
         _logger = logger ?? NullLogger<TenantSchemaService>.Instance;
@@ -105,7 +114,8 @@ public class TenantSchemaService
     public async Task MigrateTenantSchemaAsync(string schemaName, CancellationToken ct)
     {
         ValidateSchemaName(schemaName);
-        var migrator = _appDb.Database.GetService<IMigrator>();
+        await using var dboDb = new ApplicationDbContext(_appDbOptions);
+        var migrator = dboDb.Database.GetService<IMigrator>();
         var script = migrator.GenerateScript(options: MigrationsSqlGenerationOptions.Idempotent);
         var translated = TranslateSchema(script, schemaName, _configurator.Provider);
 
@@ -129,7 +139,8 @@ public class TenantSchemaService
     public async Task<IReadOnlyList<string>> GetPendingMigrationsAsync(string schemaName, CancellationToken ct)
     {
         ValidateSchemaName(schemaName);
-        var all = _appDb.Database.GetMigrations().ToList();
+        using var dboDb = new ApplicationDbContext(_appDbOptions);
+        var all = dboDb.Database.GetMigrations().ToList();
 
         await using var conn = _configurator.CreateConnection(_operationalConnectionString);
         await conn.OpenAsync(ct);

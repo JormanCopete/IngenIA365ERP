@@ -76,7 +76,19 @@ public class TenantResolutionMiddleware
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        if (IsExempt(path))
+        // Resolver y EXIGIR son dos cosas distintas, y antes eran una sola.
+        //
+        // Las rutas exentas cortocircuitaban sin escribir nada en Items. Daba igual
+        // mientras la cooperativa no llegara a la capa de datos; desde que llega,
+        // significa que /api/admin/roles —exenta— abriria el esquema equivocado, o
+        // reventaria contra la fabrica de ErpTenantInfo, que se niega a caer a dbo
+        // dentro de una peticion.
+        //
+        // Ahora se resuelve SIEMPRE que se pueda, y solo se EXIGE en las rutas no
+        // exentas. Ni un prefijo sale de la lista y ni un codigo de error cambia:
+        // una ruta exenta sin cooperativa sigue pasando de largo, como antes.
+        var exenta = IsExempt(path);
+        if (exenta && !TieneCooperativaResoluble(context))
         {
             await _next(context);
             return;
@@ -91,6 +103,12 @@ public class TenantResolutionMiddleware
              !Guid.TryParse(claimValue, out var activeTenantId)) &&
             !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)))
         {
+            if (exenta)
+            {
+                await _next(context);
+                return;
+            }
+
             await WriteTenantNotSelectedAsync(context);
             return;
         }
@@ -105,6 +123,12 @@ public class TenantResolutionMiddleware
 
         if (tenant is null)
         {
+            if (exenta)
+            {
+                await _next(context);
+                return;
+            }
+
             await WriteTenantNotFoundAsync(context, activeTenantId);
             return;
         }
@@ -115,6 +139,20 @@ public class TenantResolutionMiddleware
         context.Items["TenantSchema"] = tenant.SchemaName;
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Hay algo con lo que intentar resolver la cooperativa. Solo mira los claims y
+    /// la ruta: no toca la base. Sirve para decidir si a una ruta exenta le merece
+    /// la pena resolver, sin convertir la ausencia de cooperativa en un error.
+    /// </summary>
+    private static bool TieneCooperativaResoluble(HttpContext context)
+    {
+        var claim = context.User?.FindFirst(ActiveTenantIdClaim)?.Value;
+        if (!string.IsNullOrWhiteSpace(claim) && Guid.TryParse(claim, out _)) return true;
+
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+        return IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out _);
     }
 
     private static bool IsMasterAdmin(ClaimsPrincipal? user) =>

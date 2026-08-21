@@ -3,6 +3,7 @@ using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Interceptors;
 using IngenIA365ERP.Persistence.MultiTenancy;
 using IngenIA365ERP.Persistence.Providers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -98,6 +99,56 @@ public static class DependencyInjection
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
             providerConfigurator.Configure(options, operationalConnectionString, MigrationsTarget.Application);
+        });
+
+        // ---- El cable del aislamiento entre cooperativas ----
+        //
+        // ApplicationDbContext ya sabia elegir esquema: OnModelCreating hace
+        // `_tenantInfo?.Schema ?? "dbo"`. Lo que faltaba es que alguien pusiera ese
+        // ErpTenantInfo en el contenedor. Nadie lo hacia, en todo el repositorio, asi
+        // que el operador `??` degradaba a dbo en cada peticion, en silencio: todas
+        // las cooperativas compartiendo un unico esquema, sin excepcion ni log.
+        //
+        // No hace falta tocar la firma del constructor: ApplicationDbContext ya
+        // declara (DbContextOptions, ErpTenantInfo? = null, ICurrentUserService? = null)
+        // y el contenedor elige el constructor de mas parametros que pueda satisfacer.
+        // Se registra el TIPO CONCRETO porque la anotacion de nulabilidad no la honra.
+        services.AddScoped(sp =>
+        {
+            var peticion = sp.GetService<IHttpContextAccessor>()?.HttpContext;
+
+            // Sin peticion HTTP —arranque, trabajos de fondo, la CLI de migraciones—
+            // no hay cooperativa de la que tirar, y dbo es la respuesta correcta:
+            // ahi viven el arbol de migraciones y las plantillas. Se comprueba el
+            // HttpContext y no el esquema porque por esa via son indistinguibles.
+            if (peticion is null)
+            {
+                return new ErpTenantInfo { SchemaName = "dbo" };
+            }
+
+            var actual = sp.GetRequiredService<ICurrentTenantService>();
+            var esquema = actual.Schema;
+
+            // Dentro de una peticion, un esquema sin resolver NO puede caer a dbo.
+            // No hay segunda barrera que lo recoja: ninguna entidad implementa
+            // ITenantEntity y los 285 filtros globales son todos de borrado logico.
+            // Si el esquema sale mal, nada lo detiene y los datos se mezclan. Fallar
+            // ruidosamente es la unica opcion segura.
+            if (string.IsNullOrWhiteSpace(esquema))
+            {
+                throw new InvalidOperationException(
+                    "Se pidio la base operativa dentro de una peticion sin cooperativa resuelta " +
+                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a 'dbo' mezclaria " +
+                    "los datos de todas las cooperativas. Si esta ruta debe funcionar sin " +
+                    "cooperativa, no tiene que usar IApplicationDbContext.");
+            }
+
+            return new ErpTenantInfo
+            {
+                SchemaName = esquema,
+                Name = actual.TenantName,
+                Id = actual.TenantId,
+            };
         });
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
