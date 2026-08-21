@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-08-14**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-08-20**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -68,6 +68,24 @@ entre sí y solo se notaría al intentar restaurar.
 - SSH público cerrado en ambos servidores; administración solo por Tailscale.
 - Claves de firma RS256 distintas por ambiente: un token de DEV no vale en
   producción.
+
+### Correo saliente
+
+- **Servidor**: `mail.notifica365.com:587` con STARTTLS, remitente
+  `noresponder.ingenia365erp@notifica365.com`. Envío verificado por el usuario.
+- **No es Microsoft 365**, pese a lo que sugiere el nombre: el servidor se
+  identifica como Haraka/Poste.io autoalojado. Importa para operar — no hay
+  consola de M365 ni contraseñas de aplicación, y la entregabilidad depende de la
+  reputación de esa IP, no de la de Microsoft.
+- **Credenciales por variable de entorno** (`Smtp__Username`, `Smtp__Password`),
+  nunca en el repositorio. En Kubernetes vienen del Secret `erp-smtp`.
+- **DEV y QA no envían correo real**: tienen un smtp4dev desplegado que captura
+  todo. Se lee con `kubectl -n erp-dev port-forward svc/smtp4dev 8025:80`.
+- **Los enlaces del correo ya apuntan a donde deben**. Hasta esta ronda,
+  `IdentityEmail:BaseUrl` no estaba declarado en ningún ambiente y regía el valor
+  cableado `https://localhost:7200`: toda invitación y todo restablecimiento
+  enviados desde las VPS llevaban un enlace muerto.
+- Ver `docs/operaciones/correo-saliente.md` para operarlo.
 
 ### Interfaz
 
@@ -227,6 +245,52 @@ el objetivo original de no depender de los límites de Actions.
 `blazor.web.js`**. No se investigó si es un cambio intencional que requiere
 ajustar el código o una regresión. Revisar al actualizar en vez de quedar
 anclados sin saber por qué.
+
+### Pendientes de correo (diferidos por decisión del usuario)
+
+#### C1 — El servidor de correo usa el certificado de fábrica
+
+`mail.notifica365.com` presenta el certificado autofirmado que trae Poste.io de
+serie: sujeto = emisor = `O=Poste.io, L=Susice, C=CZ`, sin ningún nombre
+alternativo — ni siquiera nombra al servidor. MailKit lo rechaza, así que sin
+intervención el ERP no podría enviar.
+
+Como parche se fijó su huella SHA-256 en la configuración: acepta **ese**
+certificado y ninguno más. No es lo mismo que desactivar la validación —eso
+aceptaría cualquiera, y por esos correos viajan enlaces de invitación y de
+restablecimiento de contraseña, que son credenciales de un solo uso.
+
+**Lo correcto es instalar un certificado válido**; Poste.io trae Let's Encrypt
+integrado. Al hacerlo hay que **borrar la huella** de los dos sitios donde está:
+
+- `src/Presentation/IngenIA365ERP.API/appsettings.Development.json`, dentro del
+  destino `Infraestructura:Smtp:Microsoft365`
+- `workloads/erp/base/kustomization.yaml` del repositorio de despliegue
+
+> **Trampa a tener presente**: si el certificado se renueva o se reemplaza y la
+> huella no se actualiza ni se borra, el envío deja de funcionar. No falla en
+> silencio —queda un error explícito en el registro con las dos huellas, la
+> recibida y la esperada— pero nadie lo mira hasta que alguien reporta que no le
+> llegan las invitaciones. Con un certificado válido el problema desaparece,
+> porque la huella deja de usarse.
+
+Para releer la huella si hiciera falta:
+
+```bash
+openssl s_client -starttls smtp -connect mail.notifica365.com:587 -showcerts </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+```
+
+#### C2 — `ingenia365.com` no tiene DMARC
+
+Cualquiera puede falsificar correos desde ese dominio. Ya estaba señalado como
+riesgo crítico en `docs/operaciones/migracion-dns-cloudflare.md`, y ahora pesa
+más porque el ERP envía invitaciones y restablecimientos de contraseña.
+
+Conviene revisar SPF, DKIM y DMARC de **`notifica365.com`** también, que es el
+dominio que firma los envíos. Con un servidor autoalojado y sin esos registros,
+lo esperable es que Hotmail y Gmail manden las invitaciones a spam — y el
+síntoma que va a llegar es «no me llegó el correo», el mismo que originó toda
+esta ronda.
 
 ### Pendientes de la mejora visual
 
