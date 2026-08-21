@@ -94,12 +94,30 @@ public static class DomainPermissionCatalogSeeder
         ("Saas.AuditLog",          "Verify",   "Validar HMAC de un PDF firmado del audit log"),
     ];
 
+    /// <summary>
+    /// Resuelve el contexto del contenedor, que apunta a dbo. Se conserva para los
+    /// llamadores que ya existian; el sembrado por esquema usa la sobrecarga de abajo.
+    /// </summary>
     public static async Task SeedAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Permission>>();
+        await SeedAsync(db, logger);
+    }
 
+    /// <summary>
+    /// Siembra sobre el contexto que se le pase, sin tocar el contenedor.
+    ///
+    /// <para>
+    /// Existe porque el catalogo tiene que quedar dentro del esquema de CADA
+    /// cooperativa, y resolver <c>IApplicationDbContext</c> del contenedor da
+    /// siempre el esquema ambiente. El orquestador ya entrega en
+    /// <c>SeedContext.TenantDb</c> un contexto apuntado al esquema en curso.
+    /// </para>
+    /// </summary>
+    public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
+    {
         try
         {
             var existing = await db.Permissions

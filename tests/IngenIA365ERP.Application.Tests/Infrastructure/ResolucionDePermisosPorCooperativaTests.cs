@@ -1,116 +1,95 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Identity.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
 namespace IngenIA365ERP.Application.Tests.Infrastructure;
 
 /// <summary>
-/// Resolución de permisos acotada a una cooperativa.
+/// Resolución de permisos dentro del esquema de una cooperativa.
 ///
 /// <para>
-/// Es la frontera que decide qué puede hacer cada quien. El método anterior
-/// (<c>ResolveAsync</c>) recibía el tenant como cadena y no filtraba por él:
-/// devolvía los permisos de TODOS los roles del usuario, de la cooperativa que
-/// fueran. Mientras nadie autorizara con el resultado, daba igual. Desde que el
-/// filtro lo lee, cada prueba de aquí es un candado.
+/// <b>De dónde viene ahora el aislamiento.</b> Antes se intentaba con un
+/// predicado de columna (<c>Role.TenantId == idCooperativa</c>) que nunca pudo
+/// funcionar: la clave foránea apuntaba al <c>ADM_Tenants</c> local de cada
+/// esquema, vacío, así que insertar un rol de cooperativa era físicamente
+/// imposible. Ahora el aislamiento es el <b>esquema</b>: dentro del de una
+/// cooperativa, todos los roles son suyos.
+/// </para>
+///
+/// <para>
+/// <b>Qué ya no se puede probar aquí, y dónde se prueba.</b> "El rol de otra
+/// cooperativa no concede nada" era comprobable con una columna; con esquemas
+/// no lo es, porque EF InMemory no los tiene. Esa garantía se verifica con dos
+/// cooperativas reales sobre PostgreSQL. Lo que sí queda aquí es que el caché
+/// nunca las mezcle, que es la otra mitad del mismo riesgo.
 /// </para>
 /// </summary>
 public class ResolucionDePermisosPorCooperativaTests
 {
-    private const int CoopA = 1;
-    private const int CoopB = 2;
+    private const int Cooperativa = 1;
 
     private static TestApplicationDbContext Sembrar(string nombre)
     {
         var db = TestDbContextFactory.Create(nombre);
 
-        // Códigos: dos propios de la cooperativa y uno SaaS-global.
         var verSucursales = new Permission { Id = 10, Resource = "Admin.Branches", Action = "View" };
         var crearSucursal = new Permission { Id = 11, Resource = "Admin.Branches", Action = "Create" };
         var verCooperativas = new Permission { Id = 12, Resource = "Admin.Tenants", Action = "View" };
         db.Permissions.AddRange(verSucursales, crearSucursal, verCooperativas);
 
+        // TenantId nulo: es lo normal dentro del esquema de una cooperativa.
         db.Roles.AddRange(
-            new Role { Id = 100, Code = "CompanyAdmin", Name = "Admin A", TenantId = CoopA, IsActive = true },
-            new Role { Id = 200, Code = "CompanyAdmin", Name = "Admin B", TenantId = CoopB, IsActive = true },
-            new Role { Id = 300, Code = "CompanyAdmin", Name = "Plantilla", TenantId = null, IsActive = true },
-            new Role { Id = 400, Code = "Suspendido", Name = "Inactivo", TenantId = CoopA, IsActive = false });
+            new Role { Id = 100, Code = "CompanyAdmin", Name = "Admin", TenantId = null, IsActive = true },
+            new Role { Id = 400, Code = "Suspendido", Name = "Inactivo", TenantId = null, IsActive = false });
 
         db.RolePermissions.AddRange(
             new RolePermission { RoleId = 100, PermissionId = 10 },
             new RolePermission { RoleId = 100, PermissionId = 11 },
-            // El vínculo prohibido, puesto a mano: así se comprueba el segundo candado.
+            // Vínculo prohibido puesto a mano: comprueba el segundo candado.
             new RolePermission { RoleId = 100, PermissionId = 12 },
-            new RolePermission { RoleId = 200, PermissionId = 10 },
-            new RolePermission { RoleId = 300, PermissionId = 10 },
             new RolePermission { RoleId = 400, PermissionId = 11 });
 
         db.SaveChanges();
         return db;
     }
 
-    private static UserPermissionResolver Resolutor(TestApplicationDbContext db) =>
-        new(db, NullLogger<UserPermissionResolver>.Instance, cache: null);
+    private static UserPermissionResolver Resolutor(
+        TestApplicationDbContext db, IPermissionClaimsCache? cache = null) =>
+        new(db, NullLogger<UserPermissionResolver>.Instance, cache);
 
     private static void Asignar(TestApplicationDbContext db, int usuario, params int[] roles)
     {
-        foreach (var rol in roles)
-        {
-            db.UserRoles.Add(new UserRole { UserId = usuario, RoleId = rol });
-        }
+        foreach (var rol in roles) db.UserRoles.Add(new UserRole { UserId = usuario, RoleId = rol });
         db.SaveChanges();
     }
 
     [Fact]
-    public async Task ResuelveLosPermisosDeSuCooperativa()
+    public async Task ResuelveLosPermisosDeLosRolesDelEsquema()
     {
-        using var db = Sembrar(nameof(ResuelveLosPermisosDeSuCooperativa));
+        using var db = Sembrar(nameof(ResuelveLosPermisosDeLosRolesDelEsquema));
         Asignar(db, usuario: 7, roles: 100);
 
-        var r = await Resolutor(db).ResolveForTenantAsync(7, CoopA, default);
+        var r = await Resolutor(db).ResolveForTenantAsync(7, Cooperativa, default);
 
         r.Should().Contain("Admin.Branches.View");
         r.Should().Contain("Admin.Branches.Create");
     }
 
     [Fact]
-    public async Task NoResuelveNadaEnUnaCooperativaAjena()
-    {
-        // El candado principal: el usuario sólo tiene rol en A.
-        using var db = Sembrar(nameof(NoResuelveNadaEnUnaCooperativaAjena));
-        Asignar(db, usuario: 7, roles: 100);
-
-        var r = await Resolutor(db).ResolveForTenantAsync(7, CoopB, default);
-
-        r.Should().BeEmpty("el usuario no tiene ningún rol en esa cooperativa");
-    }
-
-    [Fact]
     public async Task NuncaDevuelvePermisosSaasGlobales()
     {
-        // Aunque el vínculo esté en la base: el rol 100 tiene Admin.Tenants.View.
+        // Aunque el vínculo esté puesto en la base: Admin.Tenants.* opera SOBRE el
+        // conjunto de cooperativas y sólo lo ejerce el administrador maestro.
         using var db = Sembrar(nameof(NuncaDevuelvePermisosSaasGlobales));
         Asignar(db, usuario: 7, roles: 100);
 
-        var r = await Resolutor(db).ResolveForTenantAsync(7, CoopA, default);
+        var r = await Resolutor(db).ResolveForTenantAsync(7, Cooperativa, default);
 
-        r.Should().NotContain("Admin.Tenants.View",
-            "opera sobre el conjunto de cooperativas, no dentro de una");
-    }
-
-    [Fact]
-    public async Task UnRolPlantillaNoConcedeNada()
-    {
-        // TenantId == null son las plantillas SaaS. Honrarlas daría a cualquiera
-        // los permisos del molde del que se clonan los roles de cada cooperativa.
-        using var db = Sembrar(nameof(UnRolPlantillaNoConcedeNada));
-        Asignar(db, usuario: 7, roles: 300);
-
-        var r = await Resolutor(db).ResolveForTenantAsync(7, CoopA, default);
-
-        r.Should().BeEmpty();
+        r.Should().NotContain("Admin.Tenants.View");
     }
 
     [Fact]
@@ -119,7 +98,7 @@ public class ResolucionDePermisosPorCooperativaTests
         using var db = Sembrar(nameof(UnRolDesactivadoNoConcedeNada));
         Asignar(db, usuario: 7, roles: 400);
 
-        var r = await Resolutor(db).ResolveForTenantAsync(7, CoopA, default);
+        var r = await Resolutor(db).ResolveForTenantAsync(7, Cooperativa, default);
 
         r.Should().BeEmpty();
     }
@@ -129,24 +108,43 @@ public class ResolucionDePermisosPorCooperativaTests
     {
         using var db = Sembrar(nameof(UnUsuarioSinRolesNoResuelveNada));
 
-        var r = await Resolutor(db).ResolveForTenantAsync(99, CoopA, default);
+        var r = await Resolutor(db).ResolveForTenantAsync(99, Cooperativa, default);
 
         r.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ConRolesEnDosCooperativas_CadaUnaDevuelveLoSuyo()
+    public async Task ElCacheSeparaLasCooperativas()
     {
-        using var db = Sembrar(nameof(ConRolesEnDosCooperativas_CadaUnaDevuelveLoSuyo));
-        Asignar(db, usuario: 7, roles: [100, 200]);
-        var resolutor = Resolutor(db);
+        // La otra mitad del aislamiento. El esquema separa las FILAS; esto separa lo
+        // que se recuerda de ellas. Con una clave compartida —y la había: se invalidaba
+        // con cadena vacía— un usuario que cambia de cooperativa leería el conjunto de
+        // permisos de la anterior, con los esquemas perfectamente aislados.
+        using var db = Sembrar(nameof(ElCacheSeparaLasCooperativas));
+        Asignar(db, usuario: 7, roles: 100);
+        var cache = Substitute.For<IPermissionClaimsCache>();
+        cache.GetAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<string>?)null);
 
-        var enA = await resolutor.ResolveForTenantAsync(7, CoopA, default);
-        var enB = await resolutor.ResolveForTenantAsync(7, CoopB, default);
+        await Resolutor(db, cache).ResolveForTenantAsync(7, tenantInternalId: 1, default);
+        await Resolutor(db, cache).ResolveForTenantAsync(7, tenantInternalId: 2, default);
 
-        enA.Should().Contain("Admin.Branches.Create");
-        enB.Should().NotContain("Admin.Branches.Create",
-            "en B sólo tiene el rol que concede View; los permisos no se suman entre cooperativas");
-        enB.Should().Contain("Admin.Branches.View");
+        await cache.Received(1).SetAsync(7, "1", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await cache.Received(1).SetAsync(7, "2", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await cache.DidNotReceive().SetAsync(
+            Arg.Any<int>(), string.Empty, Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoCacheadoSeDevuelveSinTocarLaBase()
+    {
+        using var db = Sembrar(nameof(LoCacheadoSeDevuelveSinTocarLaBase));
+        var cache = Substitute.For<IPermissionClaimsCache>();
+        cache.GetAsync(7, "1", Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<string>?>(["Algo.Guardado"]);
+
+        var r = await Resolutor(db, cache).ResolveForTenantAsync(7, 1, default);
+
+        r.Should().Equal("Algo.Guardado");
     }
 }

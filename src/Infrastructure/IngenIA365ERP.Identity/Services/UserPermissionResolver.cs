@@ -57,8 +57,21 @@ public sealed class UserPermissionResolver : IUserPermissionResolver
         {
             permisos = await _db.UserRoles
                 .Where(ur => ur.UserId == userId)
-                .Join(_db.Roles.Where(r =>
-                        r.TenantId == tenantInternalId && r.IsActive && !r.IsDeleted),
+                // Sin filtro por Role.TenantId, y es deliberado: con schema-per-tenant
+                // el aislamiento es el esquema, y dentro del esquema de una cooperativa
+                // TODOS los roles son suyos. La columna queda como metadato nulable.
+                //
+                // Filtrar por ella no solo sobra: no funcionaba. La FK
+                // FK_SEC_Roles_ADM_Tenants_TenantId apunta al ADM_Tenants LOCAL de cada
+                // esquema, que tiene cero filas, asi que insertar un rol con TenantId
+                // era fisicamente imposible y esta comprobacion no podia dar verdadera
+                // jamas. Es la razon de que ningun esquema de cooperativa tenga roles.
+                //
+                // Se descarto la alternativa —poblar TenantId con el Id interno— porque
+                // ata cada esquema a la secuencia de identidad de la BD administrativa:
+                // si una cooperativa se re-registra y recibe otro Id, pierde todos sus
+                // permisos en silencio.
+                .Join(_db.Roles.Where(r => r.IsActive && !r.IsDeleted),
                     ur => ur.RoleId,
                     r => r.Id,
                     (ur, r) => r.Id)

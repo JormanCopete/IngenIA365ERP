@@ -30,10 +30,16 @@ public sealed class MasterAdminSeeder : IDataSeeder
         var password = Environment.GetEnvironmentVariable("MASTER_ADMIN_PASSWORD");
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
-            context.Logger.LogWarning(
-                "No existe ningún master admin y faltan MASTER_ADMIN_EMAIL / MASTER_ADMIN_PASSWORD — " +
-                "la instalación no tendrá gobierno hasta sembrarlo (re-ejecute el seed con las variables definidas).");
-            return 0;
+            // Fallo duro, no aviso. Un arranque sobre base vacia y sin estas variables
+            // dejaba la instalacion SIN GOBIERNO y sin error visible: nadie puede
+            // administrar nada, el log lo dice una vez entre cientos de lineas, y el
+            // sintoma aparece mucho despues, cuando alguien intenta entrar. Es el peor
+            // modo de fallo de todo el corte a schema-per-tenant, y cuesta una linea
+            // evitarlo.
+            throw new InvalidOperationException(
+                "No existe ningun administrador maestro y faltan las variables de entorno " +
+                "MASTER_ADMIN_EMAIL y MASTER_ADMIN_PASSWORD. Definilas en el entorno del proceso " +
+                "antes de arrancar: sin ellas la instalacion queda sin gobierno.");
         }
 
         var user = new CentralUserIdentity

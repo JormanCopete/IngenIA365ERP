@@ -90,12 +90,23 @@ public static class BuiltInRolesSeeder
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Role>>();
+        await SeedAsync(db, logger);
+    }
 
+    /// <summary>
+    /// Siembra sobre el contexto que se le pase. Ver la nota de la sobrecarga
+    /// equivalente en <see cref="DomainPermissionCatalogSeeder"/>: los roles tienen
+    /// que existir dentro del esquema de cada cooperativa, no solo en dbo.
+    /// </summary>
+    public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
+    {
         try
         {
-            // El seed corre con TenantId = null (rol SaaS-global "plantilla").
-            // ProvisionTenantSchemaCommand (T073) replicará la plantilla a cada
-            // tenant nuevo cambiando TenantId.
+            // Los roles se siembran con TenantId = null, y ahora eso es lo correcto y
+            // no un provisional: con aislamiento por esquema, dentro del esquema de
+            // una cooperativa todos los roles son suyos y la columna no discrimina
+            // nada. Ya no hay plantillas que replicar — este seeder corre una vez
+            // por esquema.
             await SeedRolesAsync(db, logger);
             await SeedRolePermissionsAsync(db, logger);
             await PurgarPermisosSaasGlobalesAsync(db, logger);
