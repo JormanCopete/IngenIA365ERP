@@ -24,7 +24,7 @@ namespace IngenIA365ERP.Identity.Seed;
 public static class DomainPermissionCatalogSeeder
 {
     /// <summary>Permisos Phase 0 — Resource + Action.</summary>
-    private static readonly (string Resource, string Action, string Description)[] Catalog =
+    internal static readonly (string Resource, string Action, string Description)[] Catalog =
     [
         // Admin (SaaS-global)
         ("Admin.Tenants",          "View",     "Listar cooperativas-tenant del SaaS"),

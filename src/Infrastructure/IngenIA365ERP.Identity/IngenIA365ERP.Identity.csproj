@@ -31,4 +31,8 @@
          No crea ciclo: Persistence no referencia Identity. -->
     <ProjectReference Include="..\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+  </ItemGroup>
+
 </Project>

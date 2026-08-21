@@ -26,5 +26,6 @@
          Application (src) sigue sin referenciar Persistence. -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Identity\IngenIA365ERP.Identity.csproj" />
   </ItemGroup>
 </Project>
