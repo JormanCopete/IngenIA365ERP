@@ -52,6 +52,12 @@ internal sealed class SmtpEmailSender(
             try
             {
                 using var client = new SmtpClient();
+
+                // Sólo si se configuró una huella. Sin ella, MailKit valida
+                // contra las autoridades del sistema, que es lo que debe pasar.
+                if (!string.IsNullOrWhiteSpace(_settings.HuellaCertificadoAceptada))
+                    client.ServerCertificateValidationCallback = ValidarCertificadoFijado;
+
                 await client.ConnectAsync(
                     _settings.Host,
                     _settings.Port,
@@ -80,6 +86,67 @@ internal sealed class SmtpEmailSender(
                 await Task.Delay(delay, ct);
             }
         }
+    }
+
+    /// <summary>
+    /// Acepta el certificado si valida normalmente O si su huella SHA-256
+    /// coincide EXACTAMENTE con la configurada. Cualquier otro se rechaza.
+    /// </summary>
+    /// <remarks>
+    /// La diferencia con desactivar la validación es toda: aquello acepta
+    /// cualquier certificado, y entonces quien se interponga en la red puede
+    /// presentar el suyo, descifrar el tráfico y quedarse con los enlaces de
+    /// invitación y de restablecimiento que viajan en esos correos. Esto acepta
+    /// uno solo. Si el servidor cambia de certificado, el envío falla y alguien
+    /// tiene que mirar por qué — que es justo lo que se quiere.
+    /// </remarks>
+    internal bool ValidarCertificadoFijado(
+        object sender,
+        System.Security.Cryptography.X509Certificates.X509Certificate? certificate,
+        System.Security.Cryptography.X509Certificates.X509Chain? chain,
+        System.Net.Security.SslPolicyErrors errors)
+    {
+        if (errors == System.Net.Security.SslPolicyErrors.None)
+            return true;
+
+        if (certificate is null)
+            return false;
+
+        // Sin huella configurada no hay nada contra que comparar. Se rechaza en
+        // vez de dejar pasar: ante la duda, no conectar. (Con la configuracion
+        // normal este metodo ni siquiera se engancha, pero un default seguro
+        // vale mas que confiar en que nadie lo llame por otro camino.)
+        if (string.IsNullOrWhiteSpace(_settings.HuellaCertificadoAceptada))
+            return false;
+
+        var huella = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(certificate.GetRawCertData()));
+
+        var esperada = _settings.HuellaCertificadoAceptada
+            .Replace(":", string.Empty)
+            .Replace(" ", string.Empty);
+
+        var coincide = string.Equals(huella, esperada, StringComparison.OrdinalIgnoreCase);
+
+        if (coincide)
+        {
+            logger.LogWarning(
+                "El servidor {Host} presenta un certificado que no valida ({Errores}), " +
+                "pero coincide con la huella fijada. Es un parche: corresponde instalar " +
+                "un certificado válido en ese servidor.",
+                _settings.Host, errors);
+        }
+        else
+        {
+            logger.LogError(
+                "Certificado de {Host} rechazado. Errores: {Errores}. " +
+                "Huella recibida {Recibida}, esperada {Esperada}. " +
+                "Si el servidor cambió de certificado a propósito, hay que actualizar " +
+                "Smtp:HuellaCertificadoAceptada; si no, alguien se está interponiendo.",
+                _settings.Host, errors, huella, esperada);
+        }
+
+        return coincide;
     }
 
     private static string ToPlainText(string html)

@@ -15,15 +15,42 @@
 <div class="auth-card" style="max-width: 640px;">
     @if (_done && _result is not null)
     {
-        <h1>Empresa registrada ✓</h1>
-        <p>
-            <strong>@_model.Name</strong> fue creada y se envió la invitación
-            de administrador a <strong>@_model.FirstAdminEmail</strong>.
-        </p>
-        <p>
-            La invitación expira el
-            <strong>@_result.InvitationExpiresAt.ToString("dd/MM/yyyy HH:mm 'UTC'")</strong>.
-        </p>
+        @if (_result.CorreoEnviado)
+        {
+            <h1>Empresa registrada ✓</h1>
+            <div class="aviso aviso-ok" role="status">
+                <strong>@_model.Name</strong> fue creada y se envió la invitación
+                de administrador a <strong>@_model.FirstAdminEmail</strong>.
+            </div>
+            <p>
+                La invitación expira el
+                <strong>@_result.InvitationExpiresAt.ToString("dd/MM/yyyy HH:mm 'UTC'")</strong>.
+            </p>
+        }
+        else
+        {
+            <h1>Empresa registrada, correo NO enviado</h1>
+            <div class="aviso aviso-alerta" role="alert">
+                <strong>@_model.Name</strong> fue creada y la invitación de
+                administrador quedó registrada, pero <strong>el correo a
+                @_model.FirstAdminEmail no salió</strong>. Nadie la recibió:
+                hay que reenviarla.
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_result.MotivoCorreoNoEnviado))
+            {
+                <p>Motivo informado por el servidor de correo:
+                   <em>@_result.MotivoCorreoNoEnviado</em></p>
+            }
+            <p>
+                La invitación expira el
+                <strong>@_result.InvitationExpiresAt.ToString("dd/MM/yyyy HH:mm 'UTC'")</strong>,
+                se haya entregado el correo o no.
+            </p>
+            <p>
+                <a href="@InvitacionesUrl">Ir a las invitaciones de esta empresa
+                   para reenviarla</a>
+            </p>
+        }
         <button @onclick="Restart">Crear otra</button>
     }
     else
@@ -76,6 +103,10 @@
     private bool _done;
     private string? _error;
     private RegisterTenantWithAdminResponse? _result;
+
+    // Pantalla donde se lista y se reenvía la invitación cuando el correo falló.
+    private string InvitacionesUrl =>
+        $"/admin/tenants/{_result!.TenantPublicId}/invitaciones";
 
     private async Task SubmitAsync()
     {

@@ -87,6 +87,9 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         adminDb.Invitations.Add(invitation);
         await adminDb.SaveChangesAsync(ct);
 
+        var correoEnviado = true;
+        string? motivoCorreoNoEnviado = null;
+
         try
         {
             await emailDispatcher.DispatchAsync(new InvitationEmailRequest(
@@ -97,11 +100,26 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         }
         catch (Exception ex)
         {
-            // El envío puede fallar (SMTP caído). El tenant + invitación quedan
-            // persistidos; el master admin podrá reenviar luego.
+            // El envío puede fallar (SMTP caído, credenciales, certificado). No
+            // se deshace nada a propósito: la cooperativa y la invitación quedan
+            // persistidas, porque perderlas por un servidor de correo caído
+            // sería peor que quedarse sin el correo.
+            //
+            // Lo que NO se hace es callarlo: el resultado viaja con
+            // CorreoEnviado=false y el motivo, para que la pantalla lo diga en
+            // lugar de dar por enviada una invitación que nunca salió.
+            //
+            // El reenvío existe: ReenviarInvitacionCommand
+            // (Application/Invitations/GestionInvitaciones/GestionInvitaciones.cs),
+            // expuesto en POST /api/tenants/{tenantId}/invitations/{id}/reenviar
+            // y en la pantalla /admin/tenants/{tenantId}/invitaciones.
+            correoEnviado = false;
+            motivoCorreoNoEnviado = DescribirFalloDeEnvio(ex);
             logger.LogWarning(ex,
-                "Falló envío del email de invitación admin para tenant {Tenant}",
-                tenant.Name);
+                "Falló envío del email de invitación admin para tenant {Tenant}. " +
+                "La invitación {Invitation} quedó creada y debe reenviarse desde " +
+                "/admin/tenants/{TenantId}/invitaciones",
+                tenant.Name, invitation.PublicId, tenant.PublicId);
         }
 
         await EmitAuditAsync(currentUser.CentralUserId.Value,
@@ -111,7 +129,27 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         return Result.Success(new RegisterTenantWithAdminResult(
             TenantPublicId: tenant.PublicId,
             InvitationPublicId: invitation.PublicId,
-            InvitationExpiresAt: expiresAt));
+            InvitationExpiresAt: expiresAt,
+            CorreoEnviado: correoEnviado,
+            MotivoCorreoNoEnviado: motivoCorreoNoEnviado));
+    }
+
+    /// <summary>
+    /// Motivo en una línea para mostrar a quien registró la cooperativa. Usa el
+    /// mensaje de la excepción más interna, que es donde el cliente SMTP dice
+    /// lo concreto ("no se pudo conectar", "certificado no válido", "535
+    /// autenticación fallida"). El stack completo queda en el log.
+    /// </summary>
+    private static string DescribirFalloDeEnvio(Exception ex)
+    {
+        var raiz = ex;
+        while (raiz.InnerException is not null)
+            raiz = raiz.InnerException;
+
+        var mensaje = raiz.Message?.Trim();
+        return string.IsNullOrEmpty(mensaje)
+            ? "El servidor de correo no aceptó el envío."
+            : mensaje;
     }
 
     private async Task EmitAuditAsync(

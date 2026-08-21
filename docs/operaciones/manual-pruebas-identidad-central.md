@@ -39,6 +39,14 @@ docker compose up -d sqlserver mongodb redis mailhog
 **Verificar**: `docker ps` debe mostrar los 4 contenedores en estado `Up`. La
 UI de MailHog estará en `http://localhost:8025`.
 
+> **Ningún correo sale a internet durante estas pruebas, y así debe ser.** El
+> destino por defecto en desarrollo es **smtp4dev** (`docker-compose.dev.yml`,
+> misma bandeja en **http://localhost:8025**); MailHog, en el `docker-compose.yml`
+> clásico, hace lo mismo. Ambos **capturan** el mensaje y **no lo entregan**: si
+> te quedaste esperando el correo en tu buzón real, no hay nada roto — abrí
+> `http://localhost:8025`. Enviar de verdad se documenta en
+> [`correo-saliente.md`](correo-saliente.md).
+
 ### 1.2 Aplicar DDL admin (orden estricto)
 
 ```powershell
@@ -172,7 +180,14 @@ $tenantResp | ConvertTo-Json
 ```
 
 **Esperado**: 200 OK con `tenantPublicId`, `invitationPublicId`,
-`invitationExpiresAt`.
+`invitationExpiresAt`, `correoEnviado` y `motivoCorreoNoEnviado`.
+
+> Mirá `correoEnviado` antes de seguir. El 200 confirma que la empresa y la
+> invitación quedaron creadas — eso pasa igual con el SMTP caído —, pero
+> **no** que el correo haya salido. Con `correoEnviado: false` no vas a
+> encontrar nada en `http://localhost:8025`: `motivoCorreoNoEnviado` dice por
+> qué, y la invitación se reenvía desde
+> `/admin/tenants/{tenantPublicId}/invitaciones`.
 
 #### Paso 3. Verificar correo en MailHog
 
@@ -180,7 +195,9 @@ Abre `http://localhost:8025`. Deberás ver UN correo:
 
 - **To**: `ana.perez@coop.solidaria.test`
 - **Subject**: `Invitación a Coop. Solidaria Dev — IngenIA365ERP`
-- **Body**: enlace `https://localhost:7200/auth/accept-invitation?token=...`
+- **Body**: enlace `http://localhost:5200/auth/accept-invitation?token=...`
+  (la base sale de `IdentityEmail:BaseUrl`; si ves `https://localhost:7200`
+  es que esa clave no está definida y rige el valor cableado por defecto)
 
 Copia el `token=` de la URL del enlace. Lo necesitas para los siguientes pasos.
 
@@ -790,7 +807,9 @@ Inspecciona los claims de tus tokens:
 | Plantillas de correo no se renderizan | `Templates/*.html` no copiado al output | Revisar `IngenIA365ERP.Storage.csproj` — debe tener `<None Update="Templates\*.html" CopyToOutputDirectory="PreserveNewest" />` |
 | `Profile.Mfa.NoPendingEnrollment` al confirmar MFA | Pasaron > 10 min desde `BeginMfaEnrollment` | Reinicia con `POST /api/profile/mfa/enroll` |
 | `Invitation.LockBusy` en accept | Dos clics simultáneos del enlace o lock zombie | Espera 30s y reintenta |
-| MailHog no recibe correos | SMTP host mal configurado en `appsettings.json` | `EmailSender__Smtp__Host=localhost` + `Port=1025` |
+| No llega el correo a mi buzón real | Es lo esperado en local: smtp4dev/MailHog capturan y **no entregan** | Abrir la bandeja en `http://localhost:8025` |
+| La bandeja de `http://localhost:8025` no recibe nada | SMTP host/puerto mal configurados | `Smtp__Host=localhost` + `Smtp__Port=1025` (la vieja `EmailSender__*` no la lee nadie) |
+| El enlace del correo apunta a `localhost:7200` | Falta `IdentityEmail:BaseUrl` en la config del ambiente | Definir `IdentityEmail__BaseUrl` (dev: `http://localhost:5200`) |
 | Jobs no procesan nada | API recién arrancada — delay inicial de 2 min en InvitationExpiry, 5 min en PasswordResetCleanup | Esperar o reiniciar para forzar el `delay + first tick` |
 | `Membership.LastAdminProtected` al intentar revocar admin | Es la salvaguarda esperada (US4) | Promueve otro admin primero |
 | Validation.Invalid en force-mfa-reset | Razón < 10 chars | Pasa una razón descriptiva (mínimo 10 chars) |

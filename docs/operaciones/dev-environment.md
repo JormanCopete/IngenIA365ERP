@@ -27,7 +27,7 @@ Servicios expuestos:
 | SQL Server | `1433`      | `sa` / `IngenIA365_Dev2026!` (Developer Edition) |
 | MongoDB    | `27017`     | Sin auth en local; base `IngenIA365ERP_Audit` |
 | Redis      | `6379`      | Sin auth en local |
-| smtp4dev   | `5025` SMTP, `5080` UI | http://localhost:5080 para inspeccionar correos |
+| smtp4dev   | `5025` SMTP, `5080` UI | http://localhost:5080 para inspeccionar correos. **Captura el correo y no lo entrega** |
 
 Verificar:
 
@@ -59,10 +59,15 @@ export MongoDb__ConnectionString="mongodb://localhost:27017"
 export MongoDb__DatabaseName="IngenIA365ERP_Audit"
 export ConnectionStrings__Redis="localhost:6379,abortConnect=false"
 
-# Correo (smtp4dev)
+# Correo (smtp4dev) — captura los mensajes, NO los entrega
 export Smtp__Host="localhost"
 export Smtp__Port="5025"
-export Smtp__From="no-reply@ingenia365.dev"
+export Smtp__UseStartTls="false"
+export Smtp__FromAddress="noresponder.ingenia365erp@notifica365.com"
+export Smtp__FromName="No Responder IngenIA365 ERP"
+
+# Base de los enlaces que viajan dentro del correo (invitación / reset)
+export IdentityEmail__BaseUrl="http://localhost:5200"
 
 # DataProtection — claves de cifrado para refresh tokens, secretos MFA y adjuntos
 # En dev, se almacenan en disco. En prod, se rotan por DPAPI / KMS gestionado.
@@ -108,6 +113,7 @@ dotnet run --project src/Presentation/IngenIA365ERP.Web -c Release
 | `MongoServerSelectionTimeout` | MongoDB no expone 27017 | `docker compose -f docker/dev.yml ps`; revisar firewall local |
 | `StackExchange.Redis.RedisConnectionException` | Redis caído | `docker compose -f docker/dev.yml restart redis` |
 | Correos no llegan a smtp4dev | Puerto SMTP del cliente incorrecto | Confirmar `Smtp__Port=5025` (host) — *no* 25 |
+| El correo no aparece en un buzón real | Comportamiento esperado en dev | smtp4dev **captura y no entrega**; el mensaje está en su UI. Enviar de verdad: [`correo-saliente.md`](correo-saliente.md) |
 | `IDX10500: Signature validation failed` | Claves RSA no cargadas o desincronizadas | Borrar `Keys/dev_*.pem` y reiniciar la API |
 
 ## Referencias

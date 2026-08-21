@@ -121,6 +121,13 @@ docker exec ingenia365-dev-redis redis-cli ping     # → PONG
 muestra en un web UI — imprescindible para los flujos de invitación,
 password-reset y notificaciones sin mandar correos reales.
 
+> **El correo no llega a ningún buzón, y ese es el comportamiento esperado.**
+> smtp4dev es el destino por defecto en desarrollo (`Infraestructura:Destinos:Smtp`
+> = `Docker`): **captura** los mensajes y **no los entrega**. Si un flujo de
+> invitación o de restablecimiento "no manda el correo", casi siempre está
+> mandado y esperando en **http://localhost:8025**. Para que salga de verdad hay
+> que apuntar al servidor real — ver [`correo-saliente.md`](correo-saliente.md).
+
 ### Setup A — como `dotnet tool` global
 
 **Instalación (una vez):**
@@ -354,7 +361,9 @@ Connection strings activas:
 | `ConnectionStrings:SqlServerAdmin`     | `Server=localhost;Database=IngenIA365ERP_Admin;Trusted_Connection=true;...` |
 | `ConnectionStrings:MongoDB`            | `mongodb://localhost:27017/IngenIA365ERP_Audit`                        |
 | `ConnectionStrings:Redis`              | `localhost:6379,abortConnect=false`                                    |
-| `EmailSender:Smtp:Host` / `Port`       | `localhost:1025` (MailHog opcional)                                    |
+| `Smtp:Host` / `Smtp:Port`              | `127.0.0.1:1025` — smtp4dev; **captura el correo, no lo entrega** (bandeja en `http://localhost:8025`) |
+| `Smtp:FromAddress` / `Smtp:FromName`   | `noresponder.ingenia365erp@notifica365.com` / `No Responder IngenIA365 ERP` |
+| `IdentityEmail:BaseUrl`                | `http://localhost:5200` — base de los enlaces que viajan dentro del correo |
 
 ---
 

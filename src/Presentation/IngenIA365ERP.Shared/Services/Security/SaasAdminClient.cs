@@ -70,7 +70,14 @@ public sealed record RegisterTenantWithAdminBody(
     long StorageLimitMb,
     string FirstAdminEmail);
 
+/// <summary>
+/// Espejo de <c>RegisterTenantWithAdminResult</c>. <see cref="CorreoEnviado"/>
+/// distingue "cooperativa creada e invitación enviada" de "cooperativa creada
+/// pero el correo no salió" — antes ambos casos llegaban idénticos.
+/// </summary>
 public sealed record RegisterTenantWithAdminResponse(
     Guid TenantPublicId,
     Guid InvitationPublicId,
-    DateTime InvitationExpiresAt);
+    DateTime InvitationExpiresAt,
+    bool CorreoEnviado,
+    string? MotivoCorreoNoEnviado);

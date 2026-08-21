@@ -162,7 +162,9 @@ curl -s -X POST https://api.ingenia365.com/api/saas/tenants/with-admin \
 {
   "tenantPublicId": "…",
   "invitationPublicId": "…",
-  "invitationExpiresAt": "2026-08-02T…"
+  "invitationExpiresAt": "2026-08-02T…",
+  "correoEnviado": true,
+  "motivoCorreoNoEnviado": null
 }
 ```
 
@@ -171,7 +173,14 @@ curl -s -X POST https://api.ingenia365.com/api/saas/tenants/with-admin \
 - ✅ HTTP 200 (no 500)
 - ✅ Los 3 IDs vienen no-null
 - ✅ Detrás de escena se emitió el evento auditable `Tenant.Created`
-- ✅ Se mandó un correo real al `firstAdminEmail`
+- ✅ **`correoEnviado` es `true`.** No lo des por hecho a partir del 200: la
+  empresa y la invitación se crean igual aunque el servidor de correo esté
+  caído, y en ese caso la respuesta llega igual con 200 pero con
+  `correoEnviado: false` y el motivo en `motivoCorreoNoEnviado`. Si ves
+  `false`, **nadie recibió el correo**: la invitación ya existe y hay que
+  reenviarla desde `/admin/tenants/{tenantPublicId}/invitaciones`
+  (`POST /api/tenants/{tenantPublicId}/invitations/{invitationPublicId}/reenviar`).
+  Seguí entonces por la tabla de "Si no llegó" del paso 3.
 
 **Si falla con `Tenant.NitConflict`**: ya existe un tenant con ese NIT —
 elegí otro NIT o buscá el existente.
@@ -199,7 +208,8 @@ correcto.
 |---|---|
 | No aparece en bandeja de entrada | Revisar carpeta Spam / Promociones |
 | SMTP corporativo bloqueó el envío | Revisar logs del dispatcher: `NotificationEmailDispatcher` |
-| Link apunta a dominio incorrecto | Verificar `EmailSender:InvitationLinkBaseUrl` en config de prod |
+| Link apunta a dominio incorrecto | Verificar `IdentityEmail:BaseUrl` en la config de prod (o la variable `IdentityEmail__BaseUrl`). Si el enlace dice `localhost:7200`, esa clave no está definida y rige el valor cableado por defecto |
+| Nada sale del servidor de correo | Revisar la sección `Smtp` (`Smtp__Host`, `Smtp__Port`, `Smtp__UseStartTls`, `Smtp__Username`, `Smtp__Password`). Ver [`correo-saliente.md`](correo-saliente.md) |
 
 ---
 

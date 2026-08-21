@@ -77,7 +77,7 @@ Layout del repositorio (existente — ver `plan.md > Project Structure`):
 
 - [X] T001 Añadir paquetes NuGet `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 10.x y `Microsoft.AspNetCore.Identity` 10.x al proyecto `src/Infrastructure/IngenIA365ERP.Identity/IngenIA365ERP.Identity.csproj`
 - [X] T002 [P] Añadir servicio MailHog al `docker-compose.dev.yml` (puerto SMTP 1025, UI 8025) para validación local de correos de invitación
-- [X] T003 [P] Extender `src/Presentation/IngenIA365ERP.API/appsettings.json` y `appsettings.Development.json` con secciones `CentralIdentity` (issuer/audience/lifetime/keys), `EmailSender:Smtp` (host/port/from/credentials), `PwnedPassword` (base url, timeout, enable flag) y `LoginLockout` (umbrales 5/10/15/20 + durations)
+- [X] T003 [P] Extender `src/Presentation/IngenIA365ERP.API/appsettings.json` y `appsettings.Development.json` con secciones `CentralIdentity` (issuer/audience/lifetime/keys), `EmailSender:Smtp` (host/port/from/credentials), `PwnedPassword` (base url, timeout, enable flag) y `LoginLockout` (umbrales 5/10/15/20 + durations). **Nota 2026-08: `EmailSender` resultó ser configuración muerta — ningún código la lee — y fue eliminada de los `appsettings`. Las claves vivas son `Smtp` e `IdentityEmail`; ver `docs/operaciones/correo-saliente.md`.**
 - [X] T004 [P] Documentar las variables de entorno requeridas (`MASTER_ADMIN_EMAIL`, `MASTER_ADMIN_PASSWORD`, `EMAIL_SENDER_*`, `PWNED_PASSWORD_BASE_URL`) en `README.md` sección "Configuración v2 (Identidad Central)"
 
 ---
