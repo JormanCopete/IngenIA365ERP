@@ -120,6 +120,11 @@ public static class InfraestructuraConfiguracion
                         resueltos["Smtp:Host"] = smtp.Host;
                     if (smtp.Port is { } puerto)
                         resueltos["Smtp:Port"] = puerto.ToString();
+                    // Siempre se proyecta, incluso vacia: al pasar de un destino
+                    // con certificado autofirmado a otro que no lo tiene, hay que
+                    // BORRAR la huella anterior, no dejarla puesta.
+                    resueltos["Smtp:HuellaCertificadoAceptada"] =
+                        smtp.HuellaCertificadoAceptada ?? string.Empty;
                     break;
                 default:
                     throw new InvalidOperationException(

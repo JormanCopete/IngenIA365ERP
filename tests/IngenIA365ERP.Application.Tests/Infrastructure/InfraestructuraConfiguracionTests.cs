@@ -81,6 +81,38 @@ public class InfraestructuraConfiguracionTests
     }
 
     [Fact]
+    public void ElSmtpProyectaLaHuellaDelDestinoElegido()
+    {
+        // La huella pertenece al servidor, no a la configuracion en general.
+        var pares = CatalogoCompleto();
+        pares["Infraestructura:Smtp:Real:Host"] = "mail.ejemplo.test";
+        pares["Infraestructura:Smtp:Real:Port"] = "587";
+        pares["Infraestructura:Smtp:Real:HuellaCertificadoAceptada"] = "AABBCC";
+        pares["Infraestructura:Destinos:Smtp"] = "Real";
+
+        var r = InfraestructuraConfiguracion.Resolver(Configurar(pares));
+
+        r["Smtp:Host"].Should().Be("mail.ejemplo.test");
+        r["Smtp:HuellaCertificadoAceptada"].Should().Be("AABBCC");
+    }
+
+    [Fact]
+    public void AlCambiarDeDestino_LaHuellaAnteriorNoSeArrastra()
+    {
+        // Si quedara puesta, se estaria validando el certificado de un servidor
+        // contra la huella de otro: o no conecta, o —peor— se normaliza el
+        // habito de ignorar el error.
+        var pares = CatalogoCompleto();
+        pares["Infraestructura:Destinos:Smtp"] = "Docker";
+
+        var r = InfraestructuraConfiguracion.Resolver(Configurar(pares));
+
+        r.Should().ContainKey("Smtp:HuellaCertificadoAceptada");
+        r["Smtp:HuellaCertificadoAceptada"].Should().BeEmpty(
+            "smtp4dev no presenta certificado; arrastrar la del servidor real seria un error");
+    }
+
+    [Fact]
     public void DestinoInexistente_FallaAlArrancarYDiceCualesHay()
     {
         // Degradar en silencio dejaría la aplicación contra la base equivocada.

@@ -60,6 +60,17 @@ public sealed class InfraestructuraOptions
     {
         public string? Host { get; set; }
         public int? Port { get; set; }
+
+        /// <summary>
+        /// Huella SHA-256 del certificado autofirmado que ESTE servidor presenta.
+        /// </summary>
+        /// <remarks>
+        /// Va en el destino y no suelta en la sección Smtp porque pertenece al
+        /// servidor: cada destino tiene el suyo. Dejarla global significaría que
+        /// al cambiar de destino se arrastra la huella del anterior, y entonces
+        /// o no valida nada o valida contra el certificado equivocado.
+        /// </remarks>
+        public string? HuellaCertificadoAceptada { get; set; }
     }
 }
 
