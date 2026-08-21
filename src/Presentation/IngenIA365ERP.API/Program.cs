@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Middleware;
@@ -265,6 +266,41 @@ try
 
     app.UseSecurityHeaders();
     app.UseHttpsRedirection();
+    // Red de seguridad de excepciones. Va lo mas arriba posible, para envolver
+    // tambien lo que revienta en los middleware de abajo.
+    //
+    // No habia ninguna: cualquier excepcion no capturada salia como 500 crudo, sin
+    // el envelope {code,message,traceId} que el resto de la API respeta, y en
+    // Development con la traza entera. Dos consecuencias: la interfaz no sabia
+    // pintar el error —mostraba un mensaje vacio— y quien depuraba perseguia
+    // sintomas en vez de causas.
+    //
+    // Importa especialmente ahora: la fabrica de ErpTenantInfo lanza a proposito
+    // cuando una peticion llega sin cooperativa resuelta, y eso tiene que verse como
+    // un error con codigo, no como una pared de texto.
+    app.UseExceptionHandler(rama => rama.Run(async contexto =>
+    {
+        var fallo = contexto.Features.Get<IExceptionHandlerFeature>()?.Error;
+
+        contexto.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("ExcepcionNoControlada")
+            .LogError(fallo, "Excepcion no controlada en {Metodo} {Ruta}.",
+                contexto.Request.Method, contexto.Request.Path);
+
+        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        contexto.Response.ContentType = "application/json";
+
+        // Sin detalles del fallo en el cuerpo, ni en Development: el traceId lleva
+        // a la linea del registro, que si los tiene.
+        await contexto.Response.WriteAsJsonAsync(new
+        {
+            code = "Generic.Unexpected",
+            message = "Ocurrio un error inesperado al procesar la solicitud.",
+            traceId = contexto.TraceIdentifier,
+        });
+    }));
+
     app.UseSerilogRequestLogging();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");

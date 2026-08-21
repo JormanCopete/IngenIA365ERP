@@ -71,12 +71,12 @@ public sealed class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand
 
         if (_claimsCache is not null)
         {
-            // La cooperativa sale del ROL, no del contexto de la peticion: es la
-            // fuente autoritativa y funciona tambien cuando quien asigna es el
-            // administrador maestro, que no tiene cooperativa activa. Con la
-            // cadena vacia de antes, la clave se compartia entre cooperativas.
+            // La cooperativa sale de la peticion, que es de donde tambien la toma
+            // PermisosDeLaPeticion al poblar el cache: las dos puntas tienen que
+            // usar la misma clave o la invalidacion no encuentra nada. Es el Id
+            // interno, no el PublicId.
             await _claimsCache.InvalidateAsync(user.Id,
-                role.TenantId?.ToString() ?? string.Empty, ct);
+                _currentUser.TenantId ?? string.Empty, ct);
         }
 
         await _mediator.Send(new SendNotificationCommand(new NotificationPayload(

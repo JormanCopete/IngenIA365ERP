@@ -24,8 +24,28 @@ public class CurrentUserService : ICurrentUserService
         }
     }
 
+    /// <summary>
+    /// Quien esta haciendo la operacion, para el rastro de auditoria.
+    ///
+    /// <para>
+    /// Leia el claim <c>name</c> y, como respaldo, <c>Identity.Name</c>. El emisor
+    /// de identidad central no pone ninguno de los dos: emite <c>sub, jti, iat,
+    /// email, is_global_master_admin, mfa_verified, purpose</c> y poco mas. Asi que
+    /// esto devolvia null y los handlers caian a su <c>?? "SYSTEM"</c>: todo el
+    /// rastro de auditoria de las operaciones administrativas quedaba firmado por
+    /// un literal, sin decir quien lo hizo. Eso vacia de sentido el Principio VII.
+    /// </para>
+    ///
+    /// <para>
+    /// Se lee el correo, que es lo que el emisor si pone. El mapeo de entrada por
+    /// defecto lo renombra al URI largo de <see cref="ClaimTypes.Email"/>, asi que
+    /// se miran los dos nombres.
+    /// </para>
+    /// </summary>
     public string? UserName =>
-        User?.FindFirst("name")?.Value
+        User?.FindFirst(ClaimTypes.Email)?.Value
+        ?? User?.FindFirst("email")?.Value
+        ?? User?.FindFirst("name")?.Value
         ?? User?.Identity?.Name;
 
     /// <summary>

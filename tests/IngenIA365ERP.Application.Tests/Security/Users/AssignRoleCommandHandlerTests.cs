@@ -65,11 +65,12 @@ public class AssignRoleCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         db.UserRoles.Should().HaveCount(1);
 
-        // La cooperativa sale del ROL, no del contexto de la peticion. Con la clave
-        // del contexto, quien asigna siendo administrador maestro —que no tiene
-        // cooperativa activa— invalidaba una clave vacia, compartida entre
-        // cooperativas, y los permisos revocados seguian vivos hasta 30 minutos.
-        await cache.Received(1).InvalidateAsync(user.Id, "7", Arg.Any<CancellationToken>());
+        // La cooperativa sale de la peticion —"1" en Build()— y no del rol: bajo
+        // schema-per-tenant los roles viven DENTRO del esquema de su cooperativa y
+        // llevan TenantId nulo, asi que tomarla del rol daria clave vacia. Tiene que
+        // coincidir con la que usa PermisosDeLaPeticion al poblar el cache, o la
+        // invalidacion no encuentra la entrada y el permiso revocado sigue vivo.
+        await cache.Received(1).InvalidateAsync(user.Id, "1", Arg.Any<CancellationToken>());
 
         await mediator.Received(1).Send(
             Arg.Is<SendNotificationCommand>(c => c.Payload.Type == NotificationType.RoleAssigned),

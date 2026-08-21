@@ -145,10 +145,24 @@ namespace IngenIA365ERP.Shared.Services
 
                 if (!string.IsNullOrEmpty(token))
                 {
-                    // AuthBearerHandler attaches the Authorization header automatically.
+                    // Se manda el REFRESH token, no el de acceso.
+                    //
+                    // Antes iba `new LogoutRequest { Token = token }` con el token de
+                    // acceso. El endpoint enlaza un cuerpo `LogoutBody(string?
+                    // RefreshToken)`, asi que la propiedad `token` no casaba con nada:
+                    // llegaba null, el handler no encontraba sesion que cerrar y
+                    // devolvia 200. Cerrar sesion respondia bien y no cerraba nada — el
+                    // refresh token seguia siendo canjeable durante doce horas, asi que
+                    // quien recuperara ese token de un equipo compartido volvia a entrar
+                    // despues de que la persona se hubiera ido.
+                    //
+                    // El token de acceso sigue yendo en la cabecera, que la pone
+                    // AuthBearerHandler; lo que el servidor necesita en el cuerpo para
+                    // revocar la sesion es el de refresco.
+                    var refreshToken = await _secureStorage.GetAsync(RefreshTokenKey);
                     var response = await _httpClient.PostAsJsonAsync(
                         AppSettings.Endpoints.Logout,
-                        new LogoutRequest { Token = token });
+                        new { refreshToken });
                     serverOk = response.IsSuccessStatusCode;
                 }
 
