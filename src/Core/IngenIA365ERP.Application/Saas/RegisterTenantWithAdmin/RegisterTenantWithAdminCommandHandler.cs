@@ -23,6 +23,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     ICurrentCentralUserContext currentUser,
     IAdminDbContext adminDb,
     ISecureTokenGenerator tokens,
+    ITenantSchemaProvisioner aprovisionador,
     IInvitationEmailDispatcher emailDispatcher,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -68,6 +69,30 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         };
         adminDb.Tenants.Add(tenant);
         await adminDb.SaveChangesAsync(ct);
+
+        // El esquema fisico se crea AQUI, no en el arranque siguiente.
+        //
+        // Antes esto solo guardaba la fila y el esquema aparecia cuando el
+        // inicializador recorria ADM_Tenants al arrancar. En medio, la cooperativa
+        // existia en la consola y no tenia donde guardar nada: habia que reiniciar
+        // la API entre registrarla y usarla, y la invitacion que se envia justo
+        // debajo llevaba a un sitio que aun no existia.
+        //
+        // No tumba el alta si falla: la cooperativa ya esta registrada y
+        // POST /api/saas/tenants/{id}/provision es idempotente y lo repara. Perder
+        // el registro por un fallo de aprovisionamiento seria peor.
+        try
+        {
+            await aprovisionador.AprovisionarAsync(
+                tenant.SchemaName, tenant.Subdomain ?? tenant.SchemaName, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "La cooperativa {Nombre} quedo registrada pero su esquema {Esquema} no se " +
+                "aprovisiono. Reparable con POST /api/saas/tenants/{{publicId}}/provision.",
+                tenant.Name, tenant.SchemaName);
+        }
 
         // Emite la invitación admin para el FirstAdminEmail.
         var normalizedEmail = request.FirstAdminEmail.Trim().ToUpperInvariant();

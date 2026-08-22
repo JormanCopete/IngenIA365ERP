@@ -38,8 +38,17 @@ public class RegisterTenantWithAdminCommandHandlerTests
         _currentUser.Email.Returns(MasterEmail);
     }
 
+    /// <summary>
+    /// El aprovisionador va simulado a proposito: crear el esquema fisico toca la
+    /// base y estas pruebas corren sobre un contexto en memoria. Que se le llame
+    /// —y que un fallo suyo no tumbe el alta— se comprueba en
+    /// <see cref="ElAltaSobreviveSiElEsquemaNoSeAprovisiona"/>.
+    /// </summary>
+    private readonly ITenantSchemaProvisioner _aprovisionador =
+        Substitute.For<ITenantSchemaProvisioner>();
+
     private RegisterTenantWithAdminCommandHandler NewHandler() => new(
-        _currentUser, _db, _tokens, _email,
+        _currentUser, _db, _tokens, _aprovisionador, _email,
         Substitute.For<IAuditAppendOnlyWriter>(),
         Substitute.For<IDateTimeService>(),
         Options.Create(new IdentityEmailOptions()),
@@ -90,5 +99,32 @@ public class RegisterTenantWithAdminCommandHandlerTests
         var result = await NewHandler().Handle(NewCommand("900123456"), default);
 
         result.Error.Code.Should().Be("Tenant.NitConflict");
+    }
+
+    [Fact]
+    public async Task ElAltaSobreviveSiElEsquemaNoSeAprovisiona()
+    {
+        // La cooperativa ya quedo guardada cuando se intenta crear su esquema.
+        // Perder el registro por un fallo de aprovisionamiento seria peor que
+        // quedarse a medias: el endpoint de provision es idempotente y lo repara.
+        _aprovisionador
+            .AprovisionarAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException("sin conexion"));
+
+        var r = await NewHandler().Handle(NewCommand(), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue("el alta no puede perderse por un fallo de esquema");
+        _db.Tenants.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ElAltaAprovisionaElEsquemaDeLaCooperativa()
+    {
+        // Sin esto la cooperativa existia en la consola y no tenia donde guardar
+        // nada hasta el siguiente reinicio de la API.
+        await NewHandler().Handle(NewCommand(), CancellationToken.None);
+
+        await _aprovisionador.Received(1).AprovisionarAsync(
+            "tenant_test", Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

@@ -24,6 +24,29 @@ public sealed class TenantDirectory : ITenantDirectory
         _logger = logger;
     }
 
+    public async Task<IReadOnlyList<TenantDirectoryEntry>> ListActiveAsync(CancellationToken ct)
+    {
+        try
+        {
+            var filas = await _db.Tenants
+                .AsNoTracking()
+                .Where(t => t.IsActive)
+                .Select(t => new { t.InternalId, t.PublicId, t.Identifier, t.Name, t.SchemaName })
+                .ToListAsync(ct);
+
+            return [.. filas.Select(f => new TenantDirectoryEntry(
+                f.InternalId, f.PublicId, f.Identifier ?? string.Empty,
+                f.Name ?? string.Empty, f.SchemaName))];
+        }
+        catch (Exception ex)
+        {
+            // Misma politica que el resto de la clase: ante desfase de esquema,
+            // registrar y devolver vacio en vez de tumbar a quien llama.
+            _logger.LogError(ex, "No se pudo listar las cooperativas activas.");
+            return [];
+        }
+    }
+
     public async Task<TenantDirectoryEntry?> FindBySubdomainOrNitAsync(
         string subdomainOrNit, CancellationToken ct)
     {

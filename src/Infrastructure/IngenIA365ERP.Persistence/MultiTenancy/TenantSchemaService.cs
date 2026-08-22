@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Interfaces;
 using System.Text.RegularExpressions;
 using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Providers;
@@ -19,7 +20,7 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 /// Usado por el inicializador de arranque (FR-009/FR-019a) y por el alta de
 /// tenant en runtime (FR-014).
 /// </summary>
-public class TenantSchemaService
+public class TenantSchemaService : ITenantSchemaProvisioner
 {
     private readonly TenantDbContext _tenantDb;
     /// <summary>
@@ -58,8 +59,7 @@ public class TenantSchemaService
     {
         var schemaName = $"tenant_{identifier.Replace("-", "_")}";
 
-        await EnsureSchemaExistsAsync(schemaName, CancellationToken.None);
-        await MigrateTenantSchemaAsync(schemaName, CancellationToken.None);
+        await AprovisionarAsync(schemaName, identifier, CancellationToken.None);
 
         var tenant = new ErpTenantInfo
         {
@@ -79,18 +79,40 @@ public class TenantSchemaService
         _logger.LogInformation("Tenant registrado: {Identifier} → esquema {Schema} ({Provider})",
             identifier, schemaName, _configurator.Provider);
 
-        // FR-019a: el alta de tenant siembra su esquema (parametrico siempre;
-        // demo segun la politica de ambiente/flag).
-        if (_seedOrchestrator is not null)
+        return tenant;
+    }
+
+    /// <summary>
+    /// Crea el esquema si falta, lo migra y lo siembra. Es el unico camino para
+    /// dejar una cooperativa utilizable, y es idempotente: repetirlo no duplica
+    /// nada, asi que sirve tanto para el alta como para reparar una cooperativa
+    /// que quedo a medias.
+    /// </summary>
+    public async Task AprovisionarAsync(string esquema, string identificador, CancellationToken ct)
+    {
+        await EnsureSchemaExistsAsync(esquema, ct);
+        await MigrateTenantSchemaAsync(esquema, ct);
+
+        // FR-019a: el alta siembra el esquema (parametrico siempre; demo segun la
+        // politica de ambiente). Aqui es donde cada cooperativa recibe SUS permisos
+        // y SUS roles: sin esto el esquema queda con las 289 tablas vacias y nadie
+        // puede autorizar nada dentro de el.
+        if (_seedOrchestrator is null)
         {
-            await _seedOrchestrator.RunAsync(
-                Seeding.SeedCategory.Parametric, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
-            if (_seedOrchestrator.EffectiveRunTestSeed())
-                await _seedOrchestrator.RunAsync(
-                    Seeding.SeedCategory.Test, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
+            _logger.LogWarning(
+                "El esquema {Esquema} se migro pero no se sembro: no hay orquestador de " +
+                "sembrado disponible. Quedara sin permisos ni roles.", esquema);
+            return;
         }
 
-        return tenant;
+        await _seedOrchestrator.RunAsync(
+            Seeding.SeedCategory.Parametric, Seeding.SeedScope.Tenant, identificador, ct);
+
+        if (_seedOrchestrator.EffectiveRunTestSeed())
+        {
+            await _seedOrchestrator.RunAsync(
+                Seeding.SeedCategory.Test, Seeding.SeedScope.Tenant, identificador, ct);
+        }
     }
 
     public async Task EnsureSchemaExistsAsync(string schemaName, CancellationToken ct)

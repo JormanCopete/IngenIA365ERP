@@ -153,6 +153,7 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<TenantSchemaService>();
+        services.AddScoped<ITenantSchemaProvisioner>(sp => sp.GetRequiredService<TenantSchemaService>());
 
         // Para los handlers que escriben en una cooperativa que no es la de la
         // peticion: aceptar una invitacion, aprovisionar un esquema.
