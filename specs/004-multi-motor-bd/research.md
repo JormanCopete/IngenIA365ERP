@@ -121,3 +121,27 @@ Formato por decisión: **Decision** / **Rationale** / **Alternatives considered*
 **Rationale**: cierra la clarificación #1 sin borrar historia (los DDL congelados documentan el esquema de la Fase 0/1) y da al DBA artefactos idempotentes revisables como siempre.
 
 **Alternatives considered**: borrar `database/schema` (pierde trazabilidad histórica); seguir numerando allí a mano (reintroduce la doble fuente de verdad).
+
+---
+
+## D-03-REV — Revertida: database-per-tenant (2026-08-22)
+
+**Revierte D-03**, que descarto una base por cooperativa. La decision no se
+borra: queda como traza de por que se eligio lo otro.
+
+D-03 se apoyaba en un unico argumento — el Principio IV de la constitucion
+exigia schema-per-tenant. Ese principio se enmendo en la version 2.0.0, asi que
+el argumento ya no existe.
+
+Lo que decidio la enmienda no fue la teoria, sino la medicion. El
+schema-per-tenant dejaba el aislamiento en manos de la disciplina del codigo:
+`ApplicationDbContext.OnModelCreating` resolvia el esquema con
+`_tenantInfo?.Schema ?? "dbo"`, y `ErpTenantInfo` no se registraba en ningun
+contenedor. El operador `??` degradaba en silencio, en cada peticion, y las
+siete cooperativas compartian espacio sin excepcion, sin log y sin que ninguna
+prueba lo detectara.
+
+La base por cooperativa traslada la garantia del codigo al motor: una conexion
+apuntada al sitio equivocado no mezcla datos, falla.
+
+Ver constitucion v2.0.0, Principio IV.

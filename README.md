@@ -7,7 +7,7 @@ ERP Financiero SaaS para cooperativas colombianas. Migrado desde SOLIDO (VB.NET/
 - **Backend:** .NET 10, Minimal APIs (Carter), EF Core 10, CQRS (MediatR)
 - **Frontend:** Blazor Hybrid MAUI + Blazor Server + Blazor WebAssembly
 - **UI:** SyncFusion Blazor 33.1.44 (tema fluent2-dark)
-- **BD Transaccional:** SQL Server (schema-per-tenant)
+- **BD Transaccional:** PostgreSQL / SQL Server, una base por cooperativa
 - **BD Auditoria:** MongoDB (batching, TTL 5 anos)
 - **Cache:** Redis
 - **Auth:** JWT RS256, RBAC con 40 permisos, 4 roles built-in
@@ -105,8 +105,10 @@ IngenIA365ERP.slnx
 
 ## Multi-tenancy
 
-- **Estrategia:** Schema-per-tenant en SQL Server
-- **Resolucion:** Header `X-Tenant-Id` o subdominio
+- **Estrategia:** Una base de datos por cooperativa. El aislamiento lo garantiza el
+  motor, no la disciplina del código.
+- **Resolucion:** Claim `active_tenant_id` del JWT central. El header `X-Tenant-Id` y la
+  resolución por subdominio ya no se aceptan.
 - **Admin:** BD separada `IngenIA365ERP_Admin` con tablas `ADM_*`
 - **Herramienta:** `tools/IngenIA365ERP.DbMigrator` para crear/listar/eliminar tenants
 

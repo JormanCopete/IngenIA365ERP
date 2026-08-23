@@ -1,6 +1,41 @@
 <!--
-SYNC IMPACT REPORT
-==================
+SYNC IMPACT REPORT — v2.0.0
+===========================
+Version change: 1.0.0 → 2.0.0
+Bump rationale: MAJOR — redefinicion del Principio IV. El aislamiento entre
+cooperativas pasa de schema-per-tenant a UNA BASE DE DATOS POR COOPERATIVA, y se
+extiende a MongoDB y Redis. Invalida practicas vigentes (TranslateSchema,
+HasDefaultSchema dinamico, la columna SchemaName) y rompe codigo, que es el
+criterio de MAJOR de la seccion Versionado.
+
+Motivo: el schema-per-tenant dejaba el aislamiento en manos de la disciplina del
+codigo. Se comprobo en produccion de desarrollo que un unico operador `??`
+degradaba el esquema a dbo y las siete cooperativas compartian espacio, sin
+excepcion, sin log y sin que ninguna prueba lo detectara.
+
+Principios modificados:
+  IV.   Multi-tenancy schema-per-tenant → base-por-cooperativa   [MODIFICADO]
+
+Principios que lo referencian y quedan afectados:
+  X.    Trazabilidad SIPLA/SARLAFT — el rastro vive en la base de auditoria de
+        cada cooperativa, con el TTL de 5 anios aplicado base por base.
+  XII.  Migraciones — una migracion esta aplicada solo cuando lo esta en admin y
+        en TODAS las bases de cooperativa.
+
+Documentos sincronizados: CLAUDE.md, README.md, .specify/templates/plan-template.md.
+Pendiente de revisar: docs/CONFIGURACION-Y-AUTENTICACION.md (el mas desfasado),
+los guiones de prueba con schemaName en el cuerpo, y specs/004-multi-motor-bd/
+research.md D-03, que descarto database-per-tenant citando el Principio IV
+anterior — hay que anadir la decision que lo revierte, no borrar la traza.
+
+Procedimiento: la seccion Governance exige issue [Constitution] con motivacion,
+impacto y plan de migracion, mas dos revisores. Esta enmienda se redacto a
+peticion directa del propietario del producto; queda pendiente formalizar el
+issue y la revision.
+
+---
+Historico
+---------
 Version change: (uninitialized template) → 1.0.0
 Bump rationale: Initial ratification — all twelve principles, technical standards,
 and governance rules established for the first time.
@@ -9,7 +44,7 @@ Modified principles: N/A (initial adoption — twelve principles created)
   I.    Spec-First Development                                  [NEW]
   II.   Clean Architecture estricta                             [NEW]
   III.  CQRS + MediatR para Application                         [NEW]
-  IV.   Multi-tenancy schema-per-tenant                         [NEW]
+  IV.   Multi-tenancy schema-per-tenant                         [NEW] (v2.0.0: MODIFICADO)
   V.    Person como tabla maestra centralizada                  [NEW]
   VI.   PublicId hacia afuera, Id interno hacia adentro         [NEW]
   VII.  Soft-delete + auditoría obligatorias                    [NEW]
@@ -41,7 +76,8 @@ Follow-up TODOs: ninguno. Todos los placeholders se concretaron.
 
 > ERP financiero SaaS multi-tenant para cooperativas colombianas.
 > Stack: .NET 10, Blazor Hybrid (MAUI + Server + WebAssembly), SyncFusion 33.1.44,
-> SQL Server (transaccional, schema-per-tenant), MongoDB (auditoría), Redis (caché),
+> PostgreSQL / SQL Server (transaccional, una base por cooperativa), MongoDB
+> (auditoría, una base por cooperativa), Redis (caché),
 > Carter (Minimal APIs), MediatR (CQRS), QuestPDF (reportes), JWT RS256, ASP.NET Identity.
 >
 > Idioma: documentación, comentarios de negocio y mensajes al usuario en español;
@@ -52,7 +88,7 @@ Follow-up TODOs: ninguno. Todos los placeholders se concretaron.
 ### I. Spec-First Development
 
 Todo cambio que afecte más de una capa de la Clean Architecture o que modifique el
-schema de base de datos **MUST** pasar por la secuencia Constitution check →
+modelo de datos **MUST** pasar por la secuencia Constitution check →
 Specification → Plan → Tasks antes de escribir código de producción.
 
 Excepciones explícitas (no requieren spec previa): bug fixes locales contenidos en
@@ -106,24 +142,72 @@ Reglas adicionales:
 la lógica de comandos; los pipelines garantizan que validación, auditoría,
 logging y métricas se apliquen de forma uniforme sin posibilidad de olvido.
 
-### IV. Multi-tenancy schema-per-tenant — inviolable
+### IV. Multi-tenancy base-por-cooperativa — inviolable
 
-Toda query EF Core **MUST** ejecutarse en el contexto del tenant resuelto por
-`TenantResolutionMiddleware` (header `X-Tenant-Id` o resolución por subdominio).
-La base de datos `IngenIA365ERP_Admin` (tablas con prefijo `ADM_`) está separada
-del schema operativo de cada cooperativa.
+Cada cooperativa tiene su **propia base de datos**. El aislamiento es físico, no
+lógico: no existe un espacio de nombres compartido dentro del cual convivan dos
+cooperativas.
+
+El destino físico de una cooperativa lo declara su fila en `ADM_Tenants` y
+**NEVER** una constante, un sufijo derivado en código ni un valor fijado en el
+despliegue. Mover una cooperativa a otra instancia o a otro servidor **MUST** ser
+un cambio de DATO, nunca un cambio de código.
+
+La base administrativa central (`IngenIA365ERP_Admin`, tablas `ADM_*`:
+identidades centrales, membresías, invitaciones y catálogo de cooperativas) es
+**una sola** y vive **fuera** de toda base de cooperativa.
+
+El aislamiento alcanza a las tres tiendas de datos, no solo a la transaccional:
+
+- **SQL** — una base por cooperativa.
+- **MongoDB** — una base de auditoría por cooperativa. **NEVER** una colección
+  por cooperativa dentro de una base compartida.
+- **Redis** — un espacio propio por cooperativa. Las claves de la identidad
+  central (sesiones, refresh, MFA, membresías, lockout, locks distribuidos) son
+  globales por definición y **MUST** vivir separadas de las de cooperativa.
+
+Toda query EF Core **MUST** ejecutarse contra la conexión de la cooperativa
+resuelta por `TenantResolutionMiddleware` a partir del claim `active_tenant_id`
+del JWT central.
 
 Prohibiciones absolutas:
 
 - **NEVER** cross-tenant joins de ningún tipo.
-- **NEVER** queries sin tenant context (incluye background jobs: deben recibir
-  el tenant explícitamente).
-- **NEVER** `SqlConnection` directo ni Dapper raw que evite los filtros del
-  `DbContext` tenant-aware.
+- **NEVER** queries sin cooperativa resuelta. Un contexto de datos pedido dentro
+  de una petición sin cooperativa **MUST** lanzar. Degradar a una base «por
+  defecto» o «plantilla» está **PROHIBIDO**: es un fallo de aislamiento que no
+  deja rastro.
+- **NEVER** trabajos de fondo que barran «todas las cooperativas» desde una única
+  conexión; deben recorrer el directorio y abrir la conexión de cada una.
+- **NEVER** `SqlConnection` / `NpgsqlConnection` directo, Dapper raw, ni
+  composición de cadenas de conexión fuera del único punto autorizado.
+- **NEVER** tablas `ADM_*` de identidad central replicadas dentro de la base de
+  una cooperativa, ni siquiera vacías.
+
+Aprovisionamiento y migraciones (complementa el Principio XII):
+
+- Una cooperativa nueva **MUST** nacer con su base creada, migrada y sembrada en
+  el mismo acto del alta. **NEVER** diferido a un reinicio del servicio.
+- El arranque de la API **NEVER** migra las bases de las cooperativas existentes.
+  Las verifica, y **MUST** negarse a **servir** a una cooperativa cuya base esté
+  desactualizada, sin impedir el arranque ni afectar a las demás. Las migraciones
+  de las bases existentes las aplica el comando de despliegue
+  (`tools/IngenIA365ERP.DbMigrator`).
+- Respaldo, restauración y retención **MUST** poder ejecutarse y verificarse por
+  cooperativa.
 
 **Rationale**: requisito legal — los datos financieros de cooperativas distintas
 **NEVER** pueden mezclarse, y la trazabilidad de un fallo de aislamiento sería
-catastrófica frente a la Superintendencia de la Economía Solidaria.
+catastrófica frente a la Superintendencia de la Economía Solidaria. El
+schema-per-tenant dejaba esa garantía en manos de la disciplina del código: un
+único operador `??` mal puesto degradaba el esquema a `dbo` y las 289 tablas de
+todas las cooperativas quedaban en el mismo espacio, sin excepción y sin log
+—ocurrió, y no lo detectó ninguna prueba—. La base por cooperativa traslada la
+garantía al motor: una conexión apuntada al sitio equivocado no mezcla datos,
+falla. Además vuelve granular lo que la Superintendencia exige por entidad
+vigilada: respaldo, restauración, retención y entrega de información se hacen de
+una cooperativa sin arrastrar las de las demás, y una cooperativa que lo exija
+puede trasladarse a su propia instancia sin tocar el producto.
 
 ### V. Person como tabla maestra centralizada
 
@@ -389,4 +473,4 @@ bump MAJOR pero sí PR y revisión):
   constitución, **gana esta constitución** hasta que sea formalmente
   enmendada por el procedimiento descrito arriba.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-05-03
+**Version**: 2.0.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-08-22

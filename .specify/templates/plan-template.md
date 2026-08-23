@@ -49,7 +49,7 @@ rechaza. Las compuertas derivan directamente de `.specify/memory/constitution.md
 | I    | Spec-First (este plan completa Constitution → Spec → Plan → Tasks) |        |      |
 | II   | Clean Architecture (sin dependencias hacia afuera; Domain libre de infra) |        |      |
 | III  | CQRS + MediatR (Commands con FluentValidation; endpoints solo reenvían) |        |      |
-| IV   | Multi-tenancy (toda query bajo tenant context; sin cross-tenant) |        |      |
+| IV   | Multi-tenancy (toda query bajo la conexión de la cooperativa resuelta; sin cross-tenant; sin degradar a una base por defecto) |        |      |
 | V    | Person centralizada (sin duplicar datos personales en tablas hijas) |        |      |
 | VI   | PublicId externo / Id interno (DTOs y rutas usan PublicId)        |        |      |
 | VII  | Soft-delete + auditoría (`AuditableEntity` + `HasQueryFilter`)    |        |      |
