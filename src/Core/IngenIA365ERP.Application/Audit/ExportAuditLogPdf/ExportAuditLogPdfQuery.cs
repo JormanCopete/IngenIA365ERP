@@ -56,17 +56,20 @@ public sealed class ExportAuditLogPdfQueryHandler
 {
     private readonly IAuditPdfExporter _exporter;
     private readonly IApplicationDbContext _db;
+    private readonly IAdminDbContext _admin;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeService _clock;
 
     public ExportAuditLogPdfQueryHandler(
         IAuditPdfExporter exporter,
         IApplicationDbContext db,
+        IAdminDbContext admin,
         ICurrentUserService currentUser,
         IDateTimeService clock)
     {
         _exporter = exporter;
         _db = db;
+        _admin = admin;
         _currentUser = currentUser;
         _clock = clock;
     }
@@ -92,7 +95,10 @@ public sealed class ExportAuditLogPdfQueryHandler
                 "La cooperativa actual no está registrada.");
         }
 
-        var tenant = await _db.Tenants
+        // Del registro real, en la base administrativa. Antes salia de la copia
+        // que el modelo operativo replicaba dentro de cada cooperativa, y que
+        // estaba vacia: este export nunca pudo encontrar su propia cooperativa.
+        var tenant = await _admin.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == tenantInternalId, ct);
         if (tenant is null)

@@ -10,8 +10,13 @@ public sealed class GetUserByPublicIdQueryHandler
     : IRequestHandler<GetUserByPublicIdQuery, Result<UserDetailDto>>
 {
     private readonly IApplicationDbContext _db;
+    private readonly IAdminDbContext _admin;
 
-    public GetUserByPublicIdQueryHandler(IApplicationDbContext db) => _db = db;
+    public GetUserByPublicIdQueryHandler(IApplicationDbContext db, IAdminDbContext admin)
+    {
+        _db = db;
+        _admin = admin;
+    }
 
     public async Task<Result<UserDetailDto>> Handle(
         GetUserByPublicIdQuery request, CancellationToken ct)
@@ -47,14 +52,28 @@ public sealed class GetUserByPublicIdQueryHandler
             return Result.Failure<UserDetailDto>("Generic.NotFound", "Recurso no encontrado.");
         }
 
-        // Segunda lectura: branches asignadas (no navegación directa, FK en assignment).
-        var branches = await _db.UserBranchAssignments
+        // Sucursales asignadas. Van en DOS lecturas y no en un Join porque las dos
+        // mitades viven en bases distintas: la asignacion es de la cooperativa, la
+        // sucursal es del plano de control. Un Join entre ambas solo funcionaba
+        // mientras todo compartia base, y dejara de funcionar del todo cuando cada
+        // cooperativa tenga la suya.
+        var asignaciones = await _db.UserBranchAssignments
             .Where(a => a.UserId ==
                 _db.Users.Where(u => u.PublicId == request.UserPublicId).Select(u => u.Id).First())
-            .Join(_db.TenantBranches,
-                a => a.BranchId, b => b.Id,
-                (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault))
+            .Select(a => new { a.BranchId, a.IsDefault })
             .ToListAsync(ct);
+
+        var idsSucursal = asignaciones.Select(a => a.BranchId).Distinct().ToList();
+        var sucursales = await _admin.TenantBranches
+            .AsNoTracking()
+            .Where(b => idsSucursal.Contains(b.Id))
+            .Select(b => new { b.Id, b.PublicId, b.Code, b.Name })
+            .ToListAsync(ct);
+
+        var branches = asignaciones
+            .Join(sucursales, a => a.BranchId, b => b.Id,
+                (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault))
+            .ToList();
 
         return Result.Success(dto with { Branches = branches });
     }

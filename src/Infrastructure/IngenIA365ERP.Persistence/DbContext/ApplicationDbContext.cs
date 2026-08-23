@@ -339,10 +339,24 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<WebDataUpdate> WebDataUpdates => Set<WebDataUpdate>();
 
     // === Admin (3+1) ===
-    public DbSet<Tenant> Tenants => Set<Tenant>();
-    public DbSet<Subscription> Subscriptions => Set<Subscription>();
-    public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
-    public DbSet<TenantBranch> TenantBranches => Set<TenantBranch>();
+    // Las tablas ADM_* NO viven aqui. El registro de cooperativas, la identidad
+    // central, las invitaciones y las membresias son el plano de control del SaaS:
+    // tienen UNA respuesta para toda la plataforma y viven en la base
+    // administrativa, servidas por AdminDbContext.
+    //
+    // Estaban declaradas aqui, y ademas el barrido de configuraciones de abajo
+    // arrastraba la carpeta Admin entera. Resultado medido: DOCE tablas ADM_*
+    // replicadas dentro del espacio de cada cooperativa —ADM_CentralUsers incluida,
+    // que guarda los hashes de contrasena de todos los logins de la plataforma— y
+    // ocho claves foraneas apuntando a esas copias locales en vez de al registro
+    // real.
+    //
+    // No era ruido inofensivo: FK_SEC_Roles_ADM_Tenants_TenantId resolvia contra la
+    // copia local, vacia, asi que insertar un rol de cooperativa violaba la
+    // restriccion siempre. Ninguna cooperativa llego a tener roles.
+    //
+    // Con una base por cooperativa deja de poder disimularse: la copia y el original
+    // ya no son la misma tabla, y quien escriba en la copia lo hara donde nadie lee.
 
     // === Security extras (cross-tenant operadores) ===
     public DbSet<UserTenantAssignment> UserTenantAssignments => Set<UserTenantAssignment>();
@@ -354,7 +368,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         var schema = _tenantInfo?.Schema ?? "dbo";
         modelBuilder.HasDefaultSchema(schema);
 
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+        // Se excluye la carpeta Configurations/Admin: sus entidades pertenecen a
+        // AdminDbContext, que las aplica una a una y de forma explicita.
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(ApplicationDbContext).Assembly,
+            t => t.Namespace?.Contains(".Configurations.Admin", StringComparison.Ordinal) != true);
 
         // Convenciones transversales (T011 RowVersion + T022 filtro soft-delete).
         // Se aplica después de las configuraciones específicas para que cualquier

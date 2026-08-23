@@ -17,11 +17,14 @@ public class ExportAuditLogPdfQueryHandlerTests
 {
     private static (ExportAuditLogPdfQueryHandler Handler,
                     IAuditPdfExporter Exporter,
-                    TestApplicationDbContext Db,
+                    TestAdminDbContext Admin,
                     ICurrentUserService Cu)
         Build(string? tenantId = "1", DateTime? now = null)
     {
         var db = TestDbContextFactory.Create();
+        // La cooperativa de la portada se lee del registro real, en la base
+        // administrativa, no de la copia que el modelo operativo replicaba.
+        var admin = TestAdminDbContext.Create();
         var exporter = Substitute.For<IAuditPdfExporter>();
         var cu = Substitute.For<ICurrentUserService>();
         cu.TenantId.Returns(tenantId);
@@ -29,7 +32,7 @@ public class ExportAuditLogPdfQueryHandlerTests
         var clock = Substitute.For<IDateTimeService>();
         clock.UtcNow.Returns(now ?? new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc));
 
-        return (new ExportAuditLogPdfQueryHandler(exporter, db, cu, clock), exporter, db, cu);
+        return (new ExportAuditLogPdfQueryHandler(exporter, db, admin, cu, clock), exporter, admin, cu);
     }
 
     [Fact]
@@ -135,9 +138,9 @@ public class ExportAuditLogPdfQueryHandlerTests
             Arg.Any<CancellationToken>());
     }
 
-    private static (ExportAuditLogPdfQueryHandler, IAuditPdfExporter, TestApplicationDbContext,
+    private static (ExportAuditLogPdfQueryHandler, IAuditPdfExporter, TestAdminDbContext,
                     ICurrentUserService)
-        BuildWithDb(TestApplicationDbContext existingDb, string tenantId)
+        BuildWithDb(TestAdminDbContext adminExistente, string tenantId)
     {
         var exporter = Substitute.For<IAuditPdfExporter>();
         var cu = Substitute.For<ICurrentUserService>();
@@ -145,7 +148,8 @@ public class ExportAuditLogPdfQueryHandlerTests
         cu.UserName.Returns("ana@demo");
         var clock = Substitute.For<IDateTimeService>();
         clock.UtcNow.Returns(new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc));
-        return (new ExportAuditLogPdfQueryHandler(exporter, existingDb, cu, clock),
-            exporter, existingDb, cu);
+        return (new ExportAuditLogPdfQueryHandler(
+                exporter, TestDbContextFactory.Create(), adminExistente, cu, clock),
+            exporter, adminExistente, cu);
     }
 }

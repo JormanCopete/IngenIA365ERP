@@ -47,7 +47,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
-    DbSet<TenantBranch> IApplicationDbContext.TenantBranches => Set<TenantBranch>();
+    // TenantBranches salio de IApplicationDbContext: es del plano de control.
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
     DbSet<Person> IApplicationDbContext.People => throw new NotImplementedException();

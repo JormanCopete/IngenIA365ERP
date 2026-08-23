@@ -153,8 +153,12 @@ public sealed class ApiTestFixture : IAsyncLifetime
             demo = existing;
         }
 
-        var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var tenant = await appDb.Tenants.FirstOrDefaultAsync(t => t.SchemaName == "dbo");
+        // Las cooperativas y sus sucursales se siembran contra la base
+        // ADMINISTRATIVA. Antes iba por el contexto operativo, que replicaba una
+        // copia vacia de ADM_Tenants dentro del espacio de cada cooperativa: el
+        // banco sembraba en la copia y la aplicacion leia del registro real.
+        var adminDb = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+        var tenant = await adminDb.Tenants.FirstOrDefaultAsync(t => t.SchemaName == "dbo");
         if (tenant is null)
         {
             tenant = new Tenant
@@ -170,14 +174,14 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 LegalAddress = "Calle 1 #1-1, Bogotá, Colombia",
                 TaxRegime = "Común"
             };
-            appDb.Tenants.Add(tenant);
-            await appDb.SaveChangesAsync();
+            adminDb.Tenants.Add(tenant);
+            await adminDb.SaveChangesAsync();
         }
 
-        var branch = await appDb.TenantBranches.FirstOrDefaultAsync(b => b.TenantId == tenant.Id && b.Code == DemoBranchCode);
+        var branch = await adminDb.TenantBranches.FirstOrDefaultAsync(b => b.TenantId == tenant.Id && b.Code == DemoBranchCode);
         if (branch is null)
         {
-            appDb.TenantBranches.Add(new TenantBranch
+            adminDb.TenantBranches.Add(new TenantBranch
             {
                 TenantId = tenant.Id,
                 Code = DemoBranchCode,
@@ -186,7 +190,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 IsActive = true,
                 Address = "Calle 1 #1-1, Bogotá"
             });
-            await appDb.SaveChangesAsync();
+            await adminDb.SaveChangesAsync();
         }
     }
 
