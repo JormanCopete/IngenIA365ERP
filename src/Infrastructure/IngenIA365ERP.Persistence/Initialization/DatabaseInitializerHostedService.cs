@@ -158,11 +158,6 @@ public sealed class DatabaseInitializerHostedService(
     /// <summary>Cadena apuntada a la base de sistema (master / postgres) para lock y espera.</summary>
     internal static string ToServerLevelConnectionString(string connectionString, DatabaseProvider provider)
     {
-        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
-        var dbKey = builder.ContainsKey("Database") ? "Database"
-                  : builder.ContainsKey("Initial Catalog") ? "Initial Catalog" : null;
-        if (dbKey is not null)
-            builder[dbKey] = provider == DatabaseProvider.PostgreSql ? "postgres" : "master";
-        return builder.ConnectionString;
+        return Providers.ConnectionStringTargeting.ANivelDeServidor(connectionString, provider);
     }
 }
