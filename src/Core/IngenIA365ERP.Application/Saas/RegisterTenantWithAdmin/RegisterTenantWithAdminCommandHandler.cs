@@ -24,6 +24,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     IAdminDbContext adminDb,
     ISecureTokenGenerator tokens,
     ITenantDatabaseProvisioner aprovisionador,
+    ITenantCacheSlotAllocator ranuras,
     IInvitationEmailDispatcher emailDispatcher,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -90,6 +91,10 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         {
             var resultado = await aprovisionador.AprovisionarAsync(
                 tenant.DatabaseName!, tenant.Subdomain ?? tenant.SchemaName, tenant.ConnectionString, ct);
+
+            // La ranura de cache va con el aprovisionamiento, no despues: si no
+            // quedan, la cooperativa no puede quedar en Ready fingiendo que si.
+            tenant.RedisDbIndex = await ranuras.ReservarAsync(tenant.Name, ct);
 
             tenant.ProvisioningState = "Ready";
             tenant.MigrationsVersion = resultado.MigracionAplicada;

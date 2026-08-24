@@ -4,7 +4,7 @@ SYNC IMPACT REPORT — v2.0.0
 Version change: 1.0.0 → 2.0.0
 Bump rationale: MAJOR — redefinicion del Principio IV. El aislamiento entre
 cooperativas pasa de schema-per-tenant a UNA BASE DE DATOS POR COOPERATIVA, y se
-extiende a MongoDB y Redis. Invalida practicas vigentes (TranslateSchema,
+extiende a MongoDB. Invalida practicas vigentes (TranslateSchema,
 HasDefaultSchema dinamico, la columna SchemaName) y rompe codigo, que es el
 criterio de MAJOR de la seccion Versionado.
 
@@ -15,6 +15,9 @@ excepcion, sin log y sin que ninguna prueba lo detectara.
 
 Principios modificados:
   IV.   Multi-tenancy schema-per-tenant → base-por-cooperativa   [MODIFICADO]
+        Alcance: SQL y MongoDB por cooperativa; Redis global con prefijo, por
+        decision explicita del propietario del producto (techo de 15 bases
+        logicas e incompatibilidad con Redis Cluster).
 
 Principios que lo referencian y quedan afectados:
   X.    Trazabilidad SIPLA/SARLAFT — el rastro vive en la base de auditoria de
@@ -77,7 +80,7 @@ Follow-up TODOs: ninguno. Todos los placeholders se concretaron.
 > ERP financiero SaaS multi-tenant para cooperativas colombianas.
 > Stack: .NET 10, Blazor Hybrid (MAUI + Server + WebAssembly), SyncFusion 33.1.44,
 > PostgreSQL / SQL Server (transaccional, una base por cooperativa), MongoDB
-> (auditoría, una base por cooperativa), Redis (caché),
+> (auditoría, una base por cooperativa), Redis (caché global con prefijo),
 > Carter (Minimal APIs), MediatR (CQRS), QuestPDF (reportes), JWT RS256, ASP.NET Identity.
 >
 > Idioma: documentación, comentarios de negocio y mensajes al usuario en español;
@@ -162,9 +165,19 @@ El aislamiento alcanza a las tres tiendas de datos, no solo a la transaccional:
 - **SQL** — una base por cooperativa.
 - **MongoDB** — una base de auditoría por cooperativa. **NEVER** una colección
   por cooperativa dentro de una base compartida.
-- **Redis** — un espacio propio por cooperativa. Las claves de la identidad
-  central (sesiones, refresh, MFA, membresías, lockout, locks distribuidos) son
-  globales por definición y **MUST** vivir separadas de las de cooperativa.
+- **Redis** — **global, con prefijo por cooperativa en la clave**. Es la única
+  excepción del principio, y es deliberada: casi todo lo que Redis guarda es
+  global por naturaleza —contador de intentos de acceso (cuenta por correo
+  *antes* de elegir cooperativa; por cooperativa, el bloqueo se esquiva
+  cambiando de tenant), tokens revocados, refresco de sesión, los almacenes del
+  segundo factor (ocurre entre el acceso y la verificación: aún no hay
+  cooperativa), la lista de membresías de una persona, y los bloqueos
+  distribuidos, que protegen filas de la base administrativa—. Lo único
+  separable es el caché de permisos, que ya lleva la cooperativa en la clave.
+  A cambio, aislar por base lógica impondría un techo de 15 cooperativas
+  (Redis declara 16 bases y la 0 queda para lo global) y sería incompatible con
+  Redis Cluster, que sólo admite la base 0. **MUST** conservarse el prefijo por
+  cooperativa en toda clave que contenga datos de una.
 
 Toda query EF Core **MUST** ejecutarse contra la conexión de la cooperativa
 resuelta por `TenantResolutionMiddleware` a partir del claim `active_tenant_id`

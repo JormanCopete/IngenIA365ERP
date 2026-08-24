@@ -32,6 +32,18 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ingenia365-dev-redis
+    # --databases: Redis trae 16 bases logicas por defecto y el parametro es
+    # INMUTABLE en caliente (CONFIG SET lo rechaza), asi que hay que fijarlo al
+    # arrancar el servidor. Con una base por cooperativa y la 0 reservada para lo
+    # global, 16 significaria un techo de 15 cooperativas.
+    #
+    # Produccion tiene que declarar el mismo valor o mayor: si la aplicacion pide
+    # una base que el servidor no tiene, Redis responde error y la cooperativa
+    # afectada se queda sin cache.
+    #
+    # Limitacion registrada: Redis Cluster soporta UNICAMENTE la base 0. Este
+    # diseno es incompatible con clustering.
+    command: ["redis-server", "--databases", "64", "--appendonly", "yes"]
     ports:
       - "6379:6379"
     volumes:

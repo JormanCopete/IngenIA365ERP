@@ -176,6 +176,10 @@ public static class DependencyInjection
         // peticion: aceptar una invitacion, aprovisionar un esquema.
         services.AddScoped<ITenantDbContextFactory, TenantDbContextFactory>();
 
+        // Ranura de Redis por cooperativa: se lee de ADM_Tenants, no se deriva.
+        services.AddScoped<ITenantCacheSlots, TenantCacheSlots>();
+        services.AddScoped<ITenantCacheSlotAllocator, TenantCacheSlotAllocator>();
+
         // Directorio de tenants (BD IngenIA365ERP_Admin) accesible desde Application
         // sin acoplar a EF/Persistence.
         services.AddScoped<ITenantDirectory, TenantDirectory>();

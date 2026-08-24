@@ -42,6 +42,10 @@ public static class DependencyInjection
             options.InstanceName = redisSettings.InstanceName;
         });
 
+        // Cuantas bases logicas declara el servidor. Singleton: solo consulta al
+        // multiplexor, y el valor no cambia mientras Redis no reinicie.
+        services.AddSingleton<ICacheSlotCapacity, RedisSlotCapacity>();
+
         services.AddScoped<ICacheService, RedisCacheService>();
 
         // T029 — Abstracciones de seguridad respaldadas por Redis.
