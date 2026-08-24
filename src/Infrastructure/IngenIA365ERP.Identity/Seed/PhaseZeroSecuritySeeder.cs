@@ -30,7 +30,7 @@ namespace IngenIA365ERP.Identity.Seed;
 /// que el orquestador entrega apuntado al esquema en curso.
 /// </para>
 /// </summary>
-public sealed class PhaseZeroSecuritySeeder(IServiceProvider serviceProvider) : IDataSeeder
+public sealed class PhaseZeroSecuritySeeder : IDataSeeder
 {
     public int Order => 20;
     public SeedCategory Category => SeedCategory.Parametric;
@@ -52,14 +52,19 @@ public sealed class PhaseZeroSecuritySeeder(IServiceProvider serviceProvider) : 
             "Seguridad sembrada en el esquema {Esquema}: catálogo de permisos y roles built-in.",
             esquema);
 
-        // El usuario administrador de Fase 0 sólo tiene sentido en dbo, que ya no
-        // atiende a ninguna cooperativa. Las filas SEC_Users de cada cooperativa las
-        // crea TenantUserProvisioner al aceptarse una invitación, con la identidad
-        // central detrás: sembrar usuarios por esquema crearía cuentas que nadie pidió.
-        if (context.Tenant is null)
-        {
-            await DomainSecuritySeedData.SeedAsync(serviceProvider);
-        }
+        // DomainSecuritySeedData ya no corre, y es a propósito.
+        //
+        // Sembraba un usuario administrador de Fase 0 en SEC_Users. Con una base por
+        // cooperativa, la base por defecto no atiende a nadie: es sólo la plantilla
+        // desde la que se migra. Un usuario ahí no puede entrar a ninguna parte, y
+        // las filas SEC_Users de cada cooperativa las crea TenantUserProvisioner al
+        // aceptarse una invitación, con la identidad central detrás.
+        //
+        // Además avisaba en falso: resolvía su contexto del contenedor, o sea otra
+        // conexión, y leía los roles desde fuera de la transacción que el orquestador
+        // mantiene abierta. Nunca los veía, y escribía "Rol CompanyAdmin no
+        // encontrado" en cada arranque sobre base limpia — con los roles sembrados
+        // correctamente tres líneas más arriba.
 
         // Los seeders legacy no reportan conteos; 0 = "sin conteo disponible".
         return 0;
