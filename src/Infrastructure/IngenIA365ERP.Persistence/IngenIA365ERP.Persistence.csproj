@@ -36,6 +36,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+    <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />
   </ItemGroup>
 
 </Project>

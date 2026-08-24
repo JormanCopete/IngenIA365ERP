@@ -155,6 +155,11 @@ public static class DependencyInjection
         services.AddScoped<TenantSchemaService>();
         services.AddScoped<ITenantSchemaProvisioner>(sp => sp.GetRequiredService<TenantSchemaService>());
 
+        // Aprovisionador por BASE. Convive con el de esquema y todavia no lo llama
+        // nadie: se registra para poder probarlo contra PostgreSQL real antes de que
+        // nada dependa de el.
+        services.AddScoped<ITenantDatabaseProvisioner, TenantDatabaseProvisioner>();
+
         // Para los handlers que escriben en una cooperativa que no es la de la
         // peticion: aceptar una invitacion, aprovisionar un esquema.
         services.AddScoped<ITenantDbContextFactory, TenantDbContextFactory>();
