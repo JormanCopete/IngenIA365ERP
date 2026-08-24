@@ -440,6 +440,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                     b.Property<DateTime?>("ActivatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("AuditDatabaseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ConnectionString")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -505,6 +509,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnType("integer")
                         .HasDefaultValue(10);
 
+                    b.Property<string>("MigrationsVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -521,8 +529,22 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnType("character varying(50)")
                         .HasDefaultValue("Basic");
 
+                    b.Property<string>("ProvisioningError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ProvisioningState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Pending");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("RedisDbIndex")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SchemaName")
                         .IsRequired()
@@ -558,6 +580,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DatabaseName")
+                        .IsUnique();
 
                     b.HasIndex("Nit")
                         .IsUnique()

@@ -22,6 +22,22 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(e => e.Subdomain).HasMaxLength(100);
         builder.Property(e => e.PlanType).HasMaxLength(50).HasDefaultValue("Basic");
         builder.Property(e => e.DatabaseName).HasMaxLength(100);
+
+        // Dos cooperativas NO pueden apuntar a la misma base: seria un fallo de
+        // aislamiento silencioso, con las dos leyendo y escribiendo lo mismo.
+        // Nota para SQL Server: alli un indice unico admite un solo NULL, asi que
+        // toda cooperativa debe recibir DatabaseName al aprovisionarse. En
+        // PostgreSQL, el motor vivo, los NULL se consideran distintos.
+        builder.HasIndex(e => e.DatabaseName).IsUnique();
+
+        builder.Property(e => e.ConnectionString).HasMaxLength(500);
+        builder.Property(e => e.AuditDatabaseName).HasMaxLength(100);
+        builder.Property(e => e.MigrationsVersion).HasMaxLength(200);
+        builder.Property(e => e.ProvisioningError).HasMaxLength(2000);
+        // Obligatoria y CON default de base, por la misma razon que las de abajo:
+        // TenantDbContext escribe esta tabla sin conocer esta columna.
+        builder.Property(e => e.ProvisioningState)
+            .HasMaxLength(30).IsRequired().HasDefaultValue("Pending");
         // Defaults de BD (feature 004): ADM_Tenants tambien la escribe el store
         // multitenant (ErpTenantInfo/TenantDbContext), que no conoce estas
         // columnas NOT NULL — sin default el INSERT de interop fallaria.
