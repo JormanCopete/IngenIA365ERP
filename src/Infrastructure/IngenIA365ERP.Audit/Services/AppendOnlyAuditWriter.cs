@@ -24,7 +24,10 @@ internal sealed class AppendOnlyAuditWriter(
 
     public Task AppendAsync(AuditEventDocument entry, CancellationToken ct)
     {
-        var collection = _db.GetCollection<BsonDocument>($"audit_events_{entry.TenantId}");
+        // Misma convención que la consola. Ver la nota en MongoAuditService: antes
+        // este escritor y aquella lectora usaban nombres distintos.
+        var collection = _db.GetCollection<BsonDocument>(
+            MongoAuditService.NombreDeColeccion(entry.TenantId));
         var doc = new BsonDocument
         {
             { "tenantId", entry.TenantId },

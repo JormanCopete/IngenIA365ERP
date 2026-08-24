@@ -339,10 +339,30 @@ public class MongoAuditService : IAuditService, IDisposable
 
     // === Helpers ===
 
+    /// <summary>
+    /// Nombre de la colección de auditoría de una cooperativa.
+    ///
+    /// <para>
+    /// <b>Una sola convención, y esto cerraba una brecha.</b> Había dos:
+    /// <c>AppendOnlyAuditWriter</c> escribía en <c>audit_events_{tenantId}</c> y
+    /// esta consola leía de <c>audit_{tenantId}</c>. Colecciones distintas, así que
+    /// todo lo que registran los handlers de identidad —inicios de sesión, segundo
+    /// factor, invitaciones, membresías— quedaba escrito y era <b>invisible</b>
+    /// desde la consola de auditoría. El rastro regulatorio existía y nadie podía
+    /// consultarlo.
+    /// </para>
+    ///
+    /// <para>
+    /// Se conserva <c>audit_events_</c> y no la otra porque es la que ya tiene los
+    /// cuatro índices y el TTL de cinco años que exige FR-023.
+    /// </para>
+    /// </summary>
+    internal static string NombreDeColeccion(string tenantId) => "audit_events_" + tenantId;
+
     private IMongoCollection<AuditLog> GetAuditCollection(string tenantId)
     {
         var db = _client.GetDatabase(_settings.DatabaseName);
-        return db.GetCollection<AuditLog>($"audit_{tenantId}");
+        return db.GetCollection<AuditLog>(NombreDeColeccion(tenantId));
     }
 
     private IMongoCollection<AccessLog> GetAccessCollection(string tenantId)
