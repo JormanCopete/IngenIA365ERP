@@ -95,10 +95,18 @@ public static class DependencyInjection
         services.AddScoped<IAdminDbContext>(sp => sp.GetRequiredService<AdminDbContext>());
 
         // Main application DbContext (tenant-scoped)
+        // La cadena sale de la cooperativa del ambito, no de la configuracion.
+        //
+        // Esta lambda se evalua UNA VEZ POR AMBITO —medido, no supuesto— asi que
+        // cada peticion construye sus opciones con la conexion de SU cooperativa.
+        // Si se evaluara una sola vez por proceso, la cadena quedaria congelada en
+        // la primera cooperativa que entrase y todas las demas leerian sus datos.
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
-            providerConfigurator.Configure(options, operationalConnectionString, MigrationsTarget.Application);
+            var cooperativa = sp.GetRequiredService<ErpTenantInfo>();
+            providerConfigurator.Configure(
+                options, cooperativa.ConnectionString!, MigrationsTarget.Application);
         });
 
         // ---- El cable del aislamiento entre cooperativas ----
@@ -113,39 +121,43 @@ public static class DependencyInjection
         // declara (DbContextOptions, ErpTenantInfo? = null, ICurrentUserService? = null)
         // y el contenedor elige el constructor de mas parametros que pueda satisfacer.
         // Se registra el TIPO CONCRETO porque la anotacion de nulabilidad no la honra.
+        services.AddScoped<TenantConnectionResolver>();
+
         services.AddScoped(sp =>
         {
+            var resolutor = sp.GetRequiredService<TenantConnectionResolver>();
             var peticion = sp.GetService<IHttpContextAccessor>()?.HttpContext;
 
             // Sin peticion HTTP —arranque, trabajos de fondo, la CLI de migraciones—
-            // no hay cooperativa de la que tirar, y dbo es la respuesta correcta:
-            // ahi viven el arbol de migraciones y las plantillas. Se comprueba el
-            // HttpContext y no el esquema porque por esa via son indistinguibles.
+            // no hay cooperativa de la que tirar. Va contra la instancia por defecto,
+            // donde viven el arbol de migraciones y la plantilla. Se comprueba el
+            // HttpContext y no la cooperativa porque por esa via son indistinguibles.
             if (peticion is null)
             {
-                return new ErpTenantInfo { SchemaName = "dbo" };
+                return new ErpTenantInfo { SchemaName = "dbo", ConnectionString = resolutor.Plantilla };
             }
 
-            var actual = sp.GetRequiredService<ICurrentTenantService>();
-            var esquema = actual.Schema;
+            var baseDeDatos = peticion.Items.TryGetValue("TenantDatabase", out var b) ? b as string : null;
+            var propia = peticion.Items.TryGetValue("TenantConnectionOverride", out var c) ? c as string : null;
 
-            // Dentro de una peticion, un esquema sin resolver NO puede caer a dbo.
-            // No hay segunda barrera que lo recoja: ninguna entidad implementa
-            // ITenantEntity y los 285 filtros globales son todos de borrado logico.
-            // Si el esquema sale mal, nada lo detiene y los datos se mezclan. Fallar
-            // ruidosamente es la unica opcion segura.
-            if (string.IsNullOrWhiteSpace(esquema))
+            // Dentro de una peticion, una cooperativa sin resolver NO puede caer a la
+            // base de plantilla. No hay segunda barrera que lo recoja: ninguna entidad
+            // implementa ITenantEntity y los filtros globales son todos de borrado
+            // logico. Si esto sale mal, nada lo detiene y los datos se mezclan.
+            if (string.IsNullOrWhiteSpace(baseDeDatos) && string.IsNullOrWhiteSpace(propia))
             {
                 throw new InvalidOperationException(
                     "Se pidio la base operativa dentro de una peticion sin cooperativa resuelta " +
-                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a 'dbo' mezclaria " +
-                    "los datos de todas las cooperativas. Si esta ruta debe funcionar sin " +
-                    "cooperativa, no tiene que usar IApplicationDbContext.");
+                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a la base de " +
+                    "plantilla mezclaria los datos de todas las cooperativas. Si esta ruta debe " +
+                    "funcionar sin cooperativa, no tiene que usar IApplicationDbContext.");
             }
 
+            var actual = sp.GetRequiredService<ICurrentTenantService>();
             return new ErpTenantInfo
             {
-                SchemaName = esquema,
+                SchemaName = "dbo",
+                ConnectionString = resolutor.Resolver(baseDeDatos, propia, actual.TenantName),
                 Name = actual.TenantName,
                 Id = actual.TenantId,
             };

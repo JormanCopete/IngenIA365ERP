@@ -364,9 +364,19 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Set schema based on tenant
-        var schema = _tenantInfo?.Schema ?? "dbo";
-        modelBuilder.HasDefaultSchema(schema);
+        // Esquema constante, y eso es el cambio.
+        //
+        // Con una base por cooperativa cada una tiene su propio dbo, asi que el
+        // esquema deja de discriminar nada. Antes salia de
+        // `_tenantInfo?.Schema ?? "dbo"`, y ese operador `??` era el aislamiento
+        // entero: cuando ErpTenantInfo no llegaba —que era siempre, porque nadie lo
+        // registraba— degradaba a dbo en silencio y todas las cooperativas
+        // compartian espacio.
+        //
+        // Ahora lo que varia es la CONEXION, no el modelo. Efecto util de paso: el
+        // modelo es identico para todas, asi que EF construye sus 272 entidades una
+        // sola vez por proceso en lugar de una por cooperativa. Medido.
+        modelBuilder.HasDefaultSchema("dbo");
 
         // Se excluye la carpeta Configurations/Admin: sus entidades pertenecen a
         // AdminDbContext, que las aplica una a una y de forma explicita.

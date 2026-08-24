@@ -3,6 +3,7 @@ using IngenIA365ERP.Persistence.Initialization;
 using IngenIA365ERP.Persistence.MultiTenancy;
 using IngenIA365ERP.Persistence.Providers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -137,10 +138,37 @@ public sealed class SeedOrchestrator(
     private async Task<int> RunTenantSeederAsync(
         IServiceProvider sp, IDataSeeder seeder, ErpTenantInfo? tenant, CancellationToken ct)
     {
-        // Un ApplicationDbContext NUEVO por esquema — jamas se comparte entre
-        // tenants dentro de una misma operacion (principio IV).
-        var dbOptions = sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
-        await using var tenantDb = new ApplicationDbContext(dbOptions, tenant, currentUserService: null);
+        // Un ApplicationDbContext NUEVO por cooperativa, con SU conexion — jamas se
+        // comparte entre cooperativas dentro de una misma operacion (Principio IV).
+        //
+        // Las opciones NO se toman del contenedor. Ahi la cadena sale de la
+        // cooperativa del ambito, y este orquestador corre sin peticion detras: le
+        // llegaria siempre la plantilla, asi que sembraria N veces la misma base
+        // creyendo que siembra N cooperativas.
+        var configurador = sp.GetRequiredService<Providers.IDbProviderConfigurator>();
+        var resolutor = sp.GetRequiredService<MultiTenancy.TenantConnectionResolver>();
+
+        var cadena = tenant is null
+            ? resolutor.Plantilla
+            : resolutor.Resolver(tenant.SchemaName, tenant.ConnectionString, tenant.Name);
+
+        var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+        // Los interceptores se registran como ISaveChangesInterceptor. Pedir
+        // IInterceptor compila —por covarianza— y devuelve CERO: contextos
+        // sembrando sin auditoria ni borrado logico, sin una sola senal.
+        constructor.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
+        configurador.Configure(constructor, cadena, Providers.MigrationsTarget.Application);
+
+        await using var tenantDb = new ApplicationDbContext(
+            constructor.Options,
+            tenant is null ? null : new MultiTenancy.ErpTenantInfo
+            {
+                Identifier = tenant.Identifier,
+                Name = tenant.Name,
+                SchemaName = "dbo",
+                ConnectionString = cadena,
+            },
+            currentUserService: null);
         var context = NewContext(admin: null, tenantDb: tenantDb, tenant: tenant);
 
         var strategy = tenantDb.Database.CreateExecutionStrategy();

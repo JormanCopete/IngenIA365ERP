@@ -23,7 +23,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     ICurrentCentralUserContext currentUser,
     IAdminDbContext adminDb,
     ISecureTokenGenerator tokens,
-    ITenantSchemaProvisioner aprovisionador,
+    ITenantDatabaseProvisioner aprovisionador,
     IInvitationEmailDispatcher emailDispatcher,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -53,6 +53,11 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         {
             Name = request.Name,
             SchemaName = request.SchemaName,
+            // La base se llama como el esquema. Mientras convivan los dos modelos
+            // esto mantiene una sola nomenclatura; cuando SchemaName se retire, el
+            // nombre entra por el contrato.
+            DatabaseName = request.SchemaName,
+            ProvisioningState = "Provisioning",
             Subdomain = request.Subdomain,
             Nit = request.Nit,
             LegalName = request.LegalName,
@@ -83,15 +88,25 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         // el registro por un fallo de aprovisionamiento seria peor.
         try
         {
-            await aprovisionador.AprovisionarAsync(
-                tenant.SchemaName, tenant.Subdomain ?? tenant.SchemaName, ct);
+            var resultado = await aprovisionador.AprovisionarAsync(
+                tenant.DatabaseName!, tenant.Subdomain ?? tenant.SchemaName, tenant.ConnectionString, ct);
+
+            tenant.ProvisioningState = "Ready";
+            tenant.MigrationsVersion = resultado.MigracionAplicada;
+            await adminDb.SaveChangesAsync(ct);
         }
         catch (Exception ex)
         {
+            // El estado queda en Failed y con el motivo: una cooperativa a medias
+            // tiene que verse como tal, no parecer lista.
+            tenant.ProvisioningState = "Failed";
+            tenant.ProvisioningError = ex.Message;
+            await adminDb.SaveChangesAsync(ct);
+
             logger.LogError(ex,
-                "La cooperativa {Nombre} quedo registrada pero su esquema {Esquema} no se " +
+                "La cooperativa {Nombre} quedo registrada pero su base {Base} no se " +
                 "aprovisiono. Reparable con POST /api/saas/tenants/{{publicId}}/provision.",
-                tenant.Name, tenant.SchemaName);
+                tenant.Name, tenant.DatabaseName);
         }
 
         // Emite la invitación admin para el FirstAdminEmail.

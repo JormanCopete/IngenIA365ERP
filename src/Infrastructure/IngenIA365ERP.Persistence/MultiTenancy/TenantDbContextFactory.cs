@@ -1,35 +1,39 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Persistence.DbContext;
+using IngenIA365ERP.Persistence.Providers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace IngenIA365ERP.Persistence.MultiTenancy;
 
 /// <summary>
-/// Abre un <see cref="ApplicationDbContext"/> sobre el esquema que se le pida.
+/// Abre un <see cref="ApplicationDbContext"/> sobre la base de una cooperativa
+/// concreta, que no tiene por qué ser la de la petición en curso.
 ///
 /// <para>
-/// Es el mismo patrón que <c>SeedOrchestrator</c> ya usaba para sembrar cada
-/// esquema: construir el contexto a mano pasándole el tenant, en vez de pedirlo
-/// al contenedor. Las opciones salen del contenedor, así que los interceptores
-/// de auditoría, borrado lógico y control de concurrencia viajan con ellas.
+/// Los interceptores se reenganchan a mano: al construir las opciones aquí en
+/// vez de tomarlas del contenedor, la auditoría, el borrado lógico y el control
+/// de concurrencia no viajarían solos. Olvidarlo no daría error — daría filas
+/// escritas sin rastro.
 /// </para>
 /// </summary>
 internal sealed class TenantDbContextFactory(
-    DbContextOptions<ApplicationDbContext> opciones,
+    TenantConnectionResolver resolutor,
+    IDbProviderConfigurator configurador,
+    IEnumerable<ISaveChangesInterceptor> interceptores,
     ICurrentUserService? usuarioActual = null) : ITenantDbContextFactory
 {
-    public ITenantDbScope Abrir(string esquema)
+    public ITenantDbScope Abrir(string nombreDeBase, string? cadenaPropia = null)
     {
-        if (string.IsNullOrWhiteSpace(esquema))
-        {
-            throw new ArgumentException(
-                "Hace falta el nombre del esquema. Abrir la base operativa sin decir de qué " +
-                "cooperativa es escribiría en el esquema equivocado.", nameof(esquema));
-        }
+        var cadena = resolutor.Resolver(nombreDeBase, cadenaPropia);
+
+        var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+        constructor.AddInterceptors(interceptores);
+        configurador.Configure(constructor, cadena, MigrationsTarget.Application);
 
         return new Ambito(new ApplicationDbContext(
-            opciones,
-            new ErpTenantInfo { SchemaName = esquema },
+            constructor.Options,
+            new ErpTenantInfo { SchemaName = "dbo", ConnectionString = cadena },
             usuarioActual));
     }
 

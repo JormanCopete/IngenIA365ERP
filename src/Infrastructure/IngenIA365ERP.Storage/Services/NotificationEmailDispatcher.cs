@@ -92,12 +92,13 @@ public sealed class NotificationEmailDispatcher : BackgroundService
         var cooperativas = scope.ServiceProvider.GetRequiredService<ITenantDirectory>();
         var fabrica = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory>();
 
-        foreach (var esquema in await EsquemasAsync(cooperativas, ct))
+        foreach (var cooperativa in await CooperativasAsync(cooperativas, ct))
         {
             if (ct.IsCancellationRequested) return;
 
-            await using var ambito = fabrica.Abrir(esquema);
-            await ProcesarLoteDeAsync(ambito.Db, scope, esquema, ct);
+            await using var ambito = fabrica.Abrir(
+                cooperativa.DatabaseName ?? cooperativa.SchemaName, cooperativa.ConnectionString);
+            await ProcesarLoteDeAsync(ambito.Db, scope, cooperativa.Name, ct);
         }
     }
 
@@ -106,16 +107,15 @@ public sealed class NotificationEmailDispatcher : BackgroundService
     /// y se devuelve vacio: el despachador reintenta al siguiente ciclo, y tumbar el
     /// servicio de fondo por un fallo transitorio de lectura seria peor.
     /// </summary>
-    private async Task<IReadOnlyList<string>> EsquemasAsync(
+    private async Task<IReadOnlyList<TenantDirectoryEntry>> CooperativasAsync(
         ITenantDirectory directorio, CancellationToken ct)
     {
         try
         {
             var todas = await directorio.ListActiveAsync(ct);
-            return [.. todas
-                .Select(c => c.SchemaName)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct(StringComparer.OrdinalIgnoreCase)];
+            return [.. todas.Where(c =>
+                !string.IsNullOrWhiteSpace(c.DatabaseName) ||
+                !string.IsNullOrWhiteSpace(c.ConnectionString))];
         }
         catch (Exception ex)
         {

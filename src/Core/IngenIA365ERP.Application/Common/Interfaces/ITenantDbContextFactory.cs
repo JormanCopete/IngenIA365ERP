@@ -20,11 +20,14 @@ namespace IngenIA365ERP.Application.Common.Interfaces;
 /// </summary>
 public interface ITenantDbContextFactory
 {
-    /// <param name="esquema">
-    /// Nombre del esquema, tal como está en <c>ADM_Tenants.SchemaName</c>. No el
-    /// identificador ni el PublicId.
+    /// <param name="nombreDeBase">
+    /// Nombre de la base, tal como está en <c>ADM_Tenants.DatabaseName</c>.
     /// </param>
-    ITenantDbScope Abrir(string esquema);
+    /// <param name="cadenaPropia">
+    /// Cadena propia si la cooperativa vive fuera de la instancia por defecto.
+    /// Null es lo normal.
+    /// </param>
+    ITenantDbScope Abrir(string nombreDeBase, string? cadenaPropia = null);
 }
 
 /// <summary>

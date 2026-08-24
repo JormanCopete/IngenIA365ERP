@@ -44,8 +44,8 @@ public class RegisterTenantWithAdminCommandHandlerTests
     /// —y que un fallo suyo no tumbe el alta— se comprueba en
     /// <see cref="ElAltaSobreviveSiElEsquemaNoSeAprovisiona"/>.
     /// </summary>
-    private readonly ITenantSchemaProvisioner _aprovisionador =
-        Substitute.For<ITenantSchemaProvisioner>();
+    private readonly ITenantDatabaseProvisioner _aprovisionador =
+        Substitute.For<ITenantDatabaseProvisioner>();
 
     private RegisterTenantWithAdminCommandHandler NewHandler() => new(
         _currentUser, _db, _tokens, _aprovisionador, _email,
@@ -108,8 +108,10 @@ public class RegisterTenantWithAdminCommandHandlerTests
         // Perder el registro por un fallo de aprovisionamiento seria peor que
         // quedarse a medias: el endpoint de provision es idempotente y lo repara.
         _aprovisionador
-            .AprovisionarAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns<Task>(_ => throw new InvalidOperationException("sin conexion"));
+            .AprovisionarAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<ResultadoAprovisionamiento>>(_ =>
+                throw new InvalidOperationException("sin conexion"));
 
         var r = await NewHandler().Handle(NewCommand(), CancellationToken.None);
 
@@ -125,6 +127,6 @@ public class RegisterTenantWithAdminCommandHandlerTests
         await NewHandler().Handle(NewCommand(), CancellationToken.None);
 
         await _aprovisionador.Received(1).AprovisionarAsync(
-            "tenant_test", Arg.Any<string>(), Arg.Any<CancellationToken>());
+            "tenant_test", Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 }

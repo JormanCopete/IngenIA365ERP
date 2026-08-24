@@ -28,4 +28,6 @@ public sealed record TenantDirectoryEntry(
     Guid PublicId,
     string Identifier,
     string Name,
-    string SchemaName = "dbo");
+    string SchemaName = "dbo",
+    string? DatabaseName = null,
+    string? ConnectionString = null);

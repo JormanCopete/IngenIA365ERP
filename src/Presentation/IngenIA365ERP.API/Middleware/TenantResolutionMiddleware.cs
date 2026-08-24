@@ -134,6 +134,10 @@ public class TenantResolutionMiddleware
         }
 
         context.Items["TenantInfo"] = tenant;
+        // Con base por cooperativa, esto es lo que decide contra que datos opera la
+        // peticion. TenantSchema se conserva mientras convivan los dos modelos.
+        context.Items["TenantDatabase"] = tenant.DatabaseName;
+        context.Items["TenantConnectionOverride"] = tenant.ConnectionString;
         context.Items["TenantId"] = tenant.Id;
         context.Items["TenantPublicId"] = tenant.PublicId;
         context.Items["TenantSchema"] = tenant.SchemaName;

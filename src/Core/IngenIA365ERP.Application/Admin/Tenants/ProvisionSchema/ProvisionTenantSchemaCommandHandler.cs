@@ -14,13 +14,13 @@ public sealed class ProvisionTenantSchemaCommandHandler
     private const string HeadquartersName = "Sede Principal";
 
     private readonly IAdminDbContext _admin;
-    private readonly ITenantSchemaProvisioner _aprovisionador;
+    private readonly ITenantDatabaseProvisioner _aprovisionador;
     private readonly ITenantDbContextFactory _fabrica;
     private readonly ICurrentUserService _currentUser;
 
     public ProvisionTenantSchemaCommandHandler(
         IAdminDbContext admin,
-        ITenantSchemaProvisioner aprovisionador,
+        ITenantDatabaseProvisioner aprovisionador,
         ITenantDbContextFactory fabrica,
         ICurrentUserService currentUser)
     {
@@ -37,7 +37,7 @@ public sealed class ProvisionTenantSchemaCommandHandler
         // (operacional). Resolvemos primero el Id interno via PublicId.
         var tenant = await _admin.Tenants
             .Where(t => t.PublicId == request.TenantPublicId)
-            .Select(t => new { t.Id, t.Name, t.SchemaName, t.Subdomain })
+            .Select(t => new { t.Id, t.Name, t.SchemaName, t.Subdomain, t.DatabaseName, t.ConnectionString })
             .FirstOrDefaultAsync(ct);
         if (tenant is null)
         {
@@ -59,7 +59,10 @@ public sealed class ProvisionTenantSchemaCommandHandler
         // y lo migra. Es idempotente, asi que este endpoint sigue sirviendo para
         // reparar una cooperativa que quedo a medias.
         await _aprovisionador.AprovisionarAsync(
-            tenant.SchemaName, tenant.Subdomain ?? tenant.SchemaName, ct);
+            tenant.DatabaseName ?? tenant.SchemaName,
+            tenant.Subdomain ?? tenant.SchemaName,
+            tenant.ConnectionString,
+            ct);
 
         var headquartersCreated = await EnsureHeadquartersAsync(tenant.Id, tenant.Name, actor, ct);
 
