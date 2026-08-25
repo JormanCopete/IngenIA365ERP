@@ -93,11 +93,19 @@ internal sealed class TenantUserProvisioner(
         // IgnoreQueryFilters: queremos detectar también las filas soft-deleted
         // para reactivarlas en lugar de crear una nueva (idempotencia tras
         // revocaciones previas).
+        // Se busca por la IDENTIDAD CENTRAL, que es lo que de verdad identifica a
+        // una persona entre cooperativas. El correo queda como respaldo, y solo
+        // para filas creadas antes del cutover: dos correos iguales son la misma
+        // persona hoy, pero un cambio de correo rompia el vinculo en silencio.
         var existing = await db.Users
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(
-                u => u.Username == normalized || u.Email == normalized,
-                ct);
+            .FirstOrDefaultAsync(u => u.CentralUserId == centralUserId, ct)
+            ?? await db.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(
+                    u => u.CentralUserId == null &&
+                         (u.Username == normalized || u.Email == normalized),
+                    ct);
 
         if (existing is not null)
         {
@@ -105,6 +113,8 @@ internal sealed class TenantUserProvisioner(
             // Ignored() en EF hasta el cutover de T017 — se asignan aquí en
             // memoria para que el resto del handler las pueda leer dentro
             // del scope del request. No se persisten todavía.
+            // Al encontrarla por correo, se sella el vinculo para que la proxima vez
+            // se resuelva por identidad y no por cadena.
             existing.CentralUserId = centralUserId;
             existing.CentralUserPublicEmail = normalized;
 

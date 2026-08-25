@@ -61,15 +61,26 @@ internal sealed class PermisosDeLaPeticion(
     private async Task<IReadOnlyCollection<string>> ResolverSinMemoAsync(
         HttpContext http, CancellationToken ct)
     {
+        var identidadCentral = LeerIdentidadCentral(http.User);
         var email = LeerEmail(http.User);
-        if (string.IsNullOrWhiteSpace(email)) return [];
+        if (identidadCentral is null && string.IsNullOrWhiteSpace(email)) return [];
 
         var idCooperativa = await ResolverCooperativaAsync(http, ct);
         if (idCooperativa is null) return [];
 
+        // Por identidad central, que es lo que el token realmente afirma. El correo
+        // queda de respaldo y sólo para filas anteriores al cutover: el puente por
+        // cadena se rompía en silencio si alguien cambiaba de correo.
+        //
         // Sin IgnoreQueryFilters a propósito: una fila soft-deleted no concede nada.
-        var idUsuario = await operativa.Users
-            .Where(u => (u.Username == email || u.Email == email) && u.IsActive)
+        var idUsuario = identidadCentral is null ? null : await operativa.Users
+            .Where(u => u.CentralUserId == identidadCentral && u.IsActive)
+            .Select(u => (int?)u.Id)
+            .FirstOrDefaultAsync(ct);
+
+        idUsuario ??= string.IsNullOrWhiteSpace(email) ? null : await operativa.Users
+            .Where(u => u.CentralUserId == null &&
+                        (u.Username == email || u.Email == email) && u.IsActive)
             .Select(u => (int?)u.Id)
             .FirstOrDefaultAsync(ct);
 
@@ -122,6 +133,17 @@ internal sealed class PermisosDeLaPeticion(
     /// <see cref="ClaimTypes.Email"/>. Se leen los dos: si algún día se activa
     /// <c>MapInboundClaims = false</c>, esto sigue funcionando.
     /// </summary>
+    /// <summary>
+    /// La identidad central del token. El emisor la pone en <c>sub</c>, que el
+    /// mapeo de entrada por defecto renombra a <see cref="ClaimTypes.NameIdentifier"/>.
+    /// </summary>
+    private static Guid? LeerIdentidadCentral(ClaimsPrincipal usuario)
+    {
+        var valor = usuario.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? usuario.FindFirst("sub")?.Value;
+        return Guid.TryParse(valor, out var id) ? id : null;
+    }
+
     private static string? LeerEmail(ClaimsPrincipal usuario)
     {
         var valor = usuario.FindFirst(ClaimTypes.Email)?.Value

@@ -3,6 +3,7 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
 <PageTitle>Usuarios — IngenIA365ERP</PageTitle>
 
@@ -14,7 +15,7 @@
     <div class="toolbar">
         <input type="search" placeholder="Buscar usuario o correo…" @bind="_search" @bind:event="oninput" />
         <label><input type="checkbox" @bind="_includeDisabled" /> incluir deshabilitados</label>
-        <button class="primary" @onclick="OpenCreate">+ Nuevo usuario</button>
+        <button class="primary" @onclick="InvitarAsync">Invitar persona</button>
         <button @onclick="LoadAsync">Refrescar</button>
     </div>
 
@@ -67,6 +68,8 @@
     private string _search = string.Empty;
     private bool _includeDisabled;
     private bool _loading;
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthState { get; set; }
+
     private string? _error;
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -89,7 +92,29 @@
         finally { _loading = false; }
     }
 
-    private void OpenCreate() => Nav.NavigateTo("/security/users/new");
+    /// <summary>
+    /// Se invita, no se crea.
+    ///
+    /// <para>
+    /// El botón anterior daba de alta una fila en SEC_Users y nada más. Pero el
+    /// acceso valida contra la identidad central, que ese camino no tocaba: la
+    /// persona aparecía en la pantalla, se le podían asignar roles, y no podía
+    /// entrar. La invitación sí crea las dos mitades.
+    /// </para>
+    /// </summary>
+    private async Task InvitarAsync()
+    {
+        var estado = await AuthState!;
+        var cooperativa = estado.User.FindFirst("active_tenant_id")?.Value;
+
+        if (string.IsNullOrWhiteSpace(cooperativa))
+        {
+            _error = "Elegí una cooperativa antes de invitar a alguien.";
+            return;
+        }
+
+        Nav.NavigateTo($"/admin/tenants/{cooperativa}/invitaciones");
+    }
     private void Edit(Guid id) => Nav.NavigateTo($"/security/users/{id}");
     private void Roles(Guid id) => Nav.NavigateTo($"/security/users/{id}/roles");
 

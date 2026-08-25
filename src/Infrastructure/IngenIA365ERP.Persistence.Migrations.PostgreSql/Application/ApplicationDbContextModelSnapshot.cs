@@ -31082,6 +31082,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("CanOverrideLimits")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("CentralUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CentralUserPublicEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -31177,6 +31184,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CentralUserId");
 
                     b.HasIndex("PersonId");
 
