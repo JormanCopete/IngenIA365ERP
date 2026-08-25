@@ -63,6 +63,45 @@ public sealed class SeedOrchestrator(
         }
     }
 
+    /// <summary>
+    /// Siembra UNA cooperativa recién aprovisionada, aplicando la misma política de
+    /// categorías que el arranque.
+    ///
+    /// <para>
+    /// Existe para que esa política viva en un solo sitio. Estaba en dos: el
+    /// arranque sembraba paramétricos y de demostración, y el aprovisionador sólo
+    /// paramétricos. La consecuencia medida es que el contenido de una cooperativa
+    /// dependía de si el servicio se había reiniciado después de crearla — dos
+    /// cooperativas creadas el mismo día con el mismo código acababan distintas.
+    /// Esa clase de asimetría hace que un fallo aparezca en un entorno y no en
+    /// otro.
+    /// </para>
+    /// </summary>
+    public async Task<int> SembrarCooperativaAsync(string identificador, CancellationToken ct)
+    {
+        var total = 0;
+
+        if (options.Value.Seed.RunParametricSeed)
+        {
+            var r = await RunAsync(SeedCategory.Parametric, SeedScope.Tenant, identificador, ct);
+            total += r.Sum(x => x.Inserted);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Seed paramétrico omitido para {Identificador} (Database:Seed:RunParametricSeed=false).",
+                identificador);
+        }
+
+        if (EffectiveRunTestSeed())
+        {
+            var r = await RunAsync(SeedCategory.Test, SeedScope.Tenant, identificador, ct);
+            total += r.Sum(x => x.Inserted);
+        }
+
+        return total;
+    }
+
     /// <summary>Default por ambiente: on en Development/QA, off en Production salvo opt-in (FR-017).</summary>
     public bool EffectiveRunTestSeed() =>
         options.Value.Seed.RunTestSeed

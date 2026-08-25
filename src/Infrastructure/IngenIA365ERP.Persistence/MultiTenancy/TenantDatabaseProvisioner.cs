@@ -33,8 +33,7 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 internal sealed class TenantDatabaseProvisioner(
     IOptions<DatabaseOptions> opciones,
     IDbProviderConfigurator configurador,
-    IEnumerable<IDataSeeder> seeders,
-    IHostEnvironment entorno,
+    Seeding.SeedOrchestrator? orquestador,
     ILogger<TenantDatabaseProvisioner> logger) : ITenantDatabaseProvisioner
 {
     public async Task<ResultadoAprovisionamiento> AprovisionarAsync(
@@ -51,7 +50,7 @@ internal sealed class TenantDatabaseProvisioner(
         await using var db = AbrirContexto(cadena);
         await db.Database.MigrateAsync(ct);
 
-        var filas = await SembrarAsync(db, identificador, ct);
+        var filas = await SembrarAsync(identificador, ct);
         var ultima = (await db.Database.GetAppliedMigrationsAsync(ct)).LastOrDefault();
 
         logger.LogInformation(
@@ -129,30 +128,27 @@ internal sealed class TenantDatabaseProvisioner(
     }
 
     /// <summary>
-    /// Corre los seeders paramétricos de alcance cooperativa contra la base recién
-    /// creada. Se le pasa un tenant no nulo a propósito: los seeders lo usan para
-    /// distinguir la base de una cooperativa de la plantilla, y así no se siembra
-    /// ahí el usuario administrador heredado.
+    /// Siembra la cooperativa delegando en el orquestador.
+    ///
+    /// <para>
+    /// No decide aquí qué categorías van: esa política vive en
+    /// <c>SeedOrchestrator.SembrarCooperativaAsync</c> y la comparte con el
+    /// arranque. Tenerla en dos sitios ya produjo el defecto que esto corrige —
+    /// el aprovisionador sembraba sólo paramétricos y el arranque también los de
+    /// demostración, así que el contenido de una cooperativa dependía de si el
+    /// servicio se había reiniciado después de crearla.
+    /// </para>
     /// </summary>
-    private async Task<int> SembrarAsync(
-        ApplicationDbContext db, string identificador, CancellationToken ct)
+    private async Task<int> SembrarAsync(string identificador, CancellationToken ct)
     {
-        var contexto = new SeedContext
+        if (orquestador is null)
         {
-            TenantDb = db,
-            Tenant = new ErpTenantInfo { Identifier = identificador, SchemaName = "dbo" },
-            EnvironmentName = entorno.EnvironmentName,
-            Logger = logger,
-        };
-
-        var total = 0;
-        foreach (var seeder in seeders
-            .Where(s => s.Scope == SeedScope.Tenant && s.Category == SeedCategory.Parametric)
-            .OrderBy(s => s.Order))
-        {
-            total += await seeder.SeedAsync(contexto, ct);
+            logger.LogWarning(
+                "La base de {Identificador} se creó y migró, pero no se sembró: no hay " +
+                "orquestador disponible. Quedará sin permisos ni roles.", identificador);
+            return 0;
         }
 
-        return total;
+        return await orquestador.SembrarCooperativaAsync(identificador, ct);
     }
 }

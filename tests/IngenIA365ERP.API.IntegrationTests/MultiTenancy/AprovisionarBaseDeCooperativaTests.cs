@@ -39,13 +39,13 @@ public class AprovisionarBaseDeCooperativaTests
             ConnectionStrings = new Dictionary<string, string?> { ["PostgreSQL"] = cadena },
         });
 
-        var entorno = new EntornoDePrueba();
-
+        // Sin orquestador: esta prueba comprueba que la base se crea y se migra.
+        // Que se siembre —y con que politica— es cosa del orquestador, y esa
+        // politica vive en un solo sitio desde que se corrigio la asimetria.
         return new TenantDatabaseProvisioner(
             opciones,
             new PostgreSqlProviderConfigurator(),
-            seeders: [],
-            entorno,
+            orquestador: null,
             NullLogger<TenantDatabaseProvisioner>.Instance);
     }
 
