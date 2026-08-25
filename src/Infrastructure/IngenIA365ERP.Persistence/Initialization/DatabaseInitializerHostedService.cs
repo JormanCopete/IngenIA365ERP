@@ -182,13 +182,15 @@ public sealed class DatabaseInitializerHostedService(
             .GetService<Application.Common.Interfaces.ITenantDatabaseProvisioner>();
         var ranuras = scope.ServiceProvider
             .GetService<Application.Common.Interfaces.ITenantCacheSlotAllocator>();
+        var auditoria = scope.ServiceProvider
+            .GetService<Application.Common.Interfaces.IAuditStoreProvisioner>();
 
         if (aprovisionador is null) return;
 
         var cooperativas = await adminDb.Tenants
             .Where(t => t.IsActive)
-            .Select(t => new { t.Id, t.Name, t.DatabaseName, t.SchemaName, t.ConnectionString,
-                               t.Subdomain, t.RedisDbIndex })
+            .Select(t => new { t.Id, t.PublicId, t.Name, t.DatabaseName, t.SchemaName,
+                               t.ConnectionString, t.Subdomain, t.RedisDbIndex, t.AuditDatabaseName })
             .ToListAsync(ct);
 
         foreach (var c in cooperativas)
@@ -217,6 +219,20 @@ public sealed class DatabaseInitializerHostedService(
                     logger.LogInformation(
                         "Ranura de caché {Ranura} asignada a {Cooperativa} (le faltaba).",
                         fila.RedisDbIndex, c.Name);
+                }
+
+                // Misma reparación para la auditoría: una cooperativa registrada
+                // antes de que existiera el aislamiento por base no tiene la suya, y
+                // MongoDB se la crearía sola al primer evento, sin índices ni TTL.
+                if (c.AuditDatabaseName is null && auditoria is not null)
+                {
+                    var fila = await adminDb.Tenants.FirstAsync(t => t.Id == c.Id, ct);
+                    fila.AuditDatabaseName = await auditoria.AprovisionarAsync(
+                        c.PublicId.ToString("N"), ct);
+                    await adminDb.SaveChangesAsync(ct);
+                    logger.LogInformation(
+                        "Base de auditoría {Base} creada para {Cooperativa} (le faltaba).",
+                        fila.AuditDatabaseName, c.Name);
                 }
             }
             catch (Exception ex)
