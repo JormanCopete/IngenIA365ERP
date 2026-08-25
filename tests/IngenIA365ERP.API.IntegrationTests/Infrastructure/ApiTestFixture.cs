@@ -108,6 +108,10 @@ public sealed class ApiTestFixture : IAsyncLifetime
         // (migraciones EF, fuente unica de verdad) al arrancar el host de test.
         _ = Factory.Server;
 
+        // Antes de la primera escritura: que el host hable con NUESTRO contenedor.
+        InfraestructuraDeLaSuite.ExigirQueElHostHableConElContenedor(
+            Factory.Services, _sql.GetConnectionString());
+
         await SeedDemoTenantAndBranchAsync();
     }
 

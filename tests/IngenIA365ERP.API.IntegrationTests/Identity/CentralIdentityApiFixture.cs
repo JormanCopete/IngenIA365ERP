@@ -114,6 +114,10 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
         // espera BD → lock → migra admin + operativa → seed parametrico).
         _ = Factory.Server;
 
+        // Antes de la primera escritura: que el host hable con NUESTRO contenedor.
+        Infrastructure.InfraestructuraDeLaSuite.ExigirQueElHostHableConElContenedor(
+            Factory.Services, operationalConnection);
+
         await SeedMasterAdminAsync();
     }
 

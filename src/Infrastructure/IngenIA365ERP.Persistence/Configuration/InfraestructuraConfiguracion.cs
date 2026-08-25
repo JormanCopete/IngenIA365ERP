@@ -87,6 +87,27 @@ public static class InfraestructuraConfiguracion
         if (EstaEnContenedor())
             return resueltos;
 
+        // Y tampoco significa nada cuando quien arranca la aplicación trae su
+        // propia infraestructura: el host de pruebas de integración levanta sus
+        // contenedores y le pasa las cadenas al builder con UseSetting.
+        //
+        // Eso llega a la configuración ANTES que esta proyección, así que esta
+        // proyección lo pisaba. Y no daba error: la suite creía escribir en un
+        // PostgreSQL efímero y escribía en la base de desarrollo de quien la
+        // ejecutaba, con sus cooperativas, sus usuarios y sus ranuras de Redis.
+        // Se descubrió por la basura que dejó, no por un fallo.
+        //
+        // La marca es una variable de entorno y no una clave de configuración a
+        // propósito: una clave se leería de esta misma configuración, y si
+        // llegara tarde —que es justo el problema que se está arreglando— la
+        // guardia no se enteraría. La variable no depende de ningún orden.
+        //
+        // Y es SÓLO el interruptor, nunca las cadenas: cada fixture levanta sus
+        // propios contenedores, así que las cadenas tienen que ir por host
+        // (UseSetting) y no por proceso, o dos fixtures en paralelo se pisarían.
+        if (TraeInfraestructuraPropia())
+            return resueltos;
+
         var seccion = configuracion.GetSection(InfraestructuraOptions.SectionName);
         if (!seccion.Exists())
             return resueltos;
@@ -146,6 +167,23 @@ public static class InfraestructuraConfiguracion
         || string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_RUNNING_IN_CONTAINER"),
             "true", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Variable que declara «yo traigo mi infraestructura, no me la resuelvas».
+    /// La pone el host de pruebas de integración, que levanta sus contenedores.
+    /// </summary>
+    public const string VariableInfraestructuraPropia = "ERP_INFRAESTRUCTURA_PROPIA";
+
+    /// <summary>
+    /// Si está puesta, <see cref="Resolver"/> no proyecta nada y manda quien
+    /// haya configurado el host. Ver el comentario largo en <c>Resolver</c>:
+    /// esto existe porque la proyección pisaba en silencio las cadenas del host
+    /// de pruebas y la suite acababa escribiendo en la base de desarrollo.
+    /// </summary>
+    public static bool TraeInfraestructuraPropia() =>
+        Environment.GetEnvironmentVariable(VariableInfraestructuraPropia) is { } valor
+        && (valor.Equals("1", StringComparison.Ordinal)
+            || valor.Equals("true", StringComparison.OrdinalIgnoreCase));
+
     private static void ProyectarBase(
         Dictionary<string, string?> resueltos,
         Dictionary<string, InfraestructuraOptions.DestinoBaseDatos> catalogo,
@@ -197,6 +235,9 @@ public static class InfraestructuraConfiguracion
     {
         if (EstaEnContenedor())
             return "Infraestructura: en contenedor — la configuración llega por variables de entorno.";
+
+        if (TraeInfraestructuraPropia())
+            return "Infraestructura: la trae el host (contenedores de prueba) — no se resuelve por máquina.";
 
         var seccion = configuracion.GetSection(InfraestructuraOptions.SectionName);
         if (!seccion.Exists())

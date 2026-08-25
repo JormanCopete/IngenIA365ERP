@@ -241,6 +241,93 @@ public class InfraestructuraConfiguracionTests
         }
     }
 
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("True")]
+    public void ConInfraestructuraPropia_NoResuelveNada(string marca)
+    {
+        // El host de pruebas de integración levanta sus contenedores y le pasa
+        // las cadenas al builder con UseSetting. Esta proyección llegaba
+        // después y las pisaba, así que la suite escribía en la base de
+        // desarrollo de quien la ejecutara — sin un solo error. Se descubrió
+        // por las seis cooperativas de prueba que dejó.
+        var previo = Environment.GetEnvironmentVariable(
+            InfraestructuraConfiguracion.VariableInfraestructuraPropia);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, marca);
+
+            var pares = CatalogoCompleto();
+            pares["Infraestructura:Destinos:PostgreSQL"] = "Local";
+            pares["Infraestructura:Destinos:Redis"] = "Docker";
+
+            InfraestructuraConfiguracion.TraeInfraestructuraPropia().Should().BeTrue();
+            InfraestructuraConfiguracion.Resolver(Configurar(pares)).Should().BeEmpty(
+                "quien trae su infraestructura manda; proyectar aquí le pisaría las cadenas");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, previo);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("false")]
+    [InlineData("no")]
+    public void SinLaMarca_ResuelveComoSiempre(string? marca)
+    {
+        // La otra mitad: la guardia no puede apagarse sola. Si un valor
+        // cualquiera la activara, una máquina de desarrollo dejaría de resolver
+        // sus destinos y apuntaría a las cadenas crudas de appsettings.
+        var previo = Environment.GetEnvironmentVariable(
+            InfraestructuraConfiguracion.VariableInfraestructuraPropia);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, marca);
+
+            var pares = CatalogoCompleto();
+            pares["Infraestructura:Destinos:PostgreSQL"] = "Local";
+
+            InfraestructuraConfiguracion.TraeInfraestructuraPropia().Should().BeFalse();
+            InfraestructuraConfiguracion.Resolver(Configurar(pares))
+                .Should().ContainKey("Database:ConnectionStrings:PostgreSQL");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, previo);
+        }
+    }
+
+    [Fact]
+    public void ConInfraestructuraPropia_ElResumenLoDice()
+    {
+        // Si el arranque calla que no resolvió nada, el próximo que lea el log
+        // creerá que la máquina eligió sus destinos.
+        var previo = Environment.GetEnvironmentVariable(
+            InfraestructuraConfiguracion.VariableInfraestructuraPropia);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, "1");
+
+            InfraestructuraConfiguracion.Describir(Configurar(CatalogoCompleto()))
+                .Should().Contain("la trae el host");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                InfraestructuraConfiguracion.VariableInfraestructuraPropia, previo);
+        }
+    }
+
     [Fact]
     public void ElSistemaOperativoActualCoincideConElNombreDeArchivo()
     {
