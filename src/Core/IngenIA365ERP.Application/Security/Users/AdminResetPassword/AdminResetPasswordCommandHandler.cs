@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -16,6 +17,7 @@ public sealed class AdminResetPasswordCommandHandler : IRequestHandler<AdminRese
     private readonly IDateTimeService _clock;
     private readonly IRefreshTokenStore? _refreshStore;
     private readonly ISender _mediator;
+    private readonly ICentralIdentityProvider _identidadCentral;
 
     public AdminResetPasswordCommandHandler(
         IApplicationDbContext db,
@@ -23,8 +25,10 @@ public sealed class AdminResetPasswordCommandHandler : IRequestHandler<AdminRese
         IPasswordPolicyEnforcer passwords,
         IDateTimeService clock,
         ISender mediator,
+        ICentralIdentityProvider identidadCentral,
         IRefreshTokenStore? refreshStore = null)
     {
+        _identidadCentral = identidadCentral;
         _db = db;
         _currentUser = currentUser;
         _passwords = passwords;
@@ -49,7 +53,45 @@ public sealed class AdminResetPasswordCommandHandler : IRequestHandler<AdminRese
         var now = _clock.UtcNow;
         var actor = _currentUser.UserName ?? "SYSTEM";
 
-        user.PasswordHash = _passwords.Hash(request.NewPassword);
+        // La contraseña se cambia en la identidad CENTRAL, que es contra la que
+        // valida el acceso.
+        //
+        // Antes se escribía sólo aquí, en SEC_Users, y el acceso no consulta esa
+        // tabla: el botón respondía "listo", el hash cambiaba, y la persona seguía
+        // entrando con la contraseña vieja. La afectada creía tener una nueva y
+        // quien la restableció creía haber cortado el acceso. Ninguna de las dos
+        // cosas era cierta.
+        //
+        // AdminResetPasswordAsync además regenera el SecurityStamp, lo que invalida
+        // los tokens de refresco centrales — o sea que sí corta las sesiones.
+        var correo = user.Email ?? user.Username;
+        var central = string.IsNullOrWhiteSpace(correo)
+            ? null
+            : await _identidadCentral.FindByEmailAsync(correo, ct);
+
+        if (central is null)
+        {
+            return Result.Failure(
+                "Identity.CentralUserNotFound",
+                "Esta persona no tiene identidad central, así que no hay contraseña que " +
+                "restablecer. Revisá que la fila de SEC_Users corresponda a alguien que " +
+                "aceptó una invitación.");
+        }
+
+        var cambio = await _identidadCentral.AdminResetPasswordAsync(
+            central.Id, request.NewPassword, ct);
+
+        if (!cambio.Succeeded)
+        {
+            return Result.Failure(
+                "Identity.PasswordResetFailed",
+                cambio.ErrorCodes.Count > 0
+                    ? string.Join(", ", cambio.ErrorCodes)
+                    : "No se pudo restablecer la contraseña en la identidad central.");
+        }
+
+        // SEC_Users conserva su centinela: su columna de contraseña no la consulta
+        // nadie para autenticar, y escribir ahí un hash real haria creer que si.
         user.LastPasswordChangeAt = now;
         user.MustChangePassword = true;
         user.FailedLoginAttempts = 0;
