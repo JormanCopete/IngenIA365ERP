@@ -35,7 +35,18 @@ public class PermissionEnforcementTests(CentralIdentityApiFixture fx)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private const string RutaProtegida = "/api/admin/users";
+    // Un permiso SaaS-global: opera SOBRE las cooperativas, no dentro de una, y
+    // BuiltInRolesSeeder lo deja explicitamente fuera de TODOS los roles —
+    // incluido CompanyAdmin—. Solo lo ejerce el administrador maestro, por el
+    // atajo del filtro. Es el unico caso limpio de «tiene sesion y no tiene el
+    // permiso»: cualquier permiso de cooperativa lo tiene su administrador.
+    //
+    // Antes esta prueba usaba /api/admin/users y pasaba, pero por el motivo
+    // equivocado: el alta por API dejaba la cooperativa sin aprovisionar, asi
+    // que su administrador no tenia NINGUN permiso. Arreglado eso, la prueba
+    // habria empezado a devolver 200 — y con ella se habria ido la unica
+    // comprobacion del 404 indistinguible.
+    private const string RutaProtegida = "/api/saas/tenants/";
     private const string RutaInexistente = "/api/esto/no/existe";
 
     [Fact]

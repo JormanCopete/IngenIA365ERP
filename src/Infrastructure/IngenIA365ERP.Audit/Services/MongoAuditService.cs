@@ -64,7 +64,17 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAsync(AuditLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        // Sin cooperativa el rastro va a la base GLOBAL, no a un cubo llamado
+        // "default".
+        //
+        // Aqui se caia de vuelta al literal «default», y eso es lo que
+        // AuditDatabaseNames documenta como el origen de la basura: el nombre
+        // llegaba ya resuelto a "default", asi que la constante Global no se
+        // aplicaba nunca. Resultado medido en desarrollo: 148 documentos en
+        // IngenIA365ERP_Audit_default y CERO en IngenIA365ERP_Audit_Global, que
+        // es la que lee la consola. Los eventos de identidad —inicios de sesion,
+        // segundo factor, invitaciones— se escribian y quedaban invisibles.
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
 
         var entry = new AuditLog
         {
@@ -101,7 +111,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAccessAsync(AccessLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
 
         var entry = new AccessLog
         {
@@ -216,7 +226,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<PagedList<AuditLogEntry>> QueryAsync(AuditQueryParameters query, CancellationToken cancellationToken = default)
     {
-        var tenantId = query.TenantId ?? _tenantService.TenantId ?? "default";
+        var tenantId = query.TenantId ?? _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filterBuilder = Builders<AuditLog>.Filter;
@@ -256,7 +266,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByEntityAsync(string entityType, string entityId, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filter = Builders<AuditLog>.Filter.And(
@@ -274,7 +284,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filter = Builders<AuditLog>.Filter.And(
@@ -293,7 +303,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAccessCollection(tenantId);
 
         var filterBuilder = Builders<AccessLog>.Filter;

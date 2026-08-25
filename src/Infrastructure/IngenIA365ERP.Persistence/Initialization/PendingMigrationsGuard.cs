@@ -17,9 +17,17 @@ namespace IngenIA365ERP.Persistence.Initialization;
 /// coop_alfa abortara el aprovisionamiento de coop_beta.
 /// </para>
 /// </summary>
+/// <para>
+/// <b>No recibe <c>DbContextOptions</c> del contenedor.</b> Construirlas exige la
+/// cooperativa del ambito, y este guarda corre tambien donde no hay ninguna:
+/// dentro de POST /api/saas/tenants/with-admin, que es la peticion que CREA una
+/// cooperativa. Pedirlas ahi lanzaba, el aprovisionamiento se abortaba, y la
+/// cooperativa quedaba registrada sin base y sin roles — con su primer
+/// administrador sin un solo permiso. Se reparaba sola en el siguiente arranque,
+/// asi que en desarrollo parecia funcionar.
+/// </para>
 public sealed class PendingMigrationsGuard(
     AdminDbContext adminDb,
-    DbContextOptions<ApplicationDbContext> appDbOptions,
     MultiTenancy.TenantConnectionResolver resolutorDeConexion,
     Providers.IDbProviderConfigurator configurador)
 {
@@ -120,7 +128,11 @@ public sealed class PendingMigrationsGuard(
 
     private async Task<IReadOnlyList<string>> PlantillaPendientesAsync(CancellationToken ct)
     {
-        await using var appDb = new ApplicationDbContext(appDbOptions);
+        var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+        configurador.Configure(
+            constructor, resolutorDeConexion.Plantilla, Providers.MigrationsTarget.Application);
+
+        await using var appDb = new ApplicationDbContext(constructor.Options);
         return await SafePendingAsync(appDb, ct);
     }
 

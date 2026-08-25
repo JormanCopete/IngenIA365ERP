@@ -238,8 +238,19 @@ public sealed class SeedOrchestrator(
     private static async Task<List<ErpTenantInfo?>> ResolveTenantTargetsAsync(
         IServiceProvider sp, string? tenantIdentifier)
     {
-        var schemaService = sp.GetRequiredService<TenantSchemaService>();
-        var registered = await schemaService.ListTenantsAsync();
+        // El registro se lee del contexto del registro, no de TenantSchemaService.
+        //
+        // Ese servicio recibe DbContextOptions<ApplicationDbContext> por
+        // constructor, y construirlas exige la cooperativa del ambito. Resolverlo
+        // aqui lanzaba dentro de POST /api/saas/tenants/with-admin — la peticion
+        // que CREA una cooperativa, donde por definicion no hay ninguna resuelta.
+        // El alta quedaba registrada pero sin base y sin roles, y su primer
+        // administrador sin un solo permiso: 404 en todas las pantallas. El
+        // arranque siguiente lo reparaba, asi que en desarrollo pasaba por bueno.
+        //
+        // Para listar cooperativas no hace falta nada de eso.
+        var registro = sp.GetRequiredService<MultiTenancy.TenantDbContext>();
+        var registered = await registro.Tenants.OrderBy(t => t.Identifier).ToListAsync();
 
         if (tenantIdentifier is not null)
         {

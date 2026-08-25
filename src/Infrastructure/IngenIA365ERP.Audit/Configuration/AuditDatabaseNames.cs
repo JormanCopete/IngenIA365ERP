@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Audit.Configuration;
 /// una, así que los eventos de identidad quedaban escritos e invisibles.
 /// </para>
 /// </summary>
-internal static class AuditDatabaseNames
+public static class AuditDatabaseNames
 {
     /// <summary>Colección única dentro de cada base. Ya no lleva sufijo: la base ya identifica la cooperativa.</summary>
     public const string Coleccion = "audit_events";

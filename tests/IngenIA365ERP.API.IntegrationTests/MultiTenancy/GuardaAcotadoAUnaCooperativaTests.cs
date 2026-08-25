@@ -55,12 +55,10 @@ public class GuardaAcotadoAUnaCooperativaTests(Xunit.Abstractions.ITestOutputHel
         var admin = new DbContextOptionsBuilder<AdminDbContext>();
         configurador.Configure(admin, cadena, MigrationsTarget.Admin);
 
-        var app = new DbContextOptionsBuilder<ApplicationDbContext>();
-        configurador.Configure(app, cadena, MigrationsTarget.Application);
-
+        // El guarda ya no recibe DbContextOptions: construirlas exige la
+        // cooperativa del ambito, y corre tambien donde no hay ninguna.
         return new PendingMigrationsGuard(
             new AdminDbContext(admin.Options),
-            app.Options,
             new TenantConnectionResolver(opciones),
             configurador);
     }

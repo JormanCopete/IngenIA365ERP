@@ -69,7 +69,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>
 // Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
 // aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
 // y la página crasheaba el runtime WASM al inyectarlo.
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();

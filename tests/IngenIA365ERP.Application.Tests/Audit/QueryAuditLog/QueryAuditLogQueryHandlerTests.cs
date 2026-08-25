@@ -11,21 +11,19 @@ namespace IngenIA365ERP.Application.Tests.Audit.QueryAuditLog;
 /// T081 — Tests del handler T087.
 /// Cubre filtros, paginación, mapeo y la regla de aislamiento por tenant
 /// (el handler NUNCA confía en un TenantId del cliente; lo toma del JWT
-/// via <see cref="ICurrentUserService.TenantId"/>).
+/// via <see cref="ICurrentTenantService.TenantId"/>).
 ///
 /// El validator se prueba aparte de las reglas funcionales del handler
 /// para mantener facts pequeños y focalizados.
 /// </summary>
 public class QueryAuditLogQueryHandlerTests
 {
-    private static (QueryAuditLogQueryHandler Handler, IAuditService Audit, ICurrentUserService Cu)
+    private static (QueryAuditLogQueryHandler Handler, IAuditService Audit, ICurrentTenantService Cu)
         Build(string? tenantId = "demo")
     {
         var audit = Substitute.For<IAuditService>();
-        var cu = Substitute.For<ICurrentUserService>();
+        var cu = Substitute.For<ICurrentTenantService>();
         cu.TenantId.Returns(tenantId);
-        cu.UserId.Returns(42);
-        cu.UserName.Returns("ana@demo");
         return (new QueryAuditLogQueryHandler(audit, cu), audit, cu);
     }
 

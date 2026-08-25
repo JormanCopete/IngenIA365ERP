@@ -67,7 +67,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
