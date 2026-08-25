@@ -15,17 +15,20 @@ public sealed class ProvisionTenantSchemaCommandHandler
 
     private readonly IAdminDbContext _admin;
     private readonly ITenantDatabaseProvisioner _aprovisionador;
+    private readonly ITenantCacheSlotAllocator _ranuras;
     private readonly ITenantDbContextFactory _fabrica;
     private readonly ICurrentUserService _currentUser;
 
     public ProvisionTenantSchemaCommandHandler(
         IAdminDbContext admin,
         ITenantDatabaseProvisioner aprovisionador,
+        ITenantCacheSlotAllocator ranuras,
         ITenantDbContextFactory fabrica,
         ICurrentUserService currentUser)
     {
         _admin = admin;
         _aprovisionador = aprovisionador;
+        _ranuras = ranuras;
         _fabrica = fabrica;
         _currentUser = currentUser;
     }
@@ -37,7 +40,7 @@ public sealed class ProvisionTenantSchemaCommandHandler
         // (operacional). Resolvemos primero el Id interno via PublicId.
         var tenant = await _admin.Tenants
             .Where(t => t.PublicId == request.TenantPublicId)
-            .Select(t => new { t.Id, t.Name, t.SchemaName, t.Subdomain, t.DatabaseName, t.ConnectionString })
+            .Select(t => new { t.Id, t.Name, t.SchemaName, t.Subdomain, t.DatabaseName, t.ConnectionString, t.RedisDbIndex })
             .FirstOrDefaultAsync(ct);
         if (tenant is null)
         {
@@ -63,6 +66,16 @@ public sealed class ProvisionTenantSchemaCommandHandler
             tenant.Subdomain ?? tenant.SchemaName,
             tenant.ConnectionString,
             ct);
+
+        // Reparacion: este endpoint existe para dejar al dia una cooperativa que
+        // quedo a medias, y una sin ranura de cache lo esta. Sin esto habria que
+        // tocar la fila a mano.
+        if (tenant.RedisDbIndex is null)
+        {
+            var fila = await _admin.Tenants.FirstAsync(t => t.Id == tenant.Id, ct);
+            fila.RedisDbIndex = await _ranuras.ReservarAsync(tenant.Name, ct);
+            await _admin.SaveChangesAsync(ct);
+        }
 
         var headquartersCreated = await EnsureHeadquartersAsync(tenant.Id, tenant.Name, actor, ct);
 

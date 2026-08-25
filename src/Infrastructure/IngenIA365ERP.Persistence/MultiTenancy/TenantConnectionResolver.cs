@@ -23,7 +23,7 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 /// equivocada en silencio.
 /// </para>
 /// </summary>
-internal sealed class TenantConnectionResolver(IOptions<DatabaseOptions> opciones)
+public sealed class TenantConnectionResolver(IOptions<DatabaseOptions> opciones)
 {
     /// <summary>
     /// La cadena de la instancia por defecto, sin apuntar a ninguna cooperativa.

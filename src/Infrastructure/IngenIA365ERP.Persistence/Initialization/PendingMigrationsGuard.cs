@@ -13,7 +13,8 @@ namespace IngenIA365ERP.Persistence.Initialization;
 public sealed class PendingMigrationsGuard(
     AdminDbContext adminDb,
     DbContextOptions<ApplicationDbContext> appDbOptions,
-    TenantSchemaService tenantSchemaService)
+    MultiTenancy.TenantConnectionResolver resolutorDeConexion,
+    Providers.IDbProviderConfigurator configurador)
 {
     public sealed record PendingReport(
         IReadOnlyList<string> Admin,
@@ -51,12 +52,35 @@ public sealed class PendingMigrationsGuard(
             return new PendingReport(admin, application, tenants);
         }
 
-        foreach (var tenant in await tenantSchemaService.ListTenantsAsync())
+        // Se comprueba la BASE de cada cooperativa, no su esquema.
+        //
+        // Antes preguntaba por esquemas, y eso dejo de significar nada al pasar a
+        // base por cooperativa: seguia mirando esquemas que ya no existen y los
+        // daba por sin migrar, bloqueando el sembrado y tumbando el arranque
+        // entero. Mientras la basura de esquemas siguio ahi, el guarda estaba
+        // validando basura y nadie lo noto.
+        var cooperativas = await adminDb.Tenants
+            .Where(t => t.IsActive)
+            .Select(t => new { t.Name, t.DatabaseName, t.SchemaName, t.ConnectionString })
+            .ToListAsync(ct);
+
+        foreach (var c in cooperativas)
         {
-            var schema = tenant.Schema;
-            if (string.IsNullOrWhiteSpace(schema) || schema.Equals("dbo", StringComparison.OrdinalIgnoreCase))
-                continue; // el esquema default lo cubre el chequeo "operativa"
-            tenants[schema] = await tenantSchemaService.GetPendingMigrationsAsync(schema!, ct);
+            var baseDeDatos = c.DatabaseName ?? c.SchemaName;
+            if (string.IsNullOrWhiteSpace(baseDeDatos) ||
+                baseDeDatos.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            {
+                continue; // la base plantilla la cubre el chequeo "operativa"
+            }
+
+            var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+            configurador.Configure(
+                constructor,
+                resolutorDeConexion.Resolver(baseDeDatos, c.ConnectionString, c.Name),
+                Providers.MigrationsTarget.Application);
+
+            await using var db = new ApplicationDbContext(constructor.Options);
+            tenants[baseDeDatos] = await SafePendingAsync(db, ct);
         }
 
         return new PendingReport(admin, application, tenants);
