@@ -105,21 +105,39 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
         }
         catch (Exception ex)
         {
-            // El propio registro va en try: si el contenedor no puede darnos un
-            // logger, eso no puede convertirse en la excepcion que tumbe la
-            // autorizacion. Denegar y seguir.
-            try
-            {
-                servicios.GetService<ILoggerFactory>()?
-                    .CreateLogger<PermissionAuthorizationFilter>()
-                    .LogError(ex, "Fallo al resolver permisos de la peticion. Se responde 404.");
-            }
-            catch
-            {
-                // Sin registro posible. El 404 de abajo sigue siendo lo correcto.
-            }
-
+            RegistrarSinPropagar(servicios, ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Deja constancia del fallo sin poder provocar otro.
+    ///
+    /// <para>
+    /// El registro va protegido porque si el contenedor no puede darnos un logger
+    /// —ambito ya desechado, arranque a medias— esa segunda excepcion subiria
+    /// como 500 desde el mismisimo camino que existe para no propagar nada.
+    /// </para>
+    ///
+    /// <para>
+    /// El ultimo recurso escribe a la salida de error del proceso y <b>no queda
+    /// vacio</b> (Principio IX). Un silencio aqui esconderia justo el motivo por
+    /// el que todo el mundo empezaria a ver 404 sin explicacion.
+    /// </para>
+    /// </summary>
+    private static void RegistrarSinPropagar(IServiceProvider servicios, Exception ex)
+    {
+        try
+        {
+            servicios.GetService<ILoggerFactory>()?
+                .CreateLogger<PermissionAuthorizationFilter>()
+                .LogError(ex, "Fallo al resolver permisos de la peticion. Se responde 404.");
+        }
+        catch (Exception alRegistrar)
+        {
+            Console.Error.WriteLine(
+                $"[PermissionAuthorizationFilter] no se pudo registrar el fallo de permisos " +
+                $"({alRegistrar.GetType().Name}). Causa original: {ex}");
         }
     }
 

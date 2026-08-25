@@ -5,10 +5,17 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Persistence.Initialization;
 
 /// <summary>
-/// Calcula migraciones pendientes por base y por esquema de tenant (FR-011,
-/// FR-021, data-model §3). Con AutoMigrate=false y pendientes, el inicializador
-/// hace fail-fast enumerandolas; el seeding tambien se rehusa a correr sobre
-/// esquema desactualizado.
+/// Calcula migraciones pendientes por base (FR-011, FR-021, data-model §3). Con
+/// AutoMigrate=false y pendientes, el inicializador hace fail-fast enumerandolas;
+/// el seeding tambien se rehusa a correr sobre una base desactualizada.
+///
+/// <para>
+/// Tiene dos modos y la diferencia importa. El de arranque mira TODAS las bases,
+/// porque su pregunta es «¿esta el despliegue al dia?». El de sembrado mira solo
+/// las bases que esa ejecucion va a tocar, porque su pregunta es otra: «¿puedo
+/// escribir aqui?». Confundirlos es lo que hizo que una migracion pendiente en
+/// coop_alfa abortara el aprovisionamiento de coop_beta.
+/// </para>
 /// </summary>
 public sealed class PendingMigrationsGuard(
     AdminDbContext adminDb,
@@ -34,17 +41,58 @@ public sealed class PendingMigrationsGuard(
         }
     }
 
-    public async Task<PendingReport> ComputeAsync(CancellationToken ct)
+    /// <summary>
+    /// Estado de TODO el despliegue: admin, plantilla y cada cooperativa activa.
+    /// Es la pregunta del arranque.
+    /// </summary>
+    public Task<PendingReport> ComputeAsync(CancellationToken ct) => ComputeAsync(ct, null);
+
+    /// <summary>
+    /// Estado de las bases indicadas y nada mas.
+    ///
+    /// <para>
+    /// <paramref name="soloEstas"/> son los objetivos que el llamador va a
+    /// escribir, tal cual: <c>null</c> dentro de la lista significa la plantilla,
+    /// igual que en el sembrado. Se comprueban con las MISMAS coordenadas con las
+    /// que despues se abre la conexion —<c>SchemaName</c>, cadena propia, nombre—
+    /// para que no pueda darse por buena una base y escribirse en otra.
+    /// </para>
+    ///
+    /// <para>
+    /// Una lista vacia comprueba solo la base administrativa. Pasar <c>null</c>
+    /// como lista entera vuelve al modo de arranque.
+    /// </para>
+    /// </summary>
+    public async Task<PendingReport> ComputeAsync(
+        CancellationToken ct, IReadOnlyCollection<ErpTenantInfo?>? soloEstas)
     {
         var adminReachable = await adminDb.Database.CanConnectAsync(ct);
         var admin = await SafePendingAsync(adminDb, ct);
+
+        var tenants = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        if (soloEstas is not null)
+        {
+            // Acotado: ni se consulta el directorio de cooperativas. Lo que no se
+            // va a tocar no puede bloquear lo que si.
+            var plantilla = soloEstas.Any(t => t is null)
+                ? await PlantillaPendientesAsync(ct)
+                : Array.Empty<string>();
+
+            foreach (var t in soloEstas)
+            {
+                if (t is null) continue;
+                await AnotarAsync(tenants, t.SchemaName, t.ConnectionString, t.Name, ct);
+            }
+
+            return new PendingReport(admin, plantilla, tenants);
+        }
+
         // Anclado a dbo: el historial vive en dbo.__EFMigrationsHistory en los dos
         // proveedores, asi que un modelo apuntando al esquema de una cooperativa
         // leeria el historial de dbo y concluiria "sin pendientes" sin tocar nada.
-        await using var appDb = new ApplicationDbContext(appDbOptions);
-        var application = await SafePendingAsync(appDb, ct);
+        var application = await PlantillaPendientesAsync(ct);
 
-        var tenants = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
         if (!adminReachable)
         {
             // BD admin inexistente ⇒ no hay directorio de tenants que consultar;
@@ -65,25 +113,39 @@ public sealed class PendingMigrationsGuard(
             .ToListAsync(ct);
 
         foreach (var c in cooperativas)
-        {
-            var baseDeDatos = c.DatabaseName ?? c.SchemaName;
-            if (string.IsNullOrWhiteSpace(baseDeDatos) ||
-                baseDeDatos.Equals("dbo", StringComparison.OrdinalIgnoreCase))
-            {
-                continue; // la base plantilla la cubre el chequeo "operativa"
-            }
-
-            var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
-            configurador.Configure(
-                constructor,
-                resolutorDeConexion.Resolver(baseDeDatos, c.ConnectionString, c.Name),
-                Providers.MigrationsTarget.Application);
-
-            await using var db = new ApplicationDbContext(constructor.Options);
-            tenants[baseDeDatos] = await SafePendingAsync(db, ct);
-        }
+            await AnotarAsync(tenants, c.DatabaseName ?? c.SchemaName, c.ConnectionString, c.Name, ct);
 
         return new PendingReport(admin, application, tenants);
+    }
+
+    private async Task<IReadOnlyList<string>> PlantillaPendientesAsync(CancellationToken ct)
+    {
+        await using var appDb = new ApplicationDbContext(appDbOptions);
+        return await SafePendingAsync(appDb, ct);
+    }
+
+    /// <summary>Anota el estado de una base de cooperativa en el reporte.</summary>
+    private async Task AnotarAsync(
+        IDictionary<string, IReadOnlyList<string>> destino,
+        string? baseDeDatos,
+        string? cadenaPropia,
+        string? nombre,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(baseDeDatos) ||
+            baseDeDatos.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+        {
+            return; // la base plantilla la cubre el chequeo "operativa"
+        }
+
+        var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+        configurador.Configure(
+            constructor,
+            resolutorDeConexion.Resolver(baseDeDatos, cadenaPropia, nombre),
+            Providers.MigrationsTarget.Application);
+
+        await using var db = new ApplicationDbContext(constructor.Options);
+        destino[baseDeDatos] = await SafePendingAsync(db, ct);
     }
 
     /// <summary>Base inexistente todavia ⇒ todas las migraciones estan pendientes.</summary>

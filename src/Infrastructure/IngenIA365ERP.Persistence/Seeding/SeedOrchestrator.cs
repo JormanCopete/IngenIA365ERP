@@ -117,18 +117,32 @@ public sealed class SeedOrchestrator(
         using var outerScope = serviceProvider.CreateScope();
         var sp = outerScope.ServiceProvider;
 
-        // FR-021 — nunca sembrar sobre esquema desactualizado.
-        var guard = sp.GetRequiredService<PendingMigrationsGuard>();
-        var pending = await guard.ComputeAsync(ct);
-        if (pending.HasAny)
-            throw new InvalidOperationException(
-                $"[Database.Seed.SchemaOutdated] Hay migraciones pendientes — aplique las migraciones antes de sembrar: {pending.Describe()}");
-
         var seeders = sp.GetServices<IDataSeeder>()
             .Where(s => s.Category == category)
             .Where(s => scope is null || s.Scope == scope)
             .OrderBy(s => s.Order)
             .ToList();
+
+        // Los objetivos, resueltos una sola vez y antes del guarda.
+        //
+        // El guarda comprueba EXACTAMENTE las bases que este sembrado va a
+        // escribir, con las mismas coordenadas con las que luego se abren. Antes
+        // preguntaba por todas, y entonces el estado de una cooperativa decidia
+        // el destino de otra: al aprovisionar coop_beta el guarda encontro una
+        // migracion pendiente en coop_alfa y aborto el sembrado de beta, que
+        // quedo creada y migrada pero sin roles ni permisos, y sin ruido salvo
+        // una linea de error. Ninguna cooperativa puede bloquear a otra
+        // (Principio IV).
+        List<ErpTenantInfo?> objetivos = seeders.Any(s => s.Scope != SeedScope.Admin)
+            ? await ResolveTenantTargetsAsync(sp, tenantIdentifier)
+            : [];
+
+        // FR-021 — nunca sembrar sobre una base desactualizada.
+        var guard = sp.GetRequiredService<PendingMigrationsGuard>();
+        var pending = await guard.ComputeAsync(ct, objetivos);
+        if (pending.HasAny)
+            throw new InvalidOperationException(
+                $"[Database.Seed.SchemaOutdated] Hay migraciones pendientes — aplique las migraciones antes de sembrar: {pending.Describe()}");
 
         var results = new List<SeederRunResult>();
         foreach (var seeder in seeders)
@@ -144,7 +158,7 @@ public sealed class SeedOrchestrator(
             }
             else
             {
-                foreach (var tenant in await ResolveTenantTargetsAsync(sp, tenantIdentifier))
+                foreach (var tenant in objetivos)
                 {
                     inserted += await RunTenantSeederAsync(sp, seeder, tenant, ct);
                     tenantsTouched++;
