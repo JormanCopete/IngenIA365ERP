@@ -19,28 +19,32 @@ public interface IJwtService
 public class JwtService : IJwtService
 {
     private readonly JwtSettings _settings;
-    private readonly RSA _rsa;
 
-    public JwtService(IOptions<JwtSettings> settings)
+    /// <summary>
+    /// La clave la da el proveedor, no la carga este servicio.
+    ///
+    /// <para>
+    /// Antes creaba su propio <c>RSA</c> en el constructor, y este servicio es
+    /// <i>scoped</i>: un RSA nuevo por petición, todos con el MISMO material de
+    /// clave. Como el caché de proveedores de firma de Microsoft.IdentityModel
+    /// se indexa por material, el proveedor cacheado quedaba atado al RSA de la
+    /// primera petición — un objeto que después nadie mantenía vivo. Firmar con
+    /// un RSA ya recogido no da un error de configuración: da un 500 en el
+    /// login, intermitente y sin patrón visible.
+    /// </para>
+    /// </summary>
+    private readonly KeyManagement.IRsaKeyProvider _keyProvider;
+
+    public JwtService(IOptions<JwtSettings> settings, KeyManagement.IRsaKeyProvider keyProvider)
     {
         _settings = settings.Value;
-        _rsa = RSA.Create();
-
-        if (File.Exists(_settings.PrivateKeyPath))
-        {
-            var keyPem = File.ReadAllText(_settings.PrivateKeyPath);
-            _rsa.ImportFromPem(keyPem);
-        }
-        else
-        {
-            _rsa = RSA.Create(2048);
-        }
+        _keyProvider = keyProvider;
     }
 
     public Task<TokenResponse> GenerateTokensAsync(ApplicationUser user, IList<string> roles, IList<string> permissions)
     {
         var signingCredentials = new SigningCredentials(
-            new RsaSecurityKey(_rsa), SecurityAlgorithms.RsaSha256);
+            _keyProvider.GetSecurityKey(), SecurityAlgorithms.RsaSha256);
 
         var claims = new List<Claim>
         {
@@ -116,7 +120,7 @@ public class JwtService : IJwtService
             ValidateAudience = true,
             ValidIssuer = _settings.Issuer,
             ValidAudience = _settings.Audience,
-            IssuerSigningKey = new RsaSecurityKey(_rsa),
+            IssuerSigningKey = _keyProvider.GetSecurityKey(),
             ValidateLifetime = false
         };
 

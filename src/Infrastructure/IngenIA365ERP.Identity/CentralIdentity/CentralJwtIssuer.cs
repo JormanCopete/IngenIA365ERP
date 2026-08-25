@@ -117,7 +117,7 @@ public class CentralJwtIssuer : ICentralJwtIssuer
         TimeSpan lifetime)
     {
         var signingCredentials = new SigningCredentials(
-            new RsaSecurityKey(_keyProvider.GetKey()),
+            _keyProvider.GetSecurityKey(),
             SecurityAlgorithms.RsaSha256);
 
         var now = DateTime.UtcNow;

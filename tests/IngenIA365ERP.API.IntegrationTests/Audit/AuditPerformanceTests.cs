@@ -12,16 +12,30 @@ namespace IngenIA365ERP.API.IntegrationTests.Audit;
 /// con 50.000 eventos poblados, una consulta de 1 mes debe responder p95
 /// &lt; 5 s.
 ///
-/// El test es <b>costoso</b>: pre-puebla la BD Mongo a través del propio
-/// <c>IAuditService</c> y luego mide. Por eso se marca con un trait
-/// <c>perf</c> y debería excluirse del run estándar (correr en CI nightly).
+/// <para>
+/// <b>No corre en el run estándar.</b> Hace falta <c>RUN_PERF_TESTS=1</c>,
+/// siguiendo el precedente de <c>LoginThroughputFact</c>. El gate va ANTES del
+/// sembrado: son 50.000 eventos que hoy se pagaban íntegros para después
+/// fallar.
+/// </para>
 ///
-/// Hoy es RED porque:
-///  1) El endpoint <c>/api/audit/logs</c> aún no responde con el envelope
-///     CQRS y puede no estar indexado por <c>tenant + timestamp</c>.
-///  2) El index bootstrap (T026/T093) puede no haberse ejecutado contra la
-///     colección efímera de Testcontainers.
-/// Cuando T087 y los índices aterricen, el p95 debería estar holgado.
+/// <para>
+/// <b>Por qué está apagada y no arreglada.</b> Decía "hoy es RED porque el
+/// endpoint /api/audit/logs aún no responde" — y eso dejó de ser cierto: el
+/// endpoint existe y T091 está cerrado. Lo que quedó viejo es la prueba, y no
+/// con un detalle: usa un cliente ANÓNIMO contra un endpoint que exige
+/// autenticación y el permiso <c>AuditLog.View</c>, así que nunca recibe un 200,
+/// se queda sin muestras y revienta en un mensaje que culpa a una tarea
+/// terminada hace meses. Un rojo que miente es peor que un rojo.
+/// </para>
+///
+/// <para>
+/// Arreglarla no es añadir un token: el rango consultado no coincide con los
+/// timestamps sembrados, la cooperativa del sembrado no coincide con la del
+/// claim, y el vaciado de la cola escribe 100 documentos por llamada, así que
+/// los 50.000 tampoco llegan. Son cuatro arreglos acoplados y necesita que la
+/// fixture sepa emitir un cliente autenticado, que hoy no sabe.
+/// </para>
 /// </summary>
 [Trait("category", "perf")]
 public class AuditPerformanceTests : IClassFixture<ApiTestFixture>
@@ -35,6 +49,12 @@ public class AuditPerformanceTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task Querying_one_month_over_50k_events_responds_under_5s_p95()
     {
+        // Antes del sembrado: sin opt-in esto no cuesta nada.
+        if (Environment.GetEnvironmentVariable("RUN_PERF_TESTS") != "1")
+        {
+            return;
+        }
+
         await SeedAuditEventsAsync(EventCount);
 
         var client = _fx.CreateClient();

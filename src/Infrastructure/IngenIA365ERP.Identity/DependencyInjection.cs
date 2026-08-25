@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Identity.Configuration;
 using IngenIA365ERP.Identity.KeyManagement;
@@ -59,20 +58,20 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<ErpIdentityDbContext>()
             .AddDefaultTokenProviders();
 
-        // === RSA key for JWT ===
-        var rsa = RSA.Create();
-        if (File.Exists(jwtSettings.PrivateKeyPath))
-        {
-            var keyPem = File.ReadAllText(jwtSettings.PrivateKeyPath);
-            rsa.ImportFromPem(keyPem);
-        }
-        else
-        {
-            // Fail-fast en Production: una clave efímera invalidaría todos los
-            // tokens en cada reinicio, en silencio (hardening post-T118).
-            KeyManagement.RsaKeyGuard.ThrowIfProduction(jwtSettings.PrivateKeyPath);
-            rsa = RSA.Create(2048);
-        }
+        // === Clave RSA de los JWT ===
+        //
+        // Una sola, la del proveedor, para firmar Y para validar.
+        //
+        // Antes había dos: el proveedor cargaba el PEM por su lado y aquí se
+        // cargaba OTRA vez en un RSA distinto. Con el archivo presente daba
+        // igual —mismo material—, pero sin él cada rama generaba su propia
+        // clave efímera y el sistema quedaba firmando con una y validando con
+        // otra: todo respondía 401, sin un solo error en el log. Es el fallo
+        // que ya se cazó una vez en T118 y que la duplicación mantenía vivo.
+        //
+        // Se registra ANTES de AddJwtBearer porque el validador lo resuelve.
+
+        services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();
 
         // === JWT Bearer Authentication ===
         services.AddAuthentication(options =>
@@ -90,11 +89,15 @@ public static class DependencyInjection
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtSettings.Issuer,
                 ValidAudience = jwtSettings.Audience,
-                IssuerSigningKey = new RsaSecurityKey(rsa),
                 ClockSkew = TimeSpan.FromMinutes(1)
             };
         });
 
+        // La clave se inyecta aparte porque resolverla exige el contenedor, y
+        // dentro del lambda de AddJwtBearer todavía no lo hay.
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IRsaKeyProvider>((options, claves) =>
+                options.TokenValidationParameters.IssuerSigningKey = claves.GetSecurityKey());
         // === Authorization with Permission policies ===
         services.AddAuthorization();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
@@ -116,7 +119,6 @@ public static class DependencyInjection
         services.AddScoped<Persistence.Seeding.IDataSeeder, Seed.PhaseZeroSecuritySeeder>();
 
         // === Fase 0 — US1 ===
-        services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();
         services.AddSingleton<IAccessTokenIssuer, AccessTokenIssuer>();
         services.AddSingleton<ITotpService, TotpService>();
         services.AddSingleton<IMfaBackupCodeGenerator, MfaBackupCodeGenerator>();

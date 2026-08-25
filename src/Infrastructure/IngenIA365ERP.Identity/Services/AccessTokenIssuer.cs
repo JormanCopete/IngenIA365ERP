@@ -29,7 +29,7 @@ public class AccessTokenIssuer : IAccessTokenIssuer
     public AccessTokenIssueResult IssueAccessToken(AccessTokenClaims input)
     {
         var signingCredentials = new SigningCredentials(
-            new RsaSecurityKey(_keyProvider.GetKey()),
+            _keyProvider.GetSecurityKey(),
             SecurityAlgorithms.RsaSha256);
 
         var jti = string.IsNullOrWhiteSpace(input.Jti) ? Guid.NewGuid().ToString("N") : input.Jti;
