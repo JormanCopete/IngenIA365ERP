@@ -29,25 +29,30 @@ internal sealed class AuditIndexBootstrap(
     {
         try
         {
-            var db = client.GetDatabase(settings.Value.DatabaseName);
+            // Recorre las BASES de auditoria, no las colecciones de una base.
+            //
+            // Antes miraba las colecciones audit_events_* dentro de una sola base.
+            // Con una base por cooperativa eso deja de encontrar nada, y el efecto
+            // seria mudo: los indices y el TTL de cinco anios no se crearian, la
+            // escritura seguiria funcionando, y a los cinco anios el rastro no se
+            // habria purgado. FR-023 incumplido sin un solo error por el camino.
+            var prefijo = settings.Value.DatabaseName;
+            var bases = (await client.ListDatabaseNames(cancellationToken).ToListAsync(cancellationToken))
+                .Where(n => n.StartsWith(prefijo + "_", StringComparison.Ordinal))
+                .ToList();
 
-            // Recorre las colecciones audit_events_* existentes (o usa una "template" si vacía).
-            var names = await db.ListCollectionNames(
-                new ListCollectionNamesOptions { Filter = new BsonDocument("name", new BsonRegularExpression("^audit_events")) },
-                cancellationToken).ToListAsync(cancellationToken);
+            // La global siempre existe conceptualmente aunque no tenga documentos:
+            // se garantiza para que su TTL este puesto desde el primer evento.
+            var global = AuditDatabaseNames.Para(prefijo, null);
+            if (!bases.Contains(global)) bases.Add(global);
 
-            if (names.Count == 0)
+            foreach (var nombre in bases)
             {
-                // Crea una colección placeholder de manera idempotente para anclar los índices.
-                await db.CreateCollectionAsync("audit_events_template", cancellationToken: cancellationToken);
-                names.Add("audit_events_template");
-            }
-
-            foreach (var name in names)
-            {
-                var coll = db.GetCollection<BsonDocument>(name);
+                var db = client.GetDatabase(nombre);
+                var coll = db.GetCollection<BsonDocument>(AuditDatabaseNames.Coleccion);
                 await EnsureIndexesAsync(coll, cancellationToken);
-                logger.LogInformation("AuditIndexBootstrap: índices garantizados en {Collection}", name);
+                logger.LogInformation(
+                    "AuditIndexBootstrap: índices y TTL garantizados en {Base}", nombre);
             }
         }
         catch (Exception ex)
@@ -60,7 +65,7 @@ internal sealed class AuditIndexBootstrap(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private static async Task EnsureIndexesAsync(IMongoCollection<BsonDocument> coll, CancellationToken ct)
+    internal static async Task EnsureIndexesAsync(IMongoCollection<BsonDocument> coll, CancellationToken ct)
     {
         var keys = Builders<BsonDocument>.IndexKeys;
         var models = new[]

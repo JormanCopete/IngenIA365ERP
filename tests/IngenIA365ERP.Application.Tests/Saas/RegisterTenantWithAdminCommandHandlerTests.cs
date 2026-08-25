@@ -50,8 +50,11 @@ public class RegisterTenantWithAdminCommandHandlerTests
     private readonly ITenantCacheSlotAllocator _ranuras =
         Substitute.For<ITenantCacheSlotAllocator>();
 
+    private readonly IAuditStoreProvisioner _auditoria =
+        Substitute.For<IAuditStoreProvisioner>();
+
     private RegisterTenantWithAdminCommandHandler NewHandler() => new(
-        _currentUser, _db, _tokens, _aprovisionador, _ranuras, _email,
+        _currentUser, _db, _tokens, _aprovisionador, _ranuras, _auditoria, _email,
         Substitute.For<IAuditAppendOnlyWriter>(),
         Substitute.For<IDateTimeService>(),
         Options.Create(new IdentityEmailOptions()),

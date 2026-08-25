@@ -38,7 +38,7 @@ public class MongoDbInitializer
 
     private async Task InitializeAuditCollectionAsync(IMongoDatabase db, string tenantId)
     {
-        var collectionName = Services.MongoAuditService.NombreDeColeccion(tenantId);
+        var collectionName = AuditDatabaseNames.Coleccion;
         var collection = db.GetCollection<AuditLog>(collectionName);
 
         var indexes = new List<CreateIndexModel<AuditLog>>

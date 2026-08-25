@@ -357,18 +357,22 @@ public class MongoAuditService : IAuditService, IDisposable
     /// cuatro índices y el TTL de cinco años que exige FR-023.
     /// </para>
     /// </summary>
-    internal static string NombreDeColeccion(string tenantId) => "audit_events_" + tenantId;
-
     private IMongoCollection<AuditLog> GetAuditCollection(string tenantId)
     {
-        var db = _client.GetDatabase(_settings.DatabaseName);
-        return db.GetCollection<AuditLog>(NombreDeColeccion(tenantId));
+        // Base por cooperativa, coleccion constante dentro. Antes era al reves:
+        // una base compartida con una coleccion por cooperativa. El aislamiento
+        // por coleccion depende de que nadie componga mal el nombre; el de base
+        // lo sostiene el motor.
+        var db = _client.GetDatabase(
+            AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
+        return db.GetCollection<AuditLog>(AuditDatabaseNames.Coleccion);
     }
 
     private IMongoCollection<AccessLog> GetAccessCollection(string tenantId)
     {
-        var db = _client.GetDatabase(_settings.DatabaseName);
-        return db.GetCollection<AccessLog>($"access_{tenantId}");
+        var db = _client.GetDatabase(
+            AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
+        return db.GetCollection<AccessLog>("access_log");
     }
 
     private static AuditLogEntry MapToEntry(AuditLog a) => new(

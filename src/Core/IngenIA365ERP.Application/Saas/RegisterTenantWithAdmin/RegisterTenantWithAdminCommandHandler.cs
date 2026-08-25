@@ -25,6 +25,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     ISecureTokenGenerator tokens,
     ITenantDatabaseProvisioner aprovisionador,
     ITenantCacheSlotAllocator ranuras,
+    IAuditStoreProvisioner auditoria,
     IInvitationEmailDispatcher emailDispatcher,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -95,6 +96,12 @@ public sealed class RegisterTenantWithAdminCommandHandler(
             // La ranura de cache va con el aprovisionamiento, no despues: si no
             // quedan, la cooperativa no puede quedar en Ready fingiendo que si.
             tenant.RedisDbIndex = await ranuras.ReservarAsync(tenant.Name, ct);
+
+            // La base de auditoria se crea AQUI, con sus indices y su TTL. Si se
+            // dejara nacer sola al primer evento, MongoDB la crearia sin indices y
+            // el rastro no se purgaria nunca: FR-023 incumplido sin un solo error.
+            tenant.AuditDatabaseName = await auditoria.AprovisionarAsync(
+                tenant.PublicId.ToString("N"), ct);
 
             tenant.ProvisioningState = "Ready";
             tenant.MigrationsVersion = resultado.MigracionAplicada;
