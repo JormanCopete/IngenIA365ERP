@@ -15,7 +15,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity;
 /// en <c>POST /api/auth/mfa/verify</c> con <c>useRecoveryCode=true</c>:
 /// obtiene sesión operativa y <c>recoveryCodesRemaining=9</c>. El mismo
 /// código reintentado debe fallar (one-shot) con
-/// <c>Identity.MfaInvalid</c> (422 según <c>ErrorEnvelopeFilter</c>).
+/// <c>Identity.MfaInvalid</c> (401 — es un fallo de autenticación).
 /// </summary>
 public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
     : IClassFixture<CentralIdentityApiFixture>
@@ -151,9 +151,10 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         replayReq.Headers.Authorization = new("Bearer", challengeToken2);
         var replayResp = await http.SendAsync(replayReq);
 
-        // Identity.MfaInvalid no tiene mapeo específico en ErrorEnvelopeFilter
-        // → cae en el default 422 (regla de negocio incumplida).
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, replayResp.StatusCode);
+        // 401: un segundo factor inválido es un fallo de AUTENTICACIÓN, no una
+        // regla de negocio incumplida, y el contrato lo fija en
+        // specs/002/contracts/auth.md:111.
+        Assert.Equal(HttpStatusCode.Unauthorized, replayResp.StatusCode);
         var replay = await ReadJsonAsync(replayResp);
         Assert.Equal("Identity.MfaInvalid", replay.GetProperty("code").GetString());
     }

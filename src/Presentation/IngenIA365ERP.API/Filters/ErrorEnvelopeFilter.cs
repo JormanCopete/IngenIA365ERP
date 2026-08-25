@@ -68,6 +68,20 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
         {
             // Feature 002 — códigos específicos con semántica HTTP distinta del default.
             "Identity.Unauthenticated" => StatusCodes.Status401Unauthorized,
+
+            // Fallos de AUTENTICACIÓN, no de regla de negocio. Sin mapeo caían
+            // al default 422, y el contrato (specs/002/contracts/auth.md:87,
+            // :111, :138) promete 401 en los tres. Lo que mantuvo el fallo vivo
+            // es que cuatro pruebas en verde afirmaban el 422 y hasta lo
+            // explicaban en un comentario: documentaron el defecto en vez de
+            // cazarlo.
+            "Identity.InvalidCredentials" => StatusCodes.Status401Unauthorized,
+            "Identity.MfaInvalid" => StatusCodes.Status401Unauthorized,
+
+            // Incluye Reused: una violación de familia es un token que ya no
+            // autentica, no una entidad no procesable.
+            _ when code.StartsWith("Identity.RefreshToken.", StringComparison.Ordinal)
+                => StatusCodes.Status401Unauthorized,
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
 
