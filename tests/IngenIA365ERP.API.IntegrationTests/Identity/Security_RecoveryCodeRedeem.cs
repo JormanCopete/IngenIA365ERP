@@ -28,14 +28,7 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master y registro de tenant + primera invitación admin.
-        var loginMasterResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, loginMasterResp.StatusCode);
-        var loginMaster = await ReadJsonAsync(loginMasterResp);
-        var masterToken = loginMaster.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         const string adminEmail = "laura.mfa@coop.recovery.test";

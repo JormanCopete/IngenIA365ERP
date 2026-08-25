@@ -67,8 +67,7 @@ public class PermissionEnforcementTests(CentralIdentityApiFixture fx)
     {
         using var http = fx.CreateClient();
 
-        var masterToken = await LoginAsync(
-            http, CentralIdentityApiFixture.MasterEmail, CentralIdentityApiFixture.MasterPassword);
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
 
         await RegistrarCooperativaAsync(http, masterToken,
             nombre: "Coop. Permisos Test", esquema: "tenant_permisos",

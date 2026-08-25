@@ -23,14 +23,7 @@ public sealed class Security_InvitationReplay(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master admin sembrado por la fixture.
-        var loginResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, loginResp.StatusCode);
-        var login = await ReadJsonAsync(loginResp);
-        var masterToken = login.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         // 2) Registrar tenant + invitación del primer admin (atómico) para

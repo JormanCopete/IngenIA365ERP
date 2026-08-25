@@ -54,10 +54,24 @@ public class MfaVerifyCommandHandlerTests
             .Returns(new CentralAccessTokenResult("challenge-jwt", FixedNow.AddMinutes(5), "jti", "tenant-select"));
         _jwt.IssueRefreshToken()
             .Returns(new CentralRefreshTokenResult("refresh-token", "refresh-hash", FixedNow.AddHours(12)));
+
+        // Por defecto el contador no bloquea. Sin esto el sustituto devuelve null
+        // y el handler revienta: la prueba tiene que decir que contesta, igual
+        // que dice que contesta el proveedor de identidad.
+        _intentos.CheckAsync(Arg.Any<AmbitoDeIntentos>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutState(IsLocked: false, RetryAfterSeconds: 0, FailureCount: 0));
+        _intentos.RecordFailureAsync(Arg.Any<AmbitoDeIntentos>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutVerdict(ShouldLock: false, LockSeconds: 0, FailureCount: 1));
     }
 
+    /// <summary>
+    /// Contador de intentos del segundo factor. Por defecto no bloquea: cada
+    /// prueba que quiera el bloqueo lo dice explicitamente.
+    /// </summary>
+    private readonly ILoginAttemptCounter _intentos = Substitute.For<ILoginAttemptCounter>();
+
     private MfaVerifyCommandHandler NewHandler() => new(
-        _currentUser, _identity, _memberships, _jwt, _refresh, _audit, _clock,
+        _currentUser, _identity, _memberships, _jwt, _refresh, _audit, _intentos, _clock,
         NullLogger<MfaVerifyCommandHandler>.Instance);
 
     private CentralUser CreateUser(bool mfaEnabled = true) => new()

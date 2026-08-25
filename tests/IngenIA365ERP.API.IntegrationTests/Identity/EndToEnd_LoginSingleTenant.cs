@@ -26,14 +26,7 @@ public sealed class EndToEnd_LoginSingleTenant(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master para poder registrar la cooperativa.
-        var masterLoginResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, masterLoginResp.StatusCode);
-        var masterLogin = await ReadJsonAsync(masterLoginResp);
-        var masterToken = masterLogin.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         // 2) Registrar el ÚNICO tenant del usuario bajo prueba (con invitación admin).

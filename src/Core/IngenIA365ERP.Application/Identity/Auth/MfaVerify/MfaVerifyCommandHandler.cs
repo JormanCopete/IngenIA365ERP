@@ -20,6 +20,7 @@ public sealed class MfaVerifyCommandHandler(
     ICentralJwtIssuer jwtIssuer,
     ICentralRefreshTokenStore refreshStore,
     IAuditAppendOnlyWriter auditWriter,
+    ILoginAttemptCounter contadorDeIntentos,
     IDateTimeService clock,
     ILogger<MfaVerifyCommandHandler> logger)
     : IRequestHandler<MfaVerifyCommand, Result<LoginResult>>
@@ -60,6 +61,27 @@ public sealed class MfaVerifyCommandHandler(
                 "El usuario no tiene MFA habilitado; reinicia el login.");
         }
 
+        // 1b) Límite de intentos del SEGUNDO FACTOR.
+        //
+        // No lo tenía. Un TOTP son seis dígitos y aquí se llega con la contraseña
+        // ya acertada, así que sin límite el segundo factor no añade nada frente
+        // a quien ya robó la credencial: se prueba el millón.
+        //
+        // El ámbito es propio y no el del login a propósito. Un login correcto
+        // llama a ResetAsync, y a este endpoint sólo se llega tras un login
+        // correcto: con el contador compartido, el atacante se regalaría un
+        // reset volviendo a iniciar sesión cada pocos intentos.
+        var correo = user.Email ?? string.Empty;
+        var bloqueo = await contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Mfa, correo, ct);
+        if (bloqueo.IsLocked)
+        {
+            await EmitAuditAsync(user.Id, user.Email,
+                AuditEventTypes.CentralUserMfaFailed, request, now, ct);
+            return Result.Failure<LoginResult>(
+                "Identity.Locked.Soft",
+                $"Demasiados intentos con el segundo factor. Reintenta en {bloqueo.RetryAfterSeconds} segundos.");
+        }
+
         // 2) Verificar el segundo factor: TOTP o recovery code one-shot (FR-108/FR-109).
         //    El error hacia el cliente es genérico en ambas ramas; la auditoría distingue.
         int? recoveryCodesRemaining = null;
@@ -70,6 +92,7 @@ public sealed class MfaVerifyCommandHandler(
             {
                 await EmitAuditAsync(user.Id, user.Email,
                     AuditEventTypes.CentralUserMfaRecoveryCodeFailed, request, now, ct);
+                await contadorDeIntentos.RecordFailureAsync(AmbitoDeIntentos.Mfa, correo, ct);
                 return Result.Failure<LoginResult>(
                     "Identity.MfaInvalid", "Código MFA inválido.");
             }
@@ -85,6 +108,7 @@ public sealed class MfaVerifyCommandHandler(
             {
                 await EmitAuditAsync(user.Id, user.Email,
                     AuditEventTypes.CentralUserMfaFailed, request, now, ct);
+                await contadorDeIntentos.RecordFailureAsync(AmbitoDeIntentos.Mfa, correo, ct);
                 return Result.Failure<LoginResult>(
                     "Identity.MfaInvalid", "Código MFA inválido.");
             }
@@ -93,6 +117,10 @@ public sealed class MfaVerifyCommandHandler(
                 AuditEventTypes.CentralUserMfaSuccess, request, now, ct);
         }
 
+        // Segundo factor superado: el contador vuelve a cero. Va aquí y no al
+        // final para que valga igual por TOTP que por código de recuperación.
+        await contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Mfa, correo, ct);
+
         // 3) Cargar membresías y decidir auto-select vs TenantSelection.
         //    Misma lógica que LoginCommandHandler.IssueOperationalOrSelectorAsync —
         //    duplicación controlada hasta que un tercer caller justifique extraer.
@@ -100,6 +128,20 @@ public sealed class MfaVerifyCommandHandler(
 
         if (active.Count == 0)
         {
+            // El maestro global no tiene membresías por diseño: gobierna el
+            // conjunto de cooperativas, no pertenece a ninguna.
+            //
+            // Esta rama es LA SALIDA, y tiene que existir antes de que el login
+            // le exija segundo factor. Sin ella el maestro superaba el TOTP y
+            // recibía «no tienes acceso a ninguna empresa» sin token: habría
+            // quedado encerrado fuera de su propio sistema justo por inscribir
+            // el MFA. El login ya trata este caso (LoginCommandHandler, paso 6);
+            // aquí faltaba.
+            if (user.IsGlobalMasterAdmin)
+            {
+                return await IssueMasterOperationalAsync(user, recoveryCodesRemaining, ct);
+            }
+
             // Edge: el usuario perdió todas las membresías entre login y mfa/verify.
             return Result.Success(new LoginResult(
                 Challenge: LoginChallenges.NoActiveMembership,
@@ -144,6 +186,59 @@ public sealed class MfaVerifyCommandHandler(
                 .Select(m => new ActiveTenantSummary(m.TenantId, m.TenantName, m.IsTenantAdmin))
                 .ToList(),
             DefaultTenantPublicId: null,
+            AutoSelected: false,
+            RecoveryCodesRemaining: recoveryCodesRemaining));
+    }
+
+    /// <summary>
+    /// Sesión operativa del maestro global, que no tiene ni tiene que tener
+    /// membresías: gobierna el conjunto de cooperativas, no pertenece a ninguna.
+    ///
+    /// <para>
+    /// El token sale con <c>active_tenant_id=null</c> y
+    /// <c>is_global_master_admin=true</c>, igual que el que emite el login. La
+    /// diferencia es que a este sólo se llega tras verificar el segundo factor,
+    /// que es el punto entero.
+    /// </para>
+    /// </summary>
+    private async Task<Result<LoginResult>> IssueMasterOperationalAsync(
+        Domain.Entities.Admin.CentralUser user,
+        int? recoveryCodesRemaining,
+        CancellationToken ct)
+    {
+        var access = jwtIssuer.IssueAccessToken(
+            centralUserId: user.Id,
+            email: user.Email,
+            isGlobalMasterAdmin: true,
+            activeTenantId: null,
+            tenantAdmin: null,
+            mfaVerified: true);
+
+        var refresh = jwtIssuer.IssueRefreshToken();
+        await refreshStore.StoreAsync(
+            tokenHashHex: refresh.HashHex,
+            session: new CentralRefreshSession(
+                CentralUserId: user.Id,
+                ActiveTenantPublicId: null,
+                FamilyId: Guid.NewGuid(),
+                IssuedAt: clock.UtcNow,
+                IpAddress: null,
+                UserAgent: null,
+                ReplacedByTokenHashHex: null,
+                SecurityStamp: user.SecurityStamp),
+            ttl: RefreshTokenTtl,
+            ct: ct);
+
+        return Result.Success(new LoginResult(
+            Challenge: LoginChallenges.None,
+            CentralUserId: user.Id,
+            Email: user.Email,
+            IsGlobalMasterAdmin: true,
+            AccessToken: access.Jwt,
+            AccessTokenExpiresAt: access.ExpiresAt,
+            RefreshToken: refresh.Token,
+            RefreshTokenExpiresAt: refresh.ExpiresAt,
+            ExpiresInSeconds: (int)(access.ExpiresAt - clock.UtcNow).TotalSeconds,
             AutoSelected: false,
             RecoveryCodesRemaining: recoveryCodesRemaining));
     }

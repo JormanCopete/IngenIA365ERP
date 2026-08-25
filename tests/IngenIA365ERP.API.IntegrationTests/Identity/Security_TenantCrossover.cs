@@ -92,20 +92,13 @@ public sealed class Security_TenantCrossover(CentralIdentityApiFixture fx)
 
     // -------- Helpers --------
 
-    /// <summary>Login del master sembrado por la fixture (sin membresías → challenge None).</summary>
-    private static async Task<string> LoginMasterAsync(HttpClient http)
-    {
-        var resp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        var login = await ReadJsonAsync(resp);
-        var token = login.GetProperty("accessToken").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(token));
-        return token!;
-    }
+    /// <summary>
+    /// Login del maestro. Ya no es «sin membresías → challenge None»: el maestro
+    /// pasa por su segundo factor como todo el mundo, y ese recorrido lo resuelve
+    /// la fixture en un solo sitio.
+    /// </summary>
+    private async Task<string> LoginMasterAsync(HttpClient http) =>
+        await fx.IniciarSesionMaestroAsync(http);
 
     /// <summary>
     /// Registra un tenant vía <c>POST /api/saas/tenants/with-admin</c>, extrae el

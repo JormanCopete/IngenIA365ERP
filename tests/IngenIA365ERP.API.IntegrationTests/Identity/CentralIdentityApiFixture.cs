@@ -123,6 +123,111 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
 
     public HttpClient CreateClient() => Factory.CreateClient();
 
+    /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
+    private string? _secretoMaestro;
+
+    /// <summary>
+    /// Inicia sesión como maestro y devuelve su access token, recorriendo el
+    /// segundo factor de verdad.
+    ///
+    /// <para>
+    /// El maestro ya no entra con sólo contraseña: era la cuenta con más poder
+    /// del sistema —crear cooperativas, apagar la política de MFA de una
+    /// cooperativa ajena, borrar el segundo factor de cualquiera— y la única que
+    /// no tenía segundo factor. Este método hace lo que hará una persona: si no
+    /// está inscrito, se inscribe; después verifica.
+    /// </para>
+    ///
+    /// <para>
+    /// Vive en la fixture y no en cada prueba a propósito: media suite necesita
+    /// un token de maestro, y si cada una improvisa el flujo, cambiar la política
+    /// de MFA obligaría a tocar quince archivos.
+    /// </para>
+    /// </summary>
+    public async Task<string> IniciarSesionMaestroAsync(HttpClient http) =>
+        (await SesionMaestroAsync(http)).GetProperty("accessToken").GetString()
+        ?? throw new InvalidOperationException("mfa/verify no devolvió accessToken para el maestro.");
+
+    /// <summary>
+    /// La sesión completa del maestro, no sólo su access token: quien pruebe el
+    /// refresh o el cierre de sesión necesita el resto del cuerpo.
+    /// </summary>
+    public async Task<System.Text.Json.JsonElement> SesionMaestroAsync(HttpClient http)
+    {
+        var login = await PostAsync(http, "/api/auth/login",
+            new { email = MasterEmail, password = MasterPassword });
+        var cuerpo = await LeerAsync(login);
+        var reto = cuerpo.GetProperty("challenge").GetString();
+
+        if (reto == "MfaEnrollmentRequired")
+        {
+            await InscribirMfaAsync(http, cuerpo.GetProperty("challengeToken").GetString()!);
+
+            login = await PostAsync(http, "/api/auth/login",
+                new { email = MasterEmail, password = MasterPassword });
+            cuerpo = await LeerAsync(login);
+            reto = cuerpo.GetProperty("challenge").GetString();
+        }
+
+        if (reto != "MfaRequired")
+        {
+            throw new InvalidOperationException(
+                $"El login del maestro devolvió challenge='{reto}'. Se esperaba MfaRequired: " +
+                "si el maestro vuelve a entrar sin segundo factor, el arreglo se revirtió.");
+        }
+
+        var verify = await PostAsync(http, "/api/auth/mfa/verify", new
+        {
+            code = CodigoTotp(_secretoMaestro!),
+            useRecoveryCode = false,
+        }, cuerpo.GetProperty("challengeToken").GetString());
+
+        return await LeerAsync(verify);
+    }
+
+    private async Task InscribirMfaAsync(HttpClient http, string tokenDeInscripcion)
+    {
+        var inicio = await PostAsync(http, "/api/profile/mfa/enroll", new { }, tokenDeInscripcion);
+        _secretoMaestro = (await LeerAsync(inicio)).GetProperty("secretBase32").GetString();
+
+        var confirmar = await PostAsync(http, "/api/profile/mfa/confirm",
+            new { code = CodigoTotp(_secretoMaestro!) }, tokenDeInscripcion);
+
+        if (!confirmar.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"No se pudo inscribir el MFA del maestro: {(int)confirmar.StatusCode} " +
+                await confirmar.Content.ReadAsStringAsync());
+        }
+    }
+
+    /// <summary>Código TOTP válido ahora mismo, con el mismo algoritmo que valida el servidor.</summary>
+    private static string CodigoTotp(string secretoBase32) =>
+        new OtpNet.Totp(OtpNet.Base32Encoding.ToBytes(secretoBase32)).ComputeTotp();
+
+    private static async Task<HttpResponseMessage> PostAsync(
+        HttpClient http, string url, object cuerpo, string? bearer = null)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(cuerpo),
+        };
+        if (bearer is not null) req.Headers.Authorization = new("Bearer", bearer);
+
+        var resp = await http.SendAsync(req);
+        if (!resp.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"POST {url} respondió {(int)resp.StatusCode}: {await resp.Content.ReadAsStringAsync()}");
+        }
+        return resp;
+    }
+
+    private static async Task<System.Text.Json.JsonElement> LeerAsync(HttpResponseMessage resp) =>
+        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+            await resp.Content.ReadAsStringAsync(),
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
     private static string WithDatabaseName(string connectionString, string database)
     {
         var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };

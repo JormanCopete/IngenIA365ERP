@@ -60,8 +60,7 @@ public class AuditPerformanceTests(CentralIdentityApiFixture fx)
 
         // Una cooperativa con su admin: el endpoint exige cooperativa activa, y
         // el maestro no puede seleccionar una de la que no es miembro.
-        var masterToken = await LoginAsync(
-            http, CentralIdentityApiFixture.MasterEmail, CentralIdentityApiFixture.MasterPassword);
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         var cooperativa = await RegistrarCooperativaAsync(http, masterToken);
         var tokenAdmin = await AceptarInvitacionAsync(
             http, "auditor@coop.perf.test", "Auditor-Perf-2026!");

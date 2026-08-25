@@ -23,7 +23,8 @@ namespace IngenIA365ERP.Application.Identity.Auth.Login;
 ///   <item>ValidatePassword → si false → register failure + InvalidCredentials.</item>
 ///   <item>Reset lockout counter + RecordSuccessfulLogin + audit append-only.</item>
 ///   <item>Load active memberships.</item>
-///   <item>0 memberships → NoActiveMembership challenge.</item>
+///   <item>0 memberships → NoActiveMembership, salvo el maestro global, que
+///         pasa por el segundo factor (enroll si no lo tiene, verify si sí).</item>
 ///   <item>Cualquier tenant exige MFA + usuario sin MFA → MfaEnrollmentRequired.</item>
 ///   <item>Usuario con MFA habilitado → MfaRequired (challenge mfa-verify).</item>
 ///   <item>1 membership → autoSelected, emite access+refresh con active_tenant_id.</item>
@@ -53,7 +54,7 @@ public sealed class LoginCommandHandler(
         var now = clock.UtcNow;
 
         // 1) Lockout check (Redis, por email normalizado).
-        var lockState = await attemptCounter.CheckAsync(normalizedEmail, ct);
+        var lockState = await attemptCounter.CheckAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
         if (lockState.IsLocked)
         {
             await RecordAttemptAsync(
@@ -85,7 +86,7 @@ public sealed class LoginCommandHandler(
         }
 
         // 4) Login OK → resetear contador, registrar success, actualizar LastLogin.
-        await attemptCounter.ResetAsync(normalizedEmail, ct);
+        await attemptCounter.ResetAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
         await centralIdentity.RecordSuccessfulLoginAsync(user.Id, now, ct);
         await RecordAttemptAsync(user.Id, normalizedEmail, LoginAttemptResult.Success, request, now, null, ct);
         await EmitAuditAsync(user.Id, user.Email, AuditEventTypes.CentralUserLoginSuccess, request, now, ct);
@@ -94,15 +95,36 @@ public sealed class LoginCommandHandler(
         var active = await memberships.GetActiveMembershipsAsync(user.Id, ct);
 
         // 6) Cero membresías.
-        //    - Master admin global: emite access token operativo sin tenant
-        //      (habilita /api/saas/tenants/* que solo exige purpose=full +
-        //      is_global_master_admin=true, no active_tenant_id).
+        //    - Maestro global: al segundo factor. Su sesión operativa sin tenant
+        //      —la que habilita /api/saas/*— la emite ahora mfa/verify, no aquí.
         //    - Cualquier otro usuario: NoActiveMembership.
         if (active.Count == 0)
         {
             if (user.IsGlobalMasterAdmin)
             {
-                return await IssueMasterOperationalAsync(user, ct);
+                // El maestro pasa por el segundo factor como todo el mundo, y
+                // antes NO lo hacía: este return ocurría delante de los pasos 7
+                // y 8, así que ni siquiera un maestro con MFA ya inscrito lo
+                // veía. Incumplía el FR-003 ("exigir el segundo factor en cada
+                // inicio de sesión cuando esté activado") justo en la cuenta que
+                // más poder tiene: crear cooperativas, apagar la política de MFA
+                // obligatorio de una cooperativa ajena, borrar el segundo factor
+                // de cualquier persona y saltarse el filtro de permisos entero.
+                // Lo único que separaba a un atacante de todo eso era una cadena
+                // de texto.
+                //
+                // Sin inscribir todavía → challenge de inscripción, que se
+                // resuelve en el propio login. No deja a nadie fuera: quien
+                // inscribe vuelve a entrar por /api/auth/mfa/verify, que desde
+                // ahora sabe emitirle sesión aunque no tenga membresías.
+                if (!user.TwoFactorEnabled)
+                {
+                    return DesafiarAsync(user, CentralJwtPurposes.MfaEnroll,
+                        LoginChallenges.MfaEnrollmentRequired);
+                }
+
+                return DesafiarAsync(user, CentralJwtPurposes.MfaVerify,
+                    LoginChallenges.MfaRequired);
             }
 
             return Result.Success(new LoginResult(
@@ -229,52 +251,31 @@ public sealed class LoginCommandHandler(
     /// los endpoints SaaS-globales (<c>/api/saas/tenants/*</c>) que solo
     /// verifican <c>purpose=full</c> + master flag.
     /// </summary>
-    private async Task<Result<LoginResult>> IssueMasterOperationalAsync(
-        Domain.Entities.Admin.CentralUser user,
-        CancellationToken ct)
+    /// <summary>
+    /// Emite un challenge y lo devuelve como resultado del login. Extraído
+    /// porque ahora lo usan tres caminos —el maestro y los dos gates de MFA— y
+    /// tres copias del mismo bloque es como se acaba corrigiendo sólo dos.
+    /// </summary>
+    private Result<LoginResult> DesafiarAsync(
+        Domain.Entities.Admin.CentralUser user, string purpose, string challenge)
     {
-        var access = jwtIssuer.IssueAccessToken(
+        var token = jwtIssuer.IssueChallengeToken(
             centralUserId: user.Id,
             email: user.Email,
-            isGlobalMasterAdmin: true,
-            activeTenantId: null,
-            tenantAdmin: null,
-            mfaVerified: user.TwoFactorEnabled);
-
-        var refresh = jwtIssuer.IssueRefreshToken();
-
-        var familyId = Guid.NewGuid();
-        await refreshStore.StoreAsync(
-            tokenHashHex: refresh.HashHex,
-            session: new CentralRefreshSession(
-                CentralUserId: user.Id,
-                ActiveTenantPublicId: null,
-                FamilyId: familyId,
-                IssuedAt: clock.UtcNow,
-                IpAddress: null,
-                UserAgent: null,
-                ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
-            ttl: RefreshTokenTtl,
-            ct: ct);
+            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+            purpose: purpose,
+            lifetime: ChallengeTokenLifetime);
 
         return Result.Success(new LoginResult(
-            Challenge: LoginChallenges.None,
+            Challenge: challenge,
             CentralUserId: user.Id,
             Email: user.Email,
-            IsGlobalMasterAdmin: true,
-            AccessToken: access.Jwt,
-            AccessTokenExpiresAt: access.ExpiresAt,
-            RefreshToken: refresh.Token,
-            RefreshTokenExpiresAt: refresh.ExpiresAt,
-            ExpiresInSeconds: (int)(access.ExpiresAt - clock.UtcNow).TotalSeconds,
-            AutoSelected: false,
-            ActiveTenantPublicId: null,
-            ActiveTenantName: null,
-            DefaultTenantPublicId: null,
-            ActiveTenants: Array.Empty<ActiveTenantSummary>(),
-            Message: "Sesión master admin sin tenant activo."));
+            IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+            ChallengeToken: token.Jwt,
+            ChallengeTokenPurpose: purpose,
+            ExpiresInSeconds: (int)ChallengeTokenLifetime.TotalSeconds));
     }
+
 
     /// <summary>
     /// Emite access+refresh JWT con <c>active_tenant_id</c> resuelto y persiste
@@ -341,7 +342,7 @@ public sealed class LoginCommandHandler(
         LoginAttemptResult result,
         CancellationToken ct)
     {
-        var verdict = await attemptCounter.RecordFailureAsync(normalizedEmail, ct);
+        var verdict = await attemptCounter.RecordFailureAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
         await RecordAttemptAsync(
             centralUserId, normalizedEmail, result, request, now,
             lockoutAppliedSeconds: verdict.ShouldLock ? verdict.LockSeconds : null, ct);

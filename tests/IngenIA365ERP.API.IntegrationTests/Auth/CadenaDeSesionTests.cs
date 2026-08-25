@@ -109,16 +109,13 @@ public class CadenaDeSesionTests(CentralIdentityApiFixture fx)
     /// Login del master: no tiene segundo factor inscrito, así que la respuesta
     /// trae los tokens directamente y la cadena se puede seguir sin simular TOTP.
     /// </summary>
-    private static async Task<JsonElement> LoginAsync(HttpClient http)
-    {
-        var resp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        return await LeerJsonAsync(resp);
-    }
+    /// <summary>
+    /// Sesión del maestro, con su segundo factor. Antes esta prueba entraba con
+    /// sólo contraseña —el maestro se saltaba el MFA— y por eso podía pedir el
+    /// login en una línea. Ahora el recorrido lo resuelve la fixture.
+    /// </summary>
+    private async Task<JsonElement> LoginAsync(HttpClient http) =>
+        await fx.SesionMaestroAsync(http);
 
     private static async Task<JsonElement> LeerJsonAsync(HttpResponseMessage resp)
     {

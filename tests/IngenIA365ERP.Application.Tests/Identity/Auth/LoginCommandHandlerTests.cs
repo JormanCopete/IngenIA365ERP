@@ -48,7 +48,7 @@ public class LoginCommandHandlerTests
         _clock.UtcNow.Returns(FixedNow);
 
         // Defaults: no lockout, tokens stub.
-        _attempts.CheckAsync(NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutState(false, 0, 0));
         _jwt.IssueAccessToken(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
@@ -65,7 +65,9 @@ public class LoginCommandHandlerTests
 
     // ----- Helpers de setup -----
 
-    private void SetupValidPassword(Guid centralUserId, bool mfaEnabled = false, Guid? defaultTenantId = null)
+    private void SetupValidPassword(
+        Guid centralUserId, bool mfaEnabled = false, Guid? defaultTenantId = null,
+        bool esMaestro = false)
     {
         var user = new CentralUser
         {
@@ -74,6 +76,7 @@ public class LoginCommandHandlerTests
             NormalizedEmail = NormalizedEmail,
             TwoFactorEnabled = mfaEnabled,
             DefaultTenantId = defaultTenantId,
+            IsGlobalMasterAdmin = esMaestro,
         };
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>()).Returns(user);
         _identity.FindByIdAsync(centralUserId, Arg.Any<CancellationToken>()).Returns(user);
@@ -103,7 +106,7 @@ public class LoginCommandHandlerTests
     [Fact]
     public async Task Lockout_activo_devuelve_Identity_Locked_Soft()
     {
-        _attempts.CheckAsync(NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutState(true, 60, 5));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
@@ -118,14 +121,14 @@ public class LoginCommandHandlerTests
     {
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>())
             .Returns((CentralUser?)null);
-        _attempts.RecordFailureAsync(NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutVerdict(false, 0, 1));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Identity.InvalidCredentials");
-        await _attempts.Received(1).RecordFailureAsync(NormalizedEmail, Arg.Any<CancellationToken>());
+        await _attempts.Received(1).RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>());
 
         // El intento se registró en BD.
         _db.CentralUserLoginAttempts.Should().ContainSingle(a => a.Result == LoginAttemptResult.UserNotFound);
@@ -138,7 +141,7 @@ public class LoginCommandHandlerTests
         var user = new CentralUser { Id = userId, Email = Email, NormalizedEmail = NormalizedEmail };
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>()).Returns(user);
         _identity.ValidatePasswordAsync(userId, Password, Arg.Any<CancellationToken>()).Returns(false);
-        _attempts.RecordFailureAsync(NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutVerdict(false, 0, 2));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
@@ -160,6 +163,46 @@ public class LoginCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Challenge.Should().Be(LoginChallenges.NoActiveMembership);
         result.Value.AccessToken.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task El_maestro_sin_MFA_inscrito_no_recibe_sesion_sino_challenge_de_inscripcion()
+    {
+        // El maestro tiene el poder más grande del sistema —crear cooperativas,
+        // apagar la política de MFA de una cooperativa ajena, borrar el segundo
+        // factor de cualquier persona, y saltarse el filtro de permisos entero—
+        // y entraba con sólo correo y contraseña. No es que «no llegara al gate»:
+        // el return de cero membresías ocurría ANTES de los gates.
+        var userId = Guid.NewGuid();
+        SetupValidPassword(userId, mfaEnabled: false, esMaestro: true);
+        SetupMemberships();
+
+        var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Challenge.Should().Be(LoginChallenges.MfaEnrollmentRequired);
+        result.Value.AccessToken.Should().BeNull("una contraseña no puede bastar para gobernar el SaaS");
+        result.Value.RefreshToken.Should().BeNull();
+        result.Value.ChallengeToken.Should().NotBeNullOrEmpty(
+            "el challenge tiene que permitir inscribirse en el propio login; si no, el arreglo deja fuera al dueño");
+    }
+
+    [Fact]
+    public async Task El_maestro_con_MFA_inscrito_tiene_que_verificarlo()
+    {
+        // Este era el caso más grave: un maestro que YA había activado su segundo
+        // factor seguía entrando sin él, porque el mismo return se lo saltaba.
+        // Incumplía el FR-003 en la cuenta que más importa.
+        var userId = Guid.NewGuid();
+        SetupValidPassword(userId, mfaEnabled: true, esMaestro: true);
+        SetupMemberships();
+
+        var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Challenge.Should().Be(LoginChallenges.MfaRequired);
+        result.Value.AccessToken.Should().BeNull();
+        result.Value.ChallengeTokenPurpose.Should().Be(CentralJwtPurposes.MfaVerify);
     }
 
     [Fact]
