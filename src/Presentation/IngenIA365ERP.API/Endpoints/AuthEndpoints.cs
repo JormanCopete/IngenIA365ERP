@@ -56,9 +56,24 @@ public class AuthEndpoints : ICarterModule
         // "no autenticado" pasaran las credenciales que pasaran. Lo vivo esta
         // en /api/profile/*, contra ADM_CentralUsers.
 
-        group.MapPost("/mfa/reset/request", RequestMfaResetAsync).RequireAuthorization().WithName("Auth_RequestMfaReset");
-        group.MapPost("/mfa/reset/{requestPublicId:guid}/approve", ApproveMfaResetAsync).RequireAuthorization().WithName("Auth_ApproveMfaReset");
-        group.MapGet("/mfa/reset/requests", ListMfaResetRequestsAsync).RequireAuthorization().WithName("Auth_ListMfaResetRequests");
+        // Estas tres rutas exigian solo estar autenticado. Mientras el reset no
+        // restablecia nada daba igual quien aprobara; ahora que si restablece,
+        // sin permiso bastarian DOS cuentas cualesquiera de la cooperativa para
+        // dejar sin segundo factor a quien fuera. Los permisos ya existian en el
+        // catalogo (DomainPermissionCatalogSeeder) desde Fase 0 y el contrato
+        // los documentaba; lo unico que faltaba era exigirlos aqui.
+        //
+        // El listado pide Approve y no Request: es la cola del aprobador, y
+        // enumera quien esta bloqueado fuera de su cuenta.
+        group.MapPost("/mfa/reset/request", RequestMfaResetAsync)
+            .RequireAuthorization().RequirePermission("Security.MfaReset.Request")
+            .WithName("Auth_RequestMfaReset");
+        group.MapPost("/mfa/reset/{requestPublicId:guid}/approve", ApproveMfaResetAsync)
+            .RequireAuthorization().RequirePermission("Security.MfaReset.Approve")
+            .WithName("Auth_ApproveMfaReset");
+        group.MapGet("/mfa/reset/requests", ListMfaResetRequestsAsync)
+            .RequireAuthorization().RequirePermission("Security.MfaReset.Approve")
+            .WithName("Auth_ListMfaResetRequests");
 
     }
 
