@@ -58,7 +58,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     public async Task Codigo_invalido_devuelve_error()
     {
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
-            .Returns(new MfaPendingEnrollment(Secret, new[] { "code1" }, DateTime.UtcNow));
+            .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
         _identity.ConfirmMfaSetupAsync(UserId, Secret, "999999", Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(false, new[] { "Profile.Mfa.InvalidCode" }));
 
@@ -73,7 +73,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     {
         var codes = new[] { "code1", "code2" };
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
-            .Returns(new MfaPendingEnrollment(Secret, codes, DateTime.UtcNow));
+            .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
         _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(true, Array.Empty<string>(), codes));
 

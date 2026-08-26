@@ -49,7 +49,6 @@ public sealed class BeginMfaEnrollmentCommandHandler(
             centralUserId,
             new MfaPendingEnrollment(
                 SecretBase32: setup.SecretBase32,
-                RecoveryCodes: setup.RecoveryCodes,
                 CreatedAt: clock.UtcNow),
             PendingTtl,
             ct);
@@ -59,7 +58,6 @@ public sealed class BeginMfaEnrollmentCommandHandler(
         return Result.Success(new BeginMfaEnrollmentResult(
             SecretBase32: setup.SecretBase32,
             OtpAuthUri: setup.OtpAuthUri,
-            RecoveryCodes: setup.RecoveryCodes,
             ExpiresInSeconds: (int)PendingTtl.TotalSeconds));
     }
 }

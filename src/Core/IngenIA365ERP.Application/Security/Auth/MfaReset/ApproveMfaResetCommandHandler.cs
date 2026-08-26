@@ -26,7 +26,6 @@ namespace IngenIA365ERP.Application.Security.Auth.MfaReset;
 public sealed class ApproveMfaResetCommandHandler : IRequestHandler<ApproveMfaResetCommand, Result<MfaResetApprovalResult>>
 {
     private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
     private readonly ICurrentCentralUserContext _usuarioCentral;
     private readonly IDateTimeService _clock;
     private readonly ISender _mediator;
@@ -34,14 +33,12 @@ public sealed class ApproveMfaResetCommandHandler : IRequestHandler<ApproveMfaRe
 
     public ApproveMfaResetCommandHandler(
         IApplicationDbContext db,
-        ICurrentUserService currentUser,
         ICurrentCentralUserContext usuarioCentral,
         IDateTimeService clock,
         ISender mediator,
         ICentralIdentityProvider identidadCentral)
     {
         _db = db;
-        _currentUser = currentUser;
         _usuarioCentral = usuarioCentral;
         _clock = clock;
         _mediator = mediator;
@@ -136,21 +133,16 @@ public sealed class ApproveMfaResetCommandHandler : IRequestHandler<ApproveMfaRe
         entry.SecondApproverId = approverId;
         entry.SecondApprovalAt = now;
 
-        // Residuo de Fase 0: estas columnas ya no las lee nadie. Se limpian por
-        // higiene hasta que la etapa de limpieza retire la entidad completa.
-        target.MfaSecret = null;
-        target.IsMfaEnabled = false;
-
-        var backupCodes = await _db.MfaBackupCodes
-            .Where(c => c.UserId == target.Id && c.UsedAt == null)
-            .ToListAsync(ct);
-        foreach (var bc in backupCodes)
-        {
-            bc.IsDeleted = true;
-            bc.DeletedAt = now;
-            bc.DeletedBy = _currentUser.UserName;
-        }
-
+        // Aquí ya no se toca SEC_Users.MfaSecret / IsMfaEnabled ni la tabla
+        // SEC_MfaBackupCodes. Son residuo de Fase 0: nadie los lee, y limpiarlos
+        // sólo servía para que el diff pareciera hacer algo. El efecto real es
+        // el ResetMfaAsync de arriba.
+        //
+        // Las columnas y la tabla SIGUEN mapeadas en EF a propósito. Sacarlas del
+        // modelo hace que el próximo `migrations add` —cualquiera, para cualquier
+        // fin— genere DropTable + DropColumn contra la base de CADA cooperativa,
+        // sin marcarse como destructiva. El Principio XII pide backup y segundo
+        // revisor para eso, así que va en su propia pasada.
         entry.Status = MfaResetStatus.Executed;
         entry.ExecutedAt = now;
 

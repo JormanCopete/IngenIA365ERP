@@ -197,20 +197,26 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
             ? centralUserId.ToString("N")
             : identity!.Email!;
 
-        // otpauth URI — la pantalla Blazor lo convierte a QR vía QRCoder.
+        // otpauth URI — hoy la pantalla lo imprime como texto: no se genera QR
+        // en ninguna capa. Había un TotpService con QRCoder que nadie llamaba y
+        // se retiró; la pantalla nunca lo usó.
         var otpAuthUri =
             $"otpauth://totp/{Uri.EscapeDataString(TotpIssuer)}:{Uri.EscapeDataString(accountLabel)}" +
             $"?secret={base32}" +
             $"&issuer={Uri.EscapeDataString(TotpIssuer)}" +
             $"&algorithm=SHA1&digits=6&period=30";
 
-        // Recovery codes — el Application los almacena hasta confirm.
-        var codes = GenerateRecoveryCodes(RecoveryCodeCount);
-
+        // Aquí NO se generan códigos de recuperación, y antes sí.
+        //
+        // Este método devolvía diez códigos con formato AB12-CD34 que se
+        // guardaban en Redis y se descartaban: los válidos los produce ASP.NET
+        // Identity en ConfirmMfaSetupAsync, con otro alfabeto. Quien anotara los
+        // del begin y cerrara la pantalla antes de confirmar se quedaba con diez
+        // códigos que nunca iban a canjearse — justo el papelito que uno guarda
+        // para el día que pierde el teléfono.
         return new MfaEnrollmentSetup(
             SecretBase32: base32,
             OtpAuthUri: otpAuthUri,
-            RecoveryCodes: codes,
             ExpiresInSeconds: 600);
     }
 
@@ -364,18 +370,4 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         LastLoginAt = identity.LastLoginAt,
     };
 
-    private static IReadOnlyList<string> GenerateRecoveryCodes(int count)
-    {
-        var codes = new List<string>(count);
-        var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-        Span<byte> buffer = stackalloc byte[5];
-        for (var i = 0; i < count; i++)
-        {
-            rng.GetBytes(buffer);
-            // 10 hex chars; el separador "-" mejora legibilidad: AB12-CD34.
-            var hex = Convert.ToHexString(buffer);
-            codes.Add($"{hex[..4]}-{hex[4..]}");
-        }
-        return codes;
-    }
 }

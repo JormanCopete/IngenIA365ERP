@@ -9,7 +9,19 @@ Estos endpoints completan la spec en torno a FR-003 (MFA opt-in), FR-003b (force
 
 ## POST /api/profile/mfa/enroll
 
-Inicia el flujo de configuración de MFA. Genera el secret TOTP y los recovery codes; NO los persiste todavía — se confirman en el siguiente call.
+Inicia el flujo de configuración de MFA. Genera el secret TOTP; NO lo persiste todavía — se confirma en el siguiente call.
+
+> **Este endpoint ya no devuelve `recoveryCodes`, y es un cambio deliberado del
+> 2026-08-26.** Los devolvía, y no servían: se generaban aquí con un formato
+> propio (`AB12-CD34`), se guardaban en Redis y se **descartaban** al confirmar,
+> porque los códigos válidos los emite ASP.NET Identity en `/confirm` con otro
+> alfabeto. Quien anotara los del `enroll` y cerrara la pantalla antes de
+> confirmar se quedaba con diez códigos que nunca se iban a canjear — justo el
+> papelito que uno guarda para el día que pierde el teléfono.
+>
+> Los códigos de recuperación salen **sólo** de `POST /api/profile/mfa/confirm`
+> y de `POST /api/profile/mfa/recovery-codes/regenerate`. Ninguno de los dos
+> cambia.
 
 **Authorization**: JWT central con `purpose=full` (enrollment voluntario desde perfil) **o** `purpose=mfa-enroll` (enrollment forzado, emitido por `POST /api/auth/login` cuando la política de algún tenant lo exige). Cualquier otro `purpose` → `403 Identity.WrongTokenPurpose`.
 
@@ -21,12 +33,19 @@ Inicia el flujo de configuración de MFA. Genera el secret TOTP y los recovery c
 {
   "secretBase32": "JBSWY3DPEHPK3PXP",
   "otpAuthUri": "otpauth://totp/IngenIA365ERP:ana@coop.test?secret=JBSWY3DPEHPK3PXP&issuer=IngenIA365ERP&algorithm=SHA1&digits=6&period=30",
-  "recoveryCodes": ["AB12-CD34-EF56", "..."],
   "expiresInSeconds": 600
 }
 ```
 
-El cliente debe mostrar el QR derivado de `otpAuthUri` y los recovery codes. El secret pendiente se almacena en Redis con TTL 10 min; si el usuario no confirma a tiempo, debe reiniciar.
+El cliente muestra el secret para que la persona lo escriba en su app de
+autenticación. **Hoy no se pinta código QR**: no hay ninguna capa que lo genere
+—existía un `TotpService` con QRCoder que ninguna pantalla llamó, y se retiró—,
+así que la pantalla dice explícitamente que hay que teclear la clave a mano en
+vez de prometer un QR que no aparece. El `otpAuthUri` viaja igual, listo para
+cuando se implemente.
+
+El secret pendiente se almacena en Redis con TTL 10 min; si el usuario no
+confirma a tiempo, debe reiniciar.
 
 ---
 

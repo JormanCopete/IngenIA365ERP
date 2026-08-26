@@ -102,8 +102,10 @@ public interface ICentralIdentityProvider
 
     // -------------------- MFA --------------------
 
-    /// <summary>Genera secret TOTP + recovery codes para configuración pendiente
-    /// (no se persiste el secret hasta <see cref="ConfirmMfaSetupAsync"/>).</summary>
+    /// <summary>Genera el secret TOTP para una configuración pendiente (no se
+    /// persiste hasta <see cref="ConfirmMfaSetupAsync"/>). NO devuelve códigos
+    /// de recuperación: los válidos los emite el confirm, y entregarlos aquí
+    /// significaba darle al usuario diez códigos que nunca se iban a canjear.</summary>
     Task<MfaEnrollmentSetup> BeginMfaEnrollmentAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>Verifica un TOTP contra un secret pendiente. Si OK, persiste
@@ -168,7 +170,6 @@ public sealed record ChangePasswordResult(
 public sealed record MfaEnrollmentSetup(
     string SecretBase32,
     string OtpAuthUri,
-    IReadOnlyList<string> RecoveryCodes,
     int ExpiresInSeconds);
 
 public sealed record MfaConfirmResult(

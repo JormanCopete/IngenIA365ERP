@@ -162,10 +162,11 @@ public sealed class ProfileClient
 
 // -------------------- DTOs --------------------
 
+// El begin no trae códigos de recuperación: los válidos vienen en el confirm,
+// abajo. Los traía, y eran otros — se descartaban al confirmar.
 public sealed record BeginMfaEnrollResponse(
     string SecretBase32,
     string OtpAuthUri,
-    IReadOnlyList<string> RecoveryCodes,
     int ExpiresInSeconds);
 
 public sealed record RegenerateRecoveryCodesResponse(

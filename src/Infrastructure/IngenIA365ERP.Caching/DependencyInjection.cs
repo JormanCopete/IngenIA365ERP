@@ -52,11 +52,6 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenStore, RedisRefreshTokenStore>();
         services.AddScoped<IRevokedTokenBlacklist, RedisRevokedTokenBlacklist>();
         services.AddScoped<IPermissionClaimsCache, RedisPermissionClaimsCache>();
-        services.AddScoped<IMfaResetCoordinator, RedisMfaResetCoordinator>();
-
-        // T052 — Cache de challenge MFA (post-login, pre-verify) y enrollment.
-        services.AddScoped<IMfaChallengeStore, RedisMfaChallengeStore>();
-        services.AddScoped<IMfaEnrollmentStore, RedisMfaEnrollmentStore>();
 
         // Feature 002 (Chunk C.2) — identidad central:
         // - TenantMembershipReader: cache 60s + JOIN a ADM_TenantMemberships/Tenants/MfaPolicies

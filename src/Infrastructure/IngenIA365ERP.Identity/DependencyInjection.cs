@@ -119,8 +119,9 @@ public static class DependencyInjection
         services.AddScoped<Persistence.Seeding.IDataSeeder, Seed.PhaseZeroSecuritySeeder>();
 
         // === Fase 0 — US1 ===
-        services.AddSingleton<ITotpService, TotpService>();
-        services.AddSingleton<IMfaBackupCodeGenerator, MfaBackupCodeGenerator>();
+        // ITotpService y IMfaBackupCodeGenerator estaban registrados aquí y no
+        // los llamaba nadie: el TOTP y los códigos de recuperación vivos los
+        // hace AspNetCoreIdentityProvider con OtpNet y ASP.NET Identity.
         services.AddScoped<IPasswordPolicyEnforcer, PasswordPolicyEnforcer>();
         services.AddScoped<IUserPermissionResolver, UserPermissionResolver>();
 

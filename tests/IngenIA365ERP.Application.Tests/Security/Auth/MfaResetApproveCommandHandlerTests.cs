@@ -36,7 +36,7 @@ public class MfaResetApproveCommandHandlerTests
     private static Guid GuidDe(int userId) => new($"00000000-0000-0000-0000-{userId:D12}");
 
     private static (ApproveMfaResetCommandHandler Handler, TestApplicationDbContext Db,
-                    ICurrentUserService Cu, ISender Mediator, ICentralIdentityProvider Identidad)
+                    ISender Mediator, ICentralIdentityProvider Identidad)
         Build(int currentUserId, DateTime? now = null)
     {
         var db = TestDbContextFactory.Create();
@@ -54,9 +54,6 @@ public class MfaResetApproveCommandHandlerTests
         });
         db.SaveChanges();
 
-        var cu = Substitute.For<ICurrentUserService>();
-        cu.UserName.Returns("approver-" + currentUserId);
-
         var central = Substitute.For<ICurrentCentralUserContext>();
         central.CentralUserId.Returns(GuidDe(currentUserId));
 
@@ -69,8 +66,8 @@ public class MfaResetApproveCommandHandlerTests
 
         var identidad = Substitute.For<ICentralIdentityProvider>();
 
-        return (new ApproveMfaResetCommandHandler(db, cu, central, clock, mediator, identidad),
-                db, cu, mediator, identidad);
+        return (new ApproveMfaResetCommandHandler(db, central, clock, mediator, identidad),
+                db, mediator, identidad);
     }
 
     private static (MfaResetRequest Entry, User Target) SeedRequest(
@@ -112,7 +109,7 @@ public class MfaResetApproveCommandHandlerTests
         central.CentralUserId.Returns((Guid?)null);
         var clock = Substitute.For<IDateTimeService>();
         var handler = new ApproveMfaResetCommandHandler(
-            db, Substitute.For<ICurrentUserService>(), central, clock,
+            db, central, clock,
             Substitute.For<ISender>(), Substitute.For<ICentralIdentityProvider>());
 
         var result = await handler.Handle(new ApproveMfaResetCommand(Guid.NewGuid()), CancellationToken.None);
@@ -124,7 +121,7 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task Cannot_approve_own_request()
     {
-        var (handler, db, _, _, _) = Build(currentUserId: 10);
+        var (handler, db, _, _) = Build(currentUserId: 10);
         var (entry, _) = SeedRequest(db, requesterId: 10);
 
         var result = await handler.Handle(new ApproveMfaResetCommand(entry.PublicId), CancellationToken.None);
@@ -136,7 +133,7 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task First_approval_marks_first_approver_and_returns_Approved()
     {
-        var (handler, db, _, _, _) = Build(currentUserId: 30);
+        var (handler, db, _, _) = Build(currentUserId: 30);
         var (entry, _) = SeedRequest(db);
 
         var result = await handler.Handle(new ApproveMfaResetCommand(entry.PublicId), CancellationToken.None);
@@ -152,7 +149,7 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task Same_user_cannot_approve_twice()
     {
-        var (handler, db, _, _, _) = Build(currentUserId: 30);
+        var (handler, db, _, _) = Build(currentUserId: 30);
         var (entry, _) = SeedRequest(db);
         entry.FirstApproverId = 30;
         entry.FirstApprovalAt = DateTime.UtcNow;
@@ -167,17 +164,10 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task Second_distinct_approval_executes_reset_and_notifies()
     {
-        var (handler, db, _, mediator, identidad) = Build(currentUserId: 40);
-        var (entry, target) = SeedRequest(db);
+        var (handler, db, mediator, identidad) = Build(currentUserId: 40);
+        var (entry, _) = SeedRequest(db);
         entry.FirstApproverId = 30;
         entry.FirstApprovalAt = DateTime.UtcNow;
-        db.MfaBackupCodes.Add(new MfaBackupCode
-        {
-            UserId = target.Id,
-            CodeHash = "h",
-            BatchId = Guid.NewGuid(),
-            GeneratedAt = DateTime.UtcNow
-        });
         db.SaveChanges();
 
         var result = await handler.Handle(new ApproveMfaResetCommand(entry.PublicId), CancellationToken.None);
@@ -194,8 +184,6 @@ public class MfaResetApproveCommandHandlerTests
         stored.Status.Should().Be(MfaResetStatus.Executed);
         stored.SecondApproverId.Should().Be(40);
 
-        db.MfaBackupCodes.Where(c => !c.IsDeleted).Should().BeEmpty();
-
         await mediator.Received(1).Send(
             Arg.Is<SendNotificationCommand>(c => c.Payload.Type == NotificationType.MfaReset),
             Arg.Any<CancellationToken>());
@@ -204,7 +192,7 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task Sin_puente_a_identidad_central_falla_y_no_marca_ejecutada()
     {
-        var (handler, db, _, mediator, identidad) = Build(currentUserId: 40);
+        var (handler, db, mediator, identidad) = Build(currentUserId: 40);
         var (entry, _) = SeedRequest(db, conPuenteCentral: false);
         entry.FirstApproverId = 30;
         entry.FirstApprovalAt = DateTime.UtcNow;
@@ -229,7 +217,7 @@ public class MfaResetApproveCommandHandlerTests
     [Fact]
     public async Task Approval_after_24h_returns_expired()
     {
-        var (handler, db, _, _, _) = Build(currentUserId: 30,
+        var (handler, db, _, _) = Build(currentUserId: 30,
             now: new DateTime(2026, 5, 30, 0, 0, 0, DateTimeKind.Utc));
         var (entry, _) = SeedRequest(db,
             expiresAt: new DateTime(2026, 5, 29, 11, 0, 0, DateTimeKind.Utc));

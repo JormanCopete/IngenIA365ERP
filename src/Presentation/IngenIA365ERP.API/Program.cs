@@ -134,10 +134,6 @@ try
     // AdminDbContext ya queda registrado por AddPersistenceServices() abajo.
     builder.Services.AddCentralIdentity(builder.Configuration);
 
-    // T052/T058 — MFA challenge + enrollment stores en memoria (fallback dev).
-    // Producción usa los respaldos en Redis vía AddCachingServices.
-    builder.Services.AddSingleton<IMfaChallengeStore, InMemoryMfaChallengeStore>();
-    builder.Services.AddSingleton<IMfaEnrollmentStore, InMemoryMfaEnrollmentStore>();
     builder.Services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
     // T075 — cache de permisos efectivos (fallback dev). En producción
     // AddCachingServices registra el RedisPermissionClaimsCache.

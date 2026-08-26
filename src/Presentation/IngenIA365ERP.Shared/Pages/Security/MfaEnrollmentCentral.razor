@@ -8,7 +8,12 @@
 
 @*
     T079l — Enrollment voluntario de MFA desde el perfil.
-    Estados: NotStarted → Pending (QR/secret + input) → Enrolled.
+    Estados: NotStarted → Pending (secret + input) → Enrolled.
+
+    No se pinta código QR: no hay ninguna capa que lo genere. Existía un
+    TotpService con QRCoder que esta pantalla nunca llamó, y se retiró. Hasta
+    que el rediseño de MFA lo resuelva, la persona teclea el secret a mano —
+    el texto de abajo lo dice en vez de prometer un QR que no aparece.
     Feature 003 (T019): si MFA ya está activo (detectado vía GetMeAsync),
     muestra el estado Active con el contador de recovery codes restantes
     (FR-110) y la regeneración con confirmación de identidad (FR-111/FR-112).
@@ -34,7 +39,8 @@
         <ol>
             <li>Abre tu app de autenticación y agrega una nueva cuenta.</li>
             <li>
-                Escanea el código QR <em>o</em> ingresa el secret manualmente:
+                Elige «ingresar clave manualmente» y escribe este secret
+                (todavía no mostramos el código QR):
                 <code style="display: block; padding: var(--pad-sm); background: var(--superficie-0);
                               margin: var(--gap-sm) 0; word-break: break-all;">@_begin.SecretBase32</code>
                 <small>otpauth URI: <code style="word-break: break-all;">@_begin.OtpAuthUri</code></small>
