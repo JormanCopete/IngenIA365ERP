@@ -84,6 +84,15 @@ Autentica al usuario contra la identidad central. NO recibe ni acepta tenant.
   ```
   El cliente muestra `Pages/Auth/NoMembershipNotice.razor`. NO se emite JWT.
 
+  **Excepción: el administrador maestro global.** No tiene membresías por
+  diseño —gobierna el conjunto de cooperativas, no pertenece a ninguna— y no
+  recibe `NoActiveMembership` sino el challenge de su segundo factor:
+  `MfaEnrollmentRequired` si aún no lo tiene inscrito, `MfaRequired` si sí. Su
+  sesión operativa la emite `POST /api/auth/mfa/verify`, nunca este endpoint.
+  Antes entraba con sólo contraseña, y es la cuenta que crea cooperativas,
+  apaga la política de MFA de una cooperativa ajena y borra el segundo factor
+  de cualquiera (FR-003).
+
 - `401 Unauthorized` con `{ "errorCode": "Identity.InvalidCredentials", "message": "Credenciales inválidas." }` (FR-041 — mensaje genérico).
 
 - `423 Locked` con `{ "errorCode": "Identity.Locked.Soft", "message": "Cuenta bloqueada temporalmente. Reintenta en {N} segundos.", "retryAfterSeconds": 60 }` (FR-042, FR-046).
@@ -148,6 +157,30 @@ Invalida el refresh token actual y limpia la sesión.
 **Response**: `204 No Content`.
 
 **Auditoría**: `CentralUser.Logout`.
+
+---
+
+## POST /api/auth/logout-all
+
+Cierra **todas** las sesiones de quien llama, en todos sus dispositivos.
+
+Rota el `SecurityStamp` del usuario. No recorre sesiones una por una porque no
+hace falta: el refresh compara el stamp guardado en la sesión contra el actual,
+así que un stamp nuevo las invalida todas de golpe — incluidas las que ya
+estaban emitidas. No toca la contraseña.
+
+Cierra las sesiones **de quien llama**, no las de otro: el usuario sale del
+token, nunca del cuerpo. Lo prescribe el runbook ante sospecha de fuga de un
+token privilegiado.
+
+**Request**: `{}` (el access token va en `Authorization: Bearer ...`).
+
+**Response**: `204 No Content`.
+
+- `401 Unauthorized` con `Identity.Unauthenticated` si no hay sesión.
+- `404 Not Found` con `Generic.NotFound` si la cuenta ya no existe — y no
+  `204`: devolver éxito sin haber cerrado nada haría creer que se contuvo el
+  incidente.
 
 ---
 

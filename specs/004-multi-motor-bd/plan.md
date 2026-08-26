@@ -2,6 +2,14 @@
 
 **Branch**: `004-multi-motor-bd` | **Date**: 2026-08-03 | **Spec**: [spec.md](./spec.md)
 
+> **Nota de vigencia (2026-08-25).** Donde este documento dice «esquema de
+> tenant», hoy es **una base de datos por cooperativa**: el Principio IV cambió
+> con la constitución v2.0.0 y la decisión que lo revierte está registrada como
+> **D-03-REV** en [research.md](./research.md) — la traza de D-03 se conserva a
+> propósito. El aislamiento es físico y el catálogo administrativo vive en una
+> base aparte. Todo lo demás del documento sigue en pie.
+
+
 **Input**: Feature specification from `/specs/004-multi-motor-bd/spec.md`
 
 ## Summary

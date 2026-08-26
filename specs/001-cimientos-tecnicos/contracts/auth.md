@@ -1,4 +1,26 @@
-# Contract — Auth
+# Contract — Auth (Fase 0)
+
+> ## ⚠️ Mayormente superado — leé esto antes de usarlo
+>
+> **De las once rutas que documenta, hoy sólo existen cuatro.** Las demás se
+> retiraron el 2026-08-25 al desmontar la superficie de autenticación de Fase 0:
+> operaban sobre `SEC_Users` —el modelo por cooperativa— cuando la
+> autenticación ya vivía en la identidad central, así que devolvían «no
+> autenticado» pasaran las credenciales que pasaran.
+>
+> | Ruta | Hoy |
+> |---|---|
+> | `/login`, `/mfa/verify`, `/refresh`, `/logout` | Existen, pero **el contrato vivo es** [specs/002/contracts/auth.md](../../002-identidad-central-federada/contracts/auth.md). El cuerpo cambió: `{email, password}`, sin tenant ni username. |
+> | `/logout-all` | **Vive.** Reescrito: rota el `SecurityStamp` de quien llama y con eso caen todas sus sesiones. |
+> | `/mfa/reset/request`, `/mfa/reset/{id}/approve`, `/mfa/reset/requests` | **Viven.** Son la única implementación del reseteo administrativo con doble aprobación. |
+> | `/mfa/enroll/start`, `/mfa/enroll/confirm`, `/mfa/backup-codes/regenerate`, `/password/change` | **404.** Lo vivo es `/api/profile/mfa/enroll`, `/api/profile/mfa/confirm`, `/api/profile/mfa/recovery-codes/regenerate` y `/api/profile/password`. |
+>
+> Dos cosas más que este documento da por buenas y ya no lo son: los fallos de
+> autenticación responden **401**, no 422; y el administrador maestro **necesita
+> segundo factor** para entrar.
+>
+> Se conserva como registro de lo que fue Fase 0. No se reescribe: falsificaría
+> la traza.
 
 **Module**: `IngenIA365ERP.API/Modules/AuthModule.cs`
 **Base path**: `/api/auth`

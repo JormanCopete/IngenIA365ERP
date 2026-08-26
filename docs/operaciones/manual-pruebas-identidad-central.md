@@ -145,17 +145,35 @@ $loginResponse | ConvertTo-Json -Depth 5
 $accessToken = $loginResponse.accessToken
 ```
 
-**Esperado**: `challenge = "None"` + `accessToken` + `refreshToken`. Si tienes
-MFA activado para el master, recibirás `challenge = "MfaRequired"` con
-`challengeToken` y debes hacer:
+**Esperado**: `challenge = "MfaRequired"` con `challengeToken`, y **sin**
+`accessToken`. El segundo factor del maestro es obligatorio, no opcional: es la
+cuenta que crea cooperativas y puede apagar el MFA de las demás. Si el login te
+devolviera un `accessToken` directamente, eso sería un defecto.
+
+La primera vez recibirás `challenge = "MfaEnrollmentRequired"`, porque todavía
+no hay segundo factor que verificar. Se inscribe en el propio login:
 
 ```powershell
-# Con MFA: continuar con /api/auth/mfa/verify
+# Inscripción (sólo la primera vez), con el challengeToken
+$e = Invoke-RestMethod -Uri "http://localhost:5000/api/profile/mfa/enroll" `
+  -Method POST -Headers @{ Authorization = "Bearer $($loginResponse.challengeToken)" }
+# $e.secretBase32 → cargalo en la app de autenticación
+
+Invoke-RestMethod -Uri "http://localhost:5000/api/profile/mfa/confirm" `
+  -Method POST -Headers @{ Authorization = "Bearer $($loginResponse.challengeToken)" } `
+  -ContentType "application/json" -Body (@{ code = "<6 dígitos>" } | ConvertTo-Json)
+# Devuelve los códigos de recuperación. Guardalos: con un solo maestro son la
+# única vía de vuelta si se pierde el teléfono.
+
+# Después, y siempre: login → mfa/verify
 Invoke-RestMethod -Uri "http://localhost:5000/api/auth/mfa/verify" `
   -Method POST -Headers @{ Authorization = "Bearer $($loginResponse.challengeToken)" } `
   -ContentType "application/json" `
-  -Body (@{ code = "123456" } | ConvertTo-Json)
+  -Body (@{ code = "<6 dígitos>"; useRecoveryCode = $false } | ConvertTo-Json)
 ```
+
+**Ésa** es la llamada que devuelve `challenge = "None"` + `accessToken` +
+`refreshToken`.
 
 #### Paso 2. Master crea tenant + envía invitación admin (atomic)
 
@@ -856,10 +874,17 @@ Si solo tienes 5 min para verificar que el sistema está vivo:
 # 1. Health
 curl http://localhost:5000/health/live
 
-# 2. Login master
-$m = Invoke-RestMethod -Uri "http://localhost:5000/api/auth/login" `
+# 2. Login master → devuelve un CHALLENGE, no una sesión: el segundo factor
+#    del maestro es obligatorio.
+$c = Invoke-RestMethod -Uri "http://localhost:5000/api/auth/login" `
   -Method POST -ContentType "application/json" `
   -Body (@{ email = $env:MASTER_ADMIN_EMAIL; password = $env:MASTER_ADMIN_PASSWORD } | ConvertTo-Json)
+
+# 2b. Segundo factor → ESTA es la que trae la sesión.
+$m = Invoke-RestMethod -Uri "http://localhost:5000/api/auth/mfa/verify" `
+  -Method POST -Headers @{ Authorization = "Bearer $($c.challengeToken)" } `
+  -ContentType "application/json" `
+  -Body (@{ code = "<6 dígitos>"; useRecoveryCode = $false } | ConvertTo-Json)
 
 # 3. Me
 Invoke-RestMethod -Uri "http://localhost:5000/api/auth/me" `

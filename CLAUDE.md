@@ -6,7 +6,10 @@
 - **Documentación completa**: docs/ (ver docs/INDICE-DOCUMENTACION.md)
 - **Proyecto original VB.NET**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\solido.sln
 - **ERP.Core (Fase 1)**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\Plugins\PluginsComplete\ERP.Core\ (también copiado a `legacy/ERP.Core/`)
-- **Base de datos DDL**: database/schema/
+- **Base de datos DDL**: database/schema/ — **CONGELADO**, referencia histórica.
+  El esquema vivo son las migraciones EF por proveedor
+  (`src/Infrastructure/IngenIA365ERP.Persistence.Migrations.*`); esos .sql no se
+  aplican ni se mantienen.
 - **Scripts migración datos**: database/migration/
 
 ## Visión General
@@ -16,7 +19,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
 - **Backend**: .NET 10.0.5, Minimal APIs con Carter, CQRS con MediatR
 - **Frontend**: Blazor Hybrid MAUI + Web + WebAssembly, SyncFusion 33.1.44
 - **BD**: PostgreSQL / SQL Server (transaccional) + MongoDB (auditoría) + Redis (caché)
-- **Auth**: JWT RS256, 4 roles built-in, 40 permisos
+- **Auth**: JWT RS256, 4 roles built-in, 40 permisos. El segundo factor es
+  **obligatorio también para el administrador maestro**: su login devuelve un
+  challenge, nunca una sesión directa. Los fallos de autenticación responden
+  401, no 422.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
   vive fuera de toda base de cooperativa.
@@ -29,13 +35,19 @@ Clean Architecture en 4 capas:
 - `src/Presentation/` — APIs Carter, Blazor Web, Blazor MAUI
 
 ## Totales
-- 113 endpoints REST
-- 138 páginas Blazor funcionales
-- 16 reportes PDF
-- 382 archivos Application
-- 272 entidades, 272 EF Core Configurations, 142 DbSets
-- 398 tests automatizados
-- 0 errores de compilación
+
+Instantánea del 2026-08-25. **Son cifras que envejecen**: las de antes llevaban
+meses desfasadas —decían 113 endpoints cuando había ~619, y 398 pruebas cuando
+son 616— y nadie lo notaba porque nada las contrasta. Si dudás, medí en vez de
+creerles; el comando está al lado.
+
+| | | cómo medirlo |
+|---|---|---|
+| Rutas REST | ~619 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 174 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 16 | |
+| Pruebas | 616 (615 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste
   - `componentes.css` — clases de pantalla (`.pagina`, `.page-header`, `.toolbar`, `.info-card`, `.kpi-card`, `.data-grid`…)

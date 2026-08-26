@@ -15,9 +15,14 @@ excepcion, sin log y sin que ninguna prueba lo detectara.
 
 Principios modificados:
   IV.   Multi-tenancy schema-per-tenant → base-por-cooperativa   [MODIFICADO]
-        Alcance: SQL y MongoDB por cooperativa; Redis global con prefijo, por
-        decision explicita del propietario del producto (techo de 15 bases
-        logicas e incompatibilidad con Redis Cluster).
+        Alcance: SQL, MongoDB y Redis por cooperativa.
+        CORRECCION 2026-08-25: este parrafo decia "Redis global con prefijo".
+        Esa fue la primera decision y se revirtio el mismo dia, tambien a
+        peticion del propietario: Redis aisla por base logica, con la ranura
+        guardada en ADM_Tenants.RedisDbIndex. El texto del Principio IV se
+        corrigio para describir lo construido. Las dos consecuencias —techo
+        igual al valor de `databases` declarado al arrancar, e incompatibilidad
+        con Redis Cluster— siguen siendo ciertas y ahora estan escritas ahi.
 
 Principios que lo referencian y quedan afectados:
   X.    Trazabilidad SIPLA/SARLAFT — el rastro vive en la base de auditoria de
@@ -26,15 +31,30 @@ Principios que lo referencian y quedan afectados:
         en TODAS las bases de cooperativa.
 
 Documentos sincronizados: CLAUDE.md, README.md, .specify/templates/plan-template.md.
-Pendiente de revisar: docs/CONFIGURACION-Y-AUTENTICACION.md (el mas desfasado),
-los guiones de prueba con schemaName en el cuerpo, y specs/004-multi-motor-bd/
-research.md D-03, que descarto database-per-tenant citando el Principio IV
-anterior — hay que anadir la decision que lo revierte, no borrar la traza.
+
+Sincronizados el 2026-08-25:
+  - specs/004-multi-motor-bd/research.md — decision D-03-REV anadida. La traza
+    de D-03 se conserva, como pedia esta lista.
+  - specs/004-multi-motor-bd/{plan,quickstart,data-model}.md — nota de vigencia
+    al frente; corregidos ademas los pasos que alguien ejecuta.
+  - specs/001-cimientos-tecnicos/contracts/auth.md — aviso de superado con la
+    tabla de que ruta vive y cual da 404.
+  - specs/002-identidad-central-federada/contracts/auth.md — el maestro y su
+    segundo factor, y el contrato de logout-all.
+  - docs/operaciones/{runbook-fase0,Guia-Prueba-Produccion-Identidad-Central,
+    manual-pruebas-identidad-central}.md — el paso 1 de las tres guias no se
+    podia ejecutar desde que el maestro necesita segundo factor.
+  - CLAUDE.md — cifras remedidas y como recalcularlas.
+
+Pendiente: docs/CONFIGURACION-Y-AUTENTICACION.md (el mas desfasado) y los
+guiones de prueba con schemaName en el cuerpo.
 
 Procedimiento: la seccion Governance exige issue [Constitution] con motivacion,
 impacto y plan de migracion, mas dos revisores. Esta enmienda se redacto a
-peticion directa del propietario del producto; queda pendiente formalizar el
-issue y la revision.
+peticion directa del propietario del producto; SIGUE PENDIENTE formalizar el
+issue y la revision. No lo puede cerrar quien redacta el documento: hacen falta
+dos revisores distintos, y por eso queda escrito aqui en vez de darse por
+hecho.
 
 ---
 Historico
@@ -165,19 +185,30 @@ El aislamiento alcanza a las tres tiendas de datos, no solo a la transaccional:
 - **SQL** — una base por cooperativa.
 - **MongoDB** — una base de auditoría por cooperativa. **NEVER** una colección
   por cooperativa dentro de una base compartida.
-- **Redis** — **global, con prefijo por cooperativa en la clave**. Es la única
-  excepción del principio, y es deliberada: casi todo lo que Redis guarda es
-  global por naturaleza —contador de intentos de acceso (cuenta por correo
-  *antes* de elegir cooperativa; por cooperativa, el bloqueo se esquiva
-  cambiando de tenant), tokens revocados, refresco de sesión, los almacenes del
-  segundo factor (ocurre entre el acceso y la verificación: aún no hay
-  cooperativa), la lista de membresías de una persona, y los bloqueos
-  distribuidos, que protegen filas de la base administrativa—. Lo único
-  separable es el caché de permisos, que ya lleva la cooperativa en la clave.
-  A cambio, aislar por base lógica impondría un techo de 15 cooperativas
-  (Redis declara 16 bases y la 0 queda para lo global) y sería incompatible con
-  Redis Cluster, que sólo admite la base 0. **MUST** conservarse el prefijo por
-  cooperativa en toda clave que contenga datos de una.
+- **Redis** — **una base lógica por cooperativa**. La ranura se reserva al
+  aprovisionar y se guarda en `ADM_Tenants.RedisDbIndex`: es un **dato**, nunca
+  se deriva del nombre ni del índice, por la misma razón que la cadena de
+  conexión. La base 0 queda para lo que legítimamente no pertenece a ninguna
+  cooperativa: el contador de intentos de acceso (cuenta por correo *antes* de
+  elegir cooperativa; por cooperativa, el bloqueo se esquivaría cambiando de
+  tenant), los almacenes del segundo factor, el refresco de sesión y las
+  membresías de una persona.
+
+  Una ranura entregada **MUST NOT** reciclarse: reutilizar el hueco de una
+  cooperativa dada de baja haría que la siguiente heredara su caché de permisos
+  —y eso no daría error, daría los permisos de otra—.
+
+  Dos consecuencias que hay que conocer antes de desplegar, ambas verificadas:
+  el número de bases lógicas se fija con `databases` **al arrancar el servidor**
+  y es inmutable en caliente (`CONFIG SET` lo rechaza), así que el techo es el
+  que se haya declarado —16 por defecto, o sea 15 cooperativas—; y **Redis
+  Cluster sólo admite la base 0**, de modo que este modelo exige instancia
+  dedicada, no clúster. Si el techo aprieta, se sube `databases` y se reinicia,
+  o se dedica una instancia — nunca se recicla una ranura.
+
+  Esta viñeta decía «global, con prefijo por cooperativa» y describía una
+  decisión anterior que se revirtió a petición del propietario. Se corrige para
+  que describa lo construido.
 
 Toda query EF Core **MUST** ejecutarse contra la conexión de la cooperativa
 resuelta por `TenantResolutionMiddleware` a partir del claim `active_tenant_id`
