@@ -24,6 +24,7 @@
          La interfaz pública la consume Application vía ICentralIdentityProvider
          (Chunk C); aquí solo está la persistencia. -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.*" />
     <PackageReference Include="Dapper" Version="2.*" />
     <PackageReference Include="Finbuckle.MultiTenant" Version="10.1.0" />
     <PackageReference Include="Finbuckle.MultiTenant.EntityFrameworkCore" Version="10.1.0" />

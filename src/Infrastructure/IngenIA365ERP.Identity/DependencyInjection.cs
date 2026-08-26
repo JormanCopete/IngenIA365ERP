@@ -4,6 +4,7 @@ using IngenIA365ERP.Identity.KeyManagement;
 using IngenIA365ERP.Identity.Models;
 using IngenIA365ERP.Identity.Policies;
 using IngenIA365ERP.Identity.Services;
+using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -102,8 +103,24 @@ public static class DependencyInjection
         services.AddAuthorization();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
-        // === Data Protection (for EncryptionService) ===
+        // === Data Protection ===
+        //
+        // Este llavero cifra el secreto TOTP de cada persona
+        // (AspNetCoreIdentityProvider), la clave de cada adjunto
+        // (AttachmentEncryptionService) y lo que pase por EncryptionService.
+        // Perderlo no es una molestia: deja a todo el mundo sin segundo factor y
+        // vuelve ilegibles los archivos cifrados.
+        //
+        // Faltaba PersistKeysTo*. Sin esa llamada las claves van al perfil del
+        // proceso, que en un contenedor Linux es su capa escribible: se pierden al
+        // rotar el pod, y con dos réplicas cada una tiene la suya, así que lo que
+        // cifra un pod el otro no lo abre.
+        //
+        // Van a la base administrativa, que es única y compartida, y así entran en
+        // los respaldos que ya existen. SetApplicationName es el discriminador de
+        // aislamiento: si cambia, el llavero deja de reconocerse. No tocarlo.
         services.AddDataProtection()
+            .PersistKeysToDbContext<AdminDbContext>()
             .SetApplicationName("IngenIA365ERP")
             .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 

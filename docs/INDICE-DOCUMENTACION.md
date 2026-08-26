@@ -30,6 +30,7 @@
 | `docs/operaciones/dev-environment.md` | Cómo levantar el stack dev local (`docker compose -f docker/dev.yml`). |
 | `docs/operaciones/slo.md` | **Service Level Objectives** — 99.5 % mensual, ventanas, error budget (T134). |
 | `docs/operaciones/runbook-fase0.md` | **Runbook** de incidentes típicos: lockout, SMTP, Mongo down, rotación de claves (T135). |
+| `docs/operaciones/llavero-dataprotection.md` | **Leer antes de desplegar el llavero en base.** Qué cifra DataProtection (segundos factores y clave de cada adjunto), por qué se perdía en cada rotación de pod, y el procedimiento para rescatar las claves existentes antes del despliegue. Sin ese rescate, los adjuntos cifrados quedan ilegibles. |
 
 ### Fase 1: Consolidación VB.NET → C# (COMPLETADA)
 | Archivo | Descripción |

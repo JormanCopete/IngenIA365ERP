@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Persistence.Configurations.Admin;
 using IngenIA365ERP.Persistence.Configurations.Common;
 using IngenIA365ERP.Persistence.Identity;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +25,37 @@ namespace IngenIA365ERP.Persistence.DbContext;
 ///
 /// Las configurations se aplican explícitamente para no arrastrar las del modelo
 /// operacional (que vive en <see cref="ApplicationDbContext"/>).
+///
+/// <para>
+/// <b>Tercera responsabilidad: el llavero de DataProtection.</b> Implementa
+/// <see cref="IDataProtectionKeyContext"/>, así que las claves con las que se
+/// cifran el secreto TOTP de cada persona y la clave de cada adjunto viven en
+/// esta misma base.
+/// </para>
+///
+/// <para>
+/// Antes no vivían en ninguna parte: <c>AddDataProtection()</c> se registraba sin
+/// <c>PersistKeysTo*</c>, así que el llavero caía en el perfil del proceso —en un
+/// contenedor Linux, dentro de su capa escribible—. Con dos réplicas de API eso
+/// significa dos llaveros distintos: lo que cifra un pod, el otro no lo abre. En
+/// el segundo factor se ve como «código inválido» de forma intermitente; en los
+/// adjuntos, como archivos que dejan de poder leerse. Y cada despliegue rota los
+/// pods, o sea que empieza de cero.
+/// </para>
+///
+/// <para>
+/// Se eligió la base y no Redis porque las claves entran así en los respaldos que
+/// ya existen (WAL continuo + volcado diario) y se restauran junto con los datos
+/// que protegen. Contrapartida a saber: quien pueda leer esta base tiene el
+/// llavero y el ciphertext a la vez, así que el cifrado en columna deja de valer
+/// contra un atacante con acceso a la base. Protege contra respaldos filtrados y
+/// contra volcados parciales, no contra eso.
+/// </para>
 /// </summary>
-public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRole<Guid>, Guid>, IAdminDbContext
+public class AdminDbContext
+    : IdentityDbContext<CentralUserIdentity, IdentityRole<Guid>, Guid>,
+      IAdminDbContext,
+      IDataProtectionKeyContext
 {
     private readonly ICurrentUserService? _currentUserService;
 
@@ -37,6 +67,12 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
     {
         _currentUserService = currentUserService;
     }
+
+    /// <summary>
+    /// Llavero de DataProtection (tabla <c>ADM_DataProtectionKeys</c>). Lo lee y
+    /// lo escribe el propio framework; no se toca desde el código de la casa.
+    /// </summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     // --- Catálogo SaaS (Fase 0) ---
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -64,6 +100,10 @@ public class AdminDbContext : IdentityDbContext<CentralUserIdentity, IdentityRol
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("dbo");
+
+        // Llavero de DataProtection. La entidad la aporta el framework; lo único
+        // que se le impone es el prefijo de módulo de la casa.
+        modelBuilder.Entity<DataProtectionKey>().ToTable("ADM_DataProtectionKeys");
 
         // Catálogo SaaS (Fase 0).
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
