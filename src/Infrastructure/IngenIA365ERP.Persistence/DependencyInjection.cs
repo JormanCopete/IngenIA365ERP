@@ -165,7 +165,6 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<TenantSchemaService>();
-        services.AddScoped<ITenantSchemaProvisioner>(sp => sp.GetRequiredService<TenantSchemaService>());
 
         // Aprovisionador por BASE. Convive con el de esquema y todavia no lo llama
         // nadie: se registra para poder probarlo contra PostgreSQL real antes de que

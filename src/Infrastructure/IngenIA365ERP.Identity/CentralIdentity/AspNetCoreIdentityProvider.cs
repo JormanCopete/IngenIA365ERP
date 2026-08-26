@@ -139,6 +139,17 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return new ChangePasswordResult(true, []);
     }
 
+    public async Task<bool> RotateSecurityStampAsync(Guid centralUserId, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted) return false;
+
+        // Un stamp nuevo invalida todas las sesiones sin recorrerlas: el refresh
+        // compara el guardado en la sesión con el actual y rechaza si difieren.
+        var result = await _userManager.UpdateSecurityStampAsync(identity);
+        return result.Succeeded;
+    }
+
     public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsByIdsAsync(
         IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct)
     {

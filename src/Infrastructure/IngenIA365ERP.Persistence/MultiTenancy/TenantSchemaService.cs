@@ -20,7 +20,11 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 /// Usado por el inicializador de arranque (FR-009/FR-019a) y por el alta de
 /// tenant en runtime (FR-014).
 /// </summary>
-public class TenantSchemaService : ITenantSchemaProvisioner
+// Ya no implementa ITenantSchemaProvisioner: esa interfaz se quedo sin un solo
+// consumidor cuando ITenantDatabaseProvisioner la sustituyo. El METODO sigue
+// vivo — lo llama CreateTenantAsync, y de ahi el comando "create" de la CLI
+// DbMigrator—, asi que se retira la interfaz y se conserva el cuerpo.
+public class TenantSchemaService
 {
     private readonly TenantDbContext _tenantDb;
     /// <summary>

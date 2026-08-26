@@ -119,7 +119,6 @@ public static class DependencyInjection
         services.AddScoped<Persistence.Seeding.IDataSeeder, Seed.PhaseZeroSecuritySeeder>();
 
         // === Fase 0 — US1 ===
-        services.AddSingleton<IAccessTokenIssuer, AccessTokenIssuer>();
         services.AddSingleton<ITotpService, TotpService>();
         services.AddSingleton<IMfaBackupCodeGenerator, MfaBackupCodeGenerator>();
         services.AddScoped<IPasswordPolicyEnforcer, PasswordPolicyEnforcer>();

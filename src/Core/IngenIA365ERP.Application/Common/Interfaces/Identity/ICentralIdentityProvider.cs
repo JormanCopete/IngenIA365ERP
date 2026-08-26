@@ -55,6 +55,21 @@ public interface ICentralIdentityProvider
         string newPassword,
         CancellationToken ct);
 
+    /// <summary>
+    /// Rota el SecurityStamp: cierra TODAS las sesiones de la persona, en todos
+    /// sus dispositivos, sin tocar su contraseña.
+    ///
+    /// <para>
+    /// Es lo que sostiene <c>POST /api/auth/logout-all</c>, y el runbook lo
+    /// prescribe ante sospecha de fuga de la clave RSA. No hace falta recorrer
+    /// las sesiones una por una: el refresh compara el stamp guardado en la
+    /// sesión contra el actual del usuario y rechaza si difieren, así que un
+    /// stamp nuevo las invalida todas de golpe — incluidas las que ya estaban
+    /// emitidas y las que no conocemos.
+    /// </para>
+    /// </summary>
+    Task<bool> RotateSecurityStampAsync(Guid centralUserId, CancellationToken ct);
+
     /// <summary>Reset administrativo (master admin). NO requiere currentPassword.
     /// Genera nuevo SecurityStamp → invalida todos los refresh tokens.</summary>
     Task<ChangePasswordResult> AdminResetPasswordAsync(
