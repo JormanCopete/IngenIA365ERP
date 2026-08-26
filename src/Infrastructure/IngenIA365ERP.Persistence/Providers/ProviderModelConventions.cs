@@ -31,7 +31,13 @@ public static class ProviderModelConventions
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            var rowVersion = entityType.FindProperty(nameof(BaseEntity.RowVersion));
+            // DECLARED y no Find a secas: en una jerarquía TPH la propiedad la
+            // declara la raíz, y FindProperty también la encuentra desde las
+            // derivadas. Quitarla o ignorarla DESDE una derivada no es legal
+            // («cannot be ignored on type … because it's declared on the base
+            // type»), y que hoy funcionara dependería del orden en que EF
+            // devuelva los tipos. Sin herencia, declarada == propia.
+            var rowVersion = entityType.FindDeclaredProperty(nameof(BaseEntity.RowVersion));
             if (rowVersion is null || rowVersion.ClrType != typeof(byte[]))
                 continue;
 
@@ -81,7 +87,11 @@ public static class ProviderModelConventions
                 .Where(n => n is not null)
                 .ToHashSet(StringComparer.Ordinal);
 
-            foreach (var index in entityType.GetIndexes())
+            // DECLARED: en TPH las derivadas reportan también los índices
+            // heredados, y se traduciría el mismo filtro varias veces. Los
+            // índices declarados EN una derivada sí se visitan, porque el bucle
+            // de arriba recorre todos los tipos.
+            foreach (var index in entityType.GetDeclaredIndexes())
             {
                 var filter = index.GetFilter();
                 if (string.IsNullOrEmpty(filter))

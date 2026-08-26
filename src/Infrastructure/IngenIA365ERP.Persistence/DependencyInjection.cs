@@ -94,6 +94,12 @@ public static class DependencyInjection
             providerConfigurator.Configure(options, adminConnectionString, MigrationsTarget.Admin));
         services.AddScoped<IAdminDbContext>(sp => sp.GetRequiredService<AdminDbContext>());
 
+        // Directorio de credenciales de segundo factor. Es el unico sitio que
+        // escribe ADM_MfaCredentials y, con el, TwoFactorEnabled.
+        services.AddScoped<
+            Application.Common.Interfaces.Identity.IMfaDirectory,
+            Identity.MfaDirectory>();
+
         // Main application DbContext (tenant-scoped)
         // La cadena sale de la cooperativa del ambito, no de la configuracion.
         //

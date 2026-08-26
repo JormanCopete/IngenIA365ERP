@@ -40,9 +40,28 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// </summary>
 public class PrincipioXII_MigracionesDestructivas
 {
+    /// <summary>
+    /// Operaciones destructivas por la API de migraciones.
+    /// </summary>
     private static readonly Regex OperacionDestructiva = new(
         @"\b(DropTable|DropColumn|DropForeignKey)\s*\(",
         RegexOptions.Compiled);
+
+    /// <summary>
+    /// Lo mismo escrito como SQL crudo dentro de <c>migrationBuilder.Sql(...)</c>,
+    /// que la API de arriba no ve.
+    ///
+    /// <para>
+    /// Deliberadamente NO incluye <c>UPDATE</c>: una migración de datos legítima
+    /// actualiza filas, y marcarlas todas convertiría la guarda en ruido que la
+    /// gente aprende a saltarse. Queda el hueco de un
+    /// <c>UPDATE … SET columna = NULL</c> que vacíe una columna a propósito; eso
+    /// se atrapa en revisión, no aquí.
+    /// </para>
+    /// </summary>
+    private static readonly Regex SqlDestructivo = new(
+        @"\b(DELETE\s+FROM|TRUNCATE\s+TABLE|TRUNCATE\s+|DROP\s+TABLE|DROP\s+COLUMN)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private const string MarcadorDeAprobacion = "MIGRACION-DESTRUCTIVA-APROBADA";
 
@@ -95,6 +114,8 @@ public class PrincipioXII_MigracionesDestructivas
 
         return OperacionDestructiva.Matches(cuerpo)
             .Select(m => m.Groups[1].Value)
+            .Concat(SqlDestructivo.Matches(cuerpo)
+                .Select(m => $"SQL crudo: {m.Groups[1].Value.ToUpperInvariant()}"))
             .ToList();
     }
 

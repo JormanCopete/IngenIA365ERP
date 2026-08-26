@@ -35,17 +35,20 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
     private readonly UserManager<CentralUserIdentity> _userManager;
     private readonly IPwnedPasswordService _pwned;
     private readonly IDataProtector _protector;
+    private readonly IMfaDirectory _credenciales;
     private readonly ILogger<AspNetCoreIdentityProvider> _log;
 
     public AspNetCoreIdentityProvider(
         UserManager<CentralUserIdentity> userManager,
         IPwnedPasswordService pwned,
         IDataProtectionProvider dataProtection,
+        IMfaDirectory credenciales,
         ILogger<AspNetCoreIdentityProvider> log)
     {
         _userManager = userManager;
         _pwned = pwned;
         _protector = dataProtection.CreateProtector(DataProtectorPurpose);
+        _credenciales = credenciales;
         _log = log;
     }
 
@@ -233,8 +236,19 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         if (!totp.VerifyTotp(code, out _, VerificationWindow.RfcSpecifiedNetworkDelay))
             return new MfaConfirmResult(false, ["Profile.Mfa.InvalidCode"]);
 
-        // Persistir secret cifrado + activar 2FA + generar recovery codes nativos.
-        identity.MfaSecret = _protector.Protect(base32Secret);
+        var protegido = _protector.Protect(base32Secret);
+
+        // La credencial PRIMERO, la bandera DESPUÉS. Si algo falla en medio, la
+        // persona queda con credencial y sin bandera: el login no le pide segundo
+        // factor y entra. Al revés —bandera sin credencial— le pediría un código
+        // que no puede acertar, y sólo la sacaría de ahí un reseteo administrativo.
+        // Todo fallo a medias tiene que caer del lado seguro.
+        await _credenciales.ReemplazarTotpAsync(
+            identity.Id, protegido, label: null, utcNow: DateTime.UtcNow, ct);
+
+        // La columna vieja se sigue escribiendo durante el traslado: es la red por
+        // si hay que volver a la versión anterior, que sólo sabe leer de ahí.
+        identity.MfaSecret = protegido;
         identity.TwoFactorEnabled = true;
         var updateResult = await _userManager.UpdateAsync(identity);
         if (!updateResult.Succeeded)
@@ -250,13 +264,32 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
     public async Task<bool> VerifyMfaCodeAsync(Guid centralUserId, string code, CancellationToken ct)
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
-        if (identity is null || identity.IsDeleted || !identity.TwoFactorEnabled || identity.MfaSecret is null)
+        if (identity is null || identity.IsDeleted || !identity.TwoFactorEnabled)
             return false;
+
+        // La verdad está en ADM_MfaCredentials. La columna vieja se sigue leyendo
+        // como respaldo mientras dure el traslado, y no por nostalgia: si alguien
+        // despliega la versión anterior y esa versión escribe MfaSecret sin tocar
+        // la tabla nueva, sin este respaldo esa persona perdería su segundo factor
+        // al volver a desplegar la versión nueva.
+        var cifrado = await _credenciales.ObtenerCifradoTotpActivoAsync(centralUserId, ct);
+
+        if (cifrado is null && identity.MfaSecret is not null)
+        {
+            cifrado = identity.MfaSecret;
+            _log.LogWarning(
+                "[Mfa.LecturaHeredada] {CentralUserId} verificó con ADM_CentralUsers.MfaSecret: " +
+                "no tiene credencial en ADM_MfaCredentials. Si esto aparece después del traslado, " +
+                "el traslado no la cubrió.",
+                centralUserId);
+        }
+
+        if (cifrado is null) return false;
 
         string unprotected;
         try
         {
-            unprotected = _protector.Unprotect(identity.MfaSecret);
+            unprotected = _protector.Unprotect(cifrado);
         }
         catch (System.Security.Cryptography.CryptographicException ex)
         {
@@ -303,6 +336,13 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
         if (identity is null || identity.IsDeleted) return;
+
+        // Al dar de baja, el orden se invierte respecto al alta: credenciales
+        // PRIMERO, bandera después. Así un fallo a medias deja la bandera en true
+        // sin credencial —el login pide un código que no vale, molesto pero
+        // recuperable— y nunca al revés, que sería dejar la cuenta sin segundo
+        // factor creyendo que lo tiene.
+        await _credenciales.RevocarTodasAsync(centralUserId, DateTime.UtcNow, ct);
 
         identity.MfaSecret = null;
         identity.TwoFactorEnabled = false;

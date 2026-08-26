@@ -180,6 +180,83 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                     b.ToTable("ADM_Invitations", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.MfaCredential", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CentralUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("CredentialType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "CentralUserId" }, "IX_ADM_MfaCredentials_CentralUserId")
+                        .HasDatabaseName("IX_ADM_MfaCredentials_CentralUserId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "CentralUserId" }, "UX_ADM_MfaCredentials_TotpActivo")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ADM_MfaCredentials_TotpActivo")
+                        .HasFilter("[CredentialType] = 'Totp' AND [IsDeleted] = 0");
+
+                    b.ToTable("ADM_MfaCredentials", "dbo");
+
+                    b.HasDiscriminator<string>("CredentialType").HasValue("MfaCredential");
+
+                    b.UseTphMappingStrategy();
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.PasswordResetToken", b =>
                 {
                     b.Property<int>("Id")
@@ -1271,6 +1348,18 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("ADM_CentralUserTokens", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.TotpCredential", b =>
+                {
+                    b.HasBaseType("IngenIA365ERP.Domain.Entities.Admin.MfaCredential");
+
+                    b.Property<string>("SecretProtected")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.HasDiscriminator().HasValue("Totp");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.Subscription", b =>

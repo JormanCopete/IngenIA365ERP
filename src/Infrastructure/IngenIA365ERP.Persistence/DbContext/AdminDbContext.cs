@@ -84,6 +84,13 @@ public class AdminDbContext
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
+
+    /// <summary>
+    /// Credenciales de segundo factor, una tabla con discriminador. Sustituye a la
+    /// columna única <c>ADM_CentralUsers.MfaSecret</c>, que se conserva mientras
+    /// dure el modo compatibilidad.
+    /// </summary>
+    public DbSet<MfaCredential> MfaCredentials => Set<MfaCredential>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
     // --- Identidad central · Phase 4b (Profile & Recovery) ---
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
@@ -118,6 +125,11 @@ public class AdminDbContext
         modelBuilder.ApplyConfiguration(new TenantMembershipConfiguration());
         modelBuilder.ApplyConfiguration(new InvitationConfiguration());
         modelBuilder.ApplyConfiguration(new TenantMfaPolicyConfiguration());
+
+        // Jerarquía TPH: la raíz declara tabla, discriminador, índices y filtro;
+        // el subtipo sólo aporta sus columnas propias. Las dos se registran.
+        modelBuilder.ApplyConfiguration(new MfaCredentialConfiguration());
+        modelBuilder.ApplyConfiguration(new TotpCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
 
