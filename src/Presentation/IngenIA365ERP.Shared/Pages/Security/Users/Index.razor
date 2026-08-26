@@ -38,15 +38,18 @@
                         <td>@u.Username</td>
                         <td>@u.Email</td>
                         <td>@(u.IsActive ? "Activo" : "Inactivo")</td>
-                        <td>@(u.IsMfaEnabled ? "Sí" : "No")</td>
-                        <td>@(u.IsLocked ? "Sí" : "")</td>
+                        @* «—» cuando no se sabe, y NO «No»: estas columnas se leian
+                           de SEC_Users, donde ya no las escribe nadie, y afirmaban
+                           que nadie tenia segundo factor ni estaba bloqueado. *@
+                        <td>@(u.IsMfaEnabled is null ? "—" : u.IsMfaEnabled.Value ? "Sí" : "No")</td>
+                        <td>@(u.IsLocked is null ? "—" : u.IsLocked.Value ? "Sí" : "")</td>
                         <td>@string.Join(", ", u.RoleCodes)</td>
                         <td>@u.LastLoginAt?.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>
                             <div class="acciones">
                                 <button @onclick="() => Edit(u.PublicId)">Editar</button>
                                 <button @onclick="() => Roles(u.PublicId)">Roles</button>
-                                @if (u.IsLocked)
+                                @if (u.IsLocked == true)
                                 {
                                     <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
                                 }
@@ -130,7 +133,7 @@
 
     public sealed record UserItem(
         Guid PublicId, string Username, string? Email,
-        bool IsActive, bool IsMfaEnabled, bool IsLocked,
+        bool IsActive, bool? IsMfaEnabled, bool? IsLocked,
         DateTime? LastLoginAt, IReadOnlyList<string> RoleCodes);
 
     public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);

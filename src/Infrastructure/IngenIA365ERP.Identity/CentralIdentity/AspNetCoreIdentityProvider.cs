@@ -150,6 +150,23 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return result.Succeeded;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, CentralUserSecuritySnapshot>> GetSecuritySnapshotsAsync(
+        IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct)
+    {
+        if (centralUserIds.Count == 0)
+            return new Dictionary<Guid, CentralUserSecuritySnapshot>();
+
+        var ids = centralUserIds.ToArray();
+        var rows = await _userManager.Users
+            .Where(u => ids.Contains(u.Id) && !u.IsDeleted)
+            .Select(u => new { u.Id, u.TwoFactorEnabled, u.LastLoginAt })
+            .ToListAsync(ct);
+
+        return rows.ToDictionary(
+            r => r.Id,
+            r => new CentralUserSecuritySnapshot(r.TwoFactorEnabled, r.LastLoginAt));
+    }
+
     public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsByIdsAsync(
         IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct)
     {

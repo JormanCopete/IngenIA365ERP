@@ -22,6 +22,29 @@ public interface ICentralIdentityProvider
     Task<CentralUser?> FindByIdAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>
+    /// Resuelve en lote el estado de seguridad de un conjunto de usuarios: si
+    /// tienen segundo factor y cuándo entraron por última vez.
+    ///
+    /// <para>
+    /// <b>Por qué hace falta.</b> La pantalla de usuarios de una cooperativa lee
+    /// <c>SEC_Users</c>, y esas dos cosas ya no viven ahí: el segundo factor se
+    /// inscribe sobre la identidad central y el último acceso lo sella ella. Las
+    /// columnas de <c>SEC_Users</c> quedaron sin nadie que las escribiera, así
+    /// que la pantalla mostraba «MFA: No» y último acceso vacío para todo el
+    /// mundo — con aspecto de dato real.
+    /// </para>
+    ///
+    /// <para>
+    /// En lote y no una consulta por fila: son bases distintas y el listado
+    /// pagina de veinte en veinte. Ids inexistentes o eliminados simplemente no
+    /// aparecen en el diccionario, y quien llama distingue así «no» de «no se
+    /// sabe».
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, CentralUserSecuritySnapshot>> GetSecuritySnapshotsAsync(
+        IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct);
+
+    /// <summary>
     /// Resuelve en lote el email de un conjunto de usuarios (listados, p.ej.
     /// miembros de un tenant) en una sola consulta. Ids inexistentes o
     /// eliminados simplemente no aparecen en el diccionario resultante.
@@ -152,3 +175,8 @@ public sealed record MfaConfirmResult(
     bool Succeeded,
     IReadOnlyList<string> ErrorCodes,
     IReadOnlyList<string>? RecoveryCodes = null);
+
+/// <summary>
+/// Estado de seguridad de una persona, tal y como lo sabe la identidad central.
+/// </summary>
+public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt);

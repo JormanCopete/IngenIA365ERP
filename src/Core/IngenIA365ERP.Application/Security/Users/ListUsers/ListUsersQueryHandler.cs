@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Security.Users.Common;
@@ -11,12 +12,17 @@ public sealed class ListUsersQueryHandler
     : IRequestHandler<ListUsersQuery, Result<PagedResult<UserListItemDto>>>
 {
     private readonly IApplicationDbContext _db;
-    private readonly IDateTimeService _clock;
+    private readonly ICentralIdentityProvider identidadCentral;
+    private readonly ILoginAttemptCounter contadorDeIntentos;
 
-    public ListUsersQueryHandler(IApplicationDbContext db, IDateTimeService clock)
+    public ListUsersQueryHandler(
+        IApplicationDbContext db,
+        ICentralIdentityProvider identidadCentral,
+        ILoginAttemptCounter contadorDeIntentos)
     {
         _db = db;
-        _clock = clock;
+        this.identidadCentral = identidadCentral;
+        this.contadorDeIntentos = contadorDeIntentos;
     }
 
     public async Task<Result<PagedResult<UserListItemDto>>> Handle(
@@ -25,7 +31,6 @@ public sealed class ListUsersQueryHandler
         var paging = request.Paging ?? new PageRequest();
         var page = paging.SafePage;
         var pageSize = paging.SafePageSize;
-        var now = _clock.UtcNow;
 
         var query = request.IncludeDisabled
             ? _db.Users.IgnoreQueryFilters()
@@ -47,22 +52,74 @@ public sealed class ListUsersQueryHandler
 
         var total = await query.LongCountAsync(ct);
 
-        // Proyección a DTO. EF traduce Roles.Select por la junction UserRole.
-        var pageItems = await query
+        // La página, con lo que SÍ vive en la base de la cooperativa.
+        var filas = await query
             .OrderBy(u => u.Username)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(u => new UserListItemDto(
+            .Select(u => new
+            {
                 u.PublicId,
                 u.Username,
                 u.Email,
-                u.IsActive && !u.IsDeleted,
-                u.IsMfaEnabled,
-                u.LockoutEndAt != null && u.LockoutEndAt > now,
-                u.LastLoginAt,
-                u.Roles.Select(r => r.Code).ToList()))
+                Activo = u.IsActive && !u.IsDeleted,
+                u.CentralUserId,
+                Roles = u.Roles.Select(r => r.Code).ToList(),
+            })
             .ToListAsync(ct);
 
+        // Segundo factor y último acceso salen de la identidad central, en un
+        // solo viaje. En SEC_Users esas columnas existen pero no las escribe
+        // nadie: mostraban «No» y vacío para todo el mundo.
+        var identidades = filas
+            .Where(f => f.CentralUserId is not null)
+            .Select(f => f.CentralUserId!.Value)
+            .Distinct()
+            .ToList();
+
+        var central = await identidadCentral.GetSecuritySnapshotsAsync(identidades, ct);
+
+        var pageItems = new List<UserListItemDto>(filas.Count);
+        foreach (var f in filas)
+        {
+            CentralUserSecuritySnapshot? snapshot = null;
+            if (f.CentralUserId is not null && central.TryGetValue(f.CentralUserId.Value, out var s))
+            {
+                snapshot = s;
+            }
+
+            pageItems.Add(new UserListItemDto(
+                f.PublicId,
+                f.Username,
+                f.Email,
+                f.Activo,
+                snapshot?.TwoFactorEnabled,
+                await EstaBloqueadoAsync(f.Email, ct),
+                snapshot?.LastLoginAt,
+                f.Roles));
+        }
+
         return Result.Success(new PagedResult<UserListItemDto>(pageItems, page, pageSize, total));
+    }
+
+    /// <summary>
+    /// El bloqueo por intentos fallidos vive en Redis, no en una columna.
+    ///
+    /// <para>
+    /// <c>SEC_Users.LockoutEndAt</c> sólo se pone a <c>null</c> en dos sitios y
+    /// no se rellena en ninguno, así que la columna «Bloqueado» estaba vacía
+    /// siempre, incluso para una cuenta efectivamente bloqueada. Una consulta a
+    /// Redis por fila es el precio de que el dato sea cierto; la página trae
+    /// veinte como mucho.
+    /// </para>
+    /// </summary>
+    private async Task<bool?> EstaBloqueadoAsync(string? correo, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(correo)) return null;
+
+        var estado = await contadorDeIntentos.CheckAsync(
+            AmbitoDeIntentos.Password, correo.Trim().ToUpperInvariant(), ct);
+
+        return estado.IsLocked;
     }
 }

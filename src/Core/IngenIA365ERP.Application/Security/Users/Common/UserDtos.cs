@@ -3,13 +3,23 @@ namespace IngenIA365ERP.Application.Security.Users.Common;
 /// <summary>
 /// Proyección de usuario para listados — solo los campos seguros y útiles.
 /// </summary>
+/// <param name="IsMfaEnabled">
+/// <c>null</c> = no se sabe. Y esa distinción es el arreglo: estos tres datos
+/// se leían de <c>SEC_Users</c>, donde ya no los escribe nadie —el segundo
+/// factor se inscribe sobre la identidad central, el último acceso lo sella
+/// ella y el bloqueo por intentos vive en Redis—, así que la pantalla decía
+/// «MFA: No», «Bloqueado: (vacío)» y último acceso en blanco para todo el
+/// mundo. Un dato inventado con aspecto de dato real es peor que un hueco:
+/// quien administra usuarios toma decisiones con él.
+/// </param>
+/// <param name="IsLocked"><c>null</c> = no se sabe (la persona no tiene correo con el que consultarlo).</param>
 public sealed record UserListItemDto(
     Guid PublicId,
     string Username,
     string? Email,
     bool IsActive,
-    bool IsMfaEnabled,
-    bool IsLocked,
+    bool? IsMfaEnabled,
+    bool? IsLocked,
     DateTime? LastLoginAt,
     IReadOnlyList<string> RoleCodes);
 
