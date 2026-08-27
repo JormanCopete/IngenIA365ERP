@@ -37,15 +37,22 @@ public sealed class MfaCredentialConfiguration : IEntityTypeConfiguration<MfaCre
     /// </summary>
     public const string ValorTotp = "Totp";
 
+    /// <summary>
+    /// Valor del discriminador para WebAuthn. Literal corto y no el nombre de la
+    /// clase, por lo mismo que <see cref="ValorTotp"/>.
+    /// </summary>
+    public const string ValorWebAuthn = "WebAuthn";
+
     public void Configure(EntityTypeBuilder<MfaCredential> builder)
     {
         builder.ToTable("ADM_MfaCredentials");
         builder.HasKey(e => e.Id);
 
-        // TPH. Hoy hay un solo valor; el segundo llega con WebAuthn y sólo añade
-        // columnas nulables, que es una operación en línea en ambos motores.
+        // TPH con dos tipos: el autenticador de códigos y el passkey. Las columnas
+        // propias de cada uno son anulables por fuerza, porque comparten tabla.
         builder.HasDiscriminator<string>(ColumnaDiscriminador)
-            .HasValue<TotpCredential>(ValorTotp);
+            .HasValue<TotpCredential>(ValorTotp)
+            .HasValue<WebAuthnCredential>(ValorWebAuthn);
 
         builder.Property<string>(ColumnaDiscriminador).HasMaxLength(32);
 

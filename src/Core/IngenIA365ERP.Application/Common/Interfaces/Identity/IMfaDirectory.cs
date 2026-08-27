@@ -114,7 +114,65 @@ public interface IMfaDirectory
     /// </summary>
     Task MarcarUsoAsync(
         Guid centralUserId, Guid credencialPublicId, DateTime utcNow, CancellationToken ct);
+
+    // ---------- WebAuthn ----------
+
+    /// <summary>AÑADE una passkey. No reemplaza ninguna.</summary>
+    /// <returns><c>PublicId</c> de la credencial creada.</returns>
+    Task<Guid> InscribirWebAuthnAsync(
+        NuevaCredencialWebAuthn credencial, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Las passkeys activas de la persona, para poblar <c>allowCredentials</c> al
+    /// entrar y <c>excludeCredentials</c> al inscribir.
+    /// </summary>
+    Task<IReadOnlyList<CredencialWebAuthnPermitida>> ListarWebAuthnActivasAsync(
+        Guid centralUserId, CancellationToken ct);
+
+    /// <summary>
+    /// Busca una passkey por su credential id, que es único globalmente.
+    ///
+    /// <para>
+    /// No recibe la persona a propósito: al entrar, el navegador devuelve el
+    /// identificador de la llave y de ahí se deduce de quién es. Es lo que permite
+    /// que un passkey descubrible abra la sesión sin escribir el correo.
+    /// </para>
+    /// </summary>
+    Task<CredencialWebAuthnGuardada?> BuscarWebAuthnPorCredentialIdAsync(
+        byte[] credentialId, CancellationToken ct);
+
+    /// <summary>
+    /// Sella el contador de firmas tras una aserción correcta. No hace nada si no
+    /// cambió: la mayoría de las passkeys de plataforma reportan siempre cero.
+    /// </summary>
+    Task ActualizarContadorWebAuthnAsync(
+        Guid credencialPublicId, long contador, bool respaldada, CancellationToken ct);
+
+    /// <summary>¿Está libre este credential id? Lo exige la librería al inscribir.</summary>
+    Task<bool> ElCredentialIdEstaLibreAsync(byte[] credentialId, CancellationToken ct);
 }
+
+/// <summary>Lo que hace falta para persistir una passkey recién verificada.</summary>
+public sealed record NuevaCredencialWebAuthn(
+    Guid CentralUserId,
+    byte[] CredentialId,
+    byte[] ClavePublicaCose,
+    long ContadorDeFirmas,
+    Guid? AaGuid,
+    string? TransportsJson,
+    bool EsRespaldable,
+    bool EstaRespaldada,
+    string? FormatoDeAtestacion,
+    string? Label);
+
+/// <summary>
+/// Una passkey tal como está guardada, con lo justo para verificar una aserción.
+/// </summary>
+public sealed record CredencialWebAuthnGuardada(
+    Guid PublicId,
+    Guid CentralUserId,
+    byte[] ClavePublicaCose,
+    long SignCount);
 
 /// <summary>Un secreto protegido con su identificador público. Nada más.</summary>
 public sealed record CredencialTotpCifrada(Guid PublicId, string SecretProtected);

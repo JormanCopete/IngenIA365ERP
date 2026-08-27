@@ -1360,6 +1360,48 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                     b.HasDiscriminator().HasValue("Totp");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.WebAuthnCredential", b =>
+                {
+                    b.HasBaseType("IngenIA365ERP.Domain.Entities.Admin.MfaCredential");
+
+                    b.Property<Guid?>("AaGuid")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AttestationFormat")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(1023)
+                        .HasColumnType("varbinary(1023)");
+
+                    b.Property<bool>("IsBackedUp")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsBackupEligible")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("PublicKeyCose")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("varbinary(1024)");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Transports")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasIndex(new[] { "CredentialId" }, "UX_ADM_MfaCredentials_CredentialId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ADM_MfaCredentials_CredentialId")
+                        .HasFilter("[CredentialId] IS NOT NULL AND [IsDeleted] = 0");
+
+                    b.HasDiscriminator().HasValue("WebAuthn");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.Subscription", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Admin.Tenant", "Tenant")

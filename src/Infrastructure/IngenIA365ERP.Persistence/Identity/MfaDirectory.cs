@@ -164,6 +164,82 @@ public sealed class MfaDirectory : IMfaDirectory
         await _db.SaveChangesAsync(ct);
     }
 
+    // ---------- WebAuthn ----------
+
+    public async Task<Guid> InscribirWebAuthnAsync(
+        NuevaCredencialWebAuthn credencial, DateTime utcNow, CancellationToken ct)
+    {
+        var nueva = WebAuthnCredential.Inscribir(
+            credencial.CentralUserId,
+            credencial.CredentialId,
+            credencial.ClavePublicaCose,
+            credencial.ContadorDeFirmas,
+            credencial.AaGuid,
+            credencial.TransportsJson,
+            credencial.EsRespaldable,
+            credencial.EstaRespaldada,
+            credencial.FormatoDeAtestacion,
+            credencial.Label,
+            utcNow,
+            Actor);
+
+        _db.MfaCredentials.Add(nueva);
+        await _db.SaveChangesAsync(ct);
+        return nueva.PublicId;
+    }
+
+    public async Task<IReadOnlyList<CredencialWebAuthnPermitida>> ListarWebAuthnActivasAsync(
+        Guid centralUserId, CancellationToken ct) =>
+        await _db.MfaCredentials
+            .AsNoTracking()
+            .OfType<WebAuthnCredential>()
+            .Where(c => c.CentralUserId == centralUserId)
+            .OrderBy(c => c.Id)
+            .Select(c => new CredencialWebAuthnPermitida(c.CredentialId, c.Transports))
+            .ToListAsync(ct);
+
+    public async Task<CredencialWebAuthnGuardada?> BuscarWebAuthnPorCredentialIdAsync(
+        byte[] credentialId, CancellationToken ct) =>
+        await _db.MfaCredentials
+            .AsNoTracking()
+            .OfType<WebAuthnCredential>()
+            .Where(c => c.CredentialId == credentialId)
+            .Select(c => new CredencialWebAuthnGuardada(
+                c.PublicId, c.CentralUserId, c.PublicKeyCose, c.SignCount))
+            .FirstOrDefaultAsync(ct);
+
+    public async Task ActualizarContadorWebAuthnAsync(
+        Guid credencialPublicId, long contador, bool respaldada, CancellationToken ct)
+    {
+        var credencial = await _db.MfaCredentials
+            .OfType<WebAuthnCredential>()
+            .FirstOrDefaultAsync(c => c.PublicId == credencialPublicId, ct);
+
+        // Si desapareció entre la verificación y el sello, no pasa nada: el
+        // ingreso ya es correcto y no puede caerse por no haber podido escribir
+        // telemetría.
+        if (credencial is null) return;
+
+        // Sólo se guarda si cambió. La mayoría de las passkeys de plataforma
+        // reportan siempre cero, así que sin esta guarda habría un UPDATE por
+        // cada ingreso de cada persona, para no cambiar nada.
+        if (!credencial.ActualizarContador(contador, respaldada)) return;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> ElCredentialIdEstaLibreAsync(byte[] credentialId, CancellationToken ct) =>
+        !await _db.MfaCredentials
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .OfType<WebAuthnCredential>()
+            // IgnoreQueryFilters a propósito: si una llave revocada conservara su
+            // identificador, dejar re-inscribirla como si fuera nueva confundiría
+            // el rastro. El índice único sí excluye las revocadas, para que quien
+            // la retiró por error pueda volver a ponerla; esta comprobación es la
+            // que le da un mensaje decente en vez de una violación de clave.
+            .AnyAsync(c => c.CredentialId == credentialId, ct);
+
     /// <summary>
     /// Busca una credencial ACTIVA comprobando que sea de esa persona. El filtro
     /// por dueño no es decorativo: sin él, un PublicId ajeno adivinado dejaría

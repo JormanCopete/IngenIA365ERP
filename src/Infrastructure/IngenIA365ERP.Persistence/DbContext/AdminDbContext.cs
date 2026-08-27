@@ -130,6 +130,7 @@ public class AdminDbContext
         // el subtipo sólo aporta sus columnas propias. Las dos se registran.
         modelBuilder.ApplyConfiguration(new MfaCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new TotpCredentialConfiguration());
+        modelBuilder.ApplyConfiguration(new WebAuthnCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
 

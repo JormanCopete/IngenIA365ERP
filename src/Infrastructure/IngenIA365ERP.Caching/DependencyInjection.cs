@@ -76,6 +76,11 @@ public static class DependencyInjection
         // BeginMfaEnrollment y ConfirmMfaEnrollment. TTL típico 10 min.
         services.AddSingleton<IMfaPendingStore, RedisMfaPendingStore>();
 
+        // El reto de WebAuthn va aparte del pendiente de TOTP: aquel guarda una
+        // sola clave por persona, y con dos pestañas abiertas la segunda pisaria
+        // el reto de la primera.
+        services.AddSingleton<IWebAuthnChallengeStore, RedisWebAuthnChallengeStore>();
+
         // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
         // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).
         _ = RedisTenantMembershipReader.StartSubscriptionAsync(multiplexer);

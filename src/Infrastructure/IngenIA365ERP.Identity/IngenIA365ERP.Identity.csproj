@@ -26,6 +26,11 @@
          ninguna pantalla llamaba, y la de inscripcion pedia teclear 32
          caracteres en base32 a mano. -->
     <PackageReference Include="QRCoder" Version="1.6.*" />
+    <!-- WebAuthn. Verificado que 4.0.1 compila contra .NET 10 con la API real
+         (RequestNewCredential, GetAssertionOptions), no solo que restaura.
+         Se referencia SOLO desde aqui: Application y Domain no la conocen, y
+         una prueba de arquitectura lo fija. -->
+    <PackageReference Include="Fido2" Version="4.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />

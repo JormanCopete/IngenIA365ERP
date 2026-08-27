@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace IngenIA365ERP.Identity;
@@ -123,6 +124,21 @@ public static class DependencyInjection
             .PersistKeysToDbContext<AdminDbContext>()
             .SetApplicationName("IngenIA365ERP")
             .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+
+        // === WebAuthn / passkeys ===
+        //
+        // ValidateOnStart y no validación perezosa: si el dominio o los orígenes
+        // están mal, el navegador rechaza con SecurityError SIN hacer una sola
+        // petición al servidor. No habría 4xx, ni registro, ni forma de enterarse
+        // salvo porque alguien avise de que «el botón no hace nada». Es preferible
+        // que el proceso no arranque.
+        services.AddOptions<WebAuthnOptions>()
+            .Bind(configuration.GetSection(WebAuthnOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<WebAuthnOptions>, WebAuthnOptionsValidator>();
+        services.AddSingleton<
+            Application.Common.Interfaces.Identity.IWebAuthnService,
+            WebAuthn.WebAuthnService>();
 
         // === Register services ===
         services.AddScoped<IJwtService, JwtService>();
