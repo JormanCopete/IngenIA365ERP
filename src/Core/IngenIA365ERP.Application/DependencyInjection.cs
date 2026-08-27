@@ -46,6 +46,13 @@ public static class DependencyInjection
         // al aceptar invitación (T056). IInvitationEmailDispatcher: arma + envía
         // el correo de invitación (T057). Ambos Scoped — consumen IApplicationDbContext
         // / IEmailSender que también son Scoped.
+        // Lo que pasa tras superar el segundo factor. Lo comparten la
+        // verificacion por codigo y la de passkey: son dos formas de demostrar lo
+        // mismo, y a partir de ahi tiene que ocurrir exactamente lo mismo.
+        services.AddScoped<
+            Identity.Auth.Common.IEmisorDeSesionTrasSegundoFactor,
+            Identity.Auth.Common.EmisorDeSesionTrasSegundoFactor>();
+
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 

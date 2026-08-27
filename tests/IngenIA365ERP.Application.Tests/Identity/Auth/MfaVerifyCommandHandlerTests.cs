@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Application.Identity.Auth.Login;
 using IngenIA365ERP.Application.Identity.Auth.MfaVerify;
 using IngenIA365ERP.Domain.Entities.Admin;
@@ -70,8 +71,23 @@ public class MfaVerifyCommandHandlerTests
     /// </summary>
     private readonly ILoginAttemptCounter _intentos = Substitute.For<ILoginAttemptCounter>();
 
+    /// <summary>
+    /// El emisor REAL, cableado con los mismos sustitutos.
+    ///
+    /// <para>
+    /// La decisión de qué sesión emitir —auto-seleccionar, pedir cooperativa, o la
+    /// salida del maestro global— se extrajo a su propia clase cuando el ingreso
+    /// con passkey se convirtió en el segundo llamador. Sustituirla aquí dejaría
+    /// estas pruebas afirmando que «se llamó al emisor», que no es lo que
+    /// verifican: verifican qué sale por la puerta. Con el emisor real siguen
+    /// probando exactamente lo mismo que antes de la extracción.
+    /// </para>
+    /// </summary>
+    private IEmisorDeSesionTrasSegundoFactor Emisor() =>
+        new EmisorDeSesionTrasSegundoFactor(_identity, _memberships, _jwt, _refresh, _clock);
+
     private MfaVerifyCommandHandler NewHandler() => new(
-        _currentUser, _identity, _memberships, _jwt, _refresh, _audit, _intentos, _clock,
+        _currentUser, _identity, Emisor(), _audit, _intentos, _clock,
         NullLogger<MfaVerifyCommandHandler>.Instance);
 
     private CentralUser CreateUser(bool mfaEnabled = true) => new()
