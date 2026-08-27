@@ -54,6 +54,27 @@ public abstract class MfaCredential : AuditableEntity
     /// </summary>
     public DateTime? ConfirmedAt { get; protected set; }
 
+    /// <summary>
+    /// Último ingreso CORRECTO con esta credencial. NULL mientras no se haya
+    /// usado, y NULL en las trasladadas hasta que su dueño entre — por lo mismo
+    /// que <see cref="Label"/> y <see cref="ConfirmedAt"/>: ese dato no existía.
+    ///
+    /// <para>
+    /// Existe porque la pantalla de gestión lo necesita para no provocar un
+    /// bloqueo: una credencial trasladada no tiene nombre ni fecha de alta, así
+    /// que con dos en la lista no habría forma de saber cuál es el teléfono que
+    /// se perdió y cuál el que se tiene en la mano. Equivocarse ahí es quedarse
+    /// fuera de la cuenta.
+    /// </para>
+    ///
+    /// <para>
+    /// Se escribe SÓLO al acertar. Un fallo no dice de qué dispositivo vino, y
+    /// escribir en cada intento convertiría un ataque de fuerza bruta en carga de
+    /// escritura sobre la tabla del segundo factor.
+    /// </para>
+    /// </summary>
+    public DateTime? LastUsedAt { get; private set; }
+
     // EF Core
     protected MfaCredential() { }
 
@@ -96,4 +117,17 @@ public abstract class MfaCredential : AuditableEntity
         UpdatedAt = utcNow;
         UpdatedBy = modificadaPor;
     }
+
+    /// <summary>
+    /// Sella el último uso correcto.
+    ///
+    /// <para>
+    /// NO toca <c>UpdatedAt</c>/<c>UpdatedBy</c> a propósito: esto no es una
+    /// modificación que alguien hizo, es telemetría de la credencial. Mezclarlas
+    /// dejaría la auditoría afirmando que «sistema» editó la credencial en cada
+    /// inicio de sesión, y esa auditoría deja de servir justo el día que hay que
+    /// reconstruir qué pasó.
+    /// </para>
+    /// </summary>
+    public void MarcarUso(DateTime utcNow) => LastUsedAt = utcNow;
 }

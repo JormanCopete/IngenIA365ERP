@@ -4,6 +4,7 @@ using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
 {
     [DbContext(typeof(AdminDbContext))]
-    partial class AdminDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827012344_UltimoUsoDeCredencialMfa")]
+    partial class UltimoUsoDeCredencialMfa
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -247,6 +250,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                     b.HasIndex(new[] { "CentralUserId" }, "IX_ADM_MfaCredentials_CentralUserId")
                         .HasDatabaseName("IX_ADM_MfaCredentials_CentralUserId")
                         .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "CentralUserId" }, "UX_ADM_MfaCredentials_TotpActivo")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ADM_MfaCredentials_TotpActivo")
+                        .HasFilter("[CredentialType] = 'Totp' AND [IsDeleted] = 0");
 
                     b.ToTable("ADM_MfaCredentials", "dbo");
 

@@ -23,6 +23,17 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   **obligatorio también para el administrador maestro**: su login devuelve un
   challenge, nunca una sesión directa. Los fallos de autenticación responden
   401, no 422.
+- **Segundo factor**: vive en `ADM_MfaCredentials`, una tabla con discriminador
+  (TPH) — no en la columna `ADM_CentralUsers.MfaSecret`. Esa columna **sigue
+  escribiéndose** como red de rollback mientras dure el traslado, y la
+  verificación cae a ella si no encuentra credencial; el log lo marca como
+  `[Mfa.LecturaHeredada]`. Vaciarla es una migración destructiva aparte.
+  `TwoFactorEnabled` pasa a ser derivada de que exista credencial activa, y sólo
+  la escribe `IMfaDirectory`.
+- **Cifrado**: el llavero de DataProtection vive en `ADM_DataProtectionKeys`, no
+  en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**: antes de
+  desplegarlo hay que rescatar las claves de cada pod, o los archivos cifrados
+  quedan ilegibles. Ver `docs/operaciones/llavero-dataprotection.md`.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
   vive fuera de toda base de cooperativa.
@@ -36,17 +47,17 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-08-25. **Son cifras que envejecen**: las de antes llevaban
-meses desfasadas —decían 113 endpoints cuando había ~619, y 398 pruebas cuando
-son 616— y nadie lo notaba porque nada las contrasta. Si dudás, medí en vez de
-creerles; el comando está al lado.
+Instantánea del 2026-08-26, remedida. **Son cifras que envejecen**: las de antes
+llevaban meses desfasadas —decían 113 endpoints cuando había ~619, y 398 pruebas
+cuando eran 616— y nadie lo notaba porque nada las contrasta. Si dudás, medí en
+vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
 | Rutas REST | ~619 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 174 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 616 (615 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 623 (622 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

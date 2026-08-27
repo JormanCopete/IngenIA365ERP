@@ -59,7 +59,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     {
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
-        _identity.ConfirmMfaSetupAsync(UserId, Secret, "999999", Arg.Any<CancellationToken>())
+        _identity.ConfirmMfaSetupAsync(UserId, Secret, "999999", Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(false, new[] { "Profile.Mfa.InvalidCode" }));
 
         var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("999999"), default);
@@ -74,7 +74,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
         var codes = new[] { "code1", "code2" };
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
-        _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<CancellationToken>())
+        _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(true, Array.Empty<string>(), codes));
 
         var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("123456"), default);

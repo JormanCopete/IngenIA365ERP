@@ -71,19 +71,15 @@ public sealed class MfaCredentialConfiguration : IEntityTypeConfiguration<MfaCre
             .HasDatabaseName("IX_ADM_MfaCredentials_CentralUserId")
             .HasFilter("[IsDeleted] = 0");
 
-        // UNA credencial TOTP activa por persona.
+        // Aquí hubo un índice único de «una credencial TOTP activa por persona».
+        // Se retiró: una persona puede tener varios autenticadores a la vez —el
+        // teléfono, el escritorio, uno viejo de respaldo— y el ingreso prueba el
+        // código contra todos.
         //
-        // El filtro se escribe en T-SQL canónico y ProviderModelConventions lo
-        // traduce: cambia los corchetes por comillas dobles y «[IsDeleted] = 0»
-        // por «"IsDeleted" = FALSE». El literal de texto pasa tal cual y es válido
-        // en los dos motores.
-        //
-        // Que incluya IsDeleted no es decorativo: sin eso, revocar una credencial
-        // impediría inscribir otra, porque la fila revocada seguiría ocupando el
-        // índice.
-        builder.HasIndex(e => e.CentralUserId, "UX_ADM_MfaCredentials_TotpActivo")
-            .IsUnique()
-            .HasDatabaseName("UX_ADM_MfaCredentials_TotpActivo")
-            .HasFilter($"[{ColumnaDiscriminador}] = '{ValorTotp}' AND [IsDeleted] = 0");
+        // No se sustituye por otro índice único. Sobre (CentralUserId, Label) no
+        // serviría: Label es opcional, y dos «iPhone» son un problema de quien los
+        // nombró, no una violación de integridad. El tope de credenciales por
+        // persona se aplica en Application, donde se puede dar un mensaje que
+        // explique qué pasa.
     }
 }

@@ -21,7 +21,12 @@ namespace IngenIA365ERP.Identity.CentralIdentity;
 ///   <item>Pwned check: en <c>CreateUserAsync</c>, <c>ChangePasswordAsync</c>,
 ///         <c>AdminResetPasswordAsync</c>. Fail-open por design (research D-04).</item>
 ///   <item>MFA: TOTP via Otp.NET, secret base32 cifrado con
-///         <see cref="IDataProtectionProvider"/> (purpose "mfa-secret").</item>
+///         <see cref="IDataProtectionProvider"/>. El purpose es
+///         <c>central-identity:mfa-secret</c> — la constante de abajo, no el
+///         "mfa-secret" que este comentario decía antes. Equivocarse de purpose
+///         deja a toda persona con segundo factor fuera de su cuenta, y en
+///         silencio: Unprotect lanza, el catch lo registra, y la respuesta es
+///         "código inválido".</item>
 ///   <item>Recovery codes: <c>UserManager.GenerateNewTwoFactorRecoveryCodesAsync</c>
 ///         (almacenamiento nativo en <c>ADM_CentralUserTokens</c>).</item>
 /// </list>
@@ -224,7 +229,7 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
     }
 
     public async Task<MfaConfirmResult> ConfirmMfaSetupAsync(
-        Guid centralUserId, string base32Secret, string code, CancellationToken ct)
+        Guid centralUserId, string base32Secret, string code, string? label, CancellationToken ct)
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
         if (identity is null || identity.IsDeleted)
@@ -238,13 +243,19 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
 
         var protegido = _protector.Protect(base32Secret);
 
+        // ¿Es su PRIMER autenticador? Hay que saberlo antes de inscribir el nuevo.
+        var esElPrimero = await _credenciales.ContarTotpActivasAsync(identity.Id, ct) == 0;
+
         // La credencial PRIMERO, la bandera DESPUÉS. Si algo falla en medio, la
         // persona queda con credencial y sin bandera: el login no le pide segundo
         // factor y entra. Al revés —bandera sin credencial— le pediría un código
         // que no puede acertar, y sólo la sacaría de ahí un reseteo administrativo.
         // Todo fallo a medias tiene que caer del lado seguro.
-        await _credenciales.ReemplazarTotpAsync(
-            identity.Id, protegido, label: null, utcNow: DateTime.UtcNow, ct);
+        //
+        // AÑADE, no reemplaza: agregar el segundo autenticador no puede borrar el
+        // primero.
+        await _credenciales.InscribirTotpAsync(
+            identity.Id, protegido, label, utcNow: DateTime.UtcNow, ct);
 
         // La columna vieja se sigue escribiendo durante el traslado: es la red por
         // si hay que volver a la versión anterior, que sólo sabe leer de ahí.
@@ -253,6 +264,19 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         var updateResult = await _userManager.UpdateAsync(identity);
         if (!updateResult.Succeeded)
             return new MfaConfirmResult(false, [.. updateResult.Errors.Select(e => $"Identity.{e.Code}")]);
+
+        // Los códigos de recuperación se emiten SÓLO con el primer autenticador.
+        //
+        // GenerateNewTwoFactorRecoveryCodesAsync invalida los anteriores. Antes daba
+        // igual porque inscribir era siempre la primera vez; ahora, agregar un
+        // segundo teléfono habría dejado sin valor los diez códigos que la persona
+        // guardó en un papel el día que inscribió el primero — sin avisarle, y
+        // descubriéndolo justo el día que los necesita. Para renovarlos está
+        // /api/profile/mfa/recovery-codes/regenerate, que sí lo dice.
+        if (!esElPrimero)
+        {
+            return new MfaConfirmResult(true, [], []);
+        }
 
         // GenerateNewTwoFactorRecoveryCodesAsync persiste en ADM_CentralUserTokens.
         var recovery = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(identity, RecoveryCodeCount);
@@ -267,33 +291,95 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         if (identity is null || identity.IsDeleted || !identity.TwoFactorEnabled)
             return false;
 
-        // La verdad está en ADM_MfaCredentials. La columna vieja se sigue leyendo
-        // como respaldo mientras dure el traslado, y no por nostalgia: si alguien
-        // despliega la versión anterior y esa versión escribe MfaSecret sin tocar
-        // la tabla nueva, sin este respaldo esa persona perdería su segundo factor
-        // al volver a desplegar la versión nueva.
-        var cifrado = await _credenciales.ObtenerCifradoTotpActivoAsync(centralUserId, ct);
+        var credenciales = await _credenciales.ListarCifradosTotpActivosAsync(centralUserId, ct);
 
-        if (cifrado is null && identity.MfaSecret is not null)
+        if (credenciales.Count == 0)
         {
-            cifrado = identity.MfaSecret;
-            _log.LogWarning(
-                "[Mfa.LecturaHeredada] {CentralUserId} verificó con ADM_CentralUsers.MfaSecret: " +
-                "no tiene credencial en ADM_MfaCredentials. Si esto aparece después del traslado, " +
-                "el traslado no la cubrió.",
-                centralUserId);
+            return await VerificarPorCompatibilidadAsync(identity, code, centralUserId, ct);
         }
 
-        if (cifrado is null) return false;
+        // Se prueban TODAS, sin cortar en la primera que acierta.
+        //
+        // Cortar filtraría por el reloj: acertar con la primera respondería antes
+        // que acertar con la tercera, y eso le dice a quien mida los tiempos
+        // cuántos autenticadores tiene la víctima. Probarlas todas cuesta N
+        // descifrados fijos —de ahí el tope por persona— y no dice nada.
+        Guid? acertada = null;
+        foreach (var credencial in credenciales)
+        {
+            var acierta = CodigoValidoContra(credencial.SecretProtected, code, centralUserId);
+            if (acierta && acertada is null)
+            {
+                acertada = credencial.PublicId;
+            }
+        }
 
+        if (acertada is null) return false;
+
+        await _credenciales.MarcarUsoAsync(centralUserId, acertada.Value, DateTime.UtcNow, ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Modo compatibilidad: la columna heredada <c>ADM_CentralUsers.MfaSecret</c>.
+    ///
+    /// <para>
+    /// La condición es «NUNCA tuvo credencial», no «la lista vino vacía», y la
+    /// diferencia no es de estilo. Revocar es baja lógica: el filtro global saca la
+    /// fila de la lista pero la columna heredada conserva su valor, porque sólo la
+    /// limpiaba la baja total. Con la condición ingenua, quien revocara su última
+    /// credencial desde la pantalla de gestión seguiría entrando con el
+    /// autenticador que acaba de dar de baja.
+    /// </para>
+    /// </summary>
+    private async Task<bool> VerificarPorCompatibilidadAsync(
+        CentralUserIdentity identity, string code, Guid centralUserId, CancellationToken ct)
+    {
+        if (identity.MfaSecret is null) return false;
+
+        if (await _credenciales.HuboAlgunaVezTotpAsync(centralUserId, ct))
+        {
+            _log.LogWarning(
+                "[Mfa.CredencialesRevocadas] {CentralUserId} no tiene credenciales activas pero " +
+                "ADM_CentralUsers.MfaSecret sigue con valor. Se rechaza: la columna heredada no puede " +
+                "resucitar un autenticador revocado. Revisar por qué no se limpió.",
+                centralUserId);
+            return false;
+        }
+
+        _log.LogWarning(
+            "[Mfa.LecturaHeredada] {CentralUserId} verificó con ADM_CentralUsers.MfaSecret: " +
+            "no tiene credencial en ADM_MfaCredentials. Si esto aparece después del traslado, " +
+            "el traslado no la cubrió.",
+            centralUserId);
+
+        return CodigoValidoContra(identity.MfaSecret, code, centralUserId);
+    }
+
+    /// <summary>
+    /// Descifra UN texto protegido y prueba el código.
+    ///
+    /// <para>
+    /// Un llavero roto en una credencial no puede abortar el barrido de las demás.
+    /// El catch de antes hacía <c>return false</c> del método entero: trasladado
+    /// tal cual a un bucle, habría dejado fuera a quien tuviera una credencial
+    /// vieja ilegible y su teléfono actual correcto. Aquí falla sólo esa
+    /// credencial, y queda registrado.
+    /// </para>
+    /// </summary>
+    private bool CodigoValidoContra(string secretoProtegido, string code, Guid centralUserId)
+    {
         string unprotected;
         try
         {
-            unprotected = _protector.Unprotect(cifrado);
+            unprotected = _protector.Unprotect(secretoProtegido);
         }
         catch (System.Security.Cryptography.CryptographicException ex)
         {
-            _log.LogError(ex, "MfaSecret unprotect falló para {CentralUserId}", centralUserId);
+            _log.LogError(ex,
+                "MfaSecret unprotect falló para una credencial de {CentralUserId}. " +
+                "El barrido continúa con las demás.",
+                centralUserId);
             return false;
         }
 

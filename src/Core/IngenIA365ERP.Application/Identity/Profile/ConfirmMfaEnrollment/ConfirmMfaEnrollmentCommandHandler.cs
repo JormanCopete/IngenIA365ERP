@@ -54,7 +54,7 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
         }
 
         var confirm = await centralIdentity.ConfirmMfaSetupAsync(
-            centralUserId, pending.SecretBase32, request.Code, ct);
+            centralUserId, pending.SecretBase32, request.Code, request.Label, ct);
         if (!confirm.Succeeded)
         {
             var code = confirm.ErrorCodes.FirstOrDefault() ?? "Profile.Mfa.InvalidCode";

@@ -217,6 +217,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
@@ -241,11 +244,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                     b.HasIndex(new[] { "CentralUserId" }, "IX_ADM_MfaCredentials_CentralUserId")
                         .HasDatabaseName("IX_ADM_MfaCredentials_CentralUserId")
                         .HasFilter("\"IsDeleted\" = FALSE");
-
-                    b.HasIndex(new[] { "CentralUserId" }, "UX_ADM_MfaCredentials_TotpActivo")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ADM_MfaCredentials_TotpActivo")
-                        .HasFilter("\"CredentialType\" = 'Totp' AND \"IsDeleted\" = FALSE");
 
                     b.ToTable("ADM_MfaCredentials", "dbo");
 

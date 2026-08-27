@@ -59,21 +59,6 @@ public sealed class TotpCredential : MfaCredential
         return credencial;
     }
 
-    /// <summary>
-    /// Sustituye el secreto de una credencial que ya existe (re-inscripción sobre
-    /// el mismo dispositivo). Se reemplaza en sitio en vez de crear una fila
-    /// nueva: así es un solo UPDATE, cabe en un único SaveChanges, y nunca choca
-    /// con el índice único de «un TOTP activo por persona».
-    /// </summary>
-    public void RotarSecreto(string secretoProtegido, string? label, DateTime utcNow, string? rotadaPor)
-    {
-        ExigirSecreto(secretoProtegido);
-
-        SecretProtected = secretoProtegido;
-        ConfirmedAt = utcNow;
-        Renombrar(label, utcNow, rotadaPor);
-    }
-
     private static void ExigirSecreto(string secretoProtegido)
     {
         if (string.IsNullOrWhiteSpace(secretoProtegido))

@@ -14,41 +14,60 @@ namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 /// </para>
 ///
 /// <para>
-/// <b>Es el único sitio que puede escribir <c>TwoFactorEnabled</c>.</b> Esa
-/// columna pasa a ser derivada («¿tiene alguna credencial activa?»), y una columna
-/// derivada con dos escritores se desincroniza. Ya pasó con
-/// <c>SEC_Users.IsMfaEnabled</c>: alguien dejó de escribirla y nadie lo notó,
-/// porque «No» parece un dato real.
+/// <b>Una persona puede tener VARIAS credenciales TOTP activas</b>: el teléfono,
+/// el escritorio, un teléfono viejo de respaldo. No hay «la» credencial, hay una
+/// lista, y el ingreso las prueba todas. Por eso ningún método devuelve una sola.
+/// El que lo hacía —<c>ObtenerCifradoTotpActivoAsync</c>— usaba
+/// <c>FirstOrDefault</c> sin <c>OrderBy</c>: con dos filas habría elegido una
+/// arbitraria según el plan del motor, distinta entre PostgreSQL y SQL Server, y
+/// las demás no se habrían probado nunca.
+/// </para>
+///
+/// <para>
+/// <b>NO escribe <c>TwoFactorEnabled</c>.</b> Una versión anterior de este
+/// comentario decía que sí, y era falso: esa columna vive en el bridge de ASP.NET
+/// Identity, que este directorio no toca. Quien la escribe es
+/// <c>AspNetCoreIdentityProvider</c>, en un solo método, derivándola de
+/// <see cref="ContarTotpActivasAsync"/>.
 /// </para>
 /// </summary>
 public interface IMfaDirectory
 {
     /// <summary>
-    /// Texto protegido del TOTP activo de la persona, o <c>null</c> si no tiene.
-    /// El resultado es opaco: se le pasa entero a <c>Unprotect</c>.
+    /// Todos los textos protegidos TOTP activos de la persona, en orden
+    /// determinista. El ingreso los prueba TODOS. Cada elemento es opaco: se le
+    /// pasa entero a <c>Unprotect</c>.
     /// </summary>
-    Task<string?> ObtenerCifradoTotpActivoAsync(Guid centralUserId, CancellationToken ct);
+    Task<IReadOnlyList<CredencialTotpCifrada>> ListarCifradosTotpActivosAsync(
+        Guid centralUserId, CancellationToken ct);
+
+    /// <summary>Lo que la pantalla de gestión muestra. No incluye ningún secreto.</summary>
+    Task<IReadOnlyList<CredencialMfaResumen>> ListarActivasAsync(
+        Guid centralUserId, CancellationToken ct);
 
     /// <summary>
-    /// true si la persona tiene una credencial TOTP activa. Es la fuente de la que
-    /// se deriva <c>TwoFactorEnabled</c>.
+    /// Cuántas credenciales TOTP activas tiene. Es la fuente de la que se deriva
+    /// <c>TwoFactorEnabled</c> y con la que se aplica el tope por persona.
     /// </summary>
-    Task<bool> TieneTotpActivoAsync(Guid centralUserId, CancellationToken ct);
+    Task<int> ContarTotpActivasAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>
-    /// Deja a la persona con exactamente UNA credencial TOTP activa y este
-    /// secreto. Si ya tenía una, la reemplaza en sitio; si no, la crea.
+    /// ¿Tuvo ALGUNA VEZ una credencial TOTP, revocadas incluidas? Ignora el filtro
+    /// de soft-delete a propósito.
     ///
     /// <para>
-    /// En sitio y no «revocar más insertar» por dos razones: cabe en un solo
-    /// <c>SaveChanges</c> —los dos proveedores llevan <c>EnableRetryOnFailure</c>,
-    /// así que una transacción explícita exigiría la estrategia de ejecución— y
-    /// nunca choca contra el índice único filtrado por orden de sentencias.
+    /// Es lo único que distingue «nunca se trasladó» de «las dio de baja», y de esa
+    /// distinción depende que el modo compatibilidad no resucite el autenticador
+    /// que la persona acaba de revocar: la columna heredada
+    /// <c>ADM_CentralUsers.MfaSecret</c> sólo la limpiaba la baja total.
     /// </para>
     /// </summary>
+    Task<bool> HuboAlgunaVezTotpAsync(Guid centralUserId, CancellationToken ct);
+
+    /// <summary>AÑADE una credencial TOTP. No reemplaza ninguna.</summary>
     /// <param name="secretoProtegido">Salida literal de <c>Protect</c>.</param>
-    /// <returns><c>PublicId</c> de la credencial resultante.</returns>
-    Task<Guid> ReemplazarTotpAsync(
+    /// <returns><c>PublicId</c> de la credencial creada.</returns>
+    Task<Guid> InscribirTotpAsync(
         Guid centralUserId,
         string secretoProtegido,
         string? label,
@@ -56,8 +75,46 @@ public interface IMfaDirectory
         CancellationToken ct);
 
     /// <summary>
+    /// Renombra UNA credencial de esa persona. <c>false</c> si no existe o no es
+    /// suya. El filtro por persona no es decorativo: sin él, un PublicId ajeno
+    /// adivinado renombraría la credencial de otro.
+    /// </summary>
+    Task<bool> RenombrarAsync(
+        Guid centralUserId, Guid credencialPublicId, string? label, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Baja lógica de UNA credencial de esa persona. <c>false</c> si no existe o no
+    /// es suya. Idempotente.
+    /// </summary>
+    Task<bool> RevocarUnaAsync(
+        Guid centralUserId, Guid credencialPublicId, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
     /// Baja lógica de TODAS las credenciales activas de la persona. Devuelve
     /// cuántas revocó. Idempotente.
     /// </summary>
     Task<int> RevocarTodasAsync(Guid centralUserId, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Sella el último uso correcto. No lanza si la credencial desapareció entre la
+    /// verificación y el sello: un ingreso correcto no puede caerse por no haber
+    /// podido escribir telemetría.
+    /// </summary>
+    Task MarcarUsoAsync(
+        Guid centralUserId, Guid credencialPublicId, DateTime utcNow, CancellationToken ct);
 }
+
+/// <summary>Un secreto protegido con su identificador público. Nada más.</summary>
+public sealed record CredencialTotpCifrada(Guid PublicId, string SecretProtected);
+
+/// <summary>
+/// Lo que la persona ve de una de sus credenciales. <c>Label</c> y
+/// <c>ConfirmedAt</c> vienen NULL en las trasladadas: ese dato no existía, e
+/// inventarlo sería peor que el hueco.
+/// </summary>
+public sealed record CredencialMfaResumen(
+    Guid PublicId,
+    string? Label,
+    DateTime CreatedAt,
+    DateTime? ConfirmedAt,
+    DateTime? LastUsedAt);

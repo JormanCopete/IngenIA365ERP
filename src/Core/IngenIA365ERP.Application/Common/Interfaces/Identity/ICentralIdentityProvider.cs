@@ -108,13 +108,23 @@ public interface ICentralIdentityProvider
     /// significaba darle al usuario diez códigos que nunca se iban a canjear.</summary>
     Task<MfaEnrollmentSetup> BeginMfaEnrollmentAsync(Guid centralUserId, CancellationToken ct);
 
-    /// <summary>Verifica un TOTP contra un secret pendiente. Si OK, persiste
-    /// <c>TwoFactorEnabled = true</c>, almacena <c>MfaSecret</c> cifrado y
-    /// genera los recovery codes en <c>ADM_CentralUserTokens</c>.</summary>
+    /// <summary>
+    /// Verifica un TOTP contra un secret pendiente. Si acierta, AÑADE una
+    /// credencial en <c>ADM_MfaCredentials</c> —no reemplaza las que ya haya— y
+    /// activa el segundo factor.
+    ///
+    /// <para>
+    /// Los códigos de recuperación se emiten SÓLO con el primer autenticador. Con
+    /// el segundo la lista viene vacía a propósito: regenerarlos invalidaría los
+    /// que la persona guardó al inscribir el primero.
+    /// </para>
+    /// </summary>
+    /// <param name="label">Nombre que la persona le da al dispositivo. Opcional.</param>
     Task<MfaConfirmResult> ConfirmMfaSetupAsync(
         Guid centralUserId,
         string base32Secret,
         string code,
+        string? label,
         CancellationToken ct);
 
     /// <summary>Verifica un TOTP contra el secret YA persistido del usuario (login con MFA).</summary>
