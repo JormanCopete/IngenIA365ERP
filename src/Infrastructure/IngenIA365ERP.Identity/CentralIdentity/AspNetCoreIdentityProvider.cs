@@ -245,7 +245,7 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         var protegido = _protector.Protect(base32Secret);
 
         // ¿Es su PRIMER autenticador? Hay que saberlo antes de inscribir el nuevo.
-        var esElPrimero = await _credenciales.ContarTotpActivasAsync(identity.Id, ct) == 0;
+        var esElPrimero = await _credenciales.ContarActivasAsync(identity.Id, ct) == 0;
 
         // La credencial PRIMERO, la bandera DESPUÉS. Si algo falla en medio, la
         // persona queda con credencial y sin bandera: el login no le pide segundo

@@ -35,7 +35,7 @@ public sealed class RevokeMfaCredentialCommandHandler(
         // ¿Es la última que le queda? Si lo es, retirarla equivale a quedarse sin
         // segundo factor, y entonces manda la misma regla que el disable: no puede
         // hacerlo por la puerta de atrás lo que no puede hacer por la de delante.
-        var activas = await credenciales.ContarTotpActivasAsync(centralUserId, ct);
+        var activas = await credenciales.ContarActivasAsync(centralUserId, ct);
         if (activas <= 1)
         {
             var puede = await GuardiaDeSegundoFactor.PuedeQuedarseSinSegundoFactorAsync(

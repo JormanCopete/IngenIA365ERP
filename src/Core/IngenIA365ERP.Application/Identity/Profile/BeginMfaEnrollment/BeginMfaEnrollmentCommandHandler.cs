@@ -61,7 +61,7 @@ public sealed class BeginMfaEnrollmentCommandHandler(
         //
         // Se comprueba aquí y no en la base porque aquí se puede explicar qué pasa
         // y qué hacer, en vez de devolver una violación de índice.
-        var yaInscritas = await credenciales.ContarTotpActivasAsync(centralUserId, ct);
+        var yaInscritas = await credenciales.ContarActivasAsync(centralUserId, ct);
         if (yaInscritas >= MaximoDeAutenticadores)
         {
             return Result.Failure<BeginMfaEnrollmentResult>(

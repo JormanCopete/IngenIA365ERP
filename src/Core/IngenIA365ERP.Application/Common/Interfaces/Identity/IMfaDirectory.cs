@@ -28,7 +28,7 @@ namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 /// comentario decía que sí, y era falso: esa columna vive en el bridge de ASP.NET
 /// Identity, que este directorio no toca. Quien la escribe es
 /// <c>AspNetCoreIdentityProvider</c>, en un solo método, derivándola de
-/// <see cref="ContarTotpActivasAsync"/>.
+/// <see cref="ContarActivasAsync"/>.
 /// </para>
 /// </summary>
 public interface IMfaDirectory
@@ -46,10 +46,22 @@ public interface IMfaDirectory
         Guid centralUserId, CancellationToken ct);
 
     /// <summary>
-    /// Cuántas credenciales TOTP activas tiene. Es la fuente de la que se deriva
-    /// <c>TwoFactorEnabled</c> y con la que se aplica el tope por persona.
+    /// Cuántas credenciales activas tiene, <b>de cualquier tipo</b>. Es la fuente
+    /// de la que se deriva <c>TwoFactorEnabled</c>, la que responde «¿es la
+    /// última?» al revocar y «¿es la primera?» al inscribir, y con la que se
+    /// aplica el tope por persona.
+    ///
+    /// <para>
+    /// Contaba sólo las TOTP, y eso era una bomba de relojería esperando al
+    /// segundo tipo de credencial: quien tuviera un TOTP y un passkey y retirara
+    /// el passkey habría dado cuenta 1, se habría disparado el apagado total, y
+    /// <c>RevocarTodasAsync</c> —que nunca filtró por tipo— se habría llevado por
+    /// delante el TOTP que esa persona no tocó, dejándola sin segundo factor sin
+    /// decírselo. La asimetría era exacta: una operación ciega en un sentido y la
+    /// otra en el contrario.
+    /// </para>
     /// </summary>
-    Task<int> ContarTotpActivasAsync(Guid centralUserId, CancellationToken ct);
+    Task<int> ContarActivasAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>
     /// ¿Tuvo ALGUNA VEZ una credencial TOTP, revocadas incluidas? Ignora el filtro

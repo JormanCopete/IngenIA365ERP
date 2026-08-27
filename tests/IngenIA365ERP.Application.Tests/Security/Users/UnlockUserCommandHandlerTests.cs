@@ -93,6 +93,34 @@ public class UnlockUserCommandHandlerTests
     }
 
     [Fact]
+    public async Task Bloqueado_solo_por_el_segundo_factor_tambien_se_desbloquea()
+    {
+        // El caso que no tenía salida. Los dos ámbitos se llevan por separado a
+        // propósito, pero este handler sólo miraba el de contraseña: quien fallaba
+        // cinco veces su código quedaba encerrado, la consola lo mostraba como no
+        // bloqueado, y al pulsar desbloquear recibía «el usuario no está
+        // bloqueado». Sólo quedaba esperar, con el escalado subiendo hasta una
+        // hora por intento.
+        var (_, handler) = Preparar();
+
+        _intentos.CheckAsync(AmbitoDeIntentos.Password, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutState(false, 0, 0));
+        _intentos.CheckAsync(AmbitoDeIntentos.Mfa, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutState(true, 60, 5));
+
+        var result = await handler.Handle(new UnlockUserCommand(Publico), default);
+
+        result.IsSuccess.Should().BeTrue();
+
+        // Se limpian los dos: dejar uno a medias significa que el siguiente error
+        // vuelve a bloquear, y quien pidió el desbloqueo no lo entendería.
+        await _intentos.Received(1).ResetAsync(
+            AmbitoDeIntentos.Mfa, "ANA@DEMO.TEST", Arg.Any<CancellationToken>());
+        await _intentos.Received(1).ResetAsync(
+            AmbitoDeIntentos.Password, "ANA@DEMO.TEST", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Sin_correo_se_dice_por_que_en_vez_de_fingir_exito()
     {
         // El contador se lleva por correo normalizado: sin correo no hay nada

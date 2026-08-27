@@ -117,9 +117,21 @@ public sealed class ListUsersQueryHandler
     {
         if (string.IsNullOrWhiteSpace(correo)) return null;
 
-        var estado = await contadorDeIntentos.CheckAsync(
-            AmbitoDeIntentos.Password, correo.Trim().ToUpperInvariant(), ct);
+        var normalizado = correo.Trim().ToUpperInvariant();
 
-        return estado.IsLocked;
+        // Se miran LOS DOS ámbitos. Sólo se consultaba el de contraseña, así que
+        // quien se equivocaba con su código de segundo factor quedaba encerrado y
+        // aquí aparecía como no bloqueado: el administrador que iba a ayudarle veía
+        // una fila normal, pulsaba desbloquear, y recibía «el usuario no está
+        // bloqueado». La pantalla decía la verdad sobre una pregunta que nadie
+        // había hecho.
+        var porContrasena = await contadorDeIntentos.CheckAsync(
+            AmbitoDeIntentos.Password, normalizado, ct);
+        if (porContrasena.IsLocked) return true;
+
+        var porSegundoFactor = await contadorDeIntentos.CheckAsync(
+            AmbitoDeIntentos.Mfa, normalizado, ct);
+
+        return porSegundoFactor.IsLocked;
     }
 }

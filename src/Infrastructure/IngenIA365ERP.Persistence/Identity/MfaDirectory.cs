@@ -73,10 +73,16 @@ public sealed class MfaDirectory : IMfaDirectory
                 c.PublicId, c.Label, c.CreatedAt, c.ConfirmedAt, c.LastUsedAt))
             .ToListAsync(ct);
 
-    public async Task<int> ContarTotpActivasAsync(Guid centralUserId, CancellationToken ct) =>
+    /// <summary>
+    /// SIN filtro por tipo, y es deliberado: tiene que emparejar con
+    /// <see cref="RevocarTodasAsync"/>, que tampoco lo tiene. Cuando contaba sólo
+    /// las TOTP, retirar un passkey teniendo además un TOTP daba cuenta 1, se
+    /// disparaba el apagado total, y la revocación se llevaba por delante el TOTP
+    /// que la persona no había tocado.
+    /// </summary>
+    public async Task<int> ContarActivasAsync(Guid centralUserId, CancellationToken ct) =>
         await _db.MfaCredentials
             .AsNoTracking()
-            .OfType<TotpCredential>()
             .CountAsync(c => c.CentralUserId == centralUserId, ct);
 
     public async Task<bool> HuboAlgunaVezTotpAsync(Guid centralUserId, CancellationToken ct) =>

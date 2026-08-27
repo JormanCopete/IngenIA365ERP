@@ -57,18 +57,35 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
         }
 
         var correo = user.Email.Trim().ToUpperInvariant();
-        var estado = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Password, correo, ct);
+
+        // LOS DOS ÁMBITOS. El bloqueo por contraseña y el del segundo factor se
+        // llevan por separado a propósito —si compartieran contador, un login
+        // correcto le regalaría un reset a quien está adivinando el TOTP—, pero
+        // este handler sólo miraba el primero.
+        //
+        // Consecuencia: quien se equivocaba cinco veces con su código quedaba
+        // encerrado, la pantalla de usuarios lo mostraba como NO bloqueado, y al
+        // pulsar desbloquear recibía «el usuario no está bloqueado». No había
+        // salida ninguna: sólo esperar a que el escalado bajara, que llega a una
+        // hora por intento y se refresca con cada fallo.
+        var porContrasena = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Password, correo, ct);
+        var porSegundoFactor = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Mfa, correo, ct);
+
+        var hayAlgoQueLimpiar =
+            porContrasena.IsLocked || porContrasena.FailureCount > 0 ||
+            porSegundoFactor.IsLocked || porSegundoFactor.FailureCount > 0;
 
         // Se acepta también con intentos acumulados sin bloqueo activo: dejar el
         // contador a medio camino significa que el siguiente error vuelve a
         // bloquear, y quien pidió el desbloqueo no lo entendería.
-        if (!estado.IsLocked && estado.FailureCount == 0)
+        if (!hayAlgoQueLimpiar)
         {
             return Result.Failure(UserErrorCodes.NotLocked,
                 "El usuario no está bloqueado ni tiene intentos fallidos pendientes.");
         }
 
         await _contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Password, correo, ct);
+        await _contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Mfa, correo, ct);
 
         // Higiene de las columnas heredadas. No deciden nada, pero dejarlas con
         // valores viejos invita al siguiente a creérselas.
