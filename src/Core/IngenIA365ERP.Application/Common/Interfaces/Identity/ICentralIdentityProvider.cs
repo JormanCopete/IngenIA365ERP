@@ -177,9 +177,16 @@ public sealed record ChangePasswordResult(
     bool Succeeded,
     IReadOnlyList<string> ErrorCodes);
 
+/// <param name="QrPngDataUri">
+/// El <c>otpauth://</c> ya convertido en imagen, listo para un <c>&lt;img src&gt;</c>
+/// («data:image/png;base64,…»). Va como data URI y no como una ruta a descargar
+/// para que el secreto no acabe en el registro de accesos de nadie: una URL con el
+/// QR sería una URL que contiene, en la práctica, el segundo factor.
+/// </param>
 public sealed record MfaEnrollmentSetup(
     string SecretBase32,
     string OtpAuthUri,
+    string QrPngDataUri,
     int ExpiresInSeconds);
 
 public sealed record MfaConfirmResult(

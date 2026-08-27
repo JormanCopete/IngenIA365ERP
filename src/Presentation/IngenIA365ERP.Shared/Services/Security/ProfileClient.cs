@@ -46,8 +46,13 @@ public sealed class ProfileClient
         }
     }
 
+    /// <param name="label">
+    /// Nombre del dispositivo. Opcional, y sólo empieza a importar cuando hay más
+    /// de un autenticador: con dos filas sin nombre, retirar el correcto es una
+    /// apuesta.
+    /// </param>
     public async Task<InvitationApiResult<ConfirmMfaEnrollResponse>> ConfirmMfaEnrollAsync(
-        string code, bool useChallengeToken = false, CancellationToken ct = default)
+        string code, bool useChallengeToken = false, string? label = null, CancellationToken ct = default)
     {
         var token = ChooseToken(useChallengeToken);
         if (token is null) return Unauthorized<ConfirmMfaEnrollResponse>();
@@ -56,7 +61,7 @@ public sealed class ProfileClient
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/profile/mfa/confirm")
             {
-                Content = JsonContent.Create(new { code }),
+                Content = JsonContent.Create(new { code, label }),
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
@@ -73,6 +78,51 @@ public sealed class ProfileClient
     {
         return await PostAuthenticatedAsync<EmptyResponse>(
             "/api/profile/mfa/disable", new { currentPassword }, ct);
+    }
+
+    // -------------------- Credenciales de segundo factor --------------------
+
+    public async Task<InvitationApiResult<ListMfaCredentialsResponse>> ListarCredencialesMfaAsync(
+        CancellationToken ct = default) =>
+        await EnviarAutenticadoAsync<ListMfaCredentialsResponse>(
+            HttpMethod.Get, "/api/profile/mfa/credentials", cuerpo: null, ct);
+
+    public async Task<InvitationApiResult<EmptyResponse>> RenombrarCredencialMfaAsync(
+        Guid credencialPublicId, string? label, CancellationToken ct = default) =>
+        await EnviarAutenticadoAsync<EmptyResponse>(
+            HttpMethod.Patch, $"/api/profile/mfa/credentials/{credencialPublicId}",
+            new { label }, ct);
+
+    public async Task<InvitationApiResult<EmptyResponse>> RevocarCredencialMfaAsync(
+        Guid credencialPublicId, CancellationToken ct = default) =>
+        await EnviarAutenticadoAsync<EmptyResponse>(
+            HttpMethod.Delete, $"/api/profile/mfa/credentials/{credencialPublicId}",
+            cuerpo: null, ct);
+
+    /// <summary>
+    /// Envía con el token de sesión y devuelve el resultado ya interpretado.
+    /// Existe porque el helper que había sólo sabía hacer POST, y estas rutas usan
+    /// GET, PATCH y DELETE.
+    /// </summary>
+    private async Task<InvitationApiResult<T>> EnviarAutenticadoAsync<T>(
+        HttpMethod metodo, string ruta, object? cuerpo, CancellationToken ct)
+    {
+        var token = ChooseToken(useChallenge: false);
+        if (token is null) return Unauthorized<T>();
+
+        try
+        {
+            using var req = new HttpRequestMessage(metodo, ruta);
+            if (cuerpo is not null) req.Content = JsonContent.Create(cuerpo);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<T>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<T>.NetworkError(ex.Message);
+        }
     }
 
     /// <summary>Feature 003 (FR-111): regenera los recovery codes confirmando
@@ -164,10 +214,30 @@ public sealed class ProfileClient
 
 // El begin no trae códigos de recuperación: los válidos vienen en el confirm,
 // abajo. Los traía, y eran otros — se descartaban al confirmar.
+// El begin no trae códigos de recuperación: los válidos vienen en el confirm.
+// Los traía, y eran otros — se descartaban al confirmar.
 public sealed record BeginMfaEnrollResponse(
     string SecretBase32,
     string OtpAuthUri,
+    string QrPngDataUri,
     int ExpiresInSeconds);
+
+/// <summary>Una credencial de segundo factor, tal como la ve su dueño.</summary>
+/// <param name="Label">NULL en las trasladadas: ese dato no existía antes.</param>
+/// <param name="LastUsedAt">
+/// Último ingreso correcto con ella. Es lo que permite distinguir el teléfono que
+/// se tiene en la mano del que se perdió cuando ninguno tiene nombre.
+/// </param>
+public sealed record CredencialMfaDto(
+    Guid PublicId,
+    string? Label,
+    DateTime CreatedAt,
+    DateTime? ConfirmedAt,
+    DateTime? LastUsedAt);
+
+public sealed record ListMfaCredentialsResponse(
+    IReadOnlyList<CredencialMfaDto> Credenciales,
+    int CodigosDeRecuperacionRestantes);
 
 public sealed record RegenerateRecoveryCodesResponse(
     IReadOnlyList<string> RecoveryCodes);

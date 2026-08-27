@@ -54,10 +54,10 @@ vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | ~619 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 174 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | ~622 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 623 (622 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 625 (624 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

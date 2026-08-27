@@ -1,0 +1,226 @@
+@page "/profile/seguridad/credenciales"
+@using IngenIA365ERP.Shared.Services.Security
+@inject ProfileClient Profile
+
+@*
+    Gestión de los autenticadores propios. Una persona puede tener varios —el
+    teléfono, el escritorio, uno viejo de respaldo— y el ingreso acepta el código
+    de cualquiera.
+
+    Por qué la columna «último uso» está en primera línea y no escondida: las
+    credenciales que vienen del modelo anterior no tienen nombre ni fecha de alta,
+    porque ese dato no existía y se prefirió el hueco a inventarlo. Con dos filas
+    sin nombre, elegir cuál retirar sería una apuesta, y equivocarse es quedarse
+    fuera de la propia cuenta. «Usado hace un momento» lo resuelve.
+*@
+
+<PageTitle>Mis autenticadores — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h1>Mis autenticadores</h1>
+    </div>
+
+    <p class="texto-apoyo">
+        Podés tener varios: el teléfono, el computador, uno de respaldo. Al entrar
+        sirve el código de cualquiera de ellos.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="aviso aviso-error" role="alert">@_error</div>
+    }
+    @if (_aviso is not null)
+    {
+        <div class="aviso aviso-ok" role="status">@_aviso</div>
+    }
+
+    @if (_cargando)
+    {
+        <p>Cargando…</p>
+    }
+    else
+    {
+        <div class="info-card">
+            <table class="table tabla data-grid">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Último uso</th>
+                        <th>Inscrito</th>
+                        <th><span class="visualmente-oculto">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _credenciales)
+                    {
+                        <tr>
+                            <td>
+                                @if (_renombrando == c.PublicId)
+                                {
+                                    <input class="campo" @bind="_nombreNuevo" maxlength="100"
+                                           aria-label="Nombre del autenticador" />
+                                    <button class="boton boton-principal" disabled="@_ocupado"
+                                            @onclick="() => GuardarNombreAsync(c.PublicId)">Guardar</button>
+                                    <button class="boton boton-secundario" disabled="@_ocupado"
+                                            @onclick="CancelarRenombrar">Cancelar</button>
+                                }
+                                else
+                                {
+                                    @(string.IsNullOrWhiteSpace(c.Label) ? "Sin nombre" : c.Label)
+                                    @if (string.IsNullOrWhiteSpace(c.Label))
+                                    {
+                                        <span class="texto-tenue"> — ponele uno para reconocerlo</span>
+                                    }
+                                }
+                            </td>
+                            <td>@Momento(c.LastUsedAt, "Todavía no se usó")</td>
+                            <td>@Momento(c.ConfirmedAt ?? c.CreatedAt, "—")</td>
+                            <td class="acciones">
+                                @if (_renombrando != c.PublicId)
+                                {
+                                    <button class="boton boton-secundario" disabled="@_ocupado"
+                                            @onclick="() => EmpezarRenombrar(c)">Renombrar</button>
+                                    <button class="boton boton-peligro" disabled="@_ocupado"
+                                            @onclick="() => RetirarAsync(c)">Retirar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="toolbar">
+            <a class="boton boton-principal" href="/profile/mfa">Agregar autenticador</a>
+        </div>
+
+        @* Los códigos de respaldo van aquí y no en otra pantalla porque es la
+           misma decisión: quien mira sus autenticadores está evaluando si podría
+           volver a entrar habiendo perdido el teléfono. *@
+        <div class="info-card">
+            <h2>Códigos de respaldo</h2>
+            @if (_codigosRestantes == 0)
+            {
+                <div class="aviso aviso-alerta" role="alert">
+                    No te queda ningún código de respaldo. Si perdés todos tus
+                    autenticadores, sólo podrá devolverte el acceso un administrador.
+                </div>
+            }
+            else
+            {
+                <p>
+                    Te quedan <strong>@_codigosRestantes</strong>
+                    @(_codigosRestantes == 1 ? "código" : "códigos") de un solo uso.
+                </p>
+            }
+            <a class="boton boton-secundario" href="/profile/mfa">Generar códigos nuevos</a>
+        </div>
+    }
+</div>
+
+@code {
+    private List<CredencialMfaDto> _credenciales = [];
+    private int _codigosRestantes;
+    private bool _cargando = true;
+    private bool _ocupado;
+    private string? _error;
+    private string? _aviso;
+
+    private Guid? _renombrando;
+    private string? _nombreNuevo;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        var r = await Profile.ListarCredencialesMfaAsync();
+        _cargando = false;
+
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _error = r.ErrorMessage ?? "No se pudieron cargar tus autenticadores.";
+            return;
+        }
+
+        _credenciales = [.. r.Value.Credenciales];
+        _codigosRestantes = r.Value.CodigosDeRecuperacionRestantes;
+    }
+
+    private void EmpezarRenombrar(CredencialMfaDto c)
+    {
+        _renombrando = c.PublicId;
+        _nombreNuevo = c.Label;
+        _error = null;
+        _aviso = null;
+    }
+
+    private void CancelarRenombrar()
+    {
+        _renombrando = null;
+        _nombreNuevo = null;
+    }
+
+    private async Task GuardarNombreAsync(Guid publicId)
+    {
+        if (_ocupado) return;
+        _ocupado = true;
+        _error = null;
+        _aviso = null;
+
+        var r = await Profile.RenombrarCredencialMfaAsync(publicId, _nombreNuevo);
+        _ocupado = false;
+
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo cambiar el nombre.";
+            return;
+        }
+
+        CancelarRenombrar();
+        await CargarAsync();
+    }
+
+    private async Task RetirarAsync(CredencialMfaDto c)
+    {
+        if (_ocupado) return;
+        _ocupado = true;
+        _error = null;
+        _aviso = null;
+
+        var r = await Profile.RevocarCredencialMfaAsync(c.PublicId);
+        _ocupado = false;
+
+        if (!r.IsSuccess)
+        {
+            // El mensaje del servidor explica el motivo real —la cooperativa lo
+            // exige, o sos el administrador maestro— y es más útil que un texto
+            // genérico escrito aquí.
+            _error = r.ErrorMessage ?? "No se pudo retirar el autenticador.";
+            return;
+        }
+
+        var nombre = string.IsNullOrWhiteSpace(c.Label) ? "El autenticador" : $"«{c.Label}»";
+        _aviso = $"{nombre} ya no sirve para entrar.";
+        await CargarAsync();
+    }
+
+    /// <summary>
+    /// Fechas en lenguaje llano. «Hace 3 minutos» responde la pregunta que la
+    /// persona se está haciendo —¿cuál de estos es el que tengo en la mano?—
+    /// mucho mejor que una marca de tiempo.
+    /// </summary>
+    private static string Momento(DateTime? cuando, string siNoHay)
+    {
+        if (cuando is null) return siNoHay;
+
+        var transcurrido = DateTime.UtcNow - cuando.Value;
+        if (transcurrido < TimeSpan.FromMinutes(2)) return "Hace un momento";
+        if (transcurrido < TimeSpan.FromHours(1)) return $"Hace {(int)transcurrido.TotalMinutes} minutos";
+        if (transcurrido < TimeSpan.FromDays(1)) return $"Hace {(int)transcurrido.TotalHours} horas";
+        if (transcurrido < TimeSpan.FromDays(30)) return $"Hace {(int)transcurrido.TotalDays} días";
+
+        return cuando.Value.ToLocalTime().ToString("d MMM yyyy");
+    }
+}

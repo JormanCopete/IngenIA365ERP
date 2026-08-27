@@ -21,6 +21,11 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.*" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.*" />
     <PackageReference Include="Otp.NET" Version="1.4.*" />
+    <!-- Volvio en la etapa de varios autenticadores: ahora SI tiene consumidor.
+         Se habia retirado porque el unico que lo usaba era un TotpService que
+         ninguna pantalla llamaba, y la de inscripcion pedia teclear 32
+         caracteres en base32 a mano. -->
+    <PackageReference Include="QRCoder" Version="1.6.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />

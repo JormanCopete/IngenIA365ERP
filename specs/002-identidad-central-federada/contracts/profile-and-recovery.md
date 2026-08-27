@@ -33,19 +33,25 @@ Inicia el flujo de configuración de MFA. Genera el secret TOTP; NO lo persiste 
 {
   "secretBase32": "JBSWY3DPEHPK3PXP",
   "otpAuthUri": "otpauth://totp/IngenIA365ERP:ana@coop.test?secret=JBSWY3DPEHPK3PXP&issuer=IngenIA365ERP&algorithm=SHA1&digits=6&period=30",
+  "qrPngDataUri": "data:image/png;base64,iVBORw0KGgo…",
   "expiresInSeconds": 600
 }
 ```
 
-El cliente muestra el secret para que la persona lo escriba en su app de
-autenticación. **Hoy no se pinta código QR**: no hay ninguna capa que lo genere
-—existía un `TotpService` con QRCoder que ninguna pantalla llamó, y se retiró—,
-así que la pantalla dice explícitamente que hay que teclear la clave a mano en
-vez de prometer un QR que no aparece. El `otpAuthUri` viaja igual, listo para
-cuando se implemente.
+`qrPngDataUri` es el `otpAuthUri` ya convertido en imagen, listo para un
+`<img src>`. Va **incrustado** y no como una ruta que el navegador pida aparte:
+una URL que sirviera este QR sería una URL que contiene, en la práctica, el
+segundo factor, y acabaría en el registro de accesos del servidor, del proxy y de
+cualquier intermediario.
+
+El `secretBase32` se sigue mostrando debajo a propósito: quien use lector de
+pantalla, o tenga la cámara rota, necesita poder escribirlo.
 
 El secret pendiente se almacena en Redis con TTL 10 min; si el usuario no
 confirma a tiempo, debe reiniciar.
+
+**`409 Conflict`** con `Profile.Mfa.DemasiadasCredenciales` si ya llegó al máximo
+de autenticadores (5). Se resuelve retirando alguno.
 
 ---
 
@@ -98,9 +104,74 @@ Desactiva MFA del usuario. Requiere validación de contraseña actual y **rechaz
 
 - `204 No Content`.
 - `401 Unauthorized` con `Identity.InvalidCredentials` si la contraseña actual no coincide.
-- `403 Forbidden` con `Profile.Mfa.RequiredByTenantPolicy` y body `{ "tenantName": "Coop. Solidaria" }` si al menos un tenant lo exige.
+- `403 Forbidden` con `Profile.Mfa.RequiredByTenantPolicy` si al menos un tenant
+  lo exige. **No hay body `{ "tenantName": … }`**: eso lo prometía este contrato y
+  nunca existió. El nombre de la cooperativa va dentro de `message`, que es lo que
+  la pantalla muestra. El 403 sí es cierto desde el 2026-08-26 — antes caía al
+  422 por defecto.
+- `403 Forbidden` con `Profile.Mfa.RequiredForMasterAdmin` si quien llama es el
+  administrador maestro. No tiene membresías por diseño, así que la comprobación
+  de arriba no lo cubría: la única cuenta que crea cooperativas y borra el segundo
+  factor de cualquiera era, justamente, la que podía quedarse sin el suyo.
 
 **Auditoría**: `Profile.MfaDisabled`.
+
+---
+
+## GET /api/profile/mfa/credentials
+
+Los autenticadores de quien llama. Sin parámetros: siempre son los suyos, sacados
+del token.
+
+**Response** `200 OK`:
+
+```json
+{
+  "credenciales": [
+    {
+      "publicId": "…",
+      "label": "iPhone de Ana",
+      "createdAt": "2026-08-20T14:02:11Z",
+      "confirmedAt": "2026-08-20T14:02:40Z",
+      "lastUsedAt": "2026-08-26T09:31:02Z"
+    }
+  ],
+  "codigosDeRecuperacionRestantes": 8
+}
+```
+
+`label` y `confirmedAt` vienen `null` en las credenciales trasladadas desde el
+modelo de una sola columna: ese dato no existía en ninguna parte y se prefirió el
+hueco a inventarlo. `lastUsedAt` es lo que permite distinguir el dispositivo que
+se tiene en la mano del que se perdió cuando ninguno tiene nombre.
+
+---
+
+## PATCH /api/profile/mfa/credentials/{publicId}
+
+Le cambia el nombre a un autenticador. Body: `{ "label": "Teléfono viejo" }`.
+Se admite `null` para quitárselo.
+
+- `204 No Content`.
+- `404 Not Found` con `Profile.Mfa.CredentialNotFound` si no existe **o no es
+  suya**. Mismo código en ambos casos a propósito: distinguirlos confirmaría que
+  ese identificador existe y es de alguien.
+
+---
+
+## DELETE /api/profile/mfa/credentials/{publicId}
+
+Retira un autenticador conservando los demás. Si era el último, apaga el segundo
+factor.
+
+- `204 No Content`.
+- `404 Not Found` con `Profile.Mfa.CredentialNotFound`.
+- `403 Forbidden` con `Profile.Mfa.RequiredByTenantPolicy` o
+  `Profile.Mfa.RequiredForMasterAdmin` **si era la última**: quedarse sin segundo
+  factor por esta puerta no puede estar permitido si no lo está por la de
+  `disable`.
+
+**Auditoría**: `Profile.MfaCredentialRevoked`.
 
 ---
 

@@ -225,6 +225,7 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return new MfaEnrollmentSetup(
             SecretBase32: base32,
             OtpAuthUri: otpAuthUri,
+            QrPngDataUri: GenerarQrPngDataUri(otpAuthUri),
             ExpiresInSeconds: 600);
     }
 
@@ -354,6 +355,34 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
             centralUserId);
 
         return CodigoValidoContra(identity.MfaSecret, code, centralUserId);
+    }
+
+    /// <summary>
+    /// Convierte el <c>otpauth://</c> en un PNG listo para un <c>&lt;img src&gt;</c>.
+    ///
+    /// <para>
+    /// Se devuelve incrustado como data URI, no como una ruta que el navegador
+    /// pida aparte: una URL que sirva este QR es una URL que contiene el segundo
+    /// factor, y acabaría en el registro de accesos del servidor, del proxy y de
+    /// cualquier intermediario. Incrustado, viaja sólo por la respuesta que ya
+    /// lleva el secreto de todos modos.
+    /// </para>
+    ///
+    /// <para>
+    /// El <c>otpauth://</c> se sigue devolviendo aparte: quien use un lector de
+    /// pantalla, o tenga la cámara rota, necesita poder escribir la clave.
+    /// </para>
+    /// </summary>
+    private static string GenerarQrPngDataUri(string otpAuthUri)
+    {
+        using var generador = new QRCoder.QRCodeGenerator();
+        using var datos = generador.CreateQrCode(otpAuthUri, QRCoder.QRCodeGenerator.ECCLevel.Q);
+        using var png = new QRCoder.PngByteQRCode(datos);
+
+        // 10 píxeles por módulo: se escanea sin esfuerzo desde una pantalla y el
+        // PNG sigue pesando unos pocos kilobytes.
+        var bytes = png.GetGraphic(10);
+        return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
     }
 
     /// <summary>

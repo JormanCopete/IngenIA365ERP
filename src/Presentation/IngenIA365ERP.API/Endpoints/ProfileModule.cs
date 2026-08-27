@@ -3,6 +3,7 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Identity.Profile.BeginMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.ChangePassword;
 using IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
+using IngenIA365ERP.Application.Identity.Profile.Credenciales;
 using IngenIA365ERP.Application.Identity.Profile.DisableMfa;
 using IngenIA365ERP.Application.Identity.Profile.Preferencias;
 using IngenIA365ERP.Application.Identity.Profile.RegenerateRecoveryCodes;
@@ -39,6 +40,23 @@ public sealed class ProfileModule : ICarterModule
         group.MapPost("/mfa/recovery-codes/regenerate", RegenerateRecoveryCodesAsync)
             .WithName("Profile_RegenerateRecoveryCodes");
 
+        // Credenciales de segundo factor. Una persona puede tener varias —el
+        // teléfono, el escritorio, uno viejo de respaldo— y necesita verlas para
+        // saber cuál retirar.
+        //
+        // Ninguna lleva RequirePermission, por lo mismo que las preferencias: no
+        // son una facultad sobre terceros sino la gestión de lo propio, y el
+        // handler saca la identidad del token, nunca de la petición. Un PublicId
+        // ajeno adivinado responde «no existe».
+        group.MapGet("/mfa/credentials", ListMfaCredentialsAsync)
+            .WithName("Profile_ListMfaCredentials");
+
+        group.MapPatch("/mfa/credentials/{credencialPublicId:guid}", RenameMfaCredentialAsync)
+            .WithName("Profile_RenameMfaCredential");
+
+        group.MapDelete("/mfa/credentials/{credencialPublicId:guid}", RevokeMfaCredentialAsync)
+            .WithName("Profile_RevokeMfaCredential");
+
         // Password change (purpose=full).
         group.MapPost("/password", ChangePasswordAsync)
             .WithName("Profile_ChangePassword");
@@ -63,9 +81,30 @@ public sealed class ProfileModule : ICarterModule
 
     private static async Task<object?> ConfirmMfaEnrollmentAsync(
         [FromBody] ConfirmMfaBody body, ISender sender, CancellationToken ct) =>
-        await sender.Send(new ConfirmMfaEnrollmentCommand(body.Code), ct);
+        await sender.Send(new ConfirmMfaEnrollmentCommand(body.Code, body.Label), ct);
 
-    public sealed record ConfirmMfaBody(string Code);
+    /// <param name="Label">
+    /// Cómo quiere llamar la persona a este dispositivo. Opcional: quien sólo
+    /// tiene uno no necesita bautizarlo.
+    /// </param>
+    public sealed record ConfirmMfaBody(string Code, string? Label = null);
+
+    private static async Task<object?> ListMfaCredentialsAsync(
+        ISender sender, CancellationToken ct) =>
+        await sender.Send(new ListMfaCredentialsQuery(), ct);
+
+    private static async Task<object?> RenameMfaCredentialAsync(
+        Guid credencialPublicId,
+        [FromBody] RenameMfaCredentialBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new RenameMfaCredentialCommand(credencialPublicId, body.Label), ct);
+
+    public sealed record RenameMfaCredentialBody(string? Label);
+
+    private static async Task<object?> RevokeMfaCredentialAsync(
+        Guid credencialPublicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new RevokeMfaCredentialCommand(credencialPublicId), ct);
 
     private static async Task<object?> DisableMfaAsync(
         [FromBody] DisableMfaBody body, ISender sender, CancellationToken ct) =>

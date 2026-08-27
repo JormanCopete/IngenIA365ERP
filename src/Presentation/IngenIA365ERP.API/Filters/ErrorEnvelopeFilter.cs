@@ -85,6 +85,18 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
 
+            // Quedarse sin segundo factor cuando alguien lo exige no es una
+            // petición mal formada: es una acción prohibida. El contrato
+            // (specs/002/contracts/profile-and-recovery.md:101) ya prometía 403 y
+            // el código devolvía 422 por caer al default — otra promesa
+            // documentada que no era cierta.
+            "Profile.Mfa.RequiredByTenantPolicy" => StatusCodes.Status403Forbidden,
+            "Profile.Mfa.RequiredForMasterAdmin" => StatusCodes.Status403Forbidden,
+
+            // Ya llegó al tope de autenticadores: el estado actual impide la
+            // operación, y se resuelve retirando uno.
+            "Profile.Mfa.DemasiadasCredenciales" => StatusCodes.Status409Conflict,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

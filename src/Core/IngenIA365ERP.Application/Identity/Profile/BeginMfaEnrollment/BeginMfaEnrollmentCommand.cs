@@ -27,4 +27,5 @@ public sealed record BeginMfaEnrollmentCommand() : IRequest<Result<BeginMfaEnrol
 public sealed record BeginMfaEnrollmentResult(
     string SecretBase32,
     string OtpAuthUri,
+    string QrPngDataUri,
     int ExpiresInSeconds);

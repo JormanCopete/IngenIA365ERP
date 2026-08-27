@@ -54,6 +54,13 @@ public static class AuditEventTypes
     // -------------------- Profile + Recovery --------------------
     public const string ProfileMfaEnrolled = "Profile.MfaEnrolled";
     public const string ProfileMfaDisabled = "Profile.MfaDisabled";
+
+    /// <summary>Retiró UNA credencial, conservando las demás.</summary>
+    public const string ProfileMfaCredentialRevoked = "Profile.MfaCredentialRevoked";
+
+    /// <summary>Le cambió el nombre a una credencial. No altera la seguridad,
+    /// pero sí quién puede reconocer qué dispositivo es cuál.</summary>
+    public const string ProfileMfaCredentialRenamed = "Profile.MfaCredentialRenamed";
     public const string ProfileRecoveryCodesRegenerated = "Profile.RecoveryCodesRegenerated";
     public const string ProfilePasswordChanged = "Profile.PasswordChanged";
     public const string ProfilePasswordResetRequested = "Profile.PasswordResetRequested";
