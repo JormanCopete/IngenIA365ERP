@@ -28,8 +28,17 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   escribiéndose** como red de rollback mientras dure el traslado, y la
   verificación cae a ella si no encuentra credencial; el log lo marca como
   `[Mfa.LecturaHeredada]`. Vaciarla es una migración destructiva aparte.
-  `TwoFactorEnabled` pasa a ser derivada de que exista credencial activa, y sólo
-  la escribe `IMfaDirectory`.
+  Hay dos tipos de credencial: TOTP y **passkey (WebAuthn)**. Una persona puede
+  tener varias de cualquiera de los dos, y al entrar sirve cualquiera.
+  `TwoFactorEnabled` es columna almacenada y **sólo la escribe
+  `AspNetCoreIdentityProvider`**, derivándola de `ContarActivasAsync` — que
+  cuenta TODAS las credenciales, no sólo las TOTP: cuando contaba sólo un tipo,
+  retirar un passkey se llevaba por delante el TOTP.
+- **Passkeys**: `RelyingPartyId` va por ambiente (`localhost` en desarrollo,
+  `ingenia365.com` en producción) y **cambiarlo invalida todas las llaves ya
+  inscritas, sin migración posible**. No tiene valor por defecto a propósito: el
+  proceso no arranca si falta. La librería (`Fido2NetLib`) sólo la conoce
+  `WebAuthnService`, y una prueba de arquitectura lo fija.
 - **Cifrado**: el llavero de DataProtection vive en `ADM_DataProtectionKeys`, no
   en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**: antes de
   desplegarlo hay que rescatar las claves de cada pod, o los archivos cifrados
@@ -54,10 +63,10 @@ vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | ~622 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | ~626 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 625 (624 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 640 (639 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

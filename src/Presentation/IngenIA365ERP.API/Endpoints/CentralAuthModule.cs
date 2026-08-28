@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Identity.Auth.Login;
 using IngenIA365ERP.Application.Identity.Auth.Logout;
 using IngenIA365ERP.Application.Identity.Auth.Me;
 using IngenIA365ERP.Application.Identity.Auth.MfaVerify;
+using IngenIA365ERP.Application.Identity.Auth.WebAuthn;
 using IngenIA365ERP.Application.Identity.Auth.RefreshToken;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -47,6 +48,19 @@ public sealed class CentralAuthModule : ICarterModule
             .RequireAuthorization()
             .WithName("CentralAuth_MfaVerify");
 
+        // Ingreso con passkey. Rutas propias y NO un campo más en /mfa/verify:
+        // aquello valida un código de 6 a 8 caracteres y tiene ocho pruebas y
+        // varias e2e encima construyendo ese cuerpo. Ensancharlo por un método
+        // que ni siquiera manda un código habría sido romper el camino de entrada
+        // para ahorrarse dos rutas.
+        anon.MapPost("/mfa/webauthn/challenge", BeginWebAuthnAssertionAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_WebAuthnChallenge");
+
+        anon.MapPost("/mfa/webauthn/verify", VerifyWebAuthnAssertionAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_WebAuthnVerify");
+
         anon.MapPost("/logout", LogoutAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_Logout");
@@ -85,6 +99,28 @@ public sealed class CentralAuthModule : ICarterModule
             UserAgent: GetUserAgent(http)), ct);
 
     public sealed record MfaVerifyBody(string Code, bool UseRecoveryCode = false);
+
+    // -------- Ingreso con passkey --------
+
+    private static async Task<object?> BeginWebAuthnAssertionAsync(
+        ISender sender, CancellationToken ct) =>
+        await sender.Send(new BeginWebAuthnAssertionCommand(), ct);
+
+    private static async Task<object?> VerifyWebAuthnAssertionAsync(
+        [FromBody] WebAuthnVerifyBody body,
+        HttpContext http,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new VerifyWebAuthnAssertionCommand(
+            RetoId: body.RetoId,
+            RespuestaJson: body.RespuestaJson,
+            IpAddress: GetIp(http),
+            UserAgent: GetUserAgent(http)), ct);
+
+    /// <param name="RespuestaJson">
+    /// Lo que devolvió <c>navigator.credentials.get()</c>, serializado tal cual.
+    /// </param>
+    public sealed record WebAuthnVerifyBody(string RetoId, string RespuestaJson);
 
     // -------- Refresh --------
 

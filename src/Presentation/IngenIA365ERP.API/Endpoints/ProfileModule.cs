@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Identity.Profile.BeginMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.ChangePassword;
 using IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
 using IngenIA365ERP.Application.Identity.Profile.Credenciales;
+using IngenIA365ERP.Application.Identity.Profile.WebAuthn;
 using IngenIA365ERP.Application.Identity.Profile.DisableMfa;
 using IngenIA365ERP.Application.Identity.Profile.Preferencias;
 using IngenIA365ERP.Application.Identity.Profile.RegenerateRecoveryCodes;
@@ -57,6 +58,16 @@ public sealed class ProfileModule : ICarterModule
         group.MapDelete("/mfa/credentials/{credencialPublicId:guid}", RevokeMfaCredentialAsync)
             .WithName("Profile_RevokeMfaCredential");
 
+        // Passkeys. Son dos viajes porque WebAuthn es reto/respuesta: el servidor
+        // emite un reto, el navegador lo firma con la llave, y el servidor
+        // comprueba la firma contra el reto que emitió. El reto se queda aquí, y
+        // eso es lo que impide reproducir una respuesta capturada.
+        group.MapPost("/mfa/webauthn/begin", BeginWebAuthnEnrollmentAsync)
+            .WithName("Profile_BeginWebAuthnEnrollment");
+
+        group.MapPost("/mfa/webauthn/confirm", ConfirmWebAuthnEnrollmentAsync)
+            .WithName("Profile_ConfirmWebAuthnEnrollment");
+
         // Password change (purpose=full).
         group.MapPost("/password", ChangePasswordAsync)
             .WithName("Profile_ChangePassword");
@@ -105,6 +116,22 @@ public sealed class ProfileModule : ICarterModule
     private static async Task<object?> RevokeMfaCredentialAsync(
         Guid credencialPublicId, ISender sender, CancellationToken ct) =>
         await sender.Send(new RevokeMfaCredentialCommand(credencialPublicId), ct);
+
+    private static async Task<object?> BeginWebAuthnEnrollmentAsync(
+        ISender sender, CancellationToken ct) =>
+        await sender.Send(new BeginWebAuthnEnrollmentCommand(), ct);
+
+    private static async Task<object?> ConfirmWebAuthnEnrollmentAsync(
+        [FromBody] ConfirmWebAuthnBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new ConfirmWebAuthnEnrollmentCommand(
+            body.RetoId, body.RespuestaJson, body.Label), ct);
+
+    /// <param name="RespuestaJson">
+    /// Lo que devolvió <c>navigator.credentials.create()</c>, serializado tal cual.
+    /// Viaja como texto y no como objeto tipado porque la librería que sabe
+    /// interpretarlo vive en Infrastructure, y no puede asomar por aquí.
+    /// </param>
+    public sealed record ConfirmWebAuthnBody(string RetoId, string RespuestaJson, string? Label = null);
 
     private static async Task<object?> DisableMfaAsync(
         [FromBody] DisableMfaBody body, ISender sender, CancellationToken ct) =>

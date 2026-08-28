@@ -286,6 +286,27 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return new MfaConfirmResult(true, [], codes);
     }
 
+    public async Task<IReadOnlyList<string>> ActivarSegundoFactorAsync(
+        Guid centralUserId, bool esLaPrimeraCredencial, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted) return [];
+
+        // NO se toca MfaSecret. Esa columna es la red de rollback del TOTP: si
+        // una passkey la escribiera, la versión anterior —que sólo sabe leer de
+        // ahí— intentaría verificar un secreto TOTP que no existe.
+        if (!identity.TwoFactorEnabled)
+        {
+            identity.TwoFactorEnabled = true;
+            await _userManager.UpdateAsync(identity);
+        }
+
+        if (!esLaPrimeraCredencial) return [];
+
+        var recovery = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(identity, RecoveryCodeCount);
+        return recovery?.ToList() ?? [];
+    }
+
     public async Task<bool> VerifyMfaCodeAsync(Guid centralUserId, string code, CancellationToken ct)
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());

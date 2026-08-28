@@ -175,6 +175,81 @@ factor.
 
 ---
 
+## Passkeys (WebAuthn)
+
+Son **dos viajes** porque WebAuthn es reto/respuesta: el servidor emite un reto,
+el navegador lo firma con la llave, y el servidor comprueba la firma contra el
+reto que emitió. **El reto se queda en el servidor** — lo que vuelve es sólo un
+identificador para recuperarlo—, y eso es lo que impide reproducir una respuesta
+capturada.
+
+### POST /api/profile/mfa/webauthn/begin
+
+**Authorization**: `purpose=full` o `purpose=mfa-enroll`.
+
+**Response** `200 OK`: `{ "opcionesJson": "…", "retoId": "…" }`
+
+`opcionesJson` se le pasa tal cual a `navigator.credentials.create()`. Lleva
+dentro `excludeCredentials` con las llaves que la persona ya tiene, para que el
+navegador avise en el momento si intenta inscribir una repetida.
+
+- `409 Conflict` con `Profile.Mfa.DemasiadasCredenciales` si llegó al máximo (5).
+
+### POST /api/profile/mfa/webauthn/confirm
+
+Body: `{ "retoId": "…", "respuestaJson": "…", "label": "YubiKey azul" }`
+
+`respuestaJson` es lo que devolvió el navegador, serializado tal cual. Viaja como
+texto y no como objeto tipado porque la librería que sabe interpretarlo vive en
+Infrastructure y no puede asomar al contrato.
+
+**Response** `200 OK`:
+`{ "credencialPublicId": "…", "codigosDeRecuperacion": [ … ] }`
+
+Los códigos **sólo vienen si era la primera credencial** de la persona, del tipo
+que sea. Con la segunda la lista va vacía: emitirlos invalidaría los que ya
+guardó.
+
+- `422` con `Profile.Mfa.RetoVencido` si el reto caducó o **ya se usó**. Es de un
+  solo uso.
+- `422` con `Profile.Mfa.WebAuthnInvalido` si la firma no verifica.
+
+### POST /api/auth/mfa/webauthn/challenge
+
+**Authorization**: el `challengeToken` con `purpose=mfa-verify`, el mismo del
+ingreso con código.
+
+**Response** `200 OK`: `{ "opcionesJson": "…", "retoId": "…" }`
+
+- `401` con `Identity.SinPasskeys` si la cuenta no tiene ninguna llave inscrita.
+- `422` con `Identity.Locked.Soft` si está bloqueada por intentos. **Emitir un
+  reto no cuenta como intento**: si contara, pedirlos en bucle sería una forma
+  gratuita de bloquear a alguien.
+
+### POST /api/auth/mfa/webauthn/verify
+
+Body: `{ "retoId": "…", "respuestaJson": "…" }`
+
+**Response**: la misma forma que `POST /api/auth/mfa/verify` — sesión operativa,
+selección de cooperativa, o la salida del maestro global. A partir de la
+verificación es exactamente el mismo camino.
+
+- `422` con `Identity.RetoVencido` si caducó o ya se usó. **No cuenta como
+  intento fallido**: el servidor no llegó a juzgar ninguna llave, y contarlo
+  castigaría a quien dejó la pantalla abierta cinco minutos.
+- `422` con `Identity.WebAuthnInvalido` si la firma no verifica **o si la llave
+  no es de esta persona**. Mismo código en ambos casos.
+
+**Qué NO cuenta como intento fallido**: cancelar el diálogo, quedarse sin tiempo
+o no tener la llave conectada. Nada de eso llega a la API. Si contara, cinco
+tropiezos legítimos dejarían a alguien sin passkey, sin TOTP y sin códigos de
+respaldo.
+
+**Auditoría**: `CentralUser.Mfa.{Success|Failed}`, igual que la verificación con
+código.
+
+---
+
 ## POST /api/profile/password
 
 Cambia la contraseña del usuario autenticado.

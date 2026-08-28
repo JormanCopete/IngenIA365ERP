@@ -127,6 +127,25 @@ public interface ICentralIdentityProvider
         string? label,
         CancellationToken ct);
 
+    /// <summary>
+    /// Enciende <c>TwoFactorEnabled</c> tras inscribir una credencial que no es
+    /// TOTP. Se llama DESPUÉS de haber persistido la credencial, para que un
+    /// fallo a medias deje a la persona con credencial y sin bandera —entra sin
+    /// segundo factor— y nunca al revés, que sería pedirle un código que no puede
+    /// acertar.
+    ///
+    /// <para>
+    /// Sin esta llamada, quien sólo tuviera una passkey entraría SIN segundo
+    /// factor: el login mira esa bandera, y con ella apagada ni siquiera lo pide.
+    /// </para>
+    /// </summary>
+    /// <param name="esLaPrimeraCredencial">
+    /// Si lo es, se emiten códigos de recuperación. Si no, la lista vuelve vacía:
+    /// regenerarlos invalidaría los que la persona ya guardó.
+    /// </param>
+    Task<IReadOnlyList<string>> ActivarSegundoFactorAsync(
+        Guid centralUserId, bool esLaPrimeraCredencial, CancellationToken ct);
+
     /// <summary>Verifica un TOTP contra el secret YA persistido del usuario (login con MFA).</summary>
     Task<bool> VerifyMfaCodeAsync(Guid centralUserId, string code, CancellationToken ct);
 
