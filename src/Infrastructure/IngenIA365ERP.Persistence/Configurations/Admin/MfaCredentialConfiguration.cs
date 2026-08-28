@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -35,13 +36,13 @@ public sealed class MfaCredentialConfiguration : IEntityTypeConfiguration<MfaCre
     /// datos ya escritos siguen valiendo. El SQL del traslado escribe exactamente
     /// esta cadena.
     /// </summary>
-    public const string ValorTotp = "Totp";
+    public const string ValorTotp = TiposDeCredencialMfa.Totp;
 
     /// <summary>
     /// Valor del discriminador para WebAuthn. Literal corto y no el nombre de la
     /// clase, por lo mismo que <see cref="ValorTotp"/>.
     /// </summary>
-    public const string ValorWebAuthn = "WebAuthn";
+    public const string ValorWebAuthn = TiposDeCredencialMfa.WebAuthn;
 
     public void Configure(EntityTypeBuilder<MfaCredential> builder)
     {

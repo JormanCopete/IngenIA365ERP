@@ -174,6 +174,75 @@ public sealed class CentralAuthClient
         }
     }
 
+    // ---------- Ingreso con passkey ----------
+
+    /// <summary>
+    /// Primer viaje: el reto y la lista de llaves que esta persona puede usar.
+    /// Va con el challenge token, igual que el verify del TOTP — la contraseña ya
+    /// se acertó, lo que falta es el segundo factor.
+    /// </summary>
+    public async Task<InvitationApiResult<WebAuthnChallengeResponse>> WebAuthnChallengeAsync(
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<WebAuthnChallengeResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(
+                HttpMethod.Post, "/api/auth/mfa/webauthn/challenge");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<WebAuthnChallengeResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<WebAuthnChallengeResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Segundo viaje: la firma. Si verifica, lo que vuelve es exactamente el mismo
+    /// <see cref="LoginResponse"/> que tras un TOTP correcto —con su selección de
+    /// cooperativa incluida—, así que se encamina por el mismo sitio.
+    /// </summary>
+    public async Task<InvitationApiResult<LoginResponse>> WebAuthnVerifyAsync(
+        string retoId, string respuestaJson, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<LoginResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/webauthn/verify")
+            {
+                Content = JsonContent.Create(new { retoId, respuestaJson }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                await RouteLoginResponseAsync(body);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
     // ---------- Select tenant ----------
 
     public async Task<InvitationApiResult<SelectTenantResponse>> SelectTenantAsync(

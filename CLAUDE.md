@@ -30,6 +30,12 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `[Mfa.LecturaHeredada]`. Vaciarla es una migración destructiva aparte.
   Hay dos tipos de credencial: TOTP y **passkey (WebAuthn)**. Una persona puede
   tener varias de cualquiera de los dos, y al entrar sirve cualquiera.
+  El navegador se toca desde **un solo archivo**, `wwwroot/js/webauthn.js`, y
+  todo lo que cruza es base64url. Ese formato no lo elige nadie de aquí: lo
+  ponen la especificación y Fido2NetLib, y equivocarse en un campo no da error
+  sino un «no se pudo verificar la llave» indistinguible del real. Lo fija
+  `ElFormatoDeLaRespuestaWebAuthn`, que comprueba las dos mitades. **No hay
+  pruebas de navegador en el repositorio**: el interop se prueba a mano.
   `TwoFactorEnabled` es columna almacenada y **sólo la escribe
   `AspNetCoreIdentityProvider`**, derivándola de `ContarActivasAsync` — que
   cuenta TODAS las credenciales, no sólo las TOTP: cuando contaba sólo un tipo,
@@ -66,7 +72,7 @@ vez de creerles; el comando está al lado.
 | Rutas REST | ~626 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 640 (639 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 648 (647 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

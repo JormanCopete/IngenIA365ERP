@@ -18,15 +18,12 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
     ICentralIdentityProvider centralIdentity,
     IMfaPendingStore pendingStore,
     ITenantMembershipReader memberships,
-    ICentralJwtIssuer jwtIssuer,
-    ICentralRefreshTokenStore refreshStore,
+    Common.IElevadorDeSesionTrasInscripcion elevador,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     ILogger<ConfirmMfaEnrollmentCommandHandler> logger)
     : IRequestHandler<ConfirmMfaEnrollmentCommand, Result<ConfirmMfaEnrollmentResult>>
 {
-    private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
-
     public async Task<Result<ConfirmMfaEnrollmentResult>> Handle(
         ConfirmMfaEnrollmentCommand request, CancellationToken ct)
     {
@@ -78,55 +75,23 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
             return Result.Success(new ConfirmMfaEnrollmentResult(RecoveryCodes: recoveryCodes));
         }
 
-        var user = await centralIdentity.FindByIdAsync(centralUserId, ct);
-        if (user is null)
+        // La emisión vive aparte desde que hay dos formas de inscribirse: con
+        // código y con passkey. Copiarla habría dejado a quien sólo puede usar una
+        // llave sin manera de cumplir la exigencia de su cooperativa.
+        var elevada = await elevador.ElevarAsync(centralUserId, now, ct);
+        if (elevada is null)
         {
-            // Edge: usuario desapareció justo después de confirmar — devolvemos
-            // OK con los recovery codes pero sin tokens; el usuario debe re-loguear.
-            logger.LogWarning("CentralUser {Id} desapareció tras confirm MFA.", centralUserId);
             return Result.Success(new ConfirmMfaEnrollmentResult(RecoveryCodes: recoveryCodes));
         }
-
-        var active = await memberships.GetActiveMembershipsAsync(centralUserId, ct);
-        if (active.Count != 1)
-        {
-            // Para multi-tenant, devolvemos sin tokens — el cliente debe pasar por
-            // tenant-select. (No se devuelve challenge token aquí; el cliente
-            // re-llamará /api/auth/login si necesita esa pantalla.)
-            return Result.Success(new ConfirmMfaEnrollmentResult(RecoveryCodes: recoveryCodes));
-        }
-
-        var m = active[0];
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId: centralUserId,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            activeTenantId: m.TenantId,
-            tenantAdmin: m.IsTenantAdmin,
-            mfaVerified: true);
-        var refresh = jwtIssuer.IssueRefreshToken();
-
-        await refreshStore.StoreAsync(
-            refresh.HashHex,
-            new CentralRefreshSession(
-                CentralUserId: centralUserId,
-                ActiveTenantPublicId: m.TenantId,
-                FamilyId: Guid.NewGuid(),
-                IssuedAt: now,
-                IpAddress: null,
-                UserAgent: null,
-                ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
-            RefreshTokenTtl, ct);
 
         return Result.Success(new ConfirmMfaEnrollmentResult(
             RecoveryCodes: recoveryCodes,
-            AccessToken: access.Jwt,
-            AccessTokenExpiresAt: access.ExpiresAt,
-            RefreshToken: refresh.Token,
-            RefreshTokenExpiresAt: refresh.ExpiresAt,
-            ActiveTenantPublicId: m.TenantId,
-            ActiveTenantName: m.TenantName));
+            AccessToken: elevada.AccessToken,
+            AccessTokenExpiresAt: elevada.AccessTokenExpiresAt,
+            RefreshToken: elevada.RefreshToken,
+            RefreshTokenExpiresAt: elevada.RefreshTokenExpiresAt,
+            ActiveTenantPublicId: elevada.ActiveTenantPublicId,
+            ActiveTenantName: elevada.ActiveTenantName));
     }
 
     private async Task EmitAuditAsync(

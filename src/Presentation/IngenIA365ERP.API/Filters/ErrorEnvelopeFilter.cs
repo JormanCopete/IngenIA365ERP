@@ -78,6 +78,12 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Identity.InvalidCredentials" => StatusCodes.Status401Unauthorized,
             "Identity.MfaInvalid" => StatusCodes.Status401Unauthorized,
 
+            // Una firma de passkey que no verifica es lo mismo que un TOTP
+            // equivocado: falló la autenticación. Sin esta línea caía al 422 por
+            // el default, que es justo el defecto que se corrigió arriba para el
+            // TOTP — repetido en el método nuevo.
+            "Identity.WebAuthnInvalido" => StatusCodes.Status401Unauthorized,
+
             // Incluye Reused: una violación de familia es un token que ya no
             // autentica, no una entidad no procesable.
             _ when code.StartsWith("Identity.RefreshToken.", StringComparison.Ordinal)

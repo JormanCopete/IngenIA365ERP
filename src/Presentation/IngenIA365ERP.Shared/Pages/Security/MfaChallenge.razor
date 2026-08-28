@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @using IngenIA365ERP.Shared.Services.Security
 @inject CentralAuthClient AuthClient
+@inject WebAuthnInterop Passkeys
 @inject NavigationManager Nav
 
 @*
@@ -10,6 +11,12 @@
     challenge=MfaRequired; el CentralAuthClient ya tiene el challengeToken
     purpose=mfa-verify en memoria. POST a /api/auth/mfa/verify con el código TOTP
     o, en modo alterno (feature 003, FR-108/FR-109), un recovery code one-shot.
+
+    Y con passkey, que va por otra ruta: no manda ningún código, manda una firma.
+    El botón se ofrece siempre que el navegador pueda —no se consulta antes si la
+    persona tiene alguna llave, porque averiguarlo obliga a emitir un reto que casi
+    nadie usaría, y cada reto emitido es una entrada en Redis con cinco minutos de
+    vida. Si no tiene ninguna, el servidor lo dice cuando lo pulse.
 *@
 
 <PageTitle>Verifica tu código — IngenIA365ERP</PageTitle>
@@ -55,6 +62,16 @@
         </p>
     }
 
+    @if (_passkeysDisponibles)
+    {
+        <p style="margin-top: var(--pad-xl);">
+            <button type="button" class="boton boton-secundario" disabled="@_busy"
+                    @onclick="EntrarConLlaveAsync">
+                @(_firmando ? "Esperando la llave…" : "Entrar con mi llave o passkey")
+            </button>
+        </p>
+    }
+
     <p style="margin-top: var(--pad-xl); font-size: var(--texto-sm);">
         <a href="" @onclick="ToggleMode" @onclick:preventDefault>
             @(_useRecovery ? "Usar el código de mi app de autenticación" : "¿No tienes tu app? Usa un código de recuperación")
@@ -72,6 +89,11 @@
     private bool _useRecovery;
     private int? _recoveryRemaining;
     private string? _error;
+
+    private bool _passkeysDisponibles;
+
+    /// <summary>Mientras el diálogo del navegador está abierto. Cambia el texto del botón, nada más.</summary>
+    private bool _firmando;
 
     private void ToggleMode()
     {
@@ -107,24 +129,7 @@
             }
 
             _recoveryRemaining = result.Value.RecoveryCodesRemaining;
-
-            switch (result.Value.Challenge)
-            {
-                case "None":
-                    // Sin forceLoad: el storage es in-memory y un full reload
-                    // reinicia el runtime WASM descartando la sesión adoptada.
-                    Nav.NavigateTo("/");
-                    break;
-                case "TenantSelection":
-                    Nav.NavigateTo("/security/select-tenant");
-                    break;
-                case "NoActiveMembership":
-                    Nav.NavigateTo("/security/no-membership");
-                    break;
-                default:
-                    _error = $"Respuesta inesperada: {result.Value.Challenge}";
-                    break;
-            }
+            Encaminar(result.Value);
         }
         catch (Exception ex)
         {
@@ -136,6 +141,98 @@
         }
     }
 
+    /// <summary>
+    /// Comprobación diferida al primer render: durante el prerenderizado no hay
+    /// navegador y preguntar devolvería «no» siempre.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool primeraVez)
+    {
+        if (!primeraVez) return;
+
+        _passkeysDisponibles = await Passkeys.EstaDisponibleAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Dos viajes con el diálogo del navegador en medio, y al final exactamente el
+    /// mismo <c>LoginResponse</c> que tras un código correcto — por eso el
+    /// encaminamiento es compartido y no una copia.
+    /// </summary>
+    private async Task EntrarConLlaveAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var reto = await AuthClient.WebAuthnChallengeAsync();
+            if (!reto.IsSuccess || reto.Value is null)
+            {
+                _error = MapError(reto.ErrorCode, reto.ErrorMessage);
+                return;
+            }
+
+            _firmando = true;
+            StateHasChanged();
+
+            var firma = await Passkeys.FirmarAsync(reto.Value.OpcionesJson);
+            _firmando = false;
+
+            if (!firma.Ok)
+            {
+                // Cancelar el diálogo no es un fallo, y tampoco cuenta como
+                // intento: el servidor ni se entera. Se sale en silencio.
+                if (firma.Motivo != MotivosWebAuthn.Cancelado)
+                {
+                    _error = firma.Mensaje ?? "No se pudo usar la llave.";
+                }
+                return;
+            }
+
+            var result = await AuthClient.WebAuthnVerifyAsync(
+                reto.Value.RetoId, firma.RespuestaJson!);
+
+            if (!result.IsSuccess || result.Value is null)
+            {
+                _error = MapError(result.ErrorCode, result.ErrorMessage);
+                return;
+            }
+
+            Encaminar(result.Value);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _firmando = false;
+            _busy = false;
+        }
+    }
+
+    private void Encaminar(Services.Security.LoginResponse respuesta)
+    {
+        switch (respuesta.Challenge)
+        {
+            case "None":
+                // Sin forceLoad: el storage es in-memory y un full reload
+                // reinicia el runtime WASM descartando la sesión adoptada.
+                Nav.NavigateTo("/");
+                break;
+            case "TenantSelection":
+                Nav.NavigateTo("/security/select-tenant");
+                break;
+            case "NoActiveMembership":
+                Nav.NavigateTo("/security/no-membership");
+                break;
+            default:
+                _error = $"Respuesta inesperada: {respuesta.Challenge}";
+                break;
+        }
+    }
+
     private string MapError(string? code, string? message) => code switch
     {
         "Identity.MfaInvalid" => _useRecovery
@@ -144,6 +241,15 @@
         "Identity.ChallengeExpired" => "El tiempo expiró. Vuelve a iniciar sesión.",
         "Identity.NoChallengeToken" => "Falta el token de challenge. Reinicia el login.",
         "Identity.WrongTokenPurpose" => "El token no es válido para este paso.",
+
+        // Passkeys. Merecen mensajes propios porque el genérico —«no se pudo
+        // verificar el código»— es falso: acá no hay ningún código.
+        "Identity.SinPasskeys" =>
+            "Tu cuenta no tiene ninguna llave registrada. Usa el código de tu app.",
+        "Identity.RetoVencido" =>
+            "Pasó demasiado tiempo. Pulsa otra vez el botón de la llave.",
+        "Identity.WebAuthnInvalido" => "La llave no se pudo verificar.",
+
         _ => message ?? "No se pudo verificar el código.",
     };
 

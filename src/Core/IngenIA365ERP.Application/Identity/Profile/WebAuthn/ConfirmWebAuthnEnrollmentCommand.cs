@@ -21,9 +21,23 @@ public sealed record ConfirmWebAuthnEnrollmentCommand(
 /// Sólo vienen si era su PRIMERA credencial. Con la segunda la lista va vacía:
 /// emitirlos invalidaría los que ya guardó.
 /// </param>
+/// <param name="AccessToken">
+/// Sólo cuando la inscripción venía forzada —token de <c>mfa-enroll</c>— y la
+/// persona tiene exactamente una cooperativa. En cualquier otro caso va null y el
+/// cliente reinicia el ingreso. Es el mismo trato que recibe la inscripción con
+/// código: sin él, quien inscribe una passkey porque su cooperativa lo exige
+/// quedaría con la llave puesta y sin poder entrar con ella hasta volver a
+/// escribir la contraseña.
+/// </param>
 public sealed record ConfirmWebAuthnEnrollmentResult(
     Guid CredencialPublicId,
-    IReadOnlyList<string> CodigosDeRecuperacion);
+    IReadOnlyList<string> CodigosDeRecuperacion,
+    string? AccessToken = null,
+    DateTime? AccessTokenExpiresAt = null,
+    string? RefreshToken = null,
+    DateTime? RefreshTokenExpiresAt = null,
+    Guid? ActiveTenantPublicId = null,
+    string? ActiveTenantName = null);
 
 public sealed class ConfirmWebAuthnEnrollmentCommandHandler(
     ICurrentCentralUserContext currentUser,
@@ -32,6 +46,7 @@ public sealed class ConfirmWebAuthnEnrollmentCommandHandler(
     IWebAuthnService webAuthn,
     IWebAuthnChallengeStore retos,
     ITenantMembershipReader memberships,
+    Common.IElevadorDeSesionTrasInscripcion elevador,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     ILogger<ConfirmWebAuthnEnrollmentCommandHandler> logger)
@@ -110,6 +125,24 @@ public sealed class ConfirmWebAuthnEnrollmentCommandHandler(
 
         await memberships.InvalidateLocalCacheAsync(centralUserId, ct);
         await EmitirAuditoriaAsync(centralUserId, publicId, ahora, ct);
+
+        // Venía de una inscripción forzada: ya cumple lo que le exigían, así que
+        // se le abre la sesión aquí mismo en vez de devolverlo al login.
+        if (currentUser.Purpose == CentralJwtPurposes.MfaEnroll)
+        {
+            var elevada = await elevador.ElevarAsync(centralUserId, ahora, ct);
+            if (elevada is not null)
+            {
+                return Result.Success(new ConfirmWebAuthnEnrollmentResult(
+                    publicId, codigos,
+                    AccessToken: elevada.AccessToken,
+                    AccessTokenExpiresAt: elevada.AccessTokenExpiresAt,
+                    RefreshToken: elevada.RefreshToken,
+                    RefreshTokenExpiresAt: elevada.RefreshTokenExpiresAt,
+                    ActiveTenantPublicId: elevada.ActiveTenantPublicId,
+                    ActiveTenantName: elevada.ActiveTenantName));
+            }
+        }
 
         return Result.Success(new ConfirmWebAuthnEnrollmentResult(publicId, codigos));
     }

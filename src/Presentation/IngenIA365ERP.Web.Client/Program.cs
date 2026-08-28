@@ -66,6 +66,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Puente con navigator.credentials (passkeys). Va en los dos hosts porque el
+// prerender del servidor instancia las mismas pantallas; ahí devuelve
+// «no disponible» y el botón aparece recién en el primer render interactivo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.WebAuthnInterop>();
 // Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
 // aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
 // y la página crasheaba el runtime WASM al inyectarlo.

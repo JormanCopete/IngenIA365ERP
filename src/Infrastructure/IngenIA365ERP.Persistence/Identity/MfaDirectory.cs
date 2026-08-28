@@ -70,7 +70,14 @@ public sealed class MfaDirectory : IMfaDirectory
             .Where(c => c.CentralUserId == centralUserId)
             .OrderBy(c => c.Id)
             .Select(c => new CredencialMfaResumen(
-                c.PublicId, c.Label, c.CreatedAt, c.ConfirmedAt, c.LastUsedAt))
+                c.PublicId,
+                // La columna discriminadora, leída directamente. Se prefiere a un
+                // `c is TotpCredential ? … : …` porque eso deja que EF decida cómo
+                // traducirlo, y aquí lo que se quiere es exactamente el literal
+                // que está escrito en la fila —incluidas las que trasladó la
+                // migración, que nunca pasaron por una entidad.
+                EF.Property<string>(c, Configurations.Admin.MfaCredentialConfiguration.ColumnaDiscriminador),
+                c.Label, c.CreatedAt, c.ConfirmedAt, c.LastUsedAt))
             .ToListAsync(ct);
 
     /// <summary>

@@ -210,6 +210,14 @@ Los códigos **sólo vienen si era la primera credencial** de la persona, del ti
 que sea. Con la segunda la lista va vacía: emitirlos invalidaría los que ya
 guardó.
 
+Cuando el token entrante era `purpose=mfa-enroll` —inscripción forzada— la
+respuesta trae además `accessToken`, `refreshToken`, sus vencimientos y la
+cooperativa activa, exactamente igual que `POST /api/profile/mfa/confirm`. Sin
+eso, quien inscribe una passkey porque su cooperativa lo exige quedaría con la
+llave puesta y de vuelta en el login. Los campos van en null si la persona tiene
+un número de cooperativas distinto de una: entonces hay que elegir, y esa
+pantalla se alimenta de otro token.
+
 - `422` con `Profile.Mfa.RetoVencido` si el reto caducó o **ya se usó**. Es de un
   solo uso.
 - `422` con `Profile.Mfa.WebAuthnInvalido` si la firma no verifica.
@@ -221,7 +229,9 @@ ingreso con código.
 
 **Response** `200 OK`: `{ "opcionesJson": "…", "retoId": "…" }`
 
-- `401` con `Identity.SinPasskeys` si la cuenta no tiene ninguna llave inscrita.
+- `422` con `Identity.SinPasskeys` si la cuenta no tiene ninguna llave inscrita.
+  No es un 401: la contraseña ya se acertó y el token de desafío es válido. Lo
+  que falta es un método que esta persona no tiene.
 - `422` con `Identity.Locked.Soft` si está bloqueada por intentos. **Emitir un
   reto no cuenta como intento**: si contara, pedirlos en bucle sería una forma
   gratuita de bloquear a alguien.
@@ -237,7 +247,7 @@ verificación es exactamente el mismo camino.
 - `422` con `Identity.RetoVencido` si caducó o ya se usó. **No cuenta como
   intento fallido**: el servidor no llegó a juzgar ninguna llave, y contarlo
   castigaría a quien dejó la pantalla abierta cinco minutos.
-- `422` con `Identity.WebAuthnInvalido` si la firma no verifica **o si la llave
+- `401` con `Identity.WebAuthnInvalido` si la firma no verifica **o si la llave
   no es de esta persona**. Mismo código en ambos casos.
 
 **Qué NO cuenta como intento fallido**: cancelar el diálogo, quedarse sin tiempo

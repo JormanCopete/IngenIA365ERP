@@ -65,12 +65,33 @@ public sealed class ProfileClient
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
-            return await CentralAuthApi.ParseAsync<ConfirmMfaEnrollResponse>(resp, ct);
+            var parsed = await CentralAuthApi.ParseAsync<ConfirmMfaEnrollResponse>(resp, ct);
+
+            if (parsed.IsSuccess && parsed.Value is { } cuerpo)
+            {
+                await AdoptarSiVinoSesionAsync(cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken);
+            }
+
+            return parsed;
         }
         catch (HttpRequestException ex)
         {
             return InvitationApiResult<ConfirmMfaEnrollResponse>.NetworkError(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Cuando la inscripción venía forzada, el servidor devuelve la sesión ya
+    /// emitida. Se adopta AQUÍ y no en la pantalla porque son dos pantallas —la de
+    /// código y la de passkey— y olvidarlo en una no da ningún error: la persona
+    /// ve «listo», pulsa continuar, y aterriza en el login otra vez sin saber por
+    /// qué. Es lo que pasaba: los tokens llegaban y se descartaban.
+    /// </summary>
+    private async Task AdoptarSiVinoSesionAsync(
+        string? accessToken, DateTime? expiraEn, string? refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(accessToken)) return;
+        await _auth.AdoptSessionAsync(accessToken, expiraEn, refreshToken);
     }
 
     public async Task<InvitationApiResult<EmptyResponse>> DisableMfaAsync(
@@ -98,6 +119,72 @@ public sealed class ProfileClient
         await EnviarAutenticadoAsync<EmptyResponse>(
             HttpMethod.Delete, $"/api/profile/mfa/credentials/{credencialPublicId}",
             cuerpo: null, ct);
+
+    // -------------------- Passkeys --------------------
+
+    /// <summary>
+    /// Primer viaje del alta: pide el reto. Lo que vuelve se le pasa tal cual a
+    /// <c>webauthn.js</c>; el cliente no interpreta ni un campo, y es a propósito
+    /// —el formato lo fija la librería del servidor, y cualquier lectura aquí
+    /// sería una copia que se desincroniza.
+    /// </summary>
+    /// <param name="useChallengeToken">
+    /// True cuando la persona está en la inscripción forzada tras el login y
+    /// todavía no tiene sesión: entonces el único token que tiene es el de
+    /// <c>purpose=mfa-enroll</c>.
+    /// </param>
+    public async Task<InvitationApiResult<BeginWebAuthnResponse>> IniciarAltaPasskeyAsync(
+        bool useChallengeToken = false, CancellationToken ct = default)
+    {
+        var token = ChooseToken(useChallengeToken);
+        if (token is null) return Unauthorized<BeginWebAuthnResponse>();
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/profile/mfa/webauthn/begin");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<BeginWebAuthnResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<BeginWebAuthnResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>Segundo viaje: la respuesta firmada del autenticador.</summary>
+    public async Task<InvitationApiResult<ConfirmWebAuthnResponse>> ConfirmarAltaPasskeyAsync(
+        string retoId,
+        string respuestaJson,
+        string? label = null,
+        bool useChallengeToken = false,
+        CancellationToken ct = default)
+    {
+        var token = ChooseToken(useChallengeToken);
+        if (token is null) return Unauthorized<ConfirmWebAuthnResponse>();
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/profile/mfa/webauthn/confirm")
+            {
+                Content = JsonContent.Create(new { retoId, respuestaJson, label }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<ConfirmWebAuthnResponse>(resp, ct);
+
+            if (parsed.IsSuccess && parsed.Value is { } cuerpo)
+            {
+                await AdoptarSiVinoSesionAsync(cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken);
+            }
+
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<ConfirmWebAuthnResponse>.NetworkError(ex.Message);
+        }
+    }
 
     /// <summary>
     /// Envía con el token de sesión y devuelve el resultado ya interpretado.
@@ -223,6 +310,11 @@ public sealed record BeginMfaEnrollResponse(
     int ExpiresInSeconds);
 
 /// <summary>Una credencial de segundo factor, tal como la ve su dueño.</summary>
+/// <param name="Tipo">
+/// <c>Totp</c> o <c>WebAuthn</c>. Desde que hay dos clases de autenticador, una
+/// lista que no lo diga obliga a adivinar: retirar «iPhone» significa cosas muy
+/// distintas si era la app de códigos o la llave del dispositivo.
+/// </param>
 /// <param name="Label">NULL en las trasladadas: ese dato no existía antes.</param>
 /// <param name="LastUsedAt">
 /// Último ingreso correcto con ella. Es lo que permite distinguir el teléfono que
@@ -230,10 +322,50 @@ public sealed record BeginMfaEnrollResponse(
 /// </param>
 public sealed record CredencialMfaDto(
     Guid PublicId,
+    string Tipo,
     string? Label,
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
     DateTime? LastUsedAt);
+
+/// <summary>
+/// Los dos tipos de autenticador que puede traer <see cref="CredencialMfaDto.Tipo"/>.
+///
+/// <para>
+/// Es una copia de <c>TiposDeCredencialMfa</c> de Application, y lo es porque este
+/// proyecto no referencia ninguno: sus DTO son todos espejo, igual que los de
+/// cualquier cliente HTTP. Que las dos copias digan lo mismo lo comprueba una
+/// prueba de arquitectura, no la confianza.
+/// </para>
+/// </summary>
+public static class TiposDeCredencialMfa
+{
+    public const string Totp = "Totp";
+    public const string WebAuthn = "WebAuthn";
+}
+
+public sealed record BeginWebAuthnResponse(string OpcionesJson, string RetoId);
+
+/// <param name="CodigosDeRecuperacion">
+/// Sólo llegan si era la PRIMERA credencial de la persona. Con la segunda viene
+/// vacía: emitir códigos nuevos invalidaría los que ya guardó.
+/// </param>
+/// <param name="AccessToken">
+/// Sólo cuando la inscripción venía forzada. <see cref="ProfileClient"/> ya lo
+/// adoptó antes de devolver esto; la pantalla no tiene que hacer nada con él.
+/// </param>
+public sealed record ConfirmWebAuthnResponse(
+    Guid CredencialPublicId,
+    IReadOnlyList<string> CodigosDeRecuperacion,
+    string? AccessToken = null,
+    DateTime? AccessTokenExpiresAt = null,
+    string? RefreshToken = null,
+    DateTime? RefreshTokenExpiresAt = null,
+    Guid? ActiveTenantPublicId = null,
+    string? ActiveTenantName = null);
+
+/// <param name="OpcionesJson">Se le pasa entero a <c>webauthn.js</c>, sin leerlo.</param>
+public sealed record WebAuthnChallengeResponse(string OpcionesJson, string RetoId);
 
 public sealed record ListMfaCredentialsResponse(
     IReadOnlyList<CredencialMfaDto> Credenciales,

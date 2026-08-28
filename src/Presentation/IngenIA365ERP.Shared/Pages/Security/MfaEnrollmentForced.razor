@@ -3,6 +3,8 @@
 @using System.ComponentModel.DataAnnotations
 @using IngenIA365ERP.Shared.Services.Security
 @inject ProfileClient ProfileClient
+@inject CentralAuthClient AuthClient
+@inject WebAuthnInterop Passkeys
 @inject NavigationManager Nav
 
 @*
@@ -25,10 +27,23 @@
     @if (_state == State.NotStarted)
     {
         <h1>Activa la verificación en dos pasos</h1>
-        <p>Te pediremos el código de tu app en cada inicio de sesión.</p>
+        <p>Elegí cómo querés confirmar que sos vos al entrar.</p>
+
         <button @onclick="BeginAsync" disabled="@_busy" style="margin-top: var(--pad-lg);">
-            @(_busy ? "Generando..." : "Comenzar")
+            @(_busy ? "Generando..." : "Usar una app de códigos")
         </button>
+
+        @* La alternativa importa: quien no puede manejar una app de
+           autenticación —y es una de las razones por las que existen las
+           passkeys— quedaría obligado a usarla igual para poder entrar, que es
+           justo lo contrario de lo que se buscaba. *@
+        @if (_passkeysDisponibles)
+        {
+            <button class="boton boton-secundario" @onclick="InscribirPasskeyAsync"
+                    disabled="@_busy" style="margin-top: var(--gap-sm);">
+                @(_esperandoLlave ? "Esperando la llave…" : "Usar una llave o passkey")
+            </button>
+        }
     }
     else if (_state == State.Pending && _begin is not null)
     {
@@ -99,6 +114,71 @@
     private bool _busy;
     private string? _error;
 
+    private bool _passkeysDisponibles;
+    private bool _esperandoLlave;
+
+    protected override async Task OnAfterRenderAsync(bool primeraVez)
+    {
+        if (!primeraVez) return;
+
+        _passkeysDisponibles = await Passkeys.EstaDisponibleAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Inscribir una passkey cumple la exigencia igual que un código, y el
+    /// servidor eleva la sesión igual. El único cuidado es el mismo de siempre:
+    /// cancelar el diálogo no es un fallo.
+    /// </summary>
+    private async Task InscribirPasskeyAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var inicio = await ProfileClient.IniciarAltaPasskeyAsync(useChallengeToken: true);
+            if (!inicio.IsSuccess || inicio.Value is null)
+            {
+                _error = inicio.ErrorMessage ?? "No se pudo iniciar el registro de la llave.";
+                return;
+            }
+
+            _esperandoLlave = true;
+            StateHasChanged();
+
+            var firmada = await Passkeys.InscribirAsync(inicio.Value.OpcionesJson);
+            _esperandoLlave = false;
+
+            if (!firmada.Ok)
+            {
+                if (firmada.Motivo != MotivosWebAuthn.Cancelado)
+                {
+                    _error = firmada.Mensaje ?? "No se pudo registrar la llave.";
+                }
+                return;
+            }
+
+            var confirmacion = await ProfileClient.ConfirmarAltaPasskeyAsync(
+                inicio.Value.RetoId, firmada.RespuestaJson!, useChallengeToken: true);
+
+            if (!confirmacion.IsSuccess || confirmacion.Value is null)
+            {
+                _error = confirmacion.ErrorMessage ?? "El servidor no pudo verificar la llave.";
+                return;
+            }
+
+            _enrolledCodes = confirmacion.Value.CodigosDeRecuperacion;
+            _state = State.Enrolled;
+        }
+        finally
+        {
+            _esperandoLlave = false;
+            _busy = false;
+        }
+    }
+
     private async Task BeginAsync()
     {
         _busy = true;
@@ -149,9 +229,18 @@
 
     private void ContinueAsync()
     {
-        // Tras enrollment forzado el backend elevó la sesión: el cliente ya
-        // tiene access+refresh full. Navegar al dashboard.
-        Nav.NavigateTo("/");
+        // Tras la inscripción forzada el servidor eleva la sesión y ProfileClient
+        // la adopta. Pero no siempre puede elevarla —con más de una cooperativa
+        // hace falta elegir, y eso pide otra pantalla—, así que se comprueba en
+        // vez de darlo por hecho: navegar al panel sin sesión rebota al login sin
+        // explicar nada, justo después de decirle a la persona «listo ✓».
+        if (AuthClient.IsAuthenticated)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        Nav.NavigateTo("/security/login");
     }
 
     public sealed class ConfirmInput

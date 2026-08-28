@@ -53,6 +53,12 @@ public static class DependencyInjection
             Identity.Auth.Common.IEmisorDeSesionTrasSegundoFactor,
             Identity.Auth.Common.EmisorDeSesionTrasSegundoFactor>();
 
+        // Y lo que pasa tras INSCRIBIR el primero viniendo forzado, que es otra
+        // cosa. También lo comparten los dos métodos.
+        services.AddScoped<
+            Identity.Profile.Common.IElevadorDeSesionTrasInscripcion,
+            Identity.Profile.Common.ElevadorDeSesionTrasInscripcion>();
+
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 

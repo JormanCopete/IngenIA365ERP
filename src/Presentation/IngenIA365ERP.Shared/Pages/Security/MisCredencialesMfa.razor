@@ -1,11 +1,12 @@
 @page "/profile/seguridad/credenciales"
 @using IngenIA365ERP.Shared.Services.Security
 @inject ProfileClient Profile
+@inject WebAuthnInterop Passkeys
 
 @*
     Gestión de los autenticadores propios. Una persona puede tener varios —el
-    teléfono, el escritorio, uno viejo de respaldo— y el ingreso acepta el código
-    de cualquiera.
+    teléfono, el escritorio, uno viejo de respaldo— y el ingreso acepta cualquiera
+    de ellos: el código de una app o la firma de una llave.
 
     Por qué la columna «último uso» está en primera línea y no escondida: las
     credenciales que vienen del modelo anterior no tienen nombre ni fecha de alta,
@@ -22,8 +23,8 @@
     </div>
 
     <p class="texto-apoyo">
-        Podés tener varios: el teléfono, el computador, uno de respaldo. Al entrar
-        sirve el código de cualquiera de ellos.
+        Podés tener varios: el teléfono, el computador, una llave de seguridad.
+        Al entrar sirve cualquiera de ellos.
     </p>
 
     @if (_error is not null)
@@ -33,6 +34,27 @@
     @if (_aviso is not null)
     {
         <div class="aviso aviso-ok" role="status">@_aviso</div>
+    }
+
+    @* Los códigos de una credencial nueva se ven UNA vez y no vuelven. Van
+       arriba del todo y con aviso, porque cerrar la pestaña sin copiarlos es
+       exactamente cómo alguien se queda sin red de seguridad sin enterarse. *@
+    @if (_codigosNuevos is { Count: > 0 })
+    {
+        <div class="info-card">
+            <h2>Guardá estos códigos ahora</h2>
+            <div class="aviso aviso-alerta" role="alert">
+                No se vuelven a mostrar. Copialos a un lugar seguro antes de salir
+                de esta pantalla: son lo que te deja entrar si perdés todos tus
+                autenticadores.
+            </div>
+            <ul>
+                @foreach (var codigo in _codigosNuevos)
+                {
+                    <li><code>@codigo</code></li>
+                }
+            </ul>
+        </div>
     }
 
     @if (_cargando)
@@ -46,6 +68,7 @@
                 <thead>
                     <tr>
                         <th>Nombre</th>
+                        <th>Tipo</th>
                         <th>Último uso</th>
                         <th>Inscrito</th>
                         <th><span class="visualmente-oculto">Acciones</span></th>
@@ -74,6 +97,7 @@
                                     }
                                 }
                             </td>
+                            <td><span class="badge">@NombreDelTipo(c.Tipo)</span></td>
                             <td>@Momento(c.LastUsedAt, "Todavía no se usó")</td>
                             <td>@Momento(c.ConfirmedAt ?? c.CreatedAt, "—")</td>
                             <td class="acciones">
@@ -92,8 +116,26 @@
         </div>
 
         <div class="toolbar">
-            <a class="boton boton-principal" href="/profile/mfa">Agregar autenticador</a>
+            <a class="boton boton-secundario" href="/profile/mfa">Agregar app de códigos</a>
+
+            @* El botón sólo aparece si el navegador puede: ofrecer uno que sólo
+               puede fallar deja a la persona pensando que su llave está rota. *@
+            @if (_passkeysDisponibles)
+            {
+                <button class="boton boton-principal" disabled="@_ocupado"
+                        @onclick="AgregarPasskeyAsync">
+                    @(_ocupado ? "Esperando la llave…" : "Agregar llave o passkey")
+                </button>
+            }
         </div>
+
+        @if (!_passkeysDisponibles && _comprobacionHecha)
+        {
+            <p class="texto-tenue">
+                Este navegador no admite llaves de seguridad, o la página no se
+                está sirviendo por HTTPS. Podés agregar una app de códigos.
+            </p>
+        }
 
         @* Los códigos de respaldo van aquí y no en otra pantalla porque es la
            misma decisión: quien mira sus autenticadores está evaluando si podría
@@ -130,7 +172,25 @@
     private Guid? _renombrando;
     private string? _nombreNuevo;
 
+    private bool _passkeysDisponibles;
+    private bool _comprobacionHecha;
+    private IReadOnlyList<string>? _codigosNuevos;
+
     protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    /// <summary>
+    /// La comprobación va aquí y no en <c>OnInitializedAsync</c> porque durante el
+    /// prerenderizado no hay navegador: preguntarle si admite passkeys devolvería
+    /// «no» siempre, y el botón no aparecería nunca.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool primeraVez)
+    {
+        if (!primeraVez) return;
+
+        _passkeysDisponibles = await Passkeys.EstaDisponibleAsync();
+        _comprobacionHecha = true;
+        StateHasChanged();
+    }
 
     private async Task CargarAsync()
     {
@@ -146,6 +206,69 @@
 
         _credenciales = [.. r.Value.Credenciales];
         _codigosRestantes = r.Value.CodigosDeRecuperacionRestantes;
+    }
+
+    /// <summary>
+    /// Alta de una passkey: dos viajes al servidor con el diálogo del navegador en
+    /// medio. Entre uno y otro no hay estado guardado en la pantalla salvo el
+    /// identificador del reto — si la persona recarga, se empieza de cero, que es
+    /// lo correcto: el reto caduca en el servidor de todos modos.
+    /// </summary>
+    private async Task AgregarPasskeyAsync()
+    {
+        if (_ocupado) return;
+        _ocupado = true;
+        _error = null;
+        _aviso = null;
+        _codigosNuevos = null;
+
+        try
+        {
+            var inicio = await Profile.IniciarAltaPasskeyAsync();
+            if (!inicio.IsSuccess || inicio.Value is null)
+            {
+                _error = inicio.ErrorMessage ?? "No se pudo iniciar el registro de la llave.";
+                return;
+            }
+
+            var firmada = await Passkeys.InscribirAsync(inicio.Value.OpcionesJson);
+            if (!firmada.Ok)
+            {
+                // Cancelar no es un fallo: es la respuesta más común y no merece
+                // un aviso rojo. Se sale en silencio.
+                if (firmada.Motivo != MotivosWebAuthn.Cancelado)
+                {
+                    _error = firmada.Mensaje ?? "No se pudo registrar la llave.";
+                }
+                return;
+            }
+
+            var confirmacion = await Profile.ConfirmarAltaPasskeyAsync(
+                inicio.Value.RetoId, firmada.RespuestaJson!);
+
+            if (!confirmacion.IsSuccess || confirmacion.Value is null)
+            {
+                _error = confirmacion.ErrorMessage ?? "El servidor no pudo verificar la llave.";
+                return;
+            }
+
+            _aviso = "Tu llave quedó registrada. Ponele un nombre para reconocerla.";
+            _codigosNuevos = confirmacion.Value.CodigosDeRecuperacion is { Count: > 0 } codigos
+                ? codigos
+                : null;
+
+            await CargarAsync();
+
+            // Entra directo en modo renombrar: es el único momento en que la
+            // persona sabe con certeza cuál de las filas es la que acaba de
+            // inscribir.
+            _renombrando = confirmacion.Value.CredencialPublicId;
+            _nombreNuevo = null;
+        }
+        finally
+        {
+            _ocupado = false;
+        }
     }
 
     private void EmpezarRenombrar(CredencialMfaDto c)
@@ -205,6 +328,19 @@
         _aviso = $"{nombre} ya no sirve para entrar.";
         await CargarAsync();
     }
+
+    /// <summary>
+    /// El literal que guarda la base de datos no es lo que hay que leerle a
+    /// nadie. Un tipo desconocido se muestra tal cual en vez de esconderse: si
+    /// mañana aparece un tercero y esta pantalla no se actualiza, es mejor una
+    /// palabra rara que una celda vacía.
+    /// </summary>
+    private static string NombreDelTipo(string tipo) => tipo switch
+    {
+        TiposDeCredencialMfa.Totp => "App de códigos",
+        TiposDeCredencialMfa.WebAuthn => "Llave / passkey",
+        _ => tipo,
+    };
 
     /// <summary>
     /// Fechas en lenguaje llano. «Hace 3 minutos» responde la pregunta que la

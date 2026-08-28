@@ -182,9 +182,36 @@ public sealed record CredencialTotpCifrada(Guid PublicId, string SecretProtected
 /// <c>ConfirmedAt</c> vienen NULL en las trasladadas: ese dato no existía, e
 /// inventarlo sería peor que el hueco.
 /// </summary>
+/// <param name="Tipo">Uno de <see cref="TiposDeCredencialMfa"/>.</param>
 public sealed record CredencialMfaResumen(
     Guid PublicId,
+    string Tipo,
     string? Label,
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
     DateTime? LastUsedAt);
+
+/// <summary>
+/// Los dos tipos de autenticador, con los MISMOS literales que la columna
+/// discriminadora de <c>ADM_MfaCredentials</c>.
+///
+/// <para>
+/// La configuración de EF los toma de aquí en vez de repetir los literales, así
+/// que el discriminador que se escribe en la tabla y el que sale por la API son
+/// por construcción el mismo. Cambiar uno cambia los dos.
+/// </para>
+///
+/// <para>
+/// La pantalla tiene su propia copia —<c>IngenIA365ERP.Shared</c> no referencia
+/// ningún proyecto, como todos sus DTO—, y una prueba de arquitectura comprueba
+/// que las dos digan lo mismo.
+/// </para>
+/// </summary>
+public static class TiposDeCredencialMfa
+{
+    /// <summary>App de códigos: Google Authenticator, Microsoft Authenticator, cualquiera.</summary>
+    public const string Totp = "Totp";
+
+    /// <summary>Passkey: la llave del dispositivo, o una física por USB o NFC.</summary>
+    public const string WebAuthn = "WebAuthn";
+}
