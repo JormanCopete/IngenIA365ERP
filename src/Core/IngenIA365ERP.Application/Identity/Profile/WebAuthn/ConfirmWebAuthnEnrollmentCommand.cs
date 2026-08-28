@@ -130,7 +130,8 @@ public sealed class ConfirmWebAuthnEnrollmentCommandHandler(
         // se le abre la sesión aquí mismo en vez de devolverlo al login.
         if (currentUser.Purpose == CentralJwtPurposes.MfaEnroll)
         {
-            var elevada = await elevador.ElevarAsync(centralUserId, ahora, ct);
+            var elevada = await elevador.ElevarAsync(
+                centralUserId, Domain.Entities.Admin.MetodosMfa.WebAuthn, ahora, ct);
             if (elevada is not null)
             {
                 return Result.Success(new ConfirmWebAuthnEnrollmentResult(

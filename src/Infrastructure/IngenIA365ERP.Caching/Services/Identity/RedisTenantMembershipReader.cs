@@ -26,7 +26,16 @@ namespace IngenIA365ERP.Caching.Services.Identity;
 /// </summary>
 internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
 {
-    public const string KeyPrefix = "memberships:";
+    /// <summary>
+    /// El <c>v2</c> no es decorativo. <see cref="ActiveMembershipInfo"/> se
+    /// serializa entero bajo esta clave, y al añadirle los métodos aceptados las
+    /// entradas ya calientes —escritas por el binario anterior— no traen ese campo.
+    /// Sin subir el prefijo, durante los 60 segundos siguientes al despliegue cada
+    /// cooperativa se leería con el valor por defecto del campo ausente,
+    /// simultáneamente en las siete puertas. Y se cura solo, que es lo peor que le
+    /// puede pasar a un síntoma: para cuando alguien mira, ya no está.
+    /// </summary>
+    public const string KeyPrefix = "memberships:v2:";
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
 
     private readonly IConnectionMultiplexer _redis;
@@ -62,7 +71,12 @@ internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
                 m.TenantId,
                 t.Name,
                 m.IsTenantAdmin,
-                p != null && p.IsRequired))
+                p != null && p.IsRequired,
+                // Sin fila de política no hay restricción: acepta todo. Es el mismo
+                // criterio que la línea de arriba usa para IsRequired, y tiene que
+                // seguir siéndolo — «no hay política» no puede significar «exige» en
+                // una columna y «no acepta nada» en la otra.
+                p != null ? p.AllowedMethodsMask : ConversionDeMetodosMfa.Todos))
             .ToListAsync(ct);
 
         var json = JsonSerializer.Serialize(fresh);

@@ -67,13 +67,17 @@ public sealed class BeginWebAuthnEnrollmentCommandHandler(
                 "Identity.Unauthenticated", "Usuario no encontrado.");
         }
 
-        var yaInscritas = await credenciales.ContarActivasAsync(centralUserId, ct);
+        // Por tipo, no sobre el total: cinco apps de códigos no pueden impedir
+        // inscribir la primera llave. Ver el mismo comentario en el alta de TOTP.
+        var yaInscritas = await credenciales.ContarActivasDeTipoAsync(
+            centralUserId, Domain.Entities.Admin.MetodosMfa.WebAuthn, ct);
+
         if (yaInscritas >= MaximoDeAutenticadores)
         {
             return Result.Failure<BeginWebAuthnEnrollmentResult>(
                 "Profile.Mfa.DemasiadasCredenciales",
-                $"Ya tenés {yaInscritas} autenticadores, que es el máximo. " +
-                "Retirá alguno que ya no uses antes de agregar otro.");
+                $"Ya tenés {yaInscritas} llaves inscritas, que es el máximo. " +
+                "Retirá alguna que ya no uses antes de agregar otra.");
         }
 
         // Las llaves que ya tiene van en excludeCredentials: así el navegador

@@ -105,6 +105,14 @@ public sealed class CentralAuthClient
     /// </summary>
     public IReadOnlyList<ActiveTenantSummary>? LastLoginTenants { get; private set; }
 
+    /// <summary>
+    /// Los métodos que le servirían, del último desafío de inscripción. <c>null</c>
+    /// cuando el servidor no lo dijo — y entonces la pantalla ofrece los dos, que
+    /// es el comportamiento de siempre y el correcto mientras ninguna cooperativa
+    /// restrinja.
+    /// </summary>
+    public IReadOnlyList<string>? MetodosQueLeServirian { get; private set; }
+
     public bool IsAuthenticated =>
         !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
 
@@ -378,6 +386,15 @@ public sealed class CentralAuthClient
             LastLoginTenants = body.ActiveTenants;
         }
 
+        // Y si hay que inscribir, qué métodos le servirían — para que la pantalla
+        // de inscripción no le ofrezca el que volvería a dejarlo fuera. Se retiene
+        // igual que la lista de cooperativas y por el mismo motivo: el token de
+        // inscripción no sirve para volver a preguntarlo.
+        if (body.Challenge == "MfaEnrollmentRequired")
+        {
+            MetodosQueLeServirian = body.MetodosAceptados;
+        }
+
         if (body.Challenge == "None"
             && !string.IsNullOrWhiteSpace(body.AccessToken)
             && !string.IsNullOrWhiteSpace(body.RefreshToken))
@@ -415,12 +432,26 @@ public sealed record LoginResponse(
     string? ActiveTenantName,
     string? Message,
     IReadOnlyList<TenantSummary>? TenantsRequiringMfa,
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
 
+    /// <summary>
+    /// Con MfaEnrollmentRequired: que metodos le serviran, como literales
+    /// ("Totp", "WebAuthn"). La pantalla de inscripcion ofrece SOLO estos; sin
+    /// esto ofreceria los dos y el que no sirve vuelve a encerrar a la persona,
+    /// con el agravante de que ya cree que lo resolvio.
+    /// </summary>
+    IReadOnlyList<string>? MetodosAceptados = null);
+
+/// <param name="AdmiteTuMetodo">
+/// Si esa cooperativa acepta el metodo con el que la persona acaba de entrar. Se
+/// muestra atenuada en vez de esconderla: una cooperativa a la que pertenece y
+/// que desaparece sin explicacion es peor que una que aparece diciendo por que.
+/// </param>
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,
     string TenantName,
-    bool IsTenantAdmin);
+    bool IsTenantAdmin,
+    bool AdmiteTuMetodo = true);
 
 public sealed record TenantSummary(
     Guid TenantPublicId,

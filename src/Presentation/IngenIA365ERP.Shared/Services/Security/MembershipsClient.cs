@@ -44,8 +44,19 @@ public sealed class MembershipsClient
     public Task<InvitationApiResult<MfaPolicyResponse>> GetMfaPolicyAsync(Guid tenantPublicId, CancellationToken ct = default) =>
         GetAsync<MfaPolicyResponse>($"/api/tenants/{tenantPublicId}/mfa-policy", ct);
 
-    public Task<InvitationApiResult<EmptyResponse>> SetMfaPolicyAsync(Guid tenantPublicId, bool isRequired, CancellationToken ct = default) =>
-        PutAsync<EmptyResponse>($"/api/tenants/{tenantPublicId}/mfa-policy", new { isRequired }, ct);
+    /// <param name="metodosAceptados">
+    /// Literales ("Totp", "WebAuthn"). null deja los metodos como estaban; NO los
+    /// reinicia. Es la misma semantica del comando, y esta escrito en los dos
+    /// lados porque este proyecto no referencia ninguno.
+    /// </param>
+    public Task<InvitationApiResult<MfaPolicyUpdateResponse>> SetMfaPolicyAsync(
+        Guid tenantPublicId,
+        bool isRequired,
+        IReadOnlyList<string>? metodosAceptados = null,
+        CancellationToken ct = default) =>
+        PutAsync<MfaPolicyUpdateResponse>(
+            $"/api/tenants/{tenantPublicId}/mfa-policy",
+            new { isRequired, metodosAceptados }, ct);
 
     // -------------------- Helpers --------------------
 
@@ -126,4 +137,12 @@ public sealed record MfaPolicyResponse(
     Guid TenantPublicId,
     bool IsRequired,
     DateTime? ActivatedAt,
-    DateTime? DeactivatedAt);
+    DateTime? DeactivatedAt,
+    IReadOnlyList<string>? MetodosAceptados = null);
+
+/// <param name="MiembrosSinMetodoAceptado">
+/// Cuantas personas de la cooperativa tienen segundo factor pero ninguno de los
+/// metodos que la politica acepta ahora. No es un error: el sistema las manda a
+/// inscribir. Es el numero que hay que ensenar despues de guardar.
+/// </param>
+public sealed record MfaPolicyUpdateResponse(int MiembrosSinMetodoAceptado);

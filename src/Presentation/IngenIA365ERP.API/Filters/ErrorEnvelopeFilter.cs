@@ -103,6 +103,20 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // operación, y se resuelve retirando uno.
             "Profile.Mfa.DemasiadasCredenciales" => StatusCodes.Status409Conflict,
 
+            // «Tenés segundo factor, pero del tipo que esta cooperativa no
+            // acepta». Es 403 y no 422 por lo mismo que los dos de arriba: es una
+            // acción prohibida por una política, no una petición mal formada. Y
+            // lleva código propio —distinto de MfaPolicyEnforced— porque la
+            // pantalla enruta a sitios distintos: a configurar el segundo factor,
+            // o a inscribir uno concreto. Con un solo código, media docena de
+            // personas acabarían en la página que no les sirve.
+            "Tenant.MfaMethodNotAccepted" => StatusCodes.Status403Forbidden,
+            "Tenant.MfaPolicyEnforced" => StatusCodes.Status403Forbidden,
+
+            // Sólo el maestro. No es «no autenticado» sino «no sos vos».
+            "Saas.MasterOnly" => StatusCodes.Status403Forbidden,
+            "Saas.PlatformMfaPolicy.TeDejariaFuera" => StatusCodes.Status409Conflict,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

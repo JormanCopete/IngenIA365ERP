@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;

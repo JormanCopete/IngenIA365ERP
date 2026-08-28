@@ -45,6 +45,23 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   inscritas, sin migración posible**. No tiene valor por defecto a propósito: el
   proceso no arranca si falta. La librería (`Fido2NetLib`) sólo la conoce
   `WebAuthnService`, y una prueba de arquitectura lo fija.
+- **Política de métodos**: cada cooperativa decide **qué** métodos acepta
+  (`ADM_TenantMfaPolicies.AllowedMethodsMask`, máscara de bits `MetodosMfa`) además
+  de si los exige. La decisión vive en **un solo sitio**, `GuardiaDeMetodos.Evaluar`,
+  que consultan las siete puertas que acuñan un token con cooperativa resuelta
+  —los dos auto-selects, elegir, cambiar, el ascenso tras inscribir, aceptar
+  invitación y **el refresh**. Dos reglas que parecen detalles y no lo son: la
+  máscara **sólo muerde si la cooperativa exige** segundo factor, y una máscara que
+  lo acepta todo **no mira el método** — sin eso, el despliegue expulsa a la vez a
+  todas las sesiones vivas, que no llevan el dato. Nunca se rechaza sin salida: el
+  veredicto es «adelante» o «te falta inscribir **esto**», con la lista.
+  El método usado viaja en el claim `mfa_method`; ausente significa «no consta», y
+  el código de recuperación sella eso mismo a propósito.
+- **El maestro**: `ADM_PlatformMfaPolicy` (fila única) decide **qué** métodos
+  acepta, nunca **si** los exige. Es la única cuenta sin rescate —`ForceMfaReset`
+  exige ser maestro, o sea sólo puede rescatarse a sí mismo— así que existe
+  `Mfa:PlataformaSinRestriccion`: puesto a `true` ignora la política guardada y
+  acepta todos los métodos. Es el rescate; se escribió antes que la política.
 - **Cifrado**: el llavero de DataProtection vive en `ADM_DataProtectionKeys`, no
   en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**: antes de
   desplegarlo hay que rescatar las claves de cada pod, o los archivos cifrados
@@ -69,10 +86,10 @@ vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | ~626 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | ~628 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 648 (647 pasan, 1 con `RUN_PERF_TESTS=1`) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 682 (680 pasan, 1 con `RUN_PERF_TESTS=1`, 2 exigen MongoDB local) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

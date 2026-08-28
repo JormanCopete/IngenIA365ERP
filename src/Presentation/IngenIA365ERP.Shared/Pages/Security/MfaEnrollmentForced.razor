@@ -29,20 +29,38 @@
         <h1>Activa la verificación en dos pasos</h1>
         <p>Elegí cómo querés confirmar que sos vos al entrar.</p>
 
-        <button @onclick="BeginAsync" disabled="@_busy" style="margin-top: var(--pad-lg);">
-            @(_busy ? "Generando..." : "Usar una app de códigos")
-        </button>
+        @* Sólo se ofrecen los métodos que la cooperativa acepta. Ofrecer los dos
+           y dejar que la persona elija el que no sirve la devolvería aquí en el
+           siguiente intento, creyendo que ya lo había resuelto. *@
+        @if (SirveTotp)
+        {
+            <button @onclick="BeginAsync" disabled="@_busy" style="margin-top: var(--pad-lg);">
+                @(_busy ? "Generando..." : "Usar una app de códigos")
+            </button>
+        }
 
         @* La alternativa importa: quien no puede manejar una app de
            autenticación —y es una de las razones por las que existen las
            passkeys— quedaría obligado a usarla igual para poder entrar, que es
            justo lo contrario de lo que se buscaba. *@
-        @if (_passkeysDisponibles)
+        @if (SirveWebAuthn && _passkeysDisponibles)
         {
             <button class="boton boton-secundario" @onclick="InscribirPasskeyAsync"
                     disabled="@_busy" style="margin-top: var(--gap-sm);">
                 @(_esperandoLlave ? "Esperando la llave…" : "Usar una llave o passkey")
             </button>
+        }
+
+        @* El callejón sin salida que hay que nombrar: la cooperativa sólo acepta
+           llaves y este navegador no las admite. Sin este mensaje la pantalla
+           queda sin un solo botón que pulsar y sin decir por qué. *@
+        @if (SirveWebAuthn && !SirveTotp && !_passkeysDisponibles && _comprobacionHecha)
+        {
+            <div class="aviso aviso-error" role="alert" style="margin-top: var(--pad-lg);">
+                Tu empresa sólo acepta llaves de seguridad, y este navegador no las
+                admite —o la página no se está sirviendo por HTTPS—. Probá desde otro
+                navegador, o pedile a un administrador que revise la política.
+            </div>
         }
     }
     else if (_state == State.Pending && _begin is not null)
@@ -115,13 +133,28 @@
     private string? _error;
 
     private bool _passkeysDisponibles;
+    private bool _comprobacionHecha;
     private bool _esperandoLlave;
+
+    /// <summary>
+    /// Qué métodos acepta la cooperativa que le exige el segundo factor. Si el
+    /// servidor no lo dijo —cooperativa sin restricción, o un binario anterior—
+    /// valen los dos, que es el comportamiento de siempre.
+    /// </summary>
+    private IReadOnlyList<string>? Aceptados => AuthClient.MetodosQueLeServirian;
+
+    private bool SirveTotp =>
+        Aceptados is null || Aceptados.Contains(TiposDeCredencialMfa.Totp);
+
+    private bool SirveWebAuthn =>
+        Aceptados is null || Aceptados.Contains(TiposDeCredencialMfa.WebAuthn);
 
     protected override async Task OnAfterRenderAsync(bool primeraVez)
     {
         if (!primeraVez) return;
 
         _passkeysDisponibles = await Passkeys.EstaDisponibleAsync();
+        _comprobacionHecha = true;
         StateHasChanged();
     }
 

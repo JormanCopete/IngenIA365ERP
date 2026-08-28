@@ -156,7 +156,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
 
         _jwt.IssueAccessToken(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
-                Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>())
+                Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>(), Arg.Any<MetodosMfa>())
             .Returns(new CentralAccessTokenResult(
                 "access-jwt", DateTime.UtcNow.AddMinutes(15), "jti", "full"));
         _jwt.IssueRefreshToken()

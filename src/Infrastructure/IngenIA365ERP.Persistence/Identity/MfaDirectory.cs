@@ -92,6 +92,78 @@ public sealed class MfaDirectory : IMfaDirectory
             .AsNoTracking()
             .CountAsync(c => c.CentralUserId == centralUserId, ct);
 
+    /// <summary>
+    /// Se traen los discriminadores DISTINTOS y se pliegan en la máscara. No se
+    /// traen las filas: con cinco autenticadores serían cinco filas para contestar
+    /// una pregunta de dos bits, y esto corre en el camino del ingreso.
+    /// </summary>
+    public async Task<MetodosMfa> MetodosActivosAsync(Guid centralUserId, CancellationToken ct)
+    {
+        var tipos = await _db.MfaCredentials
+            .AsNoTracking()
+            .Where(c => c.CentralUserId == centralUserId)
+            .Select(c => EF.Property<string>(
+                c, Configurations.Admin.MfaCredentialConfiguration.ColumnaDiscriminador))
+            .Distinct()
+            .ToListAsync(ct);
+
+        var metodos = MetodosMfa.Ninguno;
+        foreach (var tipo in tipos)
+        {
+            metodos |= ConversionDeMetodosMfa.DesdeTipoDeCredencial(tipo);
+        }
+
+        return metodos;
+    }
+
+    /// <summary>
+    /// Una sola consulta: se traen los pares (persona, tipo) distintos de quienes
+    /// tienen alguna credencial, y el plegado se hace en memoria. La alternativa
+    /// —un GROUP BY con aritmética de bits— no la traducen igual los dos motores,
+    /// y esto corre una vez al guardar una política, no en el camino del ingreso.
+    /// </summary>
+    public async Task<int> ContarSinNingunMetodoAceptadoAsync(
+        IReadOnlyCollection<Guid> centralUserIds, MetodosMfa aceptados, CancellationToken ct)
+    {
+        if (centralUserIds.Count == 0) return 0;
+
+        var pares = await _db.MfaCredentials
+            .AsNoTracking()
+            .Where(c => centralUserIds.Contains(c.CentralUserId))
+            .Select(c => new
+            {
+                c.CentralUserId,
+                Tipo = EF.Property<string>(
+                    c, Configurations.Admin.MfaCredentialConfiguration.ColumnaDiscriminador),
+            })
+            .Distinct()
+            .ToListAsync(ct);
+
+        return pares
+            .GroupBy(p => p.CentralUserId)
+            .Count(g => g.Aggregate(
+                MetodosMfa.Ninguno,
+                (acc, p) => acc | ConversionDeMetodosMfa.DesdeTipoDeCredencial(p.Tipo))
+                is var suyos && (suyos & aceptados) == MetodosMfa.Ninguno);
+    }
+
+    public async Task<int> ContarActivasDeTipoAsync(
+        Guid centralUserId, MetodosMfa tipo, CancellationToken ct)
+    {
+        var discriminador = ConversionDeMetodosMfa.ATipoDeCredencial(tipo);
+        if (discriminador is null) return 0;
+
+        return await _db.MfaCredentials
+            .AsNoTracking()
+            .CountAsync(
+                c => c.CentralUserId == centralUserId
+                  && EF.Property<string>(
+                        c,
+                        Configurations.Admin.MfaCredentialConfiguration.ColumnaDiscriminador)
+                     == discriminador,
+                ct);
+    }
+
     public async Task<bool> HuboAlgunaVezTotpAsync(Guid centralUserId, CancellationToken ct) =>
         await _db.MfaCredentials
             .AsNoTracking()

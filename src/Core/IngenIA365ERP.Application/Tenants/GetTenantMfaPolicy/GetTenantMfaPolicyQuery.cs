@@ -10,4 +10,5 @@ public sealed record TenantMfaPolicyDto(
     Guid TenantPublicId,
     bool IsRequired,
     DateTime? ActivatedAt,
-    DateTime? DeactivatedAt);
+    DateTime? DeactivatedAt,
+    IReadOnlyList<string>? MetodosAceptados = null);

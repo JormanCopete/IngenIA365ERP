@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Entities.Admin;
+
 namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 
 /// <summary>
@@ -67,4 +69,19 @@ public sealed record CentralRefreshSession(
     string? IpAddress,
     string? UserAgent,
     string? ReplacedByTokenHashHex,
-    string? SecurityStamp);
+    string? SecurityStamp,
+
+    /// <summary>
+    /// Con qué método se superó el segundo factor cuando nació esta sesión. El
+    /// refresh lo vuelve a evaluar contra la política vigente: sin este dato, una
+    /// sesión emitida antes de que la cooperativa restringiera métodos se renovaría
+    /// cada doce horas para siempre, y la política nunca llegaría a morder.
+    ///
+    /// <para>
+    /// Valor por defecto porque esto se serializa a Redis: las sesiones ya vivas el
+    /// día del despliegue no lo traen. <c>Ninguno</c> es «no consta», y una máscara
+    /// sin restricciones las admite igual — que es lo correcto: no cambió ninguna
+    /// política, sólo el binario.
+    /// </para>
+    /// </summary>
+    MetodosMfa MetodoMfa = MetodosMfa.Ninguno);

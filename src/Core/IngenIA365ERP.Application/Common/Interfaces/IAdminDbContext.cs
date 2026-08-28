@@ -35,6 +35,7 @@ public interface IAdminDbContext
     DbSet<TenantMembership> TenantMemberships { get; }
     DbSet<Invitation> Invitations { get; }
     DbSet<TenantMfaPolicy> TenantMfaPolicies { get; }
+    DbSet<PlatformMfaPolicy> PlatformMfaPolicies { get; }
     DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts { get; }
 
     // --- Phase 4b (Profile & Recovery) ---

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Identity.Configuration;
 using IngenIA365ERP.Identity.KeyManagement;
 using Microsoft.Extensions.Options;
@@ -47,7 +48,8 @@ public class CentralJwtIssuer : ICentralJwtIssuer
         bool isGlobalMasterAdmin,
         Guid? activeTenantId,
         bool? tenantAdmin,
-        bool mfaVerified)
+        bool mfaVerified,
+        MetodosMfa metodoMfa)
     {
         return Issue(
             centralUserId,
@@ -56,6 +58,7 @@ public class CentralJwtIssuer : ICentralJwtIssuer
             activeTenantId,
             tenantAdmin,
             mfaVerified,
+            metodoMfa,
             purpose: CentralJwtPurposes.Full,
             lifetime: TimeSpan.FromMinutes(_settings.AccessTokenExpirationMinutes));
     }
@@ -67,6 +70,7 @@ public class CentralJwtIssuer : ICentralJwtIssuer
         string email,
         bool isGlobalMasterAdmin,
         string purpose,
+        MetodosMfa metodoMfa,
         TimeSpan? lifetime = null)
     {
         if (!CentralJwtPurposes.IsValid(purpose))
@@ -81,6 +85,7 @@ public class CentralJwtIssuer : ICentralJwtIssuer
             activeTenantId: null,
             tenantAdmin: null,
             mfaVerified: false,
+            metodoMfa,
             purpose,
             lifetime ?? TimeSpan.FromMinutes(5));
     }
@@ -113,6 +118,7 @@ public class CentralJwtIssuer : ICentralJwtIssuer
         Guid? activeTenantId,
         bool? tenantAdmin,
         bool mfaVerified,
+        MetodosMfa metodoMfa,
         string purpose,
         TimeSpan lifetime)
     {
@@ -136,6 +142,17 @@ public class CentralJwtIssuer : ICentralJwtIssuer
             new("mfa_verified", mfaVerified ? "true" : "false", ClaimValueTypes.Boolean),
             new("purpose", purpose),
         };
+
+        // Con qué método demostró su identidad en esta sesión. Se emite como
+        // número porque es una máscara de bits, y sólo cuando hay algo que sellar:
+        // un claim ausente y un claim con valor 0 significan lo mismo —«no consta»— y
+        // así los tokens emitidos antes de que esto existiera se leen igual que los
+        // de quien entra sin segundo factor, sin ningún caso especial.
+        if (metodoMfa != MetodosMfa.Ninguno)
+        {
+            claims.Add(new Claim(
+                "mfa_method", ((int)metodoMfa).ToString(), ClaimValueTypes.Integer32));
+        }
 
         if (activeTenantId.HasValue)
             claims.Add(new Claim("active_tenant_id", activeTenantId.Value.ToString()));

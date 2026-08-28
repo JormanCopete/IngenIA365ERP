@@ -1,13 +1,14 @@
-using System.Security.Cryptography;
-using System.Text;
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace IngenIA365ERP.Application.Identity.Auth.Login;
 
@@ -40,6 +41,7 @@ public sealed class LoginCommandHandler(
     ICentralJwtIssuer jwtIssuer,
     ICentralRefreshTokenStore refreshStore,
     IAdminDbContext adminDb,
+    IMfaDirectory credenciales,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     ILogger<LoginCommandHandler> logger)
@@ -135,15 +137,37 @@ public sealed class LoginCommandHandler(
                 Message: "No tienes acceso a ninguna empresa. Solicita una invitación."));
         }
 
-        // 7) Política MFA forzada por algún tenant + usuario sin MFA → MfaEnrollmentRequired.
+        // 7) Alguna cooperativa exige segundo factor y la persona no tiene NINGUNO
+        //    que a esa cooperativa le sirva → MfaEnrollmentRequired.
+        //
+        //    La condición preguntaba sólo `!user.TwoFactorEnabled`, y ahí estaba el
+        //    encierro principal de esta etapa: quien tenía un TOTP contestaba «sí
+        //    tengo segundo factor», no se le mandaba a inscribir nada, verificaba
+        //    bien en el paso siguiente, y el rechazo por método llegaba después —
+        //    cuando ya no quedaba ningún token con el que inscribir la passkey que
+        //    le exigían. Circuito cerrado, sin salida y sin error visible.
         var requiringMfa = active.Where(m => m.IsMfaRequiredByTenant).ToList();
-        if (requiringMfa.Count > 0 && !user.TwoFactorEnabled)
+
+        var metodosQueTiene = user.TwoFactorEnabled
+            ? await credenciales.MetodosActivosAsync(user.Id, ct)
+            : MetodosMfa.Ninguno;
+
+        // «Le sirve» significa dos cosas distintas según la cooperativa restrinja o
+        // no: la que acepta todo se conforma con que tenga algo; la que restringe
+        // exige que ese algo esté en su lista.
+        var algunaExigenteLoAdmite = requiringMfa.Any(m =>
+            GuardiaDeMetodos.Restringe(m.MetodosAceptados)
+                ? (m.MetodosAceptados & metodosQueTiene) != MetodosMfa.Ninguno
+                : user.TwoFactorEnabled);
+
+        if (requiringMfa.Count > 0 && !algunaExigenteLoAdmite)
         {
             var challenge = jwtIssuer.IssueChallengeToken(
                 centralUserId: user.Id,
                 email: user.Email,
                 isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
                 purpose: CentralJwtPurposes.MfaEnroll,
+                metodoMfa: MetodosMfa.Ninguno,
                 lifetime: ChallengeTokenLifetime);
 
             return Result.Success(new LoginResult(
@@ -156,7 +180,12 @@ public sealed class LoginCommandHandler(
                 ExpiresInSeconds: (int)ChallengeTokenLifetime.TotalSeconds,
                 TenantsRequiringMfa: requiringMfa
                     .Select(m => new TenantSummary(m.TenantId, m.TenantName))
-                    .ToList()));
+                    .ToList(),
+                // Qué inscribir, para que la pantalla no le ofrezca el botón que
+                // volvería a encerrarlo.
+                MetodosAceptados: ConversionDeMetodosMfa.ALiterales(
+                    GuardiaDeMetodos.LoQueLeServiria(
+                        active.Select(m => (m.IsMfaRequiredByTenant, m.MetodosAceptados))))));
         }
 
         // 8) Usuario con MFA habilitado → MfaRequired (challenge mfa-verify).
@@ -167,6 +196,7 @@ public sealed class LoginCommandHandler(
                 email: user.Email,
                 isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
                 purpose: CentralJwtPurposes.MfaVerify,
+                metodoMfa: MetodosMfa.Ninguno,
                 lifetime: ChallengeTokenLifetime);
 
             return Result.Success(new LoginResult(
@@ -227,6 +257,11 @@ public sealed class LoginCommandHandler(
             email: user.Email,
             isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
             purpose: CentralJwtPurposes.TenantSelect,
+            // En este archivo NADA sella metodo, y no es un olvido: todo lo que
+            // emite LoginCommandHandler ocurre ANTES de verificar el segundo
+            // factor. Lo unico que puede sellarse aqui es «no consta», que es la
+            // verdad. Quien si tiene algo que sellar es el emisor de despues.
+            metodoMfa: MetodosMfa.Ninguno,
             lifetime: ChallengeTokenLifetime);
 
         return Result.Success(new LoginResult(
@@ -264,6 +299,7 @@ public sealed class LoginCommandHandler(
             email: user.Email,
             isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
             purpose: purpose,
+            metodoMfa: MetodosMfa.Ninguno,
             lifetime: ChallengeTokenLifetime);
 
         return Result.Success(new LoginResult(
@@ -293,7 +329,11 @@ public sealed class LoginCommandHandler(
             isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
             activeTenantId: membership.TenantId,
             tenantAdmin: membership.IsTenantAdmin,
-            mfaVerified: user.TwoFactorEnabled);
+            mfaVerified: user.TwoFactorEnabled,
+            // Aqui solo se llega con TwoFactorEnabled == false: el paso 8 corta
+            // antes a todo el que tenga segundo factor. Asi que «no consta» no es
+            // una aproximacion, es el dato exacto.
+            metodoMfa: MetodosMfa.Ninguno);
 
         var refresh = jwtIssuer.IssueRefreshToken();
 

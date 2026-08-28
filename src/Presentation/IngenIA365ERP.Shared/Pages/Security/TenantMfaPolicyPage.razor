@@ -3,92 +3,185 @@
 @inject MembershipsClient Client
 
 @*
-    T110 (US4) — Política "MFA obligatorio" del tenant. Toggle con confirmación.
+    T110 (US4) — Política de segundo factor de la cooperativa: si se exige, y qué
+    métodos se aceptan.
+
+    Los textos de esta pantalla eran falsos en tres sitios: prometían que sólo se
+    podía configurar «la app de autenticación» (ya hay dos métodos), que la
+    redirección iba a una ruta concreta, y que activar «no expulsa a sesiones
+    activas» — que dejó de ser cierto cuando el refresh pasó a reevaluar la
+    política. Un texto que miente sobre lo que va a pasar es peor que no tenerlo:
+    quien lo lee decide con él.
 *@
 
-<PageTitle>Política MFA — IngenIA365ERP</PageTitle>
+<PageTitle>Política de segundo factor — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 520px;">
-    <h1>Política de doble factor</h1>
+<div class="auth-card" style="max-width: 620px;">
+    <h1>Política de segundo factor</h1>
 
-    @if (_loading)
+    @if (_cargando)
     {
-        <p>Cargando...</p>
+        <p>Cargando…</p>
     }
     else
     {
         <p>
             Estado actual:
-            <strong>@(_policy?.IsRequired == true ? "Obligatorio" : "Opcional")</strong>
+            <strong>@(_politica?.IsRequired == true ? "obligatorio" : "opcional")</strong>
         </p>
 
-        @if (_policy?.IsRequired == true)
-        {
-            <p>
-                Todos los miembros sin MFA serán redirigidos a
-                <code>/auth/enroll-mfa-forced</code> en su próximo login.
+        <div class="info-card">
+            <h2>Métodos que acepta la cooperativa</h2>
+            <p class="texto-apoyo">
+                Dentro de lo que aceptés, cada persona elige el que prefiera.
+                Restringir a uno solo deja fuera a quien no pueda usarlo — se le
+                pedirá inscribir uno nuevo la próxima vez que entre.
             </p>
-            <button @onclick="() => SetAsync(false)" disabled="@_busy">
-                Desactivar política
-            </button>
+
+            <label class="campo-check">
+                <input type="checkbox" @bind="_aceptaTotp" disabled="@_ocupado" />
+                App de códigos <span class="texto-tenue">(Google Authenticator, Microsoft Authenticator…)</span>
+            </label>
+
+            <label class="campo-check">
+                <input type="checkbox" @bind="_aceptaWebAuthn" disabled="@_ocupado" />
+                Llave o passkey <span class="texto-tenue">(el dispositivo, o una llave USB/NFC)</span>
+            </label>
+
+            @if (!_aceptaTotp && !_aceptaWebAuthn)
+            {
+                <div class="aviso aviso-error" role="alert">
+                    Tenés que aceptar al menos uno. Sin ninguno, nadie podría entrar
+                    ni tendría nada que inscribir.
+                </div>
+            }
+        </div>
+
+        @if (_politica?.IsRequired == true)
+        {
+            <div class="toolbar">
+                <button class="boton boton-principal" disabled="@(_ocupado || !HayAlgunMetodo)"
+                        @onclick="() => GuardarAsync(true)">
+                    Guardar métodos
+                </button>
+                <button class="boton boton-secundario" disabled="@_ocupado"
+                        @onclick="() => GuardarAsync(false)">
+                    Dejar de exigirlo
+                </button>
+            </div>
         }
         else
         {
-            <div class="aviso aviso-alerta" style="margin: var(--pad-lg) 0;">
-                <strong>Al activar:</strong> los miembros sin MFA deberán configurar
-                la app de autenticación en su próximo inicio de sesión antes de poder
-                continuar. Esto no expulsa a sesiones activas.
+            <div class="aviso aviso-alerta" role="alert">
+                <strong>Al exigirlo:</strong> quien no tenga ninguno de los métodos
+                aceptados tendrá que inscribir uno para poder entrar. Las sesiones
+                abiertas siguen funcionando hasta que se renueven —como mucho doce
+                horas—; al renovarse, quien no cumpla pasará por la pantalla de
+                inscripción.
             </div>
-            <button @onclick="() => SetAsync(true)" disabled="@_busy">
-                Activar política
-            </button>
+            <div class="toolbar">
+                <button class="boton boton-principal" disabled="@(_ocupado || !HayAlgunMetodo)"
+                        @onclick="() => GuardarAsync(true)">
+                    Exigir segundo factor
+                </button>
+                <button class="boton boton-secundario" disabled="@(_ocupado || !HayAlgunMetodo)"
+                        @onclick="() => GuardarAsync(false)">
+                    Guardar métodos sin exigirlo
+                </button>
+            </div>
         }
     }
 
-    @if (!string.IsNullOrEmpty(_message))
+    @* El número que evita el incidente del lunes: cuánta gente queda teniendo que
+       inscribir algo. Se muestra después de guardar, con su propio aviso. *@
+    @if (_afectados > 0)
     {
-        <p class="aviso aviso-ok" role="status" style="margin-top: var(--pad-lg);">@_message</p>
+        <div class="aviso aviso-alerta" role="alert" style="margin-top: var(--pad-lg);">
+            <strong>@_afectados</strong>
+            @(_afectados == 1 ? " persona tiene" : " personas tienen") segundo factor,
+            pero ninguno de los métodos que acabás de aceptar. La próxima vez que
+            entren se les pedirá inscribir uno de los aceptados.
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_aviso))
+    {
+        <p class="aviso aviso-ok" role="status" style="margin-top: var(--pad-lg);">@_aviso</p>
     }
     @if (!string.IsNullOrEmpty(_error))
     {
-        <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
+        <p class="aviso aviso-error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
     }
 </div>
 
 @code {
     [Parameter] public Guid TenantPublicId { get; set; }
 
-    private MfaPolicyResponse? _policy;
-    private bool _loading = true;
-    private bool _busy;
-    private string? _message;
+    private MfaPolicyResponse? _politica;
+    private bool _cargando = true;
+    private bool _ocupado;
+    private string? _aviso;
     private string? _error;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private bool _aceptaTotp = true;
+    private bool _aceptaWebAuthn = true;
+    private int _afectados;
 
-    private async Task LoadAsync()
+    private bool HayAlgunMetodo => _aceptaTotp || _aceptaWebAuthn;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
     {
-        _loading = true; _error = null;
+        _cargando = true;
+        _error = null;
         try
         {
             var r = await Client.GetMfaPolicyAsync(TenantPublicId);
-            if (r.IsSuccess) _policy = r.Value;
-            else _error = r.ErrorMessage ?? "No se pudo cargar.";
+            if (!r.IsSuccess)
+            {
+                _error = r.ErrorMessage ?? "No se pudo cargar la política.";
+                return;
+            }
+
+            _politica = r.Value;
+
+            // Sin lista, se asume que acepta todo: es lo mismo que responde el
+            // servidor cuando no hay fila de política, y coincidir con él evita
+            // que la pantalla proponga restringir algo que nadie pidió.
+            var metodos = r.Value?.MetodosAceptados;
+            _aceptaTotp = metodos is null || metodos.Contains(TiposDeCredencialMfa.Totp);
+            _aceptaWebAuthn = metodos is null || metodos.Contains(TiposDeCredencialMfa.WebAuthn);
         }
-        finally { _loading = false; }
+        finally { _cargando = false; }
     }
 
-    private async Task SetAsync(bool required)
+    private async Task GuardarAsync(bool exigir)
     {
-        _busy = true; _message = null; _error = null;
+        if (_ocupado) return;
+        _ocupado = true;
+        _aviso = null;
+        _error = null;
+
         try
         {
-            var r = await Client.SetMfaPolicyAsync(TenantPublicId, required);
-            if (r.IsSuccess)
-                _message = required ? "Política activada." : "Política desactivada.";
-            else _error = r.ErrorMessage ?? "No se pudo guardar.";
-            await LoadAsync();
+            var metodos = new List<string>();
+            if (_aceptaTotp) metodos.Add(TiposDeCredencialMfa.Totp);
+            if (_aceptaWebAuthn) metodos.Add(TiposDeCredencialMfa.WebAuthn);
+
+            var r = await Client.SetMfaPolicyAsync(TenantPublicId, exigir, metodos);
+            if (!r.IsSuccess)
+            {
+                _error = r.ErrorMessage ?? "No se pudo guardar.";
+                return;
+            }
+
+            _afectados = r.Value?.MiembrosSinMetodoAceptado ?? 0;
+            _aviso = exigir ? "Política guardada: el segundo factor es obligatorio."
+                            : "Métodos guardados. El segundo factor sigue siendo opcional.";
+
+            await CargarAsync();
         }
-        finally { _busy = false; }
+        finally { _ocupado = false; }
     }
 }

@@ -69,6 +69,12 @@ Cambia el tenant activo **dentro de una sesión ya autenticada** sin re-loguear 
 - `200 OK` (mismo formato que `select-tenant`).
 - `403 Forbidden` con `Membership.NotActive` si la membresía con el destino no está activa.
 - `403 Forbidden` con `Tenant.MfaPolicyEnforced` si el destino exige MFA y el usuario no la tiene.
+- `403 Forbidden` con `Tenant.MfaMethodNotAccepted` si el destino exige MFA y el
+  metodo con el que la persona entro no esta entre los que acepta. Codigo distinto
+  del anterior a proposito: la pantalla enruta a sitios distintos —a configurar el
+  segundo factor, o a inscribir uno concreto— y con un solo codigo media docena de
+  personas acabarian en la pagina que no les sirve. Ver
+  [tenant-mfa-policy.md](tenant-mfa-policy.md).
 
 **Side effects** servidor: emite evento `Session.TenantSwitched(centralUserId, fromTenantId, toTenantId)`.
 

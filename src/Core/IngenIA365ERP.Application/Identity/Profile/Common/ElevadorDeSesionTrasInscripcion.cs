@@ -1,6 +1,9 @@
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.Extensions.Logging;
+
+using IngenIA365ERP.Application.Identity.Auth.Common;
 
 namespace IngenIA365ERP.Application.Identity.Profile.Common;
 
@@ -34,7 +37,12 @@ public interface IElevadorDeSesionTrasInscripcion
     /// tiene un número de cooperativas distinto de una. No es un error — el
     /// autenticador quedó inscrito igual, que es lo que se pidió.
     /// </summary>
-    Task<SesionElevada?> ElevarAsync(Guid centralUserId, DateTime ahora, CancellationToken ct);
+    /// <param name="metodoInscrito">
+    /// El metodo que acaba de inscribir. Es con lo que se sella la sesion: acaba de
+    /// demostrar que lo tiene, inscribiendolo.
+    /// </param>
+    Task<SesionElevada?> ElevarAsync(
+        Guid centralUserId, MetodosMfa metodoInscrito, DateTime ahora, CancellationToken ct);
 }
 
 public sealed record SesionElevada(
@@ -56,7 +64,7 @@ public sealed class ElevadorDeSesionTrasInscripcion(
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
 
     public async Task<SesionElevada?> ElevarAsync(
-        Guid centralUserId, DateTime ahora, CancellationToken ct)
+        Guid centralUserId, MetodosMfa metodoInscrito, DateTime ahora, CancellationToken ct)
     {
         var usuario = await centralIdentity.FindByIdAsync(centralUserId, ct);
         if (usuario is null)
@@ -80,13 +88,29 @@ public sealed class ElevadorDeSesionTrasInscripcion(
 
         var membresia = activas[0];
 
+        // Acaba de inscribir un metodo, pero puede no ser el que ESTA cooperativa
+        // acepta: la pantalla ofrece lo que le serviria, y aun asi alguien puede
+        // llegar aqui con otro (por ejemplo inscribiendo desde el perfil). Sin esta
+        // puerta, inscribir el metodo equivocado entregaria justo la sesion que la
+        // mascara queria negar.
+        if (GuardiaDeMetodos.Evaluar(
+                membresia.IsMfaRequiredByTenant, membresia.MetodosAceptados, metodoInscrito)
+            != GuardiaDeMetodos.Veredicto.Admite)
+        {
+            logger.LogInformation(
+                "No se eleva la sesion de {Id}: inscribio {Metodo} y {Coop} no lo acepta.",
+                centralUserId, metodoInscrito, membresia.TenantName);
+            return null;
+        }
+
         var access = jwtIssuer.IssueAccessToken(
             centralUserId: centralUserId,
             email: usuario.Email,
             isGlobalMasterAdmin: usuario.IsGlobalMasterAdmin,
             activeTenantId: membresia.TenantId,
             tenantAdmin: membresia.IsTenantAdmin,
-            mfaVerified: true);
+            mfaVerified: true,
+            metodoMfa: metodoInscrito);
 
         var refresh = jwtIssuer.IssueRefreshToken();
 
@@ -100,7 +124,8 @@ public sealed class ElevadorDeSesionTrasInscripcion(
                 IpAddress: null,
                 UserAgent: null,
                 ReplacedByTokenHashHex: null,
-                SecurityStamp: usuario.SecurityStamp),
+                SecurityStamp: usuario.SecurityStamp,
+                MetodoMfa: metodoInscrito),
             RefreshTokenTtl, ct);
 
         return new SesionElevada(

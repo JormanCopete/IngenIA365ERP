@@ -51,6 +51,17 @@ public static class AuditEventTypes
     public const string TenantMfaPolicyActivated = "TenantMfaPolicy.Activated";
     public const string TenantMfaPolicyDeactivated = "TenantMfaPolicy.Deactivated";
 
+    /// <summary>
+    /// Cambio en QUÉ métodos acepta la cooperativa, sin tocar si los exige. Evento
+    /// propio porque no es ni activar ni desactivar: con el nombre de aquellos, un
+    /// cambio que deja fuera a media cooperativa quedaría registrado como
+    /// «activada» un día en que ya estaba activada.
+    /// </summary>
+    public const string TenantMfaPolicyMethodsChanged = "TenantMfaPolicy.MethodsChanged";
+
+    /// <summary>Cambio en los métodos que acepta la plataforma para el maestro.</summary>
+    public const string PlatformMfaPolicyMethodsChanged = "PlatformMfaPolicy.MethodsChanged";
+
     // -------------------- Profile + Recovery --------------------
     public const string ProfileMfaEnrolled = "Profile.MfaEnrolled";
     public const string ProfileMfaDisabled = "Profile.MfaDisabled";

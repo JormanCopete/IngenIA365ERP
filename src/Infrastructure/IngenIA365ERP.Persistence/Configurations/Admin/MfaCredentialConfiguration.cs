@@ -1,4 +1,3 @@
-using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

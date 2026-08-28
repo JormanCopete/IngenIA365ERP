@@ -1,10 +1,11 @@
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Application.Identity.Auth.Login;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -200,7 +201,8 @@ public sealed class VerifyWebAuthnAssertionCommandHandler(
         // A partir de aquí es exactamente lo mismo que tras un TOTP correcto:
         // auto-seleccionar cooperativa, pedir que se elija, o la salida del
         // maestro global.
-        return await emisorDeSesion.EmitirAsync(usuario, codigosDeRecuperacionRestantes: null, ct);
+        return await emisorDeSesion.EmitirAsync(
+            usuario, MetodosMfa.WebAuthn, codigosDeRecuperacionRestantes: null, ct);
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Entities.Admin;
+
 namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 
 /// <summary>
@@ -62,6 +64,50 @@ public interface IMfaDirectory
     /// </para>
     /// </summary>
     Task<int> ContarActivasAsync(Guid centralUserId, CancellationToken ct);
+
+    /// <summary>
+    /// QUÉ métodos tiene, no cuántas credenciales. Devuelve la unión: quien tenga
+    /// dos TOTP y un passkey devuelve <c>Totp | WebAuthn</c>.
+    ///
+    /// <para>
+    /// Existe porque <see cref="ContarActivasAsync"/> no puede responder esta
+    /// pregunta y usarlo igual sería peor que no tenerla: cuenta todos los tipos
+    /// —deliberadamente, ver arriba— así que devolvería «sí tiene algo» a alguien
+    /// con dos TOTP en una cooperativa que sólo acepta passkeys. Acertaría en la
+    /// mayoría de las cuentas y fallaría justo en las que esta política existe para
+    /// servir.
+    /// </para>
+    /// </summary>
+    Task<MetodosMfa> MetodosActivosAsync(Guid centralUserId, CancellationToken ct);
+
+    /// <summary>
+    /// Cuantas credenciales activas tiene DE UN TIPO. Es la que aplica el tope por
+    /// persona.
+    ///
+    /// <para>
+    /// El tope se contaba sobre el total, y con dos tipos eso era un segundo
+    /// candado: quien tuviera cinco autenticadores de codigos no podia agregar la
+    /// passkey que su cooperativa le exige, y retirar uno necesita una sesion
+    /// completa — que es justo lo que no consigue. Por tipo, el limite sigue
+    /// acotando lo que de verdad acotaba (el barrido de codigos al entrar prueba
+    /// todos los TOTP) sin bloquear un metodo con el otro.
+    /// </para>
+    /// </summary>
+    Task<int> ContarActivasDeTipoAsync(Guid centralUserId, MetodosMfa tipo, CancellationToken ct);
+
+    /// <summary>
+    /// De esas personas, cuántas <b>tienen</b> segundo factor pero ninguno de los
+    /// métodos indicados. Es lo que la pantalla de política muestra antes de
+    /// guardar: cuánta gente quedaría teniendo que inscribir algo nuevo.
+    ///
+    /// <para>
+    /// No cuenta a quien no tiene ninguna credencial. A esas personas ya las
+    /// afectaba la exigencia de segundo factor y no las cambia la máscara;
+    /// sumarlas inflaría el número justo cuando sirve para decidir.
+    /// </para>
+    /// </summary>
+    Task<int> ContarSinNingunMetodoAceptadoAsync(
+        IReadOnlyCollection<Guid> centralUserIds, MetodosMfa aceptados, CancellationToken ct);
 
     /// <summary>
     /// ¿Tuvo ALGUNA VEZ una credencial TOTP, revocadas incluidas? Ignora el filtro
@@ -190,28 +236,3 @@ public sealed record CredencialMfaResumen(
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
     DateTime? LastUsedAt);
-
-/// <summary>
-/// Los dos tipos de autenticador, con los MISMOS literales que la columna
-/// discriminadora de <c>ADM_MfaCredentials</c>.
-///
-/// <para>
-/// La configuración de EF los toma de aquí en vez de repetir los literales, así
-/// que el discriminador que se escribe en la tabla y el que sale por la API son
-/// por construcción el mismo. Cambiar uno cambia los dos.
-/// </para>
-///
-/// <para>
-/// La pantalla tiene su propia copia —<c>IngenIA365ERP.Shared</c> no referencia
-/// ningún proyecto, como todos sus DTO—, y una prueba de arquitectura comprueba
-/// que las dos digan lo mismo.
-/// </para>
-/// </summary>
-public static class TiposDeCredencialMfa
-{
-    /// <summary>App de códigos: Google Authenticator, Microsoft Authenticator, cualquiera.</summary>
-    public const string Totp = "Totp";
-
-    /// <summary>Passkey: la llave del dispositivo, o una física por USB o NFC.</summary>
-    public const string WebAuthn = "WebAuthn";
-}

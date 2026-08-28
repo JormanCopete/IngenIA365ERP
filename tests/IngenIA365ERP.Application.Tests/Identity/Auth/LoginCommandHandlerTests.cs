@@ -52,11 +52,11 @@ public class LoginCommandHandlerTests
             .Returns(new LoginLockoutState(false, 0, 0));
         _jwt.IssueAccessToken(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
-                Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>())
+                Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>(), Arg.Any<MetodosMfa>())
             .Returns(new CentralAccessTokenResult("access-jwt", FixedNow.AddMinutes(15), "jti", "full"));
         _jwt.IssueChallengeToken(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
-                Arg.Any<string>(), Arg.Any<TimeSpan?>())
+                Arg.Any<string>(), Arg.Any<MetodosMfa>(), Arg.Any<TimeSpan?>())
             .Returns(callInfo => new CentralAccessTokenResult(
                 "challenge-jwt", FixedNow.AddMinutes(5), "jti", callInfo.ArgAt<string>(3)));
         _jwt.IssueRefreshToken()
@@ -90,6 +90,13 @@ public class LoginCommandHandlerTests
             .Returns(memberships);
     }
 
+    /// <summary>
+    /// Por defecto «no tiene ningún método». No cambia ninguna prueba existente:
+    /// mientras la cooperativa no restrinja —y ninguna de estas lo hace— el paso 7
+    /// se conforma con TwoFactorEnabled, igual que antes.
+    /// </summary>
+    private readonly IMfaDirectory _credenciales = Substitute.For<IMfaDirectory>();
+
     private LoginCommandHandler NewHandler() => new(
         centralIdentity: _identity,
         memberships: _memberships,
@@ -97,6 +104,7 @@ public class LoginCommandHandlerTests
         jwtIssuer: _jwt,
         refreshStore: _refresh,
         adminDb: _db,
+        credenciales: _credenciales,
         auditWriter: _audit,
         clock: _clock,
         logger: NullLogger<LoginCommandHandler>.Instance);

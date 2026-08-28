@@ -1,10 +1,11 @@
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Application.Identity.Auth.Login;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -135,7 +136,20 @@ public sealed class MfaVerifyCommandHandler(
         // Copiarlo habría significado que arreglar un caso límite en un sitio
         // dejara el otro roto — y el caso límite de aquí es la salida del maestro
         // global, que ya se perdió una vez.
-        return await emisorDeSesion.EmitirAsync(user, recoveryCodesRemaining, ct);
+        // Con QUÉ entró, que ya no es un detalle: una cooperativa puede aceptar el
+        // TOTP y no la passkey, o al revés.
+        //
+        // El código de recuperación sella `Ninguno` y no `Totp`. No es un tecnicismo:
+        // un código de recuperación demuestra identidad pero no demuestra que la
+        // persona tenga a mano ningún método concreto — es literalmente lo que se usa
+        // cuando NO se tiene. Sellarlo como TOTP dejaría entrar a una cooperativa
+        // sólo-passkey a quien acaba de decir que perdió su autenticador.
+        var metodoDemostrado = request.UseRecoveryCode
+            ? MetodosMfa.Ninguno
+            : MetodosMfa.Totp;
+
+        return await emisorDeSesion.EmitirAsync(
+            user, metodoDemostrado, recoveryCodesRemaining, ct);
     }
 
     private async Task EmitAuditAsync(

@@ -34,15 +34,26 @@
         <div class="lista-empresas">
             @foreach (var t in _tenants)
             {
+                @* Las que no aceptan el método con el que entró se muestran
+                   igualmente, deshabilitadas y con el motivo. Esconderlas dejaría
+                   a la persona sin la única pista de por qué desapareció una
+                   cooperativa a la que pertenece. *@
                 <button
                     type="button"
                     class="empresa-opcion"
                     @onclick="() => SelectAsync(t.TenantPublicId)"
-                    disabled="@_busy">
+                    disabled="@(_busy || !t.AdmiteTuMetodo)"
+                    title="@(t.AdmiteTuMetodo ? null : "No acepta el método con el que entraste")">
                     <strong>@t.TenantName</strong>
                     @if (t.IsTenantAdmin)
                     {
                         <span class="pastilla pastilla-info">Admin</span>
+                    }
+                    @if (!t.AdmiteTuMetodo)
+                    {
+                        <span class="texto-tenue">
+                            — no acepta el método con el que entraste
+                        </span>
                     }
                 </button>
             }

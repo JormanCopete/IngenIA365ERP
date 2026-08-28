@@ -66,12 +66,35 @@ public sealed record LoginResult(
     IReadOnlyList<TenantSummary>? TenantsRequiringMfa = null,
 
     // Feature 003 (FR-110): presente solo tras canjear un recovery code en mfa/verify.
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
 
+    /// <summary>
+    /// Con MfaEnrollmentRequired: qué métodos le servirían, como literales
+    /// (<c>"Totp"</c>, <c>"WebAuthn"</c>).
+    ///
+    /// <para>
+    /// Sin esto la pantalla de inscripción ofrece los dos botones, y quien pulse el
+    /// que su cooperativa no acepta vuelve a quedar fuera — con el agravante de que
+    /// ahora cree que ya lo resolvió. Van como literales y no como número porque el
+    /// cliente ya sabe leer esos mismos literales en la lista de credenciales, y un
+    /// entero mágico por JSON no tiene precedente en este contrato.
+    /// </para>
+    /// </summary>
+    IReadOnlyList<string>? MetodosAceptados = null);
+
+/// <param name="AdmiteTuMetodo">
+/// Si esta cooperativa acepta el método con el que la persona acaba de entrar.
+/// Se muestra en vez de esconder la fila: una cooperativa a la que pertenece y
+/// que desaparece de la lista sin explicación es peor que una que aparece
+/// atenuada diciendo por qué. Por defecto <c>true</c> — los demás sitios que
+/// construyen este resumen (la lista de sesiones, <c>/me</c>) no están decidiendo
+/// un ingreso y no tienen método contra el que comparar.
+/// </param>
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,
     string TenantName,
-    bool IsTenantAdmin);
+    bool IsTenantAdmin,
+    bool AdmiteTuMetodo = true);
 
 public sealed record TenantSummary(
     Guid TenantPublicId,

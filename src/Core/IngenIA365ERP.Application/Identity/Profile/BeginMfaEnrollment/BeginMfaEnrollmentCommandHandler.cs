@@ -1,6 +1,7 @@
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -61,13 +62,20 @@ public sealed class BeginMfaEnrollmentCommandHandler(
         //
         // Se comprueba aquí y no en la base porque aquí se puede explicar qué pasa
         // y qué hacer, en vez de devolver una violación de índice.
-        var yaInscritas = await credenciales.ContarActivasAsync(centralUserId, ct);
+        // El tope cuenta las de ESTE tipo, no el total. Contaba el total, y con dos
+        // clases de autenticador eso era un segundo candado: quien tuviera cinco
+        // apps de códigos no podía agregar la passkey que su cooperativa le exige,
+        // y retirar una necesita una sesión completa — que es justo lo que no
+        // consigue mientras la política se lo impide.
+        var yaInscritas = await credenciales.ContarActivasDeTipoAsync(
+            centralUserId, MetodosMfa.Totp, ct);
+
         if (yaInscritas >= MaximoDeAutenticadores)
         {
             return Result.Failure<BeginMfaEnrollmentResult>(
                 "Profile.Mfa.DemasiadasCredenciales",
-                $"Ya tenés {yaInscritas} autenticadores, que es el máximo. " +
-                "Retirá alguno que ya no uses antes de agregar otro.");
+                $"Ya tenés {yaInscritas} apps de códigos, que es el máximo. " +
+                "Retirá alguna que ya no uses antes de agregar otra.");
         }
 
         var setup = await centralIdentity.BeginMfaEnrollmentAsync(centralUserId, ct);

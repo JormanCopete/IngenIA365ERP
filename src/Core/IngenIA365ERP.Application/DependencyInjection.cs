@@ -59,6 +59,10 @@ public static class DependencyInjection
             Identity.Profile.Common.IElevadorDeSesionTrasInscripcion,
             Identity.Profile.Common.ElevadorDeSesionTrasInscripcion>();
 
+        services.AddScoped<
+            Identity.Auth.Common.IPoliticaDePlataforma,
+            Identity.Auth.Common.PoliticaDePlataforma>();
+
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 

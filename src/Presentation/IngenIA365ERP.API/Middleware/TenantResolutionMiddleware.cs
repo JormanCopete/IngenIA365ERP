@@ -52,8 +52,21 @@ public class TenantResolutionMiddleware
         "/api/invitations/",
         "/api/saas/",
         "/api/admin",
-        "/api/profile/mfa/enroll",
-        "/api/profile/mfa/confirm",
+        // TODO el subárbol del segundo factor, y no dos rutas sueltas.
+        //
+        // Estaban enumeradas /enroll y /confirm, que eran las únicas que existían.
+        // Desde entonces se añadieron el alta de passkey (/webauthn/begin y
+        // /confirm) y la gestión de credenciales, y ninguna entró en la lista: con
+        // un token de inscripción —que por definición no tiene cooperativa
+        // elegida— este middleware las cortaba con 401 antes de llegar al handler.
+        // El síntoma era «Session.TenantNotSelected» en la pantalla que te obliga
+        // a inscribir un segundo factor, que no menciona ninguna cooperativa.
+        //
+        // El subárbol entero es exento con razón: cada uno de esos endpoints opera
+        // sobre la identidad del token y sobre la base administrativa, nunca sobre
+        // datos de una cooperativa. Y el administrador maestro, que no tiene
+        // ninguna, tampoco podía listar sus propias credenciales.
+        "/api/profile/mfa",
         "/api/health",
         // Contenido que se sirve ANTES de iniciar sesión, en la propia pantalla
         // de entrada. Por definición no hay empresa seleccionada todavía: sin

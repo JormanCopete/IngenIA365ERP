@@ -78,7 +78,8 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
         // La emisión vive aparte desde que hay dos formas de inscribirse: con
         // código y con passkey. Copiarla habría dejado a quien sólo puede usar una
         // llave sin manera de cumplir la exigencia de su cooperativa.
-        var elevada = await elevador.ElevarAsync(centralUserId, now, ct);
+        var elevada = await elevador.ElevarAsync(
+            centralUserId, Domain.Entities.Admin.MetodosMfa.Totp, now, ct);
         if (elevada is null)
         {
             return Result.Success(new ConfirmMfaEnrollmentResult(RecoveryCodes: recoveryCodes));
