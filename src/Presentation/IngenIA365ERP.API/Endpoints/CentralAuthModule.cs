@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Identity.Auth.Logout;
 using IngenIA365ERP.Application.Identity.Auth.Me;
 using IngenIA365ERP.Application.Identity.Auth.MfaVerify;
 using IngenIA365ERP.Application.Identity.Auth.WebAuthn;
+using IngenIA365ERP.Application.Identity.Auth.Recuperacion;
 using IngenIA365ERP.Application.Identity.Auth.RefreshToken;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -60,6 +61,25 @@ public sealed class CentralAuthModule : ICarterModule
         anon.MapPost("/mfa/webauthn/verify", VerifyWebAuthnAssertionAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_WebAuthnVerify");
+
+        // Recuperación del segundo factor por correo.
+        //
+        // Pedirla exige el token del desafío —o sea, la contraseña ya acertada—,
+        // así que este endpoint no sirve de oráculo para averiguar qué correos
+        // tienen cuenta. Confirmar y cancelar son anónimos porque se llega desde un
+        // enlace del correo, posiblemente en otro navegador o en otro equipo;
+        // confirmar pide la contraseña otra vez y cancelar no pide nada.
+        anon.MapPost("/mfa/recovery/request", RequestMfaRecoveryAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_MfaRecoveryRequest");
+
+        anon.MapPost("/mfa/recovery/confirm", ConfirmMfaRecoveryAsync)
+            .AllowAnonymous()
+            .WithName("CentralAuth_MfaRecoveryConfirm");
+
+        anon.MapPost("/mfa/recovery/cancel", CancelMfaRecoveryAsync)
+            .AllowAnonymous()
+            .WithName("CentralAuth_MfaRecoveryCancel");
 
         anon.MapPost("/logout", LogoutAsync)
             .RequireAuthorization()
@@ -121,6 +141,47 @@ public sealed class CentralAuthModule : ICarterModule
     /// Lo que devolvió <c>navigator.credentials.get()</c>, serializado tal cual.
     /// </param>
     public sealed record WebAuthnVerifyBody(string RetoId, string RespuestaJson);
+
+    // -------- Recuperación del segundo factor por correo --------
+
+    private static async Task<object?> RequestMfaRecoveryAsync(
+        HttpContext http, ISender sender, CancellationToken ct) =>
+        await sender.Send(new RequestMfaRecoveryCommand(
+            IpAddress: GetIp(http), UserAgent: GetUserAgent(http)), ct);
+
+    private static async Task<object?> ConfirmMfaRecoveryAsync(
+        [FromBody] ConfirmarRecuperacionBody body,
+        HttpContext http,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new ConfirmMfaRecoveryCommand(
+            Token: body.Token,
+            Password: body.Password,
+            IpAddress: GetIp(http),
+            UserAgent: GetUserAgent(http)), ct);
+
+    /// <param name="Password">
+    /// Sí, otra vez. Entre pedir la recuperación y confirmarla pasan horas o días,
+    /// y en ese tiempo el enlace puede acabar en otras manos.
+    /// </param>
+    public sealed record ConfirmarRecuperacionBody(string Token, string Password);
+
+    private static async Task<object?> CancelMfaRecoveryAsync(
+        [FromBody] CancelarRecuperacionBody body,
+        HttpContext http,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new CancelMfaRecoveryCommand(
+            Token: body.Token,
+            IpAddress: GetIp(http),
+            UserAgent: GetUserAgent(http)), ct);
+
+    /// <summary>
+    /// Sólo el token. Cancelar no pide contraseña a propósito: tiene que ser más
+    /// fácil que ejecutar, porque quien recibe el aviso sin haberlo pedido está
+    /// viendo un ataque y sólo va a pararlo si pararlo es trivial.
+    /// </summary>
+    public sealed record CancelarRecuperacionBody(string Token);
 
     // -------- Refresh --------
 

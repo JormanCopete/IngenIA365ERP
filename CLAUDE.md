@@ -45,6 +45,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   inscritas, sin migración posible**. No tiene valor por defecto a propósito: el
   proceso no arranca si falta. La librería (`Fido2NetLib`) sólo la conoce
   `WebAuthnService`, y una prueba de arquitectura lo fija.
+- **Lo que sigue pendiente y NO se ha hecho**: vaciar
+  `ADM_CentralUsers.MfaSecret` y retirar el modo compatibilidad de lectura. Es
+  destructivo y el Principio XII exige backup y segundo revisor. El orden importa
+  y es contraintuitivo — vaciar primero, retirar la lectura después. Ver
+  `docs/operaciones/retirada-de-mfasecret.md`.
 - **Política de métodos**: cada cooperativa decide **qué** métodos acepta
   (`ADM_TenantMfaPolicies.AllowedMethodsMask`, máscara de bits `MetodosMfa`) además
   de si los exige. La decisión vive en **un solo sitio**, `GuardiaDeMetodos.Evaluar`,
@@ -57,6 +62,16 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   veredicto es «adelante» o «te falta inscribir **esto**», con la lista.
   El método usado viaja en el claim `mfa_method`; ausente significa «no consta», y
   el código de recuperación sella eso mismo a propósito.
+- **Recuperación por correo**: apagada por defecto en cada cooperativa
+  (`AllowEmailRecovery`). Si el correo puede borrar el segundo factor, el segundo
+  factor se degrada al primero, así que las mitigaciones **no son opcionales**: se
+  pide desde el desafío —la contraseña ya acertada, no sirve de oráculo—, espera
+  las horas que diga la política (mínimo 1, por defecto 24), el aviso trae un
+  enlace de cancelar que **no pide nada**, cualquier ingreso correcto la cancela
+  sola, y completarla **no devuelve sesión**: recuperar no es entrar. Con varias
+  cooperativas manda la más estricta y la demora más larga. El correo sale por
+  `IEmailSender` directo, nunca por `SendNotificationCommand` — eso escribe en la
+  base de una cooperativa y aquí todavía no hay ninguna elegida.
 - **El maestro**: `ADM_PlatformMfaPolicy` (fila única) decide **qué** métodos
   acepta, nunca **si** los exige. Es la única cuenta sin rescate —`ForceMfaReset`
   exige ser maestro, o sea sólo puede rescatarse a sí mismo— así que existe
@@ -86,10 +101,10 @@ vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | ~628 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | ~631 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 682 (680 pasan, 1 con `RUN_PERF_TESTS=1`, 2 exigen MongoDB local) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 702 (700 pasan, 1 con `RUN_PERF_TESTS=1`, 2 exigen MongoDB local) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste

@@ -22,10 +22,22 @@ namespace IngenIA365ERP.Application.Tenants.UpdateTenantMfaPolicy;
 /// un incidente.
 /// </para>
 /// </param>
+/// <param name="PermitirRecuperacionPorCorreo">
+/// <c>null</c> significa «no tocar», igual que los métodos. <b>Apagada por
+/// defecto</b>: encenderla es aceptar que quien controle un buzón pueda, con la
+/// contraseña y una espera, retirarle el segundo factor a una persona.
+/// </param>
+/// <param name="HorasDeDemora">
+/// Cuánto espera una solicitud antes de poder ejecutarse. Mínimo 1. Es lo que
+/// convierte el ataque de silencioso e instantáneo en ruidoso y con tiempo para
+/// reaccionar.
+/// </param>
 public sealed record UpdateTenantMfaPolicyCommand(
     Guid TenantPublicId,
     bool IsRequired,
-    IReadOnlyList<string>? MetodosAceptados = null
+    IReadOnlyList<string>? MetodosAceptados = null,
+    bool? PermitirRecuperacionPorCorreo = null,
+    int? HorasDeDemora = null
 ) : IRequest<Result<UpdateTenantMfaPolicyResult>>;
 
 /// <param name="MiembrosSinMetodoAceptado">

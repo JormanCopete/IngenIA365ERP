@@ -40,9 +40,21 @@ public interface ITenantMembershipReader
 /// son los tirantes.
 /// </para>
 /// </param>
+/// <param name="PermiteRecuperacionPorCorreo">
+/// Si esa cooperativa acepta que el segundo factor se recupere por correo.
+/// <b>Por defecto false</b>, al revés que los métodos: aquí el valor seguro es el
+/// restrictivo, porque una entrada de caché vieja que se leyera como «sí permite»
+/// habilitaría durante un minuto una vía que la cooperativa tiene apagada.
+/// </param>
+/// <param name="HorasDeDemoraDeRecuperacion">
+/// Cuánto espera una solicitud antes de poder ejecutarse. Sólo se lee cuando la
+/// anterior es true.
+/// </param>
 public sealed record ActiveMembershipInfo(
     Guid TenantId,
     string TenantName,
     bool IsTenantAdmin,
     bool IsMfaRequiredByTenant,
-    MetodosMfa MetodosAceptados = ConversionDeMetodosMfa.Todos);
+    MetodosMfa MetodosAceptados = ConversionDeMetodosMfa.Todos,
+    bool PermiteRecuperacionPorCorreo = false,
+    int HorasDeDemoraDeRecuperacion = TenantMfaPolicy.DemoraPorDefectoEnHoras);

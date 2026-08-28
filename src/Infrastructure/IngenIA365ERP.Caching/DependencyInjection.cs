@@ -60,7 +60,13 @@ public static class DependencyInjection
         // - LoginAttemptCounter: lockout progresivo por email (5/10/15/20 fallos).
         services.AddScoped<ITenantMembershipReader, RedisTenantMembershipReader>();
         services.AddScoped<IMembershipChangedNotifier, RedisMembershipChangedNotifier>();
-        services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+        services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+
+        // Tope diario de solicitudes de recuperacion. Clave propia, no el contador
+        // de intentos: ahi no hay fallos que castigar, hay volumen que acotar.
+        services.AddScoped<
+            IngenIA365ERP.Application.Identity.Auth.Recuperacion.ITopeDeSolicitudesDeRecuperacion,
+            Services.Identity.RedisTopeDeSolicitudesDeRecuperacion>();
 
         // Feature 002 (US1.2.0) — lock distribuido para serializar trabajo
         // crítico entre instancias (single-use estricto de invitations,

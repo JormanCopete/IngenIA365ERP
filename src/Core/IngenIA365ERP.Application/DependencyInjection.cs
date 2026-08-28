@@ -69,7 +69,18 @@ public static class DependencyInjection
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<
             IngenIA365ERP.Application.Identity.Profile.Services.IPasswordResetEmailDispatcher,
-            IngenIA365ERP.Application.Identity.Profile.Services.PasswordResetEmailDispatcher>();
+            IngenIA365ERP.Application.Identity.Profile.Services.PasswordResetEmailDispatcher>();
+
+        // El aviso de recuperacion del segundo factor. Mismo camino que el de
+        // contrasena —plantilla + IEmailSender— porque ocurre en el mismo estado:
+        // sin cooperativa elegida, donde el contexto de datos lanza por Principio IV.
+        services.AddScoped<
+            Identity.Auth.Recuperacion.IMfaRecoveryEmailDispatcher,
+            Identity.Auth.Recuperacion.MfaRecoveryEmailDispatcher>();
+
+        services.AddScoped<
+            Identity.Auth.Recuperacion.ICanceladorDeRecuperacionesAlEntrar,
+            Identity.Auth.Recuperacion.CanceladorDeRecuperacionesAlEntrar>();
 
         // Helper transversal — generador de tokens crypto-safe para flujos
         // de un solo uso (invitaciones US1, password reset Phase 4b).

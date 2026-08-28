@@ -32,11 +32,16 @@ public sealed class TenantMfaPolicyModule : ICarterModule
         [FromBody] UpdateBody body,
         ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdateTenantMfaPolicyCommand(
-            tenantPublicId, body.IsRequired, body.MetodosAceptados), ct);
+            tenantPublicId, body.IsRequired, body.MetodosAceptados,
+            body.PermitirRecuperacionPorCorreo, body.HorasDeDemora), ct);
 
     /// <param name="MetodosAceptados">
     /// Literales: ["Totp"], ["WebAuthn"], o ambos. Omitirlo deja los metodos como
     /// estaban — NO los reinicia. Ver el comando para el porque.
     /// </param>
-    public sealed record UpdateBody(bool IsRequired, IReadOnlyList<string>? MetodosAceptados = null);
+    public sealed record UpdateBody(
+        bool IsRequired,
+        IReadOnlyList<string>? MetodosAceptados = null,
+        bool? PermitirRecuperacionPorCorreo = null,
+        int? HorasDeDemora = null);
 }

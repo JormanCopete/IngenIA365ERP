@@ -42,6 +42,7 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
     ICentralJwtIssuer jwtIssuer,
     ICentralRefreshTokenStore refreshStore,
     IPoliticaDePlataforma politicaDePlataforma,
+    Recuperacion.ICanceladorDeRecuperacionesAlEntrar canceladorDeRecuperaciones,
     IDateTimeService clock)
     : IEmisorDeSesionTrasSegundoFactor
 {
@@ -54,6 +55,16 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
         int? codigosDeRecuperacionRestantes,
         CancellationToken ct)
     {
+        // Superó el segundo factor: cualquier recuperación por correo en curso deja
+        // de tener sentido. Si pudo entrar no la necesitaba, y si no fue ella quien
+        // la pidió, se deshace sola sin que tenga que leer ningún correo.
+        //
+        // Va aquí y no en el login: acertar la contraseña es justamente lo que ya
+        // hizo quien pidió la recuperación, así que cancelar allí dejaría que el
+        // atacante deshiciera la solicitud de la víctima. Esto sólo lo puede hacer
+        // quien todavía tiene el segundo factor.
+        await canceladorDeRecuperaciones.CancelarLasVivasAsync(user.Id, clock.UtcNow, ct);
+
         var activas = await memberships.GetActiveMembershipsAsync(user.Id, ct);
 
         if (activas.Count == 0)

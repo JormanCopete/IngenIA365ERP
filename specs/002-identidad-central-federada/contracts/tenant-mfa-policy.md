@@ -45,8 +45,29 @@ otro.
 **Request**:
 
 ```json
-{ "isRequired": true, "metodosAceptados": ["WebAuthn"] }
+{
+  "isRequired": true,
+  "metodosAceptados": ["WebAuthn"],
+  "permitirRecuperacionPorCorreo": false,
+  "horasDeDemora": 24
+}
 ```
+
+`permitirRecuperacionPorCorreo` **nace apagada**. Encenderla es aceptar que quien
+controle un buzón pueda, con la contraseña y una espera, retirarle el segundo
+factor a una persona — es decir, que el segundo factor valga lo que valga el
+buzón. Las mitigaciones que lo hacen defendible están en
+[auth.md](auth.md#recuperación-del-segundo-factor-por-correo), y ninguna es
+opcional.
+
+`horasDeDemora` tiene mínimo 1 (`Validation.TenantMfaPolicy.DemoraInsuficiente`).
+Cero no es «recuperación rápida»: es el diseño sin demora, donde no hay aviso que
+llegue a tiempo ni cancelación posible.
+
+**Con varias cooperativas manda la más estricta**: basta una que exija segundo
+factor y no permita esta vía para que no se pueda, y la demora aplicada es la más
+larga. Si bastara una permisiva, cualquiera entraría en la cooperativa exigente
+pidiendo la recuperación «por» la otra.
 
 `metodosAceptados` **omitido o `null` deja los métodos como estaban** — no los
 reinicia. Es semántica parcial dentro de un PUT, a sabiendas: en un PUT de

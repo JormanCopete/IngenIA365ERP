@@ -251,6 +251,76 @@ public sealed class CentralAuthClient
         }
     }
 
+    // ---------- Recuperación del segundo factor por correo ----------
+
+    /// <summary>
+    /// Pide la recuperación. Va con el challenge token —la contraseña ya está
+    /// acertada— y por eso este endpoint no sirve de oráculo de cuentas.
+    /// </summary>
+    public async Task<InvitationApiResult<RecuperacionMfaPedidaResponse>> PedirRecuperacionMfaAsync(
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<RecuperacionMfaPedidaResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(
+                HttpMethod.Post, "/api/auth/mfa/recovery/request");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<RecuperacionMfaPedidaResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<RecuperacionMfaPedidaResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Completa la recuperación. Anónima: se llega desde el enlace del correo,
+    /// posiblemente en otro navegador. Pide la contraseña otra vez.
+    /// </summary>
+    public async Task<InvitationApiResult<EmptyResponse>> ConfirmarRecuperacionMfaAsync(
+        string token, string password, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                "/api/auth/mfa/recovery/confirm", new { token, password }, ct);
+            return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<EmptyResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Cancela. <b>No manda credenciales de ningún tipo</b>: cancelar tiene que ser
+    /// más fácil que ejecutar, porque quien llega aquí desde el correo está parando
+    /// algo que no pidió.
+    /// </summary>
+    public async Task<InvitationApiResult<EmptyResponse>> CancelarRecuperacionMfaAsync(
+        string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                "/api/auth/mfa/recovery/cancel", new { token }, ct);
+            return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<EmptyResponse>.NetworkError(ex.Message);
+        }
+    }
+
     // ---------- Select tenant ----------
 
     public async Task<InvitationApiResult<SelectTenantResponse>> SelectTenantAsync(
@@ -452,6 +522,15 @@ public sealed record ActiveTenantSummary(
     string TenantName,
     bool IsTenantAdmin,
     bool AdmiteTuMetodo = true);
+
+/// <param name="CorreoEnviado">
+/// Falso si el SMTP falló. Se distingue a proposito: responder «te enviamos un
+/// correo» cuando no salio deja a la persona esperando un mensaje que no existe,
+/// con la solicitud creada y su reloj corriendo. El SMTP es autoalojado: pasa.
+/// </param>
+public sealed record RecuperacionMfaPedidaResponse(
+    DateTime EjecutableDesde,
+    bool CorreoEnviado);
 
 public sealed record TenantSummary(
     Guid TenantPublicId,

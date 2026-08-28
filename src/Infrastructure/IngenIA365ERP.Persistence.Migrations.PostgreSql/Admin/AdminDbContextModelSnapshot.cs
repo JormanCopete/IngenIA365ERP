@@ -252,6 +252,80 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.MfaRecoveryRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<byte[]>("CancelTokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime?>("CanceladaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CentralUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("EjecutableDesde")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EjecutadaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiraEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpSolicitante")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MotivoDeCancelacion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MfaRecoveryRequests", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.PasswordResetToken", b =>
                 {
                     b.Property<int>("Id")
@@ -929,6 +1003,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
                     b.Property<Guid?>("ActivatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowEmailRecovery")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("AllowedMethodsMask")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -951,6 +1030,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Admin
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("text");
+
+                    b.Property<int>("EmailRecoveryDelayHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(24);
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");

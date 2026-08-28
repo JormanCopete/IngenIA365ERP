@@ -82,6 +82,7 @@ internal sealed class RedisLoginAttemptCounter : ILoginAttemptCounter
     {
         AmbitoDeIntentos.Password => "password",
         AmbitoDeIntentos.Mfa => "mfa",
+        AmbitoDeIntentos.RecuperacionMfa => "recuperacion-mfa",
         _ => throw new ArgumentOutOfRangeException(nameof(ambito), ambito, "Ámbito de intentos desconocido."),
     };
 }

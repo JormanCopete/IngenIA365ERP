@@ -1,0 +1,173 @@
+@page "/security/mfa-recovery/confirmar"
+@page "/security/mfa-recovery/cancelar"
+@layout MinimalLayout
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+@inject NavigationManager Nav
+
+@*
+    Las dos landings de los enlaces del correo, en una sola página porque son dos
+    caras de la misma decisión y la ruta es lo único que cambia.
+
+    Cancelar no pide nada: se ejecuta al abrir. Es deliberado — quien llega aquí
+    desde el enlace rojo del correo está parando algo que no pidió, y añadirle un
+    paso más es exactamente cómo se consigue que no lo pare.
+
+    Confirmar sí pide la contraseña, y la pide AQUÍ y no cuando se solicitó: entre
+    una cosa y otra pasan horas o días, y en ese tiempo el enlace puede acabar en
+    otras manos.
+*@
+
+<PageTitle>@(EsCancelar ? "Cancelar recuperación" : "Completar recuperación") — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 520px; margin: calc(var(--gap-xl) * 1.5) auto;">
+
+    @if (EsCancelar)
+    {
+        <h1>Cancelar la recuperación</h1>
+
+        @if (_estado == Estado.Trabajando)
+        {
+            <p>Cancelando…</p>
+        }
+        else if (_estado == Estado.Hecho)
+        {
+            <div class="aviso aviso-ok" role="status">
+                <strong>Cancelada.</strong> Tus autenticadores siguen intactos.
+            </div>
+            <div class="aviso aviso-alerta" role="alert" style="margin-top: var(--pad-lg);">
+                Si no fuiste vos quien pidió esto, <strong>cambiá tu contraseña
+                ahora</strong>: quien lo pidió la sabía.
+            </div>
+            <p style="margin-top: var(--pad-lg);">
+                <NavLink class="boton boton-principal" href="/security/forgot-password">
+                    Cambiar mi contraseña
+                </NavLink>
+            </p>
+        }
+        else if (_estado == Estado.Error)
+        {
+            <div class="aviso aviso-error" role="alert">@_error</div>
+            <p class="texto-tenue">
+                Si ya la habías cancelado, o ya se completó, este enlace deja de
+                servir. No hay nada más que hacer desde aquí.
+            </p>
+        }
+    }
+    else
+    {
+        <h1>Completar la recuperación</h1>
+
+        @if (_estado == Estado.Hecho)
+        {
+            <div class="aviso aviso-ok" role="status">
+                <strong>Listo.</strong> Tus autenticadores anteriores dejaron de servir.
+            </div>
+            <p>
+                Ahora entrá con tu contraseña: el sistema te va a pedir inscribir un
+                autenticador nuevo. <strong>Esto no te devolvió la sesión</strong> —
+                recuperar no es entrar.
+            </p>
+            <p style="margin-top: var(--pad-lg);">
+                <NavLink class="boton boton-principal" href="/security/login">Ir al ingreso</NavLink>
+            </p>
+        }
+        else
+        {
+            <p>
+                Vas a retirar <strong>todos</strong> tus autenticadores: las apps de
+                códigos y las llaves. Después vas a tener que inscribir uno nuevo
+                para poder entrar.
+            </p>
+
+            <EditForm Model="@_modelo" OnValidSubmit="@ConfirmarAsync" FormName="mfaRecoveryConfirm">
+                <label>Tu contraseña</label>
+                <InputText @bind-Value="_modelo.Password" type="password"
+                           autocomplete="current-password" />
+
+                <button type="submit" disabled="@(_estado == Estado.Trabajando)">
+                    @(_estado == Estado.Trabajando ? "Completando…" : "Retirar mis autenticadores")
+                </button>
+            </EditForm>
+
+            @if (_estado == Estado.Error)
+            {
+                <p class="aviso aviso-error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
+            }
+
+            <p class="texto-tenue" style="margin-top: var(--pad-xl);">
+                ¿No fuiste vos? El mismo correo trae un enlace para cancelar esto sin
+                pedirte nada.
+            </p>
+        }
+    }
+</div>
+
+@code {
+    private enum Estado { Esperando, Trabajando, Hecho, Error }
+
+    private sealed class Entrada { public string? Password { get; set; } }
+
+    private readonly Entrada _modelo = new();
+    private Estado _estado = Estado.Esperando;
+    private string? _error;
+
+    private bool EsCancelar =>
+        Nav.Uri.Contains("/mfa-recovery/cancelar", StringComparison.OrdinalIgnoreCase);
+
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    /// <summary>
+    /// Cancelar se dispara solo al abrir. Confirmar no: pide la contraseña primero.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        if (!EsCancelar) return;
+
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _estado = Estado.Error;
+            _error = "El enlace no trae el código de cancelación.";
+            return;
+        }
+
+        _estado = Estado.Trabajando;
+        var r = await AuthClient.CancelarRecuperacionMfaAsync(Token!);
+
+        _estado = r.IsSuccess ? Estado.Hecho : Estado.Error;
+        _error = r.ErrorMessage ?? "Ese enlace ya no sirve.";
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _estado = Estado.Error;
+            _error = "El enlace no trae el código.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_modelo.Password))
+        {
+            _estado = Estado.Error;
+            _error = "Escribí tu contraseña.";
+            return;
+        }
+
+        _estado = Estado.Trabajando;
+        _error = null;
+
+        var r = await AuthClient.ConfirmarRecuperacionMfaAsync(Token!, _modelo.Password!);
+
+        _estado = r.IsSuccess ? Estado.Hecho : Estado.Error;
+        if (!r.IsSuccess)
+        {
+            // El mensaje del servidor distingue «todavía no toca» de «ya no sirve»
+            // de «contraseña incorrecta», y esa diferencia importa: la primera se
+            // resuelve esperando, y decir «no sirve» haría que la persona volviera
+            // a pedirla, reiniciando el reloj cada vez.
+            _error = r.ErrorMessage ?? "No se pudo completar la recuperación.";
+        }
+    }
+}

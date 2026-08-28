@@ -18,6 +18,20 @@ public enum AmbitoDeIntentos
 
     /// <summary>Segundo factor: TOTP y códigos de recuperación.</summary>
     Mfa,
+
+    /// <summary>
+    /// Confirmación de una recuperación del segundo factor por correo, que valida
+    /// la contraseña con el enlace ya en la mano.
+    ///
+    /// <para>
+    /// Ámbito propio y no <see cref="Mfa"/> ni <see cref="Password"/>, por el mismo
+    /// motivo por el que <see cref="Mfa"/> no es <see cref="Password"/>: aquellos
+    /// los resetea un ingreso correcto, y este endpoint es anónimo —se llega desde
+    /// un enlace del correo—, así que compartir ámbito regalaría reintentos a quien
+    /// pueda provocar un reset por otra vía.
+    /// </para>
+    /// </summary>
+    RecuperacionMfa,
 }
 
 /// <summary>

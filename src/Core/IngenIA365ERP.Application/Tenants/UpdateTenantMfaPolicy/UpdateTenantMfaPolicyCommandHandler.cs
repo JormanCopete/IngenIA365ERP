@@ -69,10 +69,24 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
         // mostrando el estado viejo sin un solo error. Y si la fila no existía,
         // se había añadido al ChangeTracker cuatro líneas antes y tampoco se
         // guardaba: el silencio era doble.
+        var recuperacionPedida = request.PermitirRecuperacionPorCorreo ?? policy.AllowEmailRecovery;
+        var demoraPedida = request.HorasDeDemora ?? policy.EmailRecoveryDelayHours;
+
+        if (recuperacionPedida && demoraPedida < TenantMfaPolicy.DemoraMinimaEnHoras)
+        {
+            return Result.Failure<UpdateTenantMfaPolicyResult>(
+                "Validation.TenantMfaPolicy.DemoraInsuficiente",
+                $"La demora mínima es {TenantMfaPolicy.DemoraMinimaEnHoras} hora. Sin espera no " +
+                "hay aviso que llegue a tiempo ni forma de cancelar, y el segundo factor pasaría " +
+                "a valer lo que valga el buzón.");
+        }
+
         var sinCambios =
             !esFilaNueva
             && policy.IsRequired == request.IsRequired
-            && policy.AllowedMethodsMask == mascaraPedida;
+            && policy.AllowedMethodsMask == mascaraPedida
+            && policy.AllowEmailRecovery == recuperacionPedida
+            && policy.EmailRecoveryDelayHours == demoraPedida;
 
         if (sinCambios)
         {
@@ -88,6 +102,7 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
         // si se llamara antes de fijarla podría rechazar una combinación que la
         // misma petición estaba a punto de volver válida.
         policy.PermitirMetodos(mascaraPedida);
+        policy.ConfigurarRecuperacionPorCorreo(recuperacionPedida, demoraPedida);
 
         if (request.IsRequired) policy.Enable(actor, now);
         else policy.Disable(actor, now);
@@ -125,6 +140,8 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
                 {
                     isRequired = request.IsRequired,
                     metodos = ConversionDeMetodosMfa.ALiterales(mascaraPedida),
+                    recuperacionPorCorreo = recuperacionPedida,
+                    horasDeDemora = demoraPedida,
                 }),
                 ChangedFields: cambiaronLosMetodos
                     ? ["IsRequired", "AllowedMethodsMask"]

@@ -34,8 +34,15 @@ internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
     /// cooperativa se leería con el valor por defecto del campo ausente,
     /// simultáneamente en las siete puertas. Y se cura solo, que es lo peor que le
     /// puede pasar a un síntoma: para cuando alguien mira, ya no está.
+    ///
+    /// <para>
+    /// Va por <c>v3</c> desde que el record lleva además la recuperación por
+    /// correo. Se sube el prefijo en CADA campo que se le añade, sin excepción: el
+    /// coste es un minuto de lecturas frías y la alternativa es un fallo que se
+    /// cura solo.
+    /// </para>
     /// </summary>
-    public const string KeyPrefix = "memberships:v2:";
+    public const string KeyPrefix = "memberships:v3:";
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
 
     private readonly IConnectionMultiplexer _redis;
@@ -76,7 +83,13 @@ internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
                 // criterio que la línea de arriba usa para IsRequired, y tiene que
                 // seguir siéndolo — «no hay política» no puede significar «exige» en
                 // una columna y «no acepta nada» en la otra.
-                p != null ? p.AllowedMethodsMask : ConversionDeMetodosMfa.Todos))
+                p != null ? p.AllowedMethodsMask : ConversionDeMetodosMfa.Todos,
+                // Sin fila de política, la recuperación por correo está APAGADA.
+                // Es el criterio opuesto al de los métodos, y a propósito: allí «no
+                // hay política» significa «no restringe», y aquí significaría
+                // «habilita una vía que nadie encendió».
+                p != null && p.AllowEmailRecovery,
+                p != null ? p.EmailRecoveryDelayHours : TenantMfaPolicy.DemoraPorDefectoEnHoras))
             .ToListAsync(ct);
 
         var json = JsonSerializer.Serialize(fresh);

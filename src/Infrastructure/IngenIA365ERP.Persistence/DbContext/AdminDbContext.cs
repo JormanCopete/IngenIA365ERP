@@ -85,6 +85,7 @@ public class AdminDbContext
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
     public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
+    public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
 
     /// <summary>
     /// Credenciales de segundo factor, una tabla con discriminador. Sustituye a la

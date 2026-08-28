@@ -33,6 +33,30 @@ public class TenantMfaPolicy : AuditableEntity
     /// </summary>
     public MetodosMfa AllowedMethodsMask { get; private set; } = ConversionDeMetodosMfa.Todos;
 
+    /// <summary>
+    /// Si esta cooperativa permite recuperar el segundo factor por correo.
+    /// <b>Apagado por defecto</b>, y eso no es prudencia decorativa: encenderlo
+    /// significa aceptar que quien controle un buzón pueda, con la contraseña y un
+    /// día de espera, retirarle el segundo factor a una persona.
+    /// </summary>
+    public bool AllowEmailRecovery { get; private set; }
+
+    /// <summary>
+    /// Cuántas horas espera una solicitud antes de poder ejecutarse. Es lo que
+    /// convierte el ataque de silencioso e instantáneo en ruidoso y con tiempo para
+    /// reaccionar: durante la espera la persona recibe el aviso y puede cancelar de
+    /// un clic.
+    ///
+    /// <para>
+    /// Mínimo <see cref="DemoraMinimaEnHoras"/>. Poner cero equivaldría a no tener
+    /// demora, que es exactamente el diseño que se rechazó.
+    /// </para>
+    /// </summary>
+    public int EmailRecoveryDelayHours { get; private set; } = DemoraPorDefectoEnHoras;
+
+    public const int DemoraPorDefectoEnHoras = 24;
+    public const int DemoraMinimaEnHoras = 1;
+
     public DateTime? ActivatedAt { get; private set; }
     public Guid? ActivatedByUserId { get; private set; }
 
@@ -70,6 +94,33 @@ public class TenantMfaPolicy : AuditableEntity
         }
 
         AllowedMethodsMask = metodos;
+    }
+
+    /// <summary>
+    /// Configura la recuperación por correo.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Si se pide una demora menor que <see cref="DemoraMinimaEnHoras"/> teniéndola
+    /// habilitada. Cero horas no es «recuperación rápida», es el diseño sin demora
+    /// que se descartó: sin espera no hay aviso que llegue a tiempo ni cancelación
+    /// posible, y el segundo factor pasa a valer lo que valga el buzón.
+    /// </exception>
+    public void ConfigurarRecuperacionPorCorreo(bool permitir, int demoraEnHoras)
+    {
+        if (permitir && demoraEnHoras < DemoraMinimaEnHoras)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(demoraEnHoras),
+                demoraEnHoras,
+                $"La demora mínima es {DemoraMinimaEnHoras} hora. Sin espera no hay aviso " +
+                "que llegue a tiempo ni forma de cancelar.");
+        }
+
+        AllowEmailRecovery = permitir;
+
+        // La demora se conserva aunque se apague, para que volver a encender no
+        // reinicie en silencio un valor que alguien eligió.
+        if (permitir) EmailRecoveryDelayHours = demoraEnHoras;
     }
 
     /// <summary>Activa la política. Idempotente: si ya está activa, no hace nada.</summary>

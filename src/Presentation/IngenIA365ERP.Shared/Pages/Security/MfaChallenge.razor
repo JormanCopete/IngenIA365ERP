@@ -78,6 +78,35 @@
         </a>
     </p>
 
+    @* Último recurso, y por eso va el último: los códigos de respaldo entran
+       ahora mismo y no destruyen nada, así que se ofrecen primero. Esta vía
+       espera un día y retira todos los autenticadores. *@
+    @if (_recuperacionPedida is null)
+    {
+        <p style="margin-top: var(--gap-sm); font-size: var(--texto-sm);">
+            <a href="" @onclick="PedirRecuperacionAsync" @onclick:preventDefault>
+                Perdí todos mis autenticadores y no tengo códigos
+            </a>
+        </p>
+    }
+    else
+    {
+        <div class="aviso aviso-info" role="status" style="margin-top: var(--pad-lg);">
+            Te enviamos un correo. La recuperación se podrá completar a partir del
+            <strong>@_recuperacionPedida.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>,
+            y hasta entonces podés cancelarla desde ese mismo correo.
+        </div>
+    }
+
+    @if (_correoNoSalio)
+    {
+        <div class="aviso aviso-error" role="alert">
+            La solicitud quedó registrada, pero <strong>el correo no se pudo
+            enviar</strong>. Avisá a soporte: sin ese correo no tenés los enlaces
+            para completarla ni para cancelarla.
+        </div>
+    }
+
     <p style="margin-top: var(--gap-sm); font-size: var(--texto-sm);">
         <NavLink href="/security/login">Volver al inicio de sesión</NavLink>
     </p>
@@ -94,6 +123,40 @@
 
     /// <summary>Mientras el diálogo del navegador está abierto. Cambia el texto del botón, nada más.</summary>
     private bool _firmando;
+
+    private DateTime? _recuperacionPedida;
+    private bool _correoNoSalio;
+
+    /// <summary>
+    /// Pide la recuperación por correo. Va con el challenge token, así que la
+    /// contraseña ya está acertada — este enlace no es un oráculo de cuentas.
+    /// </summary>
+    private async Task PedirRecuperacionAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var r = await AuthClient.PedirRecuperacionMfaAsync();
+            if (!r.IsSuccess || r.Value is null)
+            {
+                // El servidor explica el motivo real —tu cooperativa no lo permite,
+                // sos el maestro, ya pediste varias hoy— y es más útil que un texto
+                // genérico escrito aquí.
+                _error = r.ErrorMessage ?? "No se pudo pedir la recuperación.";
+                return;
+            }
+
+            _recuperacionPedida = r.Value.EjecutableDesde;
+            _correoNoSalio = !r.Value.CorreoEnviado;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private void ToggleMode()
     {

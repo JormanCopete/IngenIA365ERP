@@ -18,6 +18,7 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
     public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
+    public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
@@ -43,6 +44,7 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<Invitation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<TenantMfaPolicy>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PlatformMfaPolicy>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<MfaRecoveryRequest>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CentralUserLoginAttempt>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PasswordResetToken>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<UserSetting>(b => b.Ignore("RowVersion"));

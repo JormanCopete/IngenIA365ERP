@@ -62,6 +62,19 @@ public static class AuditEventTypes
     /// <summary>Cambio en los métodos que acepta la plataforma para el maestro.</summary>
     public const string PlatformMfaPolicyMethodsChanged = "PlatformMfaPolicy.MethodsChanged";
 
+    // ---------- Recuperación del segundo factor por correo ----------
+    //
+    // Los cuatro son eventos de seguridad de primera línea: describen un intento de
+    // retirarle a alguien su segundo factor. Se separan —pedida, cancelada,
+    // ejecutada, confirmación fallida— porque cada uno significa algo distinto el
+    // día que haya que reconstruir un incidente, y «cancelada» seguida de nada es
+    // exactamente la traza de un ataque que no prosperó.
+
+    public const string MfaRecoveryRequested = "MfaRecovery.Requested";
+    public const string MfaRecoveryCancelled = "MfaRecovery.Cancelled";
+    public const string MfaRecoveryExecuted = "MfaRecovery.Executed";
+    public const string MfaRecoveryConfirmFailed = "MfaRecovery.ConfirmFailed";
+
     // -------------------- Profile + Recovery --------------------
     public const string ProfileMfaEnrolled = "Profile.MfaEnrolled";
     public const string ProfileMfaDisabled = "Profile.MfaDisabled";

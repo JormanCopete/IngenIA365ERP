@@ -37,6 +37,16 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
             .HasConversion<int>()
             .HasDefaultValue(ConversionDeMetodosMfa.Todos);
 
+        builder.Property(e => e.AllowEmailRecovery).HasDefaultValue(false);
+
+        // El default de la BASE tiene que ser 24, no 0. Sin decirlo, EF pone 0 —el
+        // default del int— y toda fila existente quedaría con «cero horas de
+        // espera», que es exactamente el diseño sin demora que se descartó: sin
+        // espera no hay aviso que llegue a tiempo ni cancelación posible, y el
+        // segundo factor pasa a valer lo que valga el buzón.
+        builder.Property(e => e.EmailRecoveryDelayHours)
+            .HasDefaultValue(TenantMfaPolicy.DemoraPorDefectoEnHoras);
+
         builder.Property(e => e.CreatedAt);
 
         builder.Property(e => e.RowVersion).IsRowVersion();

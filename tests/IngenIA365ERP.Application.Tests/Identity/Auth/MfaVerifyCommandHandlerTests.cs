@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Application.Identity.Auth.Login;
 using IngenIA365ERP.Application.Identity.Auth.MfaVerify;
+using IngenIA365ERP.Application.Identity.Auth.Recuperacion;
 using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -97,7 +98,8 @@ public class MfaVerifyCommandHandlerTests
     /// </summary>
     private IEmisorDeSesionTrasSegundoFactor Emisor() =>
         new EmisorDeSesionTrasSegundoFactor(
-            _identity, _memberships, _jwt, _refresh, _politicaPlataforma, _clock);
+            _identity, _memberships, _jwt, _refresh, _politicaPlataforma,
+            Substitute.For<ICanceladorDeRecuperacionesAlEntrar>(), _clock);
 
     private MfaVerifyCommandHandler NewHandler() => new(
         _currentUser, _identity, Emisor(), _audit, _intentos, _clock,
