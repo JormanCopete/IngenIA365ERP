@@ -111,21 +111,22 @@ vez de creerles; el comando está al lado.
 | Rutas REST | ~631 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 719 (718 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 720 (719 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
-**115 de las 719 son de integración**: levantan contenedores y exigen Docker y un
+**116 de las 720 son de integración**: levantan contenedores y exigen Docker y un
 MongoDB accesible en `localhost:27017`. Sin eso fallan por entorno, no por código.
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
-marcada `[Fact(Skip)]`. Pero **el verde tapa ocho métodos más** que hacen `return`
+marcada `[Fact(Skip)]`. Pero **el verde tapa siete métodos más** que hacen `return`
 al principio según una variable de entorno y se cuentan como **pasados** sin haber
 comprobado nada: `AuditPerformanceTests` (`RUN_PERF_TESTS`), `LoginThroughputFact`
-(`RUN_LOAD_TESTS`), cuatro de multi-tenancy (`ERP_TEST_PG`), `PrincipioVI_PublicIdOnly`
-—y `AuditExportPdfSignatureTests`, que es el único que además es un defecto: pega
-**anónima**, recibe 401, lo afirma como el estado esperado y se va en verde, de
-modo que la verificación HMAC de la exportación **no se ha ejecutado nunca**. Es
-una forma de no correr que no aparece en el resumen.
+(`RUN_LOAD_TESTS`), cuatro de multi-tenancy (`ERP_TEST_PG`) y
+`PrincipioVI_PublicIdOnly`. Es una forma de no correr que no aparece en el resumen.
+Eran ocho: `AuditExportPdfSignatureTests` pegaba **anónima**, recibía 401 y lo
+afirmaba como el estado esperado, de modo que la verificación HMAC de la
+exportación no se había ejecutado nunca. Ya corre de verdad, y con la mitad que le
+faltaba —un PDF con un byte cambiado tiene que dar `valid: false`—.
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste
   - `componentes.css` — clases de pantalla (`.pagina`, `.page-header`, `.toolbar`, `.info-card`, `.kpi-card`, `.data-grid`…)
