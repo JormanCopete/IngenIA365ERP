@@ -406,12 +406,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("AllowedMethodsMask")
-                        .HasColumnType("int");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
 
                     b.Property<DateTime?>("ChangedAt")
                         .HasColumnType("datetime2");
@@ -423,13 +426,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -445,17 +450,27 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
 
                     b.Property<string>("Scope")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("PlatformMfaPolicies", "dbo");
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Scope")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ADM_PlatformMfaPolicy_Scope")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("ADM_PlatformMfaPolicy", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.PromoContenido", b =>

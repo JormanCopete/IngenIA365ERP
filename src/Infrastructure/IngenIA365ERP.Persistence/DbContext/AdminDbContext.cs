@@ -136,6 +136,14 @@ public class AdminDbContext
         modelBuilder.ApplyConfiguration(new CentralUserLoginAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetTokenConfiguration());
 
+        // Faltaba, y el aviso de tres líneas más abajo describía exactamente lo
+        // que pasó: sin registrar, EF cae en convención y la tabla salió como
+        // «PlatformMfaPolicies» —fuera del prefijo ADM_ que usa todo este
+        // esquema— y SIN el índice único sobre Scope que es lo único que impide
+        // que una tabla de una sola fila acabe con dos, ni el filtro de borrado
+        // lógico: la política se leía aunque estuviera borrada.
+        modelBuilder.ApplyConfiguration(new PlatformMfaPolicyConfiguration());
+
         // Preferencias de interfaz por usuario. Este contexto NO usa
         // ApplyConfigurationsFromAssembly, así que una configuration que no se
         // registre acá simplemente no existe para EF y la tabla nunca aparece
