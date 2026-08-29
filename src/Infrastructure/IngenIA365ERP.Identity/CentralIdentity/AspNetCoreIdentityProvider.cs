@@ -445,7 +445,13 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
             return false;
 
         // RedeemTwoFactorRecoveryCodeAsync invalida el código en ADM_CentralUserTokens (one-shot).
-        var result = await _userManager.RedeemTwoFactorRecoveryCodeAsync(identity, code.Trim());
+        //
+        // Se normaliza antes de comparar: la comparación de Identity es ordinal, y
+        // sin esto el mismo código tecleado en minúsculas falla como si fuera
+        // incorrecto —y suma al contador de bloqueo. Ver
+        // NormalizacionDelCodigoDeRespaldo.
+        var result = await _userManager.RedeemTwoFactorRecoveryCodeAsync(
+            identity, NormalizacionDelCodigoDeRespaldo.Normalizar(code));
         return result.Succeeded;
     }
 

@@ -40,7 +40,11 @@
                 ahora</strong>: quien lo pidió la sabía.
             </div>
             <p style="margin-top: var(--pad-lg);">
-                <NavLink class="boton boton-principal" href="/security/forgot-password">
+                @* /auth/forgot-password, no /security/. Es la única ruta que
+                   declara ForgotPassword.razor, y aquí llega alguien a quien
+                   acabamos de decirle «cambiá tu contraseña ahora»: un 404 en
+                   este botón deja el consejo sin cumplir. *@
+                <NavLink class="boton boton-principal" href="/auth/forgot-password">
                     Cambiar mi contraseña
                 </NavLink>
             </p>

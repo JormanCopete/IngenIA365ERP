@@ -24,6 +24,25 @@ public sealed record UserListItemDto(
     IReadOnlyList<string> RoleCodes);
 
 /// <summary>Detalle de un usuario individual.</summary>
+/// <param name="IsMfaEnabled">
+/// <c>null</c> = no se sabe. Mismo arreglo que en <see cref="UserListItemDto"/> y
+/// por el mismo motivo: salía de <c>SEC_Users.IsMfaEnabled</c>, cuya única
+/// escritura en todo el código es el seed poniéndola en <c>false</c>. O sea que
+/// este endpoint respondía «segundo factor: no» para <b>todo el mundo</b>,
+/// incluido quien tiene TOTP y passkeys inscritos. Ahora sale de la identidad
+/// central, que es donde vive.
+/// </param>
+/// <param name="LastLoginAt">
+/// También de la identidad central, y también <c>null</c> cuando no se sabe. La
+/// columna homónima de <c>SEC_Users</c> tampoco la escribe nadie.
+/// </param>
+/// <param name="FailedLoginAttempts">
+/// <b>Sigue saliendo de <c>SEC_Users</c> y sigue mintiendo</b>: el contador de
+/// intentos vive en Redis. Se deja como estaba porque volverlo honesto obliga a
+/// cambiar el tipo y a consultar Redis, y eso es un cambio de contrato aparte.
+/// Lo mismo vale para <c>LockoutEndAt</c>, del que además no hay «hasta cuándo»
+/// disponible: el listado sólo puede decir sí/no.
+/// </param>
 public sealed record UserDetailDto(
     Guid PublicId,
     string Username,
@@ -33,7 +52,7 @@ public sealed record UserDetailDto(
     bool IsActive,
     bool IsDeleted,
     bool IsEmailVerified,
-    bool IsMfaEnabled,
+    bool? IsMfaEnabled,
     bool IsSaasOperator,
     bool MustChangePassword,
     DateTime? LastLoginAt,

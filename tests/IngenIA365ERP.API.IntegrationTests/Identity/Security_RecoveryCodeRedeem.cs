@@ -113,9 +113,19 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         Assert.False(string.IsNullOrWhiteSpace(challengeToken));
 
         // 5) Canjear el recovery code → sesión operativa + 9 códigos restantes.
+        //
+        // Se canjea EN MINÚSCULAS Y SIN EL GUION a propósito, no en el formato en
+        // que salió. La comparación de Identity es ordinal, así que sin
+        // normalizar esto responde «código inválido» y además suma al contador de
+        // bloqueo del segundo factor: quien tiene el papel correcto en la mano se
+        // va bloqueando solo. Va aquí, dentro del canje que ya existía, para
+        // demostrarlo sin gastar otro login — el límite es de 10 por minuto.
+        var tecleadoADesgana = recoveryCode.ToLowerInvariant().Replace("-", string.Empty);
+        Assert.NotEqual(recoveryCode, tecleadoADesgana);
+
         using var verifyReq = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/verify")
         {
-            Content = JsonContent.Create(new { code = recoveryCode, useRecoveryCode = true }),
+            Content = JsonContent.Create(new { code = tecleadoADesgana, useRecoveryCode = true }),
         };
         verifyReq.Headers.Authorization = new("Bearer", challengeToken);
         var verifyResp = await http.SendAsync(verifyReq);

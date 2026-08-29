@@ -111,17 +111,21 @@ vez de creerles; el comando está al lado.
 | Rutas REST | ~631 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 702 (701 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 719 (718 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
-**115 de las 702 son de integración**: levantan contenedores y exigen Docker y un
+**115 de las 719 son de integración**: levantan contenedores y exigen Docker y un
 MongoDB accesible en `localhost:27017`. Sin eso fallan por entorno, no por código.
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
-marcada `[Fact(Skip)]`. **No** es la de rendimiento: esa —`AuditPerformanceTests`—
-hace `return` al principio si falta `RUN_PERF_TESTS=1`, así que se cuenta como
-**pasada** sin haber medido nada. Es una forma de no correr que no aparece en el
-resumen; quien confíe en ese verde está confiando en un test que no se ejecutó.
+marcada `[Fact(Skip)]`. Pero **el verde tapa ocho métodos más** que hacen `return`
+al principio según una variable de entorno y se cuentan como **pasados** sin haber
+comprobado nada: `AuditPerformanceTests` (`RUN_PERF_TESTS`), `LoginThroughputFact`
+(`RUN_LOAD_TESTS`), cuatro de multi-tenancy (`ERP_TEST_PG`), `PrincipioVI_PublicIdOnly`
+—y `AuditExportPdfSignatureTests`, que es el único que además es un defecto: pega
+**anónima**, recibe 401, lo afirma como el estado esperado y se va en verde, de
+modo que la verificación HMAC de la exportación **no se ha ejecutado nunca**. Es
+una forma de no correr que no aparece en el resumen.
 - Sistema de diseño en `src/Presentation/IngenIA365ERP.Shared/wwwroot/css/`:
   - `tokens.css` — única fuente de color, densidad, escala y contraste
   - `componentes.css` — clases de pantalla (`.pagina`, `.page-header`, `.toolbar`, `.info-card`, `.kpi-card`, `.data-grid`…)

@@ -66,10 +66,21 @@
     else if (_state == State.Pending && _begin is not null)
     {
         <h1>Configura tu app</h1>
+        @* El QR primero, y el base32 como salida de emergencia.
+           Por aquí pasa TODA la gente de una cooperativa que exige segundo
+           factor, y es la única vez que lo hacen: pedirles teclear treinta y dos
+           caracteres a mano es como se pierden las inscripciones. El dato ya
+           venía en el mismo DTO que la pantalla de perfil —que sí lo pintaba—,
+           sólo que aquí no se usaba. *@
         <ol>
-            <li>Abre tu app de autenticación.</li>
+            <li>Abre tu app de autenticación y agrega una nueva cuenta.</li>
             <li>
-                Agrega el siguiente código secreto:
+                Escaneá este código con tu app:
+                <img src="@_begin.QrPngDataUri" alt="Código QR para configurar el autenticador"
+                     width="220" height="220" />
+                <br />
+                ¿No podés escanearlo? Elegí «ingresar clave manualmente» y escribí
+                este texto:
                 <code style="display: block; padding: var(--pad-sm); background: var(--superficie-0);
                               margin: var(--gap-sm) 0; word-break: break-all;">@_begin.SecretBase32</code>
             </li>
