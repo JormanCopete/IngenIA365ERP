@@ -31,6 +31,70 @@ recomendación.**
 
 ---
 
+## Caso 0 — el despliegue que mueve el llavero (ventana, no incidente)
+
+Éste no ocurre solo: **lo provoca un despliegue concreto**, el que lleva
+`LlaveroDeDataProtection`. Va primero porque es el único que se puede evitar
+del todo, y sólo antes de desplegar.
+
+El llavero pasa a `ADM_DataProtectionKeys`, que nace **vacía**. ASP.NET Core
+genera una clave nueva sin avisar, y el secreto TOTP cifrado con la anterior deja
+de descifrarse. El fallo se traga —se captura la excepción y se devuelve
+`false`—, así que el maestro ve «Código MFA inválido», indistinguible de teclear
+mal, y a los pocos intentos se bloquea.
+
+**Y aquí no hay escape de inscripción.** El login bifurca así:
+
+| Estado del maestro | Respuesta | ¿Salida? |
+|---|---|---|
+| `TwoFactorEnabled = false` | `MfaEnrollmentRequired` | **Sí** — inscribe y entra (con doble login: el ascenso no da sesión con cero membresías) |
+| `TwoFactorEnabled = true` | `MfaRequired` | **No** — pide un código que ya no puede validar |
+
+`Mfa:PlataformaSinRestriccion` **no rescata este caso**: relaja *qué* métodos se
+aceptan, nunca *si* se exige segundo factor.
+
+### La consulta que hay que correr antes de desplegar
+
+Producción es PostgreSQL (`appsettings.Production.json`), no SQL Server:
+
+```bash
+psql -d IngenIA365ERP_Admin -c 'SELECT "Email", "TwoFactorEnabled", ("MfaSecret" IS NOT NULL) AS tiene_secreto FROM dbo."ADM_CentralUsers" WHERE "IsGlobalMasterAdmin" AND NOT "IsDeleted";'
+```
+
+- **`TwoFactorEnabled = false`** → no hay nada que hacer. Cae en la fila con salida.
+- **`TwoFactorEnabled = true`** → hace falta **una** de estas dos, antes de desplegar:
+  1. Tener en la mano un código de respaldo vigente. **Sobreviven al cambio de
+     llavero**: viven en `ADM_CentralUserTokens` y no pasan por DataProtection.
+     Los diez van en **una sola fila**, separados por `;`, así que contar filas
+     no dice cuántos quedan:
+     ```sql
+     SELECT u."Email",
+            coalesce(array_length(string_to_array(t."Value", ';'), 1), 0) AS codigos_restantes
+     FROM dbo."ADM_CentralUsers" u
+     LEFT JOIN dbo."ADM_CentralUserTokens" t
+            ON t."UserId" = u."Id" AND t."Name" = 'RecoveryCodes'
+     WHERE u."IsGlobalMasterAdmin" AND NOT u."IsDeleted";
+     ```
+     Que el número sea mayor que cero **no basta**: hay que tener el papel. Si no
+     aparece por ninguna parte, tratar la opción 2 como obligatoria.
+  2. O moverlo a la fila que sí tiene salida, **antes** del despliegue:
+     ```sql
+     UPDATE dbo."ADM_CentralUsers"
+     SET "TwoFactorEnabled" = false, "MfaSecret" = NULL
+     WHERE "IsGlobalMasterAdmin" AND NOT "IsDeleted";
+     ```
+     Queda desprotegido el rato que va entre esto y el primer login posterior al
+     despliegue. Es corto y es elegido; quedarse fuera no.
+
+### Justo después de desplegar
+
+Entrar como maestro y **completar el ciclo entero**: inscribir, salir, volver a
+entrar, verificar. **Esperar dos logins** — tras inscribir no se recibe sesión,
+porque el ascenso devuelve `null` con cero membresías. Y **guardar los códigos de
+respaldo que muestra la pantalla antes de cerrarla**: se enseñan una sola vez.
+
+---
+
 ## Caso 1 — la política de plataforma lo dejó fuera
 
 Síntoma: el maestro supera su segundo factor y en vez de entrar recibe
@@ -71,28 +135,31 @@ administrativa, y por tanto:
       sistema de la que eso es cierto, y por eso el registro manual no es
       burocracia.
 
-Lo que hay que hacer, en este orden:
+Lo que hay que hacer, en este orden. **PostgreSQL**, que es lo que corre en
+producción; los identificadores van entre comillas porque EF los crea en
+PascalCase:
 
 ```sql
 -- 1) Identificar la cuenta. Confirmar que es la correcta ANTES de seguir.
-SELECT Id, Email, TwoFactorEnabled, IsGlobalMasterAdmin
-FROM ADM_CentralUsers
-WHERE IsGlobalMasterAdmin = 1;
+SELECT "Id", "Email", "TwoFactorEnabled", "IsGlobalMasterAdmin"
+FROM dbo."ADM_CentralUsers"
+WHERE "IsGlobalMasterAdmin" AND NOT "IsDeleted";
 
 -- 2) Retirar sus credenciales. Baja LOGICA, no DELETE: el rastro de qué tenía
 --    y cuándo dejó de tenerlo es parte de poder reconstruir este incidente.
-UPDATE ADM_MfaCredentials
-SET IsDeleted = 1,
-    DeletedAt = SYSUTCDATETIME(),
-    DeletedBy = 'rescate-manual'
-WHERE CentralUserId = @IdDelMaestro AND IsDeleted = 0;
+UPDATE dbo."ADM_MfaCredentials"
+SET "IsDeleted" = true,
+    "DeletedAt" = now() AT TIME ZONE 'utc',
+    "DeletedBy" = 'rescate-manual'
+WHERE "CentralUserId" = :id_del_maestro AND NOT "IsDeleted";
 
 -- 3) Apagar la bandera. Sin esto el login le sigue pidiendo un segundo factor
---    que ya no existe, y queda igual de fuera.
-UPDATE ADM_CentralUsers
-SET TwoFactorEnabled = 0,
-    MfaSecret = NULL
-WHERE Id = @IdDelMaestro;
+--    que ya no existe, y queda igual de fuera: la rama TwoFactorEnabled=true
+--    responde MfaRequired, que NO tiene escape de inscripción.
+UPDATE dbo."ADM_CentralUsers"
+SET "TwoFactorEnabled" = false,
+    "MfaSecret" = NULL
+WHERE "Id" = :id_del_maestro;
 ```
 
 **El sello de seguridad NO se toca en este SQL.** Rotarlo invalidaría todas las
@@ -102,7 +169,9 @@ es motivo para sospecharlo— entonces sí, y además hay que cambiar la contras
 
 ```sql
 -- SOLO si se sospecha compromiso.
-UPDATE ADM_CentralUsers SET SecurityStamp = NEWID() WHERE Id = @IdDelMaestro;
+UPDATE dbo."ADM_CentralUsers"
+SET "SecurityStamp" = gen_random_uuid()::text
+WHERE "Id" = :id_del_maestro;
 ```
 
 Después del rescate, el siguiente login del maestro devuelve
