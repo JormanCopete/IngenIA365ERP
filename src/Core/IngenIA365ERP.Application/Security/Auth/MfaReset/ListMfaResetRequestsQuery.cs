@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Security;
 using MediatR;
@@ -38,13 +39,16 @@ public sealed record MfaResetRequestSummary(
 
 public sealed class ListMfaResetRequestsQueryHandler(
     IApplicationDbContext db,
-    ICurrentUserService currentUser)
+    ICurrentCentralUserContext usuarioCentral)
     : IRequestHandler<ListMfaResetRequestsQuery, Result<ListMfaResetRequestsResult>>
 {
     public async Task<Result<ListMfaResetRequestsResult>> Handle(
         ListMfaResetRequestsQuery request, CancellationToken ct)
     {
-        if (currentUser.UserId is null)
+        // Ver QuienLlamaEnLaCooperativa: leer ICurrentUserService.UserId aquí
+        // devolvía null siempre bajo identidad central, así que la cola de
+        // aprobación respondía 401 a todo el mundo.
+        if (await QuienLlamaEnLaCooperativa.IdAsync(db, usuarioCentral, ct) is null)
         {
             return Result.Failure<ListMfaResetRequestsResult>(
                 "Generic.Unauthorized", "No autenticado.");

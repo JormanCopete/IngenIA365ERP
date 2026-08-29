@@ -11,20 +11,20 @@
         <div class="admin-page">
             <h1>Notificaciones</h1>
 
-            <div class="toolbar" style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+            <div class="toolbar">
                 <label><input type="checkbox" @bind="_onlyUnread" @bind:after="ReloadAsync" /> solo no leídas</label>
                 <label><input type="checkbox" @bind="_includeArchived" @bind:after="ReloadAsync" /> incluir archivadas</label>
-                <button @onclick="ReloadAsync" disabled="@_loading">Refrescar</button>
-                <button @onclick="MarkAllReadAsync" disabled="@(_loading || _unreadCount == 0)">
+                <button class="boton" @onclick="ReloadAsync" disabled="@_loading">Refrescar</button>
+                <button class="boton" @onclick="MarkAllReadAsync" disabled="@(_loading || _unreadCount == 0)">
                     Marcar todas como leídas
                 </button>
-                <span class="muted" style="margin-left:auto;">
+                <span class="muted">
                     @_unreadCount no leídas · @_totalCount totales
                 </span>
             </div>
 
             @if (_loading) { <p>Cargando…</p> }
-            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
             else if (_items.Count == 0) { <p>Sin notificaciones.</p> }
             else
             {
@@ -42,14 +42,14 @@
                     <tbody>
                         @foreach (var n in _items)
                         {
-                            <tr style="@(n.ReadAt is null ? "font-weight:600" : string.Empty)">
+                            <tr style="@(n.ReadAt is null ? "font-weight:var(--peso-fuerte)" : string.Empty)">
                                 <td>@(n.ReadAt is null ? "●" : "")</td>
                                 <td>@n.Type</td>
                                 <td>
                                     @n.Subject
                                     <details>
                                         <summary class="muted">ver detalle</summary>
-                                        <pre style="white-space:pre-wrap;">@n.Body</pre>
+                                        <pre>@n.Body</pre>
                                     </details>
                                 </td>
                                 <td>@n.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
@@ -57,11 +57,11 @@
                                 <td>
                                     @if (n.ReadAt is null)
                                     {
-                                        <button @onclick="() => MarkReadAsync(n.PublicId)">Marcar leída</button>
+                                        <button class="boton" @onclick="() => MarkReadAsync(n.PublicId)">Marcar leída</button>
                                     }
                                     @if (n.ArchivedAt is null)
                                     {
-                                        <button @onclick="() => ArchiveAsync(n.PublicId)">Archivar</button>
+                                        <button class="boton" @onclick="() => ArchiveAsync(n.PublicId)">Archivar</button>
                                     }
                                 </td>
                             </tr>

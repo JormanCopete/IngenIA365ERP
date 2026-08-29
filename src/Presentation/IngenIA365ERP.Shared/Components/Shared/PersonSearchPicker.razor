@@ -15,20 +15,20 @@
     @if (Selected is not null)
     {
         @* Persona ya seleccionada — chip con boton para limpiar *@
-        <div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--ifx-border, #ccc);border-radius:4px;background:var(--ifx-elevated, #f5f5f5);">
-            <span class="e-badge e-badge-info" style="font-size:11px;">@Selected.IdentificationNumber</span>
-            <strong style="flex:1;">@Selected.FullName</strong>
+        <div class="persona-chip">
+            <span class="e-badge e-badge-info">@Selected.IdentificationNumber</span>
+            <strong class="persona-nombre">@Selected.FullName</strong>
             @if (!string.IsNullOrEmpty(Selected.CityName))
             {
-                <span style="color:#888;font-size:12px;">(@Selected.CityName)</span>
+                <span class="texto-tenue">(@Selected.CityName)</span>
             }
             @if (Selected.IsEmployee)
             {
-                <span class="e-badge e-badge-warning" style="font-size:10px;">Empleado</span>
+                <span class="e-badge e-badge-warning">Empleado</span>
             }
             @if (Selected.IsAssociate)
             {
-                <span class="e-badge e-badge-success" style="font-size:10px;">Asociado</span>
+                <span class="e-badge e-badge-success">Asociado</span>
             }
             @if (!HideClearButton)
             {
@@ -46,26 +46,23 @@
 
         @if (_searching)
         {
-            <div style="margin-top:4px;font-size:12px;color:#888;">Buscando...</div>
+            <div class="picker-nota">Buscando...</div>
         }
         else if (_options.Count > 0)
         {
-            <div style="margin-top:4px;border:1px solid var(--ifx-border, #ccc);border-radius:4px;max-height:240px;overflow-y:auto;background:var(--ifx-bg, #fff);">
+            <div class="picker-resultados">
                 @foreach (var p in _options)
                 {
-                    <div @onclick="async () => await HandleSelect(p)"
-                         style="padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--ifx-border, #eee);"
-                         onmouseover="this.style.background='rgba(0,188,212,0.12)'"
-                         onmouseout="this.style.background='transparent'">
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <div>
-                                <span class="e-badge e-badge-info" style="font-size:10px;">@p.IdentificationNumber</span>
-                                <strong style="margin-left:8px;">@p.FullName</strong>
+                    <div class="picker-opcion" @onclick="async () => await HandleSelect(p)">
+                        <div class="picker-opcion-fila">
+                            <div class="picker-opcion-identidad">
+                                <span class="e-badge e-badge-info">@p.IdentificationNumber</span>
+                                <strong>@p.FullName</strong>
                             </div>
-                            <div style="font-size:11px;color:#888;">
+                            <div class="picker-opcion-meta">
                                 @if (!string.IsNullOrEmpty(p.CityName)) { <span>@p.CityName</span> }
-                                @if (p.IsEmployee)  { <span class="e-badge e-badge-warning" style="font-size:10px;margin-left:6px;">Empleado</span> }
-                                @if (p.IsAssociate) { <span class="e-badge e-badge-success" style="font-size:10px;margin-left:6px;">Asociado</span> }
+                                @if (p.IsEmployee)  { <span class="e-badge e-badge-warning">Empleado</span> }
+                                @if (p.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
                             </div>
                         </div>
                     </div>
@@ -74,14 +71,14 @@
         }
         else if (!string.IsNullOrWhiteSpace(_searchText) && _searchText.Length >= 2)
         {
-            <div style="margin-top:4px;font-size:12px;color:#888;">
+            <div class="picker-nota">
                 Sin resultados. La persona debe estar registrada en
                 <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
             </div>
         }
         else if (ShowHelpText)
         {
-            <div style="margin-top:4px;font-size:12px;color:#888;">
+            <div class="picker-nota">
                 La persona debe estar previamente registrada en
                 <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
             </div>

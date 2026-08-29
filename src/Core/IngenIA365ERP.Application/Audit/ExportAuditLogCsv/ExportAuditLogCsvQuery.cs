@@ -47,19 +47,21 @@ public sealed class ExportAuditLogCsvQueryHandler
     : IRequestHandler<ExportAuditLogCsvQuery, Result<AuditCsvExport>>
 {
     private readonly IAuditCsvExporter _exporter;
-    private readonly ICurrentUserService _currentUser;
+    // Misma razon que en QueryAuditLogQueryHandler: el nombre de la base de
+    // auditoria se compone con el PublicId, no con el Id interno.
+    private readonly ICurrentTenantService _cooperativaActual;
 
     public ExportAuditLogCsvQueryHandler(
-        IAuditCsvExporter exporter, ICurrentUserService currentUser)
+        IAuditCsvExporter exporter, ICurrentTenantService cooperativaActual)
     {
         _exporter = exporter;
-        _currentUser = currentUser;
+        _cooperativaActual = cooperativaActual;
     }
 
     public async Task<Result<AuditCsvExport>> Handle(
         ExportAuditLogCsvQuery request, CancellationToken ct)
     {
-        var tenantId = _currentUser.TenantId;
+        var tenantId = _cooperativaActual.TenantId;
         if (string.IsNullOrWhiteSpace(tenantId))
         {
             return Result.Failure<AuditCsvExport>(

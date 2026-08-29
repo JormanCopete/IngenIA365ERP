@@ -1,0 +1,12 @@
+/* Estados de una solicitud de credito. La forma de la pastilla la pone .badge de
+   componentes.css; aca solo el color, que es lo unico propio del dominio.
+
+   Antes esto era un bloque <style> dentro del .razor, duplicado palabra por
+   palabra en SolicitudCredito.razor. Blazor inyecta esos bloques en el
+   documento, asi que ambas definiciones convivian y ganaba la ultima cargada. */
+
+.badge-radicada     { background: var(--alerta);       color: var(--acento-texto); border-color: var(--alerta); }
+.badge-aprobada     { background: var(--exito);        color: var(--acento-texto); border-color: var(--exito); }
+.badge-rechazada    { background: var(--peligro);      color: var(--acento-texto); border-color: var(--peligro); }
+.badge-desembolsada { background: var(--info);         color: var(--acento-texto); border-color: var(--info); }
+.badge-cancelada    { background: var(--borde-fuerte); color: var(--acento-texto); border-color: var(--borde-fuerte); }

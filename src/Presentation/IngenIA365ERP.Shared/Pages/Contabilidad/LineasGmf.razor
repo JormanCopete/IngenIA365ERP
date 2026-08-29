@@ -6,62 +6,64 @@
 
 <PageTitle>Lineas de GMF - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Lineas de GMF</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Lineas de GMF</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="TaxLineItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="LineCode" HeaderText="Codigo Linea" Width="150" />
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+            <GridColumn Field="TaxRate" HeaderText="Tarifa (%)" Width="130" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="180" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as TaxLineItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+
+    <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Codigo Linea *</label>
+                        <SfTextBox @bind-Value="_model.LineCode" Placeholder="Codigo de la linea" />
+                    </div>
+                    <div>
+                        <label>Descripcion *</label>
+                        <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion" />
+                    </div>
+                    <div>
+                        <label>Tarifa (%)</label>
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_model.TaxRate"
+                            Placeholder="0.00" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
+                    </div>
+                    <div>
+                        <label>Cuenta Contable</label>
+                        <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
+                    </div>
+                </div>
+            </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+            <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        </DialogButtons>
+    </SfDialog>
+
+    <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+        Message="Esta seguro de eliminar este registro?" />
 </div>
-
-<SfGrid @ref="_grid" TValue="TaxLineItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="LineCode" HeaderText="Codigo Linea" Width="150" />
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
-        <GridColumn Field="TaxRate" HeaderText="Tarifa (%)" Width="130" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="180" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as TaxLineItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
-
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Codigo Linea *</label>
-                    <SfTextBox @bind-Value="_model.LineCode" Placeholder="Codigo de la linea" />
-                </div>
-                <div>
-                    <label>Descripcion *</label>
-                    <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion" />
-                </div>
-                <div>
-                    <label>Tarifa (%)</label>
-                    <SfNumericTextBox TValue="decimal?" @bind-Value="_model.TaxRate"
-                        Placeholder="0.00" Decimals="4" Format="N4" Min="0" Max="100" Step="0.0001m" />
-                </div>
-                <div>
-                    <label>Cuenta Contable</label>
-                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
-                </div>
-            </div>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
-    </DialogButtons>
-</SfDialog>
-
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
 
 @code {
     private SfGrid<TaxLineItem>? _grid;

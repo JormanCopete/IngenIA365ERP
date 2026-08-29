@@ -60,12 +60,25 @@ public sealed class QueryAuditLogQueryHandler
     : IRequestHandler<QueryAuditLogQuery, Result<PagedResult<AuditLogEntryDto>>>
 {
     private readonly IAuditService _audit;
-    private readonly ICurrentUserService _currentUser;
+    /// <summary>
+    /// La cooperativa sale de aquí y NO de <c>ICurrentUserService.TenantId</c>.
+    ///
+    /// <para>
+    /// No son lo mismo y esa confusión costaba caro: <c>ICurrentUserService</c>
+    /// devuelve el <b>Id interno</b> —«3»— y el escritor de auditoría usa el
+    /// <b>PublicId</b> en formato N. Como el nombre de la base de auditoría se
+    /// compone con ese identificador, el rastro se escribía en
+    /// <c>…_Audit_{guid}</c> y la consola leía <c>…_Audit_3</c>: una base vacía
+    /// que ni siquiera existe. Sin error, sin log, sin nada. La consola mostraba
+    /// «no hay eventos» mientras el rastro se guardaba correctamente al lado.
+    /// </para>
+    /// </summary>
+    private readonly ICurrentTenantService _cooperativaActual;
 
-    public QueryAuditLogQueryHandler(IAuditService audit, ICurrentUserService currentUser)
+    public QueryAuditLogQueryHandler(IAuditService audit, ICurrentTenantService cooperativaActual)
     {
         _audit = audit;
-        _currentUser = currentUser;
+        _cooperativaActual = cooperativaActual;
     }
 
     public async Task<Result<PagedResult<AuditLogEntryDto>>> Handle(
@@ -74,7 +87,7 @@ public sealed class QueryAuditLogQueryHandler
         // Aislamiento por tenant (FR-004): el TenantId SIEMPRE viene del
         // claim del usuario actual, NUNCA del cuerpo del query. Sin tenant
         // no hay query — devuelve 401-equivalente vía envelope.
-        var tenantId = _currentUser.TenantId;
+        var tenantId = _cooperativaActual.TenantId;
         if (string.IsNullOrWhiteSpace(tenantId))
         {
             return Result.Failure<PagedResult<AuditLogEntryDto>>(

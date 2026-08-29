@@ -1,10 +1,14 @@
 using System.Text.Json;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using StackExchange.Redis;
 
 namespace IngenIA365ERP.Caching.Services.Security;
 
-internal sealed class RedisPermissionClaimsCache(IConnectionMultiplexer redis) : IPermissionClaimsCache
+internal sealed class RedisPermissionClaimsCache(
+    IConnectionMultiplexer redis,
+    ITenantCacheSlots ranuras,
+    ICurrentTenantService cooperativaActual) : IPermissionClaimsCache
 {
     private const string Prefix = "perms:";
     private const string InvalidateChannel = "perms:invalidate";
@@ -15,20 +19,21 @@ internal sealed class RedisPermissionClaimsCache(IConnectionMultiplexer redis) :
 
     public async Task<IReadOnlyList<string>?> GetAsync(int userId, string tenantId, CancellationToken ct)
     {
-        var db = redis.GetDatabase();
+        var db = redis.GetDatabase(await ranuras.RanuraDeAsync(tenantId, ct));
         var raw = await db.StringGetAsync(Key(userId, tenantId));
         return raw.IsNullOrEmpty ? null : JsonSerializer.Deserialize<List<string>>((string)raw!);
     }
 
-    public Task SetAsync(int userId, string tenantId, IReadOnlyList<string> permissions, CancellationToken ct)
+    public async Task SetAsync(
+        int userId, string tenantId, IReadOnlyList<string> permissions, CancellationToken ct)
     {
-        var db = redis.GetDatabase();
-        return db.StringSetAsync(Key(userId, tenantId), JsonSerializer.Serialize(permissions), Ttl);
+        var db = redis.GetDatabase(await ranuras.RanuraDeAsync(tenantId, ct));
+        await db.StringSetAsync(Key(userId, tenantId), JsonSerializer.Serialize(permissions), Ttl);
     }
 
     public async Task InvalidateAsync(int userId, string tenantId, CancellationToken ct)
     {
-        var db = redis.GetDatabase();
+        var db = redis.GetDatabase(await ranuras.RanuraDeAsync(tenantId, ct));
         await db.KeyDeleteAsync(Key(userId, tenantId));
         // Notifica a otras instancias para que purguen su cache local si la tienen.
         await redis.GetSubscriber().PublishAsync(RedisChannel.Literal(InvalidateChannel), $"{tenantId}:{userId}");
@@ -36,28 +41,55 @@ internal sealed class RedisPermissionClaimsCache(IConnectionMultiplexer redis) :
 
     public async Task InvalidateAllForTenantAsync(string tenantId, CancellationToken ct)
     {
-        var server = redis.GetServer(redis.GetEndPoints().First());
-        var keys = server.Keys(pattern: TenantPattern(tenantId)).ToArray();
-        if (keys.Length > 0)
-            await redis.GetDatabase().KeyDeleteAsync(keys);
+        // El argumento `database` NO es opcional en la practica. Sin el, el barrido
+        // mira la base por defecto de la conexion —la 0— y con las claves viviendo
+        // en la base de su cooperativa encontraria cero: la invalidacion seria un
+        // no-op mudo, y los permisos revocados se seguirian sirviendo media hora.
+        var ranura = await ranuras.RanuraDeAsync(tenantId, ct);
+        await BorrarAsync(ranura, TenantPattern(tenantId));
+
         await redis.GetSubscriber().PublishAsync(RedisChannel.Literal(InvalidateChannel), $"{tenantId}:*");
     }
 
     /// <summary>
-    /// Invalida por rol publicando una señal global. Los nodos suscritos
-    /// purgan su cache; la siguiente lectura repuebla desde BD. No purgamos
-    /// claves específicas porque eso requiere conocer qué usuarios tienen el
-    /// rol (lo sabe el handler, no el cache).
+    /// Borra por patron dentro de UNA base logica. El canal de anuncio sigue siendo
+    /// global: el pub/sub de Redis no esta acotado por base, asi que separar las
+    /// claves no separa las notificaciones.
+    /// </summary>
+    private async Task BorrarAsync(int ranura, string patron)
+    {
+        var server = redis.GetServer(redis.GetEndPoints().First());
+        var keys = server.Keys(database: ranura, pattern: patron).ToArray();
+        if (keys.Length > 0)
+        {
+            await redis.GetDatabase(ranura).KeyDeleteAsync(keys);
+        }
+    }
+
+    /// <summary>
+    /// Invalida el caché de permisos tras cambiar un rol.
+    ///
+    /// <para>
+    /// Antes barría <c>perms:*</c> entero, o sea el caché de TODAS las
+    /// cooperativas por un cambio en una. Ahora se acota a la cooperativa en
+    /// curso, que es de donde es el rol: quien llama a esto —crear, actualizar o
+    /// borrar un rol— siempre opera dentro de una. Es a la vez correcto y menos
+    /// destructivo.
+    /// </para>
+    ///
+    /// <para>
+    /// No se purgan claves de usuarios concretos porque saber quién tiene el rol
+    /// es cosa del handler, no del caché.
+    /// </para>
     /// </summary>
     public async Task InvalidateRoleAsync(int roleId, CancellationToken ct)
     {
-        // Estrategia simple Phase 0: invalida toda la cache; los datos
-        // se repueblan a demanda. Para una base con muchos tenants se puede
-        // afinar publicando role:{id} y que el subscriber resuelva los users.
-        var server = redis.GetServer(redis.GetEndPoints().First());
-        var keys = server.Keys(pattern: $"{Prefix}*").ToArray();
-        if (keys.Length > 0)
-            await redis.GetDatabase().KeyDeleteAsync(keys);
+        var tenantId = cooperativaActual.TenantId;
+        if (!string.IsNullOrWhiteSpace(tenantId))
+        {
+            await BorrarAsync(await ranuras.RanuraDeAsync(tenantId, ct), TenantPattern(tenantId));
+        }
+
         await redis.GetSubscriber().PublishAsync(
             RedisChannel.Literal(InvalidateChannel), $"role:{roleId}");
     }

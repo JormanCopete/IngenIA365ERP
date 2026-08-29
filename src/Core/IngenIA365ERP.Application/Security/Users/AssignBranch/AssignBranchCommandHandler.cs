@@ -10,15 +10,18 @@ namespace IngenIA365ERP.Application.Security.Users.AssignBranch;
 public sealed class AssignBranchCommandHandler : IRequestHandler<AssignBranchCommand, Result>
 {
     private readonly IApplicationDbContext _db;
+    private readonly IAdminDbContext _admin;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeService _clock;
 
     public AssignBranchCommandHandler(
         IApplicationDbContext db,
+        IAdminDbContext admin,
         ICurrentUserService currentUser,
         IDateTimeService clock)
     {
         _db = db;
+        _admin = admin;
         _currentUser = currentUser;
         _clock = clock;
     }
@@ -28,7 +31,9 @@ public sealed class AssignBranchCommandHandler : IRequestHandler<AssignBranchCom
         var user = await _db.Users.FirstOrDefaultAsync(u => u.PublicId == request.UserPublicId, ct);
         if (user is null) return Result.Failure("Generic.NotFound", "El usuario no existe.");
 
-        var branch = await _db.TenantBranches
+        // Las sucursales viven en la base administrativa (ADM_Branches), no en la
+        // operativa. La replica que habia aqui estaba siempre vacia.
+        var branch = await _admin.TenantBranches
             .FirstOrDefaultAsync(b => b.PublicId == request.BranchPublicId, ct);
         if (branch is null) return Result.Failure("Generic.NotFound", "La sucursal no existe.");
 

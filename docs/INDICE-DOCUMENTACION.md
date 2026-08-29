@@ -19,7 +19,7 @@
 ### Fase 0: Fundamentos
 | Archivo | Descripción |
 |---|---|
-| `.specify/memory/constitution.md` | Constitución del proyecto — doce principios vinculantes (Spec-First, Clean Architecture, CQRS + MediatR, Multi-tenancy, Person centralizada, PublicId, Soft-delete + auditoría, Validación dual, Errores visibles, SIPLA/SARLAFT, Inmutabilidad contable, Migraciones idempotentes). v1.0.0 — Ratificada 2026-05-03. |
+| `.specify/memory/constitution.md` | Constitución del proyecto — doce principios vinculantes (Spec-First, Clean Architecture, CQRS + MediatR, Multi-tenancy, Person centralizada, PublicId, Soft-delete + auditoría, Validación dual, Errores visibles, SIPLA/SARLAFT, Inmutabilidad contable, Migraciones idempotentes). **v2.0.0** — Ratificada 2026-05-03, enmendada 2026-08-22 y corregida 2026-08-25: el Principio IV pasó de esquema por cooperativa a **una base de datos por cooperativa**, con alcance en SQL, MongoDB y Redis. |
 | `specs/001-cimientos-tecnicos/spec.md` | Spec funcional de la Fase 0 — 7 user stories, FRs y success criteria. |
 | `specs/001-cimientos-tecnicos/plan.md` | Plan técnico de implementación (Application/Infrastructure/Presentation). |
 | `specs/001-cimientos-tecnicos/research.md` | Investigación previa: librerías evaluadas, alternativas descartadas. |
@@ -30,6 +30,10 @@
 | `docs/operaciones/dev-environment.md` | Cómo levantar el stack dev local (`docker compose -f docker/dev.yml`). |
 | `docs/operaciones/slo.md` | **Service Level Objectives** — 99.5 % mensual, ventanas, error budget (T134). |
 | `docs/operaciones/runbook-fase0.md` | **Runbook** de incidentes típicos: lockout, SMTP, Mongo down, rotación de claves (T135). |
+| `docs/operaciones/despliegue-rediseno-mfa.md` | **El documento a tener delante el día del despliegue.** Producción no tiene nada del rediseño del segundo factor: son 9 migraciones administrativas, una de datos y otra que mueve el llavero. Lleva delante las tres consultas que hay que correr antes, las dos variables sin las cuales la API no arranca, el orden, y por qué el rollback es volver la imagen dejando la base adelantada. |
+| `docs/operaciones/llavero-dataprotection.md` | **Leer antes de desplegar el llavero en base.** Qué cifra DataProtection (segundos factores y clave de cada adjunto) y por qué se perdía en cada rotación de pod. Lleva delante la decisión: si no hay adjuntos que duelan, aceptar la pérdida es la respuesta correcta y **no cuesta ningún paso manual**. El rescate pod a pod es la otra rama, no el camino por defecto. |
+| `docs/operaciones/rescate-del-administrador-maestro.md` | **La única cuenta que nadie más puede rescatar.** Por qué las tres vías de recuperación fallan para el maestro, el interruptor de configuración que lo saca de una política de plataforma mal puesta, y el SQL de último recurso — con backup y segundo par de ojos. |
+| `docs/operaciones/retirada-de-mfasecret.md` | **Pendiente, no ejecutado.** Cómo vaciar la columna heredada del segundo factor y retirar el modo compatibilidad. Destructiva: exige backup y segundo revisor (Principio XII). El orden es contraintuitivo y está explicado. |
 
 ### Fase 1: Consolidación VB.NET → C# (COMPLETADA)
 | Archivo | Descripción |
@@ -125,6 +129,19 @@ con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
 | Archivo | Descripción |
 |---|---|
 | REPORTE-FINAL-MIGRACION.md | Resumen completo Fases 1-3 |
+
+## Operaciones e Infraestructura
+
+| Archivo | Ubicación | Descripción |
+|---|---|---|
+| **estado-y-pendientes.md** | docs/operaciones/ | **Estado de los tres ambientes y lista de pendientes priorizada. Empezar por acá.** |
+| despliegue-infraestructura.md | docs/operaciones/ | Diseño de la infraestructura y bitácora de instalación |
+| migracion-dns-cloudflare.md | docs/operaciones/ | Guía paso a paso de la migración de DNS |
+| politica-iam-respaldos.json | docs/operaciones/ | Política IAM del usuario de respaldos (permisos mínimos) |
+
+Los manifiestos de Kubernetes, el diseño de respaldos (`backups.md`) y el manual
+operativo de MongoDB (`mongo-replica-set.md`) viven en el repositorio **privado**
+`ingenia365-gitops`.
 
 ## Base de Datos
 | Archivo | Ubicación | Descripción |

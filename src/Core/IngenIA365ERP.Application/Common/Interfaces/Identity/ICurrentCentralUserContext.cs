@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Entities.Admin;
+
 namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 
 /// <summary>
@@ -44,6 +46,20 @@ public interface ICurrentCentralUserContext
 
     /// <summary>Claim <c>mfa_verified</c> — true si el MFA del usuario ya pasó en esta sesión.</summary>
     bool MfaVerified { get; }
+
+    /// <summary>
+    /// Claim <c>mfa_method</c> — con QUÉ método se superó el segundo factor en esta
+    /// sesión. <c>Ninguno</c> cuando el claim no viene, que cubre tres casos con la
+    /// misma respuesta: no tiene segundo factor, entró con un código de
+    /// recuperación, o el token se emitió antes de que este claim existiera.
+    ///
+    /// <para>
+    /// Es distinto de <see cref="MfaVerified"/>, que sólo dice SI se superó. Esa
+    /// respuesta ya no basta: con dos métodos, una cooperativa puede aceptar uno y
+    /// no el otro.
+    /// </para>
+    /// </summary>
+    MetodosMfa MetodoMfa { get; }
 
     /// <summary>true si hay un JWT central válido autenticado (CentralUserId no es null).</summary>
     bool IsAuthenticated { get; }

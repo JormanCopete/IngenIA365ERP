@@ -8,9 +8,9 @@
 
 <PageTitle>Asociados - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Asociados</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar por documento, nombre o apellido..." @bind-Value="_search"
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
@@ -41,7 +41,7 @@
                     var label = a?.Status == "A" ? "Activo"
                               : a?.Status == "I" ? "Inactivo"
                               : a?.Status == "R" ? "Retirado" : a?.Status;
-                    <span class="@css" style="padding:2px 8px;font-size:11px;">@label</span>
+                    <span class="@css" style="padding:2px var(--pad-sm);font-size:var(--texto-xs);">@label</span>
                 }
             </Template>
         </GridColumn>
@@ -62,8 +62,8 @@
           Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:16px;">
-                <p style="margin-bottom:12px;color:#666;">
+            <div class="panel-pestana">
+                <p class="muted" style="margin-bottom:var(--gap-md);">
                     Para registrar un asociado, primero seleccione la persona.
                     Si la persona aun no existe, debe crearla en
                     <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
@@ -88,7 +88,7 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Datos Persona" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                            <div class="rejilla-campos panel-pestana">
                                 <div>
                                     <label>Tipo Doc.</label>
                                     <SfDropDownList TValue="string" TItem="CodeOption"
@@ -98,18 +98,18 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Numero Documento <span style="color:red">*</span></label>
+                                    <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.TaxId" />
                                 </div>
                                 <div>
-                                    <label>Nombres <span style="color:red">*</span></label>
+                                    <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.FirstName" />
                                 </div>
                                 <div>
-                                    <label>Apellidos <span style="color:red">*</span></label>
+                                    <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
                                     <SfTextBox @bind-Value="_personModel.LastName" />
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Razon Social (juridica)</label>
                                     <SfTextBox @bind-Value="_personModel.BusinessName" />
                                 </div>
@@ -145,7 +145,7 @@
                                     <label>Fecha Nacimiento</label>
                                     <SfDatePicker TValue="DateTime?" @bind-Value="_personModel.DateOfBirthDt" Format="dd/MM/yyyy" />
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Direccion</label>
                                     <SfTextBox @bind-Value="_personModel.Address" />
                                 </div>
@@ -167,7 +167,7 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Afiliacion" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                            <div class="rejilla-campos panel-pestana">
                                 <div>
                                     <label>Fecha de Ingreso</label>
                                     <SfDatePicker TValue="DateTime?" @bind-Value="_associateModel.JoinDateDt" Format="dd/MM/yyyy" />
@@ -226,8 +226,8 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Empleo Externo" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <div style="grid-column:span 2;">
+                            <div class="rejilla-campos panel-pestana">
+                                <div class="campo-ancho">
                                     <label>Empresa donde trabaja el asociado</label>
                                     <SfTextBox @bind-Value="_associateModel.ExternalEmployerName"
                                                Placeholder="Nombre de la empresa empleadora" />
@@ -250,7 +250,7 @@
                                     <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ExternalSeverance"
                                                       Format="N2" Min="0" />
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Fondo de Cesantias</label>
                                     <SfTextBox @bind-Value="_associateModel.ExternalSeveranceFund" />
                                 </div>
@@ -262,8 +262,8 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Banca Deposito" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <p style="grid-column:span 2;color:#888;font-size:12px;">
+                            <div class="rejilla-campos panel-pestana">
+                                <p class="campo-ancho hint">
                                     Cuenta donde se depositan excedentes y aportes al asociado.
                                 </p>
                                 <div>
@@ -284,7 +284,7 @@
                                         <DropDownListFieldSettings Text="Name" Value="Value" />
                                     </SfDropDownList>
                                 </div>
-                                <div style="grid-column:span 2;">
+                                <div class="campo-ancho">
                                     <label>Numero de Cuenta</label>
                                     <SfTextBox @bind-Value="_associateModel.DepositBankAccountNumber" />
                                 </div>
@@ -296,8 +296,8 @@
                     <TabItem>
                         <ChildContent><TabHeader Text="Conyuge (Empleo)" /></ChildContent>
                         <ContentTemplate>
-                            <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                <div style="grid-column:span 2;">
+                            <div class="rejilla-campos panel-pestana">
+                                <div class="campo-ancho">
                                     <label>Empresa donde trabaja el conyuge</label>
                                     <SfTextBox @bind-Value="_associateModel.SpouseEmployer" />
                                 </div>

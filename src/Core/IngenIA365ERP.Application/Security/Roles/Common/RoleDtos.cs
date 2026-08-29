@@ -27,4 +27,7 @@ public static class RoleErrorCodes
     public const string PermissionsInvalid = "Security.Roles.PermissionsInvalid";
     public const string CannotDeleteBuiltIn = "Security.Roles.CannotDeleteBuiltIn";
     public const string CannotDeleteWithUsers = "Security.Roles.CannotDeleteWithUsers";
+
+    /// <summary>El cambio dejaría a la cooperativa sin nadie capaz de arreglar los roles.</summary>
+    public const string LastAdminLockout = "Security.Roles.LastAdminLockout";
 }

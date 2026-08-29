@@ -6,107 +6,109 @@
 
 <PageTitle>Saldos de Cuentas - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Saldos de Cuentas</h3>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Saldos de Cuentas</h3>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
+    </div>
 
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Anio</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
-                          CssClass="e-small" Width="100px" />
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Anio</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
+                              CssClass="e-small" Width="100px" />
+        </div>
+        <div>
+            <label>Mes</label>
+            <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Cuenta Desde</label>
+            <SfTextBox @bind-Value="_accountFrom" Placeholder="Ej: 1" CssClass="e-small" Width="130px" />
+        </div>
+        <div>
+            <label>Cuenta Hasta</label>
+            <SfTextBox @bind-Value="_accountTo" Placeholder="Ej: 9999" CssClass="e-small" Width="130px" />
+        </div>
+        <div>
+            <label>Nivel</label>
+            <SfNumericTextBox TValue="int?" @bind-Value="_level" Min="1" Max="10" Step="1"
+                              CssClass="e-small" Width="80px" Placeholder="Todos" />
+        </div>
+        <div>
+            <label>Sucursal</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Centro Costo</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Consultar</SfButton>
     </div>
-    <div>
-        <label>Mes</label>
-        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Cuenta Desde</label>
-        <SfTextBox @bind-Value="_accountFrom" Placeholder="Ej: 1" CssClass="e-small" Width="130px" />
-    </div>
-    <div>
-        <label>Cuenta Hasta</label>
-        <SfTextBox @bind-Value="_accountTo" Placeholder="Ej: 9999" CssClass="e-small" Width="130px" />
-    </div>
-    <div>
-        <label>Nivel</label>
-        <SfNumericTextBox TValue="int?" @bind-Value="_level" Min="1" Max="10" Step="1"
-                          CssClass="e-small" Width="80px" Placeholder="Todos" />
-    </div>
-    <div>
-        <label>Sucursal</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Centro Costo</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Consultar</SfButton>
-</div>
 
-<SfGrid @ref="_grid" TValue="BalanceItem" DataSource="_items" AllowPaging="true" AllowSorting="true"
-        AllowFiltering="true" AllowExcelExport="true" Height="500">
-    <GridPageSettings PageSize="50" />
-    <GridColumns>
-        <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
-        <GridColumn Field="AccountName" HeaderText="Nombre" Width="280" />
-        <GridColumn Field="Level" HeaderText="Nivel" Width="70" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Nature" HeaderText="Naturaleza" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="PreviousBalance" HeaderText="Saldo Anterior" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Debits" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Credits" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="NewBalance" HeaderText="Nuevo Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right">
-            <Template>
-                @{
-                    var item = context as BalanceItem;
-                    var color = item?.NewBalance >= 0 ? "inherit" : "red";
-                }
-                <span style="color:@color;font-weight:bold;">@item?.NewBalance.ToString("N2")</span>
-            </Template>
-        </GridColumn>
-    </GridColumns>
-    <GridAggregates>
-        <GridAggregate>
-            <GridAggregateColumns>
-                <GridAggregateColumn Field="PreviousBalance" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-                <GridAggregateColumn Field="Debits" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-                <GridAggregateColumn Field="Credits" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-                <GridAggregateColumn Field="NewBalance" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-            </GridAggregateColumns>
-        </GridAggregate>
-    </GridAggregates>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="BalanceItem" DataSource="_items" AllowPaging="true" AllowSorting="true"
+            AllowFiltering="true" AllowExcelExport="true" Height="500">
+        <GridPageSettings PageSize="50" />
+        <GridColumns>
+            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
+            <GridColumn Field="AccountName" HeaderText="Nombre" Width="280" />
+            <GridColumn Field="Level" HeaderText="Nivel" Width="70" TextAlign="TextAlign.Center" />
+            <GridColumn Field="Nature" HeaderText="Naturaleza" Width="100" TextAlign="TextAlign.Center" />
+            <GridColumn Field="PreviousBalance" HeaderText="Saldo Anterior" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Debits" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Credits" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="NewBalance" HeaderText="Nuevo Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right">
+                <Template>
+                    @{
+                        var item = context as BalanceItem;
+                        var color = item?.NewBalance >= 0 ? "inherit" : "var(--peligro-texto)";
+                    }
+                    <span style="color:@color;font-weight:bold;">@item?.NewBalance.ToString("N2")</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="PreviousBalance" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Debits" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Credits" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="NewBalance" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+</div>
 
 @code {
     private SfGrid<BalanceItem>? _grid;

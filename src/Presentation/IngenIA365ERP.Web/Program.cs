@@ -64,10 +64,18 @@ builder.Services.AddScoped<IFormDirtyStateService, InMemoryFormDirtyStateService
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.InvitationClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Puente con navigator.credentials (passkeys). Va en los dos hosts porque el
+// prerender del servidor instancia las mismas pantallas; ahí devuelve
+// «no disponible» y el botón aparece recién en el primer render interactivo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.WebAuthnInterop>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MembershipsClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.SaasAdminClient>();
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddCascadingAuthenticationState();

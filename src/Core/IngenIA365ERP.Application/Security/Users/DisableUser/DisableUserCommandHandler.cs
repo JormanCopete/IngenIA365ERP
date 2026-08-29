@@ -1,4 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Security.Users.Common;
@@ -13,17 +15,29 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeService _clock;
     private readonly IRefreshTokenStore? _refreshStore;
+    private readonly IAdminDbContext _admin;
+    private readonly ICurrentTenantService _cooperativaActual;
+    private readonly ICentralIdentityProvider _identidadCentral;
+    private readonly IMembershipChangedNotifier? _avisoDeMembresia;
 
     public DisableUserCommandHandler(
         IApplicationDbContext db,
+        IAdminDbContext admin,
         ICurrentUserService currentUser,
+        ICurrentTenantService cooperativaActual,
+        ICentralIdentityProvider identidadCentral,
         IDateTimeService clock,
-        IRefreshTokenStore? refreshStore = null)
+        IRefreshTokenStore? refreshStore = null,
+        IMembershipChangedNotifier? avisoDeMembresia = null)
     {
         _db = db;
+        _admin = admin;
         _currentUser = currentUser;
+        _cooperativaActual = cooperativaActual;
+        _identidadCentral = identidadCentral;
         _clock = clock;
         _refreshStore = refreshStore;
+        _avisoDeMembresia = avisoDeMembresia;
     }
 
     public async Task<Result> Handle(DisableUserCommand request, CancellationToken ct)
@@ -79,6 +93,53 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
             }
         }
 
+        await RevocarMembresiaAsync(user.Email ?? user.Username, now, ct);
+
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Corta también el acceso CENTRAL a esta cooperativa.
+    ///
+    /// <para>
+    /// Antes esto sólo marcaba la fila de <c>SEC_Users</c> y revocaba los tokens de
+    /// refresco operativos. Pero el acceso valida contra la identidad central y las
+    /// sesiones vivas son las centrales: la persona seguía entrando y seguía
+    /// recibiendo un token con esta cooperativa activa. El botón decía
+    /// «deshabilitado» y no deshabilitaba nada.
+    /// </para>
+    ///
+    /// <para>
+    /// Se revoca la <b>membresía</b>, no la identidad: esa persona puede pertenecer
+    /// a otras cooperativas y borrarla del todo la echaría de todas. Lo que se
+    /// quita es su acceso a ésta.
+    /// </para>
+    ///
+    /// <para>
+    /// Si algo falla aquí no se deshace lo anterior: dejar al usuario deshabilitado
+    /// en la cooperativa y avisar es mejor que revertir y dejarlo dentro.
+    /// </para>
+    /// </summary>
+    private async Task RevocarMembresiaAsync(string? correo, DateTime ahora, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(correo)) return;
+        if (!Guid.TryParse(_cooperativaActual.TenantId, out var cooperativa)) return;
+
+        var central = await _identidadCentral.FindByEmailAsync(correo, ct);
+        if (central is null) return;
+
+        var membresia = await _admin.TenantMemberships
+            .FirstOrDefaultAsync(
+                m => m.CentralUserId == central.Id && m.TenantId == cooperativa, ct);
+
+        if (membresia is null || membresia.Status != MembershipStatus.Active) return;
+
+        membresia.Revoke(byUserId: central.Id, ahora);
+        await _admin.SaveChangesAsync(ct);
+
+        if (_avisoDeMembresia is not null)
+        {
+            await _avisoDeMembresia.PublishAsync(membresia.CentralUserId, ct);
+        }
     }
 }

@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # ============================================================
 # IngenIA365ERP - Script de inicializacion para desarrollo
 # Orquesta la creacion de BD, schemas y seed data

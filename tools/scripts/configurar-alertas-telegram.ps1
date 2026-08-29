@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # configurar-alertas-telegram.ps1 - Hace que las alertas de Prometheus lleguen
 # efectivamente a alguien.
 #

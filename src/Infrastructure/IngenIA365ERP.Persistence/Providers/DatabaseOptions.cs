@@ -83,18 +83,12 @@ public sealed class DatabaseOptions
     /// </summary>
     public static string DeriveAdminConnectionString(string connectionString, DatabaseProvider provider)
     {
-        var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-        var dbKey = builder.ContainsKey("Database") ? "Database"
-                  : builder.ContainsKey("Initial Catalog") ? "Initial Catalog"
-                  : null;
-
-        if (dbKey is null)
-            throw new InvalidOperationException(
+        var catalogo = ConnectionStringTargeting.CatalogoDe(connectionString)
+            ?? throw new InvalidOperationException(
                 "[Database.ConnectionStringMissing] No fue posible derivar la cadena admin: la cadena " +
                 "operativa no declara 'Database'/'Initial Catalog'. Configure Database:AdminConnectionStrings explícitamente.");
 
         var suffix = provider == DatabaseProvider.PostgreSql ? "_admin" : "_Admin";
-        builder[dbKey] = $"{builder[dbKey]}{suffix}";
-        return builder.ConnectionString;
+        return ConnectionStringTargeting.ConCatalogo(connectionString, catalogo + suffix);
     }
 }

@@ -38,7 +38,7 @@ public class DisableMfaCommandHandlerTests
     }
 
     private DisableMfaCommandHandler NewHandler() => new(
-        _currentUser, _identity, _db, _memberships,
+        _currentUser, _identity, _memberships,
         Substitute.For<IAuditAppendOnlyWriter>(),
         Substitute.For<IDateTimeService>(),
         NullLogger<DisableMfaCommandHandler>.Instance);

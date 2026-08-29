@@ -52,9 +52,28 @@ public class TenantResolutionMiddleware
         "/api/invitations/",
         "/api/saas/",
         "/api/admin",
-        "/api/profile/mfa/enroll",
-        "/api/profile/mfa/confirm",
+        // TODO el subárbol del segundo factor, y no dos rutas sueltas.
+        //
+        // Estaban enumeradas /enroll y /confirm, que eran las únicas que existían.
+        // Desde entonces se añadieron el alta de passkey (/webauthn/begin y
+        // /confirm) y la gestión de credenciales, y ninguna entró en la lista: con
+        // un token de inscripción —que por definición no tiene cooperativa
+        // elegida— este middleware las cortaba con 401 antes de llegar al handler.
+        // El síntoma era «Session.TenantNotSelected» en la pantalla que te obliga
+        // a inscribir un segundo factor, que no menciona ninguna cooperativa.
+        //
+        // El subárbol entero es exento con razón: cada uno de esos endpoints opera
+        // sobre la identidad del token y sobre la base administrativa, nunca sobre
+        // datos de una cooperativa. Y el administrador maestro, que no tiene
+        // ninguna, tampoco podía listar sus propias credenciales.
+        "/api/profile/mfa",
         "/api/health",
+        // Contenido que se sirve ANTES de iniciar sesión, en la propia pantalla
+        // de entrada. Por definición no hay empresa seleccionada todavía: sin
+        // esta exención el panel promocional del login nunca carga, porque el
+        // middleware corta con Session.TenantNotSelected antes de llegar al
+        // endpoint, aunque el endpoint esté marcado AllowAnonymous.
+        "/api/publico/",
         "/health",     // /health/live y /health/ready (T031 — sin tenant)
         "/swagger",
         "/_framework",
@@ -70,7 +89,19 @@ public class TenantResolutionMiddleware
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        if (IsExempt(path))
+        // Resolver y EXIGIR son dos cosas distintas, y antes eran una sola.
+        //
+        // Las rutas exentas cortocircuitaban sin escribir nada en Items. Daba igual
+        // mientras la cooperativa no llegara a la capa de datos; desde que llega,
+        // significa que /api/admin/roles —exenta— abriria el esquema equivocado, o
+        // reventaria contra la fabrica de ErpTenantInfo, que se niega a caer a dbo
+        // dentro de una peticion.
+        //
+        // Ahora se resuelve SIEMPRE que se pueda, y solo se EXIGE en las rutas no
+        // exentas. Ni un prefijo sale de la lista y ni un codigo de error cambia:
+        // una ruta exenta sin cooperativa sigue pasando de largo, como antes.
+        var exenta = IsExempt(path);
+        if (exenta && !TieneCooperativaResoluble(context))
         {
             await _next(context);
             return;
@@ -85,6 +116,12 @@ public class TenantResolutionMiddleware
              !Guid.TryParse(claimValue, out var activeTenantId)) &&
             !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)))
         {
+            if (exenta)
+            {
+                await _next(context);
+                return;
+            }
+
             await WriteTenantNotSelectedAsync(context);
             return;
         }
@@ -99,16 +136,40 @@ public class TenantResolutionMiddleware
 
         if (tenant is null)
         {
+            if (exenta)
+            {
+                await _next(context);
+                return;
+            }
+
             await WriteTenantNotFoundAsync(context, activeTenantId);
             return;
         }
 
         context.Items["TenantInfo"] = tenant;
+        // Con base por cooperativa, esto es lo que decide contra que datos opera la
+        // peticion. TenantSchema se conserva mientras convivan los dos modelos.
+        context.Items["TenantDatabase"] = tenant.DatabaseName;
+        context.Items["TenantConnectionOverride"] = tenant.ConnectionString;
         context.Items["TenantId"] = tenant.Id;
         context.Items["TenantPublicId"] = tenant.PublicId;
         context.Items["TenantSchema"] = tenant.SchemaName;
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Hay algo con lo que intentar resolver la cooperativa. Solo mira los claims y
+    /// la ruta: no toca la base. Sirve para decidir si a una ruta exenta le merece
+    /// la pena resolver, sin convertir la ausencia de cooperativa en un error.
+    /// </summary>
+    private static bool TieneCooperativaResoluble(HttpContext context)
+    {
+        var claim = context.User?.FindFirst(ActiveTenantIdClaim)?.Value;
+        if (!string.IsNullOrWhiteSpace(claim) && Guid.TryParse(claim, out _)) return true;
+
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+        return IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out _);
     }
 
     private static bool IsMasterAdmin(ClaimsPrincipal? user) =>
@@ -125,7 +186,13 @@ public class TenantResolutionMiddleware
         return Guid.TryParse(segment, out tenantId);
     }
 
-    private static bool IsExempt(string path)
+    /// <summary>
+    /// internal en vez de private para poder probar la lista de exencion sin
+    /// levantar el servidor completo. Un endpoint anonimo que no figure aca
+    /// responde 401 Session.TenantNotSelected aunque este marcado
+    /// AllowAnonymous: el middleware corta antes de llegar al endpoint.
+    /// </summary>
+    internal static bool IsExempt(string path)
     {
         foreach (var prefix in ExemptPrefixes)
         {

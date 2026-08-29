@@ -19,122 +19,11 @@ namespace IngenIA365ERP.Shared.Services
             _tenantService = tenantService;
         }
 
-        public async Task<LoginResponse> LoginAsync(LoginRequest request)
-        {
-            try
-            {
-                // Register tenant before sending so the DelegatingHandler attaches X-Tenant-Id
-                // on this and all subsequent requests.
-                await _tenantService.SetTenantAsync(request.TenantId);
+        // El inicio de sesion vive en CentralAuthClient. Lo que habia aqui
+        // —LoginAsync, TryDevLoginAsync y TwoStepLoginAsync— hablaba con
+        // /api/auth/dev/login, el atajo que existia para saltarse el segundo
+        // factor. Con el MFA obligatorio, ese camino es el agujero.
 
-                // Estrategia: intenta primero /api/auth/dev/login (dev one-shot).
-                // Si no está disponible (404 = entorno no-Development), cae al
-                // flujo canónico /login → /mfa/verify.
-                var tokens = await TryDevLoginAsync(request)
-                          ?? await TwoStepLoginAsync(request);
-
-                if (tokens is null)
-                {
-                    return new LoginResponse
-                    {
-                        Success = false,
-                        Message = "Usuario o contrasena incorrectos"
-                    };
-                }
-
-                await _secureStorage.SetAsync(TokenKey, tokens.AccessToken);
-                await _secureStorage.SetAsync(RefreshTokenKey, tokens.RefreshToken);
-
-                return new LoginResponse
-                {
-                    Success = true,
-                    Token = tokens.AccessToken,
-                    Message = "Login exitoso",
-                    User = new UserInfo
-                    {
-                        Email = tokens.User?.Username ?? request.Email,
-                        Name = tokens.User?.Username ?? request.Email
-                    }
-                };
-            }
-            catch (Exception ex)
-            {
-                return new LoginResponse
-                {
-                    Success = false,
-                    Message = $"Error al conectar con el servidor: {ex.Message}"
-                };
-            }
-        }
-
-        /// <summary>
-        /// Endpoint dev-only que combina login + mfa/verify en una llamada.
-        /// Devuelve null si responde 404 (no registrado en el entorno) o si
-        /// el body de error indica que MFA está inscrito y debe usarse el
-        /// flujo canónico (Auth.DevLoginRequiresMfa).
-        /// </summary>
-        private async Task<AuthTokensDto?> TryDevLoginAsync(LoginRequest request)
-        {
-            var body = new
-            {
-                tenantSubdomainOrNit = request.TenantId,
-                username = request.Email,
-                email = request.Email,
-                tenantId = request.TenantId,
-                password = request.Password
-            };
-            var response = await _httpClient.PostAsJsonAsync(
-                $"{AppSettings.GetApiBaseUrl()}/api/auth/dev/login", body);
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<AuthTokensDto>();
-        }
-
-        /// <summary>
-        /// Flujo canónico /login → /mfa/verify. Usa código TOTP dummy "000000"
-        /// y depende de que el usuario tenga MFA deshabilitado (en cuyo caso
-        /// el handler omite la verificación). Si MFA está activo, este método
-        /// devuelve null y la UI debería enrutar al challenge MFA real
-        /// (pendiente — Phase 0 US1 cubrió backend; la UI MFA quedó scaffold).
-        /// </summary>
-        private async Task<AuthTokensDto?> TwoStepLoginAsync(LoginRequest request)
-        {
-            var loginBody = new
-            {
-                tenantSubdomainOrNit = request.TenantId,
-                username = request.Email,
-                email = request.Email,
-                tenantId = request.TenantId,
-                password = request.Password
-            };
-            var loginResp = await _httpClient.PostAsJsonAsync(
-                AppSettings.Endpoints.Login, loginBody);
-            if (!loginResp.IsSuccessStatusCode) return null;
-
-            var challenge = await loginResp.Content.ReadFromJsonAsync<LoginChallengeDto>();
-            if (challenge is null || string.IsNullOrEmpty(challenge.MfaChallengeToken)) return null;
-
-            var verifyBody = new
-            {
-                mfaChallengeToken = challenge.MfaChallengeToken,
-                totpCode = "000000",
-                useBackupCode = false
-            };
-            var verifyResp = await _httpClient.PostAsJsonAsync(
-                $"{AppSettings.GetApiBaseUrl()}/api/auth/mfa/verify", verifyBody);
-            if (!verifyResp.IsSuccessStatusCode) return null;
-
-            return await verifyResp.Content.ReadFromJsonAsync<AuthTokensDto>();
-        }
-
-        // DTOs locales para el nuevo contrato (Phase 0 US1).
-        private sealed record LoginChallengeDto(string MfaChallengeToken, bool MustChangePassword);
-        private sealed record AuthTokensDto(
-            string AccessToken,
-            string RefreshToken,
-            DateTime AccessTokenExpiresAt,
-            DateTime RefreshTokenExpiresAt,
-            AuthenticatedUserDto? User);
-        private sealed record AuthenticatedUserDto(Guid PublicId, string Username);
 
         public async Task<bool> LogoutAsync()
         {
@@ -145,10 +34,24 @@ namespace IngenIA365ERP.Shared.Services
 
                 if (!string.IsNullOrEmpty(token))
                 {
-                    // AuthBearerHandler attaches the Authorization header automatically.
+                    // Se manda el REFRESH token, no el de acceso.
+                    //
+                    // Antes iba `new LogoutRequest { Token = token }` con el token de
+                    // acceso. El endpoint enlaza un cuerpo `LogoutBody(string?
+                    // RefreshToken)`, asi que la propiedad `token` no casaba con nada:
+                    // llegaba null, el handler no encontraba sesion que cerrar y
+                    // devolvia 200. Cerrar sesion respondia bien y no cerraba nada — el
+                    // refresh token seguia siendo canjeable durante doce horas, asi que
+                    // quien recuperara ese token de un equipo compartido volvia a entrar
+                    // despues de que la persona se hubiera ido.
+                    //
+                    // El token de acceso sigue yendo en la cabecera, que la pone
+                    // AuthBearerHandler; lo que el servidor necesita en el cuerpo para
+                    // revocar la sesion es el de refresco.
+                    var refreshToken = await _secureStorage.GetAsync(RefreshTokenKey);
                     var response = await _httpClient.PostAsJsonAsync(
                         AppSettings.Endpoints.Logout,
-                        new LogoutRequest { Token = token });
+                        new { refreshToken });
                     serverOk = response.IsSuccessStatusCode;
                 }
 

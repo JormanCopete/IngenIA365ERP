@@ -68,8 +68,54 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
         {
             // Feature 002 — códigos específicos con semántica HTTP distinta del default.
             "Identity.Unauthenticated" => StatusCodes.Status401Unauthorized,
+
+            // Fallos de AUTENTICACIÓN, no de regla de negocio. Sin mapeo caían
+            // al default 422, y el contrato (specs/002/contracts/auth.md:87,
+            // :111, :138) promete 401 en los tres. Lo que mantuvo el fallo vivo
+            // es que cuatro pruebas en verde afirmaban el 422 y hasta lo
+            // explicaban en un comentario: documentaron el defecto en vez de
+            // cazarlo.
+            "Identity.InvalidCredentials" => StatusCodes.Status401Unauthorized,
+            "Identity.MfaInvalid" => StatusCodes.Status401Unauthorized,
+
+            // Una firma de passkey que no verifica es lo mismo que un TOTP
+            // equivocado: falló la autenticación. Sin esta línea caía al 422 por
+            // el default, que es justo el defecto que se corrigió arriba para el
+            // TOTP — repetido en el método nuevo.
+            "Identity.WebAuthnInvalido" => StatusCodes.Status401Unauthorized,
+
+            // Incluye Reused: una violación de familia es un token que ya no
+            // autentica, no una entidad no procesable.
+            _ when code.StartsWith("Identity.RefreshToken.", StringComparison.Ordinal)
+                => StatusCodes.Status401Unauthorized,
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
+
+            // Quedarse sin segundo factor cuando alguien lo exige no es una
+            // petición mal formada: es una acción prohibida. El contrato
+            // (specs/002/contracts/profile-and-recovery.md:101) ya prometía 403 y
+            // el código devolvía 422 por caer al default — otra promesa
+            // documentada que no era cierta.
+            "Profile.Mfa.RequiredByTenantPolicy" => StatusCodes.Status403Forbidden,
+            "Profile.Mfa.RequiredForMasterAdmin" => StatusCodes.Status403Forbidden,
+
+            // Ya llegó al tope de autenticadores: el estado actual impide la
+            // operación, y se resuelve retirando uno.
+            "Profile.Mfa.DemasiadasCredenciales" => StatusCodes.Status409Conflict,
+
+            // «Tenés segundo factor, pero del tipo que esta cooperativa no
+            // acepta». Es 403 y no 422 por lo mismo que los dos de arriba: es una
+            // acción prohibida por una política, no una petición mal formada. Y
+            // lleva código propio —distinto de MfaPolicyEnforced— porque la
+            // pantalla enruta a sitios distintos: a configurar el segundo factor,
+            // o a inscribir uno concreto. Con un solo código, media docena de
+            // personas acabarían en la página que no les sirve.
+            "Tenant.MfaMethodNotAccepted" => StatusCodes.Status403Forbidden,
+            "Tenant.MfaPolicyEnforced" => StatusCodes.Status403Forbidden,
+
+            // Sólo el maestro. No es «no autenticado» sino «no sos vos».
+            "Saas.MasterOnly" => StatusCodes.Status403Forbidden,
+            "Saas.PlatformMfaPolicy.TeDejariaFuera" => StatusCodes.Status409Conflict,
 
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,

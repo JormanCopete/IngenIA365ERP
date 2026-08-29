@@ -4,7 +4,7 @@
           Header="Buscar Cuenta Contable" CssClass="search-dialog">
     <DialogTemplates>
         <Content>
-            <div style="margin-bottom:12px;">
+            <div class="toolbar" style="margin-bottom: var(--gap-md);">
                 <SfTextBox @bind-Value="_search" Placeholder="Buscar por codigo o nombre..."
                            CssClass="e-small" Input="@OnSearchInput" />
             </div>

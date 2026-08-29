@@ -6,61 +6,63 @@
 
 <PageTitle>Facturas de Tesoreria - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Facturas de Tesoreria</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Factura</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Facturas de Tesoreria</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva Factura</SfButton>
+    </div>
 
-<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Tipo</label>
-        <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_filterType" DataSource="@_docTypes" Width="200px" Placeholder="Todos">
-            <DropDownListFieldSettings Value="Code" Text="Name" />
-        </SfDropDownList>
+    <div class="toolbar">
+        <div>
+            <label>Tipo</label>
+            <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_filterType" DataSource="@_docTypes" Width="200px" Placeholder="Todos">
+                <DropDownListFieldSettings Value="Code" Text="Name" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Vencimiento Desde</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueFrom" Placeholder="Desde" Width="160px" />
+        </div>
+        <div>
+            <label>Vencimiento Hasta</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueTo" Placeholder="Hasta" Width="160px" />
+        </div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Buscar</SfButton>
     </div>
-    <div>
-        <label>Vencimiento Desde</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueFrom" Placeholder="Desde" Width="160px" />
-    </div>
-    <div>
-        <label>Vencimiento Hasta</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_filterDueTo" Placeholder="Hasta" Width="160px" />
-    </div>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@LoadData">Buscar</SfButton>
-</div>
 
-<SfGrid @ref="_grid" TValue="InvoiceItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="InvoiceNumber" HeaderText="Numero" Width="120" />
-        <GridColumn Field="DocumentTypeText" HeaderText="Tipo" Width="160" />
-        <GridColumn Field="PersonName" HeaderText="Persona" Width="220" />
-        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
-        <GridColumn Field="InvoiceDate" HeaderText="Fecha" Width="130" Format="dd/MM/yyyy" />
-        <GridColumn Field="DueDate" HeaderText="Vencimiento" Width="130" Format="dd/MM/yyyy" />
-        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
-            <Template>
-                @{
-                    var item = context as InvoiceItem;
-                    var badgeClass = item?.Status switch
-                    {
-                        "P" => "e-badge e-badge-warning",
-                        "G" => "e-badge e-badge-success",
-                        "A" => "e-badge e-badge-danger",
-                        _ => "e-badge e-badge-info"
-                    };
-                    <span class="@badgeClass">@item?.StatusText</span>
-                }
-            </Template>
-        </GridColumn>
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="InvoiceItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="InvoiceNumber" HeaderText="Numero" Width="120" />
+            <GridColumn Field="DocumentTypeText" HeaderText="Tipo" Width="160" />
+            <GridColumn Field="PersonName" HeaderText="Persona" Width="220" />
+            <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="InvoiceDate" HeaderText="Fecha" Width="130" Format="dd/MM/yyyy" />
+            <GridColumn Field="DueDate" HeaderText="Vencimiento" Width="130" Format="dd/MM/yyyy" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+                <Template>
+                    @{
+                        var item = context as InvoiceItem;
+                        var badgeClass = item?.Status switch
+                        {
+                            "P" => "e-badge e-badge-warning",
+                            "G" => "e-badge e-badge-success",
+                            "A" => "e-badge e-badge-danger",
+                            _ => "e-badge e-badge-info"
+                        };
+                        <span class="@badgeClass">@item?.StatusText</span>
+                    }
+                </Template>
+            </GridColumn>
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="200" />
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="Registrar Factura de Tesoreria" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div style="padding:var(--pad-md);display:flex;flex-direction:column;gap:var(--pad-lg);">
                 <div>
                     <label>Tipo *</label>
                     <SfDropDownList TValue="string" TItem="DropItem" @bind-Value="_model.InvoiceType" DataSource="@_invoiceTypes">

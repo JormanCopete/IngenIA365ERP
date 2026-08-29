@@ -31,14 +31,7 @@ public sealed class EndToEnd_MultiTenantSwitch(CentralIdentityApiFixture fx)
         const string userPassword = "Carlos-Strong-Pwd-2026";
 
         // 0) Login del master (sin membresías → sesión operativa, challenge None).
-        var masterLoginResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, masterLoginResp.StatusCode);
-        var masterLogin = await ReadJsonAsync(masterLoginResp);
-        var masterToken = masterLogin.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         // 1) Registrar tenant A + invitación admin al usuario.

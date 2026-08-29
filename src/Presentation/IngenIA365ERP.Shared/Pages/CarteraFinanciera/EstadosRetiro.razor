@@ -35,7 +35,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfTextBox @bind-Value="_model.PersonCode" Placeholder="Codigo Persona" FloatLabelType="FloatLabelType.Always" />
                 <SfDatePicker TValue="DateTime" @bind-Value="_model.RequestDate" Placeholder="Fecha Solicitud" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.ReasonCode" Placeholder="Codigo Motivo" FloatLabelType="FloatLabelType.Always" />

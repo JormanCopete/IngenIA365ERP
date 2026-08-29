@@ -1,3 +1,5 @@
+using IngenIA365ERP.API.Filters.CentralIdentity;
+using IngenIA365ERP.API.Services;
 using Microsoft.AspNetCore.Http;
 
 namespace IngenIA365ERP.API.Filters;
@@ -17,8 +19,20 @@ namespace IngenIA365ERP.API.Filters;
 ///
 /// <para>
 /// Si el usuario no está autenticado y el endpoint requiere permiso, también
-/// se responde 404 — la <c>RequireAuthorization()</c> de Carter ya debería
-/// haber emitido 401, pero por defensa-en-profundidad el filtro lo cubre.
+/// se responde 404 — la <c>RequireAuthorization()</c> de Carter ya emitió 401
+/// antes de llegar aquí, pero por defensa-en-profundidad el filtro lo cubre.
+/// </para>
+///
+/// <para>
+/// <b>Atajo del administrador maestro</b>: el emisor de identidad central
+/// (<c>CentralJwtIssuer</c>) no emite claims <c>perm</c> — sólo los emite el
+/// emisor heredado, al que la interfaz ya no llega. Sin este atajo, el maestro
+/// veía 404 en TODO endpoint con permiso: podía registrar una cooperativa
+/// (esa ruta se guarda con <see cref="RequireMasterAdminAttribute"/>) pero no
+/// volver a listarla. Se reutiliza esa misma guardia, que es la que el resto
+/// del proyecto ya usa para lo global-SaaS, en vez de inventar otra: exige
+/// <c>purpose=full</c>, así que un token a medio autenticar —MFA pendiente,
+/// por ejemplo— NO pasa por aquí.
 /// </para>
 /// </summary>
 public sealed class PermissionAuthorizationFilter : IEndpointFilter
@@ -37,6 +51,14 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
             return await next(context);
         }
 
+        // Antes de mirar los `perm`: el maestro global no los lleva en el token.
+        // Esto NO relaja el aislamiento entre cooperativas — el tenant sigue
+        // saliendo de TenantResolutionMiddleware, no de este filtro.
+        if (RequireMasterAdminAttribute.Check(context.HttpContext).IsAllowed)
+        {
+            return await next(context);
+        }
+
         var user = context.HttpContext.User;
         var hasAllPerms = requirements.All(req =>
             user.HasClaim(c => c.Type == "perm" && c.Value == req.PermissionCode));
@@ -46,7 +68,77 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
             return await next(context);
         }
 
+        // El token central no lleva claims `perm`, asi que para todo el mundo
+        // salvo el maestro la comprobacion de arriba siempre da falsa. Aqui se
+        // resuelven de verdad, contra la cooperativa activa.
+        if (await TienePermisosResueltosAsync(context.HttpContext, requirements))
+        {
+            return await next(context);
+        }
+
         return NotFoundEnvelope(context.HttpContext);
+    }
+
+    /// <summary>
+    /// Resolución por petición. Devuelve false ante cualquier problema —nunca
+    /// propaga— porque una excepción aquí subiría como 500 y delataría que el
+    /// endpoint existe, que es justo lo que la indistinguibilidad 404 evita.
+    /// Fallar cerrado deja al usuario sin acceso; fallar abierto se lo da a
+    /// quien no debe.
+    /// </summary>
+    private static async Task<bool> TienePermisosResueltosAsync(
+        HttpContext http, IReadOnlyList<RequirePermissionAttribute> requisitos)
+    {
+        var servicios = http.RequestServices;
+        if (servicios is null) return false;
+
+        try
+        {
+            var servicio = servicios.GetService<PermisosDeLaPeticion>();
+            if (servicio is null) return false;
+
+            var concedidos = await servicio.ResolverAsync(http, http.RequestAborted);
+            if (concedidos.Count == 0) return false;
+
+            var conjunto = new HashSet<string>(concedidos, StringComparer.OrdinalIgnoreCase);
+            return requisitos.All(r => conjunto.Contains(r.PermissionCode));
+        }
+        catch (Exception ex)
+        {
+            RegistrarSinPropagar(servicios, ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deja constancia del fallo sin poder provocar otro.
+    ///
+    /// <para>
+    /// El registro va protegido porque si el contenedor no puede darnos un logger
+    /// —ambito ya desechado, arranque a medias— esa segunda excepcion subiria
+    /// como 500 desde el mismisimo camino que existe para no propagar nada.
+    /// </para>
+    ///
+    /// <para>
+    /// El ultimo recurso escribe a la salida de error del proceso y <b>no queda
+    /// vacio</b> (Principio IX). Un silencio aqui esconderia justo el motivo por
+    /// el que todo el mundo empezaria a ver 404 sin explicacion.
+    /// </para>
+    /// </summary>
+    private static void RegistrarSinPropagar(IServiceProvider servicios, Exception ex)
+    {
+        try
+        {
+            servicios.GetService<ILoggerFactory>()?
+                .CreateLogger<PermissionAuthorizationFilter>()
+                .LogError(ex, "Fallo al resolver permisos de la peticion. Se responde 404.");
+        }
+        catch (Exception alRegistrar)
+        {
+            Console.Error.WriteLine(
+                $"[PermissionAuthorizationFilter] no se pudo registrar el fallo de permisos " +
+                $"({alRegistrar.GetType().Name}). Causa original: {ex}");
+        }
     }
 
     /// <summary>

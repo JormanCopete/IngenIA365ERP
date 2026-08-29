@@ -37,9 +37,9 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+                <div class="pagina">
                     <div>
-                        <label>Nombre <span style="color:red">*</span></label>
+                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />

@@ -51,8 +51,15 @@ public class UpdateTenantMfaPolicyCommandHandlerTests
         _db.SaveChanges();
     }
 
+    /// <summary>
+    /// Devuelve 0 sin que nadie lo configure: estas pruebas no montan miembros ni
+    /// credenciales. El conteo de «cuántos quedarían sin método» tiene sus propias
+    /// pruebas donde sí se monta.
+    /// </summary>
+    private readonly IMfaDirectory _credenciales = Substitute.For<IMfaDirectory>();
+
     private UpdateTenantMfaPolicyCommandHandler NewHandler() => new(
-        _currentUser, _db, _notifier, _audit, _clock,
+        _currentUser, _db, _credenciales, _notifier, _audit, _clock,
         NullLogger<UpdateTenantMfaPolicyCommandHandler>.Instance);
 
     [Fact]

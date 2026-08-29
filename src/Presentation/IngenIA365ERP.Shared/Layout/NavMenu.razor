@@ -160,16 +160,22 @@
         </div>
 
         <NavMenuGroup Icon="e-lock" Title="Administracion" Expanded="SidebarOpen">
-            <NavLink href="/admin/usuarios" class="nav-subitem">Usuarios</NavLink>
-            <NavLink href="/admin/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            @* Apuntaban a /admin/usuarios y /admin/roles, que son marcadores
+               vacios. Las pantallas reales viven bajo /security y estaban
+               huerfanas: existian, funcionaban y no habia como llegar. *@
+            <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
+            <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            <NavLink href="/admin/branches" class="nav-subitem">Sucursales</NavLink>
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
+            <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
         </NavMenuGroup>
 
         @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
         <NavMenuGroup Icon="e-user" Title="Mi Cuenta" Expanded="SidebarOpen">
             <NavLink href="/profile/password" class="nav-subitem">Cambiar Contraseña</NavLink>
             <NavLink href="/profile/mfa" class="nav-subitem">Autenticacion MFA</NavLink>
+            <NavLink href="/profile/seguridad/credenciales" class="nav-subitem">Mis Autenticadores</NavLink>
             <NavLink href="/profile/default-tenant" class="nav-subitem">Empresa por Defecto</NavLink>
         </NavMenuGroup>
 
@@ -185,6 +191,7 @@
         @if (_isMaster)
         {
             <NavMenuGroup Icon="e-settings" Title="Consola SaaS" Expanded="SidebarOpen">
+                <NavLink href="/admin/tenants" class="nav-subitem">Cooperativas</NavLink>
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>

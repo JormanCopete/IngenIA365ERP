@@ -1,0 +1,16 @@
+/* Cartera de créditos — lo que no cubre componentes.css. */
+
+/* Los días de mora son el número por el que se recorre esta tabla: van en
+   negrita para encontrarlos sin leer la fila entera. El color sale de la
+   escala de riesgo y lo pone el marcado, porque depende del dato. */
+.dias-mora {
+    font-weight: var(--peso-fuerte);
+}
+
+/* Pastilla de calificación A–E. Hereda la geometría de .badge global; el
+   relleno viene del token de riesgo que corresponda a la fila. */
+.badge-categoria {
+    color: var(--acento-texto);
+    border-color: transparent;
+    font-weight: var(--peso-fuerte);
+}

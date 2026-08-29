@@ -31,25 +31,42 @@ namespace IngenIA365ERP.Application.Common.Services;
 /// </summary>
 public interface ITenantUserProvisioner
 {
+    /// <param name="tenantDatabase">
+    /// Base de datos de la cooperativa destino. Es obligatoria y no se deduce del
+    /// ambiente: esta ruta la invoca la aceptacion de una invitacion, que es
+    /// anonima y no tiene cooperativa activa. La cooperativa la dice la invitacion.
+    /// </param>
+    /// <param name="tenantConnectionOverride">Cadena propia de la cooperativa, si la tiene.</param>
+    /// <param name="asTenantAdmin">
+    /// Si la invitacion era para administrar la cooperativa. Decide el rol.
+    /// </param>
     Task<Result<int>> EnsureExistsAsync(
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
+        string tenantDatabase,
+        string? tenantConnectionOverride,
+        bool asTenantAdmin,
         CancellationToken ct);
 }
 
 internal sealed class TenantUserProvisioner(
-    IApplicationDbContext db,
+    ITenantDbContextFactory fabrica,
     IDateTimeService clock,
     ILogger<TenantUserProvisioner> logger) : ITenantUserProvisioner
 {
     private const string ProvisionerActor = "TenantUserProvisioner";
     private const string CentralManagedPasswordSentinel = "central-managed";
+    private const string RolAdministrador = "CompanyAdmin";
+    private const string RolPorDefecto = "ReadOnly";
 
     public async Task<Result<int>> EnsureExistsAsync(
         Guid centralUserId,
         string centralUserEmail,
         Guid tenantId,
+        string tenantDatabase,
+        string? tenantConnectionOverride,
+        bool asTenantAdmin,
         CancellationToken ct)
     {
         if (centralUserId == Guid.Empty)
@@ -59,16 +76,36 @@ internal sealed class TenantUserProvisioner(
             return Result.Failure<int>("Provisioning.InvalidEmail",
                 "El email del usuario central no puede estar vacío.");
 
+        if (string.IsNullOrWhiteSpace(tenantDatabase) && string.IsNullOrWhiteSpace(tenantConnectionOverride))
+            return Result.Failure<int>("Provisioning.InvalidDatabase",
+                "Hace falta la base de datos de la cooperativa destino.");
+
         var normalized = centralUserEmail.Trim();
+
+        // El contexto se abre sobre el esquema de la cooperativa destino, no se
+        // toma del contenedor. El XML doc de arriba declaraba esa precondicion
+        // desde el principio —"asume que el contexto ya apunta al schema del
+        // tenant destino"— y no la cumplia nadie: esta ruta es anonima y el
+        // contenedor no tiene cooperativa que resolver.
+        await using var ambito = fabrica.Abrir(tenantDatabase, tenantConnectionOverride);
+        var db = ambito.Db;
 
         // IgnoreQueryFilters: queremos detectar también las filas soft-deleted
         // para reactivarlas en lugar de crear una nueva (idempotencia tras
         // revocaciones previas).
+        // Se busca por la IDENTIDAD CENTRAL, que es lo que de verdad identifica a
+        // una persona entre cooperativas. El correo queda como respaldo, y solo
+        // para filas creadas antes del cutover: dos correos iguales son la misma
+        // persona hoy, pero un cambio de correo rompia el vinculo en silencio.
         var existing = await db.Users
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(
-                u => u.Username == normalized || u.Email == normalized,
-                ct);
+            .FirstOrDefaultAsync(u => u.CentralUserId == centralUserId, ct)
+            ?? await db.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(
+                    u => u.CentralUserId == null &&
+                         (u.Username == normalized || u.Email == normalized),
+                    ct);
 
         if (existing is not null)
         {
@@ -76,6 +113,8 @@ internal sealed class TenantUserProvisioner(
             // Ignored() en EF hasta el cutover de T017 — se asignan aquí en
             // memoria para que el resto del handler las pueda leer dentro
             // del scope del request. No se persisten todavía.
+            // Al encontrarla por correo, se sella el vinculo para que la proxima vez
+            // se resuelva por identidad y no por cadena.
             existing.CentralUserId = centralUserId;
             existing.CentralUserPublicEmail = normalized;
 
@@ -99,6 +138,7 @@ internal sealed class TenantUserProvisioner(
                     centralUserId, tenantId, existing.Id);
             }
 
+                await AsegurarRolAsync(db, existing.Id, tenantDatabase, asTenantAdmin, ct);
             return Result.Success(existing.Id);
         }
 
@@ -124,6 +164,70 @@ internal sealed class TenantUserProvisioner(
             "SEC_Users provisionado para CentralUser {CentralUserId} en tenant {TenantId} (nuevo UserId={UserId}).",
             centralUserId, tenantId, newUser.Id);
 
+        await AsegurarRolAsync(db, newUser.Id, tenantDatabase, asTenantAdmin, ct);
         return Result.Success(newUser.Id);
+    }
+
+    /// <summary>
+    /// Le da a la fila recien provisionada un rol dentro de SU cooperativa.
+    ///
+    /// <para>
+    /// Sin esto el usuario existe y no puede hacer nada: el provisionado creaba
+    /// la fila en <c>SEC_Users</c> y se detenia ahi, sin escribir en
+    /// <c>SEC_UserRoles</c>. Y la unica via de asignar roles en caliente
+    /// (<c>POST /api/admin/users/{id}/roles</c>) exige el permiso
+    /// <c>Security.Users.AssignRole</c>, que sale de tener un rol: bloqueo
+    /// circular que solo rompia el administrador maestro a mano.
+    /// </para>
+    ///
+    /// <para>
+    /// Quien fue invitado a administrar recibe <c>CompanyAdmin</c>; el resto,
+    /// <c>ReadOnly</c>, que es lo conservador y se cambia desde la pantalla de
+    /// usuarios. Nunca se toca un rol plantilla.
+    /// </para>
+    ///
+    /// <para>
+    /// No falla la invitacion si el rol no esta: que alguien no pueda entrar a
+    /// una pantalla se arregla; que la invitacion se pierda, no.
+    /// </para>
+    /// </summary>
+    private async Task AsegurarRolAsync(
+        IApplicationDbContext db, int userId, string tenantDatabase, bool asTenantAdmin,
+        CancellationToken ct)
+    {
+        var codigo = asTenantAdmin ? RolAdministrador : RolPorDefecto;
+
+        var rolId = await db.Roles
+            .Where(r => r.Code == codigo && r.IsActive && !r.IsDeleted)
+            .Select(r => (int?)r.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (rolId is null)
+        {
+            logger.LogWarning(
+                "La base {Base} no tiene el rol {Codigo}, asi que el usuario " +
+                "{UserId} queda sin permisos. Suele significar que nunca se aprovisiono: " +
+                "POST /api/saas/tenants/{{publicId}}/provision es idempotente y lo arregla.",
+                tenantDatabase, codigo, userId);
+            return;
+        }
+
+        var yaLoTiene = await db.UserRoles
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == rolId.Value, ct);
+        if (yaLoTiene) return;
+
+        db.UserRoles.Add(new UserRole
+        {
+            UserId = userId,
+            RoleId = rolId.Value,
+            AssignedAt = clock.UtcNow,
+            AssignedBy = ProvisionerActor,
+            CreatedBy = ProvisionerActor,
+        });
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Usuario {UserId} asignado al rol {Codigo} de la cooperativa {Base}.",
+            userId, codigo, tenantDatabase);
     }
 }

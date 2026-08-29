@@ -1,0 +1,29 @@
+/* Cuentas de ahorro — lo que no cubre componentes.css. */
+
+/* Pastillas de estado de la cuenta. La geometría la pone .badge global. */
+.badge-activa {
+    background: var(--exito);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+/* Cerrada no es un error, es un estado terminal: gris, no rojo. Va como
+   pastilla de contorno y no de relleno: --texto-secundario es un token de
+   TEXTO, y usarlo como fondo con --acento-texto (blanco) encima da 2.5:1 en
+   tema oscuro y 1.35:1 en alto contraste oscuro, es decir ilegible. La pareja
+   --texto-secundario sobre --superficie-0 sí está pensada para leerse, y se
+   mantiene en los cuatro temas. */
+.badge-cerrada {
+    background: var(--superficie-0);
+    color: var(--texto-secundario);
+    border-color: var(--borde-fuerte);
+}
+
+/* Formulario dentro de un SfDialog. Repetido en siete pantallas del grupo:
+   candidato a subir a componentes.css. */
+.campos-dialogo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-sm);
+}

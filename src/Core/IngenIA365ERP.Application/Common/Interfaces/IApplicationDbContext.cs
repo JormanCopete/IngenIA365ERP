@@ -180,6 +180,9 @@ public interface IApplicationDbContext
     // Security
     DbSet<User> Users { get; }
     DbSet<Role> Roles { get; }
+
+    // Parametros de configuracion de la cooperativa (COR_SystemSettings).
+    DbSet<SystemSetting> SystemSettings { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<LoginAttempt> LoginAttempts { get; }
     DbSet<UserTenantAssignment> UserTenantAssignments { get; }
@@ -193,8 +196,9 @@ public interface IApplicationDbContext
     DbSet<UserRole> UserRoles { get; }
 
     // Admin
-    DbSet<Tenant> Tenants { get; }
-    DbSet<TenantBranch> TenantBranches { get; }
+    // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
+    // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
+    // ese contexto y decirlo, en vez de alcanzarlas por la puerta de atras.
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

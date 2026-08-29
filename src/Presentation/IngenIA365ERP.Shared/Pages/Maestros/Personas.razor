@@ -7,9 +7,9 @@
 
 <PageTitle>Personas - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Personas</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar por documento, nombre, razon social..." @bind-Value="_search"
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
@@ -40,10 +40,10 @@
             <Template>
                 @{
                     var p = context as PersonRow;
-                    @if (p?.IsAssociate == true) { <span class="e-badge e-badge-success" style="font-size:10px;margin-right:3px;">Asociado</span> }
-                    @if (p?.IsEmployee == true) { <span class="e-badge e-badge-warning" style="font-size:10px;margin-right:3px;">Empleado</span> }
-                    @if (p?.IsThirdParty == true) { <span class="e-badge e-badge-info" style="font-size:10px;margin-right:3px;">Tercero</span> }
-                    @if (p?.IsAdvisor == true) { <span class="e-badge" style="font-size:10px;margin-right:3px;">Asesor</span> }
+                    @if (p?.IsAssociate == true) { <span class="e-badge e-badge-success marca-rol">Asociado</span> }
+                    @if (p?.IsEmployee == true) { <span class="e-badge e-badge-warning marca-rol">Empleado</span> }
+                    @if (p?.IsThirdParty == true) { <span class="e-badge e-badge-info marca-rol">Tercero</span> }
+                    @if (p?.IsAdvisor == true) { <span class="e-badge marca-rol">Asesor</span> }
                 }
             </Template>
         </GridColumn>
@@ -75,9 +75,9 @@
                         <TabItem>
                             <ChildContent><TabHeader Text="Identificacion" /></ChildContent>
                             <ContentTemplate>
-                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                <div class="rejilla-campos panel-pestana">
                                     <div>
-                                        <label>Tipo Documento <span style="color:red">*</span></label>
+                                        <label>Tipo Documento <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfDropDownList TValue="string" TItem="CodeOption"
                                                         @bind-Value="_model.IdType"
                                                         DataSource="@_idTypes"
@@ -86,7 +86,7 @@
                                         </SfDropDownList>
                                     </div>
                                     <div>
-                                        <label>Numero Documento <span style="color:red">*</span></label>
+                                        <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.TaxId" Placeholder="Numero de identificacion"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                                         <ValidationMessage For="@(() => _model.TaxId)" />
@@ -106,18 +106,18 @@
                                         </SfDropDownList>
                                     </div>
                                     <div>
-                                        <label>Nombres <span style="color:red">*</span></label>
+                                        <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.FirstName" Placeholder="Nombres"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.FirstName)" />
                                     </div>
                                     <div>
-                                        <label>Apellidos <span style="color:red">*</span></label>
+                                        <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
                                         <SfTextBox @bind-Value="_model.LastName" Placeholder="Apellidos"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.LastName)" />
                                     </div>
-                                    <div style="grid-column:span 2;">
+                                    <div class="campo-ancho">
                                         <label>Razon Social (si aplica)</label>
                                         <SfTextBox @bind-Value="_model.BusinessName" Placeholder="Razon social comercial"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
@@ -140,8 +140,8 @@
                         <TabItem>
                             <ChildContent><TabHeader Text="Contacto" /></ChildContent>
                             <ContentTemplate>
-                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-                                    <div style="grid-column:span 2;">
+                                <div class="rejilla-campos panel-pestana">
+                                    <div class="campo-ancho">
                                         <label>Direccion</label>
                                         <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion residencial / comercial"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
@@ -185,7 +185,7 @@
                         <TabItem>
                             <ChildContent><TabHeader Text="Demografia" /></ChildContent>
                             <ContentTemplate>
-                                <div style="padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                <div class="rejilla-campos panel-pestana">
                                     <div>
                                         <label>Genero</label>
                                         <SfDropDownList TValue="string" TItem="CodeOption"
@@ -227,13 +227,13 @@
                         <TabItem>
                             <ChildContent><TabHeader Text="Roles" /></ChildContent>
                             <ContentTemplate>
-                                <div style="padding:16px;">
-                                    <p style="color:#888;font-size:12px;margin-bottom:16px;">
+                                <div class="panel-pestana">
+                                    <p class="hint" style="margin-bottom:var(--pad-lg);">
                                         Marque los roles que aplican a esta persona. La especializacion de cada rol
                                         (datos de asociado, datos laborales, datos del vendedor) se administra en
                                         sus modulos correspondientes (Asociados, Empleados, Vendedores).
                                     </p>
-                                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                                    <div class="rejilla-campos">
                                         <div>
                                             <SfCheckBox @bind-Checked="_model.IsAssociate" Label="Asociado" />
                                         </div>

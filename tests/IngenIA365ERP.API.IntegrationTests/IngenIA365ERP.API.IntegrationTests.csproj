@@ -23,4 +23,19 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Presentation\IngenIA365ERP.API\IngenIA365ERP.API.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      Limita cuantas clases de prueba corren a la vez. NO es una preferencia de
+      estilo: cada clase con fixture levanta TRES contenedores (base de datos,
+      Mongo y Redis), y hay 25 clases asi. Sin tope, la maquina intenta arrancar
+      hasta 75 contenedores en paralelo y los hosts empiezan a caerse durante el
+      arranque.
+
+      Lo peor es el sintoma: el fallo llega como ObjectDisposedException sobre
+      IServiceProvider en WebApplicationFactory.StartServer, que no dice ni una
+      palabra de contenedores. Se vieron 44 pruebas rojas de golpe que pasaban
+      todas en aislamiento; diagnosticar eso desde el mensaje cuesta horas.
+    -->
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

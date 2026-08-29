@@ -1,0 +1,56 @@
+/* Recaudos es un asistente de cuatro pasos, y cada paso vivia con el mismo
+   `background:...;padding:16px;border-radius:8px;margin-bottom:16px` repetido en
+   linea. componentes.css no tiene una clase de panel de seccion; hasta que la
+   tenga, la definicion vive aca con ambito y en tokens. */
+
+.panel-paso {
+    background: var(--superficie-2);
+    padding: var(--pad-lg);
+    border-radius: var(--radio);
+    margin-bottom: var(--pad-lg);
+}
+
+.panel-paso > h5 {
+    margin: 0 0 var(--gap-md);
+}
+
+/* Resultados de la busqueda de asociado: lista corta y desplazable, para que no
+   empuje el resto del asistente hacia abajo. */
+.lista-resultados {
+    margin-top: var(--gap-sm);
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+}
+
+.item-resultado {
+    padding: var(--pad-sm) var(--pad-md);
+    border-bottom: 1px solid var(--borde);
+    cursor: pointer;
+}
+
+.item-resultado:hover {
+    background: var(--acento-suave);
+}
+
+/* El recibo se muestra como aviso de exito; .aviso-ok pone fondo y color, aca
+   se ajusta el margen del titulo y se le devuelve ese color.
+
+   `color: inherit` hace falta porque app.css declara
+   `h1..h6 { color: var(--texto-primario) }`: una regla sobre el propio elemento
+   gana siempre sobre lo heredado del contenedor, asi que sin esto el titulo
+   "Pago Aplicado Exitosamente" sale en gris de texto normal y no en el verde
+   que tenia antes en linea. */
+.aviso > h4 {
+    margin: 0 0 var(--gap-md);
+    color: inherit;
+}
+
+/* Formulario de pago: la rejilla la pone .rejilla-campos; aca solo la superficie. */
+.panel-pago {
+    margin-top: var(--gap-md);
+    padding: var(--pad-md);
+    background: var(--superficie-2);
+    border-radius: var(--radio);
+}

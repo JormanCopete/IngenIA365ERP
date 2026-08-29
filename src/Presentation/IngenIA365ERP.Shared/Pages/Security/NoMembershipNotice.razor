@@ -12,19 +12,19 @@
 
 <PageTitle>Sin acceso — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 520px; margin: 48px auto; text-align: center;">
+<div class="auth-card" style="max-width: 520px; margin: calc(var(--gap-xl) * 1.5) auto; text-align: center;">
     <h1>No tienes acceso a ninguna empresa</h1>
-    <p style="margin-top: 16px;">
+    <p style="margin-top: var(--pad-lg);">
         Tu cuenta existe pero todavía no estás vinculado a ninguna cooperativa.
         Solicita una invitación al administrador de la empresa con la que
         vas a trabajar — recibirás un correo con el enlace para unirte.
     </p>
 
-    <p style="margin-top: 24px; color: #6b7280; font-size: 14px;">
+    <p class="muted" style="margin-top: var(--pad-xl);">
         Si crees que esto es un error, contacta al soporte indicando tu correo.
     </p>
 
-    <button @onclick="LogoutAsync" disabled="@_busy" style="margin-top: 24px;">
+    <button @onclick="LogoutAsync" disabled="@_busy" style="margin-top: var(--pad-xl);">
         @(_busy ? "Cerrando..." : "Cerrar sesión")
     </button>
 </div>

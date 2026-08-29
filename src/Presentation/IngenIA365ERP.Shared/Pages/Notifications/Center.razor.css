@@ -1,0 +1,26 @@
+/* Lo específico de la bandeja de notificaciones. Todo lo demás sale de
+   componentes.css: .admin-page, .toolbar, .data-grid, .muted, .boton. */
+
+/* Estas etiquetas ENVUELVEN una casilla y su texto en la misma línea. La regla
+   global `.toolbar label` las pone en columna —correcto cuando el rótulo va
+   encima del control— y acá dejaría la casilla arriba y el texto debajo. */
+.toolbar label {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--gap-xs);
+}
+
+/* El recuento se separa de los controles y se pega al borde derecho. */
+.toolbar .muted {
+    margin-left: auto;
+}
+
+/* El cuerpo del mensaje puede traer saltos de línea propios y líneas largas:
+   se respetan los saltos pero se permite el ajuste. */
+.data-grid pre {
+    margin: var(--gap-xs) 0 0;
+    white-space: pre-wrap;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}

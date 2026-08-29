@@ -42,17 +42,20 @@ public static class DependencyInjection
             options.InstanceName = redisSettings.InstanceName;
         });
 
+        // Cuantas bases logicas declara el servidor. Singleton: solo consulta al
+        // multiplexor, y el valor no cambia mientras Redis no reinicie.
+        services.AddSingleton<ICacheSlotCapacity, RedisSlotCapacity>();
+
         services.AddScoped<ICacheService, RedisCacheService>();
 
         // T029 — Abstracciones de seguridad respaldadas por Redis.
+        //
+        // IRevokedTokenBlacklist estaba aquí y no lo inyectaba nadie: la
+        // revocación viva es el SecurityStamp, que invalida los tokens sin
+        // necesidad de una lista negra. Una abstracción registrada sin
+        // consumidor hace creer que hay una defensa donde no la hay.
         services.AddScoped<IRefreshTokenStore, RedisRefreshTokenStore>();
-        services.AddScoped<IRevokedTokenBlacklist, RedisRevokedTokenBlacklist>();
         services.AddScoped<IPermissionClaimsCache, RedisPermissionClaimsCache>();
-        services.AddScoped<IMfaResetCoordinator, RedisMfaResetCoordinator>();
-
-        // T052 — Cache de challenge MFA (post-login, pre-verify) y enrollment.
-        services.AddScoped<IMfaChallengeStore, RedisMfaChallengeStore>();
-        services.AddScoped<IMfaEnrollmentStore, RedisMfaEnrollmentStore>();
 
         // Feature 002 (Chunk C.2) — identidad central:
         // - TenantMembershipReader: cache 60s + JOIN a ADM_TenantMemberships/Tenants/MfaPolicies
@@ -62,6 +65,12 @@ public static class DependencyInjection
         services.AddScoped<ITenantMembershipReader, RedisTenantMembershipReader>();
         services.AddScoped<IMembershipChangedNotifier, RedisMembershipChangedNotifier>();
         services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+
+        // Tope diario de solicitudes de recuperacion. Clave propia, no el contador
+        // de intentos: ahi no hay fallos que castigar, hay volumen que acotar.
+        services.AddScoped<
+            IngenIA365ERP.Application.Identity.Auth.Recuperacion.ITopeDeSolicitudesDeRecuperacion,
+            Services.Identity.RedisTopeDeSolicitudesDeRecuperacion>();
 
         // Feature 002 (US1.2.0) — lock distribuido para serializar trabajo
         // crítico entre instancias (single-use estricto de invitations,
@@ -76,6 +85,11 @@ public static class DependencyInjection
         // Feature 002 · Phase 4b — secret + recovery codes pendientes entre
         // BeginMfaEnrollment y ConfirmMfaEnrollment. TTL típico 10 min.
         services.AddSingleton<IMfaPendingStore, RedisMfaPendingStore>();
+
+        // El reto de WebAuthn va aparte del pendiente de TOTP: aquel guarda una
+        // sola clave por persona, y con dos pestañas abiertas la segunda pisaria
+        // el reto de la primera.
+        services.AddSingleton<IWebAuthnChallengeStore, RedisWebAuthnChallengeStore>();
 
         // Suscriptor pub/sub al canal de invalidaciones — se monta una vez por proceso.
         // El cleanup se delega al ConnectionMultiplexer singleton (dispose drops la suscripción).

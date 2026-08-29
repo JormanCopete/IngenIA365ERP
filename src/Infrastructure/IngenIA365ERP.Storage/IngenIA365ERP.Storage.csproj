@@ -26,4 +26,8 @@
          IPasswordResetEmailDispatcher / IPasswordChangedNotifier. -->
     <None Update="Templates\*.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+  </ItemGroup>
+
 </Project>

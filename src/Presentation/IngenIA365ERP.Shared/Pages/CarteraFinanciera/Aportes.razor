@@ -7,76 +7,78 @@
 
 <PageTitle>Aportes - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>Aportes Sociales</h3>
-</div>
-
-<!-- Person search -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-        <div style="flex:1;min-width:200px;">
-            <label>Documento del Asociado</label>
-            <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
-        </div>
-        <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Aportes Sociales</h3>
     </div>
 
-    @if (_balance is not null)
-    {
-        <div style="margin-top:16px;">
-            <p style="margin:4px 0;color:#27ae60;">Asociado: <strong>@_balance.PersonName</strong></p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px;">
-                <div class="kpi-card">
-                    <span class="kpi-label">Total Aportes</span>
-                    <span class="kpi-value" style="color:#27ae60;">@_balance.TotalContributions.ToString("N0")</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Total Retiros</span>
-                    <span class="kpi-value" style="color:#e74c3c;">@_balance.TotalReductions.ToString("N0")</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Saldo Actual</span>
-                    <span class="kpi-value" style="color:#3498db;font-size:20px;">@_balance.CurrentBalance.ToString("N0")</span>
-                </div>
+    <!-- Person search -->
+    <div class="panel">
+        <div class="toolbar">
+            <div class="campo-busqueda">
+                <label>Documento del Asociado</label>
+                <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
             </div>
-
-            <div style="display:flex;gap:12px;margin-top:16px;">
-                <SfButton CssClass="e-success" IconCss="e-icons e-plus" OnClick="ShowContributeDialog">Registrar Aporte</SfButton>
-                <SfButton CssClass="e-warning" IconCss="e-icons e-minus" OnClick="ShowReductionDialog">Retiro Parcial</SfButton>
-            </div>
+            <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
         </div>
+
+        @if (_balance is not null)
+        {
+            <div class="resultado">
+                <p class="asociado">Asociado: <strong>@_balance.PersonName</strong></p>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Aportes</span>
+                        <span class="kpi-value valor-exito">@_balance.TotalContributions.ToString("N0")</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Retiros</span>
+                        <span class="kpi-value valor-peligro">@_balance.TotalReductions.ToString("N0")</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Saldo Actual</span>
+                        <span class="kpi-value valor-info">@_balance.CurrentBalance.ToString("N0")</span>
+                    </div>
+                </div>
+
+                <div class="acciones">
+                    <SfButton CssClass="e-success" IconCss="e-icons e-plus" OnClick="ShowContributeDialog">Registrar Aporte</SfButton>
+                    <SfButton CssClass="e-warning" IconCss="e-icons e-minus" OnClick="ShowReductionDialog">Retiro Parcial</SfButton>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- History grid -->
+    @if (_entries.Count > 0)
+    {
+        <h4>Historial de Movimientos</h4>
+        <SfGrid TValue="ContributionEntryRow" DataSource="_entries" AllowPaging="true" AllowSorting="true"
+                GridLines="GridLine.Both">
+            <GridPageSettings PageSize="15" />
+            <GridColumns>
+                <GridColumn Field="@nameof(ContributionEntryRow.Period)" HeaderText="Periodo" Width="110" TextAlign="TextAlign.Center" />
+                <GridColumn Field="@nameof(ContributionEntryRow.TypeText)" HeaderText="Tipo" Width="120" TextAlign="TextAlign.Center">
+                    <Template>
+                        @{
+                            var row = context as ContributionEntryRow;
+                            var css = row?.Type == "A" ? "badge-aporte" : "badge-retiro-aporte";
+                        }
+                        <span class="badge @css">@row?.TypeText</span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(ContributionEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+                <GridColumn Field="@nameof(ContributionEntryRow.CreatedAt)" HeaderText="Fecha Registro" Width="160" Format="g" />
+            </GridColumns>
+        </SfGrid>
     }
 </div>
-
-<!-- History grid -->
-@if (_entries.Count > 0)
-{
-    <h4>Historial de Movimientos</h4>
-    <SfGrid TValue="ContributionEntryRow" DataSource="_entries" AllowPaging="true" AllowSorting="true"
-            GridLines="GridLine.Both">
-        <GridPageSettings PageSize="15" />
-        <GridColumns>
-            <GridColumn Field="@nameof(ContributionEntryRow.Period)" HeaderText="Periodo" Width="110" TextAlign="TextAlign.Center" />
-            <GridColumn Field="@nameof(ContributionEntryRow.TypeText)" HeaderText="Tipo" Width="120" TextAlign="TextAlign.Center">
-                <Template>
-                    @{
-                        var row = context as ContributionEntryRow;
-                        var css = row?.Type == "A" ? "badge-aporte" : "badge-retiro-aporte";
-                    }
-                    <span class="@css">@row?.TypeText</span>
-                </Template>
-            </GridColumn>
-            <GridColumn Field="@nameof(ContributionEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
-            <GridColumn Field="@nameof(ContributionEntryRow.CreatedAt)" HeaderText="Fecha Registro" Width="160" Format="g" />
-        </GridColumns>
-    </SfGrid>
-}
 
 <!-- Dialog: Aporte -->
 <SfDialog @bind-Visible="_showContributeDialog" Header="Registrar Aporte" Width="380px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
+            <div class="campos-dialogo">
                 <label>Asociado: <strong>@_balance?.PersonName</strong></label>
                 <label>Monto del Aporte</label>
                 <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
@@ -95,9 +97,9 @@
 <SfDialog @bind-Visible="_showReductionDialog" Header="Retiro Parcial de Aportes" Width="380px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
+            <div class="campos-dialogo">
                 <label>Asociado: <strong>@_balance?.PersonName</strong></label>
-                <label>Saldo actual: <strong style="color:#3498db;">@(_balance?.CurrentBalance.ToString("N0") ?? "0")</strong></label>
+                <label>Saldo actual: <strong class="saldo-actual">@(_balance?.CurrentBalance.ToString("N0") ?? "0")</strong></label>
                 <label>Monto a Retirar</label>
                 <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
                 <label>Referencia (opcional)</label>
@@ -110,11 +112,6 @@
         <DialogButton Content="Retirar" CssClass="e-danger" OnClick="ExecuteReduction" />
     </DialogButtons>
 </SfDialog>
-
-<style>
-    .badge-aporte { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
-    .badge-retiro-aporte { background:#e74c3c; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
-</style>
 
 @code {
     private string _personCode = "";

@@ -21,9 +21,12 @@ public class MongoDbInitializer
         _logger = logger;
     }
 
-    public async Task InitializeAsync(string tenantId)
+    public async Task InitializeAsync(string? tenantId)
     {
-        var db = _client.GetDatabase(_settings.DatabaseName);
+        // La base de la cooperativa, o la global si no hay ninguna. Antes apuntaba
+        // siempre a la base sin sufijo, que con el aislamiento por base dejo de
+        // pertenecer a nadie.
+        var db = _client.GetDatabase(AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
 
         await InitializeAuditCollectionAsync(db, tenantId);
         await InitializeAccessCollectionAsync(db, tenantId);
@@ -31,14 +34,24 @@ public class MongoDbInitializer
         _logger.LogInformation("MongoDB collections initialized for tenant {TenantId}", tenantId);
     }
 
+    /// <summary>
+    /// Prepara la base GLOBAL, la de los eventos anteriores a elegir cooperativa.
+    ///
+    /// <para>
+    /// Pasaba el literal <c>"default"</c>, que componia un nombre con una palabra
+    /// de relleno — la misma clase de cubo que ya produjo <c>audit_default</c> con
+    /// cuatrocientos documentos que nadie sabia de quien eran. Ahora se pide la
+    /// global por su nombre, que es una constante.
+    /// </para>
+    /// </summary>
     public async Task InitializeDefaultAsync()
     {
-        await InitializeAsync("default");
+        await InitializeAsync(tenantId: null);
     }
 
     private async Task InitializeAuditCollectionAsync(IMongoDatabase db, string tenantId)
     {
-        var collectionName = $"audit_{tenantId}";
+        var collectionName = AuditDatabaseNames.Coleccion;
         var collection = db.GetCollection<AuditLog>(collectionName);
 
         var indexes = new List<CreateIndexModel<AuditLog>>
@@ -79,7 +92,7 @@ public class MongoDbInitializer
 
     private async Task InitializeAccessCollectionAsync(IMongoDatabase db, string tenantId)
     {
-        var collectionName = $"access_{tenantId}";
+        var collectionName = "access_log";
         var collection = db.GetCollection<AccessLog>(collectionName);
 
         var indexes = new List<CreateIndexModel<AccessLog>>

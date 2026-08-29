@@ -71,6 +71,10 @@ public sealed class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand
 
         if (_claimsCache is not null)
         {
+            // La cooperativa sale de la peticion, que es de donde tambien la toma
+            // PermisosDeLaPeticion al poblar el cache: las dos puntas tienen que
+            // usar la misma clave o la invalidacion no encuentra nada. Es el Id
+            // interno, no el PublicId.
             await _claimsCache.InvalidateAsync(user.Id,
                 _currentUser.TenantId ?? string.Empty, ct);
         }

@@ -1,0 +1,68 @@
+/* Kardex — solo lo que NO cubre componentes.css.
+   El encabezado, la barra de filtros y la rejilla de tarjetas salen de la hoja
+   global; acá queda el panel del producto elegido, la tarjeta rellena del total
+   y el estado vacío. */
+
+/* .page-header desmargina h1–h3; acá el título de sección es h4 porque el h3
+   ya lo ocupa el título de la pantalla. */
+.page-header > h4 {
+    margin: 0;
+}
+
+/* Banda del producto elegido: el dato a la izquierda, cambiar producto a la
+   derecha, y en pantalla angosta el botón baja en vez de comprimir el nombre. */
+.panel-producto {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--gap-md);
+    padding: var(--pad-lg);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-0);
+}
+
+.panel-producto .label {
+    display: block;
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}
+
+.panel-producto .titulo {
+    font-size: var(--texto-lg);
+}
+
+.panel-producto .medida {
+    margin-left: var(--gap-sm);
+}
+
+/* La única tarjeta rellena de la rejilla: el total de todas las bodegas. Su
+   texto va sobre el color de fondo, no sobre la superficie, así que hereda el
+   color en vez de usar los tokens de texto tenue —que ahí no contrastarían. */
+.tarjeta-total {
+    background: var(--info);
+    border-color: var(--info);
+    color: var(--acento-texto);
+}
+
+.tarjeta-total .kpi-label,
+.tarjeta-total .kpi-value {
+    color: inherit;
+}
+
+.tarjeta-total .kpi-label {
+    opacity: .8;
+}
+
+/* Sin producto elegido, o con filtros que no devuelven movimientos. */
+.estado-vacio {
+    padding: var(--gap-xl);
+    text-align: center;
+    color: var(--texto-tenue);
+}
+
+.estado-vacio .icono {
+    display: block;
+    margin-bottom: var(--gap-md);
+    font-size: 48px;
+}

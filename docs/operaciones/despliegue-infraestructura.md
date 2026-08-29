@@ -113,17 +113,21 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 | ✅ M4 | Migrar nameservers de `ingenia365.com` (GoDaddy → Cloudflare) — ver [guía](migracion-dns-cloudflare.md) | hecho — túnel y dominios operativos |
 | ✅ M5 | Mergear el PR a `develop` | hecho — imágenes publicadas y ERP desplegado en DEV y QA |
 | ✅ M6 | Repositorio y paquetes de GHCR en privado + Secret `ghcr-pull` | hecho — verificado con prueba de control (sin el secreto la descarga falla con 401) |
-| ⏳ M7 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado, y ejecutar `tools/scripts/crear-secreto-s3.ps1` | Backups con PITR y retención SARLAFT |
-| ⏳ M8 | **Rotar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Higiene de credenciales — independiente de M7 |
-| ⏳ M9 | Respaldo propio de **MongoDB** | La auditoría SARLAFT (5 años) vive en disco local del nodo, sin redundancia ni backup |
+| ✅ M7 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado | hecho — con Object Lock, versionado, cifrado y permisos mínimos |
+| ⏳ M8 | **Desactivar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Ya no la usa el ERP, pero sigue activa. Ver P1 en [estado-y-pendientes.md](estado-y-pendientes.md) |
+| ✅ M9 | Respaldo propio de **MongoDB** | hecho — replica set con oplog, volcado diario y **restauración probada** en los tres ambientes |
 
-### Estado de los ambientes (2026-08-11)
+### Estado de los ambientes (2026-08-14)
 
 | Ambiente | Estado | Sincronización |
 |---|---|---|
-| DEV | ✅ operativo, `Synced/Healthy`, 5/5 pods | automática con auto-reparación |
-| QA | ✅ operativo, `Synced/Healthy`, 5/5 pods | automática sin auto-reparación |
-| PDN | ⛔ **sin desplegar** | manual |
+| DEV | ✅ operativo | automática con auto-reparación |
+| QA | ✅ operativo | automática sin auto-reparación |
+| PDN | ✅ **operativo** — https://app.ingenia365.com, login verificado en navegador | manual |
+
+> 📋 El estado detallado (respaldos, observabilidad, seguridad) y **la lista de
+> pendientes priorizada** viven en [estado-y-pendientes.md](estado-y-pendientes.md).
+> Este documento conserva el diseño y la bitácora de instalación.
 
 ### Flujo de ramas y ambientes
 
@@ -140,9 +144,14 @@ separados — publicar una imagen no despliega nada por sí solo.
 `main` queda sin uso en este flujo; el CI la sigue construyendo por si se
 conserva como rama histórica.
 
-> Antes de la primera promoción a `release` conviene resolver M9. Desplegar
-> producción es empezar a acumular auditoría regulada de retención obligatoria
-> sin red de seguridad.
+> ⚠️ **Publicar una imagen no basta para desplegarla.** Las etiquetas son
+> móviles: republicar `:release` no cambia el manifiesto, así que Kubernetes no
+> ve diferencia y no rota los pods. Por eso los Deployments usan
+> `imagePullPolicy: Always`. Queda pendiente fijar el **digest** (P3), que es lo
+> único que deja registro de qué artefacto está en producción.
+>
+> La primera promoción se hizo el 2026-08-14, con los respaldos de ambos motores
+> ya verificados —incluida la restauración— y las alertas funcionando.
 
 > **M5 usa S3 de AWS** por decisión del usuario (ya disponible), no Backblaze B2
 > como se había diseñado. El diseño con Object Lock sigue siendo el objetivo:

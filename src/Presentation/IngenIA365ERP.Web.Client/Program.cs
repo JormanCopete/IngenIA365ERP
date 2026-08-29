@@ -34,7 +34,24 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 
 // Named HttpClient used by all pages/services. Pages get this via the default
 // HttpClient injection below.
-var apiBaseUrl = AppMode.UseMock ? builder.HostEnvironment.BaseAddress : AppMode.ApiBaseUrl;
+//
+// Un ApiBaseUrl RELATIVO ("/") se resuelve contra el origen desde el que se
+// sirvió la aplicación, y ésa es la única forma de que esto funcione desplegado:
+// wwwroot/appsettings.json es un archivo ESTÁTICO que descarga el navegador, así
+// que ninguna variable de entorno lo pisa. El despliegue no puede corregirlo sin
+// reconstruir el wwwroot — y mientras no se corrigió, producción sirvió
+// "http://localhost:5100", o sea la máquina de quien abría la página.
+//
+// Todas las rutas que piden los clientes empiezan por "/api/...", de modo que lo
+// único que hay que acertar aquí es el ORIGEN. Un valor absoluto se sigue
+// respetando tal cual: es lo que necesitan desarrollo (API en otro puerto) y
+// cualquier ambiente donde la API no comparta host.
+var origenDelNavegador = builder.HostEnvironment.BaseAddress;
+var apiBaseUrl = AppMode.UseMock
+    ? origenDelNavegador
+    : Uri.TryCreate(AppMode.ApiBaseUrl, UriKind.Absolute, out var apiAbsoluta)
+        ? apiAbsoluta.ToString()
+        : new Uri(new Uri(origenDelNavegador), AppMode.ApiBaseUrl).ToString();
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthBearerHandler>()
     .AddHttpMessageHandler<TenantDelegatingHandler>();
@@ -66,10 +83,18 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Puente con navigator.credentials (passkeys). Va en los dos hosts porque el
+// prerender del servidor instancia las mismas pantallas; ahí devuelve
+// «no disponible» y el botón aparece recién en el primer render interactivo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.WebAuthnInterop>();
 // Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
 // aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
 // y la página crasheaba el runtime WASM al inyectarlo.
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

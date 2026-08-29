@@ -7,101 +7,103 @@
 
 <PageTitle>Estado de Resultados - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Estado de Resultados</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
-        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Estado de Resultados</h3>
+        <div>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+            <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+        </div>
     </div>
+
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Ano</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Mes</label>
+            <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
+
+    @if (_data is not null && _data.Count > 0)
+    {
+        <!-- Summary Cards -->
+        <div class="rejilla-tarjetas">
+            <div class="info-card">
+                <span class="label">Total Ingresos</span>
+                <span style="color:var(--exito-texto);">@_totalIncome.ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Total Gastos</span>
+                <span style="color:var(--peligro-texto);">@_totalExpenses.ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">@(_netResult >= 0 ? "Utilidad Neta" : "Perdida Neta")</span>
+                <span style="color:@(_netResult >= 0 ? "var(--exito)" : "var(--peligro)");font-weight:var(--peso-fuerte);">@_netResult.ToString("N2")</span>
+            </div>
+        </div>
+
+        <!-- Income Section -->
+        <h4 style="color:var(--exito-texto);">Ingresos</h4>
+        <SfGrid TValue="ResultLine" DataSource="@_data.Where(d => d.Section == "Ingresos").ToList()" AllowSorting="true">
+            <GridColumns>
+                <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
+                <GridColumn Field="AccountName" HeaderText="Nombre" Width="350" />
+                <GridColumn Field="Amount" HeaderText="Valor" Width="180" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+
+        <!-- Expenses Section -->
+        <h4 style="color:var(--peligro-texto);">Gastos</h4>
+        <SfGrid TValue="ResultLine" DataSource="@_data.Where(d => d.Section == "Gastos").ToList()" AllowSorting="true">
+            <GridColumns>
+                <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
+                <GridColumn Field="AccountName" HeaderText="Nombre" Width="350" />
+                <GridColumn Field="Amount" HeaderText="Valor" Width="180" Format="N2" TextAlign="TextAlign.Right" />
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+
+        <!-- Net Result -->
+        <div style="padding:var(--pad-lg);border:2px solid @(_netResult >= 0 ? "var(--exito)" : "var(--peligro)");border-radius:var(--radio);text-align:center;">
+            <h4 style="margin:0;color:@(_netResult >= 0 ? "var(--exito)" : "var(--peligro)");">
+                @(_netResult >= 0 ? "UTILIDAD NETA" : "PERDIDA NETA"): @Math.Abs(_netResult).ToString("N2")
+            </h4>
+        </div>
+    }
+    else if (!_loading && _data is not null)
+    {
+        <p class="texto-tenue">No se encontraron datos para el periodo seleccionado.</p>
+    }
 </div>
-
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Ano</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Mes</label>
-        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-</div>
-
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
-}
-
-@if (_data is not null && _data.Count > 0)
-{
-    <!-- Summary Cards -->
-    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="info-card">
-            <span class="label">Total Ingresos</span>
-            <span style="color:#4caf50;">@_totalIncome.ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Total Gastos</span>
-            <span style="color:#f44336;">@_totalExpenses.ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">@(_netResult >= 0 ? "Utilidad Neta" : "Perdida Neta")</span>
-            <span style="color:@(_netResult >= 0 ? "#4caf50" : "#f44336");font-weight:bold;">@_netResult.ToString("N2")</span>
-        </div>
-    </div>
-
-    <!-- Income Section -->
-    <h4 style="color:#4caf50;margin:16px 0 8px;">Ingresos</h4>
-    <SfGrid TValue="ResultLine" DataSource="@_data.Where(d => d.Section == "Ingresos").ToList()" AllowSorting="true">
-        <GridColumns>
-            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
-            <GridColumn Field="AccountName" HeaderText="Nombre" Width="350" />
-            <GridColumn Field="Amount" HeaderText="Valor" Width="180" Format="N2" TextAlign="TextAlign.Right" />
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-
-    <!-- Expenses Section -->
-    <h4 style="color:#f44336;margin:24px 0 8px;">Gastos</h4>
-    <SfGrid TValue="ResultLine" DataSource="@_data.Where(d => d.Section == "Gastos").ToList()" AllowSorting="true">
-        <GridColumns>
-            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="140" />
-            <GridColumn Field="AccountName" HeaderText="Nombre" Width="350" />
-            <GridColumn Field="Amount" HeaderText="Valor" Width="180" Format="N2" TextAlign="TextAlign.Right" />
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-
-    <!-- Net Result -->
-    <div style="margin-top:24px;padding:16px;border:2px solid @(_netResult >= 0 ? "#4caf50" : "#f44336");border-radius:8px;text-align:center;">
-        <h4 style="margin:0;color:@(_netResult >= 0 ? "#4caf50" : "#f44336");">
-            @(_netResult >= 0 ? "UTILIDAD NETA" : "PERDIDA NETA"): @Math.Abs(_netResult).ToString("N2")
-        </h4>
-    </div>
-}
-else if (!_loading && _data is not null)
-{
-    <p style="color:#999;">No se encontraron datos para el periodo seleccionado.</p>
-}
 
 @code {
     private int _year = DateTime.Today.Year;
@@ -173,8 +175,3 @@ else if (!_loading && _data is not null)
 
     private record MonthOption(int Value, string Name);
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
-</style>

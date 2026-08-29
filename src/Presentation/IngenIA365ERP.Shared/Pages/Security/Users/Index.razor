@@ -3,21 +3,24 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
 <PageTitle>Usuarios — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>Usuarios</h1>
+    <div class="page-header">
+        <h1>Usuarios</h1>
+    </div>
 
     <div class="toolbar">
         <input type="search" placeholder="Buscar usuario o correo…" @bind="_search" @bind:event="oninput" />
         <label><input type="checkbox" @bind="_includeDisabled" /> incluir deshabilitados</label>
-        <button class="primary" @onclick="OpenCreate">+ Nuevo usuario</button>
+        <button class="primary" @onclick="InvitarAsync">Invitar persona</button>
         <button @onclick="LoadAsync">Refrescar</button>
     </div>
 
     @if (_loading) { <p>Cargando…</p> }
-    else if (_error is not null) { <p class="error">@_error</p> }
+    else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
     else if (_items.Count == 0) { <p>Sin resultados.</p> }
     else
     {
@@ -35,21 +38,26 @@
                         <td>@u.Username</td>
                         <td>@u.Email</td>
                         <td>@(u.IsActive ? "Activo" : "Inactivo")</td>
-                        <td>@(u.IsMfaEnabled ? "Sí" : "No")</td>
-                        <td>@(u.IsLocked ? "Sí" : "")</td>
+                        @* «—» cuando no se sabe, y NO «No»: estas columnas se leian
+                           de SEC_Users, donde ya no las escribe nadie, y afirmaban
+                           que nadie tenia segundo factor ni estaba bloqueado. *@
+                        <td>@(u.IsMfaEnabled is null ? "—" : u.IsMfaEnabled.Value ? "Sí" : "No")</td>
+                        <td>@(u.IsLocked is null ? "—" : u.IsLocked.Value ? "Sí" : "")</td>
                         <td>@string.Join(", ", u.RoleCodes)</td>
                         <td>@u.LastLoginAt?.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>
-                            <button @onclick="() => Edit(u.PublicId)">Editar</button>
-                            <button @onclick="() => Roles(u.PublicId)">Roles</button>
-                            @if (u.IsLocked)
-                            {
-                                <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
-                            }
-                            @if (u.IsActive)
-                            {
-                                <button @onclick="() => DisableAsync(u.PublicId)">Deshabilitar</button>
-                            }
+                            <div class="acciones">
+                                <button @onclick="() => Edit(u.PublicId)">Editar</button>
+                                <button @onclick="() => Roles(u.PublicId)">Roles</button>
+                                @if (u.IsLocked == true)
+                                {
+                                    <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
+                                }
+                                @if (u.IsActive)
+                                {
+                                    <button @onclick="() => DisableAsync(u.PublicId)">Deshabilitar</button>
+                                }
+                            </div>
                         </td>
                     </tr>
                 }
@@ -63,6 +71,8 @@
     private string _search = string.Empty;
     private bool _includeDisabled;
     private bool _loading;
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthState { get; set; }
+
     private string? _error;
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -85,7 +95,29 @@
         finally { _loading = false; }
     }
 
-    private void OpenCreate() => Nav.NavigateTo("/security/users/new");
+    /// <summary>
+    /// Se invita, no se crea.
+    ///
+    /// <para>
+    /// El botón anterior daba de alta una fila en SEC_Users y nada más. Pero el
+    /// acceso valida contra la identidad central, que ese camino no tocaba: la
+    /// persona aparecía en la pantalla, se le podían asignar roles, y no podía
+    /// entrar. La invitación sí crea las dos mitades.
+    /// </para>
+    /// </summary>
+    private async Task InvitarAsync()
+    {
+        var estado = await AuthState!;
+        var cooperativa = estado.User.FindFirst("active_tenant_id")?.Value;
+
+        if (string.IsNullOrWhiteSpace(cooperativa))
+        {
+            _error = "Elegí una cooperativa antes de invitar a alguien.";
+            return;
+        }
+
+        Nav.NavigateTo($"/admin/tenants/{cooperativa}/invitaciones");
+    }
     private void Edit(Guid id) => Nav.NavigateTo($"/security/users/{id}");
     private void Roles(Guid id) => Nav.NavigateTo($"/security/users/{id}/roles");
 
@@ -101,7 +133,7 @@
 
     public sealed record UserItem(
         Guid PublicId, string Username, string? Email,
-        bool IsActive, bool IsMfaEnabled, bool IsLocked,
+        bool IsActive, bool? IsMfaEnabled, bool? IsLocked,
         DateTime? LastLoginAt, IReadOnlyList<string> RoleCodes);
 
     public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);

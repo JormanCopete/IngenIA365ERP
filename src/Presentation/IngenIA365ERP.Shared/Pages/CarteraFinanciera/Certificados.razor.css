@@ -1,0 +1,28 @@
+/* Certificados de depósito a término — pastillas de estado.
+   Estaban en un <style> dentro del .razor, es decir sueltas en el documento:
+   cualquier otra pantalla con una clase homónima las pisaba. La geometría la
+   pone .badge de componentes.css; acá sólo el relleno semántico. */
+
+.badge-vigente {
+    background: var(--exito);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+.badge-vencido {
+    background: var(--alerta);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+.badge-cancelado {
+    background: var(--peligro);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+.badge-renovado {
+    background: var(--info);
+    color: var(--acento-texto);
+    border-color: transparent;
+}

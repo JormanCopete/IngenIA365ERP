@@ -26,10 +26,20 @@ public class PasswordPolicyConfiguration : IEntityTypeConfiguration<PasswordPoli
             .HasFilter("[IsDeleted] = 0")
             .HasDatabaseName("UX_SEC_PasswordPolicies_TenantId_NotDeleted");
 
-        builder.HasOne(e => e.Tenant)
-            .WithMany()
-            .HasForeignKey(e => e.TenantId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Sin clave foranea hacia ADM_Tenants, y no es una omision.
+        //
+        // El registro de cooperativas vive en la base ADMINISTRATIVA, no aqui. La
+        // relacion sigue existiendo conceptualmente —TenantId dice de que
+        // cooperativa es— pero se valida en la aplicacion, porque cuando cada
+        // cooperativa tiene su propia base una clave foranea entre bases distintas
+        // es sencillamente imposible de crear.
+        //
+        // Declararla no era inofensivo: EF arrastraba ADM_Tenants al modelo
+        // operativo y la copiaba, vacia, dentro del espacio de cada cooperativa. La
+        // FK resolvia contra esa copia local, asi que insertar una fila con TenantId
+        // violaba la restriccion SIEMPRE. Es la razon por la que ninguna cooperativa
+        // llego a tener roles y el sistema de permisos estuvo inerte.
+        builder.Ignore(e => e.Tenant);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

@@ -35,7 +35,9 @@ public class AssignRoleCommandHandlerTests
         bool roleAssignable = true, bool alreadyAssigned = false)
     {
         var u = new User { Username = "ana", Email = "ana@x", PasswordHash = "h", IsActive = true };
-        var r = new Role { Code = "TesoreroJunior", Name = "Tesorero Junior", IsAssignable = roleAssignable };
+        // TenantId 7, distinto del "1" que devuelve el contexto de la peticion en
+        // Build(): asi la prueba distingue de cual de los dos sale la clave.
+        var r = new Role { Code = "TesoreroJunior", Name = "Tesorero Junior", TenantId = 7, IsAssignable = roleAssignable };
         db.Users.Add(u);
         db.Roles.Add(r);
         db.SaveChanges();
@@ -63,6 +65,11 @@ public class AssignRoleCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         db.UserRoles.Should().HaveCount(1);
 
+        // La cooperativa sale de la peticion —"1" en Build()— y no del rol: bajo
+        // schema-per-tenant los roles viven DENTRO del esquema de su cooperativa y
+        // llevan TenantId nulo, asi que tomarla del rol daria clave vacia. Tiene que
+        // coincidir con la que usa PermisosDeLaPeticion al poblar el cache, o la
+        // invalidacion no encuentra la entrada y el permiso revocado sigue vivo.
         await cache.Received(1).InvalidateAsync(user.Id, "1", Arg.Any<CancellationToken>());
 
         await mediator.Received(1).Send(

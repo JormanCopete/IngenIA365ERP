@@ -1,36 +1,44 @@
+/* Panel de inicio. La pantalla usa el contenedor .pagina (relleno, gap y tope
+   de ancho salen de componentes.css); acá queda SOLO lo propio del tablero:
+   la variante de .kpi-card con icono al lado y las rejillas de gráficas.
+
+   Al ser CSS con ámbito, `.kpi-card[b-…]` gana sobre la `.kpi-card` global sin
+   necesidad de !important. */
+
 .dashboard {
     max-width: 1400px;
 }
 
-.dashboard-header {
-    margin-bottom: 24px;
-}
-
+/* Los huecos entre bloques los pone el `gap` de .pagina; los margin-bottom que
+   había acá los duplicaban. */
 .dashboard-header h2 {
-    margin: 0 0 4px;
-    font-size: 1.5rem;
+    margin: 0 0 var(--gap-xs);
+    font-size: calc(1.5rem * var(--escala));
 }
 
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: var(--pad-lg);
 }
 
+/* Variante horizontal: icono a la izquierda, cifra y etiqueta a la derecha.
+   La .kpi-card global es vertical y centrada. */
 .kpi-card {
-    background: var(--card-bg, #2a2a3c);
-    border-radius: 10px;
-    padding: 20px;
+    background: var(--superficie-1);
+    border-radius: var(--radio-lg);
+    padding: var(--gap-lg);
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 16px;
+    text-align: left;
+    gap: var(--pad-lg);
 }
 
 .kpi-icon {
     width: 48px;
     height: 48px;
-    border-radius: 12px;
+    border-radius: var(--radio-lg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -38,45 +46,46 @@
     flex-shrink: 0;
 }
 
+/* Los cuatro tonos venían como rgba() literales en el .razor: no respondían al
+   cambio de tema y quedaban casi invisibles sobre el fondo oscuro. */
+.kpi-icon-info   { background: var(--info-fondo);   color: var(--info-texto); }
+.kpi-icon-exito  { background: var(--exito-fondo);  color: var(--exito-texto); }
+.kpi-icon-marca  { background: var(--acento-suave); color: var(--acento); }
+.kpi-icon-alerta { background: var(--alerta-fondo); color: var(--alerta-texto); }
+
 .kpi-data {
     display: flex;
     flex-direction: column;
 }
 
 .kpi-value {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #fff;
+    font-size: calc(1.4rem * var(--escala));
+    font-weight: var(--peso-fuerte);
+    color: var(--texto-primario);
 }
 
 .kpi-label {
-    font-size: 0.8rem;
-    color: var(--text-secondary, #9e9e9e);
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
 }
 
-.charts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.chart-card, .table-card {
-    background: var(--card-bg, #2a2a3c);
-    border-radius: 10px;
-    padding: 20px;
-}
-
-.chart-card h4, .table-card h4 {
-    margin: 0 0 16px;
-    font-size: 0.95rem;
-    color: var(--text-primary, #e0e0e0);
-}
-
+.charts-grid,
 .tables-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 16px;
+    gap: var(--pad-lg);
+}
+
+.chart-card, .table-card {
+    background: var(--superficie-1);
+    border-radius: var(--radio-lg);
+    padding: var(--gap-lg);
+}
+
+.chart-card h4, .table-card h4 {
+    margin: 0 0 var(--pad-lg);
+    font-size: var(--texto-md);
+    color: var(--texto-primario);
 }
 
 @media (max-width: 768px) {

@@ -13,18 +13,21 @@ namespace IngenIA365ERP.Audit.Services;
 /// si alguien adquiere otro <see cref="IMongoCollection{TDocument}"/> y
 /// llama <c>UpdateOne</c>/<c>DeleteOne</c>, MongoDB rechaza la operación.
 ///
-/// La colección está particionada por tenant (<c>audit_events_{tenantId}</c>)
-/// para favorecer el sharding por <c>tenantId</c> y aislar cargas.
+/// El rastro de cada cooperativa vive en <b>su propia base</b>, y dentro en una
+/// única colección. La base se resuelve por llamada y no en el constructor: este
+/// servicio es singleton, así que cachearla la habría clavado en la primera
+/// cooperativa que escribiera y el resto habría acabado escribiendo ahí.
 /// </summary>
 internal sealed class AppendOnlyAuditWriter(
     IMongoClient client,
     IOptions<MongoDbSettings> settings) : IAuditAppendOnlyWriter
 {
-    private readonly IMongoDatabase _db = client.GetDatabase(settings.Value.DatabaseName);
 
     public Task AppendAsync(AuditEventDocument entry, CancellationToken ct)
     {
-        var collection = _db.GetCollection<BsonDocument>($"audit_events_{entry.TenantId}");
+        var db = client.GetDatabase(
+            AuditDatabaseNames.Para(settings.Value.DatabaseName, entry.TenantId));
+        var collection = db.GetCollection<BsonDocument>(AuditDatabaseNames.Coleccion);
         var doc = new BsonDocument
         {
             { "tenantId", entry.TenantId },

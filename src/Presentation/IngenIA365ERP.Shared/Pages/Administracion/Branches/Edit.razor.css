@@ -1,0 +1,11 @@
+/* `.toolbar label` del contrato apila etiqueta y campo en columna, que es lo
+   correcto para un <input> con su rótulo encima, pero NO para una casilla: el
+   cuadro quedaba encima del texto —y estirado a todo el ancho de la fila, que
+   es lo que hace Chromium con un input[type=checkbox] en `align-items:
+   stretch`—. La casilla y su texto vuelven a leerse en una línea. */
+
+.toolbar label.campo-check {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--gap-sm);
+}

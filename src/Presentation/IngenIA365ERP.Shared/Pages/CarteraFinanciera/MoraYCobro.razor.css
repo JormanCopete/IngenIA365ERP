@@ -1,0 +1,33 @@
+/* Distribucion por calificacion A-E.
+
+   Es lo unico de esta pantalla que no cubre componentes.css: una tarjeta baja,
+   sin borde, con la franja de color del tramo de riesgo a la izquierda. El
+   bloque <style> que vivia dentro del .razor tambien redefinia .kpi-card,
+   .kpi-value y .kpi-label —los tres ya estan en componentes.css— y al
+   inyectarse en el documento pisaba a las demas pantallas. Aca solo queda lo
+   propio, y con ambito. */
+
+.class-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--superficie-2);
+    padding: var(--pad-sm) var(--pad-md);
+    border-radius: var(--radio-sm);
+}
+
+.class-label {
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-fuerte);
+    color: var(--texto-secundario);
+}
+
+.class-count {
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+}
+
+.class-amount {
+    font-size: var(--texto-md);
+    color: var(--texto-primario);
+    margin-top: var(--gap-xs);
+}

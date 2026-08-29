@@ -1,5 +1,27 @@
 # Configuracion y Autenticacion
 
+> ## ⚠️ Documento parcialmente superado — mirá este mapa antes de seguirlo
+>
+> Al 2026-08-25, **la mitad describe un sistema que ya no existe**. La
+> constitución v2.0.0 lo señaló como el documento más desfasado del repositorio.
+> No se reescribe entero porque las secciones de configuración siguen siendo
+> útiles y correctas; se marca sección por sección para que nadie siga un paso
+> que ya no funciona.
+>
+> | Sección | Estado |
+> |---|---|
+> | 1 · Modos del frontend (AppMode) | **Vigente** |
+> | 2 · Multi-tenant y resolución | **Parcial.** El aislamiento ya no es por esquema sino **una base de datos por cooperativa** (Principio IV). La tabla de cooperativas y el middleware siguen como se describen. |
+> | 3 · Tablas de Identity y Seed | **Superada.** Ver la corrección en la propia sección. |
+> | 4 · Cadenas de conexión · 5 · DI · 8 · PaginationParams | **Vigentes** |
+> | 6 · `AuthResponse` · 7 · `LoginRequest` | **Superadas.** Son el contrato de Fase 0. El vivo es [specs/002/contracts/auth.md](../specs/002-identidad-central-federada/contracts/auth.md): el cuerpo es `{email, password}`, sin tenant ni username, y el login puede devolver un *challenge* en vez de una sesión. |
+> | 9 · Inicio rápido | **Superada.** Usá el de [README.md](../README.md). |
+> | 10 · Problemas frecuentes | **Parcial**, referida a tablas de Fase 0. |
+>
+> Y dos cosas que este documento da por buenas y hoy no lo son: el
+> administrador maestro **necesita segundo factor** para entrar, y los fallos de
+> autenticación responden **401**, no 422.
+
 Guia completa para levantar el sistema, cambiar entre modos (DEV-Mock / DEV-Api / QA / PDN) y entender el flujo de autenticacion multi-tenant.
 
 ---
@@ -70,6 +92,17 @@ Defaults entregados:
 
 ### Flujo basico
 
+> **Flujo superado.** Ya no se elige cooperativa antes de entrar: la identidad
+> es central y la cooperativa se resuelve DESPUÉS, a partir de las membresías de
+> la persona. El de abajo es el de Fase 0 y se conserva como referencia.
+>
+> El flujo vivo: `POST /api/auth/login` con `{email, password}` → devuelve un
+> *challenge* (`MfaRequired`, `MfaEnrollmentRequired`, `TenantSelection`,
+> `NoActiveMembership`) o la sesión directamente si hay una sola membresía y sin
+> MFA pendiente. El contrato está en
+> [specs/002/contracts/auth.md](../specs/002-identidad-central-federada/contracts/auth.md)
+> y el cliente es `CentralAuthClient`, no `AuthService`.
+
 1. El usuario entra a `/login`. El formulario incluye un campo **Tenant**.
 2. Frontend manda al API `POST /api/auth/login` con body `{ Email, Password, TenantId }`. El TenantId va **en el body** (todavia no hay sesion).
 3. Antes de mandar el request, el `AuthService` llama `TenantService.SetTenantAsync(tenantId)`. A partir de ahi, el `TenantDelegatingHandler` agrega el header `X-Tenant-Id` a todos los requests siguientes.
@@ -110,6 +143,13 @@ LicenseType = "Enterprise"
 ---
 
 ## 3. Tablas de Identity y Seed
+
+> **Esto dejó de ser cierto.** Las migraciones EF **son** la fuente de verdad
+> del esquema, en dos ensamblados por proveedor
+> (`IngenIA365ERP.Persistence.Migrations.{SqlServer,PostgreSql}`), y las aplica
+> el inicializador al arrancar. El corpus SQL de `database/schema/` quedó
+> congelado como referencia histórica: no se aplica ni se mantiene. Lo que sigue
+> se conserva sólo para entender de dónde venía el proyecto.
 
 Las EF migrations no estan operativas (incompatibilidad de tools), asi que los schemas se aplican via SQL.
 
@@ -227,7 +267,9 @@ Esto vive en:
 - API: `IngenIA365ERP.Identity/Models/AuthResponse.cs` (record)
 - Cliente: `IngenIA365ERP.Shared/Models/AuthResponse.cs` (clase con setters)
 
-`AuthService.LoginAsync` lee `authResponse.Tokens.AccessToken` y guarda tambien el refresh token en `ISecureStorage`.
+~~`AuthService.LoginAsync`~~ **ya no existe**: se retiro el 2026-08-25 junto con
+`/api/auth/dev/login`, el atajo que llamaba y que servia para saltarse el segundo
+factor. Quien guarda la sesion hoy es `CentralAuthClient`.
 
 > Si el login devuelve "Usuario o contrasena incorrectos" pero `curl` directo al API funciona con HTTP 200, casi siempre es desalineamiento de nombres entre `AuthResponse` cliente y API.
 

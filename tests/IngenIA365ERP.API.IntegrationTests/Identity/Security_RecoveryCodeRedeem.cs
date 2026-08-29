@@ -15,7 +15,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity;
 /// en <c>POST /api/auth/mfa/verify</c> con <c>useRecoveryCode=true</c>:
 /// obtiene sesión operativa y <c>recoveryCodesRemaining=9</c>. El mismo
 /// código reintentado debe fallar (one-shot) con
-/// <c>Identity.MfaInvalid</c> (422 según <c>ErrorEnvelopeFilter</c>).
+/// <c>Identity.MfaInvalid</c> (401 — es un fallo de autenticación).
 /// </summary>
 public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
     : IClassFixture<CentralIdentityApiFixture>
@@ -28,14 +28,7 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master y registro de tenant + primera invitación admin.
-        var loginMasterResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, loginMasterResp.StatusCode);
-        var loginMaster = await ReadJsonAsync(loginMasterResp);
-        var masterToken = loginMaster.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         const string adminEmail = "laura.mfa@coop.recovery.test";
@@ -120,9 +113,19 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         Assert.False(string.IsNullOrWhiteSpace(challengeToken));
 
         // 5) Canjear el recovery code → sesión operativa + 9 códigos restantes.
+        //
+        // Se canjea EN MINÚSCULAS Y SIN EL GUION a propósito, no en el formato en
+        // que salió. La comparación de Identity es ordinal, así que sin
+        // normalizar esto responde «código inválido» y además suma al contador de
+        // bloqueo del segundo factor: quien tiene el papel correcto en la mano se
+        // va bloqueando solo. Va aquí, dentro del canje que ya existía, para
+        // demostrarlo sin gastar otro login — el límite es de 10 por minuto.
+        var tecleadoADesgana = recoveryCode.ToLowerInvariant().Replace("-", string.Empty);
+        Assert.NotEqual(recoveryCode, tecleadoADesgana);
+
         using var verifyReq = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/verify")
         {
-            Content = JsonContent.Create(new { code = recoveryCode, useRecoveryCode = true }),
+            Content = JsonContent.Create(new { code = tecleadoADesgana, useRecoveryCode = true }),
         };
         verifyReq.Headers.Authorization = new("Bearer", challengeToken);
         var verifyResp = await http.SendAsync(verifyReq);
@@ -151,9 +154,10 @@ public sealed class Security_RecoveryCodeRedeem(CentralIdentityApiFixture fx)
         replayReq.Headers.Authorization = new("Bearer", challengeToken2);
         var replayResp = await http.SendAsync(replayReq);
 
-        // Identity.MfaInvalid no tiene mapeo específico en ErrorEnvelopeFilter
-        // → cae en el default 422 (regla de negocio incumplida).
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, replayResp.StatusCode);
+        // 401: un segundo factor inválido es un fallo de AUTENTICACIÓN, no una
+        // regla de negocio incumplida, y el contrato lo fija en
+        // specs/002/contracts/auth.md:111.
+        Assert.Equal(HttpStatusCode.Unauthorized, replayResp.StatusCode);
         var replay = await ReadJsonAsync(replayResp);
         Assert.Equal("Identity.MfaInvalid", replay.GetProperty("code").GetString());
     }

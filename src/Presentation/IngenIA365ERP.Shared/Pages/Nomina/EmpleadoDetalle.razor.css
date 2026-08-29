@@ -1,0 +1,13 @@
+/* Relleno del panel de cada pestaña del detalle. Estaba en linea, con 20px en
+   unas pestañas y 16px en otras. */
+.panel-pestana {
+    padding: var(--pad-lg);
+}
+
+/* Aviso de tabla vacia dentro de una pestaña. No usa .module-placeholder porque
+   ese ocupa 40vh: aca la grilla ya esta arriba y el aviso solo la acompaña. */
+.sin-datos {
+    padding: var(--pad-xl);
+    text-align: center;
+    color: var(--texto-tenue);
+}

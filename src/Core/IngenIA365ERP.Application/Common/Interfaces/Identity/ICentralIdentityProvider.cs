@@ -22,6 +22,29 @@ public interface ICentralIdentityProvider
     Task<CentralUser?> FindByIdAsync(Guid centralUserId, CancellationToken ct);
 
     /// <summary>
+    /// Resuelve en lote el estado de seguridad de un conjunto de usuarios: si
+    /// tienen segundo factor y cuándo entraron por última vez.
+    ///
+    /// <para>
+    /// <b>Por qué hace falta.</b> La pantalla de usuarios de una cooperativa lee
+    /// <c>SEC_Users</c>, y esas dos cosas ya no viven ahí: el segundo factor se
+    /// inscribe sobre la identidad central y el último acceso lo sella ella. Las
+    /// columnas de <c>SEC_Users</c> quedaron sin nadie que las escribiera, así
+    /// que la pantalla mostraba «MFA: No» y último acceso vacío para todo el
+    /// mundo — con aspecto de dato real.
+    /// </para>
+    ///
+    /// <para>
+    /// En lote y no una consulta por fila: son bases distintas y el listado
+    /// pagina de veinte en veinte. Ids inexistentes o eliminados simplemente no
+    /// aparecen en el diccionario, y quien llama distingue así «no» de «no se
+    /// sabe».
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, CentralUserSecuritySnapshot>> GetSecuritySnapshotsAsync(
+        IReadOnlyCollection<Guid> centralUserIds, CancellationToken ct);
+
+    /// <summary>
     /// Resuelve en lote el email de un conjunto de usuarios (listados, p.ej.
     /// miembros de un tenant) en una sola consulta. Ids inexistentes o
     /// eliminados simplemente no aparecen en el diccionario resultante.
@@ -55,6 +78,21 @@ public interface ICentralIdentityProvider
         string newPassword,
         CancellationToken ct);
 
+    /// <summary>
+    /// Rota el SecurityStamp: cierra TODAS las sesiones de la persona, en todos
+    /// sus dispositivos, sin tocar su contraseña.
+    ///
+    /// <para>
+    /// Es lo que sostiene <c>POST /api/auth/logout-all</c>, y el runbook lo
+    /// prescribe ante sospecha de fuga de la clave RSA. No hace falta recorrer
+    /// las sesiones una por una: el refresh compara el stamp guardado en la
+    /// sesión contra el actual del usuario y rechaza si difieren, así que un
+    /// stamp nuevo las invalida todas de golpe — incluidas las que ya estaban
+    /// emitidas y las que no conocemos.
+    /// </para>
+    /// </summary>
+    Task<bool> RotateSecurityStampAsync(Guid centralUserId, CancellationToken ct);
+
     /// <summary>Reset administrativo (master admin). NO requiere currentPassword.
     /// Genera nuevo SecurityStamp → invalida todos los refresh tokens.</summary>
     Task<ChangePasswordResult> AdminResetPasswordAsync(
@@ -64,18 +102,49 @@ public interface ICentralIdentityProvider
 
     // -------------------- MFA --------------------
 
-    /// <summary>Genera secret TOTP + recovery codes para configuración pendiente
-    /// (no se persiste el secret hasta <see cref="ConfirmMfaSetupAsync"/>).</summary>
+    /// <summary>Genera el secret TOTP para una configuración pendiente (no se
+    /// persiste hasta <see cref="ConfirmMfaSetupAsync"/>). NO devuelve códigos
+    /// de recuperación: los válidos los emite el confirm, y entregarlos aquí
+    /// significaba darle al usuario diez códigos que nunca se iban a canjear.</summary>
     Task<MfaEnrollmentSetup> BeginMfaEnrollmentAsync(Guid centralUserId, CancellationToken ct);
 
-    /// <summary>Verifica un TOTP contra un secret pendiente. Si OK, persiste
-    /// <c>TwoFactorEnabled = true</c>, almacena <c>MfaSecret</c> cifrado y
-    /// genera los recovery codes en <c>ADM_CentralUserTokens</c>.</summary>
+    /// <summary>
+    /// Verifica un TOTP contra un secret pendiente. Si acierta, AÑADE una
+    /// credencial en <c>ADM_MfaCredentials</c> —no reemplaza las que ya haya— y
+    /// activa el segundo factor.
+    ///
+    /// <para>
+    /// Los códigos de recuperación se emiten SÓLO con el primer autenticador. Con
+    /// el segundo la lista viene vacía a propósito: regenerarlos invalidaría los
+    /// que la persona guardó al inscribir el primero.
+    /// </para>
+    /// </summary>
+    /// <param name="label">Nombre que la persona le da al dispositivo. Opcional.</param>
     Task<MfaConfirmResult> ConfirmMfaSetupAsync(
         Guid centralUserId,
         string base32Secret,
         string code,
+        string? label,
         CancellationToken ct);
+
+    /// <summary>
+    /// Enciende <c>TwoFactorEnabled</c> tras inscribir una credencial que no es
+    /// TOTP. Se llama DESPUÉS de haber persistido la credencial, para que un
+    /// fallo a medias deje a la persona con credencial y sin bandera —entra sin
+    /// segundo factor— y nunca al revés, que sería pedirle un código que no puede
+    /// acertar.
+    ///
+    /// <para>
+    /// Sin esta llamada, quien sólo tuviera una passkey entraría SIN segundo
+    /// factor: el login mira esa bandera, y con ella apagada ni siquiera lo pide.
+    /// </para>
+    /// </summary>
+    /// <param name="esLaPrimeraCredencial">
+    /// Si lo es, se emiten códigos de recuperación. Si no, la lista vuelve vacía:
+    /// regenerarlos invalidaría los que la persona ya guardó.
+    /// </param>
+    Task<IReadOnlyList<string>> ActivarSegundoFactorAsync(
+        Guid centralUserId, bool esLaPrimeraCredencial, CancellationToken ct);
 
     /// <summary>Verifica un TOTP contra el secret YA persistido del usuario (login con MFA).</summary>
     Task<bool> VerifyMfaCodeAsync(Guid centralUserId, string code, CancellationToken ct);
@@ -127,13 +196,24 @@ public sealed record ChangePasswordResult(
     bool Succeeded,
     IReadOnlyList<string> ErrorCodes);
 
+/// <param name="QrPngDataUri">
+/// El <c>otpauth://</c> ya convertido en imagen, listo para un <c>&lt;img src&gt;</c>
+/// («data:image/png;base64,…»). Va como data URI y no como una ruta a descargar
+/// para que el secreto no acabe en el registro de accesos de nadie: una URL con el
+/// QR sería una URL que contiene, en la práctica, el segundo factor.
+/// </param>
 public sealed record MfaEnrollmentSetup(
     string SecretBase32,
     string OtpAuthUri,
-    IReadOnlyList<string> RecoveryCodes,
+    string QrPngDataUri,
     int ExpiresInSeconds);
 
 public sealed record MfaConfirmResult(
     bool Succeeded,
     IReadOnlyList<string> ErrorCodes,
     IReadOnlyList<string>? RecoveryCodes = null);
+
+/// <summary>
+/// Estado de seguridad de una persona, tal y como lo sabe la identidad central.
+/// </summary>
+public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt);

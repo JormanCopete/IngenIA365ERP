@@ -18,9 +18,16 @@ public sealed class RequireMasterAdminAttribute : Attribute
         if (user?.Identity?.IsAuthenticated != true)
             return MasterAdminGuardResult.Unauthenticated();
 
-        var purpose = user.FindFirst("purpose")?.Value ?? "full";
+        // Un token SIN claim purpose ya NO se toma por sesión completa.
+        //
+        // El `?? "full"` era compatibilidad con el emisor de Fase 0, que no
+        // emitía el claim — y ese emisor acaba de retirarse junto con el resto
+        // de la superficie de autenticación heredada. Mantener el fallback
+        // significaba que cualquier token sin purpose abría el atajo del
+        // administrador maestro, que salta el filtro de permisos entero.
+        var purpose = user.FindFirst("purpose")?.Value;
         if (purpose != "full")
-            return MasterAdminGuardResult.WrongPurpose(purpose);
+            return MasterAdminGuardResult.WrongPurpose(purpose ?? "(sin purpose)");
 
         var isMaster = string.Equals(
             user.FindFirst("is_global_master_admin")?.Value, "true", StringComparison.OrdinalIgnoreCase);

@@ -51,9 +51,40 @@ public static class AuditEventTypes
     public const string TenantMfaPolicyActivated = "TenantMfaPolicy.Activated";
     public const string TenantMfaPolicyDeactivated = "TenantMfaPolicy.Deactivated";
 
+    /// <summary>
+    /// Cambio en QUÉ métodos acepta la cooperativa, sin tocar si los exige. Evento
+    /// propio porque no es ni activar ni desactivar: con el nombre de aquellos, un
+    /// cambio que deja fuera a media cooperativa quedaría registrado como
+    /// «activada» un día en que ya estaba activada.
+    /// </summary>
+    public const string TenantMfaPolicyMethodsChanged = "TenantMfaPolicy.MethodsChanged";
+
+    /// <summary>Cambio en los métodos que acepta la plataforma para el maestro.</summary>
+    public const string PlatformMfaPolicyMethodsChanged = "PlatformMfaPolicy.MethodsChanged";
+
+    // ---------- Recuperación del segundo factor por correo ----------
+    //
+    // Los cuatro son eventos de seguridad de primera línea: describen un intento de
+    // retirarle a alguien su segundo factor. Se separan —pedida, cancelada,
+    // ejecutada, confirmación fallida— porque cada uno significa algo distinto el
+    // día que haya que reconstruir un incidente, y «cancelada» seguida de nada es
+    // exactamente la traza de un ataque que no prosperó.
+
+    public const string MfaRecoveryRequested = "MfaRecovery.Requested";
+    public const string MfaRecoveryCancelled = "MfaRecovery.Cancelled";
+    public const string MfaRecoveryExecuted = "MfaRecovery.Executed";
+    public const string MfaRecoveryConfirmFailed = "MfaRecovery.ConfirmFailed";
+
     // -------------------- Profile + Recovery --------------------
     public const string ProfileMfaEnrolled = "Profile.MfaEnrolled";
     public const string ProfileMfaDisabled = "Profile.MfaDisabled";
+
+    /// <summary>Retiró UNA credencial, conservando las demás.</summary>
+    public const string ProfileMfaCredentialRevoked = "Profile.MfaCredentialRevoked";
+
+    /// <summary>Le cambió el nombre a una credencial. No altera la seguridad,
+    /// pero sí quién puede reconocer qué dispositivo es cuál.</summary>
+    public const string ProfileMfaCredentialRenamed = "Profile.MfaCredentialRenamed";
     public const string ProfileRecoveryCodesRegenerated = "Profile.RecoveryCodesRegenerated";
     public const string ProfilePasswordChanged = "Profile.PasswordChanged";
     public const string ProfilePasswordResetRequested = "Profile.PasswordResetRequested";

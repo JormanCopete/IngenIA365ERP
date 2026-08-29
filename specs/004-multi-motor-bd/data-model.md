@@ -2,6 +2,14 @@
 
 **Phase 1 output** · Branch `004-multi-motor-bd` · 2026-08-03
 
+> **Nota de vigencia (2026-08-25).** Donde este documento dice «esquema de
+> tenant», hoy es **una base de datos por cooperativa**: el Principio IV cambió
+> con la constitución v2.0.0 y la decisión que lo revierte está registrada como
+> **D-03-REV** en [research.md](./research.md) — la traza de D-03 se conserva a
+> propósito. El aislamiento es físico y el catálogo administrativo vive en una
+> base aparte. Todo lo demás del documento sigue en pie.
+
+
 Este feature **no introduce entidades de dominio ni tablas de negocio nuevas**. Su "modelo de datos" son: (1) el modelo de configuración, (2) el contrato del framework de seeding, (3) el historial de migraciones por base/esquema, y (4) el inventario inicial de seeders.
 
 ---

@@ -1,0 +1,60 @@
+/* Pie de totales del comprobante.
+
+   Es lo único de esta pantalla que no cubre componentes.css: una barra de
+   cifras alineada a la derecha, bajo la tabla de movimientos. */
+
+/* `.page-header` de componentes.css sólo anula el margen de h1/h2/h3, y el
+   sub-encabezado del detalle es un h4: sin esto conserva el `margin-bottom` de
+   app.css y, en una fila centrada, el título queda desalineado respecto al
+   botón "Agregar Linea". */
+.page-header > h4 {
+    margin: 0;
+}
+
+/* Campo con lupa dentro de una celda de la tabla de movimientos.
+
+   No usa `.acciones`: esa clase trae `flex-wrap: wrap`, y el envoltorio de
+   SyncFusion (`.e-input-group`) declara `width: 100%`. Con wrap, el ancho base
+   del campo ya ocupa toda la celda y el botón de búsqueda cae a una segunda
+   línea, duplicando el alto de cada renglón del comprobante. Sin wrap el campo
+   se encoge y la lupa queda a su lado, que es como estaba antes. */
+.campo-con-boton {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--gap-xs);
+}
+
+.totales {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--gap-xl);
+    padding: var(--pad-md);
+    background: var(--superficie-0);
+    border-radius: var(--radio-sm);
+}
+
+.totales > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--gap-xs);
+}
+
+.valor-total {
+    font-size: var(--texto-lg);
+    /* Cifras de ancho fijo: débitos, créditos y diferencia se comparan en
+       vertical y con ancho proporcional los dígitos no se alinean. */
+    font-variant-numeric: tabular-nums;
+}
+
+/* La diferencia es el dato que decide si el comprobante puede contabilizarse.
+   Antes se pintaba con `green`/`red` literales, que no responden al tema. */
+.cuadre-ok {
+    color: var(--exito-texto);
+}
+
+.cuadre-error {
+    color: var(--peligro-texto);
+}

@@ -29,17 +29,25 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(e => e.IsSaasOperator).HasDefaultValue(false);
         builder.Property(e => e.MustChangePassword).HasDefaultValue(false);
 
-        // T025 (Feature 002) — las propiedades CentralUserId y
-        // CentralUserPublicEmail viven en Domain.User para que US1/US2 puedan
-        // referenciarlas sin tener que volver a tocar el modelo. Pero NO se
-        // mapean a SEC_Users hoy porque el script 15d (T017) aún no se ha
-        // ejecutado contra la BD — declarar el mapeo activo haría que EF
-        // generara SELECTs con columnas inexistentes y rompería todos los
-        // handlers legacy de Fase 0. Cuando se realice el cutover a identidad
-        // central (US1/US2 + ejecutar 15d), se retirarán estos Ignore y se
-        // activará el mapeo + UNIQUE index documentado en el script.
-        builder.Ignore(e => e.CentralUserId);
-        builder.Ignore(e => e.CentralUserPublicEmail);
+        // El puente con la identidad central, por fin persistido.
+        //
+        // Estas dos columnas existían en el modelo de dominio y estaban
+        // Ignore()-adas esperando un script que nunca se ejecutó. Mientras tanto,
+        // el puente entre «quién inició sesión» y «qué fila de SEC_Users es» era
+        // una comparación de cadenas por correo, repetida en dos sitios. Frágil de
+        // dos formas: SEC_Users.Username es UNIQUE, y un cambio de correo en la
+        // identidad central huérfana el mapeo en silencio.
+        //
+        // Ahora el esquema lo generan las migraciones de EF, así que retirar el
+        // Ignore ES el cutover: no hace falta ningún script aparte.
+        //
+        // Índice NO único a propósito. La unicidad correcta sería «una fila por
+        // identidad central», pero como la columna admite nulos —filas de sistema
+        // sin identidad— un índice único dejaría pasar un solo nulo en SQL Server.
+        // El invariante lo sostiene TenantUserProvisioner, que comprueba antes de
+        // insertar; esto es para buscar rápido.
+        builder.Property(e => e.CentralUserPublicEmail).HasMaxLength(200);
+        builder.HasIndex(e => e.CentralUserId);
 
         builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId);
 

@@ -6,65 +6,67 @@
 
 <PageTitle>Plan de Cuentas - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Plan de Cuentas</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Plan de Cuentas</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
+
+    <SfGrid @ref="_grid" TValue="ChartAccountItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="AccountCode" HeaderText="Codigo Cuenta" Width="180" />
+            <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+            <GridColumn Field="Level" HeaderText="Nivel" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Nature" HeaderText="Naturaleza" Width="120" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as ChartAccountItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+
+    <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Codigo Cuenta *</label>
+                        <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo de la cuenta" />
+                    </div>
+                    <div>
+                        <label>Nombre *</label>
+                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la cuenta" />
+                    </div>
+                    <div>
+                        <label>Nivel</label>
+                        <SfNumericTextBox TValue="int?" @bind-Value="_model.Level"
+                            Placeholder="1" Min="1" Max="10" Step="1" />
+                    </div>
+                    <div>
+                        <label>Naturaleza</label>
+                        <SfDropDownList TValue="string?" TItem="NatureOption" DataSource="@_natures"
+                            @bind-Value="_model.Nature" Placeholder="Seleccione naturaleza">
+                            <DropDownListFieldSettings Text="Name" Value="Code" />
+                        </SfDropDownList>
+                    </div>
+                </div>
+            </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+            <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        </DialogButtons>
+    </SfDialog>
+
+    <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+        Message="Esta seguro de eliminar este registro?" />
 </div>
-
-<SfGrid @ref="_grid" TValue="ChartAccountItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="AccountCode" HeaderText="Codigo Cuenta" Width="180" />
-        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
-        <GridColumn Field="Level" HeaderText="Nivel" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Nature" HeaderText="Naturaleza" Width="120" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as ChartAccountItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
-
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div>
-                    <label>Codigo Cuenta *</label>
-                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo de la cuenta" />
-                </div>
-                <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la cuenta" />
-                </div>
-                <div>
-                    <label>Nivel</label>
-                    <SfNumericTextBox TValue="int?" @bind-Value="_model.Level"
-                        Placeholder="1" Min="1" Max="10" Step="1" />
-                </div>
-                <div>
-                    <label>Naturaleza</label>
-                    <SfDropDownList TValue="string?" TItem="NatureOption" DataSource="@_natures"
-                        @bind-Value="_model.Nature" Placeholder="Seleccione naturaleza">
-                        <DropDownListFieldSettings Text="Name" Value="Code" />
-                    </SfDropDownList>
-                </div>
-            </div>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
-    </DialogButtons>
-</SfDialog>
-
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-    Message="Esta seguro de eliminar este registro?" />
 
 @code {
     private SfGrid<ChartAccountItem>? _grid;

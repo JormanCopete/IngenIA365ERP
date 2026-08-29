@@ -14,11 +14,11 @@ namespace IngenIA365ERP.Application.Tests.Audit.ExportAuditLogCsv;
 public class ExportAuditLogCsvQueryHandlerTests
 {
     private static (ExportAuditLogCsvQueryHandler Handler, IAuditCsvExporter Exporter,
-                    ICurrentUserService Cu)
+                    ICurrentTenantService Cu)
         Build(string? tenantId = "demo")
     {
         var exporter = Substitute.For<IAuditCsvExporter>();
-        var cu = Substitute.For<ICurrentUserService>();
+        var cu = Substitute.For<ICurrentTenantService>();
         cu.TenantId.Returns(tenantId);
         return (new ExportAuditLogCsvQueryHandler(exporter, cu), exporter, cu);
     }

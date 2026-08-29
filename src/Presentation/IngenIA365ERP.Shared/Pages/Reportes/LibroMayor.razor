@@ -7,96 +7,98 @@
 
 <PageTitle>Libro Mayor - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Libro Mayor</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
-        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Libro Mayor</h3>
+        <div>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+            <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf">PDF</SfButton>
+        </div>
     </div>
+
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Cuenta Contable</label>
+            <SfTextBox @bind-Value="_accountCode" Placeholder="Ej: 110505" Width="180px" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Fecha Desde</label>
+            <SfDatePicker TValue="DateTime" @bind-Value="_dateFrom" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Fecha Hasta</label>
+            <SfDatePicker TValue="DateTime" @bind-Value="_dateTo" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
+
+    @if (_data is not null && _data.Count > 0)
+    {
+        <!-- Account Header -->
+        <div class="rejilla-tarjetas">
+            <div class="info-card">
+                <span class="label">Cuenta</span>
+                <span>@_accountCode - @_accountName</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Total Debitos</span>
+                <span>@_data.Sum(d => d.Debit).ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Total Creditos</span>
+                <span>@_data.Sum(d => d.Credit).ToString("N2")</span>
+            </div>
+            <div class="info-card">
+                <span class="label">Saldo Final</span>
+                <span style="font-weight:var(--peso-fuerte);">@(_data.LastOrDefault()?.Balance.ToString("N2") ?? "0.00")</span>
+            </div>
+        </div>
+
+        <SfGrid @ref="_grid" TValue="LedgerLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
+                AllowExcelExport="true">
+            <GridPageSettings PageSize="50" />
+            <GridColumns>
+                <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="d" />
+                <GridColumn Field="VoucherType" HeaderText="Tipo" Width="80" TextAlign="TextAlign.Center" />
+                <GridColumn Field="DocNumber" HeaderText="No. Documento" Width="140" />
+                <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
+                <GridColumn Field="Debit" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Credit" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Balance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right">
+                    <Template>
+                        @{
+                            var line = context as LedgerLine;
+                            var color = line?.Balance >= 0 ? "" : "color:var(--peligro-texto);";
+                        }
+                        <span style="@color">@line?.Balance.ToString("N2")</span>
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                        <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+    }
+    else if (!_loading && _data is not null)
+    {
+        <p class="texto-tenue">No se encontraron movimientos para la cuenta y periodo seleccionados.</p>
+    }
 </div>
-
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Cuenta Contable</label>
-        <SfTextBox @bind-Value="_accountCode" Placeholder="Ej: 110505" Width="180px" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Fecha Desde</label>
-        <SfDatePicker TValue="DateTime" @bind-Value="_dateFrom" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Fecha Hasta</label>
-        <SfDatePicker TValue="DateTime" @bind-Value="_dateTo" Format="dd/MM/yyyy" Width="160px" CssClass="e-small" />
-    </div>
-</div>
-
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
-}
-
-@if (_data is not null && _data.Count > 0)
-{
-    <!-- Account Header -->
-    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="info-card">
-            <span class="label">Cuenta</span>
-            <span>@_accountCode - @_accountName</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Total Debitos</span>
-            <span>@_data.Sum(d => d.Debit).ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Total Creditos</span>
-            <span>@_data.Sum(d => d.Credit).ToString("N2")</span>
-        </div>
-        <div class="info-card">
-            <span class="label">Saldo Final</span>
-            <span style="font-weight:bold;">@(_data.LastOrDefault()?.Balance.ToString("N2") ?? "0.00")</span>
-        </div>
-    </div>
-
-    <SfGrid @ref="_grid" TValue="LedgerLine" DataSource="_data" AllowPaging="true" AllowSorting="true"
-            AllowExcelExport="true">
-        <GridPageSettings PageSize="50" />
-        <GridColumns>
-            <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="d" />
-            <GridColumn Field="VoucherType" HeaderText="Tipo" Width="80" TextAlign="TextAlign.Center" />
-            <GridColumn Field="DocNumber" HeaderText="No. Documento" Width="140" />
-            <GridColumn Field="Description" HeaderText="Descripcion" Width="300" />
-            <GridColumn Field="Debit" HeaderText="Debitos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Credit" HeaderText="Creditos" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Balance" HeaderText="Saldo" Width="160" Format="N2" TextAlign="TextAlign.Right">
-                <Template>
-                    @{
-                        var line = context as LedgerLine;
-                        var color = line?.Balance >= 0 ? "" : "color:#f44336;";
-                    }
-                    <span style="@color">@line?.Balance.ToString("N2")</span>
-                </Template>
-            </GridColumn>
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                    <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-}
-else if (!_loading && _data is not null)
-{
-    <p style="color:#999;">No se encontraron movimientos para la cuenta y periodo seleccionados.</p>
-}
 
 @code {
     private SfGrid<LedgerLine>? _grid;
@@ -177,8 +179,3 @@ else if (!_loading && _data is not null)
         public decimal Balance { get; set; }
     }
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
-</style>

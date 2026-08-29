@@ -37,9 +37,11 @@ public sealed class EndToEnd_LoginGenericErrors(CentralIdentityApiFixture fx)
             password = "Password-Incorrecta-2026!",
         });
 
-        // Mismo status en ambos casos (Identity.InvalidCredentials no tiene
-        // mapeo específico en ErrorEnvelopeFilter → default 422).
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, respInexistente.StatusCode);
+        // Mismo status en ambos casos: 401, que es lo que promete el contrato
+        // para Identity.InvalidCredentials (specs/002/contracts/auth.md:87).
+        // Esta línea decía 422 y explicaba por qué — estaba documentando el
+        // defecto en vez de cazarlo.
+        Assert.Equal(HttpStatusCode.Unauthorized, respInexistente.StatusCode);
         Assert.Equal(respInexistente.StatusCode, respPasswordMala.StatusCode);
 
         var cuerpoInexistente = await ReadJsonAsync(respInexistente);

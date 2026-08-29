@@ -24,6 +24,7 @@
          La interfaz pública la consume Application vía ICentralIdentityProvider
          (Chunk C); aquí solo está la persistencia. -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.*" />
     <PackageReference Include="Dapper" Version="2.*" />
     <PackageReference Include="Finbuckle.MultiTenant" Version="10.1.0" />
     <PackageReference Include="Finbuckle.MultiTenant.EntityFrameworkCore" Version="10.1.0" />
@@ -34,4 +35,9 @@
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+    <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

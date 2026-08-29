@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Interfaces;
 using System.Text.RegularExpressions;
 using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Providers;
@@ -19,10 +20,23 @@ namespace IngenIA365ERP.Persistence.MultiTenancy;
 /// Usado por el inicializador de arranque (FR-009/FR-019a) y por el alta de
 /// tenant en runtime (FR-014).
 /// </summary>
+// Ya no implementa ITenantSchemaProvisioner: esa interfaz se quedo sin un solo
+// consumidor cuando ITenantDatabaseProvisioner la sustituyo. El METODO sigue
+// vivo — lo llama CreateTenantAsync, y de ahi el comando "create" de la CLI
+// DbMigrator—, asi que se retira la interfaz y se conserva el cuerpo.
 public class TenantSchemaService
 {
     private readonly TenantDbContext _tenantDb;
-    private readonly ApplicationDbContext _appDb;
+    /// <summary>
+    /// Opciones, no un contexto del contenedor. En cuanto el esquema se resuelve
+    /// por peticion, el contexto que da el contenedor apunta a la cooperativa en
+    /// curso — y este servicio necesita SIEMPRE el arbol de migraciones de dbo.
+    /// Con el contexto ambiente, aprovisionar la cooperativa B desde una peticion
+    /// de la A generaria el script ya calificado con el esquema de A: TranslateSchema
+    /// busca la cadena literal "dbo" y no encontraria nada que traducir, asi que las
+    /// 289 tablas de B se crearian DENTRO de A. Sin excepcion y sin log.
+    /// </summary>
+    private readonly DbContextOptions<ApplicationDbContext> _appDbOptions;
     private readonly IDbProviderConfigurator _configurator;
     private readonly string _operationalConnectionString;
     private readonly ILogger<TenantSchemaService> _logger;
@@ -31,14 +45,14 @@ public class TenantSchemaService
 
     public TenantSchemaService(
         TenantDbContext tenantDb,
-        ApplicationDbContext appDb,
+        DbContextOptions<ApplicationDbContext> appDbOptions,
         IDbProviderConfigurator configurator,
         IOptions<DatabaseOptions> options,
         ILogger<TenantSchemaService>? logger = null,
         Seeding.SeedOrchestrator? seedOrchestrator = null)
     {
         _tenantDb = tenantDb;
-        _appDb = appDb;
+        _appDbOptions = appDbOptions;
         _configurator = configurator;
         _operationalConnectionString = options.Value.GetActiveConnectionString();
         _logger = logger ?? NullLogger<TenantSchemaService>.Instance;
@@ -49,8 +63,7 @@ public class TenantSchemaService
     {
         var schemaName = $"tenant_{identifier.Replace("-", "_")}";
 
-        await EnsureSchemaExistsAsync(schemaName, CancellationToken.None);
-        await MigrateTenantSchemaAsync(schemaName, CancellationToken.None);
+        await AprovisionarAsync(schemaName, identifier, CancellationToken.None);
 
         var tenant = new ErpTenantInfo
         {
@@ -70,18 +83,40 @@ public class TenantSchemaService
         _logger.LogInformation("Tenant registrado: {Identifier} → esquema {Schema} ({Provider})",
             identifier, schemaName, _configurator.Provider);
 
-        // FR-019a: el alta de tenant siembra su esquema (parametrico siempre;
-        // demo segun la politica de ambiente/flag).
-        if (_seedOrchestrator is not null)
+        return tenant;
+    }
+
+    /// <summary>
+    /// Crea el esquema si falta, lo migra y lo siembra. Es el unico camino para
+    /// dejar una cooperativa utilizable, y es idempotente: repetirlo no duplica
+    /// nada, asi que sirve tanto para el alta como para reparar una cooperativa
+    /// que quedo a medias.
+    /// </summary>
+    public async Task AprovisionarAsync(string esquema, string identificador, CancellationToken ct)
+    {
+        await EnsureSchemaExistsAsync(esquema, ct);
+        await MigrateTenantSchemaAsync(esquema, ct);
+
+        // FR-019a: el alta siembra el esquema (parametrico siempre; demo segun la
+        // politica de ambiente). Aqui es donde cada cooperativa recibe SUS permisos
+        // y SUS roles: sin esto el esquema queda con las 289 tablas vacias y nadie
+        // puede autorizar nada dentro de el.
+        if (_seedOrchestrator is null)
         {
-            await _seedOrchestrator.RunAsync(
-                Seeding.SeedCategory.Parametric, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
-            if (_seedOrchestrator.EffectiveRunTestSeed())
-                await _seedOrchestrator.RunAsync(
-                    Seeding.SeedCategory.Test, Seeding.SeedScope.Tenant, identifier, CancellationToken.None);
+            _logger.LogWarning(
+                "El esquema {Esquema} se migro pero no se sembro: no hay orquestador de " +
+                "sembrado disponible. Quedara sin permisos ni roles.", esquema);
+            return;
         }
 
-        return tenant;
+        await _seedOrchestrator.RunAsync(
+            Seeding.SeedCategory.Parametric, Seeding.SeedScope.Tenant, identificador, ct);
+
+        if (_seedOrchestrator.EffectiveRunTestSeed())
+        {
+            await _seedOrchestrator.RunAsync(
+                Seeding.SeedCategory.Test, Seeding.SeedScope.Tenant, identificador, ct);
+        }
     }
 
     public async Task EnsureSchemaExistsAsync(string schemaName, CancellationToken ct)
@@ -105,7 +140,8 @@ public class TenantSchemaService
     public async Task MigrateTenantSchemaAsync(string schemaName, CancellationToken ct)
     {
         ValidateSchemaName(schemaName);
-        var migrator = _appDb.Database.GetService<IMigrator>();
+        await using var dboDb = new ApplicationDbContext(_appDbOptions);
+        var migrator = dboDb.Database.GetService<IMigrator>();
         var script = migrator.GenerateScript(options: MigrationsSqlGenerationOptions.Idempotent);
         var translated = TranslateSchema(script, schemaName, _configurator.Provider);
 
@@ -129,7 +165,8 @@ public class TenantSchemaService
     public async Task<IReadOnlyList<string>> GetPendingMigrationsAsync(string schemaName, CancellationToken ct)
     {
         ValidateSchemaName(schemaName);
-        var all = _appDb.Database.GetMigrations().ToList();
+        using var dboDb = new ApplicationDbContext(_appDbOptions);
+        var all = dboDb.Database.GetMigrations().ToList();
 
         await using var conn = _configurator.CreateConnection(_operationalConnectionString);
         await conn.OpenAsync(ct);
@@ -193,17 +230,45 @@ public class TenantSchemaService
     /// [dbo]. (SQL Server), dbo. / "dbo". (PostgreSQL) y N'dbo'/'dbo' en
     /// llamadas a procedimientos del historial.
     /// </summary>
+    /// <summary>
+    /// Reescribe el script de migracion para que apunte al esquema del tenant.
+    /// </summary>
+    /// <remarks>
+    /// La sentencia CREATE SCHEMA se trata APARTE. Los reemplazos de abajo
+    /// buscan "dbo". / dbo. / 'dbo', o sea el esquema usado como CALIFICADOR,
+    /// siempre seguido de un punto o entre comillas. Pero el script trae
+    /// tambien `CREATE SCHEMA dbo;` —sin punto y sin comillas—, que no encaja
+    /// en ningun patron y sobrevivia sin traducir. El resultado era que
+    /// aprovisionar una cooperativa intentaba crear el esquema dbo, que ya
+    /// existe, y fallaba con 42P06; el esquema del tenant NO se creaba nunca.
+    /// Se emite con IF NOT EXISTS para que reaprovisionar sea idempotente.
+    /// </remarks>
     internal static string TranslateSchema(string script, string schemaName, DatabaseProvider provider)
     {
-        return provider == DatabaseProvider.PostgreSql
-            ? script
+        if (provider == DatabaseProvider.PostgreSql)
+        {
+            script = Regex.Replace(
+                script,
+                @"CREATE\s+SCHEMA\s+(IF\s+NOT\s+EXISTS\s+)?""?dbo""?",
+                $"CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"",
+                RegexOptions.IgnoreCase);
+
+            return script
                 .Replace("\"dbo\".", $"\"{schemaName}\".", StringComparison.Ordinal)
                 .Replace(" dbo.", $" \"{schemaName}\".", StringComparison.Ordinal)
-                .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal)
-            : script
-                .Replace("[dbo].", $"[{schemaName}].", StringComparison.Ordinal)
-                .Replace("N'dbo'", $"N'{schemaName}'", StringComparison.Ordinal)
                 .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal);
+        }
+
+        script = Regex.Replace(
+            script,
+            @"CREATE\s+SCHEMA\s+\[?dbo\]?",
+            $"CREATE SCHEMA [{schemaName}]",
+            RegexOptions.IgnoreCase);
+
+        return script
+            .Replace("[dbo].", $"[{schemaName}].", StringComparison.Ordinal)
+            .Replace("N'dbo'", $"N'{schemaName}'", StringComparison.Ordinal)
+            .Replace("'dbo'", $"'{schemaName}'", StringComparison.Ordinal);
     }
 
     internal static IEnumerable<string> SplitBatches(string script, DatabaseProvider provider)

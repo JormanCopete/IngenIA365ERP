@@ -23,6 +23,9 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     ICurrentCentralUserContext currentUser,
     IAdminDbContext adminDb,
     ISecureTokenGenerator tokens,
+    ITenantDatabaseProvisioner aprovisionador,
+    ITenantCacheSlotAllocator ranuras,
+    IAuditStoreProvisioner auditoria,
     IInvitationEmailDispatcher emailDispatcher,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -52,6 +55,11 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         {
             Name = request.Name,
             SchemaName = request.SchemaName,
+            // La base se llama como el esquema. Mientras convivan los dos modelos
+            // esto mantiene una sola nomenclatura; cuando SchemaName se retire, el
+            // nombre entra por el contrato.
+            DatabaseName = request.SchemaName,
+            ProvisioningState = "Provisioning",
             Subdomain = request.Subdomain,
             Nit = request.Nit,
             LegalName = request.LegalName,
@@ -68,6 +76,50 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         };
         adminDb.Tenants.Add(tenant);
         await adminDb.SaveChangesAsync(ct);
+
+        // El esquema fisico se crea AQUI, no en el arranque siguiente.
+        //
+        // Antes esto solo guardaba la fila y el esquema aparecia cuando el
+        // inicializador recorria ADM_Tenants al arrancar. En medio, la cooperativa
+        // existia en la consola y no tenia donde guardar nada: habia que reiniciar
+        // la API entre registrarla y usarla, y la invitacion que se envia justo
+        // debajo llevaba a un sitio que aun no existia.
+        //
+        // No tumba el alta si falla: la cooperativa ya esta registrada y
+        // POST /api/saas/tenants/{id}/provision es idempotente y lo repara. Perder
+        // el registro por un fallo de aprovisionamiento seria peor.
+        try
+        {
+            var resultado = await aprovisionador.AprovisionarAsync(
+                tenant.DatabaseName!, tenant.Subdomain ?? tenant.SchemaName, tenant.ConnectionString, ct);
+
+            // La ranura de cache va con el aprovisionamiento, no despues: si no
+            // quedan, la cooperativa no puede quedar en Ready fingiendo que si.
+            tenant.RedisDbIndex = await ranuras.ReservarAsync(tenant.Name, ct);
+
+            // La base de auditoria se crea AQUI, con sus indices y su TTL. Si se
+            // dejara nacer sola al primer evento, MongoDB la crearia sin indices y
+            // el rastro no se purgaria nunca: FR-023 incumplido sin un solo error.
+            tenant.AuditDatabaseName = await auditoria.AprovisionarAsync(
+                tenant.PublicId.ToString("N"), ct);
+
+            tenant.ProvisioningState = "Ready";
+            tenant.MigrationsVersion = resultado.MigracionAplicada;
+            await adminDb.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            // El estado queda en Failed y con el motivo: una cooperativa a medias
+            // tiene que verse como tal, no parecer lista.
+            tenant.ProvisioningState = "Failed";
+            tenant.ProvisioningError = ex.Message;
+            await adminDb.SaveChangesAsync(ct);
+
+            logger.LogError(ex,
+                "La cooperativa {Nombre} quedo registrada pero su base {Base} no se " +
+                "aprovisiono. Reparable con POST /api/saas/tenants/{{publicId}}/provision.",
+                tenant.Name, tenant.DatabaseName);
+        }
 
         // Emite la invitación admin para el FirstAdminEmail.
         var normalizedEmail = request.FirstAdminEmail.Trim().ToUpperInvariant();
@@ -87,6 +139,9 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         adminDb.Invitations.Add(invitation);
         await adminDb.SaveChangesAsync(ct);
 
+        var correoEnviado = true;
+        string? motivoCorreoNoEnviado = null;
+
         try
         {
             await emailDispatcher.DispatchAsync(new InvitationEmailRequest(
@@ -97,11 +152,26 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         }
         catch (Exception ex)
         {
-            // El envío puede fallar (SMTP caído). El tenant + invitación quedan
-            // persistidos; el master admin podrá reenviar luego.
+            // El envío puede fallar (SMTP caído, credenciales, certificado). No
+            // se deshace nada a propósito: la cooperativa y la invitación quedan
+            // persistidas, porque perderlas por un servidor de correo caído
+            // sería peor que quedarse sin el correo.
+            //
+            // Lo que NO se hace es callarlo: el resultado viaja con
+            // CorreoEnviado=false y el motivo, para que la pantalla lo diga en
+            // lugar de dar por enviada una invitación que nunca salió.
+            //
+            // El reenvío existe: ReenviarInvitacionCommand
+            // (Application/Invitations/GestionInvitaciones/GestionInvitaciones.cs),
+            // expuesto en POST /api/tenants/{tenantId}/invitations/{id}/reenviar
+            // y en la pantalla /admin/tenants/{tenantId}/invitaciones.
+            correoEnviado = false;
+            motivoCorreoNoEnviado = DescribirFalloDeEnvio(ex);
             logger.LogWarning(ex,
-                "Falló envío del email de invitación admin para tenant {Tenant}",
-                tenant.Name);
+                "Falló envío del email de invitación admin para tenant {Tenant}. " +
+                "La invitación {Invitation} quedó creada y debe reenviarse desde " +
+                "/admin/tenants/{TenantId}/invitaciones",
+                tenant.Name, invitation.PublicId, tenant.PublicId);
         }
 
         await EmitAuditAsync(currentUser.CentralUserId.Value,
@@ -111,7 +181,27 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         return Result.Success(new RegisterTenantWithAdminResult(
             TenantPublicId: tenant.PublicId,
             InvitationPublicId: invitation.PublicId,
-            InvitationExpiresAt: expiresAt));
+            InvitationExpiresAt: expiresAt,
+            CorreoEnviado: correoEnviado,
+            MotivoCorreoNoEnviado: motivoCorreoNoEnviado));
+    }
+
+    /// <summary>
+    /// Motivo en una línea para mostrar a quien registró la cooperativa. Usa el
+    /// mensaje de la excepción más interna, que es donde el cliente SMTP dice
+    /// lo concreto ("no se pudo conectar", "certificado no válido", "535
+    /// autenticación fallida"). El stack completo queda en el log.
+    /// </summary>
+    private static string DescribirFalloDeEnvio(Exception ex)
+    {
+        var raiz = ex;
+        while (raiz.InnerException is not null)
+            raiz = raiz.InnerException;
+
+        var mensaje = raiz.Message?.Trim();
+        return string.IsNullOrEmpty(mensaje)
+            ? "El servidor de correo no aceptó el envío."
+            : mensaje;
     }
 
     private async Task EmitAuditAsync(

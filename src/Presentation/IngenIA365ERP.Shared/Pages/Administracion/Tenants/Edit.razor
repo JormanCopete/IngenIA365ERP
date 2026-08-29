@@ -9,33 +9,35 @@
 <PageTitle>@(_isNew ? "Nueva cooperativa" : "Editar cooperativa") — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>@(_isNew ? "Registrar cooperativa" : "Editar cooperativa")</h1>
+    <div class="page-header">
+        <h1>@(_isNew ? "Registrar cooperativa" : "Editar cooperativa")</h1>
+    </div>
 
     <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="tenant-edit">
         <DataAnnotationsValidator />
 
         <fieldset>
             <legend>Identificación</legend>
-            <div class="row">
+            <div class="row toolbar">
                 <label>Nombre comercial<InputText @bind-Value="_model.Name" /></label>
                 @if (_isNew) { <label>Schema SQL<InputText @bind-Value="_model.SchemaName" /></label> }
             </div>
-            <div class="row">
+            <div class="row toolbar">
                 <label>NIT<InputText @bind-Value="_model.Nit" disabled="@(!_isNew)" /></label>
                 <label>Razón social<InputText @bind-Value="_model.LegalName" /></label>
             </div>
-            <div class="row">
+            <div class="row toolbar">
                 <label>Dirección legal<InputText @bind-Value="_model.LegalAddress" /></label>
                 <label>Régimen tributario<InputText @bind-Value="_model.TaxRegime" /></label>
             </div>
-            <div class="row">
+            <div class="row toolbar">
                 <label>Subdominio<InputText @bind-Value="_model.Subdomain" disabled="@(!_isNew)" /></label>
             </div>
         </fieldset>
 
         <fieldset>
             <legend>Contacto</legend>
-            <div class="row">
+            <div class="row toolbar">
                 <label>Email<InputText @bind-Value="_model.ContactEmail" /></label>
                 <label>Teléfono<InputText @bind-Value="_model.ContactPhone" /></label>
             </div>
@@ -43,7 +45,7 @@
 
         <fieldset>
             <legend>Plan</legend>
-            <div class="row">
+            <div class="row toolbar">
                 <label>Plan<InputText @bind-Value="_model.PlanType" /></label>
                 <label>Usuarios máx<InputNumber @bind-Value="_model.MaxUsers" /></label>
                 <label>Almacenamiento (MB)<InputNumber @bind-Value="_model.StorageLimitMb" /></label>
@@ -51,7 +53,7 @@
         </fieldset>
 
         <ValidationSummary />
-        @if (_error is not null) { <p class="error">@_error</p> }
+        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
 
         <div class="actions">
             <button type="submit" class="primary" disabled="@_saving">Guardar</button>

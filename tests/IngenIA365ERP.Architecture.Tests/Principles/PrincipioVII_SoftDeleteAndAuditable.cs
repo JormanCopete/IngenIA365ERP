@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 using IngenIA365ERP.Domain.Common;
 using System.Reflection;
@@ -46,6 +47,13 @@ public class PrincipioVII_SoftDeleteAndAuditable
         var offenders = asm.GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract)
             .Where(t => t.Namespace?.StartsWith("IngenIA365ERP.Domain.Entities", StringComparison.Ordinal) == true)
+            // Las clases que fabrica el compilador —cierres de lambdas, cachés de
+            // delegados, iteradores— aparecen en este ensamblado con nombres como
+            // `<>c__DisplayClass4_0` y no son entidades de nada. Escribir un
+            // `Where(...)` dentro de un archivo de Domain.Entities bastaba para
+            // romper esta prueba, con un mensaje que señalaba a un tipo que nadie
+            // escribió y que no se puede arreglar heredando de AuditableEntity.
+            .Where(t => t.GetCustomAttribute<CompilerGeneratedAttribute>() is null)
             .Where(t => !typeof(AuditableEntity).IsAssignableFrom(t)
                      && !typeof(AuditableEntityLong).IsAssignableFrom(t))
             // Allow [Lookup] (T099) — catálogos puros como Permission o monedas.

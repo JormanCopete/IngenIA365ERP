@@ -1,4 +1,50 @@
-# Contract — Auth
+# Contract — Auth (Fase 0)
+
+> ## ⚠️ Mayormente superado — leé esto antes de usarlo
+>
+> **De las once rutas que documenta, hoy sólo existen cuatro.** Las demás se
+> retiraron el 2026-08-25 al desmontar la superficie de autenticación de Fase 0:
+> operaban sobre `SEC_Users` —el modelo por cooperativa— cuando la
+> autenticación ya vivía en la identidad central, así que devolvían «no
+> autenticado» pasaran las credenciales que pasaran.
+>
+> | Ruta | Hoy |
+> |---|---|
+> | `/login`, `/mfa/verify`, `/refresh`, `/logout` | Existen, pero **el contrato vivo es** [specs/002/contracts/auth.md](../../002-identidad-central-federada/contracts/auth.md). El cuerpo cambió: `{email, password}`, sin tenant ni username. |
+> | `/logout-all` | **Vive.** Reescrito: rota el `SecurityStamp` de quien llama y con eso caen todas sus sesiones. |
+> | `/mfa/reset/request`, `/mfa/reset/{id}/approve`, `/mfa/reset/requests` | **Viven, y desde el 2026-08-26 además funcionan.** Ver la nota de abajo. |
+>
+> **Sobre el reseteo con doble aprobación.** Existía desde Fase 0 y no servía,
+> por dos fallos encadenados. Resolvía a quien llamaba con
+> `ICurrentUserService.UserId`, que parsea como `int` el claim `uid` —un claim
+> que el emisor central no pone—, así que las tres rutas respondían **401
+> «No autenticado» a cualquiera**: nadie podía radicar una solicitud, ni
+> aprobarla, ni ver la cola, y la pantalla `MfaResetApprovals.razor` era
+> decorativa. Y aunque se llegara, el reset limpiaba `MfaSecret` sobre
+> `SEC_Users` mientras el login verifica contra `ADM_CentralUsers`: la persona
+> habría seguido bloqueada tras recibir el correo que le decía lo contrario.
+>
+> Hoy quien llama se resuelve por el puente `SEC_Users.CentralUserId`, el reset
+> cae sobre la identidad central y rota el `SecurityStamp`, y si ese puente
+> falta el handler **falla** con `Auth.MfaResetSinIdentidadCentral` en vez de
+> decir `Executed`. Las tres rutas exigen ahora los permisos que esta misma
+> tabla ya documentaba (`Security.MfaReset.Request` / `.Approve`) y que nunca
+> se habían exigido: mientras el reset no hacía nada daba igual quién aprobara,
+> pero en cuanto funciona, sin permiso bastarían dos cuentas cualesquiera de la
+> cooperativa para dejar a quien fuera sin segundo factor. Falta de permiso
+> responde **404 indistinguible**, no 403.
+>
+> Lo cubre `EndToEnd_MfaResetDobleAprobacion`, que cierra el circuito: tras las
+> dos aprobaciones vuelve al login del afectado y exige `MfaEnrollmentRequired`.
+> Esa prueba no existía, y por eso el defecto llegó hasta acá.
+> | `/mfa/enroll/start`, `/mfa/enroll/confirm`, `/mfa/backup-codes/regenerate`, `/password/change` | **404.** Lo vivo es `/api/profile/mfa/enroll`, `/api/profile/mfa/confirm`, `/api/profile/mfa/recovery-codes/regenerate` y `/api/profile/password`. |
+>
+> Dos cosas más que este documento da por buenas y ya no lo son: los fallos de
+> autenticación responden **401**, no 422; y el administrador maestro **necesita
+> segundo factor** para entrar.
+>
+> Se conserva como registro de lo que fue Fase 0. No se reescribe: falsificaría
+> la traza.
 
 **Module**: `IngenIA365ERP.API/Modules/AuthModule.cs`
 **Base path**: `/api/auth`

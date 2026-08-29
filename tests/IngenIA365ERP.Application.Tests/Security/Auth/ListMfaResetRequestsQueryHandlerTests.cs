@@ -1,5 +1,6 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Security.Auth.MfaReset;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -16,13 +17,37 @@ public class ListMfaResetRequestsQueryHandlerTests
 {
     private static readonly DateTime Now = new(2026, 7, 31, 12, 0, 0, DateTimeKind.Utc);
 
+    private static readonly Guid CentralIdDeQuienConsulta =
+        new("00000000-0000-0000-0000-000000000001");
+
     private static (ListMfaResetRequestsQueryHandler Handler, TestApplicationDbContext Db)
         Build(int? currentUserId = 1)
     {
         var db = TestDbContextFactory.Create();
-        var cu = Substitute.For<ICurrentUserService>();
-        cu.UserId.Returns(currentUserId);
-        return (new ListMfaResetRequestsQueryHandler(db, cu), db);
+        var central = Substitute.For<ICurrentCentralUserContext>();
+
+        if (currentUserId is { } id)
+        {
+            // Quien consulta se resuelve por su puente a la identidad central,
+            // así que tiene que existir la fila en SEC_Users — como en producción.
+            db.Users.Add(new User
+            {
+                Id = id,
+                Username = "consulta",
+                Email = "consulta@coop.co",
+                PasswordHash = "h",
+                IsActive = true,
+                CentralUserId = CentralIdDeQuienConsulta,
+            });
+            db.SaveChanges();
+            central.CentralUserId.Returns(CentralIdDeQuienConsulta);
+        }
+        else
+        {
+            central.CentralUserId.Returns((Guid?)null);
+        }
+
+        return (new ListMfaResetRequestsQueryHandler(db, central), db);
     }
 
     private static void Seed(TestApplicationDbContext db)

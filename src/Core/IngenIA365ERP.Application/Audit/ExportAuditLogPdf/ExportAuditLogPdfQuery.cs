@@ -56,18 +56,29 @@ public sealed class ExportAuditLogPdfQueryHandler
 {
     private readonly IAuditPdfExporter _exporter;
     private readonly IApplicationDbContext _db;
+    private readonly IAdminDbContext _admin;
     private readonly ICurrentUserService _currentUser;
+
+    // El PDF necesita LAS DOS cosas: el Id interno para resolver la entidad de
+    // la portada (NIT, razon social) y el PublicId para localizar la base de
+    // auditoria. Confundirlas hacia que la portada saliera bien y el contenido
+    // vacio.
+    private readonly ICurrentTenantService _cooperativaActual;
     private readonly IDateTimeService _clock;
 
     public ExportAuditLogPdfQueryHandler(
         IAuditPdfExporter exporter,
         IApplicationDbContext db,
+        IAdminDbContext admin,
         ICurrentUserService currentUser,
+        ICurrentTenantService cooperativaActual,
         IDateTimeService clock)
     {
         _exporter = exporter;
         _db = db;
+        _admin = admin;
         _currentUser = currentUser;
+        _cooperativaActual = cooperativaActual;
         _clock = clock;
     }
 
@@ -75,6 +86,7 @@ public sealed class ExportAuditLogPdfQueryHandler
         ExportAuditLogPdfQuery request, CancellationToken ct)
     {
         var tenantIdStr = _currentUser.TenantId;
+        var cooperativaPublica = _cooperativaActual.TenantId ?? string.Empty;
         if (string.IsNullOrWhiteSpace(tenantIdStr))
         {
             return Result.Failure<AuditPdfExport>(
@@ -92,7 +104,10 @@ public sealed class ExportAuditLogPdfQueryHandler
                 "La cooperativa actual no está registrada.");
         }
 
-        var tenant = await _db.Tenants
+        // Del registro real, en la base administrativa. Antes salia de la copia
+        // que el modelo operativo replicaba dentro de cada cooperativa, y que
+        // estaba vacia: este export nunca pudo encontrar su propia cooperativa.
+        var tenant = await _admin.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == tenantInternalId, ct);
         if (tenant is null)
@@ -103,7 +118,7 @@ public sealed class ExportAuditLogPdfQueryHandler
         }
 
         var header = new AuditPdfHeader(
-            TenantId: tenantIdStr,
+            TenantId: cooperativaPublica,
             TenantName: tenant.Name,
             Nit: tenant.Nit ?? "—",
             LegalName: tenant.LegalName ?? tenant.Name,
@@ -113,7 +128,7 @@ public sealed class ExportAuditLogPdfQueryHandler
             To: request.To);
 
         var filters = new AuditExportFilters(
-            TenantId: tenantIdStr,
+            TenantId: cooperativaPublica,
             UserId: NullIfBlank(request.UserId),
             EntityType: NullIfBlank(request.EntityType),
             Module: NullIfBlank(request.Module),

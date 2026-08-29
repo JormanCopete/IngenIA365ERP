@@ -137,7 +137,8 @@ public class AcceptInvitationCommandHandlerTests
                 TwoFactorEnabled = false,
             });
         _jwt.IssueChallengeToken(
-                newCentralUserId, InvitedEmail, false, "mfa-enroll", Arg.Any<TimeSpan?>())
+                newCentralUserId, InvitedEmail, false, "mfa-enroll",
+                Arg.Any<MetodosMfa>(), Arg.Any<TimeSpan?>())
             .Returns(new CentralAccessTokenResult("enroll-challenge-jwt", FixedNow.AddMinutes(5), "jti", "mfa-enroll"));
 
         var result = await NewHandler().Handle(
@@ -176,7 +177,8 @@ public class AcceptInvitationCommandHandlerTests
         _identity.ValidatePasswordAsync(existingId, "right-password", Arg.Any<CancellationToken>())
             .Returns(true);
         _jwt.IssueChallengeToken(
-                existingId, InvitedEmail, false, "mfa-verify", Arg.Any<TimeSpan?>())
+                existingId, InvitedEmail, false, "mfa-verify",
+                Arg.Any<MetodosMfa>(), Arg.Any<TimeSpan?>())
             .Returns(new CentralAccessTokenResult("verify-challenge-jwt", FixedNow.AddMinutes(5), "jti", "mfa-verify"));
 
         var result = await NewHandler().Handle(
@@ -347,7 +349,7 @@ public class AcceptInvitationCommandHandlerTests
     {
         _jwt.IssueAccessToken(
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
-            Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>())
+            Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>(), Arg.Any<MetodosMfa>())
             .Returns(new CentralAccessTokenResult("access-jwt", FixedNow.AddMinutes(15), "jti", "full"));
 
         _jwt.IssueRefreshToken()
@@ -357,9 +359,17 @@ public class AcceptInvitationCommandHandlerTests
     private void SetupDefaultProvisioner()
     {
         _provisioner.EnsureExistsAsync(
-                Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(),
+                Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(42));
     }
+
+    /// <summary>
+    /// Devuelve Ninguno por defecto, que es lo correcto: estas pruebas no montan
+    /// credenciales. Sólo importa cuando la cooperativa restringe métodos, y
+    /// entonces la prueba que lo necesite tiene que decir qué tiene la persona.
+    /// </summary>
+    private readonly IMfaDirectory _credenciales = Substitute.For<IMfaDirectory>();
 
     private AcceptInvitationCommandHandler NewHandler() =>
         new(
@@ -372,6 +382,7 @@ public class AcceptInvitationCommandHandlerTests
             tokens: _tokens,
             clock: _clock,
             currentUser: _currentUser,
+            credenciales: _credenciales,
             auditWriter: _auditWriter,
             logger: NullLogger<AcceptInvitationCommandHandler>.Instance);
 }

@@ -24,7 +24,7 @@ namespace IngenIA365ERP.Identity.Seed;
 public static class DomainPermissionCatalogSeeder
 {
     /// <summary>Permisos Phase 0 — Resource + Action.</summary>
-    private static readonly (string Resource, string Action, string Description)[] Catalog =
+    internal static readonly (string Resource, string Action, string Description)[] Catalog =
     [
         // Admin (SaaS-global)
         ("Admin.Tenants",          "View",     "Listar cooperativas-tenant del SaaS"),
@@ -60,6 +60,13 @@ public static class DomainPermissionCatalogSeeder
         // Security — Permission catalog (read-only)
         ("Security.Permissions",   "View",     "Ver catálogo de permisos del sistema"),
 
+        // Security — Parametros del sistema (COR_SystemSettings). Cambian el
+        // comportamiento contable y regional de toda la cooperativa, asi que
+        // se separan de Users y Roles: ver la configuracion no debe implicar
+        // poder cambiarla.
+        ("Security.Parameters",    "View",     "Ver parámetros de configuración de la cooperativa"),
+        ("Security.Parameters",    "Update",   "Cambiar el valor de un parámetro del sistema"),
+
         // Security — MFA reset (doble aprobación)
         ("Security.MfaReset",      "Request",  "Solicitar reset administrativo de MFA para otro usuario"),
         ("Security.MfaReset",      "Approve",  "Aprobar solicitud de reset de MFA"),
@@ -87,12 +94,30 @@ public static class DomainPermissionCatalogSeeder
         ("Saas.AuditLog",          "Verify",   "Validar HMAC de un PDF firmado del audit log"),
     ];
 
+    /// <summary>
+    /// Resuelve el contexto del contenedor, que apunta a dbo. Se conserva para los
+    /// llamadores que ya existian; el sembrado por esquema usa la sobrecarga de abajo.
+    /// </summary>
     public static async Task SeedAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Permission>>();
+        await SeedAsync(db, logger);
+    }
 
+    /// <summary>
+    /// Siembra sobre el contexto que se le pase, sin tocar el contenedor.
+    ///
+    /// <para>
+    /// Existe porque el catalogo tiene que quedar dentro del esquema de CADA
+    /// cooperativa, y resolver <c>IApplicationDbContext</c> del contenedor da
+    /// siempre el esquema ambiente. El orquestador ya entrega en
+    /// <c>SeedContext.TenantDb</c> un contexto apuntado al esquema en curso.
+    /// </para>
+    /// </summary>
+    public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
+    {
         try
         {
             var existing = await db.Permissions

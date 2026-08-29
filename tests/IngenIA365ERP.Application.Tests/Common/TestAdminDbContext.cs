@@ -17,8 +17,12 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
+    public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
+    public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserSetting> UserSettings => Set<UserSetting>();
+    public DbSet<PromoContenido> PromoContenidos => Set<PromoContenido>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,8 +43,12 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<TenantMembership>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Invitation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<TenantMfaPolicy>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformMfaPolicy>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<MfaRecoveryRequest>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CentralUserLoginAttempt>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PasswordResetToken>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<UserSetting>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PromoContenido>(b => b.Ignore("RowVersion"));
     }
 
     public static TestAdminDbContext Create(string? dbName = null)

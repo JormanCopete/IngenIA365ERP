@@ -24,10 +24,12 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity;
 ///         rechazado con <c>Identity.Locked.Soft</c>: el lock es por email,
 ///         no por credencial.</item>
 /// </list>
-/// Nota HTTP: el <c>ErrorEnvelopeFilter</c> no tiene mapeo específico para
-/// <c>Identity.Locked.Soft</c> ni para <c>Identity.InvalidCredentials</c>,
-/// por lo que ambos caen al default 422 UnprocessableEntity con la envolvente
-/// <c>{ code, message, traceId }</c> (FR-048). No esperar 60s reales: en lugar
+/// Nota HTTP: <c>Identity.InvalidCredentials</c> responde 401 — es un fallo de
+/// autenticación y el contrato lo exige (specs/002/contracts/auth.md:87). Antes
+/// caía al default 422 y esta prueba lo afirmaba: estaba fijando el defecto.
+/// <c>Identity.Locked.Soft</c> sí sigue en 422: la cuenta bloqueada no es una
+/// credencial mala, y el contrato no le asigna estado. Envolvente
+/// <c>{ code, message, traceId }</c> en los dos casos (FR-048). No esperar 60s reales: en lugar
 /// de dejar expirar la ventana, validamos el estado bloqueado en caliente.
 /// Usa un usuario PROPIO para no contaminar el contador Redis de otros tests.
 /// </summary>
@@ -50,7 +52,7 @@ public sealed class EndToEnd_LockoutProgression(CentralIdentityApiFixture fx)
         for (var intento = 1; intento <= 4; intento++)
         {
             var (status, body) = await LoginAsync(http, UserEmail, WrongPassword);
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, status);
+            Assert.Equal(HttpStatusCode.Unauthorized, status);
             Assert.Equal("Identity.InvalidCredentials",
                 body.GetProperty("code").GetString());
         }
@@ -59,7 +61,7 @@ public sealed class EndToEnd_LockoutProgression(CentralIdentityApiFixture fx)
         //    La respuesta del propio 5º intento sigue siendo InvalidCredentials
         //    porque el LockoutCheck se evalúa ANTES de registrar este fallo.
         var (quintoStatus, quintoBody) = await LoginAsync(http, UserEmail, WrongPassword);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, quintoStatus);
+        Assert.Equal(HttpStatusCode.Unauthorized, quintoStatus);
         Assert.Equal("Identity.InvalidCredentials",
             quintoBody.GetProperty("code").GetString());
 

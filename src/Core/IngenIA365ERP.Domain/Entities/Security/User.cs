@@ -38,7 +38,16 @@ public class User : AuditableEntity
     // en TenantUserProvisioner (T056, US1). Los campos credencial/lockout
     // siguen declarados arriba mientras existan los handlers legacy de
     // Fase 0; US1/US2 los retirará junto con su mapeo EF.
-    public Guid CentralUserId { get; set; }
+    /// <summary>
+    /// Identidad central a la que corresponde esta fila, si la tiene.
+    ///
+    /// <para>
+    /// Nulable a propósito: una fila sembrada o de sistema no tiene identidad
+    /// central, y usar <c>Guid.Empty</c> para eso sería un centinela disfrazado
+    /// que además colisionaría en cualquier índice.
+    /// </para>
+    /// </summary>
+    public Guid? CentralUserId { get; set; }
 
     /// <summary>Email "actual" del usuario en la identidad central, replicado
     /// para listados/reportes del tenant sin cruzar BDs en cada query.</summary>

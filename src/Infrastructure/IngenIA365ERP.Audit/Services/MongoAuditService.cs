@@ -64,7 +64,17 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAsync(AuditLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        // Sin cooperativa el rastro va a la base GLOBAL, no a un cubo llamado
+        // "default".
+        //
+        // Aqui se caia de vuelta al literal «default», y eso es lo que
+        // AuditDatabaseNames documenta como el origen de la basura: el nombre
+        // llegaba ya resuelto a "default", asi que la constante Global no se
+        // aplicaba nunca. Resultado medido en desarrollo: 148 documentos en
+        // IngenIA365ERP_Audit_default y CERO en IngenIA365ERP_Audit_Global, que
+        // es la que lee la consola. Los eventos de identidad —inicios de sesion,
+        // segundo factor, invitaciones— se escribian y quedaban invisibles.
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
 
         var entry = new AuditLog
         {
@@ -101,7 +111,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAccessAsync(AccessLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
 
         var entry = new AccessLog
         {
@@ -216,7 +226,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<PagedList<AuditLogEntry>> QueryAsync(AuditQueryParameters query, CancellationToken cancellationToken = default)
     {
-        var tenantId = query.TenantId ?? _tenantService.TenantId ?? "default";
+        var tenantId = query.TenantId ?? _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filterBuilder = Builders<AuditLog>.Filter;
@@ -256,7 +266,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByEntityAsync(string entityType, string entityId, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filter = Builders<AuditLog>.Filter.And(
@@ -274,7 +284,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
         var filter = Builders<AuditLog>.Filter.And(
@@ -293,7 +303,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? "default";
+        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAccessCollection(tenantId);
 
         var filterBuilder = Builders<AccessLog>.Filter;
@@ -339,16 +349,40 @@ public class MongoAuditService : IAuditService, IDisposable
 
     // === Helpers ===
 
+    /// <summary>
+    /// Nombre de la colección de auditoría de una cooperativa.
+    ///
+    /// <para>
+    /// <b>Una sola convención, y esto cerraba una brecha.</b> Había dos:
+    /// <c>AppendOnlyAuditWriter</c> escribía en <c>audit_events_{tenantId}</c> y
+    /// esta consola leía de <c>audit_{tenantId}</c>. Colecciones distintas, así que
+    /// todo lo que registran los handlers de identidad —inicios de sesión, segundo
+    /// factor, invitaciones, membresías— quedaba escrito y era <b>invisible</b>
+    /// desde la consola de auditoría. El rastro regulatorio existía y nadie podía
+    /// consultarlo.
+    /// </para>
+    ///
+    /// <para>
+    /// Se conserva <c>audit_events_</c> y no la otra porque es la que ya tiene los
+    /// cuatro índices y el TTL de cinco años que exige FR-023.
+    /// </para>
+    /// </summary>
     private IMongoCollection<AuditLog> GetAuditCollection(string tenantId)
     {
-        var db = _client.GetDatabase(_settings.DatabaseName);
-        return db.GetCollection<AuditLog>($"audit_{tenantId}");
+        // Base por cooperativa, coleccion constante dentro. Antes era al reves:
+        // una base compartida con una coleccion por cooperativa. El aislamiento
+        // por coleccion depende de que nadie componga mal el nombre; el de base
+        // lo sostiene el motor.
+        var db = _client.GetDatabase(
+            AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
+        return db.GetCollection<AuditLog>(AuditDatabaseNames.Coleccion);
     }
 
     private IMongoCollection<AccessLog> GetAccessCollection(string tenantId)
     {
-        var db = _client.GetDatabase(_settings.DatabaseName);
-        return db.GetCollection<AccessLog>($"access_{tenantId}");
+        var db = _client.GetDatabase(
+            AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
+        return db.GetCollection<AccessLog>("access_log");
     }
 
     private static AuditLogEntry MapToEntry(AuditLog a) => new(

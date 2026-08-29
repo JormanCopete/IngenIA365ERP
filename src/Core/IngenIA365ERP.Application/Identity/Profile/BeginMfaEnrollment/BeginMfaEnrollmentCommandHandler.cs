@@ -1,6 +1,7 @@
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -9,12 +10,20 @@ namespace IngenIA365ERP.Application.Identity.Profile.BeginMfaEnrollment;
 public sealed class BeginMfaEnrollmentCommandHandler(
     ICurrentCentralUserContext currentUser,
     ICentralIdentityProvider centralIdentity,
+    IMfaDirectory credenciales,
     IMfaPendingStore pendingStore,
     IDateTimeService clock,
     ILogger<BeginMfaEnrollmentCommandHandler> logger)
     : IRequestHandler<BeginMfaEnrollmentCommand, Result<BeginMfaEnrollmentResult>>
 {
     private static readonly TimeSpan PendingTtl = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Cuántos autenticadores puede tener una persona a la vez. Cinco cubre con
+    /// holgura el caso real —teléfono, escritorio, teléfono viejo— sin que el
+    /// barrido de verificación se vuelva caro.
+    /// </summary>
+    private const int MaximoDeAutenticadores = 5;
 
     public async Task<Result<BeginMfaEnrollmentResult>> Handle(
         BeginMfaEnrollmentCommand request, CancellationToken ct)
@@ -43,13 +52,38 @@ public sealed class BeginMfaEnrollmentCommandHandler(
                 "Identity.Unauthenticated", "Usuario no encontrado.");
         }
 
+        // Tope de autenticadores por persona.
+        //
+        // No es estética: el ingreso prueba el código contra TODOS, así que cada
+        // credencial es un descifrado más por intento y otro secreto que acepta
+        // códigos. El presupuesto de intentos no crece con el número de
+        // credenciales, así que con un tope razonable un tiro ciego sigue sin
+        // acertar; sin tope, deja de estar claro.
+        //
+        // Se comprueba aquí y no en la base porque aquí se puede explicar qué pasa
+        // y qué hacer, en vez de devolver una violación de índice.
+        // El tope cuenta las de ESTE tipo, no el total. Contaba el total, y con dos
+        // clases de autenticador eso era un segundo candado: quien tuviera cinco
+        // apps de códigos no podía agregar la passkey que su cooperativa le exige,
+        // y retirar una necesita una sesión completa — que es justo lo que no
+        // consigue mientras la política se lo impide.
+        var yaInscritas = await credenciales.ContarActivasDeTipoAsync(
+            centralUserId, MetodosMfa.Totp, ct);
+
+        if (yaInscritas >= MaximoDeAutenticadores)
+        {
+            return Result.Failure<BeginMfaEnrollmentResult>(
+                "Profile.Mfa.DemasiadasCredenciales",
+                $"Ya tenés {yaInscritas} apps de códigos, que es el máximo. " +
+                "Retirá alguna que ya no uses antes de agregar otra.");
+        }
+
         var setup = await centralIdentity.BeginMfaEnrollmentAsync(centralUserId, ct);
 
         await pendingStore.StoreAsync(
             centralUserId,
             new MfaPendingEnrollment(
                 SecretBase32: setup.SecretBase32,
-                RecoveryCodes: setup.RecoveryCodes,
                 CreatedAt: clock.UtcNow),
             PendingTtl,
             ct);
@@ -59,7 +93,7 @@ public sealed class BeginMfaEnrollmentCommandHandler(
         return Result.Success(new BeginMfaEnrollmentResult(
             SecretBase32: setup.SecretBase32,
             OtpAuthUri: setup.OtpAuthUri,
-            RecoveryCodes: setup.RecoveryCodes,
+            QrPngDataUri: setup.QrPngDataUri,
             ExpiresInSeconds: (int)PendingTtl.TotalSeconds));
     }
 }

@@ -35,7 +35,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Linea de Credito *</label>
                     <SfNumericTextBox TValue="int" @bind-Value="_model.CreditLineId" Placeholder="Id linea de credito" Min="0" />
