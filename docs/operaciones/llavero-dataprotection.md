@@ -1,9 +1,14 @@
 # El llavero de DataProtection
 
-> **Antes de desplegar el cambio que mueve el llavero a la base, hay que rescatar
-> las claves que ya existen.** Si se despliega sin ese paso, todo lo cifrado hasta
-> hoy deja de poder abrirse: los segundos factores y, peor, los archivos adjuntos.
-> Es irreversible.
+> **Antes de desplegar el cambio que mueve el llavero a la base hay que tomar UNA
+> decisión, no ejecutar un procedimiento.** Desplegar sin decidir deja ilegible
+> todo lo cifrado hasta hoy, y eso es irreversible. Pero la decisión correcta
+> puede perfectamente ser «que se pierda»: mientras no haya datos que duelan, es
+> la respuesta buena y no cuesta ningún paso manual.
+>
+> La primera versión de este documento daba el rescate por obligatorio. No lo es
+> — y presentarlo así hace que alguien dedique una tarde a salvar claves que
+> protegen tres adjuntos de prueba.
 
 ## Qué protege este llavero
 
@@ -17,6 +22,50 @@ Una sola cadena de claves cifra tres cosas distintas:
 
 El segundo es el que manda. Un segundo factor perdido se vuelve a inscribir; un
 adjunto cuyo DEK ya no se puede desenvolver, no vuelve.
+
+---
+
+## Primero: ¿hay algo que rescatar?
+
+**Los segundos factores no entran en la decisión.** Perderlos cuesta que cada
+persona vuelva a inscribir su autenticador, y eso se resuelve solo la próxima vez
+que entra. Lo único que decide son los adjuntos, porque son lo único que no vuelve.
+
+Contra la base de **cada cooperativa** —`COR_Attachments` vive ahí, no en la
+administrativa—:
+
+```sql
+SELECT COUNT(*) AS adjuntos FROM dbo."COR_Attachments";
+```
+
+No hace falta filtrar por `EncryptedDek`: `UploadAttachmentCommand` cifra
+**siempre**, así que toda fila es un archivo que depende del llavero.
+
+### Si el total es cero en todas → opción A
+
+**Aceptar la pérdida.** No hay nada que salvar. Se despliega y ya: al encontrar
+`ADM_DataProtectionKeys` vacía, ASP.NET Core genera la clave nueva por su cuenta
+en el primer uso. **Cero pasos manuales, nadie tiene que crear ni pasar ninguna
+clave.**
+
+Lo único que hay que avisar: quien tuviera segundo factor inscrito recibirá
+«código inválido» y tendrá que volver a inscribirlo. En un sistema sin clientes
+son dos o tres personas, y la pantalla de inscripción forzada las guía sola.
+
+Después del despliegue, saltar directo al paso 4.
+
+### Si hay adjuntos que importan → opción B
+
+El rescate de los pasos 2 y 3. Tiene ventana: **hay que hacerlo con los pods
+actuales todavía vivos**, porque las claves están en su capa escribible y
+desaparecen cuando se reemplazan.
+
+Y conviene saber esto antes de decidir: si ya hubo despliegues desde que existen
+esos adjuntos, **parte del daño ya está hecho** — Argo rota los pods en cada
+despliegue y con dos réplicas cada una cifró lo suyo. El rescate salva lo que los
+pods vivos todavía pueden abrir, no lo anterior.
+
+---
 
 ## Qué estaba mal
 
@@ -57,16 +106,19 @@ cambia, el llavero deja de reconocerse y equivale a haberlo perdido.** No tocarl
 
 ## Procedimiento de despliegue
 
-### 1. Antes de nada: foto de lo que hay que salvar
+### 1. Decidir (arriba), y dejar constancia
+
+La consulta de adjuntos por cooperativa, y esta otra para saber a cuánta gente hay
+que avisar de que va a tener que reinscribir su segundo factor:
 
 ```bash
 psql -d IngenIA365ERP_Admin -c "SELECT count(*) FILTER (WHERE \"MfaSecret\" IS NOT NULL) AS secretos, count(*) FILTER (WHERE \"TwoFactorEnabled\") AS con_mfa FROM dbo.\"ADM_CentralUsers\";"
 ```
 
-Y contar los adjuntos cifrados que existan. Si ambos son cero, el rescate de claves
-sobra y se puede ir directo al paso 4 — pero **comprobarlo, no suponerlo**.
+**Comprobarlo, no suponerlo**, y anotar los números junto con la opción elegida.
+Si sale A, ir al paso 4.
 
-### 2. Rescatar las claves de cada pod
+### 2. [Sólo opción B] Rescatar las claves de cada pod
 
 Hay que hacerlo en **todas** las réplicas: cada una tiene su propio llavero y no se
 sabe cuál cifró qué.
@@ -87,7 +139,7 @@ Si el directorio no existe, probar `/root/.aspnet/DataProtection-Keys` y
 significa que el llavero está en otro sitio y hay que averiguar dónde antes de
 seguir, porque el despliegue lo va a dejar atrás.
 
-### 3. Cargarlas en la base
+### 3. [Sólo opción B] Cargarlas en la base
 
 Una fila por archivo. `FriendlyName` es el nombre del archivo sin extensión; `Xml`
 es su contenido íntegro, tal cual, sin reformatear.
@@ -113,8 +165,21 @@ después. Si se invierte el orden, la API no arranca (`[Database.MigrationsPendi
 
 ### 5. Comprobar de verdad, con una cuenta real
 
-No basta con que la API levante. Hay que verificar las dos cosas que el llavero
-protege:
+No basta con que la API levante.
+
+**Con la opción A**, lo que hay que comprobar es que el llavero nuevo quedó
+persistido —si no, el problema original sigue vivo y nadie se entera:
+
+```sql
+SELECT count(*) FROM dbo."ADM_DataProtectionKeys";   -- tiene que dar >= 1
+```
+
+Después, inscribir un segundo factor y verificarlo **varias veces seguidas**: con
+dos réplicas, si el llavero no se compartiera, fallaría más o menos la mitad de
+las veces según a qué pod vaya la petición. Eso es justamente el síntoma que este
+cambio elimina, y es lo único que lo demuestra desde fuera.
+
+**Con la opción B**, además:
 
 - **Segundo factor:** iniciar sesión con una cuenta que tuviera MFA inscrito
   **antes** del despliegue y pasar el desafío. Repetir varias veces seguidas: si el

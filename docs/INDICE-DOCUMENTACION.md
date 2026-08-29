@@ -30,7 +30,7 @@
 | `docs/operaciones/dev-environment.md` | Cómo levantar el stack dev local (`docker compose -f docker/dev.yml`). |
 | `docs/operaciones/slo.md` | **Service Level Objectives** — 99.5 % mensual, ventanas, error budget (T134). |
 | `docs/operaciones/runbook-fase0.md` | **Runbook** de incidentes típicos: lockout, SMTP, Mongo down, rotación de claves (T135). |
-| `docs/operaciones/llavero-dataprotection.md` | **Leer antes de desplegar el llavero en base.** Qué cifra DataProtection (segundos factores y clave de cada adjunto), por qué se perdía en cada rotación de pod, y el procedimiento para rescatar las claves existentes antes del despliegue. Sin ese rescate, los adjuntos cifrados quedan ilegibles. |
+| `docs/operaciones/llavero-dataprotection.md` | **Leer antes de desplegar el llavero en base.** Qué cifra DataProtection (segundos factores y clave de cada adjunto) y por qué se perdía en cada rotación de pod. Lleva delante la decisión: si no hay adjuntos que duelan, aceptar la pérdida es la respuesta correcta y **no cuesta ningún paso manual**. El rescate pod a pod es la otra rama, no el camino por defecto. |
 | `docs/operaciones/rescate-del-administrador-maestro.md` | **La única cuenta que nadie más puede rescatar.** Por qué las tres vías de recuperación fallan para el maestro, el interruptor de configuración que lo saca de una política de plataforma mal puesta, y el SQL de último recurso — con backup y segundo par de ojos. |
 | `docs/operaciones/retirada-de-mfasecret.md` | **Pendiente, no ejecutado.** Cómo vaciar la columna heredada del segundo factor y retirar el modo compatibilidad. Destructiva: exige backup y segundo revisor (Principio XII). El orden es contraintuitivo y está explicado. |
 

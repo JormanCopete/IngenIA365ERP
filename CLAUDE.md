@@ -78,9 +78,12 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `Mfa:PlataformaSinRestriccion`: puesto a `true` ignora la política guardada y
   acepta todos los métodos. Es el rescate; se escribió antes que la política.
 - **Cifrado**: el llavero de DataProtection vive en `ADM_DataProtectionKeys`, no
-  en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**: antes de
-  desplegarlo hay que rescatar las claves de cada pod, o los archivos cifrados
-  quedan ilegibles. Ver `docs/operaciones/llavero-dataprotection.md`.
+  en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**. Antes de
+  desplegarlo hay que **decidir**, no ejecutar un procedimiento: si no hay adjuntos
+  que duelan, aceptar la pérdida es correcto y no cuesta ningún paso manual —la
+  clave nueva la genera ASP.NET Core sola. Rescatar las claves pod a pod sólo tiene
+  sentido si hay adjuntos que importan, y hay que hacerlo con los pods vivos. Ver
+  `docs/operaciones/llavero-dataprotection.md`.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
   vive fuera de toda base de cooperativa.
