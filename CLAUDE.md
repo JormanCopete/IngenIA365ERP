@@ -82,7 +82,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   desplegarlo hay que **decidir**, no ejecutar un procedimiento: si no hay adjuntos
   que duelan, aceptar la pérdida es correcto y no cuesta ningún paso manual —la
   clave nueva la genera ASP.NET Core sola. Rescatar las claves pod a pod sólo tiene
-  sentido si hay adjuntos que importan, y hay que hacerlo con los pods vivos. Ver
+  sentido si hay adjuntos que importan, y hay que hacerlo con los pods vivos.
+  **En desarrollo nada de esto aplica**: la ejecución por defecto es local —lo dice
+  `appsettings.Development.json`—, un solo proceso sin réplicas, y la tabla la crea
+  `AutoMigrate` al arrancar. Lo único que cambia en local es que el llavero ahora se
+  va con la base administrativa si se recrea. Ver
   `docs/operaciones/llavero-dataprotection.md`.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y

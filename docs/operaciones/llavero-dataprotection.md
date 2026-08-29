@@ -9,6 +9,10 @@
 > La primera versión de este documento daba el rescate por obligatorio. No lo es
 > — y presentarlo así hace que alguien dedique una tarde a salvar claves que
 > protegen tres adjuntos de prueba.
+>
+> **Y si estás corriendo en local, esto no te toca**: saltá a
+> [«En desarrollo esto no aplica»](#en-desarrollo-esto-no-aplica) y seguí
+> trabajando.
 
 ## Qué protege este llavero
 
@@ -25,7 +29,57 @@ adjunto cuyo DEK ya no se puede desenvolver, no vuelve.
 
 ---
 
+## En desarrollo esto no aplica
+
+**Todo el procedimiento de más abajo es para los ambientes desplegados.** La
+ejecución por defecto mientras se desarrolla es **local**, que es lo que dice
+`appsettings.Development.json`: `Infraestructura:Destinos` pone cada servicio en
+esta máquina y `Database` apunta a la base administrativa local. Un solo
+proceso, sin réplicas y sin nada que rote pods — **ninguno de los dos síntomas
+de producción puede darse aquí**.
+
+Por eso el defecto duró tanto sin que nadie lo notara. En local el llavero caía
+en el perfil del usuario (`%LOCALAPPDATA%\ASP.NET\DataProtection-Keys` en
+Windows), que sobrevive a los reinicios y lo usa un único proceso: funcionaba
+perfecto. Un registro sin `PersistKeysTo*` **sólo falla donde el sistema de
+archivos es efímero o hay más de una instancia**, y corriendo `dotnet run` no
+ocurre ninguna de las dos.
+
+### Lo único que cambia en tu máquina
+
+El llavero pasa a `ADM_DataProtectionKeys`, en tu base administrativa local. La
+tabla la crea sola la migración `LlaveroDeDataProtection` al arrancar, porque en
+desarrollo `Database:AutoMigrate` está en `true`. **Cero pasos manuales, no hay
+nada que decidir.**
+
+La contrapartida es real y conviene saberla antes de tropezarla: **ahora el
+llavero se va con la base**. Si recreás o borrás la base administrativa local,
+los secretos TOTP que hubiera dejan de verificarse y los adjuntos cifrados de
+prueba dejan de abrirse. Antes no pasaba, porque el llavero vivía fuera de la
+base, en tu perfil de Windows.
+
+No es un problema —se reinscribe el segundo factor y los adjuntos son datos de
+prueba— pero explica el síntoma si aparece: **«el código de mi app dejó de
+funcionar y no toqué nada»** justo después de recrear la base es esto, no un
+fallo del TOTP.
+
+### No busques variables de configuración
+
+No hay. El registro es **el mismo en local y en producción** —una sola llamada
+en `IngenIA365ERP.Identity/DependencyInjection.cs`, sin condicionar por
+ambiente—, así que lo que cambia entre uno y otro es únicamente a qué base
+administrativa apunta la cadena de conexión.
+
+`docs/operaciones/dev-environment.md:74` promete `DataProtection__KeyRingPath` y
+`DataProtection__ApplicationName`. **Ninguna línea de código las lee**, ni antes
+ni ahora. Ponerlas no hace nada.
+
+---
+
 ## Primero: ¿hay algo que rescatar?
+
+> Esta decisión es de los ambientes desplegados. En local ya está resuelta: no
+> hay nada que rescatar.
 
 **Los segundos factores no entran en la decisión.** Perderlos cuesta que cada
 persona vuelva a inscribir su autenticador, y eso se resuelve solo la próxima vez
@@ -105,6 +159,9 @@ cambia, el llavero deja de reconocerse y equivale a haberlo perdido.** No tocarl
 ---
 
 ## Procedimiento de despliegue
+
+> **Sólo ambientes desplegados.** Corriendo en local no hay ninguno de estos
+> pasos: se arranca y la tabla se crea sola.
 
 ### 1. Decidir (arriba), y dejar constancia
 
@@ -223,6 +280,7 @@ dos se ponen rojas.
   es `ProtectKeysWithCertificate`, que exige custodiar y rotar un certificado. Es
   una decisión de operación, no de código, y se puede añadir después sin migrar nada.
 - **`docs/operaciones/dev-environment.md:74`** promete las variables
-  `DataProtection__KeyRingPath` y `DataProtection__ApplicationName`. **Ninguna línea
-  de código las lee**, ni antes ni ahora. O se implementan o se quitan del
-  documento; dejarlas ahí hace creer que el llavero se configura y no se configura.
+  `DataProtection__KeyRingPath` y `DataProtection__ApplicationName`, que **ninguna
+  línea de código lee** (ver arriba). O se implementan o se quitan de aquel
+  documento; dejarlas ahí hace creer que el llavero se configura por ambiente, y
+  no se configura: la llamada es la misma en local y en producción.
