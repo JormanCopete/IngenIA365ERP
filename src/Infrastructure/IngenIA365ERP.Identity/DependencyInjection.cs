@@ -141,10 +141,14 @@ public static class DependencyInjection
             WebAuthn.WebAuthnService>();
 
         // === Register services ===
+        //
+        // IIdentityAuthenticationService e IEncryptionService estaban aquí y no
+        // los inyectaba nadie. El primero era una capa de autenticación entera
+        // —con sus propios LoginCommand/RefreshTokenCommand— del diseño anterior
+        // a CQRS; el segundo, un cifrado genérico que nadie llamaba (el vivo es
+        // AttachmentEncryptionService). Se fueron con sus implementaciones.
         services.AddScoped<IJwtService, JwtService>();
-        services.AddScoped<IIdentityAuthenticationService, IdentityAuthenticationService>();
         services.AddScoped<IPermissionService, PermissionService>();
-        services.AddScoped<IEncryptionService, EncryptionService>();
 
         // Feature 004 (T037): seeders Phase 0 integrados al framework de
         // seeding — corren tras las migraciones del inicializador.

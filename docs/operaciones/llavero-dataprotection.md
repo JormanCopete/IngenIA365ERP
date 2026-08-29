@@ -16,16 +16,22 @@
 
 ## Qué protege este llavero
 
-Una sola cadena de claves cifra tres cosas distintas:
+Una sola cadena de claves cifra **dos** cosas, y sólo dos:
 
 | Qué | Dónde | Qué pasa si se pierde la clave |
 |---|---|---|
-| El secreto TOTP de cada persona | `ADM_CentralUsers.MfaSecret` | Todo el mundo con MFA recibe «código inválido» para siempre. Sólo lo arregla un reseteo administrativo por persona |
+| El secreto TOTP de cada persona | `ADM_CentralUsers.MfaSecret` y `ADM_MfaCredentials.SecretProtected` | Todo el mundo con MFA recibe «código inválido» para siempre. Se arregla reinscribiendo, o con un reseteo administrativo |
 | La clave de cada archivo adjunto | `AttachmentEncryptionService` | **Los archivos dejan de poder leerse.** No hay reseteo que lo arregle: es pérdida de datos |
-| Lo que pase por `EncryptionService` | varios | según el caso |
 
 El segundo es el que manda. Un segundo factor perdido se vuelve a inscribir; un
 adjunto cuyo DEK ya no se puede desenvolver, no vuelve.
+
+> Antes esta tabla tenía una tercera fila —«lo que pase por `EncryptionService`,
+> según el caso»— que era justamente lo que impedía decidir: no se puede evaluar
+> un riesgo descrito como «según el caso». Resultó que ese servicio **no lo
+> llamaba nadie**: interfaz, registro e implementación sin un solo consumidor. Se
+> retiró, y con él la fila. Las passkeys tampoco entran: WebAuthn guarda claves
+> **públicas**, que no van cifradas.
 
 ---
 

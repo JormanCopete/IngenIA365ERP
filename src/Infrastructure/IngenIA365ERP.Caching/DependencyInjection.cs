@@ -49,8 +49,12 @@ public static class DependencyInjection
         services.AddScoped<ICacheService, RedisCacheService>();
 
         // T029 — Abstracciones de seguridad respaldadas por Redis.
+        //
+        // IRevokedTokenBlacklist estaba aquí y no lo inyectaba nadie: la
+        // revocación viva es el SecurityStamp, que invalida los tokens sin
+        // necesidad de una lista negra. Una abstracción registrada sin
+        // consumidor hace creer que hay una defensa donde no la hay.
         services.AddScoped<IRefreshTokenStore, RedisRefreshTokenStore>();
-        services.AddScoped<IRevokedTokenBlacklist, RedisRevokedTokenBlacklist>();
         services.AddScoped<IPermissionClaimsCache, RedisPermissionClaimsCache>();
 
         // Feature 002 (Chunk C.2) — identidad central:
@@ -60,7 +64,7 @@ public static class DependencyInjection
         // - LoginAttemptCounter: lockout progresivo por email (5/10/15/20 fallos).
         services.AddScoped<ITenantMembershipReader, RedisTenantMembershipReader>();
         services.AddScoped<IMembershipChangedNotifier, RedisMembershipChangedNotifier>();
-        services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
+        services.AddScoped<ILoginAttemptCounter, RedisLoginAttemptCounter>();
 
         // Tope diario de solicitudes de recuperacion. Clave propia, no el contador
         // de intentos: ahi no hay fallos que castigar, hay volumen que acotar.
