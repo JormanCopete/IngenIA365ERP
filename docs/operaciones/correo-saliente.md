@@ -4,7 +4,7 @@
 > hay que definir, cómo comprobarlo antes de que haga falta, y por qué en local
 > el correo **no llega a ningún buzón** (y eso es lo correcto).
 
-Última revisión: 2026-08-19.
+Última revisión: 2026-09-04.
 
 ---
 
@@ -87,6 +87,22 @@ Es el destino que usa `appsettings.Production.json`.
 > Poste.io/Haraka autoalojado al que nunca se le puso un certificado válido, así
 > que la validación contra las autoridades del sistema falla. Lo correcto es
 > arreglar el certificado del servidor. Mientras tanto, ver §5.
+
+### 2.3 Qué hace cada ambiente en Kubernetes
+
+Comprobado contra el clúster el 2026-09-04, no contra el repositorio:
+
+| Ambiente | Correo | Cómo |
+|---|---|---|
+| DEV | **No sale.** | Sin `Smtp__Host` ni Secret `erp-smtp`. El envío falla y el ERP lo dice: el alta de cooperativa devuelve `CorreoEnviado=false` con el motivo, y la invitación queda guardada para reenviarla. |
+| QA | **Sale de verdad**, al buzón que se escriba. | `Smtp__*` en el overlay `workloads/erp/overlays/qa/` + Secret `erp-smtp` (§6). Activo desde el 2026-09-04. |
+| PDN | **No sale**, todavía. | Igual que DEV. Se activa como en QA cuando se decida: overlay + Secret + reinicio de la API. |
+
+> **No hay ningún capturador (smtp4dev, MailHog) desplegado en el clúster.** Una
+> versión anterior de esta guía y de `estado-y-pendientes.md` decía que DEV y QA
+> lo tenían; ese diseño se escribió en un commit de GitOps que nunca se subió.
+> En QA los correos llegan a buzones reales: **no probar con direcciones de
+> terceros**.
 
 ---
 
@@ -217,45 +233,50 @@ variable.
 ## 6. El Secret en Kubernetes
 
 El clúster es k3s (namespaces `erp-pdn`, `erp-dev`, `erp-qa`). Sólo usuario y
-contraseña son secretos; host, puerto, TLS y remitente ya están en el
-`configMapGenerator` de `workloads/erp/base/kustomization.yaml`, y
-`IdentityEmail__BaseUrl` en el overlay de cada ambiente.
+contraseña son secretos; host, puerto, TLS, remitente y huella van en el
+`configMapGenerator` del **overlay del ambiente que manda correo**
+(`workloads/erp/overlays/qa/kustomization.yaml` hoy), no en la base: así un
+ambiente sin esas claves no intenta enviar. `IdentityEmail__BaseUrl` también va
+en el overlay de cada ambiente.
 
-> **Las claves del Secret se llaman `Smtp__Username` y `Smtp__Password`**, igual
-> que las variables — y **no** `username` / `password`, que es la convención de
-> los otros Secrets del clúster (`erp-db-app`, `erp-master-admin`). Las lee el
-> `secretKeyRef` de `workloads/erp/base/api.yaml`. Crear el Secret con las claves
-> de la otra convención **no da ningún error**: el `secretKeyRef` es
-> `optional: true`, el pod arranca igual, el emisor se queda sin usuario y no
-> autentica. Es el fallo silencioso más fácil de provocar en esta página.
+> **Las claves del Secret se llaman `username` y `password`**, la misma
+> convención que los otros Secrets del clúster (`erp-db-app`,
+> `erp-master-admin`). Las lee el `secretKeyRef` de `workloads/erp/base/api.yaml`
+> y las escribe `tools/scripts/crear-secreto-smtp.ps1`. Una versión anterior de
+> esta guía decía lo contrario (`Smtp__Username` / `Smtp__Password`); ese diseño
+> nunca llegó al clúster. Crear el Secret con otras claves **no da ningún
+> error**: el `secretKeyRef` es `optional: true`, el pod arranca igual, el
+> emisor se queda sin usuario y no autentica. Es el fallo silencioso más fácil
+> de provocar en esta página. Comprobarlo dentro del pod, sin ver el valor:
+> `printenv Smtp__Username >/dev/null && echo presente`.
 
 ### 6.1 Crearlo
 
-Se crea **en el servidor**, a mano, una vez. La contraseña se lee por consola y
-se pasa por archivo — no como argumento — porque los argumentos de `kubectl` son
-visibles en `ps` para cualquiera que esté en la máquina:
+Desde el PC de trabajo, con la malla de Tailscale y la llave `ingenia365_deploy`:
 
-```bash
-umask 077
-read -rsp 'Contrasena del buzon de correo: ' SMTP_PASS; echo
-printf '%s' "$SMTP_PASS" > /tmp/smtp-pass
-unset SMTP_PASS
-
-kubectl -n erp-pdn create secret generic erp-smtp \
-  --from-literal=Smtp__Username=noresponder.ingenia365erp@notifica365.com \
-  --from-file=Smtp__Password=/tmp/smtp-pass
-
-shred -u /tmp/smtp-pass
+```powershell
+.\tools\scripts\crear-secreto-smtp.ps1 -Ambiente qa    # dev | qa | pdn
 ```
 
-Hay que crearlo en **cada** namespace que vaya a mandar correo (`erp-dev`,
-`erp-qa`, `erp-pdn`): un Secret no se comparte entre namespaces.
+El script pide usuario y contraseña por consola (la contraseña oculta), arma el
+Secret y lo manda por STDIN del canal SSH a `k3s kubectl apply -f -`: la
+contraseña no viaja como argumento —los argumentos son visibles en `ps` para
+cualquiera en la máquina— ni se escribe en ningún archivo. Para producción
+exige teclear `PRODUCCION`.
 
-Comprobar que quedó (sin mostrar el valor):
+Hay que crearlo en **cada** namespace que vaya a mandar correo: un Secret no se
+comparte entre namespaces.
+
+Comprobar que quedó, **sin mostrar los valores**:
 
 ```bash
-kubectl -n erp-pdn get secret erp-smtp -o jsonpath='{.data}' | tr ',' '\n'
+kubectl -n erp-qa get secret erp-smtp -o go-template='{{range $k,$v := .data}}{{$k}} {{end}}'
 ```
+
+> **La API lee el Secret al arrancar.** Si el Secret se crea después de que el
+> pod ya esté corriendo —pasó en QA el 2026-09-04, con dos minutos de
+> diferencia—, el pod tiene host pero no credenciales hasta el siguiente
+> `kubectl -n erp-qa rollout restart deploy/erp-api`.
 
 > Si el Secret tiene que vivir en el repositorio de GitOps, va **cifrado con SOPS
 > + age**, que es lo que usa este despliegue. Un manifiesto de Secret en claro no
@@ -268,13 +289,14 @@ cuando falle. En `workloads/erp/base/api.yaml`, sólo las credenciales:
 
 ```yaml
             - name: Smtp__Username
-              valueFrom: { secretKeyRef: { name: erp-smtp, key: Smtp__Username, optional: true } }
+              valueFrom: { secretKeyRef: { name: erp-smtp, key: username, optional: true } }
             - name: Smtp__Password
-              valueFrom: { secretKeyRef: { name: erp-smtp, key: Smtp__Password, optional: true } }
+              valueFrom: { secretKeyRef: { name: erp-smtp, key: password, optional: true } }
 ```
 
-El resto no es secreto y vive en el `configMapGenerator` de
-`workloads/erp/base/kustomization.yaml`, igual para los tres ambientes:
+El resto no es secreto y vive en el `configMapGenerator` del **overlay** del
+ambiente que manda correo (`workloads/erp/overlays/qa/kustomization.yaml`). DEV y
+PDN no lo tienen, y por eso no envían:
 
 ```yaml
       - Smtp__Host=mail.notifica365.com
@@ -282,6 +304,7 @@ El resto no es secreto y vive en el `configMapGenerator` de
       - Smtp__UseStartTls=true
       - Smtp__FromAddress=noresponder.ingenia365erp@notifica365.com
       - Smtp__FromName=No Responder IngenIA365 ERP
+      - Smtp__HuellaCertificadoAceptada=54EA10957D7018ADE475CA084C1CADD14030D460CD6EED62F7CEDCDA15974E1C
 ```
 
 Y lo único que cambia por ambiente, en el overlay correspondiente

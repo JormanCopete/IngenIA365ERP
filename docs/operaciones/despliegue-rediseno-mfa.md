@@ -209,6 +209,15 @@ No basta con que los health checks se pongan verdes.
 - **El frontend**: abrir la consola del navegador en producción. Tiene que decir
   `ApiBaseUrl=https://app.ingenia365.com/`, **no** `http://localhost:5100`.
 - **Adjunto anterior** (si se eligió rescatar): descargarlo y comprobar que abre.
+- **La primera cooperativa**: Consola SaaS → Registrar Cooperativa. El alta hace
+  `CREATE DATABASE` con el rol de la API, y ese rol (`ingenia`) nació **sin
+  `CREATEDB`** en los tres clústeres: sin otorgarlo antes, la cooperativa queda en
+  `Failed` y la invitación sale igual, hacia una cooperativa sin base. Ver P13 en
+  [estado-y-pendientes.md](estado-y-pendientes.md). El nombre de la base admite
+  sólo letras ASCII, dígitos y guion bajo, sin empezar por dígito. Y el correo
+  sólo sale en QA ([correo-saliente.md](correo-saliente.md) §2.3): en DEV y PDN la
+  pantalla dirá `CorreoEnviado=false` con el motivo, que es lo correcto, y la
+  invitación se reenvía desde `/admin/tenants/{tenantId}/invitaciones`.
 
 ## Vigilar 48 horas
 

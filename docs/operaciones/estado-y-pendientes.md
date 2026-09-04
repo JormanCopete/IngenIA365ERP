@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-08-20**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-04**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -79,8 +79,12 @@ entre sí y solo se notaría al intentar restaurar.
   reputación de esa IP, no de la de Microsoft.
 - **Credenciales por variable de entorno** (`Smtp__Username`, `Smtp__Password`),
   nunca en el repositorio. En Kubernetes vienen del Secret `erp-smtp`.
-- **DEV y QA no envían correo real**: tienen un smtp4dev desplegado que captura
-  todo. Se lee con `kubectl -n erp-dev port-forward svc/smtp4dev 8025:80`.
+- **Sólo QA envía correo real** (desde el 2026-09-04): `Smtp__*` en su overlay y
+  Secret `erp-smtp` en `erp-qa`. **DEV y PDN no envían**: sin `Smtp__Host` ni
+  Secret, y **no hay ningún capturador** (smtp4dev/MailHog) desplegado en el
+  clúster —una versión anterior de esta nota decía lo contrario, sobre un commit
+  de GitOps que nunca se subió—. Cuando en DEV o PDN falla el envío, el ERP lo
+  dice (`CorreoEnviado=false` con el motivo) y la invitación queda para reenviar.
 - **Los enlaces del correo ya apuntan a donde deben**. Hasta esta ronda,
   `IdentityEmail:BaseUrl` no estaba declarado en ningún ambiente y regía el valor
   cableado `https://localhost:7200`: toda invitación y todo restablecimiento
@@ -169,6 +173,36 @@ lo especificaba; nunca se implementó.
 
 > Costó dos despliegues fallidos descubrirlo: Argo reportaba `Synced` y los pods
 > seguían corriendo la imagen de 41 horas antes.
+
+#### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
+
+Registrar una cooperativa hace `CREATE DATABASE` con la conexión de la API
+(`TenantDatabaseProvisioner`), y el rol `ingenia` de los tres clústeres
+CloudNativePG **no tiene `CREATEDB`**: nació como `initdb.owner`, sin más
+atributos. Sin el permiso la cooperativa queda registrada con
+`ProvisioningState = Failed` y el motivo `permission denied to create database`;
+la invitación al primer administrador sale igual y lo lleva a una cooperativa
+sin base. Detectado el 2026-09-04 en QA, antes de registrar la primera.
+
+El manifiesto de `erp-db` **no está en GitOps** (sólo el de ensayo de PDN) y
+`spec.managed.roles` está vacío, así que el operador ni gestiona ni revierte el
+rol: se otorga en vivo, una vez por clúster, como `postgres`:
+
+```bash
+ssh -i ~/.ssh/ingenia365_deploy root@100.94.218.42 "k3s kubectl -n erp-qa exec erp-db-1 -c postgres -- psql -U postgres -c 'ALTER ROLE ingenia CREATEDB'"
+ssh -i ~/.ssh/ingenia365_deploy root@100.94.218.42 "k3s kubectl -n erp-dev exec erp-db-1 -c postgres -- psql -U postgres -c 'ALTER ROLE ingenia CREATEDB'"
+ssh -i ~/.ssh/ingenia365_deploy root@100.104.190.76 "k3s kubectl -n erp-pdn exec erp-db-1 -c postgres -- psql -U postgres -c 'ALTER ROLE ingenia CREATEDB'"
+```
+
+Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
+`t`. Es reversible con `NOCREATEDB`. Si una cooperativa ya quedó en `Failed`,
+`POST /api/saas/tenants/{publicId}/provision` es idempotente y la repara.
+
+| Ambiente | Estado |
+|---|---|
+| DEV | ⏳ pendiente |
+| QA | ⏳ pendiente |
+| PDN | ⏳ pendiente |
 
 ### 🟡 Prioridad media
 

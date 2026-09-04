@@ -116,6 +116,7 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 | ✅ M7 | Crear bucket S3 `ingenia365-erp-backups` + usuario IAM dedicado | hecho — con Object Lock, versionado, cifrado y permisos mínimos |
 | ⏳ M8 | **Desactivar la llave AWS `AKIAQ3EG…`** (quedó expuesta en una conversación) | Ya no la usa el ERP, pero sigue activa. Ver P1 en [estado-y-pendientes.md](estado-y-pendientes.md) |
 | ✅ M9 | Respaldo propio de **MongoDB** | hecho — replica set con oplog, volcado diario y **restauración probada** en los tres ambientes |
+| ⏳ M10 | **`ALTER ROLE ingenia CREATEDB`** en los tres clústeres `erp-db` | El alta de cooperativa hace `CREATE DATABASE` con el rol de la API y hoy no puede: queda en `Failed`. Ver P13 en [estado-y-pendientes.md](estado-y-pendientes.md) |
 
 ### Estado de los ambientes (2026-08-14)
 
