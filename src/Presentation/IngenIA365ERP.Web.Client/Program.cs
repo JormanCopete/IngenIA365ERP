@@ -46,11 +46,23 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 // único que hay que acertar aquí es el ORIGEN. Un valor absoluto se sigue
 // respetando tal cual: es lo que necesitan desarrollo (API en otro puerto) y
 // cualquier ambiente donde la API no comparta host.
+// OJO con como se pregunta "es absoluta". Uri.TryCreate(valor, UriKind.Absolute)
+// NO sirve: en Windows "/" devuelve false, pero el runtime del navegador es de
+// tipo Unix y ahi una barra inicial es una RUTA ABSOLUTA DE ARCHIVO, asi que
+// devuelve true con file:///. El HttpClient quedaba con BaseAddress file:/// y
+// el navegador rechazaba la peticion con "Not allowed to load local resource:
+// file:///api/auth/login", que en pantalla se ve como "Failed to fetch" y no
+// se parece en nada a la causa. La pregunta correcta es si el esquema es http
+// o https.
+static bool EsUrlAbsolutaDeRed(string valor) =>
+    Uri.TryCreate(valor, UriKind.Absolute, out var u)
+    && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
+
 var origenDelNavegador = builder.HostEnvironment.BaseAddress;
 var apiBaseUrl = AppMode.UseMock
     ? origenDelNavegador
-    : Uri.TryCreate(AppMode.ApiBaseUrl, UriKind.Absolute, out var apiAbsoluta)
-        ? apiAbsoluta.ToString()
+    : EsUrlAbsolutaDeRed(AppMode.ApiBaseUrl)
+        ? AppMode.ApiBaseUrl
         : new Uri(new Uri(origenDelNavegador), AppMode.ApiBaseUrl).ToString();
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthBearerHandler>()
