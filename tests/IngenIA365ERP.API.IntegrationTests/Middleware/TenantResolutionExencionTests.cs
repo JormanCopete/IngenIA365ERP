@@ -28,7 +28,9 @@ public class TenantResolutionExencionTests
     [InlineData("/api/invitations/preview")]
     // Superficie del administrador maestro, que no tiene empresa.
     [InlineData("/api/saas/register-tenant")]
+    // Lo único de /api/admin que vive en la base administrativa.
     [InlineData("/api/admin/promociones")]
+    [InlineData("/api/admin/branches")]
     // Infraestructura.
     [InlineData("/health/ready")]
     [InlineData("/swagger/index.html")]
@@ -45,6 +47,13 @@ public class TenantResolutionExencionTests
     [InlineData("/api/contabilidad/comprobantes")]
     [InlineData("/api/nomina/empleados")]
     [InlineData("/api/profile/preferencias")]
+    // Bajo /api/admin pero de la base DE LA COOPERATIVA. Estaban exentas por
+    // el prefijo "/api/admin" entero y devolvían 500 sin cooperativa, en vez
+    // del 401 tipado. Se vio en QA entrando como maestro.
+    [InlineData("/api/admin/roles")]
+    [InlineData("/api/admin/users")]
+    [InlineData("/api/admin/permissions")]
+    [InlineData("/api/admin/parametros")]
     // Parecidas a una ruta exenta pero distintas: la comparación es por prefijo
     // y no debe dejar pasar un sufijo que la imite.
     [InlineData("/api/publicodemas/algo")]

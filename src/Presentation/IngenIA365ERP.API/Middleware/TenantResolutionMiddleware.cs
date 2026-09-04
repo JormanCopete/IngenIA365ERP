@@ -51,7 +51,15 @@ public class TenantResolutionMiddleware
         "/api/sessions/",
         "/api/invitations/",
         "/api/saas/",
-        "/api/admin",
+        // Sólo lo de /api/admin que vive en la base ADMINISTRATIVA. Antes estaba
+        // el prefijo "/api/admin" entero, y eso eximía también a roles, users,
+        // permissions y parametros, que leen la base DE LA COOPERATIVA: pasaban
+        // el portero sin cooperativa y reventaban en la guardia de datos con un
+        // 500 genérico, en vez del 401 Session.TenantNotSelected que este mismo
+        // middleware sabe dar. Se vio en QA entrando como maestro, que no tiene
+        // cooperativa por diseño. La guardia estaba bien; la exención no.
+        "/api/admin/branches",
+        "/api/admin/promociones",
         // TODO el subárbol del segundo factor, y no dos rutas sueltas.
         //
         // Estaban enumeradas /enroll y /confirm, que eran las únicas que existían.
@@ -98,8 +106,11 @@ public class TenantResolutionMiddleware
         // dentro de una peticion.
         //
         // Ahora se resuelve SIEMPRE que se pueda, y solo se EXIGE en las rutas no
-        // exentas. Ni un prefijo sale de la lista y ni un codigo de error cambia:
-        // una ruta exenta sin cooperativa sigue pasando de largo, como antes.
+        // exentas. Una ruta exenta sin cooperativa sigue pasando de largo.
+        //
+        // (El prefijo "/api/admin" SÍ salió de la lista, después: eximía rutas de
+        // cooperativa y el 500 descrito arriba dejó de ser hipotético. Ver la
+        // nota junto a "/api/admin/branches".)
         var exenta = IsExempt(path);
         if (exenta && !TieneCooperativaResoluble(context))
         {
