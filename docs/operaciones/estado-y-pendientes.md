@@ -200,9 +200,16 @@ Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
 
 | Ambiente | Estado |
 |---|---|
-| DEV | ⏳ pendiente |
-| QA | ⏳ pendiente |
-| PDN | ⏳ pendiente |
+| DEV | ✅ 2026-09-04 (`rolcreatedb = t`) |
+| QA | ✅ 2026-09-04 — primera cooperativa `coop_prueba` aprovisionada en `Ready`, invitación entregada y aceptada |
+| PDN | ⏳ pendiente — hacerlo antes de registrar la primera cooperativa real |
+
+> Al aprovisionar apareció una carrera, una sola vez y sin daño:
+> `NotificationEmailDispatcher` recorre `ListActiveAsync()` —que filtra por
+> `IsActive` y no por `ProvisioningState`— y abrió `coop_prueba` cuando la base
+> ya existía pero sus tablas no (`42P01 dbo.COR_Notifications does not exist`).
+> Reintentó a los 15 s y no volvió a fallar. El arreglo es que los servicios de
+> fondo sólo recorran cooperativas en `Ready`; queda propuesto, no hecho.
 
 ### 🟡 Prioridad media
 
