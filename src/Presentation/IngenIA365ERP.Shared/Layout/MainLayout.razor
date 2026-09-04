@@ -35,6 +35,8 @@
                                     <span class="e-icons e-people user-icon"></span>
                                     <span class="user-name"
                                           title="Mi cuenta" @onclick="ToggleAccountMenu">@_userName ▾</span>
+                                    @* Guía de la pantalla actual, siempre a un clic. *@
+                                    <BotonAyuda />
                                     <TenantSwitcher />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-logout"
                                               Content="Salir" OnClick="@Logout" />

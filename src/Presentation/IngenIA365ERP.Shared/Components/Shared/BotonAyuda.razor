@@ -1,0 +1,62 @@
+@using IngenIA365ERP.Shared.Services.Manual
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* El puente entre cada pantalla y su guía. Resuelve la ruta actual contra el
+   catálogo del manual: si hay guía, lleva a ella; si no, al manual con la
+   búsqueda ya hecha con el último tramo de la ruta, que casi siempre es el nombre
+   de la pantalla. Se recalcula en cada navegación. *@
+<a class="ayuda-boton" href="@_destino" title="@_titulo" aria-label="@_titulo">
+    <span class="e-icons e-circle-info" aria-hidden="true"></span>
+    <span class="ayuda-boton-texto">@_texto</span>
+</a>
+
+@code {
+    private string _destino = "/manual";
+    private string _texto = "¿Cómo se hace?";
+    private string _titulo = "Abrir el manual";
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += AlCambiarDeRuta;
+        Resolver();
+    }
+
+    private void AlCambiarDeRuta(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Resolver();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Resolver()
+    {
+        var ruta = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        var sinConsulta = ruta.Split('?', 2)[0].Split('#', 2)[0];
+
+        if (sinConsulta.StartsWith("/manual", StringComparison.OrdinalIgnoreCase))
+        {
+            _destino = "/manual";
+            _texto = "Manual";
+            _titulo = "Volver al índice del manual";
+            return;
+        }
+
+        var tema = ManualCatalogo.ParaRuta(sinConsulta);
+        if (tema is not null)
+        {
+            _destino = $"/manual/{tema.Slug}";
+            _texto = "¿Cómo se hace?";
+            _titulo = $"Guía: {tema.Titulo}";
+            return;
+        }
+
+        var ultimoTramo = sinConsulta.TrimEnd('/').Split('/').LastOrDefault(t => t.Length > 0 && !Guid.TryParse(t, out _)) ?? string.Empty;
+        _destino = ultimoTramo.Length > 0
+            ? $"/manual?q={Uri.EscapeDataString(ultimoTramo.Replace('-', ' '))}"
+            : "/manual";
+        _texto = "¿Cómo se hace?";
+        _titulo = "Esta pantalla no tiene guía propia todavía: buscar en el manual";
+    }
+
+    public void Dispose() => Nav.LocationChanged -= AlCambiarDeRuta;
+}

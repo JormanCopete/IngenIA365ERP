@@ -1,0 +1,114 @@
+@page "/manual"
+@using IngenIA365ERP.Shared.Services.Manual
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>Manual del sistema — IngenIA365ERP</PageTitle>
+
+<div class="pagina manual">
+    <div class="page-header">
+        <div>
+            <h2>Manual del sistema</h2>
+            <p class="texto-apoyo">
+                Una guía por cada opción del menú: qué hace, qué necesita y cómo se usa, paso a paso.
+                En cualquier pantalla, el botón «¿Cómo se hace?» de la barra superior abre la guía de esa pantalla.
+            </p>
+        </div>
+        <span class="pastilla pastilla-info">@ManualCatalogo.Temas.Count guías</span>
+    </div>
+
+    <section class="tarjeta manual-busqueda">
+        <label class="visualmente-oculto" for="manual-q">Buscar en el manual</label>
+        <input id="manual-q" type="search" autocomplete="off"
+               placeholder="¿Qué querés hacer? Por ejemplo: invitar, liquidar nómina, perdí el teléfono…"
+               @bind="_consulta" @bind:event="oninput" @bind:after="Buscar" />
+        @if (_resultados is { Count: > 0 })
+        {
+            <p class="texto-apoyo">@_resultados.Count resultado(s)</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_consulta))
+        {
+            <p class="texto-apoyo">
+                Nada con esas palabras. Probá con menos palabras o con el nombre de la pantalla como aparece en el menú.
+            </p>
+        }
+    </section>
+
+    @if (_resultados is { Count: > 0 })
+    {
+        <ul class="manual-resultados">
+            @foreach (var r in _resultados)
+            {
+                <li class="tarjeta">
+                    <a href="/manual/@r.Tema.Slug" class="manual-resultado-titulo">@r.Tema.Titulo</a>
+                    <span class="pastilla pastilla-tenue">@r.Tema.Modulo</span>
+                    <p class="texto-apoyo">@r.Fragmento</p>
+                </li>
+            }
+        </ul>
+    }
+    else if (string.IsNullOrWhiteSpace(_consulta))
+    {
+        <section class="tarjeta">
+            <h3>Primeros pasos</h3>
+            <p class="texto-apoyo">Lo que conviene leer el primer día, en orden.</p>
+            <ol class="manual-primeros">
+                @foreach (var slug in ManualCatalogo.PrimerosPasos)
+                {
+                    var tema = ManualCatalogo.PorSlug(slug);
+                    if (tema is null) { continue; }
+                    <li><a href="/manual/@tema.Slug">@tema.Titulo</a> <span class="texto-tenue">· @tema.Modulo</span></li>
+                }
+            </ol>
+        </section>
+
+        <h3>Por módulo</h3>
+        <div class="manual-modulos">
+            @foreach (var modulo in ManualCatalogo.OrdenDeModulos)
+            {
+                var temas = ManualCatalogo.DelModulo(modulo).ToList();
+                if (temas.Count == 0) { continue; }
+                <section class="tarjeta manual-modulo">
+                    <h4>@modulo <span class="texto-tenue">(@temas.Count)</span></h4>
+                    <ul>
+                        @foreach (var tema in temas)
+                        {
+                            <li>
+                                <a href="/manual/@tema.Slug">@tema.Titulo</a>
+                                @if (tema.Tipo == TipoDeTema.Proceso)
+                                {
+                                    <span class="texto-tenue"> · paso a paso</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private string? _consulta;
+    private IReadOnlyList<ResultadoDeBusqueda>? _resultados;
+
+    protected override void OnParametersSet()
+    {
+        // Llegar con ?q= (desde el botón de ayuda de una pantalla sin guía, por
+        // ejemplo) busca de entrada.
+        if (!string.IsNullOrWhiteSpace(Q) && Q != _consulta)
+        {
+            _consulta = Q;
+            Buscar();
+        }
+    }
+
+    private void Buscar()
+    {
+        _resultados = string.IsNullOrWhiteSpace(_consulta)
+            ? null
+            : ManualBuscador.Buscar(_consulta, ManualCatalogo.Temas);
+    }
+}

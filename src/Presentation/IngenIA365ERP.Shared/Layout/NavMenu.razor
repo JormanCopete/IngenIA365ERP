@@ -180,6 +180,13 @@
             @if (SidebarOpen) { <span class="section-title">SISTEMA</span> }
         </div>
 
+        @* Para todo el mundo, con o sin cooperativa: el manual explica también
+           como entrar, elegir cooperativa y recuperar el acceso. *@
+        <NavLink href="/manual" class="nav-item">
+            <span class="e-icons e-circle-info"></span>
+            @if (SidebarOpen) { <span>Manual del sistema</span> }
+        </NavLink>
+
         @if (_tieneCooperativa)
         {
         @* Transversal a todos los modulos: es la unica entrada de reportes que
