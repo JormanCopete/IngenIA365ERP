@@ -171,7 +171,9 @@ public class MongoAuditService : IAuditService, IDisposable
         foreach (var group in batch.GroupBy(e => e.TenantId))
         {
             var collection = GetAuditCollection(group.Key);
-            await collection.InsertManyAsync(group.ToList());
+            // El mismo documento que escribe AppendOnlyAuditWriter, no la clase
+            // serializada: una sola forma en la coleccion de aqui en adelante.
+            await collection.InsertManyAsync(group.Select(AuditDocumentSchema.ToDocument).ToList());
         }
 
         _logger.LogDebug("Flushed {Count} audit log entries", batch.Count);
@@ -229,38 +231,20 @@ public class MongoAuditService : IAuditService, IDisposable
         var tenantId = query.TenantId ?? _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
-        var filterBuilder = Builders<AuditLog>.Filter;
-        var filters = new List<FilterDefinition<AuditLog>>();
-
-        if (!string.IsNullOrEmpty(query.UserId))
-            filters.Add(filterBuilder.Eq(a => a.UserId, query.UserId));
-        if (!string.IsNullOrEmpty(query.EntityType))
-            filters.Add(filterBuilder.Eq(a => a.EntityType, query.EntityType));
-        if (!string.IsNullOrEmpty(query.EntityId))
-            filters.Add(filterBuilder.Eq(a => a.EntityId, query.EntityId));
-        if (!string.IsNullOrEmpty(query.Module))
-            filters.Add(filterBuilder.Eq(a => a.Module, query.Module));
-        if (!string.IsNullOrEmpty(query.Action))
-            filters.Add(filterBuilder.Eq(a => a.Action, query.Action));
-        if (query.From.HasValue)
-            filters.Add(filterBuilder.Gte(a => a.Timestamp, query.From.Value));
-        if (query.To.HasValue)
-            filters.Add(filterBuilder.Lte(a => a.Timestamp, query.To.Value));
-
-        var filter = filters.Count > 0
-            ? filterBuilder.And(filters)
-            : filterBuilder.Empty;
+        // Filtro, orden y mapeo entienden las dos formas del documento; ver
+        // AuditDocumentSchema. Aqui no se nombra ningun campo a proposito.
+        var filter = AuditDocumentSchema.Filtro(query);
 
         var totalCount = await collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
 
-        var entries = await collection
+        var documentos = await collection
             .Find(filter)
-            .SortByDescending(a => a.Timestamp)
+            .Sort(AuditDocumentSchema.MasRecientePrimero)
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Limit(query.PageSize)
             .ToListAsync(cancellationToken);
 
-        var items = entries.Select(MapToEntry).ToList().AsReadOnly();
+        var items = documentos.Select(AuditDocumentSchema.ToEntry).ToList().AsReadOnly();
         return new PagedList<AuditLogEntry>(items, (int)totalCount, query.PageNumber, query.PageSize);
     }
 
@@ -269,17 +253,15 @@ public class MongoAuditService : IAuditService, IDisposable
         var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
-        var filter = Builders<AuditLog>.Filter.And(
-            Builders<AuditLog>.Filter.Eq(a => a.EntityType, entityType),
-            Builders<AuditLog>.Filter.Eq(a => a.EntityId, entityId));
+        var filter = AuditDocumentSchema.FiltroPorEntidad(entityType, entityId);
 
-        var entries = await collection
+        var documentos = await collection
             .Find(filter)
-            .SortByDescending(a => a.Timestamp)
+            .Sort(AuditDocumentSchema.MasRecientePrimero)
             .Limit(500)
             .ToListAsync(cancellationToken);
 
-        return entries.Select(MapToEntry).ToList().AsReadOnly();
+        return documentos.Select(AuditDocumentSchema.ToEntry).ToList().AsReadOnly();
     }
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
@@ -287,18 +269,15 @@ public class MongoAuditService : IAuditService, IDisposable
         var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
         var collection = GetAuditCollection(tenantId);
 
-        var filter = Builders<AuditLog>.Filter.And(
-            Builders<AuditLog>.Filter.Eq(a => a.UserId, userId),
-            Builders<AuditLog>.Filter.Gte(a => a.Timestamp, from),
-            Builders<AuditLog>.Filter.Lte(a => a.Timestamp, to));
+        var filter = AuditDocumentSchema.FiltroPorUsuario(userId, from, to);
 
-        var entries = await collection
+        var documentos = await collection
             .Find(filter)
-            .SortByDescending(a => a.Timestamp)
+            .Sort(AuditDocumentSchema.MasRecientePrimero)
             .Limit(1000)
             .ToListAsync(cancellationToken);
 
-        return entries.Select(MapToEntry).ToList().AsReadOnly();
+        return documentos.Select(AuditDocumentSchema.ToEntry).ToList().AsReadOnly();
     }
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
@@ -367,7 +346,13 @@ public class MongoAuditService : IAuditService, IDisposable
     /// cuatro índices y el TTL de cinco años que exige FR-023.
     /// </para>
     /// </summary>
-    private IMongoCollection<AuditLog> GetAuditCollection(string tenantId)
+    /// <summary>
+    /// Se abre como <see cref="BsonDocument"/>, no como <see cref="AuditLog"/>. El
+    /// class map exigía que cada documento tuviera exactamente sus propiedades, y
+    /// la colección guarda dos formas (ver <see cref="AuditDocumentSchema"/>): con
+    /// el primer documento de la otra forma la consola entera devolvía 500.
+    /// </summary>
+    private IMongoCollection<BsonDocument> GetAuditCollection(string tenantId)
     {
         // Base por cooperativa, coleccion constante dentro. Antes era al reves:
         // una base compartida con una coleccion por cooperativa. El aislamiento
@@ -375,7 +360,7 @@ public class MongoAuditService : IAuditService, IDisposable
         // lo sostiene el motor.
         var db = _client.GetDatabase(
             AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
-        return db.GetCollection<AuditLog>(AuditDatabaseNames.Coleccion);
+        return db.GetCollection<BsonDocument>(AuditDatabaseNames.Coleccion);
     }
 
     private IMongoCollection<AccessLog> GetAccessCollection(string tenantId)
@@ -384,13 +369,6 @@ public class MongoAuditService : IAuditService, IDisposable
             AuditDatabaseNames.Para(_settings.DatabaseName, tenantId));
         return db.GetCollection<AccessLog>("access_log");
     }
-
-    private static AuditLogEntry MapToEntry(AuditLog a) => new(
-        a.Id, a.TenantId, a.UserId, a.UserName,
-        a.Action, a.EntityType, a.EntityId, a.Module,
-        a.OldValues?.ToJson(), a.NewValues?.ToJson(),
-        a.ChangedFields, a.IpAddress, a.Endpoint,
-        a.DurationMs, a.Timestamp);
 
     private static List<T> DequeueBatch<T>(ConcurrentQueue<T> queue, int maxItems)
     {

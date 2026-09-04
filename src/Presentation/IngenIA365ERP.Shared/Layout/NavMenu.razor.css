@@ -154,3 +154,18 @@
     background: var(--lateral-activo-fondo);
     border-right: 3px solid var(--lateral-activo-borde);
 }
+
+/* Subtitulo dentro de un grupo: separa los reportes de las pantallas operativas
+   del mismo modulo sin sacarlos de el. Los reportes de contabilidad SON de
+   contabilidad; tenerlos en un grupo "Reportes" aparte obligaba a saber de
+   antemano que algo era un reporte para encontrarlo. */
+::deep .nav-subgroup-title {
+    display: block;
+    padding: var(--pad-md) var(--pad-lg) var(--pad-xs) 48px;
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-medio);
+    color: var(--lateral-texto-tenue);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: .8;
+}

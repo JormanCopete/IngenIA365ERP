@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Audit.Configuration;
+using IngenIA365ERP.Audit.Models;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -28,26 +29,10 @@ internal sealed class AppendOnlyAuditWriter(
         var db = client.GetDatabase(
             AuditDatabaseNames.Para(settings.Value.DatabaseName, entry.TenantId));
         var collection = db.GetCollection<BsonDocument>(AuditDatabaseNames.Coleccion);
-        var doc = new BsonDocument
-        {
-            { "tenantId", entry.TenantId },
-            { "userId", entry.UserId },
-            { "userName", entry.UserName ?? BsonNull.Value.AsString },
-            { "action", entry.Action },
-            { "entityType", entry.EntityType },
-            { "entityPublicId", entry.EntityPublicId ?? string.Empty },
-            { "module", entry.Module ?? string.Empty },
-            { "oldValuesJson", entry.OldValuesJson ?? string.Empty },
-            { "newValuesJson", entry.NewValuesJson ?? string.Empty },
-            { "changedFields", new BsonArray(entry.ChangedFields ?? []) },
-            { "ipAddress", entry.IpAddress ?? string.Empty },
-            { "userAgent", entry.UserAgent ?? string.Empty },
-            { "endpoint", entry.Endpoint ?? string.Empty },
-            { "httpMethod", entry.HttpMethod ?? string.Empty },
-            { "httpStatusCode", entry.HttpStatusCode ?? 0 },
-            { "durationMs", entry.DurationMs ?? 0L },
-            { "occurredAt", entry.OccurredAt }
-        };
+        // La forma del documento vive en AuditDocumentSchema y la comparte con
+        // MongoAuditService: los dos escritores producen el mismo documento, y la
+        // consola lee una sola forma (mas la heredada, que no se puede reescribir).
+        var doc = AuditDocumentSchema.ToDocument(entry);
         return collection.InsertOneAsync(doc, cancellationToken: ct);
     }
 }

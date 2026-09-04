@@ -63,6 +63,35 @@ public sealed class CooperativasClient(HttpClient http, CentralAuthClient auth)
         await EnviarAsync<EmptyResponse>(
             HttpMethod.Delete, $"/api/invitations/{invitacionPublicId}", null, ct);
 
+    /// <summary>
+    /// Emite una invitación nueva. Faltaba: la pantalla de invitaciones listaba,
+    /// reenviaba y cancelaba, y el botón «Invitar persona» de Usuarios llevaba a
+    /// ella —pero no había desde dónde invitar. El único camino era la API.
+    ///
+    /// <para>
+    /// Dos endpoints según quién invita. El administrador de la cooperativa usa
+    /// <c>POST /api/tenants/{id}/invitations</c>, que sólo admite miembros
+    /// regulares (FR-025/FR-026). El maestro usa <c>POST /api/saas/invitations</c>,
+    /// que además puede nombrar administradora a la persona. La pantalla no decide
+    /// el privilegio: lo decide el token, y la API vuelve a comprobarlo.
+    /// </para>
+    /// </summary>
+    public async Task<InvitationApiResult<InvitacionEmitida>> InvitarAsync(
+        Guid tenantPublicId, string email, bool comoAdministradora, bool comoMaestro,
+        CancellationToken ct = default)
+    {
+        if (comoMaestro)
+        {
+            return await EnviarAsync<InvitacionEmitida>(
+                HttpMethod.Post, "/api/saas/invitations",
+                new { tenantPublicId, email, inviteAsTenantAdmin = comoAdministradora }, ct);
+        }
+
+        return await EnviarAsync<InvitacionEmitida>(
+            HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations",
+            new { email }, ct);
+    }
+
     // -------------------------------------------------------------- envio --
 
     private async Task<InvitationApiResult<T>> EnviarAsync<T>(
@@ -111,3 +140,10 @@ public sealed record InvitacionResumen(
     DateTime? AceptadaEn);
 
 public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email, DateTime ExpiraEn);
+
+/// <summary>
+/// Lo que devuelven los dos endpoints de emisión. El del maestro trae además
+/// <c>inviteAsTenantAdmin</c>, que aquí se ignora: la pantalla ya sabe qué pidió.
+/// El token plano no viene nunca (FR-024): sale por correo al destinatario.
+/// </summary>
+public sealed record InvitacionEmitida(Guid InvitationPublicId, DateTime ExpiresAt);

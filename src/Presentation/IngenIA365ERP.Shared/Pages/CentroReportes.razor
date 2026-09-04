@@ -93,7 +93,7 @@
                 <div class="report-card-body">
                     <h5>Extracto de Ahorro</h5>
                     <p>Estado de cuenta de ahorros con movimientos y saldos.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/extracto-ahorro")'>Generar</SfButton>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/extractos")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
@@ -101,7 +101,7 @@
                 <div class="report-card-body">
                     <h5>Certificado CDT</h5>
                     <p>Certificado de deposito a termino con condiciones, intereses y vencimiento.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cdt/certificados")'>Generar</SfButton>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/cdt")'>Generar</SfButton>
                 </div>
             </div>
         </div>
@@ -126,17 +126,14 @@
                 <div class="report-card-body">
                     <h5>Resumen de Nomina</h5>
                     <p>Consolidado de la nomina del periodo: devengados, deducciones y neto a pagar.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/resumen")'>Generar</SfButton>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/liquidacion")'>Generar</SfButton>
                 </div>
             </div>
-            <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
-                <div class="report-card-body">
-                    <h5>Certificado Laboral</h5>
-                    <p>Certificacion de vinculacion laboral, cargo y salario del empleado.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/nomina/certificado-laboral")'>Generar</SfButton>
-                </div>
-            </div>
+            @* «Certificado Laboral» apuntaba a /nomina/certificado-laboral, que no
+               existe: era un boton a una pagina «no encontrada». Vuelve cuando exista
+               la pantalla. Lo mismo pasaba con Extracto de Ahorro, Certificado CDT,
+               Resumen de Nomina y Factura de Venta, que ahora apuntan a las
+               pantallas reales del modulo. *@
         </div>
     </div>
 
@@ -159,7 +156,7 @@
                 <div class="report-card-body">
                     <h5>Factura de Venta</h5>
                     <p>Impresion o reimpresion de facturas de venta emitidas.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturas")'>Generar</SfButton>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturacion")'>Generar</SfButton>
                 </div>
             </div>
         </div>

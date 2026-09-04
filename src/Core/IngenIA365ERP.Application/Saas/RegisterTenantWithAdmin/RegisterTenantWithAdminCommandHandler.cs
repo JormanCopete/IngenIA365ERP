@@ -59,7 +59,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
             // esto mantiene una sola nomenclatura; cuando SchemaName se retire, el
             // nombre entra por el contrato.
             DatabaseName = request.SchemaName,
-            ProvisioningState = "Provisioning",
+            ProvisioningState = EstadoDeAprovisionamiento.EnCurso,
             Subdomain = request.Subdomain,
             Nit = request.Nit,
             LegalName = request.LegalName,
@@ -103,7 +103,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
             tenant.AuditDatabaseName = await auditoria.AprovisionarAsync(
                 tenant.PublicId.ToString("N"), ct);
 
-            tenant.ProvisioningState = "Ready";
+            tenant.ProvisioningState = EstadoDeAprovisionamiento.Listo;
             tenant.MigrationsVersion = resultado.MigracionAplicada;
             await adminDb.SaveChangesAsync(ct);
         }
@@ -111,7 +111,7 @@ public sealed class RegisterTenantWithAdminCommandHandler(
         {
             // El estado queda en Failed y con el motivo: una cooperativa a medias
             // tiene que verse como tal, no parecer lista.
-            tenant.ProvisioningState = "Failed";
+            tenant.ProvisioningState = EstadoDeAprovisionamiento.Fallido;
             tenant.ProvisioningError = ex.Message;
             await adminDb.SaveChangesAsync(ct);
 

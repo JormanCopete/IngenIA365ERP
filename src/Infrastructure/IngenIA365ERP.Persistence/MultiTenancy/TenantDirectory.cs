@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -24,23 +25,41 @@ public sealed class TenantDirectory : ITenantDirectory
         _logger = logger;
     }
 
+    /// <summary>
+    /// Activas Y aprovisionadas. Las dos condiciones, no una.
+    ///
+    /// <para>
+    /// El alta pone <c>IsActive = true</c> en el mismo <c>SaveChanges</c> que crea la
+    /// fila, y el aprovisionamiento —crear la base, migrarla, reservar la ranura de
+    /// Redis, la base de auditoría— viene después y tarda unos diez segundos. En
+    /// esa ventana la cooperativa era «activa» para este método y el despachador de
+    /// notificaciones la recorrió: abrió una base que ya existía y todavía no tenía
+    /// tablas (<c>42P01 relation "dbo.COR_Notifications" does not exist</c>). Se vio
+    /// en QA el 2026-09-04 con la primera cooperativa real. Una que quedó en
+    /// <c>Failed</c> tampoco tiene nada que recorrer.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<TenantDirectoryEntry>> ListActiveAsync(CancellationToken ct)
     {
         try
         {
             var filas = await _db.Tenants
                 .AsNoTracking()
-                .Where(t => t.IsActive)
-                .Select(t => new { t.InternalId, t.PublicId, t.Identifier, t.Name, t.SchemaName, t.ConnectionString })
+                .Where(t => t.IsActive && t.ProvisioningState == EstadoDeAprovisionamiento.Listo)
+                .Select(t => new
+                {
+                    t.InternalId, t.PublicId, t.Identifier, t.Name,
+                    t.SchemaName, t.DatabaseName, t.ConnectionString,
+                })
                 .ToListAsync(ct);
 
-            // DatabaseName no lo mapea este contexto (ve un subconjunto de
-            // ADM_Tenants), asi que se deriva del esquema, que es como quedo el
-            // relleno de la migracion. Cuando TenantDbContext se retire, sale de la
-            // columna directamente.
+            // Filas anteriores al modelo de base por cooperativa no tienen
+            // DatabaseName; para ellas el esquema sigue siendo el nombre.
             return [.. filas.Select(f => new TenantDirectoryEntry(
                 f.InternalId, f.PublicId, f.Identifier ?? string.Empty,
-                f.Name ?? string.Empty, f.SchemaName, f.SchemaName, f.ConnectionString))];
+                f.Name ?? string.Empty, f.SchemaName,
+                string.IsNullOrWhiteSpace(f.DatabaseName) ? f.SchemaName : f.DatabaseName,
+                f.ConnectionString))];
         }
         catch (Exception ex)
         {

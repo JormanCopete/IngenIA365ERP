@@ -42,6 +42,13 @@
             <NavLink href="/contabilidad/cierre-periodo" class="nav-subitem">Cierre Periodo</NavLink>
             <NavLink href="/contabilidad/balance-prueba" class="nav-subitem">Balance de Prueba</NavLink>
             <NavLink href="/contabilidad/certificados-retencion" class="nav-subitem">Cert. Retencion</NavLink>
+            @* Los reportes de cada modulo viven en su modulo. Estaban en un grupo
+               "Reportes" aparte, que obligaba a saber de antemano que algo era un
+               reporte para encontrarlo. Lo transversal queda en SISTEMA. *@
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
+            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
+            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
@@ -77,6 +84,9 @@
             <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
             <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
             <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
+            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
@@ -96,6 +106,8 @@
             <NavLink href="/inventario/parametros-comisiones" class="nav-subitem">Comisiones</NavLink>
             <NavLink href="/inventario/movimientos/nuevo" class="nav-subitem">Nuevo Movimiento</NavLink>
             <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
@@ -109,6 +121,8 @@
             <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
             <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
             <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-description" Title="CDT" Expanded="SidebarOpen">
@@ -168,6 +182,13 @@
 
         @if (_tieneCooperativa)
         {
+        @* Transversal a todos los modulos: es la unica entrada de reportes que
+           no pertenece a ninguno, y por eso vive en SISTEMA y no en un grupo. *@
+        <NavLink href="/reportes" class="nav-item" Match="NavLinkMatch.All">
+            <span class="e-icons e-print-layout"></span>
+            @if (SidebarOpen) { <span>Centro de Reportes</span> }
+        </NavLink>
+
         <NavMenuGroup Icon="e-lock" Title="Administracion" Expanded="SidebarOpen">
             @* Apuntaban a /admin/usuarios y /admin/roles, que son marcadores
                vacios. Las pantallas reales viven bajo /security y estaban
@@ -213,19 +234,6 @@
             </NavMenuGroup>
         }
 
-        @if (_tieneCooperativa)
-        {
-        <NavMenuGroup Icon="e-print-layout" Title="Reportes" Expanded="SidebarOpen">
-            <NavLink href="/reportes" class="nav-subitem">Centro de Reportes</NavLink>
-            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
-            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
-            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
-            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
-            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
-            <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
-            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
-        </NavMenuGroup>
-        }
     </nav>
 </div>
 

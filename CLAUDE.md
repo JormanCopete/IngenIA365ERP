@@ -111,10 +111,10 @@ vez de creerles; el comando está al lado.
 | Rutas REST | ~631 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 16 | |
-| Pruebas | 720 (719 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
+| Pruebas | 731 (730 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
-**116 de las 720 son de integración**: levantan contenedores y exigen Docker y un
+**116 de las 731 son de integración**: levantan contenedores y exigen Docker y un
 MongoDB accesible en `localhost:27017`. Sin eso fallan por entorno, no por código.
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
