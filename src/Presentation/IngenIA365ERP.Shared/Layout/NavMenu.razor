@@ -15,6 +15,12 @@
             @if (SidebarOpen) { <span>Dashboard</span> }
         </NavLink>
 
+        @* Todo lo operativo y los maestros son DE UNA COOPERATIVA: sus pantallas
+           piden la base de la cooperativa activa, y sin ella la API responde
+           Session.TenantNotSelected. Ofrecerlas igual a quien no tiene cooperativa
+           —el administrador maestro nunca la tiene— es invitarlo a un error. *@
+        @if (_tieneCooperativa)
+        {
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">OPERACIONES</span> }
         </div>
@@ -154,11 +160,14 @@
             <NavLink href="/maestros/actividades-culturales" class="nav-subitem">Act. Culturales</NavLink>
             <NavLink href="/maestros/convenios" class="nav-subitem">Convenios</NavLink>
         </NavMenuGroup>
+        }
 
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">SISTEMA</span> }
         </div>
 
+        @if (_tieneCooperativa)
+        {
         <NavMenuGroup Icon="e-lock" Title="Administracion" Expanded="SidebarOpen">
             @* Apuntaban a /admin/usuarios y /admin/roles, que son marcadores
                vacios. Las pantallas reales viven bajo /security y estaban
@@ -170,6 +179,7 @@
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
             <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
         </NavMenuGroup>
+        }
 
         @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
         <NavMenuGroup Icon="e-user" Title="Mi Cuenta" Expanded="SidebarOpen">
@@ -195,9 +205,16 @@
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                @* Vive en la base administrativa y lo gestiona el maestro: es el
+                   contenido del panel del login, que se sirve antes de elegir
+                   cooperativa. Por eso está aquí y no sólo en Administracion,
+                   que el maestro no ve. *@
+                <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
             </NavMenuGroup>
         }
 
+        @if (_tieneCooperativa)
+        {
         <NavMenuGroup Icon="e-print-layout" Title="Reportes" Expanded="SidebarOpen">
             <NavLink href="/reportes" class="nav-subitem">Centro de Reportes</NavLink>
             <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
@@ -208,6 +225,7 @@
             <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
             <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
         </NavMenuGroup>
+        }
     </nav>
 </div>
 
@@ -219,6 +237,12 @@
     private bool _isTenantAdmin;
     private bool _isMaster;
     private string _activeTenantId = "";
+
+    /// <summary>
+    /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
+    /// secciones operativas: sin ella, esas pantallas sólo pueden fallar.
+    /// </summary>
+    private bool _tieneCooperativa => !string.IsNullOrEmpty(_activeTenantId);
 
     protected override async Task OnParametersSetAsync()
     {
