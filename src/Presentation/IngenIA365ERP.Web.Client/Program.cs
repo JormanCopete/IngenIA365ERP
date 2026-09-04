@@ -15,7 +15,12 @@ Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQx
 builder.Services.AddSyncfusionBlazor();
 
 // Read AppMode from wwwroot/appsettings(.{Environment}).json
-AppMode.Configure(builder.Configuration);
+//
+// El origen va como segundo argumento porque la base puede venir RELATIVA ("/"),
+// y resolverla es responsabilidad de AppMode: asi lo que circula por la
+// aplicacion —incluido AppSettings.GetApiBaseUrl(), que concatenan 19
+// pantallas— ya es absoluto. Ver AppMode.ResolverBase.
+AppMode.Configure(builder.Configuration, builder.HostEnvironment.BaseAddress);
 
 // Add device-specific services used by the IngenIA365ERP.Shared project.
 // SecureStorage + TenantService are Singletons because IHttpClientFactory creates
@@ -35,35 +40,11 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 // Named HttpClient used by all pages/services. Pages get this via the default
 // HttpClient injection below.
 //
-// Un ApiBaseUrl RELATIVO ("/") se resuelve contra el origen desde el que se
-// sirvió la aplicación, y ésa es la única forma de que esto funcione desplegado:
-// wwwroot/appsettings.json es un archivo ESTÁTICO que descarga el navegador, así
-// que ninguna variable de entorno lo pisa. El despliegue no puede corregirlo sin
-// reconstruir el wwwroot — y mientras no se corrigió, producción sirvió
-// "http://localhost:5100", o sea la máquina de quien abría la página.
-//
-// Todas las rutas que piden los clientes empiezan por "/api/...", de modo que lo
-// único que hay que acertar aquí es el ORIGEN. Un valor absoluto se sigue
-// respetando tal cual: es lo que necesitan desarrollo (API en otro puerto) y
-// cualquier ambiente donde la API no comparta host.
-// OJO con como se pregunta "es absoluta". Uri.TryCreate(valor, UriKind.Absolute)
-// NO sirve: en Windows "/" devuelve false, pero el runtime del navegador es de
-// tipo Unix y ahi una barra inicial es una RUTA ABSOLUTA DE ARCHIVO, asi que
-// devuelve true con file:///. El HttpClient quedaba con BaseAddress file:/// y
-// el navegador rechazaba la peticion con "Not allowed to load local resource:
-// file:///api/auth/login", que en pantalla se ve como "Failed to fetch" y no
-// se parece en nada a la causa. La pregunta correcta es si el esquema es http
-// o https.
-static bool EsUrlAbsolutaDeRed(string valor) =>
-    Uri.TryCreate(valor, UriKind.Absolute, out var u)
-    && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
-
-var origenDelNavegador = builder.HostEnvironment.BaseAddress;
-var apiBaseUrl = AppMode.UseMock
-    ? origenDelNavegador
-    : EsUrlAbsolutaDeRed(AppMode.ApiBaseUrl)
-        ? AppMode.ApiBaseUrl
-        : new Uri(new Uri(origenDelNavegador), AppMode.ApiBaseUrl).ToString();
+// AppMode.ApiBaseUrl YA viene resuelto y absoluto: la resolución vive allí y no
+// aquí, porque no es sólo este HttpClient quien la necesita —19 pantallas
+// concatenan AppSettings.GetApiBaseUrl()— y tener dos copias de esa lógica fue
+// justamente el defecto: una se arregló y la otra siguió rota.
+var apiBaseUrl = AppMode.UseMock ? builder.HostEnvironment.BaseAddress : AppMode.ApiBaseUrl;
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthBearerHandler>()
     .AddHttpMessageHandler<TenantDelegatingHandler>();
