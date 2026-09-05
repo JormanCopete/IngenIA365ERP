@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -116,4 +117,12 @@ public sealed class ListConceptVersionsQueryHandler(IApplicationDbContext db)
         var tieneCuentas = await db.PayrollConceptDefinitionAccounts.AsNoTracking().AnyAsync(a => a.ConceptCode == code, ct);
         return Result.Success<IReadOnlyList<ConceptDefinitionDto>>(versiones.Select(v => ConceptDefinitionMapper.ToDto(v, tieneCuentas)).ToList());
     }
+}
+
+// Principio VIII: toda consulta lleva su validador.
+public sealed class ListConceptDefinitionsQueryValidator : AbstractValidator<ListConceptDefinitionsQuery>;
+
+public sealed class ListConceptVersionsQueryValidator : AbstractValidator<ListConceptVersionsQuery>
+{
+    public ListConceptVersionsQueryValidator() => RuleFor(x => x.Code).NotEmpty().MaximumLength(30);
 }

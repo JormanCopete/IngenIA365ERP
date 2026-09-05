@@ -69,10 +69,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // TenantBranches salio de IApplicationDbContext: es del plano de control.
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
-    DbSet<Person> IApplicationDbContext.People => throw new NotImplementedException();
+    public DbSet<Person> People => Set<Person>();
     DbSet<Associate> IApplicationDbContext.Associates => throw new NotImplementedException();
-    DbSet<Branch> IApplicationDbContext.Branches => throw new NotImplementedException();
-    DbSet<CostCenter> IApplicationDbContext.CostCenters => throw new NotImplementedException();
+    public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     DbSet<City> IApplicationDbContext.Cities => throw new NotImplementedException();
     DbSet<Bank> IApplicationDbContext.Banks => throw new NotImplementedException();
     DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
@@ -100,10 +100,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Advisor> IApplicationDbContext.Advisors => throw new NotImplementedException();
     DbSet<PaymentMethod> IApplicationDbContext.PaymentMethods => throw new NotImplementedException();
     DbSet<ChartOfAccount> IApplicationDbContext.ChartOfAccounts => throw new NotImplementedException();
-    DbSet<AccountBalance> IApplicationDbContext.AccountBalances => throw new NotImplementedException();
-    DbSet<JournalEntry> IApplicationDbContext.JournalEntries => throw new NotImplementedException();
-    DbSet<VoucherType> IApplicationDbContext.VoucherTypes => throw new NotImplementedException();
-    DbSet<AccountingPeriod> IApplicationDbContext.AccountingPeriods => throw new NotImplementedException();
+    public DbSet<AccountBalance> AccountBalances => Set<AccountBalance>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<VoucherType> VoucherTypes => Set<VoucherType>();
+    public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
     DbSet<AccountGroup> IApplicationDbContext.AccountGroups => throw new NotImplementedException();
     DbSet<AccountSubgroup> IApplicationDbContext.AccountSubgroups => throw new NotImplementedException();
     DbSet<RiskCategory> IApplicationDbContext.RiskCategories => throw new NotImplementedException();
@@ -114,7 +114,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<GmfTaxLine> IApplicationDbContext.GmfTaxLines => throw new NotImplementedException();
     DbSet<DianReportFormat> IApplicationDbContext.DianReportFormats => throw new NotImplementedException();
     DbSet<TaxFormCode> IApplicationDbContext.TaxFormCodes => throw new NotImplementedException();
-    DbSet<AccountingDocument> IApplicationDbContext.AccountingDocuments => throw new NotImplementedException();
+    public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
     DbSet<JournalEntryItem> IApplicationDbContext.JournalEntryItems => throw new NotImplementedException();
     DbSet<AuxiliaryDocument> IApplicationDbContext.AuxiliaryDocuments => throw new NotImplementedException();
     DbSet<ThirdPartyAccount> IApplicationDbContext.ThirdPartyAccounts => throw new NotImplementedException();
@@ -148,7 +148,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<AccrualEntry> IApplicationDbContext.AccrualEntries => throw new NotImplementedException();
     DbSet<PortfolioClassification> IApplicationDbContext.PortfolioClassifications => throw new NotImplementedException();
     DbSet<RiskAssessment> IApplicationDbContext.RiskAssessments => throw new NotImplementedException();
-    DbSet<PayrollDeductionEntry> IApplicationDbContext.PayrollDeductionEntries => throw new NotImplementedException();
+    public DbSet<PayrollDeductionEntry> PayrollDeductionEntries => Set<PayrollDeductionEntry>();
     DbSet<WithdrawalStatus> IApplicationDbContext.WithdrawalStatuses => throw new NotImplementedException();
     DbSet<HousingParameter> IApplicationDbContext.HousingParameters => throw new NotImplementedException();
     DbSet<SiplaParameter> IApplicationDbContext.SiplaParameters => throw new NotImplementedException();
@@ -207,7 +207,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
-        modelBuilder.Ignore<Person>();
         modelBuilder.Ignore<City>();
         modelBuilder.Ignore<Spouse>();
         modelBuilder.Ignore<Subscription>();
@@ -237,8 +236,19 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         // Nomina (feature 005): las cuentas contables y los centros de costo no hacen
         // falta para probar los handlers; el empleado se prueba sin su Person.
         modelBuilder.Ignore<ChartOfAccount>();
-        modelBuilder.Ignore<CostCenter>();
         modelBuilder.Entity<Employee>(b => { b.Ignore(e => e.Person); b.Ignore("RowVersion"); });
+        // Feature 005: lo que el cargador de insumos y el contabilizador leen. ChartOfAccount
+        // sigue fuera del modelo (su grafo arrastra medio dominio): las navegaciones hacia el
+        // se ignoran y las cuentas se referencian por Id.
+        modelBuilder.Entity<Person>(b => { b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AccountingPeriod>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AccountingDocument>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<JournalEntry>(b => { b.Ignore(x => x.Account); b.Ignore(x => x.Items); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<AccountBalance>(b => { b.Ignore(x => x.Account); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<PayrollDeductionEntry>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayPeriod>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SalaryChange>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollPlan>(b => b.Ignore("RowVersion"));

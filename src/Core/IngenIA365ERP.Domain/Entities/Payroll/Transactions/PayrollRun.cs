@@ -47,8 +47,13 @@ public class PayrollRun : AuditableEntity
     public decimal TotalNet { get; set; }
     public decimal RoundingAdjustment { get; set; }
 
-    public int? AccountingDocumentId { get; set; }
-    public int? ReversalAccountingDocumentId { get; set; }
+    /// <summary>Comprobante NM de la aprobación. La navegación existe para que EF fije la clave en el mismo SaveChanges de la aprobación (FR-023).</summary>
+    public long? AccountingDocumentId { get; set; }
+    public Accounting.AccountingDocument? AccountingDocument { get; set; }
+
+    /// <summary>Comprobante reverso de la reversión (FR-032).</summary>
+    public long? ReversalAccountingDocumentId { get; set; }
+    public Accounting.AccountingDocument? ReversalAccountingDocument { get; set; }
 
     /// <summary>FR-021: la misma persona registró novedades y aprobó, con la política que lo permite.</summary>
     public bool ApprovedWithoutSegregation { get; set; }

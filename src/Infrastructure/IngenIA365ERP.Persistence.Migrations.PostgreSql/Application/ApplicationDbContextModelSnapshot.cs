@@ -30988,8 +30988,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("AccountingDocumentId")
-                        .HasColumnType("integer");
+                    b.Property<long?>("AccountingDocumentId")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("timestamp with time zone");
@@ -31041,8 +31041,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
-                    b.Property<int?>("ReversalAccountingDocumentId")
-                        .HasColumnType("integer");
+                    b.Property<long?>("ReversalAccountingDocumentId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ReversalReason")
                         .HasMaxLength(300)
@@ -31099,8 +31099,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountingDocumentId");
+
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("ReversalAccountingDocumentId");
 
                     b.HasIndex("PayPeriodId", "Status")
                         .HasDatabaseName("IX_PAY_PayrollRuns_Period_Status");
@@ -31119,6 +31123,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BasesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<bool>("ChangedFromPreviousRun")
                         .HasColumnType("boolean");
@@ -31153,6 +31161,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<decimal>("NetPay")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("NotesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("PayrollPlanId")
                         .HasColumnType("integer");
@@ -35327,13 +35339,27 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.AccountingDocument", "AccountingDocument")
+                        .WithMany()
+                        .HasForeignKey("AccountingDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", "PayPeriod")
                         .WithMany()
                         .HasForeignKey("PayPeriodId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.AccountingDocument", "ReversalAccountingDocument")
+                        .WithMany()
+                        .HasForeignKey("ReversalAccountingDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AccountingDocument");
+
                     b.Navigation("PayPeriod");
+
+                    b.Navigation("ReversalAccountingDocument");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>

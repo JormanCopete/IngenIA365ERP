@@ -782,16 +782,19 @@ public static class ManualCatalogo
             ["liquidacion-de-nomina", "conceptos-de-nomina", "periodos-de-pago", "empleados"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("liquidacion-de-nomina", "Liquidación de nómina", Modulos.Nomina, "/nomina/liquidacion",
-            "Calcular la nómina del período: devengados, deducciones, aportes de ley y neto a pagar. Genera los comprobantes de pago y la contabilización.",
+            "Calcular el período en borrador para todos los empleados del plan —salario por los días vinculados, auxilio de transporte, novedades, deducciones de ley, aportes del empleador y provisiones—, revisarlo empleado por empleado con la explicación de cada valor, recalcular las veces que haga falta y aprobar: el período se cierra y el comprobante contable NM se genera en la misma operación.",
             [
-                P("Antes", "Todas las novedades registradas y el período de pago abierto.", "/nomina/novedades", "Revisar Novedades"),
-                P("Nómina → Liquidación", "Elegí el período. «Calcular» corre la liquidación en borrador: se puede revisar y recalcular las veces que haga falta.", "/nomina/liquidacion", "Abrir Liquidación"),
-                P("Revisar", "Por empleado: devengados, deducciones, aportes. Compará el total contra el período anterior."),
-                P("Aprobar", "Cierra el período, genera el comprobante contable y habilita los comprobantes de pago. Aprobada no se recalcula: los ajustes van al siguiente período."),
-                P("Comprobantes de pago", "Uno por empleado, para entregar o enviar.", "/reportes/comprobante-nomina", "Abrir Comprobante de Nómina"),
+                P("Antes", "Todas las novedades registradas y los parámetros legales del año con vigencia. Si falta uno, el cálculo se niega y lo nombra.", "/nomina/novedades", "Revisar Novedades"),
+                P("Nómina → Liquidación", "Elegí el período. La tarjeta de estado dice si está sin cálculo, en borrador, desactualizado o aprobado.", "/nomina/liquidacion", "Abrir Liquidación"),
+                P("Calcular", "Produce el borrador v1: totales, tabla por concepto y bloqueos (neto negativo, deducciones sobre el máximo, afiliación faltante, procedimiento 2 sin porcentaje). Cada recálculo crea una versión nueva y señala qué empleados cambiaron."),
+                P("Revisar", "Pestaña Empleados: días, devengado, deducido, neto y banderas; clic abre el detalle con los tramos de salario, las bases del período y cada línea con su explicación (forma, pasos, parámetro y vigencia, novedad de origen)."),
+                P("Desactualizado", "Si alguien registra, corrige o anula una novedad, cambia un salario, un concepto o un parámetro, el borrador queda desactualizado y hay que recalcular antes de aprobar."),
+                P("Aprobar", "Botón «Aprobar»: resumen, bloqueos con «Autorizar excepción» y motivo (sólo con el permiso), confirmación explícita. Quien registró novedades o calculó no aprueba, salvo que la cooperativa lo permita con segunda confirmación. Al aprobar, el período queda cerrado, las novedades y la liquidación inmutables, y sale el comprobante NM cuadrado."),
+                P("Después", "Un período aprobado no se recalcula ni admite novedades: los ajustes van al siguiente período como retroactivos, o se reversa el período con motivo (Nómina › Liquidación › Reversar)."),
             ],
-            ["liquidacion", "nomina", "pagar", "devengado", "deduccion", "aportes", "neto", "aprobar"], ["Cooperativa activa.", "Conceptos, parámetros de retención y afiliaciones configurados."],
-            ["novedades-de-nomina", "empleados", "periodos-de-pago"], [], TipoDeTema.Proceso));
+            ["liquidacion", "nomina", "calcular", "recalcular", "borrador", "aprobar", "comprobante", "asiento", "devengado", "deduccion", "aportes", "provisiones", "neto", "bloqueo", "excepcion", "explicacion"],
+            ["Cooperativa activa.", "Conceptos con cuentas contables, parámetros legales vigentes y período contable abierto.", "Permiso Payroll.Runs.Calculate para calcular y Payroll.Runs.Approve para aprobar."],
+            ["novedades-de-nomina", "parametros-legales", "conceptos-de-nomina", "periodos-de-pago"], [], TipoDeTema.Proceso));
 
         t.Add(Maestro("/nomina/conceptos", "Conceptos de nómina", Modulos.Nomina, "un concepto", "Devengado o deducción, fórmula de cálculo y si es base de prestaciones.", "conceptos", "devengado", "deduccion", "formula"));
         t.Add(Maestro("/nomina/periodos-pago", "Períodos de pago", Modulos.Nomina, "un período de pago", "Cada período pertenece a un plan de nómina (mensual o quincenal) y no puede superponerse con otro del mismo plan. Nace abierto; lo cierran calcular y aprobar, nunca la edición. Con un solo plan la pantalla no pregunta por él.", "periodos", "quincena", "mes", "pago", "plan"));

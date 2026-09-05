@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -227,4 +228,25 @@ public sealed class ListSalaryChangesQueryHandler(IApplicationDbContext db)
 
         return Result.Success<IReadOnlyList<SalaryChangeDto>>(cambios);
     }
+}
+
+// Principio VIII: toda consulta lleva su validador.
+public sealed class ListNoveltiesQueryValidator : AbstractValidator<ListNoveltiesQuery>
+{
+    public ListNoveltiesQueryValidator()
+    {
+        RuleFor(x => x.PeriodPublicId).NotEmpty();
+        RuleFor(x => x.ConceptCode).MaximumLength(30);
+        RuleFor(x => x.Search).MaximumLength(100);
+    }
+}
+
+public sealed class GetNoveltyHistoryQueryValidator : AbstractValidator<GetNoveltyHistoryQuery>
+{
+    public GetNoveltyHistoryQueryValidator() => RuleFor(x => x.NoveltyPublicId).NotEmpty();
+}
+
+public sealed class ListSalaryChangesQueryValidator : AbstractValidator<ListSalaryChangesQuery>
+{
+    public ListSalaryChangesQueryValidator() => RuleFor(x => x.EmployeePublicId).NotEmpty();
 }

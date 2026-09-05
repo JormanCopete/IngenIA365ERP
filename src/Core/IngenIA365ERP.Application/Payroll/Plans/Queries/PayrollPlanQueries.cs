@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -34,3 +35,6 @@ public sealed class ListPayrollPlansQueryHandler(IApplicationDbContext db)
         return Result.Success<IReadOnlyList<PayrollPlanDto>>(lista);
     }
 }
+
+/// <summary>Principio VIII: sin reglas, pero la consulta existe en el catálogo de validación.</summary>
+public sealed class ListPayrollPlansQueryValidator : AbstractValidator<ListPayrollPlansQuery>;

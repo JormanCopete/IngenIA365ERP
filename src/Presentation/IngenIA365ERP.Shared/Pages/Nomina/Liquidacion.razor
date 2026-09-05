@@ -1,14 +1,340 @@
 @page "/nomina/liquidacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
 
-<PageTitle>Liquidacion de Nomina - IngenIA365ERP</PageTitle>
+<PageTitle>Liquidación de nómina - IngenIA365ERP</PageTitle>
 
-<div class="module-placeholder">
-    <div class="placeholder-icon">
-        <span class="e-icons e-people"></span>
+<div class="page-header">
+    <h3>Liquidación del período</h3>
+    <div>
+        @if (_periodo is not null)
+        {
+            @if (_periodo.EstaAbierto && (_corrida is null || _corrida.EsBorrador))
+            {
+                <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@Calcular">@(_corrida is null ? "Calcular" : "Recalcular")</SfButton>
+            }
+            @if (_corrida is { Status: "Draft" } && _periodo.Status == "Calculated")
+            {
+                <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirAprobacion">Aprobar</SfButton>
+            }
+        }
     </div>
-    <h2>Liquidacion de Nomina</h2>
-    <p>Modulo en construccion</p>
-    <SfProgressBar Type="ProgressType.Linear" Value="0" Minimum="0" Maximum="100"
-                   Height="4" TrackColor="var(--borde)" ProgressColor="var(--acento)" IsIndeterminate="true" />
 </div>
+
+<SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
+
+@if (_periodo is not null)
+{
+    <div class="info-card">
+        <span class="label">Estado</span>
+        @if (_corrida is null)
+        {
+            <p><strong>Abierto sin cálculo.</strong> Cuando las novedades estén completas, «Calcular» produce el borrador.</p>
+        }
+        else if (_corrida.Status == "Draft")
+        {
+            <p><strong>Borrador v@_corrida.Version</strong> calculado por @_corrida.CalculatedBy el @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+               @(_corrida.ChangedEmployees > 0 ? $"{_corrida.ChangedEmployees} empleado(s) cambiaron respecto del borrador anterior." : string.Empty)</p>
+        }
+        else if (_corrida.Status == "Stale")
+        {
+            <p><strong>Desactualizado:</strong> hay cambios (novedades, salarios, conceptos o parámetros) desde el cálculo v@_corrida.Version. Recalculá antes de aprobar.</p>
+        }
+        else if (_corrida.Status == "Approved")
+        {
+            <p><strong>Aprobado</strong> por @_corrida.ApprovedBy el @_corrida.ApprovedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · comprobante @_corrida.AccountingDocumentNumber
+               @(_corrida.ApprovedWithoutSegregation ? " · aprobado sin segregación de funciones" : string.Empty)</p>
+        }
+        else if (_corrida.Status == "Reversed")
+        {
+            <p><strong>Reversado</strong> por @_corrida.ReversedBy el @_corrida.ReversedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @_corrida.ReversalReason</p>
+        }
+        @if (_avisos.Count > 0)
+        {
+            <ul class="texto-tenue">
+                @foreach (var a in _avisos) { <li>@a</li> }
+            </ul>
+        }
+    </div>
+
+    @if (_corrida is not null)
+    {
+        <SfTab>
+            <TabItems>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Resumen" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="kpi-grid">
+                            <div class="kpi-card"><span class="label">Devengado</span><strong>@_corrida.Totals.Earnings.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Deducido</span><strong>@_corrida.Totals.Deductions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Neto a pagar</span><strong>@_corrida.Totals.Net.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Aportes del empleador</span><strong>@_corrida.Totals.EmployerContributions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Provisiones</span><strong>@_corrida.Totals.Provisions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Ajuste de redondeo</span><strong>@_corrida.Totals.RoundingAdjustment.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Empleados</span><strong>@_corrida.EmployeeCount</strong></div>
+                        </div>
+
+                        @if (_corrida.Blockers.Count > 0)
+                        {
+                            <span class="label">Bloqueos para aprobar (@_corrida.Blockers.Count)</span>
+                            <table class="data-grid">
+                                <thead><tr><th>Empleado</th><th>Bloqueo</th><th>Detalle</th></tr></thead>
+                                <tbody>
+                                    @foreach (var b in _corrida.Blockers)
+                                    {
+                                        <tr><td><a href="" @onclick="() => AbrirDetalle(b.EmployeePublicId)" @onclick:preventDefault>@b.EmployeeName</a></td><td>@b.BanderaTexto</td><td class="texto-tenue">@b.Detail</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <span class="label">Por concepto</span>
+                        <table class="data-grid">
+                            <thead><tr><th>Concepto</th><th>Tipo</th><th class="monto">Empleados</th><th class="monto">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _corrida.ByConcept)
+                                {
+                                    <tr><td>@c.Code · @c.Name</td><td>@c.NaturalezaTexto</td><td class="monto">@c.Employees</td><td class="monto">@c.Amount.ToString("N0")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p class="texto-tenue">Hash de insumos: <code>@_corrida.InputsHash</code></p>
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Empleados" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="toolbar">
+                            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Buscar" ShowClearButton="true" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await CargarEmpleadosAsync())" />
+                            <label>
+                                Bandera
+                                <select class="e-input" value="@_filtroBandera" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => { _filtroBandera = e.Value?.ToString() ?? ""; await CargarEmpleadosAsync(); })">
+                                    <option value="">Todos</option>
+                                    <option value="NegativeNet">Neto negativo</option>
+                                    <option value="DeductionsOverMax">Deducciones sobre el máximo</option>
+                                    <option value="MissingAffiliation">Afiliación faltante</option>
+                                    <option value="WithholdingRateMissing">Sin porcentaje de retención</option>
+                                </select>
+                            </label>
+                            <label class="campo-check"><input type="checkbox" @bind="_soloCambiados" @bind:after="CargarEmpleadosAsync" /> Sólo los que cambiaron</label>
+                        </div>
+                        <SfGrid TValue="EmpleadoDeCorridaDto" DataSource="@_empleados" AllowPaging="true" AllowSorting="true">
+                            <GridPageSettings PageSize="25" />
+                            <GridEvents TValue="EmpleadoDeCorridaDto" RowSelected="@(async (RowSelectEventArgs<EmpleadoDeCorridaDto> e) => await AbrirDetalle(e.Data.EmployeePublicId))" />
+                            <GridColumns>
+                                <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="220" />
+                                <GridColumn Field="Document" HeaderText="Documento" Width="120" />
+                                <GridColumn Field="DaysWorked" HeaderText="Días" Width="70" TextAlign="TextAlign.Center" />
+                                <GridColumn Field="TotalEarnings" HeaderText="Devengado" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="TotalDeductions" HeaderText="Deducido" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="NetPay" HeaderText="Neto" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn HeaderText="Banderas" Width="200">
+                                    <Template>
+                                        @{
+                                            var e = (EmpleadoDeCorridaDto)context;
+                                            if (e.TieneBloqueos) { <span class="e-badge e-badge-danger">@e.BanderasTexto</span> }
+                                            if (e.Changed) { <span class="e-badge e-badge-warning">cambió</span> }
+                                        }
+                                    </Template>
+                                </GridColumn>
+                            </GridColumns>
+                        </SfGrid>
+                    </ContentTemplate>
+                </TabItem>
+            </TabItems>
+        </SfTab>
+    }
+}
+
+@* ------------------------------------------------------------- detalle del empleado --- *@
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Detalle" : $"{_detalle.EmployeeName} · {_detalle.Document}")" Width="920px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_detalle is not null)
+            {
+                <div class="pagina">
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="label">Días pagados</span><strong>@_detalle.DaysWorked</strong></div>
+                        <div class="kpi-card"><span class="label">Devengado</span><strong>@_detalle.Totals.Earnings.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Deducido</span><strong>@_detalle.Totals.Deductions.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Neto</span><strong>@_detalle.Totals.Net.ToString("N0")</strong></div>
+                    </div>
+
+                    @if (_detalle.Refusals.Count > 0)
+                    {
+                        <div class="info-card">
+                            <span class="label">Avisos del cálculo</span>
+                            <ul>@foreach (var r in _detalle.Refusals) { <li>@r</li> }</ul>
+                        </div>
+                    }
+
+                    <span class="label">Tramos de salario</span>
+                    <table class="data-grid">
+                        <thead><tr><th>Desde</th><th>Hasta</th><th class="monto">Días</th><th class="monto">Ausencias</th><th class="monto">Pagados</th><th class="monto">Salario mensual</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _detalle.SalaryTranches)
+                            {
+                                <tr><td>@t.From.ToString("dd/MM/yyyy")</td><td>@t.To.ToString("dd/MM/yyyy")</td><td class="monto">@t.Days</td><td class="monto">@t.AbsenceDays</td><td class="monto">@t.PaidDays</td><td class="monto">@t.MonthlySalary.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <span class="label">Bases del período</span>
+                    <ol class="explicacion-pasos">
+                        @foreach (var b in _detalle.Bases)
+                        {
+                            <li><span>@b.Label</span> @if (b.Value is { } v) { <strong class="monto">@v.ToString("N2")</strong> } else if (b.Text is not null) { <em class="texto-tenue">@b.Text</em> }</li>
+                        }
+                    </ol>
+
+                    <span class="label">Líneas</span>
+                    @foreach (var grupo in _detalle.Lines.GroupBy(l => l.NaturalezaTexto))
+                    {
+                        <h4>@grupo.Key</h4>
+                        <table class="data-grid">
+                            <thead><tr><th></th><th>Concepto</th><th class="monto">Cantidad</th><th class="monto">Base</th><th class="monto">Factor</th><th class="monto">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in grupo)
+                                {
+                                    <tr>
+                                        <td><SfButton CssClass="e-flat e-small" IconCss="@(_lineaAbierta == l.PublicId ? "e-icons e-chevron-up" : "e-icons e-chevron-down")" OnClick="@(() => _lineaAbierta = _lineaAbierta == l.PublicId ? null : l.PublicId)" /></td>
+                                        <td>@l.ConceptCode · @l.ConceptName @(l.AffectsAccounting ? string.Empty : " (sin asiento)")</td>
+                                        <td class="monto">@(l.Quantity?.ToString("0.##"))</td>
+                                        <td class="monto">@(l.BaseAmount?.ToString("N2"))</td>
+                                        <td class="monto">@(l.Factor?.ToString("0.####"))</td>
+                                        <td class="monto"><strong>@l.Amount.ToString("N0")</strong></td>
+                                    </tr>
+                                    @if (_lineaAbierta == l.PublicId)
+                                    {
+                                        <tr><td colspan="6"><ExplicacionDeLinea Explicacion="@l.Explanation" NovedadUrl="@(id => $"/nomina/novedades?periodo={_periodo?.PublicId}")" /></td></tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (_detalle.Skips.Count > 0)
+                    {
+                        <details>
+                            <summary class="texto-tenue">Conceptos automáticos que no aplicaron (@_detalle.Skips.Count)</summary>
+                            <ul class="texto-tenue">@foreach (var s in _detalle.Skips) { <li>@s</li> }</ul>
+                        </details>
+                    }
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PanelDeAprobacion @ref="_panel" @bind-Visible="_mostrarAprobacion" Corrida="_corrida" Periodo="_periodo"
+                   PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync" />
+
+@code {
+    private SelectorDePeriodo? _selector;
+    private PanelDeAprobacion? _panel;
+    private PeriodoPagoDto? _periodo;
+    private ResumenCorridaDto? _corrida;
+    private List<EmpleadoDeCorridaDto> _empleados = [];
+    private List<string> _avisos = [];
+    private DetalleEmpleadoCorridaDto? _detalle;
+    private Guid? _lineaAbierta;
+    private string _buscarEmpleado = string.Empty, _filtroBandera = string.Empty;
+    private bool _soloCambiados, _ocupado, _mostrarDetalle, _mostrarAprobacion;
+
+    private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
+    {
+        _periodo = periodo;
+        _avisos = [];
+        await CargarCorridaAsync();
+    }
+
+    private async Task CargarCorridaAsync()
+    {
+        _corrida = null; _empleados = [];
+        if (_periodo is null) { StateHasChanged(); return; }
+        var res = await Nomina.CorridaActualAsync(_periodo.PublicId);
+        if (res.IsSuccess) { _corrida = res.Value; await CargarEmpleadosAsync(); }
+        else if (res.ErrorCode != "Payroll.RunNotFound" && res.StatusCode != 404)
+            await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la liquidación.");
+        StateHasChanged();
+    }
+
+    private async Task CargarEmpleadosAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.EmpleadosDeCorridaAsync(_corrida.PublicId,
+            string.IsNullOrEmpty(_filtroBandera) ? null : _filtroBandera,
+            _soloCambiados ? true : null,
+            string.IsNullOrWhiteSpace(_buscarEmpleado) ? null : _buscarEmpleado);
+        if (res.IsSuccess) _empleados = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los empleados.");
+        StateHasChanged();
+    }
+
+    private async Task Calcular()
+    {
+        if (_periodo is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.CalcularAsync(_periodo.PublicId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo calcular."); return; }
+            var r = res.Value!;
+            _avisos = r.Warnings.ToList();
+            await Notification.SuccessAsync($"Borrador v{r.Version}: {r.EmployeeCount} empleado(s), neto {r.Totals.Net:N0}" +
+                                            (r.Blockers.Count > 0 ? $", {r.Blockers.Count} bloqueo(s)" : string.Empty) +
+                                            (r.ChangedEmployees > 0 ? $", {r.ChangedEmployees} cambiaron" : string.Empty) + ".");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task AbrirDetalle(Guid empleadoId)
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.DetalleEmpleadoAsync(_corrida.PublicId, empleadoId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el detalle."); return; }
+        _detalle = res.Value;
+        _lineaAbierta = null;
+        _mostrarDetalle = true;
+    }
+
+    private void AbrirAprobacion()
+    {
+        _panel?.Reiniciar();
+        _mostrarAprobacion = true;
+    }
+
+    private async Task AprobarAsync(AprobarRequest request)
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.AprobarAsync(_corrida.PublicId, request);
+            if (!res.IsSuccess)
+            {
+                if (res.ErrorCode == "Payroll.ConfirmationRequired" && (res.ErrorMessage ?? string.Empty).Contains("segregaci", StringComparison.OrdinalIgnoreCase))
+                {
+                    _panel?.PedirSegundaConfirmacion();
+                    await Notification.WarningAsync(res.ErrorMessage ?? "Se requiere una segunda confirmación.");
+                    return;
+                }
+                await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo aprobar.");
+                return;
+            }
+            _mostrarAprobacion = false;
+            await Notification.SuccessAsync($"Período aprobado. Comprobante {res.Value!.AccountingDocumentNumber}; neto {res.Value.Totals.Net:N0}.");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+}

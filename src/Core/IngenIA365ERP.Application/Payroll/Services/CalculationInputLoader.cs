@@ -185,7 +185,8 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                     FamilyCompensation = e.FamilySubsidyId > 0,
                 },
                 WithholdingProcedure = e.WithholdingProcedure is 1 or 2 ? e.WithholdingProcedure : (byte)1,
-                WithholdingRatePercent = tasasPorEmpleado.GetValueOrDefault(e.Id),
+                // Sin vigencia = nulo, no cero: cero se calcularía como una tasa válida del 0 %.
+                WithholdingRatePercent = tasasPorEmpleado.TryGetValue(e.Id, out var tasa) ? tasa : null,
                 TaxDeductions = deduccionesPorEmpleado[e.Id]
                     .Select(d => new TaxDeductionInput(d.Kind, d.MonthlyAmount, d.Percent))
                     .ToList(),

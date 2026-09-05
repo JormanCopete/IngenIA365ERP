@@ -1,0 +1,23 @@
+{
+  "nombre": "Salario de 50.000.000: el IBC se limita a 25 SMMLV",
+  "descripcion": "La base de aportes queda en 43.772.625 (IBC_TOPE_SMMLV × SMMLV) para salud, pensión, FSP (25 SMMLV → tramo 20 en adelante al 2 %), ARL y parafiscales; las provisiones se calculan sobre el salario completo. Retención en el tramo 640–945 UVT, aproximada al múltiplo de mil. La suma de líneas redondeadas difiere en un peso del neto redondeado: ajuste de redondeo.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Jorge Vélez", "clase": "Standard", "ingreso": "2019-03-01",
+    "salarios": [ { "desde": "2019-03-01", "mensual": 50000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 50000000, "AJUSTE_REDONDEO": 1,
+      "SALUD_EMP": 1750905, "PENSION_EMP": 1750905, "FSP": 875453, "RETEFTE": 11514000,
+      "SALUD_EMPLEADOR": 3720673, "PENSION_EMPLEADOR": 5252715, "ARL": 228493, "SENA": 875453, "ICBF": 1313179, "CAJA": 1750905,
+      "PROV_CESANTIAS": 4165000, "PROV_INT_CESANTIAS": 500000, "PROV_PRIMA": 4165000, "PROV_VACACIONES": 2085000
+    },
+    "totales": { "devengos": 50000001, "deducciones": 15891263, "aportesEmpleador": 13141418, "provisiones": 10915000, "neto": 34108738, "ajusteRedondeo": 1 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

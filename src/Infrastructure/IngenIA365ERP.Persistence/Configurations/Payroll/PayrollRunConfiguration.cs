@@ -39,6 +39,11 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
         builder.HasOne(e => e.PayPeriod).WithMany().HasForeignKey(e => e.PayPeriodId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(e => e.Employees).WithOne(x => x.Run).HasForeignKey(x => x.PayrollRunId).OnDelete(DeleteBehavior.Restrict);
 
+        // Comprobantes de aprobacion y de reversion: navegaciones para que la clave se
+        // fije en el mismo SaveChanges (FR-023). Nunca se borra un comprobante con corrida.
+        builder.HasOne(e => e.AccountingDocument).WithMany().HasForeignKey(e => e.AccountingDocumentId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.ReversalAccountingDocument).WithMany().HasForeignKey(e => e.ReversalAccountingDocumentId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Ignore(e => e.IsEditableDraft);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
@@ -57,6 +62,8 @@ public class PayrollRunEmployeeConfiguration : IEntityTypeConfiguration<PayrollR
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.SalaryTranchesJson).IsRequired();
+        builder.Property(e => e.BasesJson).IsRequired();
+        builder.Property(e => e.NotesJson).IsRequired();
         builder.Property(e => e.TotalEarnings).HasPrecision(18, 2);
         builder.Property(e => e.TotalDeductions).HasPrecision(18, 2);
         builder.Property(e => e.TotalEmployerContributions).HasPrecision(18, 2);

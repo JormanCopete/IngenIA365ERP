@@ -21,6 +21,9 @@ public sealed class PayrollPolicyReader(IApplicationDbContext db)
     public const string AllowSameUserApprovalKey = "Payroll.AllowSameUserApproval";
     public const string ApplyEmployerExemptionKey = "Payroll.ApplyEmployerExemption";
 
+    /// <summary>Umbral por defecto del comparativo (D-09); es politica de la cooperativa, no un valor legal.</summary>
+    private const decimal DefaultVariationThresholdPercent = 10;
+
     public sealed record PayrollPolicies(
         PayrollRounding Rounding,
         decimal VariationThresholdPercent,
@@ -42,7 +45,7 @@ public sealed class PayrollPolicyReader(IApplicationDbContext db)
             ? pr : PayrollRounding.Peso;
         var umbral = mapa.TryGetValue(VariationThresholdKey, out var u)
                      && decimal.TryParse(u, NumberStyles.Number, CultureInfo.InvariantCulture, out var d)
-            ? d : 10m;
+            ? d : DefaultVariationThresholdPercent;
         var mismoUsuario = mapa.TryGetValue(AllowSameUserApprovalKey, out var a) && bool.TryParse(a, out var ba) && ba;
         var exoneracion = mapa.TryGetValue(ApplyEmployerExemptionKey, out var e) && bool.TryParse(e, out var be) && be;
 
