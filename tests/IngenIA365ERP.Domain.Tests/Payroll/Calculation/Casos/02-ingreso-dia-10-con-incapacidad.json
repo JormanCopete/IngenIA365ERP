@@ -1,0 +1,25 @@
+{
+  "nombre": "Ingreso el día 10 con salario mínimo e incapacidad de 3 días",
+  "descripcion": "Ingresa el 10 de marzo: 21 días comerciales. Incapacidad general del 20 al 22 (3 días) al 66,67 % a cargo del empleador; el salario se liquida por 18 días y el auxilio de transporte se proporciona a los 18 días pagados. La incapacidad entra al IBC y a la base prestacional pero no a los devengos salariales (vacaciones).",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Bruno Díaz", "clase": "Standard", "ingreso": "2026-03-10",
+    "salarios": [ { "desde": "2026-03-10", "mensual": 1750905 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [
+    { "concepto": "INCAP_GENERAL", "desde": "2026-03-20", "hasta": "2026-03-22", "descripcion": "Incapacidad EPS" }
+  ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1050543, "AUX_TRANSPORTE": 149457, "INCAP_GENERAL": 116733,
+      "SALUD_EMP": 46691, "PENSION_EMP": 46691, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 99218, "PENSION_EMPLEADOR": 140073, "ARL": 6093, "SENA": 23346, "ICBF": 35018, "CAJA": 46691,
+      "PROV_CESANTIAS": 109684, "PROV_INT_CESANTIAS": 13167, "PROV_PRIMA": 109684, "PROV_VACACIONES": 43808
+    },
+    "totales": { "devengos": 1316733, "deducciones": 93382, "aportesEmpleador": 350439, "provisiones": 276343, "neto": 1223351, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 18, "diasAusencia": 3
+  }
+}

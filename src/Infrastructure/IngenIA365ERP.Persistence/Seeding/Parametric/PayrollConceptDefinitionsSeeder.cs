@@ -34,7 +34,7 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
     private static readonly int CotizanPension = Clases(EmployeeClass.Standard, EmployeeClass.IntegralSalary);
     private static readonly int ConAuxilio = Clases(EmployeeClass.Standard, EmployeeClass.Apprentice, EmployeeClass.Intern, EmployeeClass.Pensioner);
 
-    internal static IReadOnlyList<PayrollConceptDefinition> Catalogo()
+    public static IReadOnlyList<PayrollConceptDefinition> Catalogo()
     {
         var lista = new List<PayrollConceptDefinition>();
 
@@ -48,7 +48,8 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         lista.Add(Def(WellKnownConceptCodes.TransportAllowance, "Auxilio de transporte", ConceptNature.Earning, CalculationKind.FixedAmount, d =>
         {
             d.AmountParameterCode = LegalParameterCodes.TransportAllowance; d.ProrateByDays = true; d.IsAutomatic = true;
-            d.AffectsBenefitsBase = true; d.IsBenefitRelated = true; d.ApplicableClasses = ConAuxilio;
+            // Prestacional y gravado para retencion; NO hace parte del IBC de aportes.
+            d.AffectsBenefitsBase = true; d.AffectsWithholdingBase = true; d.IsBenefitRelated = true; d.ApplicableClasses = ConAuxilio;
         }));
 
         foreach (var (code, name, factor) in new (string, string, decimal)[]
@@ -132,6 +133,7 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         lista.Add(Def(WellKnownConceptCodes.HealthEmployee, "Salud (aporte del empleado)", ConceptNature.Deduction, CalculationKind.PercentOfBase, d =>
         {
             d.BaseKind = CalculationBase.ContributionBase; d.PercentParameterCode = LegalParameterCodes.HealthEmployeePct; d.IsAutomatic = true;
+            d.ApplicableClasses = SinAprendicesNiPasantes; // el patrocinador paga la salud completa del aprendiz
         }));
         lista.Add(Def(WellKnownConceptCodes.PensionEmployee, "Pensión (aporte del empleado)", ConceptNature.Deduction, CalculationKind.PercentOfBase, d =>
         {
@@ -175,6 +177,12 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         lista.Add(Def(WellKnownConceptCodes.HealthEmployer, "Salud (aporte del empleador)", ConceptNature.EmployerContribution, CalculationKind.PercentOfBase, d =>
         {
             d.BaseKind = CalculationBase.ContributionBase; d.PercentParameterCode = LegalParameterCodes.HealthEmployerPct; d.IsAutomatic = true;
+            d.ApplicableClasses = SinAprendicesNiPasantes;
+        }));
+        lista.Add(Def("SALUD_APRENDIZ", "Salud de aprendices y pasantes (a cargo del patrocinador)", ConceptNature.EmployerContribution, CalculationKind.PercentOfBase, d =>
+        {
+            d.BaseKind = CalculationBase.ContributionBase; d.PercentParameterCode = LegalParameterCodes.HealthApprenticePct; d.IsAutomatic = true;
+            d.ApplicableClasses = Clases(EmployeeClass.Apprentice, EmployeeClass.Intern);
         }));
         lista.Add(Def(WellKnownConceptCodes.PensionEmployer, "Pensión (aporte del empleador)", ConceptNature.EmployerContribution, CalculationKind.PercentOfBase, d =>
         {

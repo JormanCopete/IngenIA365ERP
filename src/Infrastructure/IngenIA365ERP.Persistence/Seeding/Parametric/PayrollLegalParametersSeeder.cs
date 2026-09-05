@@ -38,7 +38,7 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
     private const string FuenteRetencion = "Estatuto Tributario arts. 383, 387 y 206 num. 10";
     private const string FuenteLaboral = "Código Sustantivo del Trabajo y Ley 50 de 1990";
 
-    internal static IReadOnlyList<PayrollLegalParameter> Catalogo()
+    public static IReadOnlyList<PayrollLegalParameter> Catalogo()
     {
         var lista = new List<PayrollLegalParameter>
         {
@@ -51,6 +51,7 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
             Porcentaje(LegalParameterCodes.PensionEmployeePct, "Pensión a cargo del empleado", 4m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.HealthEmployerPct, "Salud a cargo del empleador", 8.5m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.PensionEmployerPct, "Pensión a cargo del empleador", 12m, FuenteSeguridadSocial),
+            Porcentaje(LegalParameterCodes.HealthApprenticePct, "Salud de aprendices y pasantes (total, a cargo del patrocinador)", 12.5m, "Ley 789 de 2002 art. 30 y Decreto 933 de 2003"),
             Porcentaje(LegalParameterCodes.WorkRiskClass1Pct, "ARL clase de riesgo I", 0.522m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.WorkRiskClass2Pct, "ARL clase de riesgo II", 1.044m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.WorkRiskClass3Pct, "ARL clase de riesgo III", 2.436m, FuenteSeguridadSocial),
@@ -77,10 +78,20 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
             Cantidad(LegalParameterCodes.SickLeaveEmployerDays, "Días de incapacidad a cargo del empleador", 2m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.SickLeaveEmployerPct, "Porcentaje pagado en incapacidad general", 66.67m, FuenteSeguridadSocial),
             Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 240m, FuenteLaboral),
+
+            // Depuracion de la base de retencion (solo si el empleado declara la deduccion).
+            Cantidad(LegalParameterCodes.WithholdingHousingInterestCapUvt, "Tope mensual de intereses de vivienda (UVT)", 100m, FuenteRetencion),
+            Cantidad(LegalParameterCodes.WithholdingPrepaidHealthCapUvt, "Tope mensual de medicina prepagada (UVT)", 16m, FuenteRetencion),
+            Porcentaje(LegalParameterCodes.WithholdingDependentsPct, "Deduccion por dependientes sobre el ingreso bruto", 10m, FuenteRetencion),
+            Cantidad(LegalParameterCodes.WithholdingDependentsCapUvt, "Tope mensual de la deduccion por dependientes (UVT)", 32m, FuenteRetencion),
+            Porcentaje(LegalParameterCodes.WithholdingVoluntarySavingsPct, "Renta exenta por aportes voluntarios (AFC y pension voluntaria)", 30m, FuenteRetencion),
+            Cantidad(LegalParameterCodes.WithholdingVoluntarySavingsCapUvt, "Tope mensual de la renta exenta por aportes voluntarios (UVT)", 316.67m, FuenteRetencion),
+            Monto(LegalParameterCodes.WithholdingRoundingMultiple, "Multiplo de aproximacion de la retencion en la fuente", 1_000m, FuenteRetencion),
         };
 
         // Fondo de solidaridad pensional: tramos en múltiplos de SMMLV → porcentaje.
         lista.Add(Tabla(LegalParameterCodes.SolidarityFundTable, "Fondo de solidaridad pensional (tramos en SMMLV)", FuenteSeguridadSocial,
+            unitCode: LegalParameterCodes.Smmlv, marginal: false,
         [
             (4m, 16m, 1.0m, 0m),
             (16m, 17m, 1.2m, 0m),
@@ -93,6 +104,7 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
         // Retención en la fuente art. 383 E.T.: tramos en UVT → tarifa marginal sobre el
         // exceso del tramo más UVT fijas.
         lista.Add(Tabla(LegalParameterCodes.WithholdingTableUvt, "Retención en la fuente por salarios (tramos en UVT)", FuenteRetencion,
+            unitCode: LegalParameterCodes.Uvt, marginal: true,
         [
             (0m, 95m, 0m, 0m),
             (95m, 150m, 19m, 0m),
@@ -127,10 +139,12 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
         CreatedBy = SeedContext.ParametricCreatedBy,
     };
 
-    private static PayrollLegalParameter Tabla(string code, string name, string source,
+    private static PayrollLegalParameter Tabla(string code, string name, string source, string unitCode, bool marginal,
         (decimal From, decimal? To, decimal Rate, decimal Fixed)[] tramos)
     {
         var p = Nuevo(code, name, LegalParameterKind.RangeTable, null, source);
+        p.RangeUnitParameterCode = unitCode;
+        p.RangeIsMarginal = marginal;
         var order = 0;
         foreach (var (from, to, rate, fixedValue) in tramos)
         {

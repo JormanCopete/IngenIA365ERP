@@ -1,0 +1,25 @@
+{
+  "nombre": "Exactamente dos salarios mínimos, con auxilio y 6 horas extra nocturnas",
+  "descripcion": "Salario igual al tope (2 SMMLV): conserva el auxilio de transporte. Seis horas extra nocturnas: hora = salario / 240 × 1,75. Clase de riesgo II. La suma de líneas redondeadas difiere en un peso del neto redondeado y aparece el ajuste por redondeo.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Elena Gómez", "clase": "Standard", "ingreso": "2022-09-01",
+    "salarios": [ { "desde": "2022-09-01", "mensual": 3501810 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 2, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [
+    { "concepto": "HEX_NOCTURNA", "cantidad": 6, "descripcion": "Inventario nocturno" }
+  ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 3501810, "AUX_TRANSPORTE": 249095, "HEX_NOCTURNA": 153204, "AJUSTE_REDONDEO": 1,
+      "SALUD_EMP": 146201, "PENSION_EMP": 146201, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 310676, "PENSION_EMPLEADOR": 438602, "ARL": 38158, "SENA": 73100, "ICBF": 109650, "CAJA": 146201,
+      "PROV_CESANTIAS": 325212, "PROV_INT_CESANTIAS": 39041, "PROV_PRIMA": 325212, "PROV_VACACIONES": 152414
+    },
+    "totales": { "devengos": 3904110, "deducciones": 292402, "aportesEmpleador": 1116387, "provisiones": 841879, "neto": 3611708, "ajusteRedondeo": 1 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

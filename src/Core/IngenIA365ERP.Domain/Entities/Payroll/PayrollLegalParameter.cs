@@ -30,6 +30,22 @@ public class PayrollLegalParameter : AuditableEntity
     [MaxLength(200)]
     public string? Source { get; set; }
 
+    /// <summary>
+    /// RangeTable: codigo del parametro que da la UNIDAD en que estan expresados los
+    /// tramos (UVT para la retencion, SMMLV para el fondo de solidaridad). Nulo = los
+    /// tramos estan en pesos. El motor convierte la base a esa unidad antes de buscar
+    /// el tramo, y la explicacion lo muestra (29,92 UVT -> tramo 0-95).
+    /// </summary>
+    [MaxLength(40)]
+    public string? RangeUnitParameterCode { get; set; }
+
+    /// <summary>
+    /// RangeTable: true = tarifa marginal sobre el exceso del tramo mas el fijo del
+    /// tramo (retencion en la fuente, art. 383 E.T.); false = la tarifa del tramo se
+    /// aplica a TODA la base (fondo de solidaridad pensional).
+    /// </summary>
+    public bool RangeIsMarginal { get; set; }
+
     public ICollection<PayrollLegalParameterRange> Ranges { get; set; } = [];
 
     public bool IsValidAt(DateTime date) =>

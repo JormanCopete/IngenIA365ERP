@@ -19,6 +19,7 @@ public class PayrollLegalParameterConfiguration : IEntityTypeConfiguration<Payro
         builder.Property(e => e.Code).HasMaxLength(40).IsRequired();
         builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
         builder.Property(e => e.Source).HasMaxLength(200);
+        builder.Property(e => e.RangeUnitParameterCode).HasMaxLength(40);
         builder.Property(e => e.Value).HasPrecision(18, 4);
 
         builder.HasIndex(e => new { e.Code, e.ValidFrom }).IsUnique().HasDatabaseName("UK_PAY_LegalParameters_Code_ValidFrom");

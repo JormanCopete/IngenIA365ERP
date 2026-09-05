@@ -47,6 +47,24 @@ public static class LegalParameterCodes
     /// <summary>Tope mensual en UVT de deducciones más rentas exentas de la base de retención.</summary>
     public const string WithholdingDeductionsCapUvt = "RETEFTE_DEDUCCIONES_TOPE_UVT";
 
+    // --- Depuracion de la base de retencion (art. 387 E.T. y Ley 2277 de 2022). ---
+    // No son requeridos para calcular: solo cuando un empleado declara la deduccion o
+    // renta exenta correspondiente; entonces, si falta la vigencia, el motor se niega
+    // para ese empleado y lo nombra.
+
+    public const string WithholdingHousingInterestCapUvt = "RETEFTE_INT_VIVIENDA_TOPE_UVT";
+    public const string WithholdingPrepaidHealthCapUvt = "RETEFTE_MED_PREPAGADA_TOPE_UVT";
+    public const string WithholdingDependentsPct = "RETEFTE_DEPENDIENTES_PCT";
+    public const string WithholdingDependentsCapUvt = "RETEFTE_DEPENDIENTES_TOPE_UVT";
+    public const string WithholdingVoluntarySavingsPct = "RETEFTE_AFC_AVP_PCT";
+    public const string WithholdingVoluntarySavingsCapUvt = "RETEFTE_AFC_AVP_TOPE_UVT";
+
+    /// <summary>Salud de aprendices y pasantes, a cargo del patrocinador en su totalidad (Ley 789 de 2002). Opcional.</summary>
+    public const string HealthApprenticePct = "SALUD_APRENDIZ_PCT";
+
+    /// <summary>Multiplo al que se aproxima la retencion (DIAN: al multiplo de mil mas cercano). Opcional.</summary>
+    public const string WithholdingRoundingMultiple = "RETEFTE_REDONDEO";
+
     /// <summary>Sin vigencia de cualquiera de estos a la fecha del período, no hay cálculo.</summary>
     public static readonly IReadOnlyList<string> Required =
     [

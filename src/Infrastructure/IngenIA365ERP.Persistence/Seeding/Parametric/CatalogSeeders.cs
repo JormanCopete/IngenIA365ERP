@@ -97,6 +97,7 @@ public sealed class SystemParametersSeeder : IDataSeeder
         ("Payroll.Rounding", "Peso", "String", "Redondeo de la liquidación de nómina: Peso o Centavo", "PAY"),
         ("Payroll.VariationThresholdPercent", "10", "Decimal", "Umbral (%) que resalta variaciones en el comparativo de nómina", "PAY"),
         ("Payroll.AllowSameUserApproval", "false", "Bool", "Permitir que quien registra novedades apruebe la liquidación (con doble confirmación)", "PAY"),
+        ("Payroll.ApplyEmployerExemption", "false", "Bool", "El empleador goza de la exoneración de salud, SENA e ICBF (art. 114-1 E.T.) para empleados bajo el tope; una cooperativa del régimen especial normalmente no", "PAY"),
     ];
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
