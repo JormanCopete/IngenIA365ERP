@@ -66,11 +66,20 @@ public static class DependencyInjection
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 
+        // Feature 005 — servicios compartidos de nómina (T044-T046). El motor
+        // (Domain) no se registra: es puro y se instancia donde se usa.
+        services.AddScoped<Payroll.Services.PayrollPolicyReader>();
+        services.AddScoped<Payroll.Services.CalculationInputLoader>();
+        services.AddScoped<Payroll.Services.PayrollAccountingPoster>();
+        services.AddScoped<Payroll.Services.IPayrollRunStaleMarker, Payroll.Services.PayrollRunStaleMarker>();
+
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<
             IngenIA365ERP.Application.Identity.Profile.Services.IPasswordResetEmailDispatcher,
-            IngenIA365ERP.Application.Identity.Profile.Services.PasswordResetEmailDispatcher>();
-
+            IngenIA365ERP.Application.Identity.Profile.Services.PasswordResetEmailDispatcher>();
+
+
+
         // El aviso de recuperacion del segundo factor. Mismo camino que el de
         // contrasena —plantilla + IEmailSender— porque ocurre en el mismo estado:
         // sin cooperativa elegida, donde el contexto de datos lanza por Principio IV.

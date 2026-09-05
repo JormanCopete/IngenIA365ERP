@@ -788,7 +788,19 @@ public static class ManualCatalogo
             ["novedades-de-nomina", "empleados", "periodos-de-pago"], [], TipoDeTema.Proceso));
 
         t.Add(Maestro("/nomina/conceptos", "Conceptos de nómina", Modulos.Nomina, "un concepto", "Devengado o deducción, fórmula de cálculo y si es base de prestaciones.", "conceptos", "devengado", "deduccion", "formula"));
-        t.Add(Maestro("/nomina/periodos-pago", "Períodos de pago", Modulos.Nomina, "un período de pago", "Mensual o quincenal; se abren y se cierran con la liquidación.", "periodos", "quincena", "mes", "pago"));
+        t.Add(Maestro("/nomina/periodos-pago", "Períodos de pago", Modulos.Nomina, "un período de pago", "Cada período pertenece a un plan de nómina (mensual o quincenal) y no puede superponerse con otro del mismo plan. Nace abierto; lo cierran calcular y aprobar, nunca la edición. Con un solo plan la pantalla no pregunta por él.", "periodos", "quincena", "mes", "pago", "plan"));
+        t.Add(Maestro("/nomina/planes", "Planes de nómina", Modulos.Nomina, "un plan de nómina", "Un plan es un grupo de empleados que se paga con la misma periodicidad (mensual de 30 días o quincenal de 15). Toda cooperativa nace con el plan por defecto y casi ninguna necesita otro; el plan por defecto no se desactiva y un plan con empleados vigentes tampoco. El cambio de plan de un empleado se hace desde su ficha, con fecha de efecto posterior al período abierto de su plan actual.", "planes", "plan de nomina", "periodicidad", "mensual", "quincenal"));
+        t.Add(Proceso("parametros-legales", "Parámetros legales de nómina", Modulos.Nomina, "/nomina/parametros-legales",
+            "Los valores de ley con los que liquida la nómina —salario mínimo, auxilio de transporte, UVT, porcentajes de salud, pensión, ARL, parafiscales y provisiones, tablas de retención y de fondo de solidaridad— con la fecha desde la que rigen. El programa no trae ninguno fijo: si falta uno para la fecha del período, el cálculo se niega y lo nombra.",
+            [
+                P("Nómina → Parámetros legales", "La grilla muestra cada código con su vigencia actual y las anteriores. Arriba avisa si algún código requerido no tiene vigencia para el año en curso o el siguiente.", "/nomina/parametros-legales", "Abrir Parámetros legales"),
+                P("Nueva vigencia", "En la fila del código, «Nueva vigencia»: fecha desde, el valor (o la tabla de tramos: desde, hasta, tarifa, fijo) y la fuente normativa (decreto o resolución). La vigencia anterior se cierra el día antes."),
+                P("Cuándo hacerlo", "Al empezar el año, cuando el Gobierno fija salario mínimo, auxilio y UVT, y cuando cambie una tarifa. El primer período del año no se puede calcular hasta registrarlos."),
+                P("Comprobar", "Calculá el período en borrador: cada línea de la liquidación muestra el parámetro y la vigencia que usó."),
+            ],
+            ["parametros legales", "salario minimo", "smmlv", "auxilio de transporte", "uvt", "retencion", "tabla", "fondo de solidaridad", "vigencia", "porcentaje"],
+            ["Cooperativa activa.", "Permiso Payroll.LegalParameters.Manage para registrar vigencias."],
+            ["liquidacion-de-nomina", "conceptos-de-nomina"], [], TipoDeTema.Proceso));
         t.Add(Maestro("/nomina/eps", "EPS", Modulos.Nomina, "una EPS", null, "eps", "salud", "afiliacion"));
         t.Add(Maestro("/nomina/arl", "ARL", Modulos.Nomina, "una ARL", null, "arl", "riesgos laborales"));
         t.Add(Maestro("/nomina/arl-tarifas", "Tarifas ARL", Modulos.Nomina, "una tarifa ARL", "Por clase de riesgo.", "arl", "tarifa", "clase de riesgo"));

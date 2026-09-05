@@ -1,0 +1,145 @@
+@*
+    SelectorDePeriodo — plan de nómina → período (feature 005, contracts/ui.md §8).
+    Si la cooperativa tiene un solo plan, el plan no se muestra. Por defecto elige el
+    período abierto (o calculado) más reciente. Emite PeriodoCambiado con el período
+    elegido, o null si no hay ninguno.
+
+    Uso:
+        <SelectorDePeriodo PeriodoCambiado="OnPeriodo" IncluirAprobados="true" />
+*@
+
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+<div class="toolbar selector-periodo">
+    @if (_planes.Count > 1)
+    {
+        <label>
+            Plan
+            <select class="e-input" value="@_planId" @onchange="OnPlanCambiado" disabled="@_cargando">
+                @foreach (var p in _planes)
+                {
+                    <option value="@p.PublicId">@p.Name (@p.PeriodicidadTexto)</option>
+                }
+            </select>
+        </label>
+    }
+
+    <label>
+        Período
+        <select class="e-input" value="@_periodoId" @onchange="OnPeriodoCambiado" disabled="@(_cargando || _periodos.Count == 0)">
+            @if (_periodos.Count == 0)
+            {
+                <option value="">@(_cargando ? "Cargando…" : "Sin períodos")</option>
+            }
+            @foreach (var p in _periodos)
+            {
+                <option value="@p.PublicId">@p.Etiqueta · @p.EstadoTexto</option>
+            }
+        </select>
+    </label>
+
+    @if (Periodo is not null)
+    {
+        <span class="e-badge @ClaseEstado(Periodo.Status)">@Periodo.EstadoTexto</span>
+    }
+</div>
+
+@code {
+    /// <summary>Se dispara al elegir un período (o cuando no hay ninguno, con null).</summary>
+    [Parameter] public EventCallback<PeriodoPagoDto?> PeriodoCambiado { get; set; }
+
+    /// <summary>Incluye los períodos aprobados y reversados en la lista (consulta histórica).</summary>
+    [Parameter] public bool IncluirAprobados { get; set; } = true;
+
+    /// <summary>Período preseleccionado (por ejemplo, desde la URL).</summary>
+    [Parameter] public Guid? PeriodoInicial { get; set; }
+
+    public PeriodoPagoDto? Periodo { get; private set; }
+    public PlanNominaDto? Plan => _planes.FirstOrDefault(p => p.PublicId.ToString() == _planId);
+
+    private List<PlanNominaDto> _planes = [];
+    private List<PeriodoPagoDto> _periodos = [];
+    private string _planId = string.Empty;
+    private string _periodoId = string.Empty;
+    private bool _cargando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cargando = true;
+        var planes = await Nomina.ListarPlanesAsync();
+        if (!planes.IsSuccess)
+        {
+            await Notification.ErrorAsync(planes.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");
+            _cargando = false;
+            return;
+        }
+        _planes = planes.Value!.ToList();
+        var porDefecto = _planes.FirstOrDefault(p => p.IsDefault) ?? _planes.FirstOrDefault();
+        _planId = porDefecto?.PublicId.ToString() ?? string.Empty;
+        await CargarPeriodosAsync();
+        _cargando = false;
+    }
+
+    /// <summary>Vuelve a leer los períodos (por ejemplo, tras calcular o aprobar) conservando la selección.</summary>
+    public async Task RefrescarAsync()
+    {
+        var actual = _periodoId;
+        await CargarPeriodosAsync(actual);
+        StateHasChanged();
+    }
+
+    private async Task CargarPeriodosAsync(string? preferido = null)
+    {
+        _periodos = [];
+        if (string.IsNullOrEmpty(_planId)) { await Seleccionar(null); return; }
+
+        var res = await Nomina.ListarPeriodosAsync(Guid.Parse(_planId), null, 1, 100);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los períodos.");
+            await Seleccionar(null);
+            return;
+        }
+
+        _periodos = res.Value!.Items
+            .Where(p => IncluirAprobados || p.EstaAbierto)
+            .OrderByDescending(p => p.StartDate)
+            .ToList();
+
+        var elegido =
+            _periodos.FirstOrDefault(p => p.PublicId.ToString() == (preferido ?? PeriodoInicial?.ToString()))
+            ?? _periodos.FirstOrDefault(p => p.EstaAbierto)
+            ?? _periodos.FirstOrDefault();
+        await Seleccionar(elegido);
+    }
+
+    private async Task OnPlanCambiado(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _planId = e.Value?.ToString() ?? string.Empty;
+        await CargarPeriodosAsync();
+    }
+
+    private async Task OnPeriodoCambiado(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        await Seleccionar(_periodos.FirstOrDefault(p => p.PublicId.ToString() == id));
+    }
+
+    private async Task Seleccionar(PeriodoPagoDto? periodo)
+    {
+        Periodo = periodo;
+        _periodoId = periodo?.PublicId.ToString() ?? string.Empty;
+        await PeriodoCambiado.InvokeAsync(periodo);
+    }
+
+    private static string ClaseEstado(string status) => status switch
+    {
+        "Open" => "e-badge-info",
+        "Calculated" => "e-badge-warning",
+        "Approved" => "e-badge-success",
+        "Reversed" => "e-badge-danger",
+        _ => "e-badge-secondary",
+    };
+}

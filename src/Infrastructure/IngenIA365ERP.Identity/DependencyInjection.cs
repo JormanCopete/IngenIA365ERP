@@ -149,6 +149,8 @@ public static class DependencyInjection
         // AttachmentEncryptionService). Se fueron con sus implementaciones.
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IPermissionService, PermissionService>();
+        // Feature 005: permiso del usuario actual consultable desde un handler.
+        services.AddScoped<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker, Services.CurrentUserPermissionChecker>();
 
         // Feature 004 (T037): seeders Phase 0 integrados al framework de
         // seeding — corren tras las migraciones del inicializador.

@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.PayPeriods.Commands.CreatePayPeriod;
 using IngenIA365ERP.Application.Payroll.PayPeriods.Commands.UpdatePayPeriod;
 using IngenIA365ERP.Application.Payroll.PayPeriods.Commands.DeletePayPeriod;
@@ -7,6 +8,12 @@ using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Payroll;
 
+/// <summary>
+/// Períodos de pago (feature 005, contracts/api.md §2). Permisos: quien ve la liquidación
+/// ve los períodos (<c>Payroll.Runs.View</c>); quien calcula los crea y edita
+/// (<c>Payroll.Runs.Calculate</c>). Los códigos heredados <c>Payroll.PayrollPeriods.*</c>
+/// no están en el catálogo sembrado y por eso no se exigen.
+/// </summary>
 public class PayPeriodsEndpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -17,35 +24,31 @@ public class PayPeriodsEndpoints : ICarterModule
 
         group.MapGet("/", async ([AsParameters] ListPayPeriodsQuery query, ISender sender) =>
         {
-            var result = await sender.Send(query);
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListPayPeriods");
+            return await sender.Send(query);
+        }).WithName("ListPayPeriods").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Runs.View");
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
-            var result = await sender.Send(new GetPayPeriodByIdQuery(id));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPayPeriodById");
+            return await sender.Send(new GetPayPeriodByIdQuery(id));
+        }).WithName("GetPayPeriodById").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Runs.View");
 
         group.MapPost("/", async (CreatePayPeriodCommand command, ISender sender) =>
         {
             var result = await sender.Send(command);
             return result.IsSuccess
                 ? Results.Created($"/api/payroll/pay-periods/{result.Value}", result.Value)
-                : Results.BadRequest(result.Error);
-        }).WithName("CreatePayPeriod");
+                : (object)result;
+        }).WithName("CreatePayPeriod").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Runs.Calculate");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdatePayPeriodCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
-            var result = await sender.Send(command);
-            return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdatePayPeriod");
+            return await sender.Send(command);
+        }).WithName("UpdatePayPeriod").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Runs.Calculate");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
-            var result = await sender.Send(new DeletePayPeriodCommand(id));
-            return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeletePayPeriod");
+            return await sender.Send(new DeletePayPeriodCommand(id));
+        }).WithName("DeletePayPeriod").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Runs.Calculate");
     }
 }
