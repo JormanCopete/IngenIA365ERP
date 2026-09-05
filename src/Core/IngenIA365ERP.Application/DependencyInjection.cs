@@ -72,6 +72,8 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Services.CalculationInputLoader>();
         services.AddScoped<Payroll.Services.PayrollAccountingPoster>();
         services.AddScoped<Payroll.Services.IPayrollRunStaleMarker, Payroll.Services.PayrollRunStaleMarker>();
+        services.AddScoped<Payroll.Services.PayrollAuditEmitter>();
+        services.AddScoped<Payroll.Novelties.CarryOverNoveltiesService>();
 
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<

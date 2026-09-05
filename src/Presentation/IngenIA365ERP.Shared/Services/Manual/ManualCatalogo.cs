@@ -766,14 +766,20 @@ public static class ManualCatalogo
             ["personas", "liquidacion-de-nomina", "novedades-de-nomina"], ["/nomina/empleados/{EmployeeId}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("novedades-de-nomina", "Novedades de nómina", Modulos.Nomina, "/nomina/novedades",
-            "Lo que cambia en un período: horas extra, incapacidades, vacaciones, licencias, préstamos y descuentos.",
+            "Lo que cambia en un período respecto del salario fijo: horas extra y recargos, comisiones y bonificaciones, incapacidades, licencias, vacaciones, descuentos autorizados y cambios de salario con fecha de efecto. Cada novedad dice a quién, con qué concepto, cuánto y desde y hasta cuándo, y muestra el valor que aportará a la liquidación.",
             [
-                P("Nómina → Novedades", "Elegí el período de pago abierto.", "/nomina/novedades", "Abrir Novedades"),
-                P("Nuevo", "Empleado, concepto (define si suma o resta y cómo se calcula), cantidad o valor y fechas."),
-                P("Revisar antes de liquidar", "Las novedades sólo entran en la liquidación del período en que se registran. Después de liquidar, se corrigen en el período siguiente."),
+                P("Nómina → Novedades", "Elegí el período (si hay un solo plan de nómina no se pregunta por él). La pastilla de arriba dice si está abierto, calculado o aprobado; en uno aprobado la pantalla es de sólo consulta.", "/nomina/novedades", "Abrir Novedades"),
+                P("Nuevo", "Buscá al empleado, elegí el concepto (la lista sólo trae los vigentes que aplican a su clase) y completá lo que el concepto pida: cantidad (horas o días), valor o fechas. Guardá: la grilla muestra el valor previsto con el salario vigente."),
+                P("Fechas que cruzan el período", "Una incapacidad o licencia que termina después del fin del período se liquida por los días que caen dentro; el resto queda registrado y aparece solo en el período siguiente como «Traslado»."),
+                P("Corregir", "El lápiz de la fila pide el cambio y un motivo. No se sobreescribe nada: queda una versión nueva y la anterior se ve en «Historial» con quién y cuándo."),
+                P("Anular", "La papelera pide motivo y marca la novedad como anulada; sigue visible en texto tenue."),
+                P("Cambio de salario", "Botón «Cambio de salario»: empleado, salario nuevo, fecha de efecto y motivo. El historial de salarios del empleado se conserva y la liquidación paga cada tramo de días con el salario que regía en él."),
+                P("Período aprobado", "No se registra ni se corrige nada en un período aprobado: el sistema ofrece registrar un ajuste retroactivo en el período abierto siguiente, con referencia al original."),
+                P("Borrador desactualizado", "Si el período ya estaba calculado, cualquier novedad nueva, corregida o anulada deja el borrador «desactualizado» y hay que recalcular antes de aprobar."),
             ],
-            ["novedades", "horas extra", "incapacidad", "vacaciones", "licencia", "descuento", "prestamo"], ["Cooperativa activa.", "Un período de pago abierto."],
-            ["liquidacion-de-nomina", "conceptos-de-nomina"], [], TipoDeTema.Proceso));
+            ["novedades", "horas extra", "recargo", "incapacidad", "vacaciones", "licencia", "descuento", "prestamo", "libranza", "cambio de salario", "traslado", "corregir", "anular", "retroactivo"],
+            ["Cooperativa activa.", "Un período de pago abierto del plan del empleado.", "Permiso Payroll.Novelties.Create para registrar; Update para corregir; Cancel para anular."],
+            ["liquidacion-de-nomina", "conceptos-de-nomina", "periodos-de-pago", "empleados"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("liquidacion-de-nomina", "Liquidación de nómina", Modulos.Nomina, "/nomina/liquidacion",
             "Calcular la nómina del período: devengados, deducciones, aportes de ley y neto a pagar. Genera los comprobantes de pago y la contabilización.",

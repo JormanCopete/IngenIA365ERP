@@ -37,7 +37,8 @@ public record CreatePayPeriodCommand : IRequest<Result<Guid>>
 public class CreatePayPeriodCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    Novelties.CarryOverNoveltiesService carryOver)
     : IRequestHandler<CreatePayPeriodCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(
@@ -100,6 +101,13 @@ public class CreatePayPeriodCommandHandler(
 
         context.PayPeriods.Add(entity);
         await context.SaveChangesAsync(cancellationToken);
+
+        // FR-003: las novedades del período anterior que cruzan hacia este aparecen
+        // aquí automáticamente. Va en un segundo SaveChanges porque necesita el Id del
+        // período; si falla, el período ya existe y el traslado se reintenta al
+        // registrar la siguiente novedad o al abrir el siguiente período.
+        var trasladadas = await carryOver.MaterializePendingAsync(entity, cancellationToken);
+        if (trasladadas > 0) await context.SaveChangesAsync(cancellationToken);
 
         return Result.Success(entity.PublicId);
     }

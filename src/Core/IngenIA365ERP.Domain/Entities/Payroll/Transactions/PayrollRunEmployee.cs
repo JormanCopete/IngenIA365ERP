@@ -31,6 +31,18 @@ public class PayrollRunEmployee : AuditableEntity
     /// <summary>Cambió respecto del borrador anterior del mismo período (FR-014).</summary>
     public bool ChangedFromPreviousRun { get; set; }
 
+    /// <summary>
+    /// Cómo se formaron las bases del período (salarial, IBC con tope, prestacional…),
+    /// paso a paso, tal como las explicó el motor. JSON de <c>ExplanationStep[]</c>.
+    /// </summary>
+    public string BasesJson { get; set; } = "[]";
+
+    /// <summary>
+    /// Lo que el motor se negó a calcular para este empleado y los automáticos que no
+    /// produjeron línea, con su motivo. JSON <c>{ refusals: [], skips: [] }</c>.
+    /// </summary>
+    public string NotesJson { get; set; } = "{}";
+
     public PayrollRun? Run { get; set; }
     public Employee? Employee { get; set; }
     public ICollection<PayrollRunLine> Lines { get; set; } = [];
