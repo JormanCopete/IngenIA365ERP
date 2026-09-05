@@ -80,8 +80,12 @@ public static class BuiltInRolesSeeder
     internal static readonly Dictionary<string, string[]> PermissionPatterns = new()
     {
         ["CompanyAdmin"] = ["*"],                                   // todo dentro del tenant
-        ["Auditor"]      = ["*.View", "AuditLog.*"],                // read-only + audit completo
-        ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn"],
+        // Nomina (feature 005): el auditor exporta el detalle con explicaciones; el
+        // operador registra novedades y calcula, pero NO aprueba, ni marca pagos, ni
+        // reversa (segregacion de funciones, FR-020).
+        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export"],
+        ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn",
+                            "Payroll.Novelties.*", "Payroll.Runs.Calculate"],
         ["ReadOnly"]     = ["*.View"],
     };
 

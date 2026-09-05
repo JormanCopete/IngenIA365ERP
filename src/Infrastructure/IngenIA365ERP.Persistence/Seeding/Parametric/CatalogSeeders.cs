@@ -93,6 +93,10 @@ public sealed class SystemParametersSeeder : IDataSeeder
         ("Core.Locale", "es-CO", "String", "Cultura por defecto de la cooperativa", "COR"),
         ("Accounting.DecimalPlaces", "2", "Int", "Decimales para importes contables", "ACC"),
         ("Accounting.FiscalYearStartMonth", "1", "Int", "Mes de inicio del año fiscal", "ACC"),
+        // Nomina (feature 005, research D-09): decisiones de la cooperativa, no valores legales.
+        ("Payroll.Rounding", "Peso", "String", "Redondeo de la liquidación de nómina: Peso o Centavo", "PAY"),
+        ("Payroll.VariationThresholdPercent", "10", "Decimal", "Umbral (%) que resalta variaciones en el comparativo de nómina", "PAY"),
+        ("Payroll.AllowSameUserApproval", "false", "Bool", "Permitir que quien registra novedades apruebe la liquidación (con doble confirmación)", "PAY"),
     ];
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

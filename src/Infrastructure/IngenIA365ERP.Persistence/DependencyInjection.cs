@@ -197,6 +197,12 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CurrenciesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DocumentTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ChartOfAccountsSeeder>();
+        // Nomina (feature 005): plan por defecto, conceptos estandar, parametros legales
+        // del ano y tipo de comprobante NM. Idempotentes por clave natural.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollPlansSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollVoucherTypeSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         services.AddScoped<Application.Common.Interfaces.Database.IDatabaseStatusReader, Initialization.DatabaseStatusReader>();

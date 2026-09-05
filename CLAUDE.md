@@ -138,11 +138,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/004-multi-motor-bd/plan.md](specs/004-multi-motor-bd/plan.md)
+[specs/005-nomina-novedades-liquidacion/plan.md](specs/005-nomina-novedades-liquidacion/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/004-multi-motor-bd/spec.md)
-- [research.md](specs/004-multi-motor-bd/research.md)
-- [data-model.md](specs/004-multi-motor-bd/data-model.md)
-- [quickstart.md](specs/004-multi-motor-bd/quickstart.md)
-- [contracts/](specs/004-multi-motor-bd/contracts/)
+- [spec.md](specs/005-nomina-novedades-liquidacion/spec.md)
+- [research.md](specs/005-nomina-novedades-liquidacion/research.md)
+- [data-model.md](specs/005-nomina-novedades-liquidacion/data-model.md)
+- [quickstart.md](specs/005-nomina-novedades-liquidacion/quickstart.md)
+- [contracts/](specs/005-nomina-novedades-liquidacion/contracts/)
 <!-- SPECKIT END -->

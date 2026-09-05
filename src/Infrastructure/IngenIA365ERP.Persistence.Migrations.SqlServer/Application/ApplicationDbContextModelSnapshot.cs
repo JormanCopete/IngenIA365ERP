@@ -19,7 +19,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dbo")
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -28066,6 +28066,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateTime?>("EffectiveDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("EmployeeClass")
+                        .HasColumnType("int");
+
                     b.Property<int>("EmployeeType")
                         .HasColumnType("int");
 
@@ -28146,6 +28149,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("int");
 
                     b.Property<int>("PayrollCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PayrollPlanEffectiveFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PayrollPlanId")
                         .HasColumnType("int");
 
                     b.Property<int>("PensionFundId")
@@ -28251,6 +28260,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("WithholdingCycle")
                         .HasColumnType("int");
 
+                    b.Property<byte>("WithholdingProcedure")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)1);
+
                     b.Property<decimal?>("WithholdingTaxRate")
                         .HasPrecision(7, 4)
                         .HasColumnType("decimal(7,4)");
@@ -28264,6 +28278,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("PayrollCompanyId");
+
+                    b.HasIndex("PayrollPlanId")
+                        .HasDatabaseName("IX_PAY_Employees_PayrollPlan");
 
                     b.HasIndex("PersonId")
                         .IsUnique()
@@ -28511,6 +28528,139 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("PAY_EmployeeLiquidationMasters", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeTaxDeduction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MonthlyAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("Percent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "Kind", "ValidFrom")
+                        .HasDatabaseName("IX_PAY_EmployeeTaxDeductions_Employee_Kind_ValidFrom");
+
+                    b.ToTable("PAY_EmployeeTaxDeductions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeWithholdingRate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("RatePercent")
+                        .HasPrecision(6, 3)
+                        .HasColumnType("decimal(6,3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "ValidFrom")
+                        .HasDatabaseName("IX_PAY_EmployeeWithholdingRates_Employee_ValidFrom");
+
+                    b.ToTable("PAY_EmployeeWithholdingRates", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.HealthInsuranceProvider", b =>
                 {
                     b.Property<int>("Id")
@@ -28613,6 +28763,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(1)
                         .HasColumnType("nvarchar(1)");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -28668,6 +28825,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("PayrollCompanyId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PayrollPlanId")
+                        .HasColumnType("int");
+
                     b.Property<int>("PeriodId")
                         .HasColumnType("int");
 
@@ -28685,6 +28845,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("RunPublicId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
@@ -28707,6 +28870,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("PayrollPlanId", "StartDate")
+                        .HasDatabaseName("IX_PAY_PayPeriods_Plan_StartDate");
 
                     b.HasIndex("PlanId", "PayrollCompanyId")
                         .IsUnique();
@@ -29008,6 +29174,249 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("PAY_PayrollConcepts", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollConceptDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AffectsBenefitsBase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AffectsContributionBase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AffectsSalaryBase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AffectsWithholdingBase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsRepeatInPeriod")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AmountParameterCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ApplicableClasses")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BaseKind")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CalculationKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ComponentConceptCodes")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("FixedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsAutomatic")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsBenefitRelated")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LegacyConceptId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MaxQuantity")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("Nature")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Percent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<string>("PercentParameterCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("ProrateByDays")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("ReducesWorkedDays")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresAmount")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresDates")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresQuantity")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TableParameterCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal?>("UnitFactor")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<int?>("UnitKind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Code", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_ConceptDefinitions_Code_ValidFrom");
+
+                    b.HasIndex("Code", "ValidTo")
+                        .HasDatabaseName("IX_PAY_ConceptDefinitions_Code_ValidTo");
+
+                    b.ToTable("PAY_ConceptDefinitions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollConceptDefinitionAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConceptCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("CostCenterId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CreditAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DebitAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConceptCode")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PAY_ConceptDefinitionAccounts_Default")
+                        .HasFilter("[CostCenterId] IS NULL");
+
+                    b.HasIndex("CostCenterId");
+
+                    b.HasIndex("CreditAccountId");
+
+                    b.HasIndex("DebitAccountId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ConceptCode", "CostCenterId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PAY_ConceptDefinitionAccounts_CostCenter")
+                        .HasFilter("[CostCenterId] IS NOT NULL");
+
+                    b.ToTable("PAY_ConceptDefinitionAccounts", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -29105,6 +29514,447 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique();
 
                     b.ToTable("PAY_PayrollEntries", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("Value")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Code", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_LegalParameters_Code_ValidFrom");
+
+                    b.ToTable("PAY_LegalParameters", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameterRange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("FixedValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("FromValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LegalParameterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal?>("ToValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("LegalParameterId", "Order")
+                        .HasDatabaseName("IX_PAY_LegalParameterRanges_Parameter_Order");
+
+                    b.ToTable("PAY_LegalParameterRanges", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollNovelty", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("CarriedFromNoveltyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CarryOverDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConceptCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("ConceptDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DaysInPeriod")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ImportBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("InstallmentNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InstallmentTotal")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LoanPortfolioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int?>("RecurringNoveltyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RetroactiveOfPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("SupersedesNoveltyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConceptDefinitionId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ImportBatchId")
+                        .HasDatabaseName("IX_PAY_Novelties_ImportBatch");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayPeriodId", "ConceptDefinitionId")
+                        .HasDatabaseName("IX_PAY_Novelties_Period_Concept");
+
+                    b.HasIndex("PayPeriodId", "EmployeeId", "Status")
+                        .HasDatabaseName("IX_PAY_Novelties_Period_Employee_Status");
+
+                    b.ToTable("PAY_Novelties", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReverted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaidBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayrollRunEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("RevertReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("RevertedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RevertedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunEmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PAY_PayrollPayments_RunEmployee_Vigente")
+                        .HasFilter("[IsReverted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("PAY_PayrollPayments", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Periodicity")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollPlans_Code");
+
+                    b.HasIndex("IsDefault")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PAY_PayrollPlans_Default")
+                        .HasFilter("[IsDefault] = 1");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("PAY_PayrollPlans", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlanLiquidation", b =>
@@ -29212,6 +30062,95 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("PAY_PayrollPlanLiquidations", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollRecurringNovelty", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ConceptCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DeactivationReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InstallmentsIssued")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("TotalInstallments")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "IsActive")
+                        .HasDatabaseName("IX_PAY_RecurringNovelties_Employee_Active");
+
+                    b.ToTable("PAY_RecurringNovelties", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollTransaction", b =>
                 {
                     b.Property<long>("Id")
@@ -29304,6 +30243,85 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique();
 
                     b.ToTable("PAY_PayrollTransactions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayslipDelivery", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PayrollRunEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunEmployeeId")
+                        .HasDatabaseName("IX_PAY_PayslipDeliveries_RunEmployee");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("PAY_PayslipDeliveries", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PensionProvider", b =>
@@ -30208,6 +31226,349 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique();
 
                     b.ToTable("PAY_TaxCertificates", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountingDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ApprovedWithoutSegregation")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CalculatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CalculatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExceptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InputsHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PayPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ReversalAccountingDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("RoundingAdjustment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalDeductions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalEarnings")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalEmployerContributions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalNet")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalProvisions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayPeriodId", "Status")
+                        .HasDatabaseName("IX_PAY_PayrollRuns_Period_Status");
+
+                    b.HasIndex("PayPeriodId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollRuns_Period_Version");
+
+                    b.ToTable("PAY_PayrollRuns", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("ChangedFromPreviousRun")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DaysWorked")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeClass")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Flags")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NetPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PayrollPlanId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayrollRunId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SalaryTranchesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("TotalDeductions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalEarnings")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalEmployerContributions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalProvisions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollRunId", "EmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollRunEmployees_Run_Employee");
+
+                    b.ToTable("PAY_PayrollRunEmployees", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AffectsAccounting")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("BaseAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ConceptCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("ConceptDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConceptName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExplanationJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("Factor")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LegalParameterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Nature")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NoveltyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayrollRunEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal?>("RangeFrom")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("RangeTo")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConceptCode")
+                        .HasDatabaseName("IX_PAY_PayrollRunLines_ConceptCode");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollRunEmployeeId", "Order")
+                        .HasDatabaseName("IX_PAY_PayrollRunLines_RunEmployee_Order");
+
+                    b.ToTable("PAY_PayrollRunLines", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.VacationLiquidation", b =>
@@ -33978,11 +35339,19 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Employee", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", "PayrollPlan")
+                        .WithMany()
+                        .HasForeignKey("PayrollPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("PayrollPlan");
 
                     b.Navigation("Person");
                 });
@@ -34009,6 +35378,39 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeTaxDeduction", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeWithholdingRate", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", "PayrollPlan")
+                        .WithMany()
+                        .HasForeignKey("PayrollPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollPlan");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollAccountingEntry", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
@@ -34018,6 +35420,32 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollConceptDefinitionAccount", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", "CostCenter")
+                        .WithMany()
+                        .HasForeignKey("CostCenterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "CreditAccount")
+                        .WithMany()
+                        .HasForeignKey("CreditAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "DebitAccount")
+                        .WithMany()
+                        .HasForeignKey("DebitAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CostCenter");
+
+                    b.Navigation("CreditAccount");
+
+                    b.Navigation("DebitAccount");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollEntry", b =>
@@ -34031,7 +35459,67 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameterRange", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameter", "LegalParameter")
+                        .WithMany("Ranges")
+                        .HasForeignKey("LegalParameterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LegalParameter");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollNovelty", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollConceptDefinition", "ConceptDefinition")
+                        .WithMany()
+                        .HasForeignKey("ConceptDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", "PayPeriod")
+                        .WithMany()
+                        .HasForeignKey("PayPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ConceptDefinition");
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PayPeriod");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollPayment", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", "RunEmployee")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RunEmployee");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlanLiquidation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollRecurringNovelty", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
                         .WithMany()
@@ -34059,6 +35547,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Concept");
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayslipDelivery", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", "RunEmployee")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RunEmployee");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PreLiquidation", b =>
@@ -34103,6 +35602,47 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", "PayPeriod")
+                        .WithMany()
+                        .HasForeignKey("PayPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayPeriod");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", "Run")
+                        .WithMany("Employees")
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", "RunEmployee")
+                        .WithMany("Lines")
+                        .HasForeignKey("PayrollRunEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RunEmployee");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.VacationLiquidation", b =>
@@ -34428,6 +35968,21 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("PendingInstallments");
 
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameter", b =>
+                {
+                    b.Navigation("Ranges");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
+                {
+                    b.Navigation("Employees");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.Permission", b =>

@@ -138,6 +138,22 @@ public interface IApplicationDbContext
     DbSet<Absence> Absences { get; }
     DbSet<TaxCertificate> TaxCertificates { get; }
 
+    // Payroll — feature 005 (novedades y liquidacion)
+    DbSet<PayrollPlan> PayrollPlans { get; }
+    DbSet<PayrollConceptDefinition> PayrollConceptDefinitions { get; }
+    DbSet<PayrollConceptDefinitionAccount> PayrollConceptDefinitionAccounts { get; }
+    DbSet<PayrollLegalParameter> PayrollLegalParameters { get; }
+    DbSet<PayrollLegalParameterRange> PayrollLegalParameterRanges { get; }
+    DbSet<PayrollNovelty> PayrollNovelties { get; }
+    DbSet<PayrollRecurringNovelty> PayrollRecurringNovelties { get; }
+    DbSet<EmployeeWithholdingRate> EmployeeWithholdingRates { get; }
+    DbSet<EmployeeTaxDeduction> EmployeeTaxDeductions { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRun> PayrollRuns { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRunEmployee> PayrollRunEmployees { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines { get; }
+    DbSet<PayrollPayment> PayrollPayments { get; }
+    DbSet<PayslipDelivery> PayslipDeliveries { get; }
+
     // Inventory
     DbSet<Product> Products { get; }
     DbSet<ProductGroup> ProductGroups { get; }

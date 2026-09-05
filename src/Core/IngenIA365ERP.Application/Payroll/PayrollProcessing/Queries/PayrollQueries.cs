@@ -83,7 +83,7 @@ public class ListPayrollSummaryQueryHandler(IApplicationDbContext context)
             deductions,
             net,
             employeeCount,
-            period.Status,
+            (int)period.Status,
             period.StatusMessage));
     }
 }

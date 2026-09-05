@@ -248,6 +248,22 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<TaxCertificate> TaxCertificates => Set<TaxCertificate>();
     public DbSet<AutoContributionParam> AutoContributionParams => Set<AutoContributionParam>();
 
+    // Payroll — feature 005 (novedades y liquidacion)
+    public DbSet<PayrollPlan> PayrollPlans => Set<PayrollPlan>();
+    public DbSet<PayrollConceptDefinition> PayrollConceptDefinitions => Set<PayrollConceptDefinition>();
+    public DbSet<PayrollConceptDefinitionAccount> PayrollConceptDefinitionAccounts => Set<PayrollConceptDefinitionAccount>();
+    public DbSet<PayrollLegalParameter> PayrollLegalParameters => Set<PayrollLegalParameter>();
+    public DbSet<PayrollLegalParameterRange> PayrollLegalParameterRanges => Set<PayrollLegalParameterRange>();
+    public DbSet<PayrollNovelty> PayrollNovelties => Set<PayrollNovelty>();
+    public DbSet<PayrollRecurringNovelty> PayrollRecurringNovelties => Set<PayrollRecurringNovelty>();
+    public DbSet<EmployeeWithholdingRate> EmployeeWithholdingRates => Set<EmployeeWithholdingRate>();
+    public DbSet<EmployeeTaxDeduction> EmployeeTaxDeductions => Set<EmployeeTaxDeduction>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollRun> PayrollRuns => Set<Domain.Entities.Payroll.Transactions.PayrollRun>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollRunEmployee> PayrollRunEmployees => Set<Domain.Entities.Payroll.Transactions.PayrollRunEmployee>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines => Set<Domain.Entities.Payroll.Transactions.PayrollRunLine>();
+    public DbSet<PayrollPayment> PayrollPayments => Set<PayrollPayment>();
+    public DbSet<PayslipDelivery> PayslipDeliveries => Set<PayslipDelivery>();
+
     // === Inventory (24) ===
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();

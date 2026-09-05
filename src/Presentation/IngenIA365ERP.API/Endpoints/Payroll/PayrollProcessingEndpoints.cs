@@ -1,55 +1,47 @@
 using Carter;
-using IngenIA365ERP.Application.Payroll.PayrollProcessing.Commands.ProcessPayroll;
-using IngenIA365ERP.Application.Payroll.PayrollProcessing.Commands.RegisterPayrollEntry;
-using IngenIA365ERP.Application.Payroll.PayrollProcessing.Queries;
-using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Payroll;
 
+/// <summary>
+/// Restos del cálculo preliminar de nómina, retirado en la feature 005.
+///
+/// <para>
+/// Aquí vivían <c>POST /api/payroll/process/{periodId}</c> y
+/// <c>POST /api/payroll/entries</c>: un cálculo con salud al 4 %, pensión al 4 %,
+/// aportes del empleador al 8,5 % y 12 % fijos en el programa, salario dividido entre
+/// 30 sin mirar ingresos ni retiros, sin auxilio de transporte, sin provisiones, sin
+/// tabla de retención y sin explicación de ningún valor. Ninguna nómina real lo usó.
+/// Se eliminan sin alias: no tenían consumidores (las dos pantallas eran marcadores).
+/// </para>
+///
+/// <para>
+/// Las tres consultas que había (<c>summary</c>, <c>detail</c>, <c>payslip</c>) se
+/// redirigen (308) a las rutas nuevas de corridas, que son las que leen las tablas
+/// nuevas. El alias se retira en la versión siguiente (contracts/api.md §7).
+/// </para>
+/// </summary>
 public class PayrollProcessingEndpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/payroll")
-            .WithTags("PayrollProcessing")
+            .WithTags("PayrollProcessing (alias retirados)")
             .RequireAuthorization();
 
-        // Payroll entries (novedades)
-        group.MapPost("/entries", async (RegisterPayrollEntryCommand command, ISender sender) =>
-        {
-            var result = await sender.Send(command);
-            return result.IsSuccess
-                ? Results.Created($"/api/payroll/entries/{result.Value}", result.Value)
-                : Results.BadRequest(result.Error);
-        }).WithName("RegisterPayrollEntry");
+        group.MapGet("/summary/{periodId:guid}", (Guid periodId) =>
+                Results.Redirect($"/api/payroll/pay-periods/{periodId}/runs/current", permanent: true, preserveMethod: true))
+            .WithName("GetPayrollSummary_Alias");
 
-        // Process payroll (liquidar)
-        group.MapPost("/process/{periodId:guid}", async (Guid periodId, ISender sender) =>
-        {
-            var result = await sender.Send(new ProcessPayrollCommand(periodId));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ProcessPayroll");
+        group.MapGet("/detail/{periodId:guid}", (Guid periodId, Guid? employeeId) =>
+                Results.Redirect(
+                    employeeId is null
+                        ? $"/api/payroll/pay-periods/{periodId}/runs/current"
+                        : $"/api/payroll/pay-periods/{periodId}/runs/current?employeeId={employeeId}",
+                    permanent: true, preserveMethod: true))
+            .WithName("GetPayrollDetail_Alias");
 
-        // Payroll summary
-        group.MapGet("/summary/{periodId:guid}", async (Guid periodId, ISender sender) =>
-        {
-            var result = await sender.Send(new ListPayrollSummaryQuery(periodId));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPayrollSummary");
-
-        // Payroll detail (all employees or one)
-        group.MapGet("/detail/{periodId:guid}", async (Guid periodId, Guid? employeeId, ISender sender) =>
-        {
-            var result = await sender.Send(new GetPayrollDetailQuery(periodId, employeeId));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPayrollDetail");
-
-        // Payslip for one employee
-        group.MapGet("/payslip/{periodId:guid}/{employeeId:guid}",
-            async (Guid periodId, Guid employeeId, ISender sender) =>
-        {
-            var result = await sender.Send(new GetPayslipQuery(periodId, employeeId));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPayslip");
+        group.MapGet("/payslip/{periodId:guid}/{employeeId:guid}", (Guid periodId, Guid employeeId) =>
+                Results.Redirect($"/api/payroll/pay-periods/{periodId}/runs/current/payslips/{employeeId}", permanent: true, preserveMethod: true))
+            .WithName("GetPayslip_Alias");
     }
 }

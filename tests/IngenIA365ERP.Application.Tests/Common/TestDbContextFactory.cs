@@ -47,6 +47,25 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+
+    // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<PayPeriod> PayPeriods => Set<PayPeriod>();
+    public DbSet<SalaryChange> SalaryChanges => Set<SalaryChange>();
+    public DbSet<PayrollPlan> PayrollPlans => Set<PayrollPlan>();
+    public DbSet<PayrollConceptDefinition> PayrollConceptDefinitions => Set<PayrollConceptDefinition>();
+    public DbSet<PayrollConceptDefinitionAccount> PayrollConceptDefinitionAccounts => Set<PayrollConceptDefinitionAccount>();
+    public DbSet<PayrollLegalParameter> PayrollLegalParameters => Set<PayrollLegalParameter>();
+    public DbSet<PayrollLegalParameterRange> PayrollLegalParameterRanges => Set<PayrollLegalParameterRange>();
+    public DbSet<PayrollNovelty> PayrollNovelties => Set<PayrollNovelty>();
+    public DbSet<PayrollRecurringNovelty> PayrollRecurringNovelties => Set<PayrollRecurringNovelty>();
+    public DbSet<EmployeeWithholdingRate> EmployeeWithholdingRates => Set<EmployeeWithholdingRate>();
+    public DbSet<EmployeeTaxDeduction> EmployeeTaxDeductions => Set<EmployeeTaxDeduction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun> PayrollRuns => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee> PayrollRunEmployees => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine>();
+    public DbSet<PayrollPayment> PayrollPayments => Set<PayrollPayment>();
+    public DbSet<PayslipDelivery> PayslipDeliveries => Set<PayslipDelivery>();
     // TenantBranches salio de IApplicationDbContext: es del plano de control.
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
@@ -139,9 +158,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
     DbSet<AssociateWithdrawal> IApplicationDbContext.AssociateWithdrawals => throw new NotImplementedException();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
-    DbSet<Employee> IApplicationDbContext.Employees => throw new NotImplementedException();
     DbSet<PayrollConcept> IApplicationDbContext.PayrollConcepts => throw new NotImplementedException();
-    DbSet<PayPeriod> IApplicationDbContext.PayPeriods => throw new NotImplementedException();
     DbSet<HealthInsuranceProvider> IApplicationDbContext.HealthInsuranceProviders => throw new NotImplementedException();
     DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
     DbSet<WorkRiskRate> IApplicationDbContext.WorkRiskRates => throw new NotImplementedException();
@@ -153,7 +170,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<AutoContributionParam> IApplicationDbContext.AutoContributionParams => throw new NotImplementedException();
     DbSet<PayrollTransaction> IApplicationDbContext.PayrollTransactions => throw new NotImplementedException();
     DbSet<PayrollEntry> IApplicationDbContext.PayrollEntries => throw new NotImplementedException();
-    DbSet<SalaryChange> IApplicationDbContext.SalaryChanges => throw new NotImplementedException();
     DbSet<Absence> IApplicationDbContext.Absences => throw new NotImplementedException();
     DbSet<TaxCertificate> IApplicationDbContext.TaxCertificates => throw new NotImplementedException();
     DbSet<Product> IApplicationDbContext.Products => throw new NotImplementedException();
@@ -217,6 +233,31 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<MfaResetRequest>(b => { b.Ignore(r => r.User); b.Ignore("RowVersion"); });
         modelBuilder.Entity<Tenant>(b => { b.Ignore(t => t.Subscriptions); b.Ignore(t => t.Settings); b.Ignore("RowVersion"); });
         modelBuilder.Entity<Attachment>(b => b.Ignore("RowVersion"));
+
+        // Nomina (feature 005): las cuentas contables y los centros de costo no hacen
+        // falta para probar los handlers; el empleado se prueba sin su Person.
+        modelBuilder.Ignore<ChartOfAccount>();
+        modelBuilder.Ignore<CostCenter>();
+        modelBuilder.Entity<Employee>(b => { b.Ignore(e => e.Person); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<PayPeriod>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<SalaryChange>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollPlan>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollConceptDefinition>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollConceptDefinitionAccount>(b =>
+        {
+            b.Ignore(a => a.CostCenter); b.Ignore(a => a.DebitAccount); b.Ignore(a => a.CreditAccount); b.Ignore("RowVersion");
+        });
+        modelBuilder.Entity<PayrollLegalParameter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollLegalParameterRange>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollNovelty>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollRecurringNovelty>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<EmployeeWithholdingRate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<EmployeeTaxDeduction>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollPayment>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayslipDelivery>(b => b.Ignore("RowVersion"));
     }
 }
 

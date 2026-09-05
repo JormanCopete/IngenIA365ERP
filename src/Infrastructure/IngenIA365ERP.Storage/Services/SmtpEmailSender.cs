@@ -43,6 +43,15 @@ internal sealed class SmtpEmailSender(
             HtmlBody = message.BodyHtml,
             TextBody = message.BodyText ?? ToPlainText(message.BodyHtml)
         };
+        // Adjuntos (feature 005: el comprobante de pago viaja como PDF). Opcionales;
+        // los correos que ya existian no traen ninguno y siguen igual.
+        if (message.Attachments is { Count: > 0 })
+        {
+            foreach (var adjunto in message.Attachments)
+            {
+                body.Attachments.Add(adjunto.FileName, adjunto.Content, ContentType.Parse(adjunto.ContentType));
+            }
+        }
         mime.Body = body.ToMessageBody();
 
         var attempt = 0;

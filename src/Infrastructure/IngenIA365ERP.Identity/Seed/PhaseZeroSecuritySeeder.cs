@@ -46,6 +46,9 @@ public sealed class PhaseZeroSecuritySeeder : IDataSeeder
 
         // Catálogo primero: los roles enlazan permisos que tienen que existir ya.
         await DomainPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Nomina (feature 005): seeder hermano con los permisos Payroll.*; misma
+        // idempotencia, mismo esquema en curso.
+        await PayrollPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
 
         context.Logger.LogInformation(
