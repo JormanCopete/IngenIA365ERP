@@ -26,7 +26,12 @@ public class TenantDbContext : Microsoft.EntityFrameworkCore.DbContext
             // entran porque sin ellas el directorio no puede distinguir una
             // cooperativa lista de una a medio aprovisionar.
             e.Property(t => t.DatabaseName).HasMaxLength(63);
-            e.Property(t => t.ProvisioningState).HasMaxLength(50);
+            // Con default de base: la columna es NOT NULL DEFAULT 'Pending' en ADM_Tenants y
+            // este contexto la mapea como texto nullable. Sin el default aqui, EF la incluye
+            // en el INSERT con NULL explicito cuando nadie la asigna, y el default de base
+            // no aplica (solo aplica si la columna se omite). Lo destaparon las seis clases
+            // sobre ApiTestFixture, que sembraban la cooperativa demo sin asignarla.
+            e.Property(t => t.ProvisioningState).HasMaxLength(50).HasDefaultValue("Pending");
             e.Property(t => t.LicenseType).HasMaxLength(50).HasDefaultValue("Basic");
             e.Property(t => t.MaxUsers).HasDefaultValue(10);
             e.Property(t => t.ExpirationDate);

@@ -131,17 +131,18 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
 | Pruebas sin contenedores | 748 (136 Domain, 556 Application, 54 Architecture, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 130 el 2026-09-06 con Docker: 111 pasan, 1 omitida, **18 fallan** (abajo) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas de integración | 130 el 2026-09-06 con Docker: 129 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
 corriendo. Las 10 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
-`PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Las 18 que fallan**
-son las clases sobre `ApiTestFixture` (Audit/Tenant isolation, SoftDelete, CrossTenant,
-EmailRetry, HabeasData, Attachments): esa fixture siembra `ADM_Tenants` en un SQL Server
-local y la base rechaza `ProvisioningState` nulo. No es de nómina —la rama 005 no toca la
-fixture ni `Tenant`— y falla en 1 ms antes de ejecutar nada.
+`PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. Las 18 clases sobre
+`ApiTestFixture` (la fixture de Fase 0, SQL Server) estuvieron cayendo en 1 ms desde el
+2026-08-24: `ADM_Tenants.ProvisioningState` es `NOT NULL DEFAULT 'Pending'`, pero el store
+multi-tenant (`ErpTenantInfo`) mapeaba la columna sin default y EF la insertaba en NULL
+explícito. El default en el mapeo lo cerró; la fixture sigue siendo deuda (una
+cooperativa «demo» con esquema `dbo`, contra el modelo de una base por cooperativa).
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
 marcada `[Fact(Skip)]`. Pero **el verde tapa siete métodos más** que hacen `return`

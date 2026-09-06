@@ -147,6 +147,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 LicenseType = "Test",
                 IsActive = true,
                 MaxUsers = 100,
+                // La demo esta lista de entrada: su esquema es dbo sobre la base operativa
+                // del contenedor, que el inicializador ya migro.
+                ProvisioningState = "Ready",
                 CreatedAt = DateTime.UtcNow
             };
             tenantDb.Tenants.Add(demo);

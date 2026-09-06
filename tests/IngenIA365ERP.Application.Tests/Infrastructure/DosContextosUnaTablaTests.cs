@@ -77,6 +77,38 @@ public class DosContextosUnaTablaTests
         ModeloTenant().FindEntityType(typeof(ErpTenantInfo))!.GetTableName().Should().Be("ADM_Tenants");
     }
 
+    /// <summary>
+    /// La otra mitad de la trampa, que la primera prueba no veía: una columna que el store
+    /// SÍ conoce pero mapea como nullable y sin default. EF la incluye en el INSERT con NULL
+    /// explícito, y ahí el default de la base no aplica (sólo aplica si la columna se omite).
+    /// Así cayeron dieciocho pruebas de integración durante dos semanas por
+    /// <c>ProvisioningState</c>: obligatoria con default en <see cref="AdminDbContext"/>,
+    /// nullable sin default en <see cref="TenantDbContext"/>.
+    /// </summary>
+    [Fact]
+    public void TodaColumnaObligatoriaQueElStoreConoce_ElStoreLaMapeaConDefaultONoNula()
+    {
+        var obligatoriasEnAdmin = ModeloAdmin()
+            .FindEntityType(typeof(Tenant))!
+            .GetProperties()
+            .Where(p => !p.IsNullable && !p.IsPrimaryKey())
+            .Select(p => p.GetColumnName())
+            .ToHashSet();
+
+        var problematicas = ModeloTenant()
+            .FindEntityType(typeof(ErpTenantInfo))!
+            .GetProperties()
+            .Where(p => obligatoriasEnAdmin.Contains(p.GetColumnName()))
+            .Where(p => p.IsNullable)
+            .Where(p => p.GetDefaultValue() is null && p.GetDefaultValueSql() is null)
+            .Select(p => p.GetColumnName())
+            .ToList();
+
+        problematicas.Should().BeEmpty(
+            "el store las inserta en NULL explícito cuando nadie las asigna, y la base las " +
+            "rechaza aunque tengan default: el default sólo cubre columnas omitidas");
+    }
+
     [Fact]
     public void ElEstadoDeAprovisionamiento_TieneDefault()
     {
