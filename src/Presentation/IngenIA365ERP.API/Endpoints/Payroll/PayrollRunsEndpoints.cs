@@ -55,6 +55,29 @@ public sealed class PayrollRunsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Runs.View");
 
+        group.MapGet("/runs/{runId:guid}/comparison", async (Guid runId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetRunComparisonQuery(runId), ct))
+            .WithName("Payroll_Runs_Comparison")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.View");
+
+        group.MapGet("/runs/{runId:guid}/balance-check", async (Guid runId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetRunBalanceCheckQuery(runId), ct))
+            .WithName("Payroll_Runs_BalanceCheck")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.View");
+
+        group.MapGet("/runs/{runId:guid}/export", async (Guid runId, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new ExportRunQuery(runId), ct);
+                return result.IsSuccess
+                    ? Results.File(result.Value.Content, result.Value.ContentType, result.Value.FileName)
+                    : (object)result;
+            })
+            .WithName("Payroll_Runs_Export")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.Export");
+
         group.MapPost("/runs/{runId:guid}/approve", async (Guid runId, ApproveBody body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ApprovePayrollRunCommand(runId, body.Confirm, body.Exceptions, body.ConfirmEmpty, body.ConfirmWithoutSegregation), ct))
             .WithName("Payroll_Runs_Approve")

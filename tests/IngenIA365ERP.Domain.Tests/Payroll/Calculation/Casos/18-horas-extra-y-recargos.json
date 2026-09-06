@@ -1,0 +1,26 @@
+{
+  "nombre": "Cuatro horas extra dominicales nocturnas y diez horas de recargo nocturno sobre 2.400.000",
+  "descripcion": "Hora ordinaria = 2.400.000 / 240 (HORAS_MES) = 10.000. Extra dominical nocturna 4 × 10.000 × 2,5 = 100.000; recargo nocturno 10 × 10.000 × 0,35 = 35.000. Ambas entran a todas las bases.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Sara Mejía", "clase": "Standard", "ingreso": "2020-01-20",
+    "salarios": [ { "desde": "2020-01-20", "mensual": 2400000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [
+    { "concepto": "HEX_DOM_NOCTURNA", "cantidad": 4 },
+    { "concepto": "RECARGO_NOCTURNO", "cantidad": 10 }
+  ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2400000, "AUX_TRANSPORTE": 249095, "HEX_DOM_NOCTURNA": 100000, "RECARGO_NOCTURNO": 35000,
+      "SALUD_EMP": 101400, "PENSION_EMP": 101400, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 215475, "PENSION_EMPLEADOR": 304200, "ARL": 13233, "SENA": 50700, "ICBF": 76050, "CAJA": 101400,
+      "PROV_CESANTIAS": 231915, "PROV_INT_CESANTIAS": 27841, "PROV_PRIMA": 231915, "PROV_VACACIONES": 105710
+    },
+    "totales": { "devengos": 2784095, "deducciones": 202800, "aportesEmpleador": 761058, "provisiones": 597381, "neto": 2581295, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

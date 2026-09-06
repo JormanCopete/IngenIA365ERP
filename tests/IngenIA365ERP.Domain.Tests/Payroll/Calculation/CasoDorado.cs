@@ -166,6 +166,9 @@ public sealed class CasoDorado
         public RunEmployeeFlag Banderas { get; set; } = RunEmployeeFlag.None;
         public int? DiasPagados { get; set; }
         public int? DiasAusencia { get; set; }
+
+        /// <summary>Fragmentos que deben aparecer en las negativas del motor; vacío = no debe negarse a nada.</summary>
+        public List<string> Rechazos { get; set; } = [];
     }
 
     public sealed class TotalesJson

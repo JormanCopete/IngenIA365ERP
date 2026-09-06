@@ -205,6 +205,8 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollVoucherTypeSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
+        // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.
+        services.AddScoped<Application.Payroll.Concepts.IPayrollSeedApplier, Seeding.PayrollSeedApplier>();
         services.AddScoped<Application.Common.Interfaces.Database.IDatabaseStatusReader, Initialization.DatabaseStatusReader>();
         services.AddHostedService<Initialization.DatabaseInitializerHostedService>();
 

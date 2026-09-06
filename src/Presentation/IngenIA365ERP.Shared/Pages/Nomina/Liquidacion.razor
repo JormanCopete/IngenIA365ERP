@@ -5,6 +5,7 @@
 @inject NominaClient Nomina
 @inject INotificationService Notification
 @inject NavigationManager Nav
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
 
 <PageTitle>Liquidación de nómina - IngenIA365ERP</PageTitle>
 
@@ -20,6 +21,10 @@
             @if (_corrida is { Status: "Draft" } && _periodo.Status == "Calculated")
             {
                 <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirAprobacion">Aprobar</SfButton>
+            }
+            @if (_corrida is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@Exportar" Title="CSV con cada línea y su explicación">Exportar</SfButton>
             }
         }
     </div>
@@ -145,6 +150,62 @@
                         </SfGrid>
                     </ContentTemplate>
                 </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Comparativo" /></ChildContent>
+                    <ContentTemplate>
+                        @if (_comparativo is null)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@CargarComparativoAsync">Comparar con el período anterior</SfButton>
+                        }
+                        else
+                        {
+                            <div class="toolbar">
+                                <span class="texto-tenue">@(_comparativo.PreviousPeriodLabel is null ? "No hay un período anterior aprobado del mismo plan." : $"Contra {_comparativo.PreviousPeriodLabel}; umbral {_comparativo.ThresholdPercent:0.#} %.")</span>
+                                <label class="campo-check"><input type="checkbox" @bind="_soloVariaciones" /> Sólo variaciones sobre el umbral</label>
+                            </div>
+                            <table class="data-grid">
+                                <thead><tr><th>Empleado</th><th class="monto">Neto anterior</th><th class="monto">Neto actual</th><th class="monto">Variación</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var f in _comparativo.Rows.Where(r => !_soloVariaciones || r.OverThreshold))
+                                    {
+                                        <tr>
+                                            <td>@f.EmployeeName</td>
+                                            <td class="monto">@(f.PreviousNet?.ToString("N0") ?? "—")</td>
+                                            <td class="monto">@f.CurrentNet.ToString("N0")</td>
+                                            <td class="monto">@(f.VariationPercent is { } v ? $"{v:+0.0;-0.0} %" : "—")</td>
+                                            <td>
+                                                @if (f.NewEmployee) { <span class="e-badge e-badge-info">nuevo</span> }
+                                                @if (f.LeftEmployee) { <span class="e-badge e-badge-secondary">retirado</span> }
+                                                @if (f.OverThreshold && !f.NewEmployee && !f.LeftEmployee) { <span class="e-badge e-badge-warning">sobre el umbral</span> }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Cuadre" /></ChildContent>
+                    <ContentTemplate>
+                        @if (_cuadre is null)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@CargarCuadreAsync">Verificar cuadre</SfButton>
+                        }
+                        else
+                        {
+                            <table class="data-grid">
+                                <tbody>
+                                    <tr><td>@(_cuadre.EarningsMinusDeductionsEqualsNet ? "✓" : "✗")</td><td>Devengos − deducciones = neto (corrida y suma por empleado)</td></tr>
+                                    <tr><td>@(_cuadre.LinesMatchEmployeeTotals ? "✓" : "✗")</td><td>Cada empleado: devengado − deducido = neto</td></tr>
+                                    <tr><td>@(_cuadre.EmployerAndProvisionsOutsideNet ? "✓" : "✗")</td><td>Aportes del empleador y provisiones fuera del neto</td></tr>
+                                    <tr><td>@(_cuadre.AccountingDocumentBalanced is null ? "—" : _cuadre.AccountingDocumentBalanced.Value ? "✓" : "✗")</td><td>Comprobante contable cuadrado e igual a las líneas con asiento</td></tr>
+                                </tbody>
+                            </table>
+                            <ul class="texto-tenue">@foreach (var d in _cuadre.Details) { <li>@d</li> }</ul>
+                        }
+                    </ContentTemplate>
+                </TabItem>
             </TabItems>
         </SfTab>
     }
@@ -243,7 +304,9 @@
     private DetalleEmpleadoCorridaDto? _detalle;
     private Guid? _lineaAbierta;
     private string _buscarEmpleado = string.Empty, _filtroBandera = string.Empty;
-    private bool _soloCambiados, _ocupado, _mostrarDetalle, _mostrarAprobacion;
+    private bool _soloCambiados, _ocupado, _mostrarDetalle, _mostrarAprobacion, _soloVariaciones;
+    private ComparativoDto? _comparativo;
+    private CuadreDto? _cuadre;
 
     private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
     {
@@ -254,7 +317,7 @@
 
     private async Task CargarCorridaAsync()
     {
-        _corrida = null; _empleados = [];
+        _corrida = null; _empleados = []; _comparativo = null; _cuadre = null;
         if (_periodo is null) { StateHasChanged(); return; }
         var res = await Nomina.CorridaActualAsync(_periodo.PublicId);
         if (res.IsSuccess) { _corrida = res.Value; await CargarEmpleadosAsync(); }
@@ -291,6 +354,33 @@
             if (_selector is not null) await _selector.RefrescarAsync();
             _periodo = _selector?.Periodo ?? _periodo;
             await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task CargarComparativoAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.ComparativoAsync(_corrida.PublicId);
+        if (res.IsSuccess) _comparativo = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el comparativo.");
+    }
+
+    private async Task CargarCuadreAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.CuadreAsync(_corrida.PublicId);
+        if (res.IsSuccess) _cuadre = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo verificar el cuadre.");
+    }
+
+    private async Task Exportar()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ExportarAsync(_corrida.PublicId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
         }
         finally { _ocupado = false; }
     }

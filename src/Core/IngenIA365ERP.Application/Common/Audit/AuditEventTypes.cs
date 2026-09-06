@@ -106,6 +106,7 @@ public static class AuditEventTypes
     public const string PayrollPaymentMarkReverted = "Payroll.Payments.MarkReverted";
     public const string PayrollPayslipsSent = "Payroll.Payslips.Sent";
     public const string PayrollEmployeeWithholdingChanged = "Payroll.EmployeeWithholding.Changed";
+    public const string PayrollRunExported = "Payroll.Run.Exported";
 
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";

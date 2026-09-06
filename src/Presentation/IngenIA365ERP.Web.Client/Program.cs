@@ -89,6 +89,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesCli
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
 // Feature 005 — cliente tipado del módulo de nómina (planes, períodos, novedades, liquidación).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();

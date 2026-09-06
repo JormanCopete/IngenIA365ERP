@@ -1,4 +1,6 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Payroll.EmployeeTax;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.TerminateEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.UpdateEmployee;
@@ -26,6 +28,21 @@ public class EmployeesEndpoints : ICarterModule
             var result = await sender.Send(new GetEmployeeByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
         }).WithName("GetEmployeeById");
+
+        // Feature 005 (contracts/api.md §6): retención y plan del empleado. Los códigos
+        // heredados Payroll.Employees.* no estan en el catalogo sembrado; se usan los de
+        // novedades, que es quien mantiene los datos de nomina del empleado.
+        group.MapGet("/{employeeId:guid}/withholding", async (Guid employeeId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetEmployeeWithholdingQuery(employeeId), ct))
+            .WithName("Payroll_Employees_Withholding_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Novelties.View");
+
+        group.MapPut("/{employeeId:guid}/withholding", async (Guid employeeId, SetEmployeeWithholdingCommand command, ISender sender, CancellationToken ct) =>
+                await sender.Send(command with { EmployeePublicId = employeeId }, ct))
+            .WithName("Payroll_Employees_Withholding_Set")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Novelties.Create");
 
         group.MapGet("/by-person/{personId:guid}", async (Guid personId, ISender sender) =>
         {

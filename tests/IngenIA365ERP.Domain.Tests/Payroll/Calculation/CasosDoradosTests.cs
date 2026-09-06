@@ -24,7 +24,11 @@ public class CasosDoradosTests
 
         using var _ = new AssertionScope($"{archivo} — {caso.Nombre}");
 
-        resultado.Refusals.Should().BeEmpty("el motor no debería negarse en un caso dorado");
+        if (caso.Esperado.Rechazos.Count == 0)
+            resultado.Refusals.Should().BeEmpty("el motor no debería negarse en un caso dorado");
+        else
+            foreach (var esperado in caso.Esperado.Rechazos)
+                resultado.Refusals.Should().Contain(r => r.Contains(esperado, StringComparison.OrdinalIgnoreCase), $"el motor debe negarse nombrando «{esperado}»");
 
         foreach (var (codigo, esperado) in caso.Esperado.Lineas)
         {
