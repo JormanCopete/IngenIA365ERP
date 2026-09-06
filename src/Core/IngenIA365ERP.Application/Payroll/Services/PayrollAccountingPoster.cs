@@ -150,13 +150,8 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, IDateTimeS
         var ahora = clock.UtcNow;
         var usuario = currentUser.UserName;
 
-        // VoucherType se asigna además del código: el mapeo de VoucherType.Documents no
-        // enlaza la navegación AccountingDocument.VoucherType, así que EF le creó una segunda
-        // relación con FK sombra VoucherTypeId (NOT NULL en la base). Sin la navegación, el
-        // INSERT viola esa FK; lo detectó la prueba e2e de aprobación.
         var documento = new AccountingDocument
         {
-            VoucherType = voucher,
             VoucherTypeCode = voucher.Code,
             DocumentNumber = numero,
             Detail = detalle.Length <= DetailMaxLength ? detalle : detalle[..DetailMaxLength], // ACC_Documents.Detail: varchar(200)

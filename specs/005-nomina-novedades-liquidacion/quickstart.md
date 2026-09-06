@@ -168,3 +168,9 @@ sección 3 a mano, tener presentes estos desvíos respecto de los contratos orig
 - **Migraciones**: una sola migración de esquema (`NominaNovedadesYLiquidacion`) más
   `NominaTablasPorRangos` y `NominaDetalleDeCorrida`, pareadas por proveedor. En local
   las dos últimas se aplican con `AutoMigrate` al siguiente arranque de la API.
+- **Migración destructiva fuera de nómina**: `RetiroDeVoucherTypeIdSombraEnDocumentos`
+  (2026-09-06) quita la columna sombra `VoucherTypeId` de `ACC_Documents`, que hacía
+  fallar todo comprobante contable creado por la API contra base real (lo destapó la
+  e2e de aprobación). Lleva el marcador `MIGRACION-DESTRUCTIVA-APROBADA` y su `Down`
+  reconstruye la columna desde el código; por el Principio XII, **backup y segundo
+  revisor antes de aplicarla en un ambiente** y anotar las referencias en su cabecera.

@@ -402,9 +402,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
-                    b.Property<int>("VoucherTypeId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
@@ -413,8 +410,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("VoucherTypeCode")
                         .HasDatabaseName("IX_ACC_Documents_VoucherTypeCode");
-
-                    b.HasIndex("VoucherTypeId");
 
                     b.HasIndex("VoucherTypeCode", "DocumentNumber")
                         .IsUnique()
@@ -34149,17 +34144,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.AccountingDocument", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.VoucherType", null)
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.VoucherType", "VoucherType")
                         .WithMany("Documents")
                         .HasForeignKey("VoucherTypeCode")
                         .HasPrincipalKey("Code")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.VoucherType", "VoucherType")
-                        .WithMany()
-                        .HasForeignKey("VoucherTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("VoucherType");
