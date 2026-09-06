@@ -83,7 +83,15 @@ public sealed class PayrollRunsEndpoints : ICarterModule
             .WithName("Payroll_Runs_Approve")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Runs.Approve");
+
+        group.MapPost("/runs/{runId:guid}/reverse", async (Guid runId, ReverseBody body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new Application.Payroll.Runs.ReversePayrollRun.ReversePayrollRunCommand(runId, body.Reason), ct))
+            .WithName("Payroll_Runs_Reverse")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.Reverse");
     }
+
+    public sealed record ReverseBody(string Reason);
 
     public sealed record ApproveBody(
         bool Confirm,

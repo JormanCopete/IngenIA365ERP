@@ -14,13 +14,17 @@
     <div>
         @if (_periodo is not null)
         {
-            @if (_periodo.EstaAbierto && (_corrida is null || _corrida.EsBorrador))
+            @if (_periodo.EstaAbierto && (_corrida is null || _corrida.EsBorrador || _corrida.Status == "Reversed"))
             {
-                <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@Calcular">@(_corrida is null ? "Calcular" : "Recalcular")</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@Calcular">@(_corrida is null || _corrida.Status == "Reversed" ? "Calcular" : "Recalcular")</SfButton>
             }
             @if (_corrida is { Status: "Draft" } && _periodo.Status == "Calculated")
             {
                 <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirAprobacion">Aprobar</SfButton>
+            }
+            @if (_corrida is { Status: "Approved" })
+            {
+                <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@AbrirReversar" Title="Deshace la aprobación con un asiento reverso y reabre el período">Reversar</SfButton>
             }
             @if (_corrida is not null)
             {
@@ -285,6 +289,30 @@
                         </ContentTemplate>
                     </TabItem>
                 }
+                <TabItem>
+                    <ChildContent><TabHeader Text="Historial" /></ChildContent>
+                    <ContentTemplate>
+                        <p class="texto-tenue">Cada cálculo deja una versión. Las reemplazadas y las reversadas se conservan con quién, cuándo y por qué.</p>
+                        <table class="data-grid">
+                            <thead><tr><th>Versión</th><th>Estado</th><th>Calculada</th><th>Empleados</th><th>Neto</th><th>Aprobación</th><th>Reversión</th><th>Comprobante</th></tr></thead>
+                            <tbody>
+                                @foreach (var h in _historial)
+                                {
+                                    <tr class="@(h.PublicId == _corrida.PublicId ? "" : "texto-tenue")">
+                                        <td>v@h.Version</td>
+                                        <td>@h.EstadoTexto</td>
+                                        <td>@h.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @h.CalculatedBy</td>
+                                        <td>@h.EmployeeCount</td>
+                                        <td>@h.Totals.Net.ToString("N0")</td>
+                                        <td>@(h.ApprovedAt is { } ap ? $"{ap.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ApprovedBy}" : "—")</td>
+                                        <td>@(h.ReversedAt is { } rv ? $"{rv.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ReversedBy}: {h.ReversalReason}" : "—")</td>
+                                        <td>@(h.AccountingDocumentNumber ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </ContentTemplate>
+                </TabItem>
             </TabItems>
         </SfTab>
     }
@@ -379,6 +407,31 @@
 <PanelDeAprobacion @ref="_panel" @bind-Visible="_mostrarAprobacion" Corrida="_corrida" Periodo="_periodo"
                    PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync" />
 
+@* ------------------------------------------------------------------ reversar --- *@
+<SfDialog @bind-Visible="_mostrarReversar" Header="Reversar la liquidación aprobada" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="info-card">
+                <span class="label">Qué pasa al reversar</span>
+                <p>El comprobante contable @_corrida?.AccountingDocumentNumber se reversa con un asiento espejo que lo referencia; la corrida v@(_corrida?.Version) queda marcada como reversada con tu nombre, la fecha y el motivo; el período vuelve a abrirse con sus novedades intactas para corregir y recalcular. Nada se borra.</p>
+            </div>
+            @if (_pagadosAntesDeReversar is { Count: > 0 })
+            {
+                <div class="info-card">
+                    <span class="label">No se puede reversar todavía</span>
+                    <p>@_pagadosAntesDeReversar.Count empleado(s) tienen marca de pago vigente. Retirá las marcas en la pestaña «Relación de pago» (con motivo) y volvé a intentar.</p>
+                    <ul class="texto-tenue">@foreach (var n in _pagadosAntesDeReversar) { <li>@n</li> }</ul>
+                </div>
+            }
+            <label>Motivo <SfTextBox @bind-Value="_motivoReversion" Multiline="true" Placeholder="Por qué se reversa esta liquidación" MaxLength="500" /></label>
+        </Content>
+        <FooterTemplate>
+            <SfButton CssClass="e-flat" OnClick="@(() => _mostrarReversar = false)">Cancelar</SfButton>
+            <SfButton CssClass="e-danger" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivoReversion) || _pagadosAntesDeReversar is { Count: > 0 })" OnClick="@ReversarAsync">Reversar</SfButton>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
 @* ------------------------------------------------------------- marcar pagados --- *@
 <SfDialog @bind-Visible="_mostrarMarcarPago" Header="Marcar pagados" Width="460px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -435,6 +488,44 @@
     private CuadreDto? _cuadre;
     private RelacionDePagoDto? _relacion;
     private List<EnvioComprobanteDto>? _envios;
+    private List<ResumenCorridaDto> _historial = [];
+    private bool _mostrarReversar;
+    private string _motivoReversion = string.Empty;
+    private List<string>? _pagadosAntesDeReversar;
+
+    private async Task CargarHistorialAsync()
+    {
+        if (_periodo is null) return;
+        var res = await Nomina.HistorialCorridasAsync(_periodo.PublicId);
+        if (res.IsSuccess) _historial = res.Value!.ToList();
+    }
+
+    private async Task AbrirReversar()
+    {
+        if (_corrida is null) return;
+        _motivoReversion = string.Empty;
+        _pagadosAntesDeReversar = null;
+        var rel = await Nomina.RelacionDePagoAsync(_corrida.PublicId);
+        if (rel.IsSuccess) _pagadosAntesDeReversar = rel.Value!.Rows.Where(r => r.Paid).Select(r => r.EmployeeName).ToList();
+        _mostrarReversar = true;
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ReversarAsync(_corrida.PublicId, _motivoReversion.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo reversar."); return; }
+            _mostrarReversar = false;
+            await Notification.SuccessAsync($"Liquidación reversada con el comprobante {res.Value!.ReversalAccountingDocumentNumber}. El período quedó abierto.");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
     private bool _mostrarMarcarPago, _mostrarRetirarMarca;
     private readonly MarcaDePago _marca = new();
     private FilaRelacionDePagoDto? _filaRetiro;
@@ -555,6 +646,7 @@
         if (res.IsSuccess) { _corrida = res.Value; await CargarEmpleadosAsync(); }
         else if (res.ErrorCode != "Payroll.RunNotFound" && res.StatusCode != 404)
             await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la liquidación.");
+        await CargarHistorialAsync();
         StateHasChanged();
     }
 

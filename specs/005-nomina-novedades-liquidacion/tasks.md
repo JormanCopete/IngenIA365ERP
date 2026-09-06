@@ -307,14 +307,14 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 
 ### Tests for User Story 7
 
-- [ ] T126 [P] [US7] Pruebas de `ReversePayrollRunCommandHandler` (pago vigente → `Payroll.PaymentBlocksReversal` con la lista; período `CNT` cerrado → `Payroll.AccountingPeriodClosedForReversal`; sin motivo → `Payroll.ReasonRequired`; éxito → asiento reverso con referencia, corrida `Reversed`, período `Open`, novedades sin cambios, `InstallmentsIssued` decrementado) en `TST/IngenIA365ERP.Application.Tests/Payroll/Runs/ReversePayrollRunCommandHandlerTests.cs`
+- [X] T126 [P] [US7] Pruebas de `ReversePayrollRunCommandHandler` (pago vigente → `Payroll.PaymentBlocksReversal` con la lista; período `CNT` cerrado → `Payroll.AccountingPeriodClosedForReversal`; sin motivo → `Payroll.ReasonRequired`; éxito → asiento reverso con referencia, corrida `Reversed`, período `Open`, novedades sin cambios, `InstallmentsIssued` decrementado) en `TST/IngenIA365ERP.Application.Tests/Payroll/Runs/ReversePayrollRunCommandHandlerTests.cs`
 
 ### Implementation for User Story 7
 
-- [ ] T127 [US7] Crear `ReversePayrollRunCommand` + validador + handler (FR-032; `PayrollAccountingPoster.Reverse`; `ReversalAccountingDocumentId`; período `Reversed` → `Open` en el mismo acto; evento explícito de auditoría con motivo) en `APP/Payroll/Runs/ReversePayrollRun/ReversePayrollRunCommand.cs`
-- [ ] T128 [US7] Añadir `POST /api/payroll/runs/{id}/reverse` (permiso `Payroll.Runs.Reverse`) a `API/Endpoints/Payroll/PayrollRunsEndpoints.cs` y `ReversarAsync` a `SHR/Services/Nomina/NominaClient.cs`
-- [ ] T129 [US7] Añadir a `Liquidacion.razor` el botón y diálogo «Reversar» (motivo obligatorio, advertencia, bloqueado si hay pagos con la lista visible) y el historial de corridas (versiones, reversadas) en `SHR/Pages/Nomina/Liquidacion.razor`
-- [ ] T130 [P] [US7] Ampliar la guía `liquidacion-de-nomina` (reversión y cuándo no) en `SHR/Services/Manual/ManualCatalogo.cs`
+- [X] T127 [US7] Crear `ReversePayrollRunCommand` + validador + handler (FR-032; `PayrollAccountingPoster.Reverse`; `ReversalAccountingDocumentId`; período `Reversed` → `Open` en el mismo acto; evento explícito de auditoría con motivo) en `APP/Payroll/Runs/ReversePayrollRun/ReversePayrollRunCommand.cs`
+- [X] T128 [US7] Añadir `POST /api/payroll/runs/{id}/reverse` (permiso `Payroll.Runs.Reverse`) a `API/Endpoints/Payroll/PayrollRunsEndpoints.cs` y `ReversarAsync` a `SHR/Services/Nomina/NominaClient.cs`
+- [X] T129 [US7] Añadir a `Liquidacion.razor` el botón y diálogo «Reversar» (motivo obligatorio, advertencia, bloqueado si hay pagos con la lista visible) y el historial de corridas (versiones, reversadas) en `SHR/Pages/Nomina/Liquidacion.razor`
+- [X] T130 [P] [US7] Ampliar la guía `liquidacion-de-nomina` (reversión y cuándo no) en `SHR/Services/Manual/ManualCatalogo.cs`
 
 **Checkpoint**: las siete historias son verificables por separado.
 
