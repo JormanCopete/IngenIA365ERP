@@ -130,8 +130,8 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 674 en 142 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 748 (136 Domain, 556 Application, 54 Architecture, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 130 el 2026-09-06 con Docker: 129 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 749 (136 Domain, 557 Application, 54 Architecture, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 131 el 2026-09-06 con Docker: 130 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
