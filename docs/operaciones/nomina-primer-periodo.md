@@ -1,0 +1,148 @@
+# Nómina: el primer período de una cooperativa
+
+Runbook de la feature 005 (novedades por período y liquidación). Qué tiene que existir
+en la base de una cooperativa antes de que alguien pueda calcular su primera nómina, cómo
+comprobarlo **contra la base del ambiente** (no contra el repositorio), qué hacer cuando
+el cálculo se niega por un parámetro sin vigencia, y cómo cargar el año nuevo.
+
+Regla de la casa que aplica aquí: el programa **no trae ningún valor legal fijo**. Salario
+mínimo, auxilio de transporte, UVT, porcentajes y tablas viven en `PAY_PayrollLegalParameters`
+con fecha de vigencia. Si falta uno para la fecha del período, el cálculo se niega y lo
+nombra. Eso no es un error del programa: es el aviso de que hay que registrar el dato.
+
+---
+
+## 1. Qué deja la semilla
+
+Al arrancar la API con `Database:AutoMigrate = true` y `Database:Seed:RunParametricSeed = true`
+(así están `appsettings.Development.json` y el fixture de integración), cada base de
+cooperativa recibe, de forma idempotente:
+
+| Qué | Dónde | Cuánto | Quién lo siembra |
+|---|---|---|---|
+| Plan de nómina por defecto `DEFAULT` («Nómina general», mensual) | `PAY_PayrollPlans` | 1 fila, `IsDefault = 1` | la migración `NominaNovedadesYLiquidacion` lo inserta antes de las FK; `PayrollPlansSeeder` lo completa |
+| Definiciones de conceptos (salario, auxilio, horas y recargos, incapacidades y licencias, salud, pensión, FSP, retención, aportes del empleador, parafiscales, provisiones, descuentos, cartera) | `PAY_PayrollConceptDefinitions` | 40, `Origin = Seed`, `ValidFrom = 2026-01-01` | `PayrollConceptDefinitionsSeeder` |
+| Parámetros legales con vigencia 2026 (SMMLV, auxilio, UVT, porcentajes, tabla de retención en UVT, tabla FSP) | `PAY_PayrollLegalParameters` + `PAY_PayrollLegalParameterRanges` | 33 códigos | `PayrollLegalParametersSeeder` |
+| Tipo de comprobante `NM` («Nómina», módulo `NOM`) | `ACC_VoucherTypes` | 1 | `PayrollVoucherTypeSeeder` |
+| Permisos `Payroll.Plans.*`, `Payroll.Novelties.*`, `Payroll.Runs.*`, `Payroll.Payments.*`, `Payroll.Payslips.*`, `Payroll.Concepts.*`, `Payroll.LegalParameters.*` | catálogo de permisos de la cooperativa | — | `PayrollPermissionCatalogSeeder` (Identity) |
+| Políticas `Payroll.Rounding`, `Payroll.VariationThresholdPercent`, `Payroll.AllowSameUserApproval`, `Payroll.ApplyEmployerExemption` | `SystemSettings` | 4 claves | `CatalogSeeders` |
+
+Lo que la semilla **no** deja, porque es decisión de cada cooperativa:
+
+- Las **cuentas contables de cada concepto** (`PAY_PayrollConceptDefinitionAccounts`). Sin
+  ellas la aprobación se bloquea con `Payroll.ConceptWithoutAccounts` y la lista de códigos.
+  Se cargan en Nómina › Conceptos › ícono de cuentas (`PUT /api/payroll/concept-definitions/{code}/accounts`).
+- El **período contable `CNT` abierto** del mes que se va a liquidar (Contabilidad › Períodos).
+  Sin él: `Payroll.AccountingPeriodClosed`.
+- Al menos una **sucursal** y un **centro de costo**; el centro de costo del empleado se
+  resuelve por su `LegacyCode`, y si no coincide se usa el primero.
+- Empleados con **persona**, **plan**, **salario**, **fecha de ingreso** y **afiliaciones**
+  (salud, pensión, ARL con clase 1..5, caja). Cada afiliación faltante es un bloqueo
+  visible en el borrador, no un error silencioso.
+
+## 2. Cómo comprobarlo contra la base del ambiente
+
+Con un token de administrador de la cooperativa (segundo factor incluido). Se mira la
+respuesta de la API, que lee la base real; nada de esto se infiere del repositorio.
+
+```bash
+H="Authorization: Bearer $TOKEN"; API=https://<host-del-ambiente>
+
+# Plan por defecto
+curl -s -H "$H" "$API/api/payroll/plans" | jq '.[] | select(.isDefault)'
+
+# Conceptos vigentes (deben ser 40 de origen Seed, salvo los que la cooperativa haya revisado)
+curl -s -H "$H" "$API/api/payroll/concept-definitions" | jq 'length'
+
+# Parámetros legales: qué códigos requeridos NO tienen vigencia este año o el siguiente
+curl -s -H "$H" "$API/api/payroll/legal-parameters" | jq '{missingThisYear, missingNextYear}'
+```
+
+Si `missingThisYear` no está vacío, el primer período del año **no se va a poder calcular**
+hasta registrar esas vigencias (sección 4).
+
+Desde SQL, si hace falta mirar la base directamente (una cooperativa = una base):
+
+```sql
+SELECT Code, Name, IsDefault FROM PAY_PayrollPlans WHERE IsDeleted = 0;
+SELECT COUNT(*) AS Conceptos FROM PAY_PayrollConceptDefinitions WHERE IsActive = 1 AND IsDeleted = 0;
+SELECT Code, ValidFrom, ValidTo, Value FROM PAY_PayrollLegalParameters WHERE IsDeleted = 0 ORDER BY Code, ValidFrom;
+SELECT Code, Name, ModuleCode FROM ACC_VoucherTypes WHERE Code = 'NM';
+```
+
+En PostgreSQL los nombres van entre comillas dobles y `IsDeleted = false`.
+
+## 3. Cuando el cálculo responde `Payroll.LegalParameterMissing`
+
+El mensaje trae los códigos y la fecha: *«No hay vigencia al 31/01/2027 para los parámetros
+legales: SMMLV, AUX_TRANSPORTE, UVT»*. No es un fallo del programa y no se arregla
+reiniciando nada.
+
+1. Confirmar con `GET /api/payroll/legal-parameters` qué códigos aparecen en `missingThisYear`.
+2. Registrar la vigencia de cada uno (sección 4) con la fuente normativa (decreto o resolución).
+3. Volver a calcular. Cada línea del borrador muestra el parámetro y la vigencia que usó, así
+   que se puede comprobar en la primera liquidación del año que el valor es el correcto.
+
+Si el código que falta **no está en el catálogo** (`Payroll.LegalParameterNew`), la
+primera vigencia exige además nombre y tipo (`kind`). Sólo debería pasar con conceptos
+propios de la cooperativa que referencian un código nuevo.
+
+## 4. Cargar la vigencia de un año nuevo
+
+Cuando el Gobierno fija salario mínimo, auxilio de transporte y UVT (diciembre–enero), y
+cuando cambia cualquier tarifa o tabla:
+
+- **Pantalla**: Nómina › Parámetros legales › fila del código › «Nueva vigencia»: fecha desde,
+  valor (o la tabla de tramos: desde, hasta, tarifa, fijo — contiguos, sin huecos, último abierto)
+  y la fuente. La vigencia anterior se cierra el día antes.
+- **API**:
+
+```bash
+curl -s -X POST -H "$H" -H "Content-Type: application/json" \
+  -d '{"validFrom":"2027-01-01","value":1900000,"source":"Decreto xxxx de 2026"}' \
+  "$API/api/payroll/legal-parameters/SMMLV/versions"
+```
+
+Un solapamiento con una vigencia existente responde `Payroll.LegalParameterOverlap`; una
+tabla con huecos o sin tramo final abierto, `Payroll.RangeTableInvalid`. Ninguna vigencia
+se edita ni se borra: se agrega la siguiente.
+
+Los borradores ya calculados de períodos que cubran la fecha quedan **desactualizados** y
+hay que recalcularlos antes de aprobar.
+
+## 5. Reaplicar la semilla
+
+Tras una actualización que traiga conceptos o parámetros nuevos, o si alguien borró por
+error algo de la semilla:
+
+- **Pantalla**: Nómina › Conceptos › «Reaplicar semilla».
+- **API**: `POST /api/payroll/concept-definitions/seed` (permiso `Payroll.Concepts.Manage`).
+
+Inserta lo que falte y **no toca** lo que la cooperativa ya ajustó (versiones propias,
+cuentas, vigencias registradas a mano). Es idempotente: correrla dos veces no duplica nada.
+
+## 6. Las migraciones de esta entrega
+
+Todas pareadas por proveedor (`Persistence.Migrations.PostgreSql` y `.SqlServer`), en
+`Application/`, y las aplica `AutoMigrate` al arrancar la API en cada base de cooperativa:
+
+| Migración | Qué hace | Cuidado |
+|---|---|---|
+| `NominaNovedadesYLiquidacion` | 14 tablas nuevas de nómina, columnas en empleados y períodos, plan `DEFAULT` insertado antes de las FK | Idempotente; reversible |
+| `NominaTablasPorRangos` | Unidad y marginalidad de las tablas por rangos, con relleno de las de retención y FSP | Idempotente; reversible |
+| `NominaDetalleDeCorrida` | Bases y notas por empleado en la corrida; FKs al comprobante contable | Reversible |
+| `RetiroDeVoucherTypeIdSombraEnDocumentos` | **Destructiva.** Quita de `ACC_Documents` la columna sombra `VoucherTypeId`, que duplicaba `VoucherTypeCode` y rompía todo comprobante contable creado por la API | **Backup de cada base de cooperativa y segundo revisor antes de aplicarla en un ambiente** (Principio XII); anotar las referencias en la cabecera de la migración. Su `Down` reconstruye la columna desde el código |
+
+La última no es de nómina: la destapó la prueba e2e de aprobación, y afecta a Contabilidad.
+Sin ella, `POST /api/accounting/documents` responde 500 contra PostgreSQL y SQL Server.
+
+## 7. Lo que este runbook no cubre
+
+- Reversar una liquidación aprobada, marcar pagos o enviar comprobantes: está en el manual
+  dentro de la aplicación (guía «Liquidación de nómina»).
+- Correo saliente para los comprobantes: `docs/operaciones/correo-saliente.md`. Si el
+  ambiente no lo tiene, el envío responde `Payroll.EmailNotConfigured` antes de intentar y
+  los comprobantes se descargan en PDF.
+- La migración de datos de nóminas históricas del sistema anterior: las tablas legadas
+  (`PAY_PayrollTransactions`, `PAY_PayrollEntries`, `PAY_PayrollConcepts`) se conservan de
+  sólo lectura; el catálogo heredado se ve en Nómina › Conceptos › «Catálogo heredado».

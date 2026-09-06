@@ -1,0 +1,23 @@
+{
+  "nombre": "Dos cambios de salario dentro del período (2,0 → 2,3 → 2,6 millones)",
+  "descripcion": "Cada tramo de diez días usa su salario: 10 × 66.666,67 + 10 × 76.666,67 + 10 × 86.666,67 = 2.300.000. El auxilio de transporte se decide con el salario vigente al cierre (2.600.000 ≤ 2 SMMLV).",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Gloria Ríos", "clase": "Standard", "ingreso": "2024-06-01",
+    "salarios": [ { "desde": "2024-06-01", "mensual": 2000000 }, { "desde": "2026-03-11", "mensual": 2300000 }, { "desde": "2026-03-21", "mensual": 2600000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2300000, "AUX_TRANSPORTE": 249095,
+      "SALUD_EMP": 92000, "PENSION_EMP": 92000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 195500, "PENSION_EMPLEADOR": 276000, "ARL": 12006, "SENA": 46000, "ICBF": 69000, "CAJA": 92000,
+      "PROV_CESANTIAS": 212340, "PROV_INT_CESANTIAS": 25491, "PROV_PRIMA": 212340, "PROV_VACACIONES": 95910
+    },
+    "totales": { "devengos": 2549095, "deducciones": 184000, "aportesEmpleador": 690506, "provisiones": 546081, "neto": 2365095, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

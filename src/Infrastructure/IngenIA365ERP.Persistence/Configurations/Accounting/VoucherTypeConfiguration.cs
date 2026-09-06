@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -47,7 +47,11 @@ public class VoucherTypeConfiguration : IEntityTypeConfiguration<VoucherType>
 
         builder.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UK_ACC_VoucherTypes_Code");
 
-        builder.HasMany(e => e.Documents).WithOne().HasForeignKey(e => e.VoucherTypeCode).HasPrincipalKey(e => e.Code).OnDelete(DeleteBehavior.Restrict);
+        // Una sola relacion, por el codigo (clave alterna). Con WithOne() vacio, la navegacion
+        // AccountingDocument.VoucherType quedaba fuera y EF le creaba por convencion una segunda
+        // relacion con FK sombra VoucherTypeId NOT NULL: todo INSERT que solo llenara el codigo
+        // (CreateDocumentCommand, el contabilizador de nomina) violaba esa FK contra base real.
+        builder.HasMany(e => e.Documents).WithOne(d => d.VoucherType).HasForeignKey(d => d.VoucherTypeCode).HasPrincipalKey(v => v.Code).OnDelete(DeleteBehavior.Restrict);
 
 
         builder.Property(e => e.CreatedBy).HasMaxLength(100).IsRequired();

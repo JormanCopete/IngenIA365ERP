@@ -1,0 +1,22 @@
+{
+  "nombre": "Salario integral de 20.000.000",
+  "descripcion": "Clase salario integral: sin auxilio de transporte ni provisiones; IBC al 70 % (14.000.000). Fondo de solidaridad del 1 % (IBC entre 4 y 16 SMMLV). Retención procedimiento 1: renta exenta del 25 % limitada al tope de 65,83 UVT; base 291,98 UVT en el tramo 150–360 (28 % + 10 UVT), aproximada al múltiplo de mil.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Carla Ruiz", "clase": "IntegralSalary", "ingreso": "2020-06-01",
+    "salarios": [ { "desde": "2020-06-01", "mensual": 20000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 20000000,
+      "SALUD_EMP": 560000, "PENSION_EMP": 560000, "FSP": 140000, "RETEFTE": 2606000,
+      "SALUD_EMPLEADOR": 1190000, "PENSION_EMPLEADOR": 1680000, "ARL": 73080, "SENA": 280000, "ICBF": 420000, "CAJA": 560000
+    },
+    "totales": { "devengos": 20000000, "deducciones": 3866000, "aportesEmpleador": 4203080, "provisiones": 0, "neto": 16134000, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

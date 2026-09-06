@@ -1,0 +1,23 @@
+{
+  "nombre": "Incapacidad general de diez días con salario de 2.400.000",
+  "descripcion": "Del 6 al 15 de marzo: el salario se liquida por 20 días y la incapacidad paga 10 días al 66,67 % del valor día (INCAPACIDAD_EMPLEADOR_PCT), sin que nadie teclee el porcentaje. La incapacidad entra al IBC y a la base prestacional, no a los devengos salariales; el auxilio se proporciona a los 20 días pagados.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Hugo Salas", "clase": "Standard", "ingreso": "2023-02-01",
+    "salarios": [ { "desde": "2023-02-01", "mensual": 2400000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [ { "concepto": "INCAP_GENERAL", "desde": "2026-03-06", "hasta": "2026-03-15" } ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1600000, "AUX_TRANSPORTE": 166063, "INCAP_GENERAL": 533360,
+      "SALUD_EMP": 85334, "PENSION_EMP": 85334, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 181336, "PENSION_EMPLEADOR": 256003, "ARL": 11136, "SENA": 42667, "ICBF": 64001, "CAJA": 85334,
+      "PROV_CESANTIAS": 191542, "PROV_INT_CESANTIAS": 22994, "PROV_PRIMA": 191542, "PROV_VACACIONES": 66720
+    },
+    "totales": { "devengos": 2299423, "deducciones": 170668, "aportesEmpleador": 640477, "provisiones": 472798, "neto": 2128755, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 20, "diasAusencia": 10
+  }
+}

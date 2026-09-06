@@ -256,6 +256,16 @@ else
                     </div>
                 </ContentTemplate>
             </TabItem>
+
+            @* ===== Tab 5: Retención y plan (feature 005, US3) ===== *@
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Retención y plan" />
+                </ChildContent>
+                <ContentTemplate>
+                    <IngenIA365ERP.Shared.Components.Nomina.RetencionYPlan EmployeeId="EmployeeId" />
+                </ContentTemplate>
+            </TabItem>
         </TabItems>
     </SfTab>
 }

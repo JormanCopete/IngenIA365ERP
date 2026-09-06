@@ -1,0 +1,224 @@
+@page "/nomina/parametros-legales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+<PageTitle>Parámetros legales de nómina - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Parámetros legales de nómina</h3>
+    <div>
+        <SfDatePicker TValue="DateTime" @bind-Value="_vigenteA" Placeholder="Vigentes a" FloatLabelType="FloatLabelType.Always" Width="160px" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirNuevaVigencia(null))">Nuevo parámetro</SfButton>
+    </div>
+</div>
+
+@if (_resumen is not null && (_resumen.MissingThisYear.Count > 0 || _resumen.MissingNextYear.Count > 0))
+{
+    <div class="info-card alerta">
+        <span class="label">Faltan vigencias</span>
+        @if (_resumen.MissingThisYear.Count > 0)
+        {
+            <p><strong>Para @(_resumen.AsOf.Year):</strong> @string.Join(", ", _resumen.MissingThisYear). El cálculo se negará hasta registrarlas.</p>
+        }
+        @if (_resumen.MissingNextYear.Count > 0)
+        {
+            <p><strong>Para @(_resumen.AsOf.Year + 1):</strong> @string.Join(", ", _resumen.MissingNextYear).</p>
+        }
+    </div>
+}
+else if (_resumen is not null)
+{
+    <div class="info-card">
+        <span class="label">Todo vigente</span>
+        <p>Los @_resumen.Items.Count(i => i.IsRequired) parámetros que el cálculo exige tienen vigencia para @(_resumen.AsOf.Year) y @(_resumen.AsOf.Year + 1). Cuando el Gobierno fije los valores del año siguiente, registrá la vigencia nueva aquí: la anterior se cierra sola el día antes.</p>
+    </div>
+}
+
+<SfGrid TValue="ParametroLegalDto" DataSource="@(_resumen?.Items ?? [])" AllowSorting="true" AllowPaging="true">
+    <GridPageSettings PageSize="50" />
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Código" Width="240" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="280" />
+        <GridColumn Field="TipoTexto" HeaderText="Tipo" Width="120" />
+        <GridColumn Field="ValorTexto" HeaderText="Valor vigente" Width="140" TextAlign="TextAlign.Right" />
+        <GridColumn Field="VigenciaTexto" HeaderText="Vigencia" Width="180" />
+        <GridColumn HeaderText="Requerido" Width="100" TextAlign="TextAlign.Center">
+            <Template>@{ var p = (ParametroLegalDto)context; if (p.IsRequired) { <span class="e-badge e-badge-info">Sí</span> } }</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="180" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var p = (ParametroLegalDto)context;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Vigencias" OnClick="@(() => AbrirVersiones(p))" />
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Nueva vigencia" OnClick="@(() => AbrirNuevaVigencia(p))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+@* --------------------------------------------------------------- versiones --- *@
+<SfDialog @bind-Visible="_mostrarVersiones" Header="@($"Vigencias de {_versionesDe?.Code}")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="pagina">
+                @foreach (var v in _versiones)
+                {
+                    <div class="info-card">
+                        <span class="label">@v.VigenciaTexto</span>
+                        <p><strong>@v.ValorTexto</strong> · @v.Source <span class="texto-tenue">· registrado por @v.CreatedBy</span></p>
+                        @if (v.EsTabla)
+                        {
+                            <TablaDeRangos Tramos="@v.Ranges" Unidad="@(v.RangeUnitParameterCode ?? "pesos")" SoloLectura="true" />
+                            <p class="texto-tenue">@(v.RangeIsMarginal ? "Tarifa marginal sobre el exceso del tramo más el fijo." : "Tarifa del tramo sobre toda la base.")</p>
+                        }
+                    </div>
+                }
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ----------------------------------------------------------- nueva vigencia --- *@
+<SfDialog @bind-Visible="_mostrarNueva" Header="@_tituloNueva" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_nueva" OnValidSubmit="GuardarNuevaVigencia">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_base is null)
+                    {
+                        <SfTextBox @bind-Value="_nueva.Code" Placeholder="Código (MAYUSCULAS_CON_GUION_BAJO)" FloatLabelType="FloatLabelType.Always" />
+                        <ValidationMessage For="() => _nueva.Code" />
+                        <SfTextBox @bind-Value="_nueva.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                        <ValidationMessage For="() => _nueva.Name" />
+                        <label class="campo">
+                            Tipo
+                            <select class="e-input" @bind="_nueva.Kind">
+                                <option value="Amount">Valor</option>
+                                <option value="Percent">Porcentaje</option>
+                                <option value="RangeTable">Tabla por rangos</option>
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <div class="info-card">
+                            <span class="label">@_base.Code</span>
+                            <p>@_base.Name · @_base.TipoTexto · vigente hoy: <strong>@_base.ValorTexto</strong> (@_base.VigenciaTexto)</p>
+                        </div>
+                    }
+                    <SfDatePicker TValue="DateTime" @bind-Value="_nueva.ValidFrom" Placeholder="Rige desde" FloatLabelType="FloatLabelType.Always" />
+                    @if (_nueva.Kind != "RangeTable")
+                    {
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_nueva.Value" Placeholder="@(_nueva.Kind == "Percent" ? "Porcentaje" : "Valor")" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
+                        <ValidationMessage For="() => _nueva.Value" />
+                    }
+                    else
+                    {
+                        @if (_base is null)
+                        {
+                            <SfTextBox @bind-Value="_nueva.RangeUnitParameterCode" Placeholder="Unidad de los tramos (código de parámetro: UVT, SMMLV; vacío = pesos)" FloatLabelType="FloatLabelType.Always" />
+                            <label class="campo-check"><input type="checkbox" @bind="_nueva.RangeIsMarginal" /> Tarifa marginal sobre el exceso del tramo (retención); sin marcar, la tarifa aplica a toda la base (fondo de solidaridad)</label>
+                        }
+                        <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" />
+                    }
+                    <SfTextBox @bind-Value="_nueva.Source" Placeholder="Norma que lo fija (decreto, resolución, ley)" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _nueva.Source" />
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar vigencia</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private ResumenParametrosLegalesDto? _resumen;
+    private DateTime _vigenteA = DateTime.Today;
+    private bool _mostrarVersiones, _mostrarNueva, _guardando;
+    private ParametroLegalDto? _versionesDe, _base;
+    private List<ParametroLegalDto> _versiones = [];
+    private FormVigencia _nueva = new();
+    private TablaDeRangos? _tabla;
+    private string _tituloNueva = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        var res = await Nomina.ListarParametrosLegalesAsync(_vigenteA);
+        if (res.IsSuccess) _resumen = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los parámetros legales.");
+    }
+
+    private async Task AbrirVersiones(ParametroLegalDto p)
+    {
+        var res = await Nomina.VersionesDeParametroAsync(p.Code);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las vigencias."); return; }
+        _versionesDe = p;
+        _versiones = res.Value!.ToList();
+        _mostrarVersiones = true;
+    }
+
+    private void AbrirNuevaVigencia(ParametroLegalDto? baseParam)
+    {
+        _base = baseParam;
+        var inicioAnoSiguiente = new DateTime(DateTime.Today.Year + 1, 1, 1);
+        _nueva = new FormVigencia
+        {
+            Code = baseParam?.Code ?? string.Empty,
+            Name = baseParam?.Name ?? string.Empty,
+            Kind = baseParam?.Kind ?? "Amount",
+            ValidFrom = baseParam is null ? DateTime.Today : inicioAnoSiguiente,
+            Value = baseParam?.EsTabla == true ? null : baseParam?.Value,
+            Ranges = baseParam?.Ranges ?? [],
+            RangeUnitParameterCode = baseParam?.RangeUnitParameterCode,
+            RangeIsMarginal = baseParam?.RangeIsMarginal ?? false,
+        };
+        _tituloNueva = baseParam is null ? "Nuevo parámetro legal" : $"Nueva vigencia de {baseParam.Code}";
+        _mostrarNueva = true;
+    }
+
+    private async Task GuardarNuevaVigencia()
+    {
+        if (_guardando) return;
+        if (_nueva.Kind == "RangeTable" && _tabla?.Error is { } error) { await Notification.WarningAsync(error); return; }
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.NuevaVigenciaAsync(_nueva.Code.Trim().ToUpperInvariant(), new NuevaVigenciaRequest(
+                _nueva.ValidFrom, _nueva.Kind == "RangeTable" ? null : _nueva.Value, _nueva.Kind == "RangeTable" ? _nueva.Ranges : null,
+                _nueva.Source.Trim(), _base is null ? _nueva.Name.Trim() : null, _base is null ? _nueva.Kind : null,
+                string.IsNullOrWhiteSpace(_nueva.RangeUnitParameterCode) ? null : _nueva.RangeUnitParameterCode.Trim().ToUpperInvariant(),
+                _base is null ? _nueva.RangeIsMarginal : null));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar la vigencia."); return; }
+            await Notification.SuccessAsync("Vigencia registrada. Los borradores de liquidación quedaron desactualizados.");
+            _mostrarNueva = false;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private sealed class FormVigencia
+    {
+        [Required(ErrorMessage = "El código es obligatorio.")]
+        [RegularExpression("^[A-Za-z0-9_]{2,40}$", ErrorMessage = "Letras, dígitos y guion bajo (2 a 40).")]
+        public string Code { get; set; } = string.Empty;
+        [StringLength(120)] public string Name { get; set; } = string.Empty;
+        public string Kind { get; set; } = "Amount";
+        public DateTime ValidFrom { get; set; } = DateTime.Today;
+        public decimal? Value { get; set; }
+        public IReadOnlyList<TramoDto> Ranges { get; set; } = [];
+        public string? RangeUnitParameterCode { get; set; }
+        public bool RangeIsMarginal { get; set; }
+        [Required(ErrorMessage = "Indicá la norma que fija el valor.")]
+        [StringLength(200)] public string Source { get; set; } = string.Empty;
+    }
+}

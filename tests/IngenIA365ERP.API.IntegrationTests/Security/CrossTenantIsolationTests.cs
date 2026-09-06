@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.Security;
@@ -10,15 +11,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Security;
 /// rechaza el request si <c>X-Tenant-Id</c> contradice el claim
 /// <c>tenant_id</c> del JWT.
 /// </summary>
-public class CrossTenantIsolationTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class CrossTenantIsolationTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public CrossTenantIsolationTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task X_Tenant_Id_header_diverging_from_claim_is_rejected()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         // Sin JWT: el middleware aún acepta el header (rama no-autenticada);
         // pero pedimos un endpoint que requiere auth → 401/404.

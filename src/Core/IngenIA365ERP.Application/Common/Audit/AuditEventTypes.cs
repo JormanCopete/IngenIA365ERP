@@ -96,6 +96,18 @@ public static class AuditEventTypes
     // -------------------- Tenant (SaaS) --------------------
     public const string TenantCreated = "Tenant.Created";
 
+    // -------------------- Nómina (feature 005) --------------------
+    // Eventos explícitos además del AuditBehavior genérico (contracts/permissions.md §Auditoría):
+    // llevan EntityPublicId y valores antes/después.
+    public const string PayrollSalaryChanged = "Payroll.SalaryChanged";
+    public const string PayrollRunApproved = "Payroll.Run.Approved";
+    public const string PayrollRunReversed = "Payroll.Run.Reversed";
+    public const string PayrollPaymentsMarked = "Payroll.Payments.Marked";
+    public const string PayrollPaymentMarkReverted = "Payroll.Payments.MarkReverted";
+    public const string PayrollPayslipsSent = "Payroll.Payslips.Sent";
+    public const string PayrollEmployeeWithholdingChanged = "Payroll.EmployeeWithholding.Changed";
+    public const string PayrollRunExported = "Payroll.Run.Exported";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

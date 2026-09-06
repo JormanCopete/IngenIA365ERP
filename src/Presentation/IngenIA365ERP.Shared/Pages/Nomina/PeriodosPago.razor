@@ -1,130 +1,262 @@
 @page "/nomina/periodos-pago"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@using System.Net.Http.Json
-@inject HttpClient Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
 @inject INotificationService Notification
 
-<PageTitle>Periodos de Pago - IngenIA365ERP</PageTitle>
+<PageTitle>Períodos de pago - IngenIA365ERP</PageTitle>
 
 <div class="page-header">
-    <h3>Periodos de Pago</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <h3>Períodos de pago</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo</SfButton>
 </div>
 
-<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+<div class="toolbar">
+    @if (_planes.Count > 1)
+    {
+        <label>
+            Plan
+            <select class="e-input" value="@_filtroPlan" @onchange="FiltrarPorPlan">
+                <option value="">Todos los planes</option>
+                @foreach (var p in _planes)
+                {
+                    <option value="@p.PublicId">@p.Name (@p.PeriodicidadTexto)</option>
+                }
+            </select>
+        </label>
+    }
+    <label>
+        Estado
+        <select class="e-input" value="@_filtroEstado" @onchange="FiltrarPorEstado">
+            <option value="">Todos</option>
+            <option value="Open">Abiertos</option>
+            <option value="Calculated">Calculados</option>
+            <option value="Approved">Aprobados</option>
+            <option value="Reversed">Reversados</option>
+        </select>
+    </label>
+</div>
+
+<SfGrid TValue="PeriodoPagoDto" DataSource="@_items" AllowPaging="true" AllowSorting="true">
+    <GridPageSettings PageSize="20" />
     <GridColumns>
-        <GridColumn Field="PlanId" HeaderText="Plan" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="220" />
-        <GridColumn Field="StartDate" HeaderText="Fecha Inicio" Width="140" Format="d" TextAlign="TextAlign.Center" />
-        <GridColumn Field="EndDate" HeaderText="Fecha Fin" Width="140" Format="d" TextAlign="TextAlign.Center" />
-        <GridColumn Field="PeriodId" HeaderText="Periodo" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Status" HeaderText="Estado" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="StatusMessage" HeaderText="Mensaje Estado" Width="180" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+        @if (_planes.Count > 1)
+        {
+            <GridColumn Field="PlanName" HeaderText="Plan" Width="150" />
+        }
+        <GridColumn Field="PlanId" HeaderText="Planilla" Width="90" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Description" HeaderText="Descripción" Width="200" />
+        <GridColumn Field="StartDate" HeaderText="Desde" Width="120" Format="d" TextAlign="TextAlign.Center" />
+        <GridColumn Field="EndDate" HeaderText="Hasta" Width="120" Format="d" TextAlign="TextAlign.Center" />
+        <GridColumn HeaderText="Estado" Width="120" TextAlign="TextAlign.Center">
             <Template>
                 @{
-                    var item = context as ItemModel;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    var item = (PeriodoPagoDto)context;
+                    <span class="e-badge @ClaseEstado(item.Status)">@item.EstadoTexto</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="ApprovedBy" HeaderText="Aprobó" Width="140" />
+        <GridColumn Field="StatusMessage" HeaderText="Nota" Width="180" />
+        <GridColumn HeaderText="Acciones" Width="120" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var item = (PeriodoPagoDto)context;
+                    if (item.Status == "Open")
+                    {
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => AbrirEditar(item))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" Title="Eliminar" OnClick="@(() => AbrirEliminar(item))" />
+                    }
+                    else
+                    {
+                        <span class="texto-tenue">Sólo consulta</span>
+                    }
                 }
             </Template>
         </GridColumn>
     </GridColumns>
 </SfGrid>
 
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@_titulo" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div class="pagina">
-                <SfNumericTextBox TValue="int" @bind-Value="_model.PlanId" Placeholder="Plan" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.PayrollCompanyId" Placeholder="Empresa Nomina" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion" FloatLabelType="FloatLabelType.Always" />
-                <SfDatePicker TValue="DateTime" @bind-Value="_model.StartDate" Placeholder="Fecha Inicio" FloatLabelType="FloatLabelType.Always" />
-                <SfDatePicker TValue="DateTime" @bind-Value="_model.EndDate" Placeholder="Fecha Fin" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.PeriodId" Placeholder="Periodo" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.Status" Placeholder="Estado" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.StatusMessage" Placeholder="Mensaje Estado" FloatLabelType="FloatLabelType.Always" />
-            </div>
+            <EditForm Model="_modelo" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_editId is null && _planes.Count > 1)
+                    {
+                        <label class="campo">
+                            Plan de nómina
+                            <select class="e-input" @bind="_modelo.PlanPublicId">
+                                @foreach (var p in _planes)
+                                {
+                                    <option value="@p.PublicId">@p.Name (@p.PeriodicidadTexto)</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                    <SfTextBox @bind-Value="_modelo.Description" Placeholder="Descripción (p. ej. Marzo 2026)" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _modelo.Description" />
+                    <SfDatePicker TValue="DateTime" @bind-Value="_modelo.StartDate" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" />
+                    <SfDatePicker TValue="DateTime" @bind-Value="_modelo.EndDate" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _modelo.EndDate" />
+                    <SfTextBox @bind-Value="_modelo.PayDate" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
+                    @if (_editId is null)
+                    {
+                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PayrollCompanyId" Placeholder="Empresa de nómina" FloatLabelType="FloatLabelType.Always" />
+                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PlanId" Placeholder="Número de planilla (0 = siguiente)" FloatLabelType="FloatLabelType.Always" />
+                    }
+                    <SfTextBox @bind-Value="_modelo.StatusMessage" Placeholder="Nota" FloatLabelType="FloatLabelType.Always" />
+                    <p class="texto-tenue">El estado lo mueven calcular, aprobar y reversar en Liquidación; aquí no se edita.</p>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDialogo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
+                </div>
+            </EditForm>
         </Content>
     </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
-    </DialogButtons>
 </SfDialog>
 
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+<ConfirmDialog @bind-Visible="_mostrarConfirmar" OnConfirm="ConfirmarEliminar" Message="¿Eliminar este período de pago? Sólo se puede si está abierto y sin novedades." />
 
 @code {
-    private SfGrid<ItemModel>? _grid;
-    private List<ItemModel> _items = [];
-    private FormModel _model = new();
+    private List<PeriodoPagoDto> _items = [];
+    private List<PlanNominaDto> _planes = [];
+    private Modelo _modelo = new();
     private Guid? _editId;
-    private bool _showDialog, _showConfirm;
-    private string _dialogTitle = "";
-    private Guid _deleteId;
+    private Guid _eliminarId;
+    private bool _mostrarDialogo, _mostrarConfirmar, _guardando;
+    private string _titulo = string.Empty;
+    private string _filtroPlan = string.Empty;
+    private string _filtroEstado = string.Empty;
 
-    protected override async Task OnInitializedAsync() => await LoadData();
-
-    private async Task LoadData()
+    protected override async Task OnInitializedAsync()
     {
-        try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/pay-periods?pageSize=500"); _items = r?.Items ?? []; }
-        catch { _items = []; }
+        var planes = await Nomina.ListarPlanesAsync();
+        if (planes.IsSuccess) _planes = planes.Value!.ToList();
+        else await Notification.ErrorAsync(planes.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");
+        await CargarAsync();
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Periodo de Pago"; _showDialog = true; }
-
-    private void OpenEdit(ItemModel item)
+    private async Task CargarAsync()
     {
-        _model = new()
+        Guid? plan = Guid.TryParse(_filtroPlan, out var g) ? g : null;
+        var res = await Nomina.ListarPeriodosAsync(plan, string.IsNullOrEmpty(_filtroEstado) ? null : _filtroEstado, 1, 500);
+        if (res.IsSuccess) _items = res.Value!.Items.OrderByDescending(p => p.StartDate).ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los períodos.");
+    }
+
+    private async Task FiltrarPorPlan(Microsoft.AspNetCore.Components.ChangeEventArgs e) { _filtroPlan = e.Value?.ToString() ?? string.Empty; await CargarAsync(); }
+    private async Task FiltrarPorEstado(Microsoft.AspNetCore.Components.ChangeEventArgs e) { _filtroEstado = e.Value?.ToString() ?? string.Empty; await CargarAsync(); }
+
+    private void AbrirNuevo()
+    {
+        var porDefecto = _planes.FirstOrDefault(p => p.IsDefault) ?? _planes.FirstOrDefault();
+        var hoy = DateTime.Today;
+        _modelo = new Modelo
         {
-            PlanId = item.PlanId, PayrollCompanyId = item.PayrollCompanyId, Description = item.Description,
-            StartDate = item.StartDate, EndDate = item.EndDate, PeriodId = item.PeriodId,
-            Status = item.Status, StatusMessage = item.StatusMessage
+            PlanPublicId = porDefecto?.PublicId.ToString() ?? string.Empty,
+            StartDate = new DateTime(hoy.Year, hoy.Month, 1),
+            EndDate = new DateTime(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month)),
+            Description = hoy.ToString("MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("es-CO")),
         };
-        _editId = item.PublicId; _dialogTitle = "Editar Periodo de Pago"; _showDialog = true;
+        _editId = null;
+        _titulo = "Nuevo período de pago";
+        _mostrarDialogo = true;
     }
 
-    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
-
-    private async Task Save()
+    private void AbrirEditar(PeriodoPagoDto item)
     {
-        var res = _editId.HasValue
-            ? await Http.PutAsJsonAsync($"/api/payroll/pay-periods/{_editId}", _model)
-            : await Http.PostAsJsonAsync("/api/payroll/pay-periods", _model);
-        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
-        else await Notification.ShowErrorAsync(res, "Error al guardar");
+        _modelo = new Modelo
+        {
+            PlanPublicId = item.PlanPublicId.ToString(),
+            PlanId = item.PlanId,
+            PayrollCompanyId = item.PayrollCompanyId,
+            Description = item.Description ?? string.Empty,
+            PayDate = item.PayDate,
+            StartDate = item.StartDate,
+            EndDate = item.EndDate,
+            StatusMessage = item.StatusMessage,
+        };
+        _editId = item.PublicId;
+        _titulo = "Editar período de pago";
+        _mostrarDialogo = true;
     }
 
-    private async Task ConfirmDelete()
+    private void AbrirEliminar(PeriodoPagoDto item) { _eliminarId = item.PublicId; _mostrarConfirmar = true; }
+
+    private async Task Guardar()
     {
-        var res = await Http.DeleteAsync($"/api/payroll/pay-periods/{_deleteId}");
-        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
-        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+        if (_guardando) return;
+        _guardando = true;
+        try
+        {
+            if (_editId is null)
+            {
+                Guid? plan = Guid.TryParse(_modelo.PlanPublicId, out var g) ? g : null;
+                var res = await Nomina.CrearPeriodoAsync(new CrearPeriodoPagoRequest(
+                    plan, _modelo.PlanId, _modelo.PayrollCompanyId, _modelo.Description, _modelo.PayDate,
+                    _modelo.StartDate, _modelo.EndDate, null, _modelo.StatusMessage, 0));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo crear el período."); return; }
+                await Notification.SuccessAsync("Período creado.");
+            }
+            else
+            {
+                var res = await Nomina.ActualizarPeriodoAsync(new ActualizarPeriodoPagoRequest(
+                    _editId.Value, _modelo.Description, _modelo.PayDate, _modelo.StartDate, _modelo.EndDate, _modelo.StatusMessage));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo actualizar el período."); return; }
+                await Notification.SuccessAsync("Período actualizado.");
+            }
+            _mostrarDialogo = false;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
     }
 
-    private class Paged { public List<ItemModel> Items { get; set; } = []; }
-    private class ItemModel
+    private async Task ConfirmarEliminar()
     {
-        public Guid PublicId { get; set; }
+        var res = await Nomina.EliminarPeriodoAsync(_eliminarId);
+        if (res.IsSuccess) { await Notification.SuccessAsync("Período eliminado."); await CargarAsync(); }
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo eliminar el período.");
+    }
+
+    private static string ClaseEstado(string status) => status switch
+    {
+        "Open" => "e-badge-info",
+        "Calculated" => "e-badge-warning",
+        "Approved" => "e-badge-success",
+        "Reversed" => "e-badge-danger",
+        _ => "e-badge-secondary",
+    };
+
+    private sealed class Modelo
+    {
+        public string PlanPublicId { get; set; } = string.Empty;
         public int PlanId { get; set; }
         public int PayrollCompanyId { get; set; }
-        public string Description { get; set; } = "";
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-        public int PeriodId { get; set; }
-        public int Status { get; set; }
-        public string StatusMessage { get; set; } = "";
-    }
-    private class FormModel
-    {
-        public int PlanId { get; set; }
-        public int PayrollCompanyId { get; set; }
-        public string Description { get; set; } = "";
+
+        [StringLength(100, ErrorMessage = "Máximo 100 caracteres.")]
+        public string Description { get; set; } = string.Empty;
+
+        public string? PayDate { get; set; }
         public DateTime StartDate { get; set; } = DateTime.Today;
+
+        [FechaFinal(nameof(StartDate), ErrorMessage = "La fecha final debe ser igual o posterior a la inicial.")]
         public DateTime EndDate { get; set; } = DateTime.Today;
-        public int PeriodId { get; set; }
-        public int Status { get; set; }
-        public string StatusMessage { get; set; } = "";
+
+        [StringLength(100, ErrorMessage = "Máximo 100 caracteres.")]
+        public string StatusMessage { get; set; } = string.Empty;
+    }
+
+    private sealed class FechaFinalAttribute(string otraPropiedad) : ValidationAttribute
+    {
+        protected override ValidationResult? IsValid(object? value, ValidationContext context)
+        {
+            var otra = context.ObjectType.GetProperty(otraPropiedad)?.GetValue(context.ObjectInstance) as DateTime?;
+            return value is DateTime fin && otra is DateTime inicio && fin < inicio
+                ? new ValidationResult(ErrorMessage ?? "Fecha inválida", [context.MemberName ?? string.Empty])
+                : ValidationResult.Success;
+        }
     }
 }

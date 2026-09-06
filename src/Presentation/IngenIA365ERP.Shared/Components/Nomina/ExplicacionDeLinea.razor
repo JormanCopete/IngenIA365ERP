@@ -1,0 +1,90 @@
+@*
+    ExplicacionDeLinea — pinta la explicación estructurada de una línea de liquidación
+    (Explanation del motor, serializada en ExplanationJson): la forma, el resumen, los
+    pasos con su valor, el parámetro legal con vigencia, el tramo de tabla y la novedad
+    de origen (FR-013). Recibe el JsonElement tal cual llega de la API.
+*@
+@using System.Text.Json
+
+<div class="explicacion-linea">
+    @if (Explicacion.ValueKind == JsonValueKind.Object)
+    {
+        <div class="explicacion-cabecera">
+            <span class="e-badge e-badge-info">@Texto("form")</span>
+            <strong>@Texto("summary")</strong>
+        </div>
+
+        @if (Explicacion.TryGetProperty("steps", out var pasos) && pasos.ValueKind == JsonValueKind.Array)
+        {
+            <ol class="explicacion-pasos">
+                @foreach (var paso in pasos.EnumerateArray())
+                {
+                    <li>
+                        <span>@Prop(paso, "label")</span>
+                        @if (paso.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number)
+                        {
+                            <strong class="monto">@v.GetDecimal().ToString("N2")</strong>
+                        }
+                        else if (paso.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
+                        {
+                            <em class="texto-tenue">@t.GetString()</em>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+
+        @if (Explicacion.TryGetProperty("parameter", out var parametro) && parametro.ValueKind == JsonValueKind.Object)
+        {
+            <p class="texto-tenue">
+                Parámetro legal <strong>@Prop(parametro, "code")</strong>
+                vigente desde @Fecha(parametro, "validFrom")
+                @if (parametro.TryGetProperty("value", out var pv) && pv.ValueKind == JsonValueKind.Number)
+                {
+                    <span> · valor @pv.GetDecimal().ToString("N4")</span>
+                }
+            </p>
+        }
+
+        @if (Explicacion.TryGetProperty("range", out var tramo) && tramo.ValueKind == JsonValueKind.Object)
+        {
+            <p class="texto-tenue">
+                Tramo desde @Num(tramo, "from") @(tramo.TryGetProperty("to", out var to) && to.ValueKind == JsonValueKind.Number ? $"hasta {to.GetDecimal():N2}" : "en adelante")
+                @Prop(tramo, "unit") · tarifa @Num(tramo, "rate") % · fijo @Num(tramo, "fixed") · base @Num(tramo, "baseInUnits") @Prop(tramo, "unit")
+            </p>
+        }
+
+        @if (Explicacion.TryGetProperty("novelty", out var novedad) && novedad.ValueKind == JsonValueKind.Object)
+        {
+            <p class="texto-tenue">
+                Origen: novedad @Prop(novedad, "description")
+                @if (NovedadUrl is not null && novedad.TryGetProperty("publicId", out var nid))
+                {
+                    <a href="@NovedadUrl(nid.GetString() ?? string.Empty)">ver</a>
+                }
+            </p>
+        }
+    }
+    else
+    {
+        <em class="texto-tenue">Sin explicación registrada.</em>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public JsonElement Explicacion { get; set; }
+
+    /// <summary>Construye la URL de la novedad de origen a partir de su PublicId; nulo = sin enlace.</summary>
+    [Parameter] public Func<string, string>? NovedadUrl { get; set; }
+
+    private string Texto(string nombre) => Prop(Explicacion, nombre);
+
+    private static string Prop(JsonElement e, string nombre) =>
+        e.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
+
+    private static string Num(JsonElement e, string nombre) =>
+        e.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal().ToString("N2") : "–";
+
+    private static string Fecha(JsonElement e, string nombre) =>
+        e.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.String && DateTime.TryParse(v.GetString(), out var d) ? d.ToString("dd/MM/yyyy") : "–";
+}

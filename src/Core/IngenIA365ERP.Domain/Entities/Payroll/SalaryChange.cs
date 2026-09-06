@@ -18,4 +18,15 @@ public class SalaryChange : AuditableEntityLong
 
     // Navigation
     public Employee? Employee { get; set; }
+
+    /// <summary>Largo de la columna legada <c>UserName</c> (SOLIDO): varchar(20).</summary>
+    public const int UserNameMaxLength = 20;
+
+    /// <summary>
+    /// Recorta el usuario a lo que cabe en la columna legada. Un correo como nombre de
+    /// usuario no cabe y PostgreSQL rechaza el INSERT entero (22001). Quién lo hizo de
+    /// verdad va en <c>CreatedBy</c>, sin recorte.
+    /// </summary>
+    public static string? RecortarUsuario(string? userName) =>
+        userName is null ? null : userName.Length <= UserNameMaxLength ? userName : userName[..UserNameMaxLength];
 }

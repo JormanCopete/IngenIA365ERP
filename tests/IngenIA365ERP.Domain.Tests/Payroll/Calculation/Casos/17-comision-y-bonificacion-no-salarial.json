@@ -1,0 +1,26 @@
+{
+  "nombre": "Comisión de 500.000 (salarial) y bonificación no salarial de 200.000 sobre 2.400.000",
+  "descripcion": "La comisión entra a todas las bases: IBC 2.900.000 (salario + comisión), prestacional 3.149.095 (con auxilio) y vacaciones sobre los devengos salariales 2.900.000. La bonificación no salarial sólo suma al ingreso de retención y al neto; no toca IBC ni prestaciones.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Raúl Serna", "clase": "Standard", "ingreso": "2021-11-01",
+    "salarios": [ { "desde": "2021-11-01", "mensual": 2400000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [
+    { "concepto": "COMISION", "valor": 500000, "descripcion": "Comisión de ventas" },
+    { "concepto": "BONIF_NO_SALARIAL", "valor": 200000, "descripcion": "Bonificación por metas" }
+  ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2400000, "AUX_TRANSPORTE": 249095, "COMISION": 500000, "BONIF_NO_SALARIAL": 200000,
+      "SALUD_EMP": 116000, "PENSION_EMP": 116000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 246500, "PENSION_EMPLEADOR": 348000, "ARL": 15138, "SENA": 58000, "ICBF": 87000, "CAJA": 116000,
+      "PROV_CESANTIAS": 262320, "PROV_INT_CESANTIAS": 31491, "PROV_PRIMA": 262320, "PROV_VACACIONES": 120930
+    },
+    "totales": { "devengos": 3349095, "deducciones": 232000, "aportesEmpleador": 870638, "provisiones": 677061, "neto": 3117095, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "nombre": "Retención procedimiento 1 con deducciones declaradas, salario 12.000.000",
+  "descripcion": "Intereses de vivienda 1.200.000, medicina prepagada 300.000 y dependientes (10 % del ingreso, tope 32 UVT). Deducciones más renta exenta del 25 % superan el 40 % del ingreso neto: se aplica el tope global (4.368.000). Base 6.552.000 = 125,10 UVT → tramo 95–150 al 19 %: 5,72 UVT = 299.523, aproximado a 300.000. La explicación muestra cada depuración.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Marta Ochoa", "clase": "Standard", "ingreso": "2018-02-01",
+    "salarios": [ { "desde": "2018-02-01", "mensual": 12000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1,
+    "deduccionesTributarias": [
+      { "tipo": "HousingInterest", "mensual": 1200000 },
+      { "tipo": "PrepaidHealth", "mensual": 300000 },
+      { "tipo": "Dependents" }
+    ]
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 12000000,
+      "SALUD_EMP": 480000, "PENSION_EMP": 480000, "FSP": 120000, "RETEFTE": 300000,
+      "SALUD_EMPLEADOR": 1020000, "PENSION_EMPLEADOR": 1440000, "ARL": 62640, "SENA": 240000, "ICBF": 360000, "CAJA": 480000,
+      "PROV_CESANTIAS": 999600, "PROV_INT_CESANTIAS": 120000, "PROV_PRIMA": 999600, "PROV_VACACIONES": 500400
+    },
+    "totales": { "devengos": 12000000, "deducciones": 1380000, "aportesEmpleador": 3602640, "provisiones": 2619600, "neto": 10620000, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

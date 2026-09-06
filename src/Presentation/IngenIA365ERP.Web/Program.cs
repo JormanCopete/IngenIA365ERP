@@ -75,6 +75,9 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
+// Feature 005 — cliente tipado del módulo de nómina (planes, períodos, novedades, liquidación).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();

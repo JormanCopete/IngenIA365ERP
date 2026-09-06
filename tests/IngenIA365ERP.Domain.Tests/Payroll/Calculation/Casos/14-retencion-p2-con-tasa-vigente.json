@@ -1,0 +1,23 @@
+{
+  "nombre": "Retención procedimiento 2 con porcentaje vigente del 4,5 %, salario 6.000.000",
+  "descripcion": "La misma base depurada del procedimiento 1 (ingreso − aportes obligatorios − renta exenta del 25 %) = 4.140.000, por el porcentaje fijo del empleado 4,5 % = 186.300, aproximado al múltiplo de mil: 186.000. Sin fondo de solidaridad (3,43 SMMLV).",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Nelson Ávila", "clase": "Standard", "ingreso": "2019-09-16",
+    "salarios": [ { "desde": "2019-09-16", "mensual": 6000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 2, "tasaRetencion": 4.5
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 6000000,
+      "SALUD_EMP": 240000, "PENSION_EMP": 240000, "FSP": 0, "RETEFTE": 186000,
+      "SALUD_EMPLEADOR": 510000, "PENSION_EMPLEADOR": 720000, "ARL": 31320, "SENA": 120000, "ICBF": 180000, "CAJA": 240000,
+      "PROV_CESANTIAS": 499800, "PROV_INT_CESANTIAS": 60000, "PROV_PRIMA": 499800, "PROV_VACACIONES": 250200
+    },
+    "totales": { "devengos": 6000000, "deducciones": 666000, "aportesEmpleador": 1801320, "provisiones": 1309800, "neto": 5334000, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

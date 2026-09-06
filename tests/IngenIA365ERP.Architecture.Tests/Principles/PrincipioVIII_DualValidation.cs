@@ -33,6 +33,18 @@ public class PrincipioVIII_DualValidation
         "IngenIA365ERP.Application.Compliance",
         // Notifications cubre el contrato cross-cutting; el stub SendNotificationCommand
         // se exenta porque su validation lo hace el handler real (T118, US6).
+
+        // Feature 005 — nomina nueva (novedades y liquidacion). El modulo Payroll
+        // legado sigue fuera; estos namespaces son los que nacen con la feature y
+        // entran con validador desde el primer comando.
+        "IngenIA365ERP.Application.Payroll.Plans",
+        "IngenIA365ERP.Application.Payroll.Novelties",
+        "IngenIA365ERP.Application.Payroll.Runs",
+        "IngenIA365ERP.Application.Payroll.Payments",
+        "IngenIA365ERP.Application.Payroll.Payslips",
+        "IngenIA365ERP.Application.Payroll.Concepts",
+        "IngenIA365ERP.Application.Payroll.LegalParameters",
+        "IngenIA365ERP.Application.Payroll.EmployeeTax",
     ];
 
     private static readonly HashSet<string> AllowedWithoutValidator =

@@ -61,6 +61,18 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.HasIndex(e => e.PayrollCompanyId);
         builder.HasIndex(e => e.Status);
 
+        // Feature 005: cada empleado pertenece a exactamente un plan de nomina (FR-037).
+        builder.HasOne(e => e.PayrollPlan)
+            .WithMany()
+            .HasForeignKey(e => e.PayrollPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.PayrollPlanId).HasDatabaseName("IX_PAY_Employees_PayrollPlan");
+
+        // Procedimiento de retencion 1 o 2 (FR-015). El default va en la BASE, no solo
+        // en el CLR: la migracion que anade la columna deja a los empleados existentes
+        // en el procedimiento 1, no en un 0 que ningun calculo acepta.
+        builder.Property(e => e.WithholdingProcedure).HasDefaultValue((byte)1);
+
         // === Audit ===
         builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);

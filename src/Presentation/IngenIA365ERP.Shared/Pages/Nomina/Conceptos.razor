@@ -1,131 +1,685 @@
 @page "/nomina/conceptos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@using System.Net.Http.Json
-@inject HttpClient Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
 @inject INotificationService Notification
 
-<PageTitle>Conceptos de Nomina - IngenIA365ERP</PageTitle>
+<PageTitle>Conceptos de nómina - IngenIA365ERP</PageTitle>
 
 <div class="page-header">
-    <h3>Conceptos de Nomina</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <h3>Conceptos de nómina</h3>
+    <div>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@ReaplicarSemilla" Title="Vuelve a insertar los conceptos y parámetros estándar que falten; no toca lo existente">Reaplicar semilla</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo concepto</SfButton>
+    </div>
 </div>
 
-<SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="ConceptCode" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Name" HeaderText="Nombre" Width="200" />
-        <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
-        <GridColumn Field="ConceptClass" HeaderText="Clase" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Nature" HeaderText="Naturaleza" Width="110" TextAlign="TextAlign.Center" />
-        <GridColumn Field="Value" HeaderText="Valor" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Factor" HeaderText="Factor" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="IsAutomatic" HeaderText="Automatico" Width="100" TextAlign="TextAlign.Center" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as ItemModel;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+<SfTab>
+    <TabItems>
+        <TabItem>
+            <ChildContent><TabHeader Text="Definiciones" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <label>
+                        Tipo
+                        <select class="e-input" @bind="_filtroNaturaleza">
+                            <option value="">Todos</option>
+                            <option value="Earning">Devengos</option>
+                            <option value="Deduction">Deducciones</option>
+                            <option value="EmployerContribution">Aportes del empleador</option>
+                            <option value="Provision">Provisiones</option>
+                            <option value="Informative">Informativos</option>
+                        </select>
+                    </label>
+                    <label>
+                        Origen
+                        <select class="e-input" @bind="_filtroOrigen">
+                            <option value="">Todos</option>
+                            <option value="Seed">Semilla</option>
+                            <option value="Custom">Propio</option>
+                            <option value="TranslatedLegacy">Traducido</option>
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_incluirInactivos" @bind:after="CargarAsync" /> Incluir desactivados</label>
+                    <span class="texto-tenue">@_visibles.Count() concepto(s)</span>
+                </div>
 
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
+                <SfGrid TValue="ConceptoDto" DataSource="@_visibles" AllowSorting="true" AllowPaging="true">
+                    <GridPageSettings PageSize="30" />
+                    <GridColumns>
+                        <GridColumn Field="Code" HeaderText="Código" Width="170" />
+                        <GridColumn Field="Name" HeaderText="Nombre" Width="240" />
+                        <GridColumn Field="NaturalezaTexto" HeaderText="Tipo" Width="150" />
+                        <GridColumn Field="FormaTexto" HeaderText="Forma de cálculo" Width="170" />
+                        <GridColumn HeaderText="Bases" Width="140">
+                            <Template>
+                                @{
+                                    var c = (ConceptoDto)context;
+                                    <small class="texto-tenue">@Bases(c)</small>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn HeaderText="Origen" Width="110">
+                            <Template>@{ var c = (ConceptoDto)context; <span class="e-badge @(c.Origin == "Seed" ? "e-badge-info" : c.Origin == "Custom" ? "e-badge-success" : "e-badge-warning")">@c.OrigenTexto</span> }</Template>
+                        </GridColumn>
+                        <GridColumn HeaderText="Cuentas" Width="90" TextAlign="TextAlign.Center">
+                            <Template>@{ var c = (ConceptoDto)context; if (c.Nature != "Informative") { <span class="e-badge @(c.HasAccounts ? "e-badge-success" : "e-badge-danger")">@(c.HasAccounts ? "Sí" : "Faltan")</span> } }</Template>
+                        </GridColumn>
+                        <GridColumn Field="ValidFrom" HeaderText="Vigente desde" Width="120" Format="d" />
+                        <GridColumn HeaderText="Acciones" Width="200" TextAlign="TextAlign.Center">
+                            <Template>
+                                @{
+                                    var c = (ConceptoDto)context;
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Nueva versión" OnClick="@(() => AbrirRevisar(c))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-table" Title="Cuentas contables" OnClick="@(() => AbrirCuentas(c))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-play" Title="Probar en seco" OnClick="@(() => AbrirPruebaEnSeco(c))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Versiones" OnClick="@(() => VerVersiones(c.Code))" />
+                                    @if (c.IsActive && c.ValidTo is null)
+                                    {
+                                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-close" Title="Desactivar (cerrar vigencia)" OnClick="@(() => AbrirDesactivar(c))" />
+                                    }
+                                }
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </SfGrid>
+            </ContentTemplate>
+        </TabItem>
+
+        <TabItem>
+            <ChildContent><TabHeader Text="Versiones" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <label>
+                        Concepto
+                        <select class="e-input" value="@_codigoVersiones" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => await VerVersiones(e.Value?.ToString() ?? string.Empty))">
+                            <option value="">Elegí un concepto…</option>
+                            @foreach (var c in _conceptos.OrderBy(c => c.Code)) { <option value="@c.Code">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                </div>
+                @if (_versiones.Count > 0)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Desde</th><th>Hasta</th><th>Nombre</th><th>Forma</th><th>Parámetros</th><th>Activo</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _versiones)
+                            {
+                                <tr class="@(v.ValidTo is null ? "" : "texto-tenue")">
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                    <td>@(v.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                    <td>@v.Name</td>
+                                    <td>@v.FormaTexto</td>
+                                    <td class="texto-tenue">@Resumen(v)</td>
+                                    <td>@(v.IsActive ? "Sí" : "No")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </ContentTemplate>
+        </TabItem>
+
+        <TabItem>
+            <ChildContent><TabHeader Text="Catálogo heredado" /></ChildContent>
+            <ContentTemplate>
+                <div class="info-card">
+                    <span class="label">Sólo lectura</span>
+                    <p>Los conceptos del sistema anterior no liquidan. «Traducir a definición» abre el formulario con lo que se puede deducir sin inventar; lo demás queda vacío para que lo completés. Un concepto que ninguna forma cubra se deja sin traducir.</p>
+                </div>
+                <div class="toolbar">
+                    <SfTextBox @bind-Value="_buscarHeredado" Placeholder="Buscar" ShowClearButton="true" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await CargarHeredadosAsync())" />
+                </div>
+                <SfGrid TValue="ConceptoHeredadoDto" DataSource="@_heredados" AllowPaging="true" AllowSorting="true">
+                    <GridPageSettings PageSize="30" />
+                    <GridColumns>
+                        <GridColumn Field="ConceptCode" HeaderText="Código" Width="90" TextAlign="TextAlign.Center" />
+                        <GridColumn Field="Name" HeaderText="Nombre" Width="220" />
+                        <GridColumn Field="Value" HeaderText="Valor" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="Factor" HeaderText="Factor" Width="90" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="TranslationHint" HeaderText="Pista" Width="260" />
+                        <GridColumn HeaderText="Traducido" Width="150">
+                            <Template>@{ var h = (ConceptoHeredadoDto)context; if (h.TranslatedToCode is not null) { <span class="e-badge e-badge-success">@h.TranslatedToCode</span> } else { <span class="e-badge e-badge-secondary">Sin traducir</span> } }</Template>
+                        </GridColumn>
+                        <GridColumn HeaderText="" Width="170">
+                            <Template>@{ var h = (ConceptoHeredadoDto)context; if (h.TranslatedToCode is null) { <SfButton CssClass="e-outline e-small" OnClick="@(() => Traducir(h))">Traducir a definición</SfButton> } }</Template>
+                        </GridColumn>
+                    </GridColumns>
+                </SfGrid>
+            </ContentTemplate>
+        </TabItem>
+    </TabItems>
+</SfTab>
+
+@* ------------------------------------------------------------- formulario --- *@
+<SfDialog @bind-Visible="_mostrarForm" Header="@_tituloForm" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_f" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    <div class="form-grid">
+                        <SfTextBox @bind-Value="_f.Code" Placeholder="Código (MAYUSCULAS_GUION_BAJO)" FloatLabelType="FloatLabelType.Always" Readonly="@(_revisando is not null)" />
+                        <SfTextBox @bind-Value="_f.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                        <label class="campo">Tipo
+                            <select class="e-input" @bind="_f.Nature">
+                                <option value="Earning">Devengo</option><option value="Deduction">Deducción</option>
+                                <option value="EmployerContribution">Aporte del empleador</option><option value="Provision">Provisión</option><option value="Informative">Informativo</option>
+                            </select>
+                        </label>
+                        <label class="campo">Forma de cálculo
+                            <select class="e-input" @bind="_f.CalculationKind">
+                                <option value="FixedAmount">Valor fijo</option><option value="PercentOfBase">Porcentaje sobre base</option>
+                                <option value="QuantityTimesUnit">Cantidad × unidad</option><option value="RangeTable">Tabla por rangos</option><option value="CompositeOfConcepts">Suma de conceptos</option>
+                            </select>
+                        </label>
+                        <SfDatePicker TValue="DateTime" @bind-Value="_f.ValidFrom" Placeholder="Vigente desde" FloatLabelType="FloatLabelType.Always" />
+                    </div>
+                    <ValidationMessage For="() => _f.Code" /><ValidationMessage For="() => _f.Name" />
+
+                    <span class="label">Parámetros de la forma «@FormaTexto(_f.CalculationKind)»</span>
+                    <div class="form-grid">
+                        @switch (_f.CalculationKind)
+                        {
+                            case "FixedAmount":
+                                <SfNumericTextBox TValue="decimal?" @bind-Value="_f.FixedAmount" Placeholder="Valor fijo (o dejalo vacío si lo trae la novedad o un parámetro)" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
+                                <SfTextBox @bind-Value="_f.AmountParameterCode" Placeholder="Parámetro legal que aporta el valor (p. ej. AUX_TRANSPORTE)" FloatLabelType="FloatLabelType.Always" />
+                                <label class="campo-check"><input type="checkbox" @bind="_f.ProrateByDays" /> Proporcional a los días pagados</label>
+                                break;
+                            case "PercentOfBase":
+                            case "RangeTable":
+                                <label class="campo">Base
+                                    <select class="e-input" @bind="_f.BaseKind">
+                                        <option value="">Elegí…</option>
+                                        <option value="BasicSalary">Salario básico del período</option><option value="SalaryEarnings">Devengos salariales</option>
+                                        <option value="ContributionBase">Base de aportes (IBC)</option><option value="BenefitsBase">Base prestacional</option>
+                                        <option value="WithholdingBase">Base de retención depurada</option><option value="TransportAllowanceBase">Salario mensual (auxilio)</option>
+                                    </select>
+                                </label>
+                                @if (_f.CalculationKind == "PercentOfBase")
+                                {
+                                    <SfNumericTextBox TValue="decimal?" @bind-Value="_f.Percent" Placeholder="Porcentaje fijo (%)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" Max="100" />
+                                    <SfTextBox @bind-Value="_f.PercentParameterCode" Placeholder="…o parámetro legal que lo aporta (p. ej. SALUD_EMPLEADO_PCT; {CLASE} = clase ARL)" FloatLabelType="FloatLabelType.Always" />
+                                }
+                                else
+                                {
+                                    <SfTextBox @bind-Value="_f.TableParameterCode" Placeholder="Parámetro legal de tipo tabla (p. ej. RETEFTE_TABLA_UVT)" FloatLabelType="FloatLabelType.Always" />
+                                }
+                                break;
+                            case "QuantityTimesUnit":
+                                <label class="campo">Unidad
+                                    <select class="e-input" @bind="_f.UnitKind">
+                                        <option value="">Elegí…</option>
+                                        <option value="OrdinaryHour">Hora ordinaria (salario / horas del mes)</option>
+                                        <option value="HourWithSurcharge">Hora con recargo</option>
+                                        <option value="Day">Día (salario / 30)</option>
+                                    </select>
+                                </label>
+                                <SfNumericTextBox TValue="decimal?" @bind-Value="_f.UnitFactor" Placeholder="Factor de recargo (1,25; 1,75; 2…)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
+                                <SfTextBox @bind-Value="_f.PercentParameterCode" Placeholder="Porcentaje por parámetro legal (opcional, p. ej. INCAPACIDAD_EMPLEADOR_PCT)" FloatLabelType="FloatLabelType.Always" />
+                                break;
+                            case "CompositeOfConcepts":
+                                <SfTextBox @bind-Value="_f.ComponentConceptCodes" Placeholder="Componentes: +HEX_DIURNA*1;+COMISION*1;-OTROS_DESC*0.5" FloatLabelType="FloatLabelType.Always" />
+                                <SfNumericTextBox TValue="decimal?" @bind-Value="_f.Percent" Placeholder="Porcentaje sobre la suma (opcional)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" Max="100" />
+                                break;
+                        }
+                    </div>
+
+                    <span class="label">Qué bases alimenta y cómo se registra</span>
+                    <div class="form-grid">
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AffectsSalaryBase" /> Devengo salarial</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AffectsContributionBase" /> Base de aportes (IBC)</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AffectsBenefitsBase" /> Base prestacional</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AffectsWithholdingBase" /> Base de retención</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.IsBenefitRelated" /> Prestacional</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.IsAutomatic" /> Automático (lo genera el cálculo sin novedad)</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.RequiresQuantity" /> La novedad trae cantidad</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.RequiresAmount" /> La novedad trae valor</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.RequiresDates" /> La novedad trae fechas</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.ReducesWorkedDays" /> Resta días al salario (ausencias)</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AllowsRepeatInPeriod" /> Admite repetirse en el período</label>
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_f.MaxQuantity" Placeholder="Tope de cantidad" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" />
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_f.MaxAmount" Placeholder="Tope de valor" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
+                    </div>
+
+                    <span class="label">Clases de empleado a las que aplica (ninguna marcada = todas)</span>
+                    <div class="form-grid">
+                        @foreach (var (clase, nombre, bit) in Clases)
+                        {
+                            <label class="campo-check"><input type="checkbox" checked="@((_f.ApplicableClasses & bit) != 0)" @onchange="e => Marcar(bit, (bool)(e.Value ?? false))" /> @nombre</label>
+                        }
+                    </div>
+
+                    @if (_revisando is not null)
+                    {
+                        <p class="texto-tenue">Se crea una versión nueva desde la fecha indicada; la actual se cierra el día anterior. Las liquidaciones aprobadas siguen mostrando la versión con la que se calcularon. Si hay un borrador calculado, quedará desactualizado.</p>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarForm = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_ocupado">@(_revisando is null ? "Crear" : "Guardar versión")</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------- cuentas --- *@
+<SfDialog @bind-Visible="_mostrarCuentas" Header="@($"Cuentas contables de {_cuentasDe?.Code}")" Width="760px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             <div class="pagina">
-                <SfNumericTextBox TValue="int" @bind-Value="_model.ConceptCode" Placeholder="Codigo" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.ConceptClass" Placeholder="Clase Concepto" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.Nature" Placeholder="Naturaleza" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="decimal" @bind-Value="_model.Value" Placeholder="Valor" Format="N2" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="decimal" @bind-Value="_model.Factor" Placeholder="Factor" Format="N2" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.IsAutomatic" Placeholder="Automatico (S/N)" FloatLabelType="FloatLabelType.Always" />
+                <p class="texto-tenue">Una fila por defecto (sin centro de costo) y, si hace falta, una por centro de costo. El valor del concepto va al débito de la cuenta débito y al crédito de la cuenta crédito.</p>
+                <table class="data-grid">
+                    <thead><tr><th>Centro de costo</th><th>Cuenta débito</th><th>Cuenta crédito</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var fila in _filasCuentas)
+                        {
+                            <tr>
+                                <td><SfTextBox @bind-Value="fila.CostCenterPublicId" Placeholder="vacío = por defecto (PublicId del centro)" /></td>
+                                <td>
+                                    <div class="toolbar">
+                                        <SfTextBox @bind-Value="fila.Debito" Placeholder="Código" />
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" type="button" OnClick="@(() => BuscarCuenta(fila, true))" />
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="toolbar">
+                                        <SfTextBox @bind-Value="fila.Credito" Placeholder="Código" />
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" type="button" OnClick="@(() => BuscarCuenta(fila, false))" />
+                                    </div>
+                                </td>
+                                <td><SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" OnClick="@(() => _filasCuentas.Remove(fila))" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@(() => _filasCuentas.Add(new FilaCuenta()))">Agregar fila</SfButton>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarCuentas = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-primary" type="button" Disabled="@_ocupado" OnClick="@GuardarCuentas">Guardar cuentas</SfButton>
             </div>
         </Content>
     </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
-    </DialogButtons>
+</SfDialog>
+<AccountSearchDialog @bind-Visible="_mostrarBuscarCuenta" OnAccountSelected="CuentaElegida" />
+
+@* ----------------------------------------------------------- desactivar --- *@
+<SfDialog @bind-Visible="_mostrarDesactivar" Header="@($"Desactivar {_desactivando?.Code}")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="pagina">
+                <p>Cierra la vigencia del concepto en la fecha indicada. No se borra: las liquidaciones anteriores lo siguen mostrando.</p>
+                <SfDatePicker TValue="DateTime" @bind-Value="_fechaDesactivar" Placeholder="Vigente hasta" FloatLabelType="FloatLabelType.Always" />
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDesactivar = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-danger" type="button" Disabled="@_ocupado" OnClick="@ConfirmarDesactivar">Desactivar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
 </SfDialog>
 
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+@* --------------------------------------------------------- prueba en seco --- *@
+<SfDialog @bind-Visible="_mostrarPrueba" Header="@($"Probar en seco: {_pruebaDe?.Code}")" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="pagina">
+                <p class="texto-tenue">Calcula al empleado en el período con esta definición como si fuera la vigente y muestra la línea con su explicación. No guarda nada.</p>
+                <div class="form-grid">
+                    <div class="campo">
+                        <label>Empleado</label>
+                        @if (_pruebaEmpleado is null)
+                        {
+                            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await BuscarEmpleadosAsync())" />
+                            @foreach (var e in _empleados)
+                            {
+                                <div class="picker-opcion" @onclick="() => _pruebaEmpleado = e"><span class="e-badge e-badge-info">@e.IdentificationNumber</span> <strong>@e.FullName</strong></div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="persona-chip"><strong>@_pruebaEmpleado.FullName</strong> <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => _pruebaEmpleado = null)" /></div>
+                        }
+                    </div>
+                    <label class="campo">Período
+                        <select class="e-input" @bind="_pruebaPeriodoId">
+                            <option value="">Elegí…</option>
+                            @foreach (var p in _periodos) { <option value="@p.PublicId">@p.Etiqueta · @p.EstadoTexto</option> }
+                        </select>
+                    </label>
+                    @if (_pruebaDe is not null && !_pruebaDe.IsAutomatic)
+                    {
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_pruebaCantidad" Placeholder="Cantidad" FloatLabelType="FloatLabelType.Always" Decimals="2" />
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_pruebaValor" Placeholder="Valor" FloatLabelType="FloatLabelType.Always" Format="N0" />
+                        <SfDatePicker TValue="DateTime?" @bind-Value="_pruebaDesde" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" />
+                        <SfDatePicker TValue="DateTime?" @bind-Value="_pruebaHasta" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" type="button" Disabled="@(_ocupado || _pruebaEmpleado is null || string.IsNullOrEmpty(_pruebaPeriodoId))" OnClick="@Probar">Calcular</SfButton>
+                </div>
+                @if (_pruebaResultado is not null)
+                {
+                    @if (_pruebaResultado.Lines.Count == 0)
+                    {
+                        <div class="info-card"><span class="label">Sin línea</span><p>@(_pruebaResultado.Skips.FirstOrDefault() ?? _pruebaResultado.Refusals.FirstOrDefault() ?? "El concepto no produjo línea para este empleado.")</p></div>
+                    }
+                    @foreach (var l in _pruebaResultado.Lines)
+                    {
+                        <div class="info-card">
+                            <span class="label">@l.ConceptCode · @l.ConceptName</span>
+                            <p><strong>@l.Amount.ToString("N0")</strong></p>
+                            <ExplicacionDeLinea Explicacion="@l.Explanation" />
+                        </div>
+                    }
+                    <p class="texto-tenue">Neto del empleado con esta definición: @_pruebaResultado.Totals.Net.ToString("N0").</p>
+                }
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 
 @code {
-    private SfGrid<ItemModel>? _grid;
-    private List<ItemModel> _items = [];
-    private FormModel _model = new();
-    private Guid? _editId;
-    private bool _showDialog, _showConfirm;
-    private string _dialogTitle = "";
-    private Guid _deleteId;
+    private static readonly (string Clase, string Nombre, int Bit)[] Clases =
+    [
+        ("Standard", "Estándar", 1 << 0), ("IntegralSalary", "Salario integral", 1 << 1), ("Apprentice", "Aprendiz", 1 << 2), ("Intern", "Pasante", 1 << 3), ("Pensioner", "Pensionado", 1 << 4),
+    ];
 
-    protected override async Task OnInitializedAsync() => await LoadData();
+    private List<ConceptoDto> _conceptos = [];
+    private List<ConceptoDto> _versiones = [];
+    private List<ConceptoHeredadoDto> _heredados = [];
+    private List<PeriodoPagoDto> _periodos = [];
+    private List<EmpleadoResumenDto> _empleados = [];
+    private string _filtroNaturaleza = string.Empty, _filtroOrigen = string.Empty, _codigoVersiones = string.Empty, _buscarHeredado = string.Empty, _buscarEmpleado = string.Empty;
+    private bool _incluirInactivos, _ocupado, _mostrarForm, _mostrarCuentas, _mostrarBuscarCuenta, _mostrarDesactivar, _mostrarPrueba;
+    private FormConcepto _f = new();
+    private ConceptoDto? _revisando, _cuentasDe, _desactivando, _pruebaDe;
+    private string _tituloForm = string.Empty;
+    private List<FilaCuenta> _filasCuentas = [];
+    private FilaCuenta? _filaBuscando; private bool _buscandoDebito;
+    private DateTime _fechaDesactivar = DateTime.Today;
+    private EmpleadoResumenDto? _pruebaEmpleado;
+    private string _pruebaPeriodoId = string.Empty;
+    private decimal? _pruebaCantidad, _pruebaValor;
+    private DateTime? _pruebaDesde, _pruebaHasta;
+    private ResultadoPruebaEnSecoDto? _pruebaResultado;
 
-    private async Task LoadData()
+    private IEnumerable<ConceptoDto> _visibles => _conceptos
+        .Where(c => string.IsNullOrEmpty(_filtroNaturaleza) || c.Nature == _filtroNaturaleza)
+        .Where(c => string.IsNullOrEmpty(_filtroOrigen) || c.Origin == _filtroOrigen);
+
+    protected override async Task OnInitializedAsync()
     {
-        try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/concepts?pageSize=500"); _items = r?.Items ?? []; }
-        catch { _items = []; }
+        await CargarAsync();
+        await CargarHeredadosAsync();
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Concepto"; _showDialog = true; }
-
-    private void OpenEdit(ItemModel item)
+    private async Task CargarAsync()
     {
-        _model = new()
+        var res = await Nomina.ListarConceptosAsync(null, _incluirInactivos);
+        if (res.IsSuccess) _conceptos = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los conceptos.");
+    }
+
+    private async Task CargarHeredadosAsync()
+    {
+        var res = await Nomina.ListarConceptosHeredadosAsync(string.IsNullOrWhiteSpace(_buscarHeredado) ? null : _buscarHeredado);
+        if (res.IsSuccess) _heredados = res.Value!.ToList();
+    }
+
+    private async Task VerVersiones(string code)
+    {
+        _codigoVersiones = code;
+        if (string.IsNullOrEmpty(code)) { _versiones = []; return; }
+        var res = await Nomina.VersionesDeConceptoAsync(code);
+        _versiones = res.IsSuccess ? res.Value!.ToList() : [];
+    }
+
+    private static string Bases(ConceptoDto c)
+    {
+        var b = new List<string>();
+        if (c.AffectsSalaryBase) b.Add("salarial");
+        if (c.AffectsContributionBase) b.Add("IBC");
+        if (c.AffectsBenefitsBase) b.Add("prestacional");
+        if (c.AffectsWithholdingBase) b.Add("retención");
+        return b.Count == 0 ? "—" : string.Join(", ", b);
+    }
+
+    private static string Resumen(ConceptoDto v) => v.CalculationKind switch
+    {
+        "FixedAmount" => v.AmountParameterCode ?? v.FixedAmount?.ToString("N0") ?? "valor de la novedad",
+        "PercentOfBase" => $"{v.BaseKind} × {(v.PercentParameterCode ?? v.Percent?.ToString("0.####") + " %")}",
+        "QuantityTimesUnit" => $"{v.UnitKind} × {v.UnitFactor?.ToString("0.##") ?? "1"}{(v.PercentParameterCode is null ? "" : " × " + v.PercentParameterCode)}",
+        "RangeTable" => $"{v.BaseKind} → {v.TableParameterCode}",
+        "CompositeOfConcepts" => v.ComponentConceptCodes ?? string.Empty,
+        _ => string.Empty,
+    };
+
+    private static string FormaTexto(string kind) => kind switch
+    {
+        "FixedAmount" => "Valor fijo", "PercentOfBase" => "Porcentaje sobre base", "QuantityTimesUnit" => "Cantidad × unidad",
+        "RangeTable" => "Tabla por rangos", "CompositeOfConcepts" => "Suma de conceptos", _ => kind,
+    };
+
+    private void Marcar(int bit, bool marcado) => _f.ApplicableClasses = marcado ? _f.ApplicableClasses | bit : _f.ApplicableClasses & ~bit;
+
+    // ------------------------------------------------------------ crear / revisar ---
+
+    private void AbrirNuevo()
+    {
+        _f = new FormConcepto { ValidFrom = DateTime.Today };
+        _revisando = null;
+        _tituloForm = "Nuevo concepto";
+        _mostrarForm = true;
+    }
+
+    private void AbrirRevisar(ConceptoDto c)
+    {
+        _f = FormConcepto.Desde(c);
+        _f.ValidFrom = DateTime.Today > c.ValidFrom ? DateTime.Today : c.ValidFrom.AddDays(1);
+        _revisando = c;
+        _tituloForm = $"Nueva versión de {c.Code}";
+        _mostrarForm = true;
+    }
+
+    private void Traducir(ConceptoHeredadoDto h)
+    {
+        _f = new FormConcepto
         {
-            ConceptCode = item.ConceptCode, Name = item.Name, ShortName = item.ShortName,
-            ConceptClass = item.ConceptClass, Nature = item.Nature, Value = item.Value,
-            Factor = item.Factor, IsAutomatic = item.IsAutomatic
+            Code = $"LEG_{h.ConceptCode}",
+            Name = h.Name,
+            Nature = h.Nature == 2 ? "Deduction" : "Earning",
+            CalculationKind = h.Factor > 0 && h.Value == 0 ? "QuantityTimesUnit" : h.Value is > 0 and <= 100 ? "PercentOfBase" : "FixedAmount",
+            UnitFactor = h.Factor > 0 ? h.Factor : null,
+            Percent = h.Value is > 0 and <= 100 ? h.Value : null,
+            FixedAmount = h.Value > 100 ? h.Value : null,
+            AffectsSalaryBase = h.AffectsSalary,
+            AffectsBenefitsBase = h.AffectsBenefits,
+            AffectsWithholdingBase = h.AffectsWithholding,
+            IsBenefitRelated = h.IsBenefit,
+            IsAutomatic = h.IsAutomatic,
+            RequiresQuantity = h.Factor > 0 && h.Value == 0,
+            ValidFrom = DateTime.Today,
         };
-        _editId = item.PublicId; _dialogTitle = "Editar Concepto"; _showDialog = true;
+        _revisando = null;
+        _tituloForm = $"Traducir concepto heredado {h.ConceptCode} · {h.Name}";
+        _mostrarForm = true;
     }
 
-    private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
-
-    private async Task Save()
+    private async Task Guardar()
     {
-        var res = _editId.HasValue
-            ? await Http.PutAsJsonAsync($"/api/payroll/concepts/{_editId}", _model)
-            : await Http.PostAsJsonAsync("/api/payroll/concepts", _model);
-        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Guardado"); _showDialog = false; await LoadData(); }
-        else await Notification.ShowErrorAsync(res, "Error al guardar");
+        if (_ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var req = _f.ARequest();
+            var res = _revisando is null ? await Nomina.CrearConceptoAsync(req) : await Nomina.RevisarConceptoAsync(_revisando.Code, req);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo guardar el concepto."); return; }
+            await Notification.SuccessAsync(_revisando is null ? "Concepto creado." : "Versión nueva guardada.");
+            _mostrarForm = false;
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
     }
 
-    private async Task ConfirmDelete()
+    // ------------------------------------------------------------------- cuentas ---
+
+    private void AbrirCuentas(ConceptoDto c)
     {
-        var res = await Http.DeleteAsync($"/api/payroll/concepts/{_deleteId}");
-        if (res.IsSuccessStatusCode) { await Notification.SuccessAsync("Eliminado"); await LoadData(); }
-        else await Notification.ShowErrorAsync(res, "Error al eliminar");
+        _cuentasDe = c;
+        _filasCuentas = [new FilaCuenta()];
+        _mostrarCuentas = true;
     }
 
-    private class Paged { public List<ItemModel> Items { get; set; } = []; }
-    private class ItemModel
+    private void BuscarCuenta(FilaCuenta fila, bool debito) { _filaBuscando = fila; _buscandoDebito = debito; _mostrarBuscarCuenta = true; }
+
+    private void CuentaElegida(AccountSearchDialog.AccountSearchResult cuenta)
     {
-        public Guid PublicId { get; set; }
-        public int ConceptCode { get; set; }
-        public string Name { get; set; } = "";
-        public string ShortName { get; set; } = "";
-        public int ConceptClass { get; set; }
-        public int Nature { get; set; }
-        public decimal Value { get; set; }
-        public decimal Factor { get; set; }
-        public string IsAutomatic { get; set; } = "";
+        if (_filaBuscando is null) return;
+        if (_buscandoDebito) _filaBuscando.Debito = cuenta.Code; else _filaBuscando.Credito = cuenta.Code;
+        _mostrarBuscarCuenta = false;
     }
-    private class FormModel
+
+    private async Task GuardarCuentas()
     {
-        public int ConceptCode { get; set; }
-        public string Name { get; set; } = "";
-        public string ShortName { get; set; } = "";
-        public int ConceptClass { get; set; }
-        public int Nature { get; set; }
-        public decimal Value { get; set; }
-        public decimal Factor { get; set; }
-        public string IsAutomatic { get; set; } = "N";
+        if (_cuentasDe is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var filas = _filasCuentas.Select(f => new CuentaDeConceptoRequest(
+                Guid.TryParse(f.CostCenterPublicId, out var cc) ? cc : null, f.Debito.Trim(), f.Credito.Trim())).ToList();
+            var res = await Nomina.GuardarCuentasDeConceptoAsync(_cuentasDe.Code, filas);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron guardar las cuentas."); return; }
+            await Notification.SuccessAsync("Cuentas guardadas.");
+            _mostrarCuentas = false;
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    // ---------------------------------------------------------------- desactivar ---
+
+    private void AbrirDesactivar(ConceptoDto c) { _desactivando = c; _fechaDesactivar = DateTime.Today; _mostrarDesactivar = true; }
+
+    private async Task ConfirmarDesactivar()
+    {
+        if (_desactivando is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.DesactivarConceptoAsync(_desactivando.Code, _fechaDesactivar);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo desactivar."); return; }
+            await Notification.SuccessAsync("Vigencia cerrada.");
+            _mostrarDesactivar = false;
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    // ------------------------------------------------------------ prueba en seco ---
+
+    private async Task AbrirPruebaEnSeco(ConceptoDto c)
+    {
+        _pruebaDe = c;
+        _pruebaResultado = null;
+        _pruebaEmpleado = null;
+        _pruebaCantidad = null; _pruebaValor = null; _pruebaDesde = null; _pruebaHasta = null;
+        var periodos = await Nomina.ListarPeriodosAsync(null, null, 1, 50);
+        _periodos = periodos.IsSuccess ? periodos.Value!.Items.OrderByDescending(p => p.StartDate).ToList() : [];
+        _pruebaPeriodoId = _periodos.FirstOrDefault(p => p.EstaAbierto)?.PublicId.ToString() ?? _periodos.FirstOrDefault()?.PublicId.ToString() ?? string.Empty;
+        _mostrarPrueba = true;
+    }
+
+    private async Task BuscarEmpleadosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarEmpleado) || _buscarEmpleado.Trim().Length < 2) { _empleados = []; return; }
+        var res = await Nomina.BuscarEmpleadosAsync(_buscarEmpleado);
+        _empleados = res.IsSuccess ? res.Value!.Items.ToList() : [];
+    }
+
+    private async Task Probar()
+    {
+        if (_pruebaDe is null || _pruebaEmpleado is null || !Guid.TryParse(_pruebaPeriodoId, out var periodo) || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ProbarEnSecoAsync(new PruebaEnSecoRequest(FormConcepto.Desde(_pruebaDe).ARequest(), _pruebaEmpleado.PublicId, periodo, _pruebaCantidad, _pruebaValor, _pruebaDesde, _pruebaHasta));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo calcular."); return; }
+            _pruebaResultado = res.Value;
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ReaplicarSemilla()
+    {
+        if (_ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ReaplicarSemillaAsync();
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo reaplicar la semilla."); return; }
+            var total = res.Value!.Sum(x => x.Inserted);
+            await Notification.SuccessAsync(total == 0 ? "La semilla ya estaba completa: no faltaba nada." : $"Semilla reaplicada: {total} fila(s) nuevas.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private sealed class FilaCuenta { public string CostCenterPublicId { get; set; } = string.Empty; public string Debito { get; set; } = string.Empty; public string Credito { get; set; } = string.Empty; }
+
+    private sealed class FormConcepto
+    {
+        [Required(ErrorMessage = "El código es obligatorio.")]
+        [RegularExpression("^[A-Za-z0-9_]{2,30}$", ErrorMessage = "Letras, dígitos y guion bajo (2 a 30).")]
+        public string Code { get; set; } = string.Empty;
+        [Required(ErrorMessage = "El nombre es obligatorio."), StringLength(120)] public string Name { get; set; } = string.Empty;
+        public string Nature { get; set; } = "Earning";
+        public string CalculationKind { get; set; } = "FixedAmount";
+        public decimal? FixedAmount { get; set; }
+        public string? AmountParameterCode { get; set; }
+        public bool ProrateByDays { get; set; }
+        public string? BaseKind { get; set; }
+        public decimal? Percent { get; set; }
+        public string? PercentParameterCode { get; set; }
+        public string? UnitKind { get; set; }
+        public decimal? UnitFactor { get; set; }
+        public string? TableParameterCode { get; set; }
+        public string? ComponentConceptCodes { get; set; }
+        public bool AffectsSalaryBase { get; set; }
+        public bool AffectsContributionBase { get; set; }
+        public bool AffectsBenefitsBase { get; set; }
+        public bool AffectsWithholdingBase { get; set; }
+        public bool IsBenefitRelated { get; set; }
+        public bool AllowsRepeatInPeriod { get; set; }
+        public decimal? MaxQuantity { get; set; }
+        public decimal? MaxAmount { get; set; }
+        public int ApplicableClasses { get; set; }
+        public bool RequiresDates { get; set; }
+        public bool RequiresQuantity { get; set; }
+        public bool RequiresAmount { get; set; }
+        public bool IsAutomatic { get; set; }
+        public bool ReducesWorkedDays { get; set; }
+        public DateTime ValidFrom { get; set; } = DateTime.Today;
+
+        public static FormConcepto Desde(ConceptoDto c) => new()
+        {
+            Code = c.Code, Name = c.Name, Nature = c.Nature, CalculationKind = c.CalculationKind, FixedAmount = c.FixedAmount, AmountParameterCode = c.AmountParameterCode,
+            ProrateByDays = c.ProrateByDays, BaseKind = c.BaseKind, Percent = c.Percent, PercentParameterCode = c.PercentParameterCode, UnitKind = c.UnitKind, UnitFactor = c.UnitFactor,
+            TableParameterCode = c.TableParameterCode, ComponentConceptCodes = c.ComponentConceptCodes, AffectsSalaryBase = c.AffectsSalaryBase, AffectsContributionBase = c.AffectsContributionBase,
+            AffectsBenefitsBase = c.AffectsBenefitsBase, AffectsWithholdingBase = c.AffectsWithholdingBase, IsBenefitRelated = c.IsBenefitRelated, AllowsRepeatInPeriod = c.AllowsRepeatInPeriod,
+            MaxQuantity = c.MaxQuantity, MaxAmount = c.MaxAmount, ApplicableClasses = c.ApplicableClasses, RequiresDates = c.RequiresDates, RequiresQuantity = c.RequiresQuantity,
+            RequiresAmount = c.RequiresAmount, IsAutomatic = c.IsAutomatic, ReducesWorkedDays = c.ReducesWorkedDays, ValidFrom = c.ValidFrom,
+        };
+
+        public DefinicionConceptoRequest ARequest() => new(
+            Code.Trim().ToUpperInvariant(), Name.Trim(), Nature, CalculationKind, FixedAmount, Vacio(AmountParameterCode), ProrateByDays,
+            Vacio(BaseKind), Percent, Vacio(PercentParameterCode), Vacio(UnitKind), UnitFactor, Vacio(TableParameterCode), Vacio(ComponentConceptCodes),
+            AffectsSalaryBase, AffectsContributionBase, AffectsBenefitsBase, AffectsWithholdingBase, IsBenefitRelated,
+            AllowsRepeatInPeriod, MaxQuantity, MaxAmount, ApplicableClasses, RequiresDates, RequiresQuantity, RequiresAmount, IsAutomatic, ReducesWorkedDays, ValidFrom);
+
+        private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
 }

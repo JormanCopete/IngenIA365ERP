@@ -1,0 +1,141 @@
+@*
+    PanelDeAprobacion — diálogo de aprobación (contracts/ui.md §2): resumen de totales,
+    lista de bloqueos con casilla «Autorizar excepción» + motivo (visible sólo con el
+    permiso), texto de confirmación explícito, y segunda confirmación cuando la
+    cooperativa permite aprobar sin segregación. Emite Aprobar con la petición armada.
+*@
+@using IngenIA365ERP.Shared.Services.Nomina
+
+<SfDialog Visible="@Visible" VisibleChanged="@OnDialogVisibleChanged" Header="Aprobar la liquidación" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (Corrida is not null && Periodo is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card">
+                        <span class="label">Qué se aprueba</span>
+                        <p>Período <strong>@Periodo.Etiqueta</strong>, borrador v@Corrida.Version con <strong>@Corrida.EmployeeCount</strong> empleado(s).
+                           Neto a pagar <strong>@Corrida.Totals.Net.ToString("N0")</strong>; devengos @Corrida.Totals.Earnings.ToString("N0"),
+                           deducciones @Corrida.Totals.Deductions.ToString("N0"), aportes del empleador @Corrida.Totals.EmployerContributions.ToString("N0"),
+                           provisiones @Corrida.Totals.Provisions.ToString("N0").</p>
+                        <p class="texto-tenue">Al aprobar, el período se cierra, las novedades y la liquidación quedan inmutables y se genera el comprobante contable NM en la misma operación.</p>
+                    </div>
+
+                    @if (Corrida.Blockers.Count > 0)
+                    {
+                        <span class="label">Bloqueos (@Corrida.Blockers.Count)</span>
+                        @if (!PuedeAutorizarExcepciones)
+                        {
+                            <p class="texto-tenue">Corregí las causas y recalculá. Autorizar una excepción exige el permiso «Autorizar excepciones».</p>
+                        }
+                        <table class="data-grid">
+                            <thead><tr><th>Empleado</th><th>Bloqueo</th><th>Detalle</th>@if (PuedeAutorizarExcepciones) { <th>Autorizar</th><th>Motivo</th> }</tr></thead>
+                            <tbody>
+                                @foreach (var b in Corrida.Blockers)
+                                {
+                                    var clave = Clave(b);
+                                    <tr>
+                                        <td>@b.EmployeeName</td>
+                                        <td>@b.BanderaTexto</td>
+                                        <td class="texto-tenue">@b.Detail</td>
+                                        @if (PuedeAutorizarExcepciones)
+                                        {
+                                            <td><input type="checkbox" checked="@_autorizadas.Contains(clave)" @onchange="e => Marcar(clave, (bool)(e.Value ?? false))" /></td>
+                                            <td>
+                                                @if (_autorizadas.Contains(clave))
+                                                {
+                                                    <input class="e-input" placeholder="Motivo de la excepción" value="@Motivo(clave)" @oninput="e => _motivos[clave] = e.Value?.ToString() ?? string.Empty" />
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (Corrida.EmployeeCount == 0)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_confirmarVacio" /> Entiendo que el período no tiene empleados y quiero aprobarlo vacío.</label>
+                    }
+
+                    <label class="campo-check">
+                        <input type="checkbox" @bind="_confirmar" />
+                        Confirmo aprobar el período @Periodo.Etiqueta con @Corrida.EmployeeCount empleado(s) y neto @Corrida.Totals.Net.ToString("N0").
+                    </label>
+
+                    @if (_pideSegundaConfirmacion)
+                    {
+                        <div class="info-card">
+                            <span class="label">Segunda confirmación</span>
+                            <p>Participaste en las novedades o en el cálculo de este período. La cooperativa permite aprobarlo igual, pero queda registrado como aprobado sin segregación de funciones.</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_confirmarSinSegregacion" /> Confirmo aprobar sin segregación de funciones.</label>
+                        </div>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@Cerrar">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@(!PuedeEnviar)" OnClick="@Enviar">Aprobar</SfButton>
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public ResumenCorridaDto? Corrida { get; set; }
+    [Parameter] public PeriodoPagoDto? Periodo { get; set; }
+    [Parameter] public bool PuedeAutorizarExcepciones { get; set; }
+    [Parameter] public EventCallback<AprobarRequest> Aprobar { get; set; }
+    [Parameter] public bool Enviando { get; set; }
+
+    private readonly HashSet<string> _autorizadas = [];
+    private readonly Dictionary<string, string> _motivos = [];
+    private bool _confirmar, _confirmarVacio, _confirmarSinSegregacion, _pideSegundaConfirmacion;
+
+    /// <summary>La pantalla la llama cuando el servidor pidió la segunda confirmación (Payroll.ConfirmationRequired por segregación).</summary>
+    public void PedirSegundaConfirmacion() { _pideSegundaConfirmacion = true; StateHasChanged(); }
+
+    public void Reiniciar()
+    {
+        _autorizadas.Clear(); _motivos.Clear();
+        _confirmar = _confirmarVacio = _confirmarSinSegregacion = _pideSegundaConfirmacion = false;
+    }
+
+    private static string Clave(BloqueoDto b) => $"{b.EmployeePublicId}|{b.Flag}";
+    private string Motivo(string clave) => _motivos.GetValueOrDefault(clave, string.Empty);
+
+    private void Marcar(string clave, bool marcado)
+    {
+        if (marcado) _autorizadas.Add(clave); else { _autorizadas.Remove(clave); _motivos.Remove(clave); }
+    }
+
+    private bool TodosLosBloqueosCubiertos =>
+        Corrida is null || Corrida.Blockers.All(b => _autorizadas.Contains(Clave(b)) && !string.IsNullOrWhiteSpace(Motivo(Clave(b))));
+
+    private bool PuedeEnviar =>
+        !Enviando && _confirmar && Corrida is not null
+        && (Corrida.EmployeeCount > 0 || _confirmarVacio)
+        && TodosLosBloqueosCubiertos
+        && (!_pideSegundaConfirmacion || _confirmarSinSegregacion);
+
+    private async Task Enviar()
+    {
+        if (Corrida is null) return;
+        var excepciones = Corrida.Blockers
+            .Where(b => _autorizadas.Contains(Clave(b)))
+            .Select(b => new ExcepcionAprobacionDto(b.EmployeePublicId, b.Flag, Motivo(Clave(b)).Trim()))
+            .ToList();
+        await Aprobar.InvokeAsync(new AprobarRequest(true, excepciones, _confirmarVacio, _confirmarSinSegregacion));
+    }
+
+    private async Task Cerrar() => await OnDialogVisibleChanged(false);
+
+    private async Task OnDialogVisibleChanged(bool visible)
+    {
+        Visible = visible;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

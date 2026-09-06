@@ -1,0 +1,21 @@
+{
+  "nombre": "Aprendiz SENA con cuota de apoyo de un salario mínimo",
+  "descripcion": "Clase aprendiz: recibe auxilio de transporte; no cotiza a pensión ni paga salud (el patrocinador la asume completa al 12,5 %); sin parafiscales ni provisiones. Sólo ARL clase I y salud del patrocinador.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Diego Mora", "clase": "Apprentice", "ingreso": "2026-02-01",
+    "salarios": [ { "desde": "2026-02-01", "mensual": 1750905 } ],
+    "afiliaciones": { "salud": true, "pension": false, "arl": 1, "caja": false },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1750905, "AUX_TRANSPORTE": 249095, "RETEFTE": 0,
+      "SALUD_APRENDIZ": 218863, "ARL": 9140
+    },
+    "totales": { "devengos": 2000000, "deducciones": 0, "aportesEmpleador": 228003, "provisiones": 0, "neto": 2000000, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

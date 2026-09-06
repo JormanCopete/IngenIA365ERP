@@ -1,0 +1,23 @@
+{
+  "nombre": "Ingreso el 5 y retiro el 20 del mismo período, salario 3.000.000",
+  "descripcion": "Sólo se liquidan los 16 días comerciales entre ingreso y retiro; los días posteriores al retiro no generan salario ni aportes. Auxilio de transporte proporcional a los 16 días (3.000.000 ≤ 2 SMMLV).",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Fabio León", "clase": "Standard", "ingreso": "2026-03-05", "retiro": "2026-03-20",
+    "salarios": [ { "desde": "2026-03-05", "mensual": 3000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1600000, "AUX_TRANSPORTE": 132851,
+      "SALUD_EMP": 64000, "PENSION_EMP": 64000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 136000, "PENSION_EMPLEADOR": 192000, "ARL": 8352, "SENA": 32000, "ICBF": 48000, "CAJA": 64000,
+      "PROV_CESANTIAS": 144346, "PROV_INT_CESANTIAS": 17329, "PROV_PRIMA": 144346, "PROV_VACACIONES": 66720
+    },
+    "totales": { "devengos": 1732851, "deducciones": 128000, "aportesEmpleador": 480352, "provisiones": 372741, "neto": 1604851, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 16
+  }
+}

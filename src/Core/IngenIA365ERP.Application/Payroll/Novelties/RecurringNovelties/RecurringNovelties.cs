@@ -1,0 +1,258 @@
+using FluentValidation;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Enums.Payroll;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
+
+// ------------------------------------------------------------------------ DTO --
+
+public sealed record RecurringNoveltyDto(
+    Guid PublicId, Guid EmployeePublicId, string EmployeeName, string Document, string ConceptCode, string ConceptName, string Nature,
+    decimal? Quantity, decimal? Amount, DateTime StartDate, DateTime? EndDate, int? TotalInstallments, int InstallmentsIssued,
+    bool IsActive, string? Notes, string? DeactivationReason, DateTime CreatedAt, string? CreatedBy);
+
+// ---------------------------------------------------------------------- crear --
+
+/// <summary>FR-007: una novedad que se repite cada período (cuotas de un descuento, un auxilio fijo) se registra una vez.</summary>
+public sealed record CreateRecurringNoveltyCommand(
+    Guid EmployeePublicId,
+    string ConceptCode,
+    decimal? Quantity,
+    decimal? Amount,
+    DateTime StartDate,
+    DateTime? EndDate,
+    int? TotalInstallments,
+    string? Notes) : IRequest<Result<Guid>>;
+
+public sealed class CreateRecurringNoveltyCommandValidator : AbstractValidator<CreateRecurringNoveltyCommand>
+{
+    public CreateRecurringNoveltyCommandValidator()
+    {
+        RuleFor(x => x.EmployeePublicId).NotEmpty().WithMessage("El empleado es obligatorio.");
+        RuleFor(x => x.ConceptCode).NotEmpty().WithMessage("El concepto es obligatorio.").MaximumLength(30);
+        RuleFor(x => x.StartDate).NotEmpty().WithMessage("La fecha desde es obligatoria.");
+        RuleFor(x => x.EndDate).GreaterThanOrEqualTo(x => x.StartDate).When(x => x.EndDate is not null)
+            .WithMessage("La fecha hasta debe ser igual o posterior a la fecha desde.");
+        RuleFor(x => x.TotalInstallments).GreaterThan(0).When(x => x.TotalInstallments is not null)
+            .WithMessage("El número de cuotas debe ser mayor que cero.");
+        RuleFor(x => x).Must(x => x.Quantity is not null || x.Amount is not null)
+            .WithMessage("La novedad recurrente necesita cantidad o valor.");
+        RuleFor(x => x.Quantity).GreaterThan(0).When(x => x.Quantity is not null).WithMessage("La cantidad debe ser mayor que cero.");
+        RuleFor(x => x.Amount).GreaterThan(0).When(x => x.Amount is not null).WithMessage("El valor debe ser mayor que cero.");
+        RuleFor(x => x.Notes).MaximumLength(500);
+    }
+}
+
+public sealed class CreateRecurringNoveltyCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, IPayrollRunStaleMarker staleMarker)
+    : IRequestHandler<CreateRecurringNoveltyCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(CreateRecurringNoveltyCommand request, CancellationToken ct)
+    {
+        var employee = await db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.PublicId == request.EmployeePublicId, ct);
+        if (employee is null) return Result.Failure<Guid>(new Error("Payroll.EmployeeNotFound", "No existe el empleado indicado."));
+        if (employee.TerminationDate < request.StartDate.Date)
+            return Result.Failure<Guid>(new Error("Payroll.EmployeeNotActiveInPeriod", "El empleado ya está retirado en la fecha desde."));
+
+        var conceptoRes = await NoveltyRules.ResolveConceptAsync(db, request.ConceptCode, request.StartDate.Date, employee.EmployeeClass, ct);
+        if (conceptoRes.IsFailure) return Result.Failure<Guid>(conceptoRes.Error);
+        var concept = conceptoRes.Value;
+        if (concept.RequiresDates)
+            return Result.Failure<Guid>(new Error("Payroll.ConceptNotApplicable",
+                $"El concepto {concept.Name} se registra por fechas (incapacidad, licencia, vacaciones) y no puede ser recurrente."));
+        if (concept.RequiresQuantity && request.Quantity is null)
+            return Result.Failure<Guid>(new Error("Payroll.ConceptRequiresQuantity", $"El concepto {concept.Name} exige cantidad."));
+        if (concept.RequiresAmount && request.Amount is null)
+            return Result.Failure<Guid>(new Error("Payroll.ConceptRequiresAmount", $"El concepto {concept.Name} exige valor."));
+        if (concept.MaxQuantity is { } mq && request.Quantity > mq)
+            return Result.Failure<Guid>(new Error("Payroll.NoveltyOverMax", $"La cantidad supera el máximo del concepto ({mq:0.##})."));
+        if (concept.MaxAmount is { } ma && request.Amount > ma)
+            return Result.Failure<Guid>(new Error("Payroll.NoveltyOverMax", $"El valor supera el máximo del concepto ({ma:N0})."));
+
+        var ahora = clock.UtcNow;
+        var recurrente = new PayrollRecurringNovelty
+        {
+            EmployeeId = employee.Id,
+            ConceptCode = concept.Code,
+            Quantity = request.Quantity,
+            Amount = request.Amount,
+            StartDate = request.StartDate.Date,
+            EndDate = request.EndDate?.Date,
+            TotalInstallments = request.TotalInstallments,
+            InstallmentsIssued = 0,
+            IsActive = true,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            CreatedAt = ahora,
+            CreatedBy = user.UserName,
+        };
+        db.PayrollRecurringNovelties.Add(recurrente);
+        await db.SaveChangesAsync(ct);
+
+        // Un borrador ya calculado que cubra la vigencia queda desactualizado: al recalcular se materializa.
+        var calculados = await db.PayPeriods.AsNoTracking()
+            .Where(p => p.PayrollPlanId == employee.PayrollPlanId && p.Status == PayPeriodStatus.Calculated
+                        && p.EndDate >= recurrente.StartDate && (recurrente.EndDate == null || p.StartDate <= recurrente.EndDate))
+            .Select(p => p.Id).ToListAsync(ct);
+        foreach (var id in calculados)
+            await staleMarker.MarkStaleAsync(id, $"novedad recurrente {concept.Code} registrada", ct);
+        if (calculados.Count > 0) await db.SaveChangesAsync(ct);
+
+        return Result.Success(recurrente.PublicId);
+    }
+}
+
+// ----------------------------------------------------------------- desactivar --
+
+public sealed record DeactivateRecurringNoveltyCommand(Guid RecurringPublicId, string Reason) : IRequest<Result>;
+
+public sealed class DeactivateRecurringNoveltyCommandValidator : AbstractValidator<DeactivateRecurringNoveltyCommand>
+{
+    public DeactivateRecurringNoveltyCommandValidator()
+    {
+        RuleFor(x => x.RecurringPublicId).NotEmpty();
+        RuleFor(x => x.Reason).NotEmpty().WithMessage("El motivo es obligatorio.").MaximumLength(300);
+    }
+}
+
+/// <summary>Desactiva la recurrente y anula (Principio VII: estado, no borrado) sus novedades en períodos aún no aprobados.</summary>
+public sealed class DeactivateRecurringNoveltyCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, IPayrollRunStaleMarker staleMarker)
+    : IRequestHandler<DeactivateRecurringNoveltyCommand, Result>
+{
+    public async Task<Result> Handle(DeactivateRecurringNoveltyCommand request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return Result.Failure(new Error("Payroll.ReasonRequired", "El motivo es obligatorio."));
+        var recurrente = await db.PayrollRecurringNovelties.FirstOrDefaultAsync(r => r.PublicId == request.RecurringPublicId, ct);
+        if (recurrente is null) return Result.Failure(new Error("Payroll.RecurringNoveltyNotFound", "No existe la novedad recurrente indicada."));
+        if (!recurrente.IsActive) return Result.Failure(new Error("Payroll.NoveltyNotActive", "La novedad recurrente ya está desactivada."));
+
+        var ahora = clock.UtcNow;
+        recurrente.IsActive = false;
+        recurrente.DeactivationReason = request.Reason.Trim();
+        recurrente.UpdatedAt = ahora;
+        recurrente.UpdatedBy = user.UserName;
+
+        var pendientes = await (
+            from n in db.PayrollNovelties
+            join p in db.PayPeriods.AsNoTracking() on n.PayPeriodId equals p.Id
+            where n.RecurringNoveltyId == recurrente.Id && n.Status == NoveltyStatus.Active
+                  && (p.Status == PayPeriodStatus.Open || p.Status == PayPeriodStatus.Calculated)
+            select n.Id).ToListAsync(ct);
+        var novedades = pendientes.Count == 0 ? [] : await db.PayrollNovelties.Where(n => pendientes.Contains(n.Id)).ToListAsync(ct);
+        foreach (var n in novedades)
+        {
+            n.Status = NoveltyStatus.Cancelled;
+            n.StatusReason = $"Recurrente desactivada: {recurrente.DeactivationReason}";
+            n.UpdatedAt = ahora;
+            n.UpdatedBy = user.UserName;
+        }
+        await db.SaveChangesAsync(ct);
+        foreach (var periodId in novedades.Select(n => n.PayPeriodId).Distinct())
+            await staleMarker.MarkStaleAsync(periodId, $"recurrente {recurrente.ConceptCode} desactivada", ct);
+        if (novedades.Count > 0) await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+// --------------------------------------------------------------------- listar --
+
+public sealed record ListRecurringNoveltiesQuery(Guid? EmployeePublicId, bool? Active) : IRequest<Result<IReadOnlyList<RecurringNoveltyDto>>>;
+
+public sealed class ListRecurringNoveltiesQueryValidator : AbstractValidator<ListRecurringNoveltiesQuery>
+{
+    public ListRecurringNoveltiesQueryValidator() => RuleFor(x => x.EmployeePublicId).NotEqual(Guid.Empty).When(x => x.EmployeePublicId is not null);
+}
+
+public sealed class ListRecurringNoveltiesQueryHandler(IApplicationDbContext db) : IRequestHandler<ListRecurringNoveltiesQuery, Result<IReadOnlyList<RecurringNoveltyDto>>>
+{
+    public async Task<Result<IReadOnlyList<RecurringNoveltyDto>>> Handle(ListRecurringNoveltiesQuery request, CancellationToken ct)
+    {
+        var filas = await (
+            from r in db.PayrollRecurringNovelties.AsNoTracking()
+            join e in db.Employees.AsNoTracking() on r.EmployeeId equals e.Id
+            join p in db.People.AsNoTracking() on e.PersonId equals p.Id
+            where (request.EmployeePublicId == null || e.PublicId == request.EmployeePublicId)
+                  && (request.Active == null || r.IsActive == request.Active)
+            orderby r.IsActive descending, p.LastName, p.FirstName, r.StartDate
+            select new { r, e.PublicId, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }).ToListAsync(ct);
+
+        var codigos = filas.Select(f => f.r.ConceptCode).Distinct().ToList();
+        var conceptos = (await db.PayrollConceptDefinitions.AsNoTracking().Where(c => codigos.Contains(c.Code)).OrderByDescending(c => c.ValidFrom).ToListAsync(ct))
+            .GroupBy(c => c.Code).ToDictionary(g => g.Key, g => g.First());
+
+        return Result.Success<IReadOnlyList<RecurringNoveltyDto>>(filas.Select(f =>
+        {
+            conceptos.TryGetValue(f.r.ConceptCode, out var c);
+            return new RecurringNoveltyDto(f.r.PublicId, f.PublicId, f.Nombre, f.TaxId, f.r.ConceptCode, c?.Name ?? f.r.ConceptCode, (c?.Nature ?? ConceptNature.Earning).ToString(),
+                f.r.Quantity, f.r.Amount, f.r.StartDate, f.r.EndDate, f.r.TotalInstallments, f.r.InstallmentsIssued, f.r.IsActive, f.r.Notes, f.r.DeactivationReason, f.r.CreatedAt, f.r.CreatedBy);
+        }).ToList());
+    }
+}
+
+// ----------------------------------------------------------- materialización --
+
+public sealed record MaterializationResult(int Created, IReadOnlyList<string> Warnings);
+
+/// <summary>
+/// Antes de calcular un período, convierte cada recurrente activa que lo cubre en una novedad
+/// <c>Origin = Recurring</c> con su número de cuota, si aún no existe una activa para ese
+/// período. Guarda en el acto: la novedad es un hecho del período, exista o no el cálculo.
+/// La cuota se cuenta como emitida al aprobar (y se descuenta al reversar), no aquí.
+/// </summary>
+public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user)
+{
+    public async Task<MaterializationResult> MaterializeAsync(PayPeriod period, CancellationToken ct)
+    {
+        var candidatas = await (
+            from r in db.PayrollRecurringNovelties.AsNoTracking()
+            join e in db.Employees.AsNoTracking() on r.EmployeeId equals e.Id
+            where r.IsActive && r.StartDate <= period.EndDate && (r.EndDate == null || r.EndDate >= period.StartDate)
+                  && (r.TotalInstallments == null || r.InstallmentsIssued < r.TotalInstallments)
+                  && e.PayrollPlanId == period.PayrollPlanId
+            select new { r, e }).ToListAsync(ct);
+        if (candidatas.Count == 0) return new MaterializationResult(0, []);
+
+        var existentes = await db.PayrollNovelties.AsNoTracking()
+            .Where(n => n.PayPeriodId == period.Id && n.RecurringNoveltyId != null && n.Status == NoveltyStatus.Active)
+            .Select(n => n.RecurringNoveltyId!.Value).ToListAsync(ct);
+        var ya = existentes.ToHashSet();
+
+        var avisos = new List<string>();
+        var creadas = 0;
+        var ahora = clock.UtcNow;
+        foreach (var c in candidatas.Where(c => !ya.Contains(c.r.Id)))
+        {
+            if (NoveltyRules.EnsureEmployeeInPeriod(c.e, period).IsFailure) continue;
+            var concepto = await NoveltyRules.ResolveConceptAsync(db, c.r.ConceptCode, period.EndDate, c.e.EmployeeClass, ct);
+            if (concepto.IsFailure)
+            {
+                avisos.Add($"Recurrente {c.r.ConceptCode} del empleado {c.e.PublicId}: {concepto.Error.Message}");
+                continue;
+            }
+            db.PayrollNovelties.Add(new PayrollNovelty
+            {
+                PayPeriodId = period.Id,
+                EmployeeId = c.e.Id,
+                ConceptDefinitionId = concepto.Value.Id,
+                ConceptCode = concepto.Value.Code,
+                Quantity = c.r.Quantity,
+                Amount = c.r.Amount,
+                Notes = c.r.Notes,
+                Status = NoveltyStatus.Active,
+                Origin = NoveltyOrigin.Recurring,
+                RecurringNoveltyId = c.r.Id,
+                InstallmentNumber = c.r.InstallmentsIssued + 1,
+                InstallmentTotal = c.r.TotalInstallments,
+                CreatedAt = ahora,
+                CreatedBy = user.UserName ?? "sistema",
+            });
+            creadas++;
+        }
+        if (creadas > 0) await db.SaveChangesAsync(ct);
+        return new MaterializationResult(creadas, avisos);
+    }
+}

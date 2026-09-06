@@ -1,0 +1,24 @@
+{
+  "nombre": "Retención procedimiento 2 sin porcentaje vigente: el motor se niega para la retención y lo nombra",
+  "descripcion": "Venció el semestre y nadie registró el porcentaje nuevo. El resto de la liquidación sale; la retención no se calcula, no cae al procedimiento 1 ni aplica un porcentaje vencido, y el empleado queda marcado para bloquear la aprobación.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Olga Rincón", "clase": "Standard", "ingreso": "2019-09-16",
+    "salarios": [ { "desde": "2019-09-16", "mensual": 6000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 2, "tasaRetencion": null
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 6000000,
+      "SALUD_EMP": 240000, "PENSION_EMP": 240000, "FSP": 0,
+      "SALUD_EMPLEADOR": 510000, "PENSION_EMPLEADOR": 720000, "ARL": 31320, "SENA": 120000, "ICBF": 180000, "CAJA": 240000,
+      "PROV_CESANTIAS": 499800, "PROV_INT_CESANTIAS": 60000, "PROV_PRIMA": 499800, "PROV_VACACIONES": 250200
+    },
+    "totales": { "devengos": 6000000, "deducciones": 480000, "aportesEmpleador": 1801320, "provisiones": 1309800, "neto": 5520000, "ajusteRedondeo": 0 },
+    "banderas": "WithholdingRateMissing", "diasPagados": 30,
+    "rechazos": [ "Procedimiento 2" ]
+  }
+}

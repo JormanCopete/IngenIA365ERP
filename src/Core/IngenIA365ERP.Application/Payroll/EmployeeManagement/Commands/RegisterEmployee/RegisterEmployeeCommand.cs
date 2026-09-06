@@ -97,6 +97,15 @@ public class RegisterEmployeeCommandHandler(
             if (bank is not null) payrollBankId = bank.Id.ToString();
         }
 
+        // 3b. Plan de nómina (feature 005): todo empleado nace en el plan por defecto de la
+        // cooperativa. Sin esto queda con PayrollPlanId = 0, fuera de cualquier período:
+        // no admite novedades ni entra en la liquidación. Cambiar de plan es
+        // ChangeEmployeePlanCommand, con fecha de efecto.
+        var planPorDefecto = await context.PayrollPlans.AsNoTracking()
+            .Where(p => p.IsDefault && p.IsActive && !p.IsDeleted)
+            .Select(p => (int?)p.Id)
+            .FirstOrDefaultAsync(ct);
+
         // 4. Crear empleado.
         // IMPORTANTE: el DDL de PAY_Employees tiene varias columnas legacy NOT NULL
         // sin DEFAULT (AreaCode, SectionId, TerminationCause, PensionFundMember, etc.).
@@ -107,6 +116,7 @@ public class RegisterEmployeeCommandHandler(
         {
             PersonId = person.Id,
             PayrollCompanyId = 1,
+            PayrollPlanId = planPorDefecto ?? 0,
             CostCenterId = "",
             AreaCode = "",
             SectionId = "",
@@ -146,14 +156,17 @@ public class RegisterEmployeeCommandHandler(
         person.UpdatedAt = dateTime.UtcNow;
         person.UpdatedBy = currentUser.UserName;
 
-        // 6. Registro inicial en historial salarial
+        // 6. Registro inicial en historial salarial.
+        // UserName es la columna legada de SOLIDO: varchar(20). Un correo como usuario no
+        // cabe y PostgreSQL rechaza el INSERT entero (22001). Quién lo hizo de verdad va en
+        // CreatedBy, sin recorte; aquí sólo se conserva el prefijo por compatibilidad.
         var salaryChange = new SalaryChange
         {
             PayrollCompanyId = 1,
             EmployeeId = 0,
             EffectiveDate = request.HireDate,
             NewSalary = request.BaseSalary,
-            UserName = currentUser.UserName,
+            UserName = SalaryChange.RecortarUsuario(currentUser.UserName),
             EntryDate = dateTime.UtcNow,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName

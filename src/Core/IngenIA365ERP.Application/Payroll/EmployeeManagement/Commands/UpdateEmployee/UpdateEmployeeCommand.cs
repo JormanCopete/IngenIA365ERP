@@ -99,7 +99,7 @@ public class UpdateEmployeeCommandHandler(
                 EmployeeId = employee.Id,
                 EffectiveDate = dateTime.UtcNow,
                 NewSalary = request.BaseSalary,
-                UserName = currentUser.UserName,
+                UserName = SalaryChange.RecortarUsuario(currentUser.UserName),
                 EntryDate = dateTime.UtcNow,
                 CreatedAt = dateTime.UtcNow,
                 CreatedBy = currentUser.UserName

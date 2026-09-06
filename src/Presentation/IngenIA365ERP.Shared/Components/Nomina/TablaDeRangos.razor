@@ -1,0 +1,110 @@
+@*
+    TablaDeRangos — editor de tramos desde / hasta / tarifa / fijo de una tabla por rangos
+    (contracts/ui.md §8). Valida en cliente lo mismo que el servidor: tramos contiguos,
+    sin huecos ni solapes, y el último abierto. Emite los tramos ordenados.
+*@
+@using IngenIA365ERP.Shared.Services.Nomina
+
+<div class="tabla-de-rangos">
+    <table class="data-grid">
+        <thead>
+            <tr><th>Desde (@Unidad)</th><th>Hasta (@Unidad)</th><th>Tarifa %</th><th>Fijo (@Unidad)</th>@if (!SoloLectura) { <th></th> }</tr>
+        </thead>
+        <tbody>
+            @foreach (var (fila, i) in _filas.Select((f, i) => (f, i)))
+            {
+                <tr>
+                    <td><SfNumericTextBox TValue="decimal" Value="@fila.Desde" ValueChanged="@((decimal v) => { fila.Desde = v; Emitir(); })" Decimals="4" Min="0" Readonly="@SoloLectura" /></td>
+                    <td><SfNumericTextBox TValue="decimal?" Value="@fila.Hasta" ValueChanged="@((decimal? v) => { fila.Hasta = v; Emitir(); })" Decimals="4" Min="0" Placeholder="@(i == _filas.Count - 1 ? "abierto" : "")" Readonly="@SoloLectura" /></td>
+                    <td><SfNumericTextBox TValue="decimal?" Value="@fila.Tarifa" ValueChanged="@((decimal? v) => { fila.Tarifa = v; Emitir(); })" Decimals="3" Min="0" Readonly="@SoloLectura" /></td>
+                    <td><SfNumericTextBox TValue="decimal?" Value="@fila.Fijo" ValueChanged="@((decimal? v) => { fila.Fijo = v; Emitir(); })" Decimals="4" Min="0" Readonly="@SoloLectura" /></td>
+                    @if (!SoloLectura)
+                    {
+                        <td><SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" OnClick="@(() => Quitar(fila))" Title="Quitar tramo" /></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (!SoloLectura)
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@Agregar">Agregar tramo</SfButton>
+            @if (Error is not null) { <span class="texto-error">@Error</span> }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<TramoDto> Tramos { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<TramoDto>> TramosChanged { get; set; }
+    [Parameter] public string Unidad { get; set; } = "UVT";
+    [Parameter] public bool SoloLectura { get; set; }
+
+    private List<Fila> _filas = [];
+    private IReadOnlyList<TramoDto>? _ultimoRecibido;
+
+    /// <summary>Mensaje del primer problema de la tabla; nulo si es válida.</summary>
+    public string? Error => Validar(_filas);
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_ultimoRecibido, Tramos)) return;
+        _ultimoRecibido = Tramos;
+        _filas = Tramos.OrderBy(t => t.FromValue).Select(t => new Fila { Desde = t.FromValue, Hasta = t.ToValue, Tarifa = t.Rate, Fijo = t.FixedValue }).ToList();
+    }
+
+    private async Task Agregar()
+    {
+        var ultima = _filas.LastOrDefault();
+        if (ultima is not null && ultima.Hasta is null) ultima.Hasta = ultima.Desde + 1;
+        _filas.Add(new Fila { Desde = ultima?.Hasta ?? 0m, Hasta = null, Tarifa = 0m, Fijo = 0m });
+        await EmitirAsync();
+    }
+
+    private async Task Quitar(Fila fila)
+    {
+        _filas.Remove(fila);
+        if (_filas.Count > 0) _filas[^1].Hasta = null;
+        await EmitirAsync();
+    }
+
+    private void Emitir() => _ = EmitirAsync();
+
+    private async Task EmitirAsync()
+    {
+        var tramos = _filas.OrderBy(f => f.Desde).Select((f, i) => new TramoDto(f.Desde, f.Hasta, f.Tarifa, f.Fijo, i + 1)).ToList();
+        _ultimoRecibido = tramos;
+        await TramosChanged.InvokeAsync(tramos);
+    }
+
+    public static string? Validar(List<Fila> filas)
+    {
+        if (filas.Count == 0) return "La tabla necesita al menos un tramo.";
+        var orden = filas.OrderBy(f => f.Desde).ToList();
+        for (var i = 0; i < orden.Count; i++)
+        {
+            var f = orden[i];
+            if (f.Tarifa is null && f.Fijo is null) return $"El tramo desde {f.Desde} no tiene tarifa ni fijo.";
+            if (i < orden.Count - 1)
+            {
+                if (f.Hasta is null) return $"Sólo el último tramo puede quedar abierto (desde {f.Desde}).";
+                if (f.Hasta <= f.Desde) return $"El «hasta» del tramo desde {f.Desde} debe ser mayor que su «desde».";
+                if (f.Hasta != orden[i + 1].Desde) return f.Hasta < orden[i + 1].Desde ? $"Hueco entre {f.Hasta} y {orden[i + 1].Desde}." : $"Solape entre {orden[i + 1].Desde} y {f.Hasta}.";
+            }
+            else if (f.Hasta is not null)
+            {
+                return "El último tramo debe quedar abierto («hasta» vacío).";
+            }
+        }
+        return null;
+    }
+
+    public sealed class Fila
+    {
+        public decimal Desde { get; set; }
+        public decimal? Hasta { get; set; }
+        public decimal? Tarifa { get; set; }
+        public decimal? Fijo { get; set; }
+    }
+}

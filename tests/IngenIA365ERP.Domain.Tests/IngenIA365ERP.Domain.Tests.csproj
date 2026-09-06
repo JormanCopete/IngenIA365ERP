@@ -16,6 +16,14 @@
     <PackageReference Include="NSubstitute" Version="5.*" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Payroll\Calculation\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
+    <!-- Feature 005: los casos dorados del motor usan el MISMO catalogo de conceptos y
+         parametros que siembra la cooperativa (PayrollConceptDefinitionsSeeder,
+         PayrollLegalParametersSeeder). Solo se toman los catalogos estaticos; ningun
+         test toca EF ni una base. -->
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
   </ItemGroup>
 </Project>
