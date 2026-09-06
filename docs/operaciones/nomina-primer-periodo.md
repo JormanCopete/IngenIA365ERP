@@ -121,7 +121,22 @@ error algo de la semilla:
 Inserta lo que falte y **no toca** lo que la cooperativa ya ajustó (versiones propias,
 cuentas, vigencias registradas a mano). Es idempotente: correrla dos veces no duplica nada.
 
-## 6. Lo que este runbook no cubre
+## 6. Las migraciones de esta entrega
+
+Todas pareadas por proveedor (`Persistence.Migrations.PostgreSql` y `.SqlServer`), en
+`Application/`, y las aplica `AutoMigrate` al arrancar la API en cada base de cooperativa:
+
+| Migración | Qué hace | Cuidado |
+|---|---|---|
+| `NominaNovedadesYLiquidacion` | 14 tablas nuevas de nómina, columnas en empleados y períodos, plan `DEFAULT` insertado antes de las FK | Idempotente; reversible |
+| `NominaTablasPorRangos` | Unidad y marginalidad de las tablas por rangos, con relleno de las de retención y FSP | Idempotente; reversible |
+| `NominaDetalleDeCorrida` | Bases y notas por empleado en la corrida; FKs al comprobante contable | Reversible |
+| `RetiroDeVoucherTypeIdSombraEnDocumentos` | **Destructiva.** Quita de `ACC_Documents` la columna sombra `VoucherTypeId`, que duplicaba `VoucherTypeCode` y rompía todo comprobante contable creado por la API | **Backup de cada base de cooperativa y segundo revisor antes de aplicarla en un ambiente** (Principio XII); anotar las referencias en la cabecera de la migración. Su `Down` reconstruye la columna desde el código |
+
+La última no es de nómina: la destapó la prueba e2e de aprobación, y afecta a Contabilidad.
+Sin ella, `POST /api/accounting/documents` responde 500 contra PostgreSQL y SQL Server.
+
+## 7. Lo que este runbook no cubre
 
 - Reversar una liquidación aprobada, marcar pagos o enviar comprobantes: está en el manual
   dentro de la aplicación (guía «Liquidación de nómina»).
