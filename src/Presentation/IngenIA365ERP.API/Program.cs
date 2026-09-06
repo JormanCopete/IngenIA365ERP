@@ -199,6 +199,8 @@ try
 
     // T030 — Email (MailKit) y T025/T030a — Storage abstractions.
     builder.Services.AddStorageServices(builder.Configuration);
+    // Feature 005: el comprobante de pago se pinta con QuestPDF, que solo conoce la API.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.IPayslipPdfRenderer, IngenIA365ERP.API.Reports.PayslipPdfRenderer>();
 
     // T031 — SignalR para el push de notificaciones in-app.
     builder.Services.AddSignalR();

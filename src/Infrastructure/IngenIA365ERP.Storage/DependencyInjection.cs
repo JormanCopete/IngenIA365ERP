@@ -14,6 +14,8 @@ public static class DependencyInjection
     {
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+        // Feature 005: si hay correo saliente configurado, antes de intentar enviar comprobantes.
+        services.AddSingleton<Application.Common.Interfaces.Notifications.IOutboundEmailStatus, Services.OutboundEmailStatus>();
 
         // T106 + T107 — Adjuntos cifrados (US5).
         services.Configure<AttachmentStorageSettings>(

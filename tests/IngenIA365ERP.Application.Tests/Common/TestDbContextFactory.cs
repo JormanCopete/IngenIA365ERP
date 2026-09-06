@@ -74,7 +74,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     DbSet<City> IApplicationDbContext.Cities => throw new NotImplementedException();
-    DbSet<Bank> IApplicationDbContext.Banks => throw new NotImplementedException();
+    public DbSet<Bank> Banks => Set<Bank>();
     DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
     DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
@@ -83,7 +83,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Department> IApplicationDbContext.Departments => throw new NotImplementedException();
     DbSet<Section> IApplicationDbContext.Sections => throw new NotImplementedException();
     DbSet<Profession> IApplicationDbContext.Professions => throw new NotImplementedException();
-    DbSet<Position> IApplicationDbContext.Positions => throw new NotImplementedException();
+    public DbSet<Position> Positions => Set<Position>();
     DbSet<Relationship> IApplicationDbContext.Relationships => throw new NotImplementedException();
     DbSet<WithdrawalReason> IApplicationDbContext.WithdrawalReasons => throw new NotImplementedException();
     DbSet<Sport> IApplicationDbContext.Sports => throw new NotImplementedException();
@@ -242,6 +242,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         // se ignoran y las cuentas se referencian por Id.
         modelBuilder.Entity<Person>(b => { b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion"); });
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<AccountingPeriod>(b => b.Ignore("RowVersion"));

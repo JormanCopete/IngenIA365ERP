@@ -73,7 +73,7 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, IDateTimeS
         // --- cuentas por concepto ---
         var codigos = grupos.Keys.Select(k => k.Code).Distinct().ToList();
         var cuentas = await db.PayrollConceptDefinitionAccounts.AsNoTracking()
-            .Where(a => codigos.Contains(a.ConceptCode))
+            .Where(a => !a.IsDeleted && codigos.Contains(a.ConceptCode))
             .ToListAsync(ct);
         var sinCuentas = new List<string>();
         var asientos = new List<(string Code, int CostCenterId, int DebitAccountId, int CreditAccountId, decimal Amount)>();
