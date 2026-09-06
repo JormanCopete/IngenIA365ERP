@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.Attachments;
@@ -15,15 +16,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Attachments;
 ///
 /// Requiere Docker (Testcontainers) para los caminos GREEN completos.
 /// </summary>
-public class AttachmentAuthorizationTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class AttachmentAuthorizationTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public AttachmentAuthorizationTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task Upload_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent([0x25, 0x50, 0x44, 0x46]), "file", "x.pdf");
         form.Add(new StringContent("User"), "ownerEntityType");
@@ -38,7 +38,7 @@ public class AttachmentAuthorizationTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task Download_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.GetAsync($"/api/attachments/{Guid.NewGuid()}");
 
@@ -49,7 +49,7 @@ public class AttachmentAuthorizationTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task Delete_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.DeleteAsync($"/api/attachments/{Guid.NewGuid()}");
 
@@ -60,7 +60,7 @@ public class AttachmentAuthorizationTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task ListByOwner_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.GetAsync(
             $"/api/attachments/by-owner?ownerEntityType=User&ownerEntityPublicId={Guid.NewGuid()}");

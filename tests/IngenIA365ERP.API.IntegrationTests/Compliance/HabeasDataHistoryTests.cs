@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.Compliance;
@@ -10,15 +11,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Compliance;
 /// historial muestra la secuencia + emite <c>HabeasDataRevokedEvent</c>)
 /// requiere Docker para Testcontainers + un usuario autenticado.
 /// </summary>
-public class HabeasDataHistoryTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class HabeasDataHistoryTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public HabeasDataHistoryTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task ListPolicies_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var resp = await client.GetAsync("/api/compliance/habeas-data/policies/");
         resp.StatusCode.Should().BeOneOf(
             HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
@@ -27,7 +27,7 @@ public class HabeasDataHistoryTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task PublishPolicy_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var resp = await client.PostAsync("/api/compliance/habeas-data/policies/",
             JsonContent.Create(new
             {
@@ -42,7 +42,7 @@ public class HabeasDataHistoryTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task RevokeConsent_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var resp = await client.PostAsync("/api/compliance/habeas-data/consents/revoke",
             JsonContent.Create(new { personId = 1, notes = "x" }));
         resp.StatusCode.Should().BeOneOf(
@@ -52,7 +52,7 @@ public class HabeasDataHistoryTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task History_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var resp = await client.GetAsync("/api/compliance/habeas-data/consents/history/123");
         resp.StatusCode.Should().BeOneOf(
             HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);

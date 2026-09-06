@@ -137,12 +137,15 @@ dudás, medí en vez de creerles; el comando está al lado.
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
 corriendo. Las 10 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
-`PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. Las 18 clases sobre
-`ApiTestFixture` (la fixture de Fase 0, SQL Server) estuvieron cayendo en 1 ms desde el
-2026-08-24: `ADM_Tenants.ProvisioningState` es `NOT NULL DEFAULT 'Pending'`, pero el store
-multi-tenant (`ErpTenantInfo`) mapeaba la columna sin default y EF la insertaba en NULL
-explícito. El default en el mapeo lo cerró; la fixture sigue siendo deuda (una
-cooperativa «demo» con esquema `dbo`, contra el modelo de una base por cooperativa).
+`PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
+`CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,
+maestro con segundo factor, cooperativas por `/api/saas/tenants/with-admin`); las clases
+que sólo comprueban la puerta comparten host por la colección «Identidad central
+compartida». `ApiTestFixture`, la de Fase 0 (SQL Server fijo, cooperativa «demo» sobre
+`dbo`), se retiró el 2026-09-06: sus 18 pruebas llevaban desde el 2026-08-24 cayendo en
+1 ms porque el store multi-tenant (`ErpTenantInfo`) insertaba `ProvisioningState` en NULL
+explícito sobre una columna `NOT NULL DEFAULT 'Pending'`; el default en el mapeo lo cerró
+y `DosContextosUnaTablaTests` lo vigila.
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
 marcada `[Fact(Skip)]`. Pero **el verde tapa siete métodos más** que hacen `return`

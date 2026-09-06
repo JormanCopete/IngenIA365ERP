@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.Audit;
@@ -19,15 +20,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Audit;
 /// RequirePermission (T091 lo cubrirá), así que estos tests son RED a
 /// runtime: pasan cuando el reescribir aterrice y la auth se aplique.
 /// </summary>
-public class AuditTenantIsolationTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class AuditTenantIsolationTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public AuditTenantIsolationTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task Anonymous_request_to_audit_logs_does_not_return_data()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.GetAsync("/api/audit/logs");
 
@@ -43,7 +43,7 @@ public class AuditTenantIsolationTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task X_Tenant_Id_header_diverging_from_claim_does_not_leak_other_tenant_data()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-de-otra-cooperativa");
 
         var resp = await client.GetAsync("/api/audit/logs");
@@ -58,7 +58,7 @@ public class AuditTenantIsolationTests : IClassFixture<ApiTestFixture>
         // FR-017 / SC-005: un endpoint protegido sin permiso responde con el
         // envelope canónico { code, message, traceId } — no payload Mongo
         // raw. Hoy el endpoint NO usa ErrorEnvelopeFilter; T091 lo aterriza.
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var resp = await client.GetAsync("/api/audit/logs");
 
         if (resp.StatusCode == HttpStatusCode.NotFound)
