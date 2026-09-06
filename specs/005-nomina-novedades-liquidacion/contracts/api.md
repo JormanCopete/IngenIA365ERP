@@ -191,5 +191,10 @@ para la forma), `Payroll.ConceptSeedProtected` (borrar o cambiar `Code` de semil
 ## 7. Retirados
 
 `POST /api/payroll/process/{periodId}` y `POST /api/payroll/entries` desaparecen (D-14).
-`GET /api/payroll/summary|detail|payslip/…` se mantienen como alias que redirigen
-(308) a las rutas de la sección 4 y 5 durante esta versión y se eliminan en la siguiente.
+`GET /api/payroll/summary|detail|payslip/…` iban a quedar como alias 308 durante una
+version. Al implementar (T136, 2026-09-05) se buscaron consumidores en `SHR/` y MAUI y no
+hubo ninguno —las pantallas heredadas eran marcadores—, asi que los alias se retiraron en
+esta misma version: `PayrollProcessingEndpoints.cs` ya no existe. Las rutas heredadas de
+reportes (`/api/reports/payroll/payslip/{employeeId}/{periodId}/pdf` y `/summary/{periodId}/pdf`)
+si redirigen 308 a la corrida vigente del periodo, porque el comprobante de pago se emite
+por corrida (seccion 5), no por periodo.

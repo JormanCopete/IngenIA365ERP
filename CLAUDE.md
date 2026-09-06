@@ -92,6 +92,25 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
   vive fuera de toda base de cooperativa.
 - **Reportes**: QuestPDF (16 reportes)
+- **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
+  (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
+  —período, empleado con su historial de salarios, novedades, definiciones de
+  conceptos y parámetros legales vigentes— y devuelve líneas con explicación. **No hay
+  un solo valor legal escrito en el código**: salario mínimo, auxilio, UVT,
+  porcentajes y tablas viven en `PAY_PayrollLegalParameters` con vigencia, y la prueba
+  de arquitectura `LaNominaNoTieneValoresLegalesFijos` sólo admite en `Domain/Payroll` y
+  `Application/Payroll` los literales decimales `0, 1, 2, 0.5, 12, 15, 30, 100, 360`.
+  Cinco formas de cálculo (valor fijo, porcentaje sobre base, cantidad × unidad, tabla
+  por rangos, suma de conceptos), sin fórmulas libres. Los **casos dorados** son JSON en
+  `tests/IngenIA365ERP.Domain.Tests/Payroll/Calculation/Casos/` con valores calculados a
+  mano. Las corridas (`PAY_PayrollRuns`, `…RunEmployees`, `…RunLines`, bajo
+  `Entities/Payroll/Transactions`) son **inmutables** (Principio XI): recalcular crea
+  una versión y deja la anterior `Superseded`; aprobar genera el comprobante `NM` en la
+  misma transacción; reversar deja un asiento espejo y reabre el período. La semilla
+  deja plan por defecto, 40 conceptos, 33 parámetros con vigencia 2026 y el `NM`; lo
+  que no deja (cuentas por concepto, período contable) está en
+  `docs/operaciones/nomina-primer-periodo.md`. El **cálculo preliminar** anterior
+  (`POST /api/payroll/process`, salud y pensión fijas al 4 %) se retiró sin alias.
 
 ## Arquitectura
 Clean Architecture en 4 capas:
@@ -101,21 +120,24 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-08-26, remedida. **Son cifras que envejecen**: las de antes
-llevaban meses desfasadas —decían 113 endpoints cuando había ~619, y 398 pruebas
-cuando eran 616— y nadie lo notaba porque nada las contrasta. Si dudás, medí en
-vez de creerles; el comando está al lado.
+Instantánea del 2026-09-05 (cierre de la feature 005), remedida. **Son cifras que
+envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
+~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
+dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | ~631 en 137 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 175 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 16 | |
-| Pruebas | 731 (730 pasan, 1 omitida) | `dotnet test IngenIA365ERP.slnx` |
+| Rutas REST | 674 en 142 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 748 (136 Domain, 556 Application, 54 Architecture, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 116 la última vez que corrieron (2026-08-26); **no corridas el 2026-09-05** (Docker apagado) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
-**116 de las 731 son de integración**: levantan contenedores y exigen Docker y un
-MongoDB accesible en `localhost:27017`. Sin eso fallan por entorno, no por código.
+**Las 116 de integración** levantan contenedores y exigen Docker y un MongoDB accesible
+en `localhost:27017`. Sin eso fallan por entorno, no por código. La feature 005 dejó
+cuatro de integración **sin escribir** por eso mismo (T067, T079, T115, T125 en su
+`tasks.md`): el ciclo completo por HTTP está probado sólo por debajo, en Application.
 
 La única omitida es `PasswordHashIntegrityTests.AllHashes_must_meet_cost_threshold`,
 marcada `[Fact(Skip)]`. Pero **el verde tapa siete métodos más** que hacen `return`

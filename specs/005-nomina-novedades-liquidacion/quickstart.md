@@ -115,3 +115,42 @@ sincroniza DEV y QA, y hay que reiniciar API y Web (`imagePullPolicy: Always` co
 etiqueta móvil). Antes de la primera liquidación real en un ambiente, verificar la
 tabla de la sección 2 contra **esa** base, no contra el repositorio. Producción sigue
 en `release` con aprobación manual.
+
+## 5. Desvíos observados al implementar (2026-09-05)
+
+El recorrido de la sección 3 **no se ejecutó con `curl` en esta sesión**: exige la
+credencial de un administrador de cooperativa (con segundo factor) y la implementación
+corrió sin nadie que la digitara. Las reglas de la casa no permiten inventar ni pedir
+credenciales por chat, así que queda para la validación de QA (T134). Lo que sí está
+verificado es el mismo ciclo por debajo de HTTP: 92 pruebas de Application sobre los
+handlers (novedades, cálculo, aprobación, pagos, comprobantes, importación, recurrentes,
+reversión) y 54 de arquitectura. Al correrlo, tener presentes estos desvíos respecto de
+los contratos originales:
+
+- **Permisos de períodos de pago**: `GET /api/payroll/pay-periods` exige
+  `Payroll.Runs.View` y las escrituras `Payroll.Runs.Calculate`. Los códigos
+  `Payroll.PayrollPeriods.*` del contrato nunca existieron en la semilla.
+- **Retención por empleado**: `GET|PUT /api/payroll/employees/{id}/withholding` usan
+  `Payroll.Novelties.View|Create`.
+- **Cuentas por concepto**: `PUT /api/payroll/concept-definitions/{code}/accounts` recibe
+  `debitAccountCode` y `creditAccountCode` (códigos del plan de cuentas), no PublicIds.
+- **Importación**: `POST …/novelties/import` responde **200** con
+  `{applied, batchId, errors: []}` cuando entra todo y **422 con el mismo DTO**
+  (`applied = 0`, `errors` con fila y columna) cuando algo falla; un archivo de más de
+  5 MB responde 413 antes de leerlo. La plantilla se descarga en
+  `GET /api/payroll/novelties/import-template`.
+- **Recurrentes**: se materializan al **calcular** (no al crear el período) como
+  novedades `Origin = Recurring` con su cuota; la cuota se cuenta al aprobar y se
+  devuelve al reversar. Desactivar anula las novedades de períodos no aprobados.
+- **Comprobantes**: sólo sobre corridas aprobadas o reversadas; `POST …/payslips/send`
+  responde `Payroll.EmailNotConfigured` si la sección `Smtp` no declara host, puerto y
+  remitente, antes de intentar un solo envío.
+- **Reversión**: `POST /api/payroll/runs/{id}/reverse` contabiliza el reverso con la
+  fecha del día (`clock.TodayUtc`); si el período contable de hoy está cerrado responde
+  `Payroll.AccountingPeriodClosedForReversal`. El período vuelve a `Open` con
+  `RunPublicId = null` y `StatusMessage` con el motivo.
+- **Alias 308** de `/api/payroll/summary|detail|payslip`: retirados en esta versión
+  (no tenían consumidores). Las rutas heredadas de reportes sí redirigen 308.
+- **Migraciones**: una sola migración de esquema (`NominaNovedadesYLiquidacion`) más
+  `NominaTablasPorRangos` y `NominaDetalleDeCorrida`, pareadas por proveedor. En local
+  las dos últimas se aplican con `AutoMigrate` al siguiente arranque de la API.

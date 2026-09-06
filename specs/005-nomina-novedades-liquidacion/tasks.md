@@ -155,7 +155,7 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 - [X] T064 [US1] Añadir a `NominaClient` los métodos de novedades y cambios de salario (`ListarNovedadesAsync`, `RegistrarNovedadAsync`, `CorregirNovedadAsync`, `AnularNovedadAsync`, `HistorialNovedadAsync`, `RegistrarCambioDeSalarioAsync`, `HistorialSalariosAsync`) en `SHR/Services/Nomina/NominaClient.cs`
 - [X] T065 [US1] Reescribir `Novedades.razor` (`/nomina/novedades`: `SelectorDePeriodo`, pastilla de estado, barra con buscar/filtros/«Nuevo»/«Cambio de salario», grilla con lápiz y papelera con motivo, diálogo de novedad con `PersonSearchPicker` filtrado a empleados, lista de conceptos aplicables agrupada por naturaleza, campos según el concepto y valor estimado al vuelo, diálogo de cambio de salario con historial; modelos con `DataAnnotations`; `_saving`) en `SHR/Pages/Nomina/Novedades.razor`
 - [X] T066 [P] [US1] Actualizar la guía `novedades-de-nomina` en `SHR/Services/Manual/ManualCatalogo.cs` con los pasos reales de la pantalla (Nuevo, corregir, anular, cambio de salario, ajuste retroactivo)
-- [ ] T067 [US1] Prueba de integración HTTP: crear período, registrar, corregir, anular y listar novedades; sin permiso `Payroll.Novelties.Create` → 404 indistinguible en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/NoveltiesEndpointsTests.cs`
+- [ ] T067 (Pendiente: exige Docker (Testcontainers), apagado en esta sesion.) [US1] Prueba de integración HTTP: crear período, registrar, corregir, anular y listar novedades; sin permiso `Payroll.Novelties.Create` → 404 indistinguible en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/NoveltiesEndpointsTests.cs`
 
 **Checkpoint**: US1 verificable sola: la cooperativa deja las novedades en hojas de cálculo.
 
@@ -183,7 +183,7 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 - [X] T076 [P] [US2] Crear componente `PanelDeAprobacion` (resumen, bloqueos con casilla «Autorizar excepción» + motivo visible sólo con permiso, texto de confirmación explícito, segunda confirmación sin segregación) en `SHR/Components/Nomina/PanelDeAprobacion.razor`
 - [X] T077 [US2] Reescribir `Liquidacion.razor` (`/nomina/liquidacion`: `SelectorDePeriodo`, tarjeta de estado con Calcular/Recalcular/Aprobar según estado y permiso, pestañas Resumen y Empleados con banderas y «cambió», `PanelDeAprobacion`) en `SHR/Pages/Nomina/Liquidacion.razor`
 - [X] T078 [P] [US2] Actualizar la guía `liquidacion-de-nomina` en `SHR/Services/Manual/ManualCatalogo.cs`
-- [ ] T079 [US2] Prueba de integración HTTP del ciclo: período → novedades → calcular → recalcular → aprobar → segundo cálculo rechazado → `ACC_AccountingDocuments` `NM` cuadrado en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/PayrollRunsEndpointsTests.cs`
+- [ ] T079 (Pendiente: exige Docker (Testcontainers), apagado en esta sesion.) [US2] Prueba de integración HTTP del ciclo: período → novedades → calcular → recalcular → aprobar → segundo cálculo rechazado → `ACC_AccountingDocuments` `NM` cuadrado en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/PayrollRunsEndpointsTests.cs`
 
 **Checkpoint**: MVP completo: una cooperativa paga una nómina con el sistema (US1 + US2).
 
@@ -267,7 +267,7 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 - [X] T112 [US5] Añadir a `NominaClient` (`RelacionDePagoAsync`, `MarcarPagadosAsync`, `RetirarMarcaAsync`, `ComprobantePdfAsync`, `ComprobantesPdfAsync`, `EnviarComprobantesAsync`, `EnviosAsync`) en `SHR/Services/Nomina/NominaClient.cs`
 - [X] T113 [US5] Añadir a `Liquidacion.razor` la pestaña «Relación de pago» (grilla, «Marcar pagados» con fecha/medio/referencia, «Retirar marca» con motivo, descargar uno/todos, «Enviar por correo» con resultado y pestaña de envíos) y activar «Comprobante PDF» en el detalle en `SHR/Pages/Nomina/Liquidacion.razor`
 - [X] T114 [P] [US5] Ampliar la guía `liquidacion-de-nomina` (relación de pago, marca de pagado, comprobantes y envío) en `SHR/Services/Manual/ManualCatalogo.cs`
-- [ ] T115 [US5] Prueba de integración HTTP: aprobar → relación de pago → marcar pago → PDF descarga con `application/pdf` en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/PaymentsAndPayslipsEndpointsTests.cs`
+- [ ] T115 (Pendiente: exige Docker (Testcontainers), apagado en esta sesion.) [US5] Prueba de integración HTTP: aprobar → relación de pago → marcar pago → PDF descarga con `application/pdf` en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/PaymentsAndPayslipsEndpointsTests.cs`
 
 **Checkpoint**: la nómina llega a contabilidad y a tesorería, y el empleado recibe su comprobante.
 
@@ -293,7 +293,7 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 - [X] T122 [US6] Añadir `GET /novelties/import-template`, `POST /pay-periods/{id}/novelties/import` (multipart, límite 5 MB) y las rutas de recurrentes (permisos `Payroll.Novelties.Import|Create|Cancel|View`) a `API/Endpoints/Payroll/PayrollNoveltiesEndpoints.cs`
 - [X] T123 [US6] Añadir a `NominaClient` (`PlantillaImportacionAsync`, `ImportarNovedadesAsync` multipart, `ListarRecurrentesAsync`, `CrearRecurrenteAsync`, `DesactivarRecurrenteAsync`) y a `Novedades.razor` el diálogo «Importar» (descarga de plantilla, selector de archivo, tabla de errores) y la pestaña «Recurrentes» en `SHR/Services/Nomina/NominaClient.cs`, `SHR/Pages/Nomina/Novedades.razor`
 - [X] T124 [P] [US6] Ampliar la guía `novedades-de-nomina` (recurrentes e importación) en `SHR/Services/Manual/ManualCatalogo.cs`
-- [ ] T125 [US6] Prueba de integración HTTP de importación (lote inválido → 422 sin cambios; lote válido → novedades listadas) en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/ImportNoveltiesEndpointsTests.cs`
+- [ ] T125 (Pendiente: exige Docker (Testcontainers), apagado en esta sesion.) [US6] Prueba de integración HTTP de importación (lote inválido → 422 sin cambios; lote válido → novedades listadas) en `TST/IngenIA365ERP.API.IntegrationTests/Payroll/ImportNoveltiesEndpointsTests.cs`
 
 **Checkpoint**: menos transcripción, mismos controles.
 
@@ -322,12 +322,12 @@ Identificadores en inglés; textos de usuario en español; ningún color literal
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T131 [P] Escribir el runbook `docs/operaciones/nomina-primer-periodo.md` (qué debe dejar la semilla y cómo comprobarlo contra la base del ambiente, cómo se carga la vigencia de un año nuevo, qué hacer ante `Payroll.LegalParameterMissing`, cómo reaplicar la semilla) e indexarlo en `docs/INDICE-DOCUMENTACION.md`
-- [ ] T132 [P] Prueba de rendimiento en `TST/IngenIA365ERP.Domain.Tests/Payroll/Calculation/RendimientoTests.cs`: 200 empleados sintéticos con 8 novedades cada uno se calculan en < 10 s en el motor puro (SC-004 deja margen a la persistencia); y una prueba de integración marcada con `RUN_PERF_TESTS` que mide el ciclo completo < 60 s
-- [ ] T133 [P] Verificar que `PrincipioXI_ContableImmutable` ya no pasa vacuamente (el namespace `Entities/Payroll/Transactions` existe) y que `PrincipioVIII_DualValidation` cubre los 24 comandos; ejecutar `dotnet test tests/IngenIA365ERP.Architecture.Tests` y corregir lo que salga
-- [ ] T134 Recorrer `specs/005-nomina-novedades-liquidacion/quickstart.md` §3 completo con `curl` contra la API local y anotar en el propio quickstart cualquier desvío
-- [ ] T135 [P] Actualizar `CLAUDE.md`: sección Stack (nómina: motor puro, corridas inmutables, semilla de conceptos y parámetros con vigencia, retiro del cálculo preliminar) y la tabla de Totales remedida con los comandos indicados
-- [ ] T136 Retirar las redirecciones 308 de `API/Endpoints/Payroll/PayrollProcessingEndpoints.cs` si ningún consumidor las usa (buscar en `SHR/` y MAUI), o documentar su fecha de retiro en `contracts/api.md` §7
+- [X] T131 [P] Escribir el runbook `docs/operaciones/nomina-primer-periodo.md` (qué debe dejar la semilla y cómo comprobarlo contra la base del ambiente, cómo se carga la vigencia de un año nuevo, qué hacer ante `Payroll.LegalParameterMissing`, cómo reaplicar la semilla) e indexarlo en `docs/INDICE-DOCUMENTACION.md`
+- [ ] T132 [P] (Hecha la del motor puro: `RendimientoTests` en verde, 200 x 8 en < 10 s. Falta la de integracion con `RUN_PERF_TESTS`: exige Docker, apagado en esta sesion.) Prueba de rendimiento en `TST/IngenIA365ERP.Domain.Tests/Payroll/Calculation/RendimientoTests.cs`: 200 empleados sintéticos con 8 novedades cada uno se calculan en < 10 s en el motor puro (SC-004 deja margen a la persistencia); y una prueba de integración marcada con `RUN_PERF_TESTS` que mide el ciclo completo < 60 s
+- [X] T133 [P] Verificar que `PrincipioXI_ContableImmutable` ya no pasa vacuamente (el namespace `Entities/Payroll/Transactions` existe) y que `PrincipioVIII_DualValidation` cubre los 24 comandos; ejecutar `dotnet test tests/IngenIA365ERP.Architecture.Tests` y corregir lo que salga
+- [ ] T134 (No ejecutado: exige credencial de administrador de cooperativa con segundo factor; los desvios conocidos ya estan anotados en quickstart.md §5.) Recorrer `specs/005-nomina-novedades-liquidacion/quickstart.md` §3 completo con `curl` contra la API local y anotar en el propio quickstart cualquier desvío
+- [X] T135 [P] Actualizar `CLAUDE.md`: sección Stack (nómina: motor puro, corridas inmutables, semilla de conceptos y parámetros con vigencia, retiro del cálculo preliminar) y la tabla de Totales remedida con los comandos indicados
+- [X] T136 Retirar las redirecciones 308 de `API/Endpoints/Payroll/PayrollProcessingEndpoints.cs` si ningún consumidor las usa (buscar en `SHR/` y MAUI), o documentar su fecha de retiro en `contracts/api.md` §7
 
 ---
 
