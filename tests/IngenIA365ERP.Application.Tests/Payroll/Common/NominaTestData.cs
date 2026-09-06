@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Payroll.Novelties;
+using IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
@@ -36,6 +37,7 @@ public sealed class NominaTestData
     public PayrollPolicyReader Policies { get; }
     public CalculationInputLoader Loader { get; }
     public PayrollAccountingPoster Poster { get; }
+    public RecurringNoveltiesMaterializer Recurrentes { get; }
 
     public PayrollPlan Plan { get; }
     public PayPeriod Marzo { get; }
@@ -63,6 +65,7 @@ public sealed class NominaTestData
         Policies = new PayrollPolicyReader(Db);
         Loader = new CalculationInputLoader(Db, Policies);
         Poster = new PayrollAccountingPoster(Db, Clock, User);
+        Recurrentes = new RecurringNoveltiesMaterializer(Db, Clock, User);
 
         Plan = new PayrollPlan { Code = "DEFAULT", Name = "Nómina general", Periodicity = PayrollPeriodicity.Monthly, IsDefault = true, IsActive = true, CreatedBy = "system:seed" };
         Db.PayrollPlans.Add(Plan);

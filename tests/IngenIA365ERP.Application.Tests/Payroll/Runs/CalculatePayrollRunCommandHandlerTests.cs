@@ -16,7 +16,7 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Runs;
 public class CalculatePayrollRunCommandHandlerTests
 {
     private static CalculatePayrollRunCommandHandler Handler(NominaTestData d) =>
-        new(d.Db, d.Loader, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        new(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
 
     private static async Task RegistrarHoras(NominaTestData d, decimal horas = 6m)
     {

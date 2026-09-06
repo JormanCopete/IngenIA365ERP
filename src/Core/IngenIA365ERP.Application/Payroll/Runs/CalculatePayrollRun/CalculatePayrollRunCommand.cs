@@ -42,6 +42,7 @@ public sealed class CalculatePayrollRunCommandValidator : AbstractValidator<Calc
 public sealed class CalculatePayrollRunCommandHandler(
     IApplicationDbContext db,
     CalculationInputLoader loader,
+    Novelties.RecurringNovelties.RecurringNoveltiesMaterializer recurring,
     IDistributedLock distributedLock,
     IDateTimeService clock,
     ICurrentUserService user,
@@ -66,6 +67,9 @@ public sealed class CalculatePayrollRunCommandHandler(
         if (handle is null)
             return Result.Failure<CalculateRunResultDto>(new Error("Payroll.RunInProgress",
                 "Ya hay un cálculo en curso para este período. Espere a que termine y refresque."));
+
+        // US6: las recurrentes activas del plan entran al período como novedades antes de leer los insumos.
+        var recurrentes = await recurring.MaterializeAsync(period, ct);
 
         var batch = await loader.LoadAsync(period, ct);
         var faltantes = batch.MissingRequiredParameters;
@@ -98,6 +102,7 @@ public sealed class CalculatePayrollRunCommandHandler(
         var hashes = new List<string>();
         var bloqueos = new List<RunBlockerDto>();
         var avisos = new List<string>();
+        avisos.AddRange(recurrentes.Warnings);
         var cambiados = 0;
         decimal devengos = 0m, deducciones = 0m, aportes = 0m, provisiones = 0m, neto = 0m, ajuste = 0m;
 

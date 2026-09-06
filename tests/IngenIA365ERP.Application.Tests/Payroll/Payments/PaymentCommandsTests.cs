@@ -24,7 +24,7 @@ public class PaymentCommandsTests
     private static async Task<Guid> Aprobada(NominaTestData d)
     {
         d.ConfigurarContabilidad();
-        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await calc.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var poster = new PayrollAccountingPoster(d.Db, d.Clock, Contadora);

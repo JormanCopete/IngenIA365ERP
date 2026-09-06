@@ -153,6 +153,20 @@ public sealed class ApprovePayrollRunCommandHandler(
         period.UpdatedAt = ahora;
         period.UpdatedBy = yo;
 
+        // US6: cada recurrente con novedad activa en el período emite su cuota al aprobar (la reversión la descuenta).
+        var recurrentesIds = await db.PayrollNovelties.AsNoTracking()
+            .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active && n.RecurringNoveltyId != null)
+            .Select(n => n.RecurringNoveltyId!.Value).Distinct().ToListAsync(ct);
+        if (recurrentesIds.Count > 0)
+        {
+            foreach (var r in await db.PayrollRecurringNovelties.Where(r => recurrentesIds.Contains(r.Id)).ToListAsync(ct))
+            {
+                r.InstallmentsIssued++;
+                r.UpdatedAt = ahora;
+                r.UpdatedBy = yo;
+            }
+        }
+
         await db.SaveChangesAsync(ct);
 
         var totales = new RunTotalsDto(run.TotalEarnings, run.TotalDeductions, run.TotalEmployerContributions, run.TotalProvisions, run.TotalNet, run.RoundingAdjustment);

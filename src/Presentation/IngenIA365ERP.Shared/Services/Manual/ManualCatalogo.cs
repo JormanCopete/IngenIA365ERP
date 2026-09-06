@@ -776,9 +776,11 @@ public static class ManualCatalogo
                 P("Cambio de salario", "Botón «Cambio de salario»: empleado, salario nuevo, fecha de efecto y motivo. El historial de salarios del empleado se conserva y la liquidación paga cada tramo de días con el salario que regía en él."),
                 P("Período aprobado", "No se registra ni se corrige nada en un período aprobado: el sistema ofrece registrar un ajuste retroactivo en el período abierto siguiente, con referencia al original."),
                 P("Borrador desactualizado", "Si el período ya estaba calculado, cualquier novedad nueva, corregida o anulada deja el borrador «desactualizado» y hay que recalcular antes de aprobar."),
+                P("Importar desde archivo", "Botón «Importar»: descargá la plantilla (CSV separado por punto y coma: documento, concepto, cantidad, valor, desde, hasta, observación), completala y subila. Cada fila pasa las mismas reglas que el registro manual. Si una sola falla, no entra ninguna y la pantalla muestra la lista de errores con fila y columna; corregí el archivo y volvé a subirlo. El límite es 5 MB por archivo."),
+                P("Recurrentes", "Botón «Recurrentes»: una novedad que se repite cada período (un descuento por cuotas, un auxilio fijo) se registra una vez con empleado, concepto, cantidad o valor, fecha desde y, si aplica, hasta o número de cuotas. En cada cálculo aparece como novedad «Recurrente» con su número de cuota; al aprobar se cuenta la cuota emitida, y al llegar a la última deja de generarse sola. Desactivarla pide motivo y anula las que estén en períodos aún no aprobados."),
             ],
-            ["novedades", "horas extra", "recargo", "incapacidad", "vacaciones", "licencia", "descuento", "prestamo", "libranza", "cambio de salario", "traslado", "corregir", "anular", "retroactivo"],
-            ["Cooperativa activa.", "Un período de pago abierto del plan del empleado.", "Permiso Payroll.Novelties.Create para registrar; Update para corregir; Cancel para anular."],
+            ["novedades", "horas extra", "recargo", "incapacidad", "vacaciones", "licencia", "descuento", "prestamo", "libranza", "cambio de salario", "traslado", "corregir", "anular", "retroactivo", "importar", "csv", "plantilla", "recurrente", "cuotas"],
+            ["Cooperativa activa.", "Un período de pago abierto del plan del empleado.", "Permiso Payroll.Novelties.Create para registrar; Update para corregir; Cancel para anular; Import para importar archivos."],
             ["liquidacion-de-nomina", "conceptos-de-nomina", "periodos-de-pago", "empleados"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("liquidacion-de-nomina", "Liquidación de nómina", Modulos.Nomina, "/nomina/liquidacion",

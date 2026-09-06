@@ -40,7 +40,7 @@ public class SendPayslipsCommandHandlerTests
         (await d.Db.People.SingleAsync(p => p.Id == carla.PersonId)).Email = null;
         await d.Db.SaveChangesAsync();
 
-        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await calc.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         if (aprobar)

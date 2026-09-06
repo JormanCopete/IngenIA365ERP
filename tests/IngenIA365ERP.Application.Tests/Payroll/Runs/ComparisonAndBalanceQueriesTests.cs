@@ -14,7 +14,7 @@ public class ComparisonAndBalanceQueriesTests
 {
     private static async Task<Guid> Calcular(NominaTestData d, Domain.Entities.Payroll.PayPeriod periodo)
     {
-        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await h.Handle(new CalculatePayrollRunCommand(periodo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         return r.Value.RunPublicId;

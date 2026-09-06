@@ -2,14 +2,18 @@ using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.Novelties.CancelNovelty;
 using IngenIA365ERP.Application.Payroll.Novelties.CorrectNovelty;
+using IngenIA365ERP.Application.Payroll.Novelties.ImportNovelties;
 using IngenIA365ERP.Application.Payroll.Novelties.Queries;
 using IngenIA365ERP.Application.Payroll.Novelties.RegisterNovelty;
 using IngenIA365ERP.Application.Payroll.Novelties.RegisterSalaryChange;
+using IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
+using IngenIA365ERP.Application.Payroll.Services;
+using Microsoft.AspNetCore.Mvc;
 using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Payroll;
 
-/// <summary>Feature 005 (contracts/api.md §3): novedades del período y cambios de salario. Importación y recurrentes van en su propio módulo (US6).</summary>
+/// <summary>Feature 005 (contracts/api.md §3): novedades del período y cambios de salario. Incluye importación desde archivo y novedades recurrentes (US6).</summary>
 public sealed class PayrollNoveltiesEndpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -77,6 +81,54 @@ public sealed class PayrollNoveltiesEndpoints : ICarterModule
             .WithName("Payroll_SalaryChanges_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Novelties.View");
+
+        // ------------------------------------------------------------ importación (US6) --
+
+        group.MapGet("/novelties/import-template", (INoveltyFileParser parser) =>
+                Results.File(parser.Template(), "text/csv; charset=utf-8", "plantilla_novedades.csv"))
+            .WithName("Payroll_Novelties_ImportTemplate")
+            .RequirePermission("Payroll.Novelties.Import");
+
+        group.MapPost("/pay-periods/{periodId:guid}/novelties/import",
+                async (Guid periodId, [FromForm] IFormFile file, ISender sender, HttpContext http, CancellationToken ct) =>
+                {
+                    if (file is null || file.Length == 0)
+                        return Results.Json(new { code = "Payroll.ImportInvalid", message = "No se recibió un archivo.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status400BadRequest);
+                    if (file.Length > ImportNoveltiesCommandValidator.MaxBytes)
+                        return Results.Json(new { code = "Payroll.ImportFileTooLarge", message = "El archivo pesa más de 5 MB. Divídalo en varios lotes.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status413PayloadTooLarge);
+
+                    await using var stream = file.OpenReadStream();
+                    var result = await sender.Send(new ImportNoveltiesCommand(periodId, stream, file.FileName, file.Length), ct);
+                    if (result.IsFailure) return ErrorEnvelopeFilter.Translate(http, result);
+                    // Con errores: 422 y el mismo DTO, applied = 0, nada persistido (contracts/api.md §3).
+                    return result.Value.HasErrors ? Results.UnprocessableEntity(result.Value) : Results.Ok(result.Value);
+                })
+            .WithName("Payroll_Novelties_Import")
+            .DisableAntiforgery() // multipart sin form anti-XSRF — endpoint API
+            .RequirePermission("Payroll.Novelties.Import");
+
+        // ------------------------------------------------------------- recurrentes (US6) --
+
+        group.MapGet("/recurring-novelties", async (Guid? employeeId, bool? active, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListRecurringNoveltiesQuery(employeeId, active), ct))
+            .WithName("Payroll_RecurringNovelties_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Novelties.View");
+
+        group.MapPost("/recurring-novelties", async (CreateRecurringNoveltyCommand command, ISender sender, CancellationToken ct) =>
+                {
+                    var result = await sender.Send(command, ct);
+                    return result.IsSuccess ? Results.Created($"/api/payroll/recurring-novelties/{result.Value}", new { publicId = result.Value }) : (object)result;
+                })
+            .WithName("Payroll_RecurringNovelties_Create")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Novelties.Create");
+
+        group.MapPost("/recurring-novelties/{recurringId:guid}/deactivate", async (Guid recurringId, CancelBody body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new DeactivateRecurringNoveltyCommand(recurringId, body.Reason), ct))
+            .WithName("Payroll_RecurringNovelties_Deactivate")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Novelties.Cancel");
     }
 
     public sealed record CancelBody(string Reason);
