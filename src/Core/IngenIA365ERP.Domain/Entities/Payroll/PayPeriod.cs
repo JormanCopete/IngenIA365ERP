@@ -81,4 +81,16 @@ public class PayPeriod : AuditableEntity
 
     [MaxLength(1)]
     public string AdvanceCrossing { get; set; } = string.Empty;
+
+    /// <summary>Largo de la columna legada <c>StatusMessage</c> (SOLIDO): varchar(100).</summary>
+    public const int StatusMessageMaxLength = 100;
+
+    /// <summary>
+    /// Deja el mensaje de estado en lo que cabe en la columna. Un correo largo como usuario más
+    /// la fecha ya se acercan al límite, y PostgreSQL rechaza el UPDATE entero (22001). Lo
+    /// que se recorta es texto de cortesía: quién y cuándo también están en las columnas
+    /// propias (ApprovedBy, ApprovedAt, la corrida).
+    /// </summary>
+    public static string Mensaje(string texto) =>
+        texto.Length <= StatusMessageMaxLength ? texto : texto[..(StatusMessageMaxLength - 1)] + "…";
 }

@@ -79,7 +79,7 @@ public sealed class RegisterSalaryChangeCommandHandler(
                 EmployeeId = employee.Id,
                 EffectiveDate = employee.JoinDate.Date,
                 NewSalary = employee.Salary,
-                UserName = Recortar(user.UserName, 20),
+                UserName = SalaryChange.RecortarUsuario(user.UserName),
                 EntryDate = ahora,
                 CreatedAt = ahora,
                 CreatedBy = "system:baseline",
@@ -92,7 +92,7 @@ public sealed class RegisterSalaryChangeCommandHandler(
             EmployeeId = employee.Id,
             EffectiveDate = efecto,
             NewSalary = request.NewSalary,
-            UserName = Recortar(user.UserName, 20),
+            UserName = SalaryChange.RecortarUsuario(user.UserName),
             EntryDate = ahora,
             CreatedAt = ahora,
             CreatedBy = user.UserName,
@@ -129,7 +129,4 @@ public sealed class RegisterSalaryChangeCommandHandler(
 
         return Result.Success(cambio.Id);
     }
-
-    private static string? Recortar(string? valor, int max) =>
-        valor is null ? null : valor.Length <= max ? valor : valor[..max];
 }

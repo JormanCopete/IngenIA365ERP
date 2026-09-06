@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -211,7 +212,7 @@ public sealed class CalculatePayrollRunCommandHandler(
         db.PayrollRuns.Add(run);
         period.Status = PayPeriodStatus.Calculated;
         period.RunPublicId = run.PublicId;
-        period.StatusMessage = $"Borrador v{version} calculado por {usuario} el {ahora:dd/MM/yyyy HH:mm} UTC";
+        period.StatusMessage = PayPeriod.Mensaje($"Borrador v{version} calculado por {usuario} el {ahora:dd/MM/yyyy HH:mm} UTC");
         period.UpdatedAt = ahora;
         period.UpdatedBy = usuario;
 

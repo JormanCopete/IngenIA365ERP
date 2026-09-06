@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -91,7 +92,7 @@ public sealed class ReversePayrollRunCommandHandler(
         period.ApprovedAt = null;
         period.ApprovedBy = null;
         period.RunPublicId = null;
-        period.StatusMessage = $"Reversado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC ({request.Reason.Trim()}). Período reabierto; corrija y recalcule.";
+        period.StatusMessage = PayPeriod.Mensaje($"Reversado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC. Reabierto: {request.Reason.Trim()}");
         period.UpdatedAt = ahora;
         period.UpdatedBy = yo;
 

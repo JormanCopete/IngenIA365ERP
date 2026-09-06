@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Payments;
 using IngenIA365ERP.Application.Payroll.Payslips;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -23,7 +24,14 @@ public sealed class PayrollPaymentsEndpoints : ICarterModule
             .RequirePermission("Payroll.Payments.View");
 
         group.MapPost("/payments", async (Guid runId, MarkBody body, ISender sender, CancellationToken ct) =>
-                await sender.Send(new MarkPaymentsCommand(runId, body.EmployeePublicIds, body.PaidAt, body.Method, body.Reference), ct))
+            {
+                // El medio viaja como texto («Transfer», «Check», «Cash»): la API no serializa
+                // enums como cadenas y un número en el cuerpo no le dice nada a quien lo lee.
+                if (!Enum.TryParse<PayrollPaymentMethod>(body.Method, ignoreCase: true, out var metodo) || !Enum.IsDefined(metodo))
+                    return (object)Result.Failure<int>(new Error("Payroll.PaymentMethodInvalid",
+                        $"Medio de pago «{body.Method}» no reconocido. Use Transfer, Check o Cash."));
+                return await sender.Send(new MarkPaymentsCommand(runId, body.EmployeePublicIds, body.PaidAt, metodo, body.Reference), ct);
+            })
             .WithName("Payroll_Payments_Mark")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Payments.Mark");
@@ -65,7 +73,7 @@ public sealed class PayrollPaymentsEndpoints : ICarterModule
             .RequirePermission("Payroll.Payslips.View");
     }
 
-    public sealed record MarkBody(IReadOnlyList<Guid>? EmployeePublicIds, DateTime PaidAt, PayrollPaymentMethod Method, string? Reference);
+    public sealed record MarkBody(IReadOnlyList<Guid>? EmployeePublicIds, DateTime PaidAt, string Method, string? Reference);
     public sealed record ReasonBody(string Reason);
     public sealed record SendBody(IReadOnlyList<Guid>? EmployeePublicIds);
 }

@@ -118,14 +118,23 @@ en `release` con aprobación manual.
 
 ## 5. Desvíos observados al implementar (2026-09-05)
 
-El recorrido de la sección 3 **no se ejecutó con `curl` en esta sesión**: exige la
-credencial de un administrador de cooperativa (con segundo factor) y la implementación
-corrió sin nadie que la digitara. Las reglas de la casa no permiten inventar ni pedir
-credenciales por chat, así que queda para la validación de QA (T134). Lo que sí está
-verificado es el mismo ciclo por debajo de HTTP: 92 pruebas de Application sobre los
-handlers (novedades, cálculo, aprobación, pagos, comprobantes, importación, recurrentes,
-reversión) y 54 de arquitectura. Al correrlo, tener presentes estos desvíos respecto de
-los contratos originales:
+El recorrido de la sección 3 **no se ejecutó con `curl` a mano**: exige la credencial de
+un administrador de cooperativa (con segundo factor) y las reglas de la casa no permiten
+inventar ni pedir credenciales por chat; queda para la validación de QA (T134). Lo que sí
+corre, y el 2026-09-06 corrió en verde contra PostgreSQL, Mongo y Redis en contenedores,
+es **el mismo recorrido por HTTP** desde `tests/IngenIA365ERP.API.IntegrationTests/Payroll/`:
+cooperativa nueva con su administrador por invitación, período, novedades (registrar,
+corregir, anular, importar), calcular, recalcular, aprobar con comprobante `NM` cuadrado,
+relación de pago, marca, PDF, envío por correo capturado, reversión bloqueada por el pago
+y luego efectiva, más el 404 para quien no tiene el permiso. Y con `RUN_PERF_TESTS=1`,
+200 empleados con 1 600 novedades importadas, calculadas y aprobadas en 13 s. Esa
+corrida destapó cinco defectos que no salían en las pruebas sin base real, ya corregidos:
+el empleado registrado por la API no quedaba en el plan por defecto; el `UserName` legado
+de 20 caracteres rechazaba a un usuario con correo; el verificador de permisos de los
+handlers resolvía por el `UserId` entero (nulo con identidad central) y negaba toda
+excepción; el comprobante contable tenía una FK sombra `VoucherTypeId` sin asignar; y el
+mensaje de estado del período (100 caracteres) desbordaba al reversar. Al correr la
+sección 3 a mano, tener presentes estos desvíos respecto de los contratos originales:
 
 - **Permisos de períodos de pago**: `GET /api/payroll/pay-periods` exige
   `Payroll.Runs.View` y las escrituras `Payroll.Runs.Calculate`. Los códigos
@@ -149,6 +158,11 @@ los contratos originales:
   fecha del día (`clock.TodayUtc`); si el período contable de hoy está cerrado responde
   `Payroll.AccountingPeriodClosedForReversal`. El período vuelve a `Open` con
   `RunPublicId = null` y `StatusMessage` con el motivo.
+- **Medio de pago**: `POST …/payments` recibe `method` como texto (`Transfer`, `Check`,
+  `Cash`); otro valor responde `Payroll.PaymentMethodInvalid`. La API no serializa enums
+  como cadenas, así que el enum no puede ir en el cuerpo.
+- **Aprobación**: cada período del plan incluye a **todos** los empleados vigentes; las
+  excepciones se autorizan por (empleado, bloqueo) y el bloqueo nombra a la persona.
 - **Alias 308** de `/api/payroll/summary|detail|payslip`: retirados en esta versión
   (no tenían consumidores). Las rutas heredadas de reportes sí redirigen 308.
 - **Migraciones**: una sola migración de esquema (`NominaNovedadesYLiquidacion`) más

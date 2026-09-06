@@ -86,6 +86,16 @@ public sealed class ApprovePayrollRunCommandHandler(
         if (empleados.Count == 0 && !request.ConfirmEmpty)
             return Fallo("Payroll.ConfirmationRequired", "El borrador no tiene empleados. Aprobar un período vacío exige confirmEmpty = true.");
 
+        // Los bloqueos se nombran por persona, no por identificador: quien aprueba tiene que
+        // saber a quién autoriza. (Employee.Person no se incluye: el join es explícito.)
+        var idsEmpleados = empleados.Select(e => e.EmployeeId).ToList();
+        var nombres = await (
+            from e in db.Employees.AsNoTracking()
+            join p in db.People.AsNoTracking() on e.PersonId equals p.Id
+            where idsEmpleados.Contains(e.Id)
+            select new { e.Id, Nombre = (p.FirstName + " " + p.LastName).Trim() })
+            .ToDictionaryAsync(x => x.Id, x => x.Nombre, ct);
+
         // --- bloqueos y excepciones (FR-022) ---
         var excepciones = request.Exceptions ?? [];
         var bloqueosSinExcepcion = new List<string>();
@@ -94,7 +104,7 @@ public sealed class ApprovePayrollRunCommandHandler(
             foreach (var flag in RunJson.FlagNames(e.Flags))
             {
                 var cubierta = excepciones.Any(x => x.EmployeePublicId == e.Employee!.PublicId && x.Flag.Equals(flag, StringComparison.OrdinalIgnoreCase));
-                if (!cubierta) bloqueosSinExcepcion.Add($"{NombreDe(e)}: {RunJson.FlagLabel(Enum.Parse<RunEmployeeFlag>(flag))}");
+                if (!cubierta) bloqueosSinExcepcion.Add($"{NombreDe(e, nombres)}: {RunJson.FlagLabel(Enum.Parse<RunEmployeeFlag>(flag))}");
             }
         }
         if (bloqueosSinExcepcion.Count > 0)
@@ -149,7 +159,7 @@ public sealed class ApprovePayrollRunCommandHandler(
         period.ApprovedAt = ahora;
         period.ApprovedBy = yo;
         period.RunPublicId = run.PublicId;
-        period.StatusMessage = $"Aprobado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC · comprobante {posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}";
+        period.StatusMessage = PayPeriod.Mensaje($"Aprobado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC · comprobante {posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}");
         period.UpdatedAt = ahora;
         period.UpdatedBy = yo;
 
@@ -189,5 +199,6 @@ public sealed class ApprovePayrollRunCommandHandler(
     private static bool Igual(string? a, string b) =>
         !string.IsNullOrEmpty(a) && a.Equals(b, StringComparison.OrdinalIgnoreCase);
 
-    private static string NombreDe(PayrollRunEmployee e) => e.Employee?.PublicId.ToString() ?? e.EmployeeId.ToString();
+    private static string NombreDe(PayrollRunEmployee e, IReadOnlyDictionary<int, string> nombres) =>
+        nombres.TryGetValue(e.EmployeeId, out var n) && n.Length > 0 ? n : e.Employee?.PublicId.ToString() ?? e.EmployeeId.ToString();
 }

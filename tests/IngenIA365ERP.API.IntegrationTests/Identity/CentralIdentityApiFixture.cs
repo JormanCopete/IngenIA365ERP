@@ -94,6 +94,14 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
             // Pwned check apagado: los tests no deben depender de un servicio externo.
             builder.UseSetting("PwnedPassword:Enabled", "false");
 
+            // Correo saliente «configurado» a ojos de IOutboundEmailStatus (feature 005): el
+            // envío de comprobantes se niega antes de intentar si la sección Smtp no declara
+            // host, puerto y remitente. El transporte real está sustituido por
+            // CapturingEmailSender, así que nada sale de la máquina.
+            builder.UseSetting("Smtp:Host", "smtp.integration.test");
+            builder.UseSetting("Smtp:Port", "25");
+            builder.UseSetting("Smtp:FromAddress", "noresponder@integration.test");
+
             // Las claves RS256 se cargan con File.Exists sobre un path RELATIVO
             // ("Keys/dev_private.pem"). Bajo el test host el cwd es el bin de
             // tests → path absoluto a las claves reales del API.
