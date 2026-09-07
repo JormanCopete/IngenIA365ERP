@@ -16,7 +16,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
     /// preservar, y por eso <c>Down</c> la reconstruye desde el codigo antes de volver a poner la FK.
     ///
     /// Principio XII: antes de aplicarla en un ambiente, backup de la base de cada cooperativa
-    /// y segundo revisor. Referencias: backup ______ / revisor ______ (anotar al desplegar).
+    /// y segundo revisor. Referencias (PDN, 2026-09-07): backup CNPG <c>erp-db-pre-nomina-mfa-20260907</c>
+    /// a S3 con archivado continuo (PITR), mas <c>pg_dump -Fc</c> de <c>ingenia365erp</c> y
+    /// <c>ingenia365erp_admin</c> en el nodo (<c>/root/respaldos/</c>) / revisor: Jorman Copete, que
+    /// autorizo el despliegue a produccion. DEV y QA la recibieron por AutoMigrate el 2026-09-06.
     /// Lo destapo la prueba e2e <c>CreateDocumentEndpointTests</c> el 2026-09-06: crear un
     /// comprobante contable manual por la API fallaba con
     /// <c>FK_ACC_Documents_ACC_VoucherTypes_VoucherTypeId</c>.
