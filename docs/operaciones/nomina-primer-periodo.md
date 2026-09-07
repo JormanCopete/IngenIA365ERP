@@ -124,7 +124,13 @@ cuentas, vigencias registradas a mano). Es idempotente: correrla dos veces no du
 ## 6. Las migraciones de esta entrega
 
 Todas pareadas por proveedor (`Persistence.Migrations.PostgreSql` y `.SqlServer`), en
-`Application/`, y las aplica `AutoMigrate` al arrancar la API en cada base de cooperativa:
+`Application/`. En DEV y QA las aplica `AutoMigrate` al arrancar la API, base por base
+(operativa y cada cooperativa; hecho el 2026-09-06, `coop_prueba` incluida). En producción
+`AutoMigrate` está apagado: las aplicó el Job PreSync de Argo (`erp-db-migrate`) sobre la
+base operativa el 2026-09-07, y **las bases de cooperativa de producción no las migra
+nadie todavía** —el Job neutraliza ese bucle a propósito y hoy hay cero cooperativas—;
+antes de registrar la primera hace falta el paso por cooperativa que el propio Job deja
+anotado como pendiente.
 
 | Migración | Qué hace | Cuidado |
 |---|---|---|
@@ -135,6 +141,14 @@ Todas pareadas por proveedor (`Persistence.Migrations.PostgreSql` y `.SqlServer`
 
 La última no es de nómina: la destapó la prueba e2e de aprobación, y afecta a Contabilidad.
 Sin ella, `POST /api/accounting/documents` responde 500 contra PostgreSQL y SQL Server.
+
+**Aplicada en producción el 2026-09-07** con lo que exige el Principio XII: respaldo CNPG
+`erp-db-pre-nomina-mfa-20260907` a S3 (archivado continuo, PITR) más `pg_dump -Fc` de
+`ingenia365erp` e `ingenia365erp_admin` en el nodo, y Jorman Copete como revisor que
+autorizó la promoción. Las referencias quedaron en la cabecera de la migración. Después
+del despliegue, `information_schema.columns` ya no lista `VoucherTypeId` en `ACC_Documents`
+y la semilla dejó 41 definiciones de concepto, 41 parámetros legales, el plan por defecto
+y el comprobante `NM`.
 
 ## 7. Lo que este runbook no cubre
 

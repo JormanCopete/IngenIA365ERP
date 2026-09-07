@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-04**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-07**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -22,6 +22,17 @@
 Producción responde en **https://app.ingenia365.com** — login verificado en
 navegador, sin errores de consola. La IP del servidor no es visible desde
 internet: todo entra por el túnel de Cloudflare.
+
+**Producción corre desde el 2026-09-07 la misma generación que DEV y QA**
+(`release` = `50ba799`, 108 commits promovidos de una vez): rediseño del segundo
+factor con passkeys, llavero de DataProtection en `ADM_DataProtectionKeys`,
+aprovisionamiento de una base por cooperativa y la nómina de la feature 005.
+Se aplicaron 13 migraciones administrativas y 7 operativas por el Job PreSync de
+Argo, con respaldo previo (`erp-db-pre-nomina-mfa-20260907`) y las tres consultas
+de [despliegue-rediseno-mfa.md](despliegue-rediseno-mfa.md) respondidas contra la
+base: 0 cooperativas, 0 adjuntos, maestro sin segundo factor. **El maestro todavía
+no ha inscrito su segundo factor** —su primer login devolverá
+`MfaEnrollmentRequired`— y P13 sigue abierto en PDN.
 
 ### Respaldos
 
@@ -202,7 +213,7 @@ Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
 |---|---|
 | DEV | ✅ 2026-09-04 (`rolcreatedb = t`) |
 | QA | ✅ 2026-09-04 — primera cooperativa `coop_prueba` aprovisionada en `Ready`, invitación entregada y aceptada |
-| PDN | ⏳ pendiente — hacerlo antes de registrar la primera cooperativa real |
+| PDN | ⏳ pendiente — **desde el 2026-09-07 producción ya tiene la consola SaaS que registra cooperativas**: hacerlo antes de la primera real (verificado ese día: `rolcreatedb = f`) |
 
 > Al aprovisionar apareció una carrera, una sola vez y sin daño:
 > `NotificationEmailDispatcher` recorre `ListActiveAsync()` —que filtra por
@@ -210,6 +221,23 @@ Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
 > ya existía pero sus tablas no (`42P01 dbo.COR_Notifications does not exist`).
 > Reintentó a los 15 s y no volvió a fallar. **Arreglado en `e7c96a2`** (2026-09-04):
 > `ListActiveAsync` exige `ProvisioningState = Ready`, con prueba unitaria.
+
+#### P14 — Las bases de cooperativa de producción no las migra nadie
+
+En producción `Database__AutoMigrate=false` a propósito, y el Job PreSync
+(`workloads/erp/overlays/pdn/migracion-job.yaml`) migra la base administrativa y
+la operativa, pero **neutraliza el bucle de cooperativas** (`--tenant __ninguna__`)
+porque ese bucle es del modelo anterior —un esquema por cooperativa— y el vivo es
+una base por cooperativa. En DEV y QA no se nota: la API migra base por base al
+arrancar. En PDN, la primera cooperativa que se registre nacerá con el esquema del
+día del alta y **nadie le aplicará las migraciones siguientes**: la API le
+responderá `[Database.MigrationsPending]` al abrirla.
+
+Hace falta un paso por cooperativa que apunte `Database__ConnectionStrings__PostgreSQL`
+a cada base listada en `ADM_Tenants.DatabaseName` y corra `migrate --scope tenants
+--tenant __ninguna__`. El migrador ya sabe hacerlo; lo que no existe es quién lo
+invoque por cada base. Hoy no urge (0 cooperativas, verificado el 2026-09-07); con la
+primera, sí, y va de la mano de P13.
 
 ### 🟡 Prioridad media
 
