@@ -6,135 +6,137 @@
 
 <PageTitle>Movimientos Contables - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Movimientos Contables</h3>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Movimientos Contables</h3>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
+    </div>
 
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Fecha Desde</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Fecha Hasta</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
-    </div>
-    <div>
-        <label>Cuenta</label>
-        <div style="display:flex;gap:4px;">
-            <SfTextBox @bind-Value="_accountFilter" Placeholder="Codigo cuenta" CssClass="e-small" Width="140px" />
-            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" OnClick="@(() => _showAccountSearch = true)" />
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Fecha Desde</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
         </div>
-    </div>
-    <div>
-        <label>Tercero</label>
-        <div style="display:flex;gap:4px;">
-            <SfTextBox @bind-Value="_personFilter" Placeholder="NIT" CssClass="e-small" Width="140px" />
-            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" OnClick="@(() => _showPersonSearch = true)" />
+        <div>
+            <label>Fecha Hasta</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
         </div>
+        <div>
+            <label>Cuenta</label>
+            <div class="acciones">
+                <SfTextBox @bind-Value="_accountFilter" Placeholder="Codigo cuenta" CssClass="e-small" Width="140px" />
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" OnClick="@(() => _showAccountSearch = true)" />
+            </div>
+        </div>
+        <div>
+            <label>Tercero</label>
+            <div class="acciones">
+                <SfTextBox @bind-Value="_personFilter" Placeholder="NIT" CssClass="e-small" Width="140px" />
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" OnClick="@(() => _showPersonSearch = true)" />
+            </div>
+        </div>
+        <div>
+            <label>Tipo Comprobante</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_voucherTypeFilter" DataSource="_voucherTypes" CssClass="e-small" Width="180px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Sucursal</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches" CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Centro Costo</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters" CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
+        <SfButton CssClass="e-flat e-small" OnClick="ClearFilters">Limpiar</SfButton>
     </div>
-    <div>
-        <label>Tipo Comprobante</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_voucherTypeFilter" DataSource="_voucherTypes" CssClass="e-small" Width="180px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Sucursal</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches" CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Centro Costo</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters" CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
-    <SfButton CssClass="e-flat e-small" OnClick="ClearFilters">Limpiar</SfButton>
+
+    <SfGrid @ref="_grid" TValue="JournalEntryItem" DataSource="_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true"
+            AllowExcelExport="true" Height="500">
+        <GridPageSettings PageSize="50" />
+        <GridColumns>
+            <GridColumn Field="DocumentDate" HeaderText="Fecha" Width="110" Format="d" Type="ColumnType.Date" />
+            <GridColumn Field="VoucherTypeCode" HeaderText="Comprobante" Width="110" />
+            <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="100" />
+            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" />
+            <GridColumn Field="AccountName" HeaderText="Nombre Cuenta" Width="220" />
+            <GridColumn Field="PersonCode" HeaderText="Tercero" Width="120" />
+            <GridColumn Field="PersonName" HeaderText="Nombre Tercero" Width="200" />
+            <GridColumn Field="Description" HeaderText="Descripcion" Width="250" />
+            <GridColumn Field="Debit" HeaderText="Debito" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+            <GridColumn Field="Credit" HeaderText="Credito" Width="140" Format="N2" TextAlign="TextAlign.Right" />
+        </GridColumns>
+        <GridAggregates>
+            <GridAggregate>
+                <GridAggregateColumns>
+                    <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                    <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
+                        <FooterTemplate>
+                            @{ var sum = (context as AggregateTemplateContext); }
+                            <span><b>@sum?.Sum</b></span>
+                        </FooterTemplate>
+                    </GridAggregateColumn>
+                </GridAggregateColumns>
+            </GridAggregate>
+        </GridAggregates>
+    </SfGrid>
+
+    <!-- Account search dialog -->
+    <SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div>
+                    <div class="toolbar" style="margin-bottom:var(--gap-md);">
+                        <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre" CssClass="e-small" />
+                        <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
+                    </div>
+                    <SfGrid TValue="AccountItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnAccountSelected" TValue="AccountItem" />
+                        <GridColumns>
+                            <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+                        </GridColumns>
+                    </SfGrid>
+                </div>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+
+    <!-- Person search dialog -->
+    <SfDialog @bind-Visible="_showPersonSearch" Header="Buscar Tercero" Width="600px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div>
+                    <div class="toolbar" style="margin-bottom:var(--gap-md);">
+                        <SfTextBox @bind-Value="_personSearchText" Placeholder="NIT o nombre" CssClass="e-small" />
+                        <SfButton CssClass="e-primary e-small" OnClick="SearchPersons">Buscar</SfButton>
+                    </div>
+                    <SfGrid TValue="PersonItem" DataSource="_personSearchResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnPersonSelected" TValue="PersonItem" />
+                        <GridColumns>
+                            <GridColumn Field="IdentificationNumber" HeaderText="NIT" Width="140" />
+                            <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
+                        </GridColumns>
+                    </SfGrid>
+                </div>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
 </div>
-
-<SfGrid @ref="_grid" TValue="JournalEntryItem" DataSource="_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true"
-        AllowExcelExport="true" Height="500">
-    <GridPageSettings PageSize="50" />
-    <GridColumns>
-        <GridColumn Field="DocumentDate" HeaderText="Fecha" Width="110" Format="d" Type="ColumnType.Date" />
-        <GridColumn Field="VoucherTypeCode" HeaderText="Comprobante" Width="110" />
-        <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="100" />
-        <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" />
-        <GridColumn Field="AccountName" HeaderText="Nombre Cuenta" Width="220" />
-        <GridColumn Field="PersonCode" HeaderText="Tercero" Width="120" />
-        <GridColumn Field="PersonName" HeaderText="Nombre Tercero" Width="200" />
-        <GridColumn Field="Description" HeaderText="Descripcion" Width="250" />
-        <GridColumn Field="Debit" HeaderText="Debito" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Credit" HeaderText="Credito" Width="140" Format="N2" TextAlign="TextAlign.Right" />
-    </GridColumns>
-    <GridAggregates>
-        <GridAggregate>
-            <GridAggregateColumns>
-                <GridAggregateColumn Field="Debit" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-                <GridAggregateColumn Field="Credit" Type="AggregateType.Sum" Format="N2">
-                    <FooterTemplate>
-                        @{ var sum = (context as AggregateTemplateContext); }
-                        <span><b>@sum?.Sum</b></span>
-                    </FooterTemplate>
-                </GridAggregateColumn>
-            </GridAggregateColumns>
-        </GridAggregate>
-    </GridAggregates>
-</SfGrid>
-
-<!-- Account search dialog -->
-<SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre" CssClass="e-small" />
-                    <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
-                </div>
-                <SfGrid TValue="AccountItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnAccountSelected" TValue="AccountItem" />
-                    <GridColumns>
-                        <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
-                        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
-
-<!-- Person search dialog -->
-<SfDialog @bind-Visible="_showPersonSearch" Header="Buscar Tercero" Width="600px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <SfTextBox @bind-Value="_personSearchText" Placeholder="NIT o nombre" CssClass="e-small" />
-                    <SfButton CssClass="e-primary e-small" OnClick="SearchPersons">Buscar</SfButton>
-                </div>
-                <SfGrid TValue="PersonItem" DataSource="_personSearchResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnPersonSelected" TValue="PersonItem" />
-                    <GridColumns>
-                        <GridColumn Field="IdentificationNumber" HeaderText="NIT" Width="140" />
-                        <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
 
 @code {
     private SfGrid<JournalEntryItem>? _grid;

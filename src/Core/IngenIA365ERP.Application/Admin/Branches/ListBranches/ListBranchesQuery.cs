@@ -1,4 +1,6 @@
 using IngenIA365ERP.Application.Admin.Branches.Common;
+using IngenIA365ERP.Application.Admin.Branches.Common;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
@@ -22,7 +24,18 @@ public sealed class ListBranchesQueryHandler
 {
     private readonly IAdminDbContext _db;
 
-    public ListBranchesQueryHandler(IAdminDbContext db) => _db = db;
+    private readonly ICurrentTenantService _cooperativaActual;
+    private readonly ICurrentCentralUserContext _usuario;
+
+    public ListBranchesQueryHandler(
+        IAdminDbContext db,
+        ICurrentTenantService cooperativaActual,
+        ICurrentCentralUserContext usuario)
+    {
+        _db = db;
+        _cooperativaActual = cooperativaActual;
+        _usuario = usuario;
+    }
 
     public async Task<Result<PagedResult<BranchDto>>> Handle(
         ListBranchesQuery request, CancellationToken ct)
@@ -31,7 +44,22 @@ public sealed class ListBranchesQueryHandler
         var page = paging.SafePage;
         var pageSize = paging.SafePageSize;
 
+        // Acotado SIEMPRE a la cooperativa de quien llama, salvo que sea el
+        // administrador maestro. Antes filtraba solo si el llamador enviaba el
+        // identificador, asi que omitirlo devolvia las sucursales de todas.
+        var alcance = await AlcanceDeSucursales.ResolverAsync(
+            _db, _cooperativaActual, _usuario, ct);
+        if (!alcance.Permitido)
+        {
+            return Result.Failure<PagedResult<BranchDto>>(alcance.Codigo!, alcance.Mensaje!);
+        }
+
         var query = _db.TenantBranches.AsQueryable();
+
+        if (alcance.Cooperativa is { } propia)
+        {
+            query = query.Where(b => b.TenantId == propia);
+        }
 
         if (request.TenantPublicId is { } tpid)
         {

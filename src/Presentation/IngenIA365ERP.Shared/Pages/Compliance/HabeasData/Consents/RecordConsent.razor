@@ -26,13 +26,13 @@
                 </label>
             </div>
 
-            @if (_error is not null) { <p class="error">@_error</p> }
+            @if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
 
-            <div style="display:flex; gap:8px; margin-top:12px;">
+            <div class="acciones">
                 <button class="primary" @onclick="AcceptAsync" disabled="@_saving">
                     @(_saving ? "Guardando…" : "Registrar aceptación")
                 </button>
-                <button @onclick="Cancel">Cancelar</button>
+                <button class="boton" @onclick="Cancel">Cancelar</button>
             </div>
         </div>
     </ChildContent>

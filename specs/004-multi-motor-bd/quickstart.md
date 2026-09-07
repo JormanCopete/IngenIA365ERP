@@ -1,6 +1,14 @@
 # Quickstart — Verificación end-to-end del Multi-Motor (Feature 004)
 
 Recorrido de los 5 user stories y los criterios SC-001…SC-008 sobre el entorno local.
+
+> **Nota de vigencia (2026-08-25).** Donde este documento dice «esquema de
+> tenant», hoy es **una base de datos por cooperativa**: el Principio IV cambió
+> con la constitución v2.0.0 y la decisión que lo revierte está registrada como
+> **D-03-REV** en [research.md](./research.md) — la traza de D-03 se conserva a
+> propósito. El aislamiento es físico y el catálogo administrativo vive en una
+> base aparte. Todo lo demás del documento sigue en pie.
+
 Prerrequisito: rama `004-multi-motor-bd` implementada; Docker disponible.
 
 ## 0. Levantar la orquestación dual (US5 / FR-024)
@@ -18,7 +26,10 @@ dotnet run --project src/Presentation/IngenIA365ERP.API
 # Esperado en el log: provider=PostgreSQL · validación OK · migraciones aplicadas (lista)
 #                     · seed paramétrico admin+tenants · "Now listening"
 # Verificar: curl http://localhost:5100/health/ready → Healthy
-#            login master (curl POST /api/auth/login) → challenge NoActiveMembership
+#            login master (curl POST /api/auth/login) → challenge
+#            MfaEnrollmentRequired la primera vez, MfaRequired después.
+#            NO devuelve accessToken: el segundo factor del maestro es
+#            obligatorio y la sesión la emite /api/auth/mfa/verify.
 
 # 1b. Misma build sobre SQL Server (solo configuración)
 $env:Database__Provider = 'SqlServer'
@@ -113,6 +124,6 @@ $env:DB_PROVIDER='SqlServer';  dotnet test tests/IngenIA365ERP.API.IntegrationTe
 ## 8. Alta de tenant en runtime (FR-014, FR-019a)
 
 Con el master: `POST /api/saas/tenants/with-admin` (flujo existente del 002) →
-verificar que el esquema del tenant nuevo se crea en el motor activo, su
+verificar que la BASE de la cooperativa nueva se crea en el motor activo, su
 `__EFMigrationsHistory` queda al día y sus catálogos paramétricos sembrados;
 la invitación del primer admin llega por SMTP como siempre.

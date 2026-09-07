@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Middleware;
@@ -19,6 +20,7 @@ using IngenIA365ERP.API.Hubs;
 using IngenIA365ERP.API.HealthChecks;
 using Microsoft.OpenApi;  // En OpenApi 2.x los tipos se movieron de Microsoft.OpenApi.Models a la raiz Microsoft.OpenApi
 using Serilog;
+using IngenIA365ERP.Persistence.Configuration;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -32,6 +34,19 @@ try
     QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
     var builder = WebApplication.CreateBuilder(args);
+
+    // === Infraestructura de la maquina (local / docker / wsl) ===
+    // Se agregan DESPUES de CreateBuilder para que ganen sobre appsettings, y
+    // se vuelven a poner las variables de entorno encima al final: en un
+    // cluster la configuracion llega por variables y un archivo del
+    // repositorio no puede pisarla.
+    builder.Configuration.AgregarInfraestructuraDeLaMaquina(builder.Environment.EnvironmentName);
+    var destinosResueltos = InfraestructuraConfiguracion.Resolver(builder.Configuration);
+    if (destinosResueltos.Count > 0)
+    {
+        builder.Configuration.AddInMemoryCollection(destinosResueltos);
+    }
+    builder.Configuration.AddEnvironmentVariables();
 
     // T123 — Serilog enrichers para central_user_id + active_tenant_id desde
     // los claims del JWT. Se rehidrata desde DI para tener IHttpContextAccessor.
@@ -97,6 +112,10 @@ try
     // === Cross-cutting services consumed by Identity & Audit ===
     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
     builder.Services.AddSingleton<ICurrentUserService, CurrentUserService>();
+
+    // Scoped: abre DbContexts. Lo consume PermissionAuthorizationFilter
+    // por peticion, no en el arranque.
+    builder.Services.AddScoped<IngenIA365ERP.API.Services.PermisosDeLaPeticion>();
     // Feature 002 — accessor del JWT central (sub, email, active_tenant_id,
     // tenant_admin, is_global_master_admin, purpose, mfa_verified).
     builder.Services.AddSingleton<
@@ -109,16 +128,16 @@ try
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);
+    // Feature 005: los handlers preguntan por permisos por el mismo camino que la puerta del
+    // endpoint (identidad central → SEC_Users → cooperativa). Va después de Identity para que
+    // esta registración sea la que resuelva IPermissionChecker.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker, IngenIA365ERP.API.Services.PermisosDelHandler>();
     // T048 (Feature 002) — identidad central federada sobre AdminDbContext.
     // Registra IdentityCore<CentralUserIdentity>, BcryptPasswordHasher,
     // PwnedPasswordService, CentralJwtIssuer, ICentralIdentityProvider.
     // AdminDbContext ya queda registrado por AddPersistenceServices() abajo.
     builder.Services.AddCentralIdentity(builder.Configuration);
 
-    // T052/T058 — MFA challenge + enrollment stores en memoria (fallback dev).
-    // Producción usa los respaldos en Redis vía AddCachingServices.
-    builder.Services.AddSingleton<IMfaChallengeStore, InMemoryMfaChallengeStore>();
-    builder.Services.AddSingleton<IMfaEnrollmentStore, InMemoryMfaEnrollmentStore>();
     builder.Services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
     // T075 — cache de permisos efectivos (fallback dev). En producción
     // AddCachingServices registra el RedisPermissionClaimsCache.
@@ -184,6 +203,8 @@ try
 
     // T030 — Email (MailKit) y T025/T030a — Storage abstractions.
     builder.Services.AddStorageServices(builder.Configuration);
+    // Feature 005: el comprobante de pago se pinta con QuestPDF, que solo conoce la API.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.IPayslipPdfRenderer, IngenIA365ERP.API.Reports.PayslipPdfRenderer>();
 
     // T031 — SignalR para el push de notificaciones in-app.
     builder.Services.AddSignalR();
@@ -218,6 +239,8 @@ try
             dbOpts.AutoMigrate,
             dbOpts.Seed.RunParametricSeed,
             dbOpts.Seed.RunTestSeed?.ToString() ?? "(default por ambiente)");
+
+        Log.Information("{Resumen}", InfraestructuraConfiguracion.Describir(app.Configuration));
     }
 
     // Initialize MongoDB collections and indexes
@@ -245,6 +268,41 @@ try
 
     app.UseSecurityHeaders();
     app.UseHttpsRedirection();
+    // Red de seguridad de excepciones. Va lo mas arriba posible, para envolver
+    // tambien lo que revienta en los middleware de abajo.
+    //
+    // No habia ninguna: cualquier excepcion no capturada salia como 500 crudo, sin
+    // el envelope {code,message,traceId} que el resto de la API respeta, y en
+    // Development con la traza entera. Dos consecuencias: la interfaz no sabia
+    // pintar el error —mostraba un mensaje vacio— y quien depuraba perseguia
+    // sintomas en vez de causas.
+    //
+    // Importa especialmente ahora: la fabrica de ErpTenantInfo lanza a proposito
+    // cuando una peticion llega sin cooperativa resuelta, y eso tiene que verse como
+    // un error con codigo, no como una pared de texto.
+    app.UseExceptionHandler(rama => rama.Run(async contexto =>
+    {
+        var fallo = contexto.Features.Get<IExceptionHandlerFeature>()?.Error;
+
+        contexto.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("ExcepcionNoControlada")
+            .LogError(fallo, "Excepcion no controlada en {Metodo} {Ruta}.",
+                contexto.Request.Method, contexto.Request.Path);
+
+        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        contexto.Response.ContentType = "application/json";
+
+        // Sin detalles del fallo en el cuerpo, ni en Development: el traceId lleva
+        // a la linea del registro, que si los tiene.
+        await contexto.Response.WriteAsJsonAsync(new
+        {
+            code = "Generic.Unexpected",
+            message = "Ocurrio un error inesperado al procesar la solicitud.",
+            traceId = contexto.TraceIdentifier,
+        });
+    }));
+
     app.UseSerilogRequestLogging();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");

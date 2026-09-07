@@ -1,0 +1,34 @@
+/* Lo que esta pantalla agrega sobre las clases .report-* de componentes.css.
+
+   Antes esto vivía en un bloque <style> dentro del .razor, que Blazor inyecta
+   en el documento: redefinía .report-card, .report-cards y .report-section-title
+   para TODA la aplicación, no solo para esta pantalla. Acá va con ámbito. */
+
+/* El contenedor .pagina ya separa sus hijos con --gap-lg; el margen propio de
+   .report-section sumaría un segundo hueco entre secciones. */
+.report-section {
+    margin-bottom: 0;
+}
+
+/* El título de sección lleva el icono al lado y una línea que cierra el bloque.
+   El `gap` sustituye al margin-right que cada icono traía en línea. */
+.report-section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    color: var(--acento);
+    border-bottom: 1px solid var(--borde);
+    padding-bottom: var(--pad-sm);
+}
+
+.report-card-body h5 {
+    margin: 0 0 var(--gap-xs);
+    font-size: var(--texto-md);
+}
+
+.report-card-body p {
+    margin: 0 0 var(--gap-md);
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+    line-height: var(--interlineado-compacto);
+}

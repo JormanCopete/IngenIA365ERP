@@ -1,120 +1,171 @@
+/* Menú lateral sobre el morado de marca.
+   Los colores salen de los tokens --lateral-*, que ya vienen resueltos para
+   claro y oscuro: el lateral es morado profundo en ambos modos, así que la
+   identidad no cambia al cambiar de tema. */
+
+/* El fondo oscuro se pinta AQUI, en el mismo componente que fija los colores
+   de texto claros del menu. Antes vivia solo en MainLayout.razor.css, como
+   `::deep .erp-sidebar`: un selector que tiene que atravesar el marcado de un
+   componente de terceros para llegar al elemento. Si deja de alcanzarlo, el
+   fondo desaparece pero los colores claros se quedan, y el menu entero queda
+   blanco sobre blanco: ilegible. Que fondo y texto salgan de la misma regla,
+   sobre el propio elemento del componente, hace imposible que se separen.
+
+   El literal de respaldo en var() es a proposito. La version anterior a los
+   tokens decia `var(--sidebar-bg, #111827)` y el refactor lo perdio: sin
+   respaldo, una variable que no resuelva no deja el fondo oscuro, lo deja
+   transparente. */
 .nav-menu {
+    background: var(--lateral-fondo, #3a1450);
+    color: var(--lateral-texto, #ede8f2);
+    min-height: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.1) transparent;
+    scrollbar-color: rgba(255, 255, 255, .14) transparent;
 }
 
 .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    min-height: 48px;
+    gap: var(--gap-sm);
+    padding: var(--pad-md) var(--pad-lg);
+    border-bottom: 1px solid rgba(255, 255, 255, .10);
+    min-height: 52px;
 }
 
+/* El isotipo en dorado es el único punto cálido del lateral: da un ancla visual
+   a la marca sin competir con los elementos del menú. */
 .brand-icon {
     font-size: 22px;
-    color: #00bcd4;
+    color: var(--realce);
 }
 
 .brand-text {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: 0.5px;
+    font-size: var(--texto-lg);
+    font-weight: var(--peso-medio);
+    color: var(--lateral-texto);
+    letter-spacing: 0;
     white-space: nowrap;
 }
 
 .nav-items {
-    padding: 8px 0;
+    padding: var(--pad-sm) 0;
     flex: 1;
 }
 
 .nav-section {
-    padding: 16px 16px 4px;
+    padding: var(--pad-lg) var(--pad-lg) var(--pad-xs);
 }
 
 .section-title {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: rgba(255,255,255,0.35);
-    letter-spacing: 1.5px;
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-medio);
+    color: var(--lateral-texto-tenue);
+    letter-spacing: 1px;
     text-transform: uppercase;
 }
 
 .nav-item, ::deep .nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    color: rgba(255,255,255,0.7);
+    gap: var(--gap-md);
+    padding: var(--pad-sm) var(--pad-lg);
+    color: var(--lateral-texto);
     text-decoration: none;
-    font-size: 0.875rem;
+    font-size: var(--texto-md);
     border: none;
     background: none;
     width: 100%;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background var(--dur-rapida) var(--curva),
+                color var(--dur-rapida) var(--curva);
     white-space: nowrap;
 }
 
 .nav-item:hover, ::deep .nav-item:hover {
-    background: rgba(255,255,255,0.06);
-    color: #fff;
+    background: var(--lateral-hover);
+    color: var(--lateral-texto-activo);
+    text-decoration: none;
 }
 
+/* El activo se marca con fondo Y con una barra dorada a la derecha. Dos señales
+   y no una: quien distingue mal los colores necesita la barra, y con menús
+   largos el fondo solo se pierde al desplazar. */
 ::deep .nav-item.active, .nav-item.active {
-    background: rgba(0,188,212,0.12);
-    color: #00bcd4;
-    border-right: 3px solid #00bcd4;
+    background: var(--lateral-activo-fondo);
+    color: var(--lateral-texto-activo);
+    border-right: 3px solid var(--lateral-activo-borde);
+    font-weight: var(--peso-medio);
 }
 
-.nav-item .e-icons {
+::deep .nav-item .e-icons, .nav-item .e-icons {
     font-size: 18px;
     width: 28px;
     text-align: center;
     flex-shrink: 0;
 }
 
-.nav-group-toggle {
+/* ::deep para alcanzar el marcado de NavMenuGroup. El CSS con ambito de Blazor
+   solo aplica al componente que lo declara: sin esto, el encabezado de cada
+   grupo plegable de la barra lateral queda centrado en vez de alineado a la
+   izquierda, y el chevron sin tamano. Se ve en todas las pantallas. */
+::deep .nav-group-toggle, .nav-group-toggle {
     justify-content: flex-start;
 }
 
-.nav-group-title {
+::deep .nav-group-title, .nav-group-title {
     flex: 1;
     text-align: left;
 }
 
-.nav-chevron {
+::deep .nav-chevron, .nav-chevron {
     font-size: 12px !important;
     width: auto !important;
-    opacity: 0.5;
+    opacity: .6;
+    transition: transform var(--dur-normal) var(--curva);
 }
 
 ::deep .nav-group-items {
-    padding-left: 8px;
+    padding-left: var(--pad-sm);
 }
 
 ::deep .nav-subitem {
     display: block;
-    padding: 8px 16px 8px 48px;
-    color: rgba(255,255,255,0.55);
+    padding: var(--pad-sm) var(--pad-lg) var(--pad-sm) 48px;
+    color: var(--lateral-texto-tenue);
     text-decoration: none;
-    font-size: 0.82rem;
-    transition: all 0.15s ease;
+    font-size: var(--texto-sm);
+    transition: background var(--dur-rapida) var(--curva),
+                color var(--dur-rapida) var(--curva);
 }
 
 ::deep .nav-subitem:hover {
-    color: #fff;
-    background: rgba(255,255,255,0.04);
+    color: var(--lateral-texto-activo);
+    background: var(--lateral-hover);
+    text-decoration: none;
 }
 
 ::deep .nav-subitem.active {
-    color: #00bcd4;
-    background: rgba(0,188,212,0.08);
+    color: var(--lateral-texto-activo);
+    background: var(--lateral-activo-fondo);
+    border-right: 3px solid var(--lateral-activo-borde);
+}
+
+/* Subtitulo dentro de un grupo: separa los reportes de las pantallas operativas
+   del mismo modulo sin sacarlos de el. Los reportes de contabilidad SON de
+   contabilidad; tenerlos en un grupo "Reportes" aparte obligaba a saber de
+   antemano que algo era un reporte para encontrarlo. */
+::deep .nav-subgroup-title {
+    display: block;
+    padding: var(--pad-md) var(--pad-lg) var(--pad-xs) 48px;
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-medio);
+    color: var(--lateral-texto-tenue);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: .8;
 }

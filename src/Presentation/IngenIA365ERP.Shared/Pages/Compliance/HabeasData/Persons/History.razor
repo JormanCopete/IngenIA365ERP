@@ -12,7 +12,7 @@
         <div class="admin-page">
             <h1>Historial habeas data — titular #@PersonId</h1>
 
-            <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <div class="acciones">
                 <PermissionGate Required="Compliance.HabeasData.RecordConsent">
                     <ChildContent>
                         <button class="primary" @onclick='() => Nav.NavigateTo($"/compliance/habeas-data/consents/aceptar/{PersonId}")'>
@@ -22,7 +22,7 @@
                 </PermissionGate>
                 <PermissionGate Required="Compliance.HabeasData.Revoke">
                     <ChildContent>
-                        <button @onclick='() => Nav.NavigateTo($"/compliance/habeas-data/consents/revocar/{PersonId}")'>
+                        <button class="boton" @onclick='() => Nav.NavigateTo($"/compliance/habeas-data/consents/revocar/{PersonId}")'>
                             Registrar revocación
                         </button>
                     </ChildContent>
@@ -30,7 +30,7 @@
             </div>
 
             @if (_loading) { <p>Cargando…</p> }
-            else if (_error is not null) { <p class="error">@_error</p> }
+            else if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
             else if (_items.Count == 0) { <p>El titular aún no tiene consentimientos registrados.</p> }
             else
             {
@@ -50,7 +50,7 @@
                             <tr>
                                 <td>@h.ActionAt.ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>
-                                    <span style="color: @(h.Action == "Accepted" ? "green" : "darkred");">
+                                    <span style="color: @(h.Action == "Accepted" ? "var(--exito-texto)" : "var(--peligro-texto)");">
                                         @h.Action
                                     </span>
                                 </td>

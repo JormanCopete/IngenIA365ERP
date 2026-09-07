@@ -177,6 +177,8 @@ Auditoría: el intento bloqueado se registra como `Membership.DemotionRejected.L
 
 Configuración SMTP en `appsettings.json` con sección `EmailSender:Smtp:{Host, Port, Username, Password, FromAddress, FromName, EnableSsl}`. Credenciales SMTP nunca en código.
 
+> **Superado (2026-08).** Esa sección `EmailSender` nunca llegó a leerse y fue eliminada de los `appsettings`. Lo que el código lee es `Smtp:{Host, Port, UseStartTls, Username, Password, FromAddress, FromName}` (`SmtpSettings`) y `IdentityEmail:{BaseUrl, InvitationLifetimeDays}` (`IdentityEmailOptions`). Ver [`docs/operaciones/correo-saliente.md`](../../docs/operaciones/correo-saliente.md).
+
 **Rationale**:
 - El producto se despliega en VPS, donde un MTA local o un relay SMTP autenticado es lo natural.
 - Mantener `IEmailSender` desacoplada permite intercambiar a Azure Communication / SendGrid sin tocar handlers (la clarification Q5 dejó esto como decisión confirmada).

@@ -17,7 +17,12 @@ namespace IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
 /// devuelve los recovery codes.
 /// </para>
 /// </summary>
-public sealed record ConfirmMfaEnrollmentCommand(string Code)
+/// <param name="Label">
+/// Nombre que la persona le da al dispositivo («iPhone de Ana»). Opcional, y por
+/// eso con valor por defecto: quien sólo tiene un autenticador no necesita
+/// bautizarlo. Empieza a importar con el segundo.
+/// </param>
+public sealed record ConfirmMfaEnrollmentCommand(string Code, string? Label = null)
     : IRequest<Result<ConfirmMfaEnrollmentResult>>;
 
 public sealed record ConfirmMfaEnrollmentResult(

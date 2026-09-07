@@ -34,7 +34,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Nombre *</label>
                     <SfTextBox @bind-Value="_model.Description" Placeholder="Descripcion de la linea" />

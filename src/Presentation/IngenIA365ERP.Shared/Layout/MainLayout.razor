@@ -31,26 +31,26 @@
                         </ToolbarItem>
                         <ToolbarItem Align="ItemAlign.Right">
                             <Template>
-                                <div class="toolbar-user" style="position: relative;">
+                                <div class="toolbar-user">
                                     <span class="e-icons e-people user-icon"></span>
-                                    <span class="user-name" style="cursor: pointer;"
+                                    <span class="user-name"
                                           title="Mi cuenta" @onclick="ToggleAccountMenu">@_userName ▾</span>
+                                    @* Guía de la pantalla actual, siempre a un clic. *@
+                                    <BotonAyuda />
                                     <TenantSwitcher />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-logout"
                                               Content="Salir" OnClick="@Logout" />
                                     @if (_accountMenuOpen)
                                     {
-                                        <div class="account-menu"
-                                             style="position: absolute; top: 100%; right: 0; z-index: 1000;
-                                                    background: var(--surface, #fff); border: 1px solid #d0d0d0;
-                                                    border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.15);
-                                                    min-width: 220px; padding: 4px 0;">
-                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                        <div class="account-menu">
+                                            <a class="nav-subitem"
                                                href="/profile/password" @onclick="CloseAccountMenu">Cambiar contraseña</a>
-                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                            <a class="nav-subitem"
                                                href="/profile/mfa" @onclick="CloseAccountMenu">Autenticación MFA</a>
-                                            <a class="nav-subitem" style="display: block; padding: 8px 16px;"
+                                            <a class="nav-subitem"
                                                href="/profile/default-tenant" @onclick="CloseAccountMenu">Empresa por defecto</a>
+                                            <a class="nav-subitem"
+                                               href="/perfil/preferencias" @onclick="CloseAccountMenu">Preferencias</a>
                                         </div>
                                     }
                                 </div>

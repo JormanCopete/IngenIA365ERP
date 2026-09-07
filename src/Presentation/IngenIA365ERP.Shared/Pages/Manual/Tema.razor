@@ -1,0 +1,178 @@
+@page "/manual/{Slug}"
+@using IngenIA365ERP.Shared.Services.Manual
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@if (_tema is null)
+{
+    <PageTitle>Manual — IngenIA365ERP</PageTitle>
+    <div class="pagina manual">
+        <div class="page-header">
+            <h2>No hay una guía con ese nombre</h2>
+        </div>
+        <section class="tarjeta">
+            <p class="texto-apoyo">
+                Puede que la pantalla sea nueva y todavía no tenga guía, o que el enlace esté mal escrito.
+            </p>
+            <div class="toolbar">
+                <a class="boton-principal" href="/manual">Ir al manual</a>
+                <a class="boton-secundario" href="/manual?q=@Uri.EscapeDataString(Slug.Replace('-', ' '))">Buscar «@Slug.Replace('-', ' ')»</a>
+            </div>
+        </section>
+    </div>
+    return;
+}
+
+<PageTitle>@_tema.Titulo — Manual — IngenIA365ERP</PageTitle>
+
+<div class="pagina manual">
+    <nav class="manual-migas" aria-label="Ubicación">
+        <a href="/manual">Manual</a> <span aria-hidden="true">›</span>
+        <a href="/manual?q=@Uri.EscapeDataString(_tema.Modulo)">@_tema.Modulo</a> <span aria-hidden="true">›</span>
+        <span>@_tema.Titulo</span>
+    </nav>
+
+    <div class="page-header">
+        <div>
+            <h2>@_tema.Titulo</h2>
+            <p class="texto-apoyo">@_tema.Resumen</p>
+        </div>
+        <div class="toolbar">
+            @if (_tema.RutaEsNavegable)
+            {
+                <a class="boton-principal" href="@_tema.Ruta">Ir a la pantalla</a>
+            }
+            <button type="button" class="boton-secundario" @onclick="AlternarGuia">
+                @(_guiado ? "Ver todos los pasos" : "Guiame paso a paso")
+            </button>
+        </div>
+    </div>
+
+    @if (_tema.Requisitos.Count > 0)
+    {
+        <section class="aviso aviso-info manual-requisitos" role="note">
+            <strong>Antes de empezar</strong>
+            <ul>
+                @foreach (var r in _tema.Requisitos) { <li>@r</li> }
+            </ul>
+        </section>
+    }
+
+    @if (_guiado)
+    {
+        var paso = _tema.Pasos[_indice];
+        var n = _indice + 1;
+        <section class="tarjeta manual-guia" aria-live="polite">
+            <p class="manual-progreso">
+                <span class="pastilla pastilla-info">Paso @n de @_tema.Pasos.Count</span>
+                <progress max="@_tema.Pasos.Count" value="@n" aria-label="Avance de la guía"></progress>
+            </p>
+            <h3>@paso.Titulo</h3>
+            @if (!string.IsNullOrWhiteSpace(paso.Detalle))
+            {
+                <p>@paso.Detalle</p>
+            }
+            @Imagen(n)
+            <div class="toolbar manual-guia-acciones">
+                <button type="button" class="boton-secundario" disabled="@(_indice == 0)" @onclick="Anterior">‹ Anterior</button>
+                @if (paso.Ruta is not null && !paso.Ruta.Contains('{'))
+                {
+                    <a class="boton-secundario" href="@paso.Ruta">@(paso.EtiquetaRuta ?? "Abrir la pantalla de este paso")</a>
+                }
+                @if (_indice < _tema.Pasos.Count - 1)
+                {
+                    <button type="button" class="boton-principal" @onclick="Siguiente">Siguiente ›</button>
+                }
+                else
+                {
+                    <button type="button" class="boton-principal" @onclick="AlternarGuia">Listo</button>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        <ol class="manual-pasos">
+            @for (var i = 0; i < _tema.Pasos.Count; i++)
+            {
+                var paso = _tema.Pasos[i];
+                var n = i + 1;
+                <li class="tarjeta manual-paso">
+                    <div class="manual-paso-encabezado">
+                        <span class="pastilla pastilla-info manual-paso-numero" aria-hidden="true">@n</span>
+                        <h3>@paso.Titulo</h3>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(paso.Detalle))
+                    {
+                        <p>@paso.Detalle</p>
+                    }
+                    @Imagen(n)
+                    @if (paso.Ruta is not null && !paso.Ruta.Contains('{'))
+                    {
+                        <a class="boton-secundario manual-paso-ir" href="@paso.Ruta">@(paso.EtiquetaRuta ?? "Abrir la pantalla de este paso")</a>
+                    }
+                </li>
+            }
+        </ol>
+    }
+
+    @if (_relacionados.Count > 0)
+    {
+        <section class="tarjeta">
+            <h3>Relacionado</h3>
+            <ul class="manual-relacionados">
+                @foreach (var r in _relacionados)
+                {
+                    <li><a href="/manual/@r.Slug">@r.Titulo</a> <span class="texto-tenue">· @r.Modulo</span></li>
+                }
+            </ul>
+        </section>
+    }
+
+    <p class="texto-apoyo manual-pie">
+        ¿Algo de esta guía ya no coincide con la pantalla? Anotá la ruta <code>@_tema.Ruta</code> y avisá al administrador:
+        el manual viaja con cada versión del sistema y se corrige en la siguiente.
+    </p>
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    private TemaDeManual? _tema;
+    private List<TemaDeManual> _relacionados = [];
+    private bool _guiado;
+    private int _indice;
+
+    // Las capturas son opcionales: si el archivo no existe, el navegador dispara
+    // onerror y la imagen se oculta. Un tema sin capturas sigue siendo completo.
+    private readonly HashSet<int> _sinImagen = [];
+
+    protected override void OnParametersSet()
+    {
+        _tema = ManualCatalogo.PorSlug(Slug);
+        _relacionados = _tema is null
+            ? []
+            : _tema.Relacionados.Select(ManualCatalogo.PorSlug).OfType<TemaDeManual>().ToList();
+        _guiado = false;
+        _indice = 0;
+        _sinImagen.Clear();
+    }
+
+    private RenderFragment Imagen(int n) => __builder =>
+    {
+        if (_tema is null || _sinImagen.Contains(n)) return;
+        <figure class="manual-figura">
+            <img src="@_tema.ImagenDelPaso(n)" alt="Captura del paso @n" loading="lazy"
+                 @onerror="() => _sinImagen.Add(n)" />
+        </figure>
+    };
+
+    private void AlternarGuia()
+    {
+        _guiado = !_guiado;
+        _indice = 0;
+    }
+
+    private void Anterior() { if (_indice > 0) _indice--; }
+    private void Siguiente() { if (_tema is not null && _indice < _tema.Pasos.Count - 1) _indice++; }
+}

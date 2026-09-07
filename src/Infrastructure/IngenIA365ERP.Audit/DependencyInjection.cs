@@ -33,6 +33,9 @@ public static class DependencyInjection
         // T028 — Writer append-only sobre audit_events_{tenantId}.
         services.AddSingleton<IAuditAppendOnlyWriter, AppendOnlyAuditWriter>();
 
+        // Crea la base de auditoria de una cooperativa con sus indices y TTL.
+        services.AddSingleton<IAuditStoreProvisioner, MongoAuditStoreProvisioner>();
+
         // T088 — Exporter CSV (CsvHelper). Scoped: el writer interno usa
         // streams por request; no compartirlos entre requests concurrentes.
         services.AddScoped<IAuditCsvExporter, AuditCsvExporter>();

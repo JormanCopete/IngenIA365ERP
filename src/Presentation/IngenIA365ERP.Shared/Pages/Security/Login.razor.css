@@ -1,0 +1,213 @@
+/* =============================================================================
+   Pantalla de inicio de sesión, a dos columnas.
+
+   El formulario va a la DERECHA y el panel promocional a la izquierda, pero en
+   el marcado el formulario va primero. Así quien navega con teclado o con
+   lector de pantalla llega de entrada a lo que vino a hacer, y no tiene que
+   atravesar la publicidad para encontrar el campo de correo. El orden visual
+   lo invierte la rejilla.
+   ========================================================================== */
+
+.login-pantalla {
+    min-height: 100vh;
+    min-height: 100dvh;   /* en móvil, descuenta la barra del navegador */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--superficie-0);
+}
+
+.login-promo {
+    grid-column: 1;
+    grid-row: 1;
+    background: linear-gradient(150deg,
+                var(--morado-900) 0%, var(--morado-800) 55%, var(--morado-600) 100%);
+    color: var(--lateral-texto);
+    padding: var(--pad-xl);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: var(--gap-lg);
+    text-align: center;
+}
+
+.login-formulario {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--pad-xl);
+}
+
+.login-formulario .auth-card {
+    width: 100%;
+    max-width: 420px;
+}
+
+.login-marca {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: var(--gap-lg);
+}
+
+.login-marca-nombre {
+    font-size: calc(1.35rem * var(--escala));
+    font-weight: var(--peso-fuerte);
+    color: var(--texto-marca);
+    letter-spacing: -.02em;
+}
+
+.login-marca-sufijo {
+    color: var(--realce);
+}
+
+.login-marca-bajada {
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}
+
+.login-olvide {
+    margin-top: var(--gap-md);
+    font-size: var(--texto-sm);
+}
+
+/* --- Panel promocional --------------------------------------------------- */
+
+.login-promo-pieza {
+    max-width: 460px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--gap-md);
+}
+
+.login-promo-imagen {
+    max-width: 100%;
+    /* Alto acotado para que una imagen desproporcionada cargada por el
+       administrador no empuje el texto fuera de la pantalla. */
+    max-height: 40vh;
+    object-fit: contain;
+    border-radius: var(--radio-lg);
+}
+
+.login-promo h2 {
+    margin: 0;
+    font-size: calc(1.5rem * var(--escala));
+    line-height: 1.25;
+    color: var(--texto-invertido);
+}
+
+.login-promo p {
+    margin: 0;
+    color: var(--lateral-texto);
+    font-size: calc(1rem * var(--escala));
+    line-height: 1.6;
+}
+
+.login-promo-enlace {
+    display: inline-block;
+    margin-top: var(--gap-sm);
+    padding: var(--pad-sm) var(--pad-lg);
+    background: var(--realce);
+    color: var(--morado-900);
+    border-radius: var(--radio);
+    font-weight: var(--peso-medio);
+    text-decoration: none;
+    transition: transform var(--dur-rapida) var(--curva);
+}
+
+.login-promo-enlace:hover {
+    transform: translateY(-1px);
+}
+
+.login-promo-puntos {
+    display: flex;
+    gap: var(--gap-sm);
+}
+
+/* Los puntos son controles reales, no adornos: se pueden enfocar y activar
+   con el teclado, y miden 24px aunque se vean de 8 — un blanco de 8px es
+   inalcanzable con el dedo o con temblor en la mano. */
+.punto {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+.punto::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lateral-texto-tenue);
+    transition: background var(--dur-rapida) var(--curva),
+                transform var(--dur-rapida) var(--curva);
+}
+
+.punto-activo::before {
+    background: var(--realce);
+    transform: scale(1.4);
+}
+
+.punto:focus-visible {
+    outline: 2px solid var(--realce);
+    outline-offset: 2px;
+    border-radius: 50%;
+}
+
+/* --- Pantallas angostas -------------------------------------------------- */
+
+/* Por debajo de 900px la promoción pasa a ser una franja arriba, no media
+   pantalla: en un teléfono, dos columnas dejarían el formulario en una
+   columna de 180px. */
+@media (max-width: 900px) {
+    .login-pantalla {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .login-promo {
+        grid-column: 1;
+        grid-row: 1;
+        padding: var(--pad-lg);
+        gap: var(--gap-md);
+    }
+
+    .login-formulario {
+        grid-column: 1;
+        grid-row: 2;
+        padding: var(--pad-lg);
+    }
+
+    .login-promo-imagen {
+        max-height: 22vh;
+    }
+
+    .login-promo h2 {
+        font-size: calc(1.15rem * var(--escala));
+    }
+}
+
+/* En pantalla muy baja (un portátil de 13" con el teclado virtual abierto) la
+   promoción estorba más de lo que aporta. */
+@media (max-height: 520px) {
+    .login-promo {
+        display: none;
+    }
+
+    .login-pantalla {
+        grid-template-columns: 1fr;
+    }
+
+    .login-formulario {
+        grid-column: 1;
+        grid-row: 1;
+    }
+}

@@ -18,33 +18,42 @@
 
 <PageTitle>Selecciona tu empresa — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 520px; margin: 48px auto;">
+<div class="auth-card" style="max-width: 520px; margin: calc(var(--gap-xl) * 1.5) auto;">
     <h1>Selecciona tu empresa</h1>
     <p>Estás vinculado a varias cooperativas. Elige con cuál vas a trabajar ahora.</p>
 
     @if (_tenants is null || _tenants.Count == 0)
     {
-        <p style="margin-top: 16px; color: #6b7280;">
+        <p class="muted" style="margin-top: var(--pad-lg);">
             No hay empresas para elegir. Vuelve a iniciar sesión.
         </p>
         <NavLink href="/security/login">Volver al inicio</NavLink>
     }
     else
     {
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
+        <div class="lista-empresas">
             @foreach (var t in _tenants)
             {
+                @* Las que no aceptan el método con el que entró se muestran
+                   igualmente, deshabilitadas y con el motivo. Esconderlas dejaría
+                   a la persona sin la única pista de por qué desapareció una
+                   cooperativa a la que pertenece. *@
                 <button
                     type="button"
+                    class="empresa-opcion"
                     @onclick="() => SelectAsync(t.TenantPublicId)"
-                    disabled="@_busy"
-                    style="padding: 16px; text-align: left; border: 1px solid #e5e7eb;
-                           border-radius: 8px; background: white; cursor: pointer;">
+                    disabled="@(_busy || !t.AdmiteTuMetodo)"
+                    title="@(t.AdmiteTuMetodo ? null : "No acepta el método con el que entraste")">
                     <strong>@t.TenantName</strong>
                     @if (t.IsTenantAdmin)
                     {
-                        <span style="margin-left: 8px; padding: 2px 8px; background: #dbeafe;
-                                     color: #1e40af; border-radius: 4px; font-size: 12px;">Admin</span>
+                        <span class="pastilla pastilla-info">Admin</span>
+                    }
+                    @if (!t.AdmiteTuMetodo)
+                    {
+                        <span class="texto-tenue">
+                            — no acepta el método con el que entraste
+                        </span>
                     }
                 </button>
             }
@@ -53,7 +62,7 @@
 
     @if (!string.IsNullOrEmpty(_error))
     {
-        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
+        <p class="error" role="alert" style="margin-top: var(--gap-md);">@_error</p>
     }
 </div>
 

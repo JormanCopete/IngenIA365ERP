@@ -7,7 +7,6 @@ using IngenIA365ERP.Application.Security.Users.AssignRole;
 using IngenIA365ERP.Application.Security.Users.DisableUser;
 using IngenIA365ERP.Application.Security.Users.GetUserByPublicId;
 using IngenIA365ERP.Application.Security.Users.ListUsers;
-using IngenIA365ERP.Application.Security.Users.RegisterUser;
 using IngenIA365ERP.Application.Security.Users.RemoveRole;
 using IngenIA365ERP.Application.Security.Users.RestoreUser;
 using IngenIA365ERP.Application.Security.Users.UnlockUser;
@@ -36,8 +35,11 @@ public sealed class UsersModule : ICarterModule
         group.MapGet("/{publicId:guid}", GetAsync).WithName("Users_Get")
             .RequirePermission("Security.Users.View");
 
-        group.MapPost("/", RegisterAsync).WithName("Users_Register")
-            .RequirePermission("Security.Users.Create");
+        // El alta directa se retiro. Crear una fila SEC_Users sin identidad central
+        // produce alguien que existe en la pantalla, al que se le pueden asignar
+        // roles, y que NO puede entrar: el acceso valida contra ADM_CentralUsers,
+        // que ese camino no tocaba. Las personas entran por invitacion
+        // —POST /api/tenants/{id}/invitations— que crea las dos mitades.
 
         group.MapPut("/{publicId:guid}", UpdateAsync).WithName("Users_Update")
             .RequirePermission("Security.Users.Update");
@@ -76,13 +78,6 @@ public sealed class UsersModule : ICarterModule
         Guid publicId, ISender sender, CancellationToken ct) =>
         await sender.Send(new GetUserByPublicIdQuery(publicId), ct);
 
-    private static async Task<object?> RegisterAsync(
-        [FromBody] RegisterUserBody body, ISender sender, CancellationToken ct) =>
-        await sender.Send(new RegisterUserCommand(
-            body.Username, body.Email, body.FullName, body.InitialPassword,
-            body.PersonId, body.IdentificationNumber,
-            body.RolePublicIds ?? []), ct);
-
     private static async Task<object?> UpdateAsync(
         Guid publicId, [FromBody] UpdateUserBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdateUserCommand(
@@ -120,9 +115,7 @@ public sealed class UsersModule : ICarterModule
 public sealed record UsersListQueryParams(
     string? Search, bool IncludeDisabled = false, string? RoleCode = null,
     int? Page = null, int? PageSize = null);
-public sealed record RegisterUserBody(
-    string Username, string Email, string? FullName, string InitialPassword,
-    int? PersonId, string? IdentificationNumber, IReadOnlyList<Guid>? RolePublicIds);
+
 public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId);
 public sealed record AssignRoleBody(Guid RolePublicId);
 public sealed record AssignBranchBody(Guid BranchPublicId, bool IsDefault);

@@ -1,0 +1,14 @@
+/* El ejecutor de procesos apila barra de parámetros, vista previa, resultado y
+   botonera. El hueco entre esos bloques lo daba un `margin-top: 16px` repetido
+   en cada rama del @if; acá se resuelve una vez con el gap del contenedor. */
+
+.process-executor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+}
+
+/* El icono del aviso de error llevaba su propio margin-right en línea. */
+.process-executor .aviso .e-icons {
+    margin-right: var(--gap-sm);
+}

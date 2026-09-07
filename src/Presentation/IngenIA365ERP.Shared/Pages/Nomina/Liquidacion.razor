@@ -1,14 +1,754 @@
 @page "/nomina/liquidacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
 
-<PageTitle>Liquidacion de Nomina - IngenIA365ERP</PageTitle>
+<PageTitle>Liquidación de nómina - IngenIA365ERP</PageTitle>
 
-<div class="module-placeholder">
-    <div class="placeholder-icon">
-        <span class="e-icons e-people"></span>
+<div class="page-header">
+    <h3>Liquidación del período</h3>
+    <div>
+        @if (_periodo is not null)
+        {
+            @if (_periodo.EstaAbierto && (_corrida is null || _corrida.EsBorrador || _corrida.Status == "Reversed"))
+            {
+                <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@Calcular">@(_corrida is null || _corrida.Status == "Reversed" ? "Calcular" : "Recalcular")</SfButton>
+            }
+            @if (_corrida is { Status: "Draft" } && _periodo.Status == "Calculated")
+            {
+                <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirAprobacion">Aprobar</SfButton>
+            }
+            @if (_corrida is { Status: "Approved" })
+            {
+                <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@AbrirReversar" Title="Deshace la aprobación con un asiento reverso y reabre el período">Reversar</SfButton>
+            }
+            @if (_corrida is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@Exportar" Title="CSV con cada línea y su explicación">Exportar</SfButton>
+            }
+        }
     </div>
-    <h2>Liquidacion de Nomina</h2>
-    <p>Modulo en construccion</p>
-    <SfProgressBar Type="ProgressType.Linear" Value="0" Minimum="0" Maximum="100"
-                   Height="4" TrackColor="#333" ProgressColor="#00bcd4" IsIndeterminate="true" />
 </div>
+
+<SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
+
+@if (_periodo is not null)
+{
+    <div class="info-card">
+        <span class="label">Estado</span>
+        @if (_corrida is null)
+        {
+            <p><strong>Abierto sin cálculo.</strong> Cuando las novedades estén completas, «Calcular» produce el borrador.</p>
+        }
+        else if (_corrida.Status == "Draft")
+        {
+            <p><strong>Borrador v@_corrida.Version</strong> calculado por @_corrida.CalculatedBy el @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+               @(_corrida.ChangedEmployees > 0 ? $"{_corrida.ChangedEmployees} empleado(s) cambiaron respecto del borrador anterior." : string.Empty)</p>
+        }
+        else if (_corrida.Status == "Stale")
+        {
+            <p><strong>Desactualizado:</strong> hay cambios (novedades, salarios, conceptos o parámetros) desde el cálculo v@_corrida.Version. Recalculá antes de aprobar.</p>
+        }
+        else if (_corrida.Status == "Approved")
+        {
+            <p><strong>Aprobado</strong> por @_corrida.ApprovedBy el @_corrida.ApprovedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · comprobante @_corrida.AccountingDocumentNumber
+               @(_corrida.ApprovedWithoutSegregation ? " · aprobado sin segregación de funciones" : string.Empty)</p>
+        }
+        else if (_corrida.Status == "Reversed")
+        {
+            <p><strong>Reversado</strong> por @_corrida.ReversedBy el @_corrida.ReversedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @_corrida.ReversalReason</p>
+        }
+        @if (_avisos.Count > 0)
+        {
+            <ul class="texto-tenue">
+                @foreach (var a in _avisos) { <li>@a</li> }
+            </ul>
+        }
+    </div>
+
+    @if (_corrida is not null)
+    {
+        <SfTab>
+            <TabItems>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Resumen" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="kpi-grid">
+                            <div class="kpi-card"><span class="label">Devengado</span><strong>@_corrida.Totals.Earnings.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Deducido</span><strong>@_corrida.Totals.Deductions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Neto a pagar</span><strong>@_corrida.Totals.Net.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Aportes del empleador</span><strong>@_corrida.Totals.EmployerContributions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Provisiones</span><strong>@_corrida.Totals.Provisions.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Ajuste de redondeo</span><strong>@_corrida.Totals.RoundingAdjustment.ToString("N0")</strong></div>
+                            <div class="kpi-card"><span class="label">Empleados</span><strong>@_corrida.EmployeeCount</strong></div>
+                        </div>
+
+                        @if (_corrida.Blockers.Count > 0)
+                        {
+                            <span class="label">Bloqueos para aprobar (@_corrida.Blockers.Count)</span>
+                            <table class="data-grid">
+                                <thead><tr><th>Empleado</th><th>Bloqueo</th><th>Detalle</th></tr></thead>
+                                <tbody>
+                                    @foreach (var b in _corrida.Blockers)
+                                    {
+                                        <tr><td><a href="" @onclick="() => AbrirDetalle(b.EmployeePublicId)" @onclick:preventDefault>@b.EmployeeName</a></td><td>@b.BanderaTexto</td><td class="texto-tenue">@b.Detail</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <span class="label">Por concepto</span>
+                        <table class="data-grid">
+                            <thead><tr><th>Concepto</th><th>Tipo</th><th class="monto">Empleados</th><th class="monto">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _corrida.ByConcept)
+                                {
+                                    <tr><td>@c.Code · @c.Name</td><td>@c.NaturalezaTexto</td><td class="monto">@c.Employees</td><td class="monto">@c.Amount.ToString("N0")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p class="texto-tenue">Hash de insumos: <code>@_corrida.InputsHash</code></p>
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Empleados" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="toolbar">
+                            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Buscar" ShowClearButton="true" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await CargarEmpleadosAsync())" />
+                            <label>
+                                Bandera
+                                <select class="e-input" value="@_filtroBandera" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => { _filtroBandera = e.Value?.ToString() ?? ""; await CargarEmpleadosAsync(); })">
+                                    <option value="">Todos</option>
+                                    <option value="NegativeNet">Neto negativo</option>
+                                    <option value="DeductionsOverMax">Deducciones sobre el máximo</option>
+                                    <option value="MissingAffiliation">Afiliación faltante</option>
+                                    <option value="WithholdingRateMissing">Sin porcentaje de retención</option>
+                                </select>
+                            </label>
+                            <label class="campo-check"><input type="checkbox" @bind="_soloCambiados" @bind:after="CargarEmpleadosAsync" /> Sólo los que cambiaron</label>
+                        </div>
+                        <SfGrid TValue="EmpleadoDeCorridaDto" DataSource="@_empleados" AllowPaging="true" AllowSorting="true">
+                            <GridPageSettings PageSize="25" />
+                            <GridEvents TValue="EmpleadoDeCorridaDto" RowSelected="@(async (RowSelectEventArgs<EmpleadoDeCorridaDto> e) => await AbrirDetalle(e.Data.EmployeePublicId))" />
+                            <GridColumns>
+                                <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="220" />
+                                <GridColumn Field="Document" HeaderText="Documento" Width="120" />
+                                <GridColumn Field="DaysWorked" HeaderText="Días" Width="70" TextAlign="TextAlign.Center" />
+                                <GridColumn Field="TotalEarnings" HeaderText="Devengado" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="TotalDeductions" HeaderText="Deducido" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn Field="NetPay" HeaderText="Neto" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                <GridColumn HeaderText="Banderas" Width="200">
+                                    <Template>
+                                        @{
+                                            var e = (EmpleadoDeCorridaDto)context;
+                                            if (e.TieneBloqueos) { <span class="e-badge e-badge-danger">@e.BanderasTexto</span> }
+                                            if (e.Changed) { <span class="e-badge e-badge-warning">cambió</span> }
+                                        }
+                                    </Template>
+                                </GridColumn>
+                            </GridColumns>
+                        </SfGrid>
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Comparativo" /></ChildContent>
+                    <ContentTemplate>
+                        @if (_comparativo is null)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@CargarComparativoAsync">Comparar con el período anterior</SfButton>
+                        }
+                        else
+                        {
+                            <div class="toolbar">
+                                <span class="texto-tenue">@(_comparativo.PreviousPeriodLabel is null ? "No hay un período anterior aprobado del mismo plan." : $"Contra {_comparativo.PreviousPeriodLabel}; umbral {_comparativo.ThresholdPercent:0.#} %.")</span>
+                                <label class="campo-check"><input type="checkbox" @bind="_soloVariaciones" /> Sólo variaciones sobre el umbral</label>
+                            </div>
+                            <table class="data-grid">
+                                <thead><tr><th>Empleado</th><th class="monto">Neto anterior</th><th class="monto">Neto actual</th><th class="monto">Variación</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var f in _comparativo.Rows.Where(r => !_soloVariaciones || r.OverThreshold))
+                                    {
+                                        <tr>
+                                            <td>@f.EmployeeName</td>
+                                            <td class="monto">@(f.PreviousNet?.ToString("N0") ?? "—")</td>
+                                            <td class="monto">@f.CurrentNet.ToString("N0")</td>
+                                            <td class="monto">@(f.VariationPercent is { } v ? $"{v:+0.0;-0.0} %" : "—")</td>
+                                            <td>
+                                                @if (f.NewEmployee) { <span class="e-badge e-badge-info">nuevo</span> }
+                                                @if (f.LeftEmployee) { <span class="e-badge e-badge-secondary">retirado</span> }
+                                                @if (f.OverThreshold && !f.NewEmployee && !f.LeftEmployee) { <span class="e-badge e-badge-warning">sobre el umbral</span> }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Cuadre" /></ChildContent>
+                    <ContentTemplate>
+                        @if (_cuadre is null)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@CargarCuadreAsync">Verificar cuadre</SfButton>
+                        }
+                        else
+                        {
+                            <table class="data-grid">
+                                <tbody>
+                                    <tr><td>@(_cuadre.EarningsMinusDeductionsEqualsNet ? "✓" : "✗")</td><td>Devengos − deducciones = neto (corrida y suma por empleado)</td></tr>
+                                    <tr><td>@(_cuadre.LinesMatchEmployeeTotals ? "✓" : "✗")</td><td>Cada empleado: devengado − deducido = neto</td></tr>
+                                    <tr><td>@(_cuadre.EmployerAndProvisionsOutsideNet ? "✓" : "✗")</td><td>Aportes del empleador y provisiones fuera del neto</td></tr>
+                                    <tr><td>@(_cuadre.AccountingDocumentBalanced is null ? "—" : _cuadre.AccountingDocumentBalanced.Value ? "✓" : "✗")</td><td>Comprobante contable cuadrado e igual a las líneas con asiento</td></tr>
+                                </tbody>
+                            </table>
+                            <ul class="texto-tenue">@foreach (var d in _cuadre.Details) { <li>@d</li> }</ul>
+                        }
+                    </ContentTemplate>
+                </TabItem>
+                @if (_corrida.Status is "Approved" or "Reversed")
+                {
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Relación de pago" /></ChildContent>
+                        <ContentTemplate>
+                            @if (_relacion is null)
+                            {
+                                <SfButton CssClass="e-outline" OnClick="@CargarRelacionAsync">Cargar relación de pago</SfButton>
+                            }
+                            else
+                            {
+                                <div class="toolbar">
+                                    <span class="texto-tenue">@_relacion.PaidCount de @_relacion.Employees pagados · neto total @_relacion.TotalNet.ToString("N0") · pagado @_relacion.PaidNet.ToString("N0")</span>
+                                    @if (_corrida.Status == "Approved" && _relacion.PaidCount < _relacion.Employees)
+                                    {
+                                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirMarcarPago">Marcar pagados</SfButton>
+                                    }
+                                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@DescargarTodosLosComprobantes" Title="Todos los comprobantes en un PDF">Comprobantes PDF</SfButton>
+                                    <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@_ocupado" OnClick="@EnviarComprobantes" Title="Envía cada comprobante al correo registrado del empleado. Nunca es automático.">Enviar por correo</SfButton>
+                                </div>
+                                <SfGrid TValue="FilaRelacionDePagoDto" DataSource="@_relacion.Rows" AllowPaging="true" AllowSorting="true">
+                                    <GridPageSettings PageSize="25" />
+                                    <GridColumns>
+                                        <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="200" />
+                                        <GridColumn Field="Document" HeaderText="Documento" Width="110" />
+                                        <GridColumn Field="BankName" HeaderText="Banco" Width="140" />
+                                        <GridColumn Field="BankAccountType" HeaderText="Tipo" Width="90" />
+                                        <GridColumn Field="BankAccountNumber" HeaderText="Cuenta" Width="140" />
+                                        <GridColumn Field="NetPay" HeaderText="Neto" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                                        <GridColumn HeaderText="Pago" Width="220">
+                                            <Template>
+                                                @{
+                                                    var f = (FilaRelacionDePagoDto)context;
+                                                    if (f.Paid) { <span class="e-badge e-badge-success">Pagado @f.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy") · @f.PaymentMethod@(string.IsNullOrEmpty(f.Reference) ? "" : $" · {f.Reference}")</span> }
+                                                    else { <span class="e-badge">Pendiente</span> }
+                                                }
+                                            </Template>
+                                        </GridColumn>
+                                        <GridColumn HeaderText="" Width="120">
+                                            <Template>
+                                                @{
+                                                    var f = (FilaRelacionDePagoDto)context;
+                                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-file-document" Title="Comprobante PDF" OnClick="@(() => DescargarComprobante(f.EmployeePublicId))" />
+                                                    if (f.Paid && _corrida.Status == "Approved")
+                                                    {
+                                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-undo" Title="Retirar la marca de pago" OnClick="@(() => AbrirRetirarMarca(f))" />
+                                                    }
+                                                }
+                                            </Template>
+                                        </GridColumn>
+                                    </GridColumns>
+                                </SfGrid>
+                                @if (_envios is not null)
+                                {
+                                    <details open class="info-card">
+                                        <summary>Envíos por correo (@_envios.Count)</summary>
+                                        @if (_envios.Count == 0) { <p class="texto-tenue">Todavía no se ha enviado ningún comprobante de esta liquidación.</p> }
+                                        else
+                                        {
+                                            <table class="data-grid">
+                                                <thead><tr><th>Empleado</th><th>Correo</th><th>Solicitado</th><th>Por</th><th>Estado</th><th>Intento</th></tr></thead>
+                                                <tbody>
+                                                    @foreach (var e in _envios)
+                                                    {
+                                                        <tr>
+                                                            <td>@e.EmployeeName</td><td>@e.RecipientEmail</td>
+                                                            <td>@e.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td><td>@e.RequestedBy</td>
+                                                            <td>@(e.Status == "Sent" ? "Enviado" : $"Falló: {e.ErrorMessage}")</td><td>@e.AttemptNumber</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </details>
+                                }
+                            }
+                        </ContentTemplate>
+                    </TabItem>
+                }
+                <TabItem>
+                    <ChildContent><TabHeader Text="Historial" /></ChildContent>
+                    <ContentTemplate>
+                        <p class="texto-tenue">Cada cálculo deja una versión. Las reemplazadas y las reversadas se conservan con quién, cuándo y por qué.</p>
+                        <table class="data-grid">
+                            <thead><tr><th>Versión</th><th>Estado</th><th>Calculada</th><th>Empleados</th><th>Neto</th><th>Aprobación</th><th>Reversión</th><th>Comprobante</th></tr></thead>
+                            <tbody>
+                                @foreach (var h in _historial)
+                                {
+                                    <tr class="@(h.PublicId == _corrida.PublicId ? "" : "texto-tenue")">
+                                        <td>v@h.Version</td>
+                                        <td>@h.EstadoTexto</td>
+                                        <td>@h.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @h.CalculatedBy</td>
+                                        <td>@h.EmployeeCount</td>
+                                        <td>@h.Totals.Net.ToString("N0")</td>
+                                        <td>@(h.ApprovedAt is { } ap ? $"{ap.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ApprovedBy}" : "—")</td>
+                                        <td>@(h.ReversedAt is { } rv ? $"{rv.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ReversedBy}: {h.ReversalReason}" : "—")</td>
+                                        <td>@(h.AccountingDocumentNumber ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </ContentTemplate>
+                </TabItem>
+            </TabItems>
+        </SfTab>
+    }
+}
+
+@* ------------------------------------------------------------- detalle del empleado --- *@
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Detalle" : $"{_detalle.EmployeeName} · {_detalle.Document}")" Width="920px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_detalle is not null)
+            {
+                <div class="pagina">
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="label">Días pagados</span><strong>@_detalle.DaysWorked</strong></div>
+                        <div class="kpi-card"><span class="label">Devengado</span><strong>@_detalle.Totals.Earnings.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Deducido</span><strong>@_detalle.Totals.Deductions.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Neto</span><strong>@_detalle.Totals.Net.ToString("N0")</strong></div>
+                    </div>
+
+                    @if (_detalle.Refusals.Count > 0)
+                    {
+                        <div class="info-card">
+                            <span class="label">Avisos del cálculo</span>
+                            <ul>@foreach (var r in _detalle.Refusals) { <li>@r</li> }</ul>
+                        </div>
+                    }
+
+                    <span class="label">Tramos de salario</span>
+                    <table class="data-grid">
+                        <thead><tr><th>Desde</th><th>Hasta</th><th class="monto">Días</th><th class="monto">Ausencias</th><th class="monto">Pagados</th><th class="monto">Salario mensual</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _detalle.SalaryTranches)
+                            {
+                                <tr><td>@t.From.ToString("dd/MM/yyyy")</td><td>@t.To.ToString("dd/MM/yyyy")</td><td class="monto">@t.Days</td><td class="monto">@t.AbsenceDays</td><td class="monto">@t.PaidDays</td><td class="monto">@t.MonthlySalary.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <span class="label">Bases del período</span>
+                    <ol class="explicacion-pasos">
+                        @foreach (var b in _detalle.Bases)
+                        {
+                            <li><span>@b.Label</span> @if (b.Value is { } v) { <strong class="monto">@v.ToString("N2")</strong> } else if (b.Text is not null) { <em class="texto-tenue">@b.Text</em> }</li>
+                        }
+                    </ol>
+
+                    <span class="label">Líneas</span>
+                    @foreach (var grupo in _detalle.Lines.GroupBy(l => l.NaturalezaTexto))
+                    {
+                        <h4>@grupo.Key</h4>
+                        <table class="data-grid">
+                            <thead><tr><th></th><th>Concepto</th><th class="monto">Cantidad</th><th class="monto">Base</th><th class="monto">Factor</th><th class="monto">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in grupo)
+                                {
+                                    <tr>
+                                        <td><SfButton CssClass="e-flat e-small" IconCss="@(_lineaAbierta == l.PublicId ? "e-icons e-chevron-up" : "e-icons e-chevron-down")" OnClick="@(() => _lineaAbierta = _lineaAbierta == l.PublicId ? null : l.PublicId)" /></td>
+                                        <td>@l.ConceptCode · @l.ConceptName @(l.AffectsAccounting ? string.Empty : " (sin asiento)")</td>
+                                        <td class="monto">@(l.Quantity?.ToString("0.##"))</td>
+                                        <td class="monto">@(l.BaseAmount?.ToString("N2"))</td>
+                                        <td class="monto">@(l.Factor?.ToString("0.####"))</td>
+                                        <td class="monto"><strong>@l.Amount.ToString("N0")</strong></td>
+                                    </tr>
+                                    @if (_lineaAbierta == l.PublicId)
+                                    {
+                                        <tr><td colspan="6"><ExplicacionDeLinea Explicacion="@l.Explanation" NovedadUrl="@(id => $"/nomina/novedades?periodo={_periodo?.PublicId}")" /></td></tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (_detalle.Skips.Count > 0)
+                    {
+                        <details>
+                            <summary class="texto-tenue">Conceptos automáticos que no aplicaron (@_detalle.Skips.Count)</summary>
+                            <ul class="texto-tenue">@foreach (var s in _detalle.Skips) { <li>@s</li> }</ul>
+                        </details>
+                    }
+                    @if (_corrida is { Status: "Approved" or "Reversed" })
+                    {
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-file-document" Disabled="@_ocupado" OnClick="@(() => DescargarComprobante(_detalle.EmployeePublicId))">Comprobante PDF</SfButton>
+                        </div>
+                    }
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PanelDeAprobacion @ref="_panel" @bind-Visible="_mostrarAprobacion" Corrida="_corrida" Periodo="_periodo"
+                   PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync" />
+
+@* ------------------------------------------------------------------ reversar --- *@
+<SfDialog @bind-Visible="_mostrarReversar" Header="Reversar la liquidación aprobada" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="info-card">
+                <span class="label">Qué pasa al reversar</span>
+                <p>El comprobante contable @_corrida?.AccountingDocumentNumber se reversa con un asiento espejo que lo referencia; la corrida v@(_corrida?.Version) queda marcada como reversada con tu nombre, la fecha y el motivo; el período vuelve a abrirse con sus novedades intactas para corregir y recalcular. Nada se borra.</p>
+            </div>
+            @if (_pagadosAntesDeReversar is { Count: > 0 })
+            {
+                <div class="info-card">
+                    <span class="label">No se puede reversar todavía</span>
+                    <p>@_pagadosAntesDeReversar.Count empleado(s) tienen marca de pago vigente. Retirá las marcas en la pestaña «Relación de pago» (con motivo) y volvé a intentar.</p>
+                    <ul class="texto-tenue">@foreach (var n in _pagadosAntesDeReversar) { <li>@n</li> }</ul>
+                </div>
+            }
+            <label>Motivo <SfTextBox @bind-Value="_motivoReversion" Multiline="true" Placeholder="Por qué se reversa esta liquidación" MaxLength="500" /></label>
+        </Content>
+        <FooterTemplate>
+            <SfButton CssClass="e-flat" OnClick="@(() => _mostrarReversar = false)">Cancelar</SfButton>
+            <SfButton CssClass="e-danger" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivoReversion) || _pagadosAntesDeReversar is { Count: > 0 })" OnClick="@ReversarAsync">Reversar</SfButton>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------- marcar pagados --- *@
+<SfDialog @bind-Visible="_mostrarMarcarPago" Header="Marcar pagados" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-tenue">Deja constancia de que el pago se ejecutó fuera del sistema para todos los empleados que aún no tienen marca. Cada marca queda auditada.</p>
+            <div class="formulario">
+                <label>Fecha de pago <SfDatePicker TValue="DateTime" @bind-Value="_marca.Fecha" Format="dd/MM/yyyy" /></label>
+                <label>Medio
+                    <select class="e-input" @bind="_marca.Medio">
+                        <option value="Transfer">Transferencia</option>
+                        <option value="Check">Cheque</option>
+                        <option value="Cash">Efectivo</option>
+                    </select>
+                </label>
+                <label>Referencia (opcional) <SfTextBox @bind-Value="_marca.Referencia" Placeholder="Número de lote, cheque o soporte" MaxLength="60" /></label>
+            </div>
+        </Content>
+        <FooterTemplate>
+            <SfButton CssClass="e-flat" OnClick="@(() => _mostrarMarcarPago = false)">Cancelar</SfButton>
+            <SfButton CssClass="e-primary" Disabled="@_ocupado" OnClick="@MarcarPagadosAsync">Marcar</SfButton>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------- retirar marca --- *@
+<SfDialog @bind-Visible="_mostrarRetirarMarca" Header="Retirar la marca de pago" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_filaRetiro is not null)
+            {
+                <p>@_filaRetiro.EmployeeName · pagado el @_filaRetiro.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy") (@_filaRetiro.PaymentMethod).</p>
+            }
+            <label>Motivo <SfTextBox @bind-Value="_motivoRetiro" Multiline="true" Placeholder="Por qué se retira la marca" MaxLength="300" /></label>
+        </Content>
+        <FooterTemplate>
+            <SfButton CssClass="e-flat" OnClick="@(() => _mostrarRetirarMarca = false)">Cancelar</SfButton>
+            <SfButton CssClass="e-danger" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivoRetiro))" OnClick="@RetirarMarcaAsync">Retirar</SfButton>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private SelectorDePeriodo? _selector;
+    private PanelDeAprobacion? _panel;
+    private PeriodoPagoDto? _periodo;
+    private ResumenCorridaDto? _corrida;
+    private List<EmpleadoDeCorridaDto> _empleados = [];
+    private List<string> _avisos = [];
+    private DetalleEmpleadoCorridaDto? _detalle;
+    private Guid? _lineaAbierta;
+    private string _buscarEmpleado = string.Empty, _filtroBandera = string.Empty;
+    private bool _soloCambiados, _ocupado, _mostrarDetalle, _mostrarAprobacion, _soloVariaciones;
+    private ComparativoDto? _comparativo;
+    private CuadreDto? _cuadre;
+    private RelacionDePagoDto? _relacion;
+    private List<EnvioComprobanteDto>? _envios;
+    private List<ResumenCorridaDto> _historial = [];
+    private bool _mostrarReversar;
+    private string _motivoReversion = string.Empty;
+    private List<string>? _pagadosAntesDeReversar;
+
+    private async Task CargarHistorialAsync()
+    {
+        if (_periodo is null) return;
+        var res = await Nomina.HistorialCorridasAsync(_periodo.PublicId);
+        if (res.IsSuccess) _historial = res.Value!.ToList();
+    }
+
+    private async Task AbrirReversar()
+    {
+        if (_corrida is null) return;
+        _motivoReversion = string.Empty;
+        _pagadosAntesDeReversar = null;
+        var rel = await Nomina.RelacionDePagoAsync(_corrida.PublicId);
+        if (rel.IsSuccess) _pagadosAntesDeReversar = rel.Value!.Rows.Where(r => r.Paid).Select(r => r.EmployeeName).ToList();
+        _mostrarReversar = true;
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ReversarAsync(_corrida.PublicId, _motivoReversion.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo reversar."); return; }
+            _mostrarReversar = false;
+            await Notification.SuccessAsync($"Liquidación reversada con el comprobante {res.Value!.ReversalAccountingDocumentNumber}. El período quedó abierto.");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+    private bool _mostrarMarcarPago, _mostrarRetirarMarca;
+    private readonly MarcaDePago _marca = new();
+    private FilaRelacionDePagoDto? _filaRetiro;
+    private string _motivoRetiro = string.Empty;
+
+    private sealed class MarcaDePago
+    {
+        public DateTime Fecha { get; set; } = DateTime.Today;
+        public string Medio { get; set; } = "Transfer";
+        public string? Referencia { get; set; }
+    }
+
+    private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
+    {
+        _periodo = periodo;
+        _avisos = [];
+        await CargarCorridaAsync();
+    }
+
+    private async Task CargarRelacionAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.RelacionDePagoAsync(_corrida.PublicId);
+        if (res.IsSuccess) _relacion = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la relación de pago.");
+        var envios = await Nomina.EnviosAsync(_corrida.PublicId);
+        if (envios.IsSuccess) _envios = envios.Value!.ToList();
+    }
+
+    private void AbrirMarcarPago()
+    {
+        _marca.Fecha = DateTime.Today; _marca.Medio = "Transfer"; _marca.Referencia = null;
+        _mostrarMarcarPago = true;
+    }
+
+    private async Task MarcarPagadosAsync()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.MarcarPagadosAsync(_corrida.PublicId, new MarcarPagoRequest(null, _marca.Fecha, _marca.Medio, _marca.Referencia));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo marcar el pago."); return; }
+            _mostrarMarcarPago = false;
+            await Notification.SuccessAsync($"{res.Value} empleado(s) marcados como pagados.");
+            await CargarRelacionAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private void AbrirRetirarMarca(FilaRelacionDePagoDto fila)
+    {
+        _filaRetiro = fila; _motivoRetiro = string.Empty;
+        _mostrarRetirarMarca = true;
+    }
+
+    private async Task RetirarMarcaAsync()
+    {
+        if (_corrida is null || _filaRetiro is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.RetirarMarcaDePagoAsync(_corrida.PublicId, _filaRetiro.EmployeePublicId, _motivoRetiro.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo retirar la marca."); return; }
+            _mostrarRetirarMarca = false;
+            await Notification.SuccessAsync("Marca de pago retirada.");
+            await CargarRelacionAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DescargarComprobante(Guid empleadoId)
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ComprobanteAsync(_corrida.PublicId, empleadoId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo generar el comprobante."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DescargarTodosLosComprobantes()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.TodosLosComprobantesAsync(_corrida.PublicId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron generar los comprobantes."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task EnviarComprobantes()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.EnviarComprobantesAsync(_corrida.PublicId, null);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron enviar los comprobantes."); return; }
+            var r = res.Value!;
+            var texto = $"{r.Sent} enviado(s), {r.Failed} fallido(s), {r.WithoutEmail.Count} sin correo.";
+            if (r.Failed > 0 || r.WithoutEmail.Count > 0) await Notification.WarningAsync(texto); else await Notification.SuccessAsync(texto);
+            await CargarRelacionAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task CargarCorridaAsync()
+    {
+        _corrida = null; _empleados = []; _comparativo = null; _cuadre = null; _relacion = null; _envios = null;
+        if (_periodo is null) { StateHasChanged(); return; }
+        var res = await Nomina.CorridaActualAsync(_periodo.PublicId);
+        if (res.IsSuccess) { _corrida = res.Value; await CargarEmpleadosAsync(); }
+        else if (res.ErrorCode != "Payroll.RunNotFound" && res.StatusCode != 404)
+            await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la liquidación.");
+        await CargarHistorialAsync();
+        StateHasChanged();
+    }
+
+    private async Task CargarEmpleadosAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.EmpleadosDeCorridaAsync(_corrida.PublicId,
+            string.IsNullOrEmpty(_filtroBandera) ? null : _filtroBandera,
+            _soloCambiados ? true : null,
+            string.IsNullOrWhiteSpace(_buscarEmpleado) ? null : _buscarEmpleado);
+        if (res.IsSuccess) _empleados = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los empleados.");
+        StateHasChanged();
+    }
+
+    private async Task Calcular()
+    {
+        if (_periodo is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.CalcularAsync(_periodo.PublicId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo calcular."); return; }
+            var r = res.Value!;
+            _avisos = r.Warnings.ToList();
+            await Notification.SuccessAsync($"Borrador v{r.Version}: {r.EmployeeCount} empleado(s), neto {r.Totals.Net:N0}" +
+                                            (r.Blockers.Count > 0 ? $", {r.Blockers.Count} bloqueo(s)" : string.Empty) +
+                                            (r.ChangedEmployees > 0 ? $", {r.ChangedEmployees} cambiaron" : string.Empty) + ".");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task CargarComparativoAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.ComparativoAsync(_corrida.PublicId);
+        if (res.IsSuccess) _comparativo = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el comparativo.");
+    }
+
+    private async Task CargarCuadreAsync()
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.CuadreAsync(_corrida.PublicId);
+        if (res.IsSuccess) _cuadre = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo verificar el cuadre.");
+    }
+
+    private async Task Exportar()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ExportarAsync(_corrida.PublicId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task AbrirDetalle(Guid empleadoId)
+    {
+        if (_corrida is null) return;
+        var res = await Nomina.DetalleEmpleadoAsync(_corrida.PublicId, empleadoId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el detalle."); return; }
+        _detalle = res.Value;
+        _lineaAbierta = null;
+        _mostrarDetalle = true;
+    }
+
+    private void AbrirAprobacion()
+    {
+        _panel?.Reiniciar();
+        _mostrarAprobacion = true;
+    }
+
+    private async Task AprobarAsync(AprobarRequest request)
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.AprobarAsync(_corrida.PublicId, request);
+            if (!res.IsSuccess)
+            {
+                if (res.ErrorCode == "Payroll.ConfirmationRequired" && (res.ErrorMessage ?? string.Empty).Contains("segregaci", StringComparison.OrdinalIgnoreCase))
+                {
+                    _panel?.PedirSegundaConfirmacion();
+                    await Notification.WarningAsync(res.ErrorMessage ?? "Se requiere una segunda confirmación.");
+                    return;
+                }
+                await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo aprobar.");
+                return;
+            }
+            _mostrarAprobacion = false;
+            await Notification.SuccessAsync($"Período aprobado. Comprobante {res.Value!.AccountingDocumentNumber}; neto {res.Value.Totals.Net:N0}.");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
+    }
+}

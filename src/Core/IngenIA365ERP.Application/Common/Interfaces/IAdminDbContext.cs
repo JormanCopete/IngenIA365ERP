@@ -35,10 +35,18 @@ public interface IAdminDbContext
     DbSet<TenantMembership> TenantMemberships { get; }
     DbSet<Invitation> Invitations { get; }
     DbSet<TenantMfaPolicy> TenantMfaPolicies { get; }
+    DbSet<PlatformMfaPolicy> PlatformMfaPolicies { get; }
+    DbSet<MfaRecoveryRequest> MfaRecoveryRequests { get; }
     DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts { get; }
 
     // --- Phase 4b (Profile & Recovery) ---
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
+
+    // --- Preferencias de interfaz por usuario ---
+    DbSet<UserSetting> UserSettings { get; }
+
+    // --- Contenido promocional de la pantalla de inicio de sesion ---
+    DbSet<PromoContenido> PromoContenidos { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

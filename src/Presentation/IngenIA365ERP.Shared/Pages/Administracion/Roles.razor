@@ -1,14 +1,22 @@
 @page "/admin/roles"
-@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject NavigationManager Nav
 
-<PageTitle>Roles y Permisos - IngenIA365ERP</PageTitle>
+@*
+    Redireccion, no pantalla.
 
-<div class="module-placeholder">
-    <div class="placeholder-icon">
-        <span class="e-icons e-lock"></span>
-    </div>
-    <h2>Roles y Permisos</h2>
-    <p>Modulo en construccion</p>
-    <SfProgressBar Type="ProgressType.Linear" Value="0" Minimum="0" Maximum="100"
-                   Height="4" TrackColor="#333" ProgressColor="#00bcd4" IsIndeterminate="true" />
-</div>
+    Aca habia un marcador de "Modulo en construccion" que nunca se completo,
+    mientras la pantalla real existia y funcionaba en otra ruta sin que nada la
+    enlazara. El menu apuntaba al marcador; el modulo bueno estaba huerfano.
+
+    La gestion de roles y su matriz de permisos viven en /security/roles.
+
+    Se conserva la ruta vieja porque puede estar en un favorito o en un enlace
+    compartido: en vez de una pantalla vacia, lleva a donde corresponde.
+*@
+
+<PageTitle>Redirigiendo…</PageTitle>
+
+@code {
+    protected override void OnInitialized() =>
+        Nav.NavigateTo("/security/roles", replace: true);
+}

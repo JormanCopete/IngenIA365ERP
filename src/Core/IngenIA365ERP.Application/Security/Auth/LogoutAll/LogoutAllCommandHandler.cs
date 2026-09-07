@@ -1,57 +1,54 @@
-using IngenIA365ERP.Application.Common.Interfaces;
-using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Security.Auth.LogoutAll;
 
-public sealed class LogoutAllCommandHandler : IRequestHandler<LogoutAllCommand, Result>
+/// <summary>
+/// Cierra TODAS las sesiones de quien llama, en todos sus dispositivos.
+///
+/// <para>
+/// <b>Por qué existe.</b> Es el paso 4 del procedimiento de rotación de claves
+/// RSA ante sospecha de fuga (<c>docs/operaciones/runbook-fase0.md</c>), y la
+/// identidad central no tiene otro: <c>/api/auth/logout</c> revoca una sola
+/// sesión. Su cliente es una persona operando con <c>curl</c>, que es por lo que
+/// ninguna búsqueda de llamadores lo encuentra y por poco se retira por muerto.
+/// </para>
+///
+/// <para>
+/// <b>Estaba roto.</b> Leía <c>ICurrentUserService.UserId</c>, que sale del
+/// claim <c>uid</c> —un entero de Fase 0— o de <c>NameIdentifier</c> pasado por
+/// <c>int.TryParse</c>. El emisor central no pone <c>uid</c> y su <c>sub</c> es
+/// un GUID, así que con cualquier sesión de hoy devolvía «No autenticado». Un
+/// endpoint de contención de incidentes que no responde justo cuando hay una
+/// sospecha de fuga es peor que no tenerlo: se descubre en el peor momento.
+/// </para>
+///
+/// <para>
+/// Ahora rota el <c>SecurityStamp</c>. No recorre sesiones una por una porque no
+/// hace falta: el refresh compara el stamp guardado en la sesión contra el
+/// actual del usuario, así que un stamp nuevo invalida todas de golpe —incluidas
+/// las que ya estaban emitidas y las que no conocemos—. Y no toca la contraseña:
+/// cerrar sesiones y cambiar credenciales son dos decisiones distintas.
+/// </para>
+/// </summary>
+public sealed class LogoutAllCommandHandler(
+    ICurrentCentralUserContext usuarioActual,
+    ICentralIdentityProvider identidadCentral)
+    : IRequestHandler<LogoutAllCommand, Result>
 {
-    private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IRefreshTokenStore _refreshStore;
-    private readonly IDateTimeService _clock;
-
-    public LogoutAllCommandHandler(
-        IApplicationDbContext db,
-        ICurrentUserService currentUser,
-        IRefreshTokenStore refreshStore,
-        IDateTimeService clock)
-    {
-        _db = db;
-        _currentUser = currentUser;
-        _refreshStore = refreshStore;
-        _clock = clock;
-    }
-
     public async Task<Result> Handle(LogoutAllCommand request, CancellationToken ct)
     {
-        if (_currentUser.UserId is null)
+        if (usuarioActual.CentralUserId is null || !usuarioActual.IsAuthenticated)
         {
-            return Result.Failure("Generic.Unauthorized", "No autenticado.");
+            return Result.Failure("Identity.Unauthenticated", "No autenticado.");
         }
 
-        var userId = _currentUser.UserId.Value;
-        var tokens = await _db.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ToListAsync(ct);
+        var rotado = await identidadCentral.RotateSecurityStampAsync(
+            usuarioActual.CentralUserId.Value, ct);
 
-        var now = _clock.UtcNow;
-        var families = new HashSet<Guid>();
-        foreach (var t in tokens)
-        {
-            t.RevokedAt = now;
-            t.RevocationReason = "LogoutAll";
-            families.Add(t.FamilyId);
-        }
-        await _db.SaveChangesAsync(ct);
-
-        foreach (var f in families)
-        {
-            await _refreshStore.InvalidateFamilyAsync(f.ToString(), ct);
-        }
-
-        return Result.Success();
+        return rotado
+            ? Result.Success()
+            : Result.Failure("Generic.NotFound", "La cuenta no existe o está dada de baja.");
     }
 }

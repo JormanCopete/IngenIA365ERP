@@ -1,33 +1,21 @@
 namespace IngenIA365ERP.Application.Security.Auth.Common;
 
-public sealed record LoginChallengeResult(
-    string MfaChallengeToken,
-    bool MustChangePassword);
-
-public sealed record AuthTokensResult(
-    string AccessToken,
-    string RefreshToken,
-    DateTime AccessTokenExpiresAt,
-    DateTime RefreshTokenExpiresAt,
-    AuthenticatedUserDto? User);
-
-public sealed record AuthenticatedUserDto(
-    Guid PublicId,
-    string Username,
-    AuthenticatedTenantDto Tenant,
-    AuthenticatedBranchDto? Branch,
-    IReadOnlyList<string> Roles);
-
-public sealed record AuthenticatedTenantDto(Guid PublicId, string Name);
-public sealed record AuthenticatedBranchDto(Guid PublicId, string Name);
-
-public sealed record MfaEnrollmentStartResult(
-    string Secret,
-    string QrCodeSvg,
-    string EnrollmentToken);
-
-public sealed record MfaBackupCodesResult(IReadOnlyList<string> BackupCodes);
-
+/// <summary>
+/// Lo único que queda de los DTOs de autenticación de Fase 0.
+///
+/// <para>
+/// Aquí vivían nueve records: los del login, la verificación del segundo factor,
+/// la inscripción de MFA y los códigos de respaldo. Todos servían a endpoints
+/// que operaban sobre <c>SEC_Users</c> y que la identidad central sustituyó; se
+/// retiraron con ellos.
+/// </para>
+///
+/// <para>
+/// El reseteo administrativo de MFA con doble aprobación NO tiene equivalente en
+/// la identidad central: es la única implementación que existe, sigue viva y por
+/// eso sus dos records se quedan.
+/// </para>
+/// </summary>
 public sealed record MfaResetRequestResult(Guid RequestPublicId, DateTime ExpiresAt);
 
-public sealed record MfaResetApprovalResult(string Status); // "Approved" | "Executed"
+public sealed record MfaResetApprovalResult(string Status);

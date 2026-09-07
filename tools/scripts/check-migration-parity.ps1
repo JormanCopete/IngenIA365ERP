@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # check-migration-parity.ps1 — verifica que cada migracion EF exista en AMBOS
 # ensamblados de proveedor (feature 004, SC-008). Compara los NOMBRES LOGICOS
 # (sufijo tras el timestamp) por contexto (carpetas Admin/ y Application/).

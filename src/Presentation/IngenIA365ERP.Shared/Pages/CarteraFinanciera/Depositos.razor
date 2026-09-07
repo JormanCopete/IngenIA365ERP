@@ -7,15 +7,16 @@
 
 <PageTitle>Depositos - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+<div class="pagina">
+<div class="page-header">
     <h3>Depositos</h3>
 </div>
 
 <!-- Quick deposit form -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
-    <h4 style="margin-top:0;">Registro Rapido de Deposito</h4>
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-        <div style="flex:1;min-width:200px;">
+<div class="panel">
+    <h4>Registro Rapido de Deposito</h4>
+    <div class="toolbar">
+        <div class="campo-busqueda">
             <label>Documento del Asociado</label>
             <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
         </div>
@@ -26,23 +27,23 @@
 
     @if (_personName is not null)
     {
-        <p style="margin:8px 0;color:#27ae60;">Asociado: <strong>@_personName</strong></p>
+        <p class="asociado">Asociado: <strong>@_personName</strong></p>
 
         @if (_personAccounts.Count > 0)
         {
-            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
-                <div style="min-width:220px;">
+            <div class="toolbar">
+                <div class="campo-cuenta">
                     <label>Cuenta de Ahorro</label>
                     <SfDropDownList TValue="string" TItem="AccountItem" @bind-Value="_selectedAccountId"
                                     DataSource="_personAccounts" CssClass="e-small">
                         <DropDownListFieldSettings Text="Text" Value="Value" />
                     </SfDropDownList>
                 </div>
-                <div style="min-width:150px;">
+                <div class="campo-monto">
                     <label>Monto</label>
                     <SfNumericTextBox TValue="decimal" @bind-Value="_depositAmount" Min="1" Format="N0" />
                 </div>
-                <div style="min-width:200px;">
+                <div class="campo-referencia">
                     <label>Referencia (opcional)</label>
                     <SfTextBox @bind-Value="_reference" />
                 </div>
@@ -51,7 +52,7 @@
         }
         else
         {
-            <p style="color:#f39c12;">El asociado no tiene cuentas de ahorro activas.</p>
+            <p class="sin-cuentas">El asociado no tiene cuentas de ahorro activas.</p>
         }
     }
 </div>
@@ -71,15 +72,12 @@
                 @{
                     var row = context as RecentDepositRow;
                 }
-                <span class="badge-deposito">@row?.EntryTypeText</span>
+                <span class="badge badge-deposito">@row?.EntryTypeText</span>
             </Template>
         </GridColumn>
     </GridColumns>
 </SfGrid>
-
-<style>
-    .badge-deposito { background:#27ae60; color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; }
-</style>
+</div>
 
 @code {
     private string _personCode = "";

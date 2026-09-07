@@ -105,6 +105,14 @@ public sealed class CentralAuthClient
     /// </summary>
     public IReadOnlyList<ActiveTenantSummary>? LastLoginTenants { get; private set; }
 
+    /// <summary>
+    /// Los métodos que le servirían, del último desafío de inscripción. <c>null</c>
+    /// cuando el servidor no lo dijo — y entonces la pantalla ofrece los dos, que
+    /// es el comportamiento de siempre y el correcto mientras ninguna cooperativa
+    /// restrinja.
+    /// </summary>
+    public IReadOnlyList<string>? MetodosQueLeServirian { get; private set; }
+
     public bool IsAuthenticated =>
         !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
 
@@ -171,6 +179,145 @@ public sealed class CentralAuthClient
         catch (HttpRequestException ex)
         {
             return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Ingreso con passkey ----------
+
+    /// <summary>
+    /// Primer viaje: el reto y la lista de llaves que esta persona puede usar.
+    /// Va con el challenge token, igual que el verify del TOTP — la contraseña ya
+    /// se acertó, lo que falta es el segundo factor.
+    /// </summary>
+    public async Task<InvitationApiResult<WebAuthnChallengeResponse>> WebAuthnChallengeAsync(
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<WebAuthnChallengeResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(
+                HttpMethod.Post, "/api/auth/mfa/webauthn/challenge");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<WebAuthnChallengeResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<WebAuthnChallengeResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Segundo viaje: la firma. Si verifica, lo que vuelve es exactamente el mismo
+    /// <see cref="LoginResponse"/> que tras un TOTP correcto —con su selección de
+    /// cooperativa incluida—, así que se encamina por el mismo sitio.
+    /// </summary>
+    public async Task<InvitationApiResult<LoginResponse>> WebAuthnVerifyAsync(
+        string retoId, string respuestaJson, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<LoginResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/webauthn/verify")
+            {
+                Content = JsonContent.Create(new { retoId, respuestaJson }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                await RouteLoginResponseAsync(body);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Recuperación del segundo factor por correo ----------
+
+    /// <summary>
+    /// Pide la recuperación. Va con el challenge token —la contraseña ya está
+    /// acertada— y por eso este endpoint no sirve de oráculo de cuentas.
+    /// </summary>
+    public async Task<InvitationApiResult<RecuperacionMfaPedidaResponse>> PedirRecuperacionMfaAsync(
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<RecuperacionMfaPedidaResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(
+                HttpMethod.Post, "/api/auth/mfa/recovery/request");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<RecuperacionMfaPedidaResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<RecuperacionMfaPedidaResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Completa la recuperación. Anónima: se llega desde el enlace del correo,
+    /// posiblemente en otro navegador. Pide la contraseña otra vez.
+    /// </summary>
+    public async Task<InvitationApiResult<EmptyResponse>> ConfirmarRecuperacionMfaAsync(
+        string token, string password, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                "/api/auth/mfa/recovery/confirm", new { token, password }, ct);
+            return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<EmptyResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Cancela. <b>No manda credenciales de ningún tipo</b>: cancelar tiene que ser
+    /// más fácil que ejecutar, porque quien llega aquí desde el correo está parando
+    /// algo que no pidió.
+    /// </summary>
+    public async Task<InvitationApiResult<EmptyResponse>> CancelarRecuperacionMfaAsync(
+        string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                "/api/auth/mfa/recovery/cancel", new { token }, ct);
+            return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<EmptyResponse>.NetworkError(ex.Message);
         }
     }
 
@@ -309,6 +456,15 @@ public sealed class CentralAuthClient
             LastLoginTenants = body.ActiveTenants;
         }
 
+        // Y si hay que inscribir, qué métodos le servirían — para que la pantalla
+        // de inscripción no le ofrezca el que volvería a dejarlo fuera. Se retiene
+        // igual que la lista de cooperativas y por el mismo motivo: el token de
+        // inscripción no sirve para volver a preguntarlo.
+        if (body.Challenge == "MfaEnrollmentRequired")
+        {
+            MetodosQueLeServirian = body.MetodosAceptados;
+        }
+
         if (body.Challenge == "None"
             && !string.IsNullOrWhiteSpace(body.AccessToken)
             && !string.IsNullOrWhiteSpace(body.RefreshToken))
@@ -346,12 +502,35 @@ public sealed record LoginResponse(
     string? ActiveTenantName,
     string? Message,
     IReadOnlyList<TenantSummary>? TenantsRequiringMfa,
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
 
+    /// <summary>
+    /// Con MfaEnrollmentRequired: que metodos le serviran, como literales
+    /// ("Totp", "WebAuthn"). La pantalla de inscripcion ofrece SOLO estos; sin
+    /// esto ofreceria los dos y el que no sirve vuelve a encerrar a la persona,
+    /// con el agravante de que ya cree que lo resolvio.
+    /// </summary>
+    IReadOnlyList<string>? MetodosAceptados = null);
+
+/// <param name="AdmiteTuMetodo">
+/// Si esa cooperativa acepta el metodo con el que la persona acaba de entrar. Se
+/// muestra atenuada en vez de esconderla: una cooperativa a la que pertenece y
+/// que desaparece sin explicacion es peor que una que aparece diciendo por que.
+/// </param>
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,
     string TenantName,
-    bool IsTenantAdmin);
+    bool IsTenantAdmin,
+    bool AdmiteTuMetodo = true);
+
+/// <param name="CorreoEnviado">
+/// Falso si el SMTP falló. Se distingue a proposito: responder «te enviamos un
+/// correo» cuando no salio deja a la persona esperando un mensaje que no existe,
+/// con la solicitud creada y su reloj corriendo. El SMTP es autoalojado: pasa.
+/// </param>
+public sealed record RecuperacionMfaPedidaResponse(
+    DateTime EjecutableDesde,
+    bool CorreoEnviado);
 
 public sealed record TenantSummary(
     Guid TenantPublicId,

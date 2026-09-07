@@ -1,0 +1,26 @@
+/* Lista de empresas del usuario: una fila por membresía, con el nombre a la
+   izquierda y el botón de acción a la derecha. Estaba resuelto con cuatro
+   `style=` anidados dentro del .razor. */
+
+.lista-empresas {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    margin-top: var(--pad-lg);
+}
+
+.empresa-fila {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+    padding: var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+}
+
+.empresa-nombre {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+}

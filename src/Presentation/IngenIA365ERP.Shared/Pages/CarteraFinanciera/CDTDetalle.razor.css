@@ -1,0 +1,43 @@
+/* Detalle de CDT — lo que no cubre componentes.css. */
+
+/* Estado de carga: el spinner centrado mientras llega el detalle. */
+.cargando {
+    display: flex;
+    justify-content: center;
+    padding: var(--gap-xl);
+}
+
+/* Relleno del contenido de una pestaña de SfTab, que viene sin aire propio. */
+.contenido-tab {
+    padding: var(--pad-lg);
+}
+
+/* Ficha de dos columnas: etiqueta a la izquierda, dato a la derecha. El tope
+   de ancho es lo que mantiene el par etiqueta-valor a distancia legible; sin
+   él, en un monitor ancho la etiqueta y su dato quedan a un palmo. */
+.lista-datos {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gap-md);
+    max-width: 600px;
+}
+
+/* El interés proyectado es el número por el que se entra a esta pantalla. */
+.kpi-value.valor-exito { color: var(--exito-texto); }
+
+/* Cifras que en realidad son texto (una fecha, un nombre de línea): con el
+   tamaño de cifra se parten en dos renglones. */
+.kpi-value.valor-texto { font-size: var(--texto-md); }
+
+.texto-exito   { color: var(--exito-texto); }
+.texto-info    { color: var(--info-texto); }
+.texto-peligro { color: var(--peligro-texto); }
+
+/* Formulario dentro de un SfDialog. Repetido en siete pantallas del grupo:
+   candidato a subir a componentes.css. */
+.campos-dialogo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-sm);
+}

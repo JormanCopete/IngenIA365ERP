@@ -280,3 +280,9 @@ speckit.constitution.md
 
 # Artefactos de Playwright MCP (pruebas de UI automatizadas)
 .playwright-mcp/
+
+# Configuracion de infraestructura propia de cada maquina (local / docker / wsl).
+# El archivo por sistema operativo SI se versiona; este no: lleva la IP de WSL,
+# puertos movidos y credenciales de servicios instalados a mano.
+appsettings.*.local.json
+!appsettings.*.local.json.ejemplo

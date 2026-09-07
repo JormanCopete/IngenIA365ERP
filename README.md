@@ -7,10 +7,10 @@ ERP Financiero SaaS para cooperativas colombianas. Migrado desde SOLIDO (VB.NET/
 - **Backend:** .NET 10, Minimal APIs (Carter), EF Core 10, CQRS (MediatR)
 - **Frontend:** Blazor Hybrid MAUI + Blazor Server + Blazor WebAssembly
 - **UI:** SyncFusion Blazor 33.1.44 (tema fluent2-dark)
-- **BD Transaccional:** SQL Server (schema-per-tenant)
+- **BD Transaccional:** PostgreSQL / SQL Server, una base por cooperativa
 - **BD Auditoria:** MongoDB (batching, TTL 5 anos)
 - **Cache:** Redis
-- **Auth:** JWT RS256, RBAC con 112 permisos, 8 roles
+- **Auth:** JWT RS256, RBAC con 40 permisos, 4 roles built-in
 - **Reportes:** QuestPDF (15 reportes PDF)
 - **Testing:** xUnit + FluentAssertions + ArchUnitNET
 
@@ -105,8 +105,10 @@ IngenIA365ERP.slnx
 
 ## Multi-tenancy
 
-- **Estrategia:** Schema-per-tenant en SQL Server
-- **Resolucion:** Header `X-Tenant-Id` o subdominio
+- **Estrategia:** Una base de datos por cooperativa. El aislamiento lo garantiza el
+  motor, no la disciplina del código.
+- **Resolucion:** Claim `active_tenant_id` del JWT central. El header `X-Tenant-Id` y la
+  resolución por subdominio ya no se aceptan.
 - **Admin:** BD separada `IngenIA365ERP_Admin` con tablas `ADM_*`
 - **Herramienta:** `tools/IngenIA365ERP.DbMigrator` para crear/listar/eliminar tenants
 
@@ -135,12 +137,20 @@ A partir de v2 la autenticacion se rediseña: la credencial vive UNA SOLA VEZ en
 MASTER_ADMIN_EMAIL=master@tu-dominio.com
 MASTER_ADMIN_PASSWORD=<password fuerte; minimo 12 chars>
 
-# SMTP (override de appsettings si aplica)
-EmailSender__Smtp__Host=localhost     # MailHog en dev
-EmailSender__Smtp__Port=1025
-EmailSender__Smtp__Username=          # opcional
-EmailSender__Smtp__Password=          # opcional
-EmailSender__Smtp__FromAddress=no-reply@tu-dominio.com
+# SMTP saliente — seccion "Smtp" de appsettings; estas variables la pisan.
+# (La vieja seccion "EmailSender" no la lee nadie: fue eliminada.)
+Smtp__Host=localhost                  # en dev: smtp4dev, que CAPTURA y no entrega
+Smtp__Port=1025
+Smtp__UseStartTls=false               # true contra el servidor real (puerto 587)
+Smtp__Username=                       # vacio en dev; obligatorio contra el servidor real
+Smtp__Password=                       # nunca en el repositorio: variable de entorno o Secret
+Smtp__FromAddress=noresponder.ingenia365erp@notifica365.com
+Smtp__FromName=No Responder IngenIA365 ERP
+
+# Base de los enlaces que viajan DENTRO de esos correos (invitacion y reset).
+# Si no se define, los enlaces salen apuntando a https://localhost:7200 desde
+# cualquier ambiente, incluido produccion.
+IdentityEmail__BaseUrl=http://localhost:5200
 
 # Validación contra contraseñas comprometidas (HaveIBeenPwned)
 PwnedPassword__Enabled=true
@@ -149,7 +159,9 @@ PwnedPassword__BaseUrl=https://api.pwnedpasswords.com
 
 ### Servicios Docker para desarrollo
 
-`docker compose up -d sqlserver mongodb redis mailhog` levanta el stack mínimo. La UI de MailHog en `http://localhost:8025` captura todos los correos de invitación y reset de contraseña para validación local.
+`docker compose -f docker-compose.dev.yml up -d postgres redis smtp4dev` levanta el stack mínimo (el `docker-compose.yml` clásico trae MailHog en los mismos puertos).
+
+> **En local el correo NO se entrega, y eso es lo correcto.** El destino por defecto en desarrollo es **smtp4dev**, cuya bandeja se ve en **http://localhost:8025**. smtp4dev *captura* los mensajes y no los reenvía a internet: si esperabas ver el correo de invitación en tu buzón real y no llegó, no hay nada roto — abrí `http://localhost:8025`. Para enviar de verdad hay que apuntar `Smtp__Host` al servidor real; ver [`docs/operaciones/correo-saliente.md`](docs/operaciones/correo-saliente.md).
 
 ### Bootstrap inicial
 

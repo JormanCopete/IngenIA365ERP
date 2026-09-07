@@ -1,0 +1,15 @@
+.clave-tecnica {
+    font-family: var(--fuente-mono, ui-monospace, monospace);
+    font-size: var(--texto-sm);
+    margin-top: var(--gap-xs);
+}
+
+/* La columna del valor manda: es lo unico editable de la fila. */
+.data-grid td input[type="text"] {
+    width: 100%;
+    min-width: 160px;
+}
+
+.celda-acciones {
+    white-space: nowrap;
+}

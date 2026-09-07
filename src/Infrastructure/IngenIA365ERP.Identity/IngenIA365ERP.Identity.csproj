@@ -21,7 +21,16 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.*" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.*" />
     <PackageReference Include="Otp.NET" Version="1.4.*" />
+    <!-- Volvio en la etapa de varios autenticadores: ahora SI tiene consumidor.
+         Se habia retirado porque el unico que lo usaba era un TotpService que
+         ninguna pantalla llamaba, y la de inscripcion pedia teclear 32
+         caracteres en base32 a mano. -->
     <PackageReference Include="QRCoder" Version="1.6.*" />
+    <!-- WebAuthn. Verificado que 4.0.1 compila contra .NET 10 con la API real
+         (RequestNewCredential, GetAssertionOptions), no solo que restaura.
+         Se referencia SOLO desde aqui: Application y Domain no la conocen, y
+         una prueba de arquitectura lo fija. -->
+    <PackageReference Include="Fido2" Version="4.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
@@ -31,4 +40,8 @@
          No crea ciclo: Persistence no referencia Identity. -->
     <ProjectReference Include="..\IngenIA365ERP.Persistence\IngenIA365ERP.Persistence.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+  </ItemGroup>
+
 </Project>

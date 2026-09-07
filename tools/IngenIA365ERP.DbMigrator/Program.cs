@@ -137,17 +137,40 @@ class Program
             var appDb = sp.GetRequiredService<ApplicationDbContext>();
             await MigrateContextAsync("operativa (dbo)", appDb);
 
+            // Este bucle quedó en el modelo ANTERIOR —un esquema por cooperativa
+            // dentro de una base compartida— y el vivo es una base por
+            // cooperativa (constitución v2.0.0, Principio IV: el aislamiento es
+            // físico). Lo que hace hoy no es «migrar la cooperativa»: es crear
+            // sus ~289 tablas como un esquema DENTRO de la base a la que apunte
+            // Database__ConnectionStrings, que en un despliegue es la plantilla.
+            //
+            // El agravante es el valor por defecto: --scope vale "all" si no se
+            // pasa, así que un Job que invoque el migrador a secas entra aquí.
+            //
+            // Se para en vez de hacerlo. Un fallo ruidoso se arregla; una base
+            // llena de esquemas basura se descubre semanas después.
             var schemaService = sp.GetRequiredService<TenantSchemaService>();
             var only = GetArg(args, "--tenant");
-            foreach (var tenant in await schemaService.ListTenantsAsync())
+            var porEsquema = (await schemaService.ListTenantsAsync())
+                .Where(t => only is null ||
+                            string.Equals(t.Identifier, only, StringComparison.OrdinalIgnoreCase))
+                .Where(t => !string.IsNullOrWhiteSpace(t.Schema) &&
+                            !t.Schema!.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+                .Select(t => $"{t.Identifier} → esquema '{t.Schema}'")
+                .ToList();
+
+            if (porEsquema.Count > 0)
             {
-                if (only is not null && !string.Equals(tenant.Identifier, only, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (string.IsNullOrWhiteSpace(tenant.Schema) ||
-                    tenant.Schema!.Equals("dbo", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                Log.Information("Migrando esquema de tenant [{Schema}]…", tenant.Schema);
-                await schemaService.MigrateTenantSchemaAsync(tenant.Schema!, CancellationToken.None);
+                Log.Error(
+                    "[Migrator.ModeloDeAislamiento] Hay {Cuenta} cooperativa(s) declaradas con esquema " +
+                    "propio, y este comando las migraría como esquemas dentro de la base operativa " +
+                    "actual — que es el modelo anterior al Principio IV.\n  {Lista}\n\n" +
+                    "Migre cada cooperativa contra SU base, apuntando " +
+                    "Database__ConnectionStrings__<Proveedor> a ella y usando --tenant __ninguna__ " +
+                    "para neutralizar este bucle. El alcance 'admin' sí es seguro y ya se aplicó.",
+                    porEsquema.Count, string.Join("\n  ", porEsquema));
+
+                return 2;
             }
         }
 

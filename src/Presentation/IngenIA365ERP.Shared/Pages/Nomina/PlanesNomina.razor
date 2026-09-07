@@ -1,0 +1,170 @@
+@page "/nomina/planes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+<PageTitle>Planes de nómina - IngenIA365ERP</PageTitle>
+
+<div class="page-header">
+    <h3>Planes de nómina</h3>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo plan</SfButton>
+</div>
+
+@if (_planes.Count == 1)
+{
+    <div class="info-card">
+        <span class="label">Un solo plan</span>
+        <p>Todos los empleados están en el plan por defecto «@_planes[0].Name» (@_planes[0].PeriodicidadTexto).
+           Creá otro plan sólo si un grupo de empleados se paga con otra periodicidad.</p>
+    </div>
+}
+
+<SfGrid TValue="PlanNominaDto" DataSource="@_planes" AllowSorting="true">
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Código" Width="120" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="220" />
+        <GridColumn Field="PeriodicidadTexto" HeaderText="Periodicidad" Width="120" />
+        <GridColumn HeaderText="Por defecto" Width="110" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var p = (PlanNominaDto)context;
+                    if (p.IsDefault) { <span class="e-badge e-badge-success">Sí</span> }
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Activo" Width="90" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var p = (PlanNominaDto)context;
+                    <span class="e-badge @(p.IsActive ? "e-badge-info" : "e-badge-secondary")">@(p.IsActive ? "Activo" : "Inactivo")</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="EmployeeCount" HeaderText="Empleados" Width="110" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Acciones" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var p = (PlanNominaDto)context;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => AbrirEditar(p))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@_titulo" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_modelo" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_editando is null)
+                    {
+                        <SfTextBox @bind-Value="_modelo.Code" Placeholder="Código (mayúsculas, sin espacios)" FloatLabelType="FloatLabelType.Always" />
+                        <ValidationMessage For="() => _modelo.Code" />
+                    }
+                    <SfTextBox @bind-Value="_modelo.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _modelo.Name" />
+                    @if (_editando is null)
+                    {
+                        <label class="campo">
+                            Periodicidad
+                            <select class="e-input" @bind="_modelo.Periodicity">
+                                <option value="Monthly">Mensual (30 días)</option>
+                                <option value="Biweekly">Quincenal (15 días)</option>
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <label class="campo-check">
+                            <input type="checkbox" @bind="_modelo.IsActive" disabled="@_editando.IsDefault" />
+                            Activo
+                        </label>
+                        @if (_editando.IsDefault)
+                        {
+                            <p class="texto-tenue">El plan por defecto no se puede desactivar.</p>
+                        }
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDialogo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private List<PlanNominaDto> _planes = [];
+    private Modelo _modelo = new();
+    private PlanNominaDto? _editando;
+    private bool _mostrarDialogo, _guardando;
+    private string _titulo = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        var res = await Nomina.ListarPlanesAsync(incluirInactivos: true);
+        if (res.IsSuccess) _planes = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");
+    }
+
+    private void AbrirNuevo()
+    {
+        _modelo = new Modelo();
+        _editando = null;
+        _titulo = "Nuevo plan de nómina";
+        _mostrarDialogo = true;
+    }
+
+    private void AbrirEditar(PlanNominaDto plan)
+    {
+        _modelo = new Modelo { Code = plan.Code, Name = plan.Name, Periodicity = plan.Periodicity, IsActive = plan.IsActive };
+        _editando = plan;
+        _titulo = $"Editar plan {plan.Code}";
+        _mostrarDialogo = true;
+    }
+
+    private async Task Guardar()
+    {
+        if (_guardando) return;
+        _guardando = true;
+        try
+        {
+            if (_editando is null)
+            {
+                var res = await Nomina.CrearPlanAsync(new CrearPlanNominaRequest(_modelo.Code.Trim().ToUpperInvariant(), _modelo.Name.Trim(), _modelo.Periodicity));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo crear el plan."); return; }
+                await Notification.SuccessAsync("Plan creado.");
+            }
+            else
+            {
+                var res = await Nomina.ActualizarPlanAsync(_editando.PublicId, new ActualizarPlanNominaRequest(_modelo.Name.Trim(), _modelo.IsActive));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo actualizar el plan."); return; }
+                await Notification.SuccessAsync("Plan actualizado.");
+            }
+            _mostrarDialogo = false;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private sealed class Modelo
+    {
+        [Required(ErrorMessage = "El código es obligatorio.")]
+        [StringLength(20, ErrorMessage = "Máximo 20 caracteres.")]
+        [RegularExpression("^[A-Za-z0-9_]+$", ErrorMessage = "Sólo letras, dígitos y guion bajo.")]
+        public string Code { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        [StringLength(100, ErrorMessage = "Máximo 100 caracteres.")]
+        public string Name { get; set; } = string.Empty;
+
+        public string Periodicity { get; set; } = "Monthly";
+        public bool IsActive { get; set; } = true;
+    }
+}

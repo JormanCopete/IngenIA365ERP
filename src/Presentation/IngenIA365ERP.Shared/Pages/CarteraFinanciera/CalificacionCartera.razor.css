@@ -1,0 +1,23 @@
+/* Calificación de cartera — lo que no cubre componentes.css.
+   El <style> que tenía la página redefinía .info-card y .label a su manera y,
+   como Blazor inyecta esos bloques en el documento, se los imponía a las demás
+   pantallas. Ahora esas dos clases salen de componentes.css. */
+
+/* Gráfico y tabla lado a lado; en pantalla angosta la tabla baja entera en vez
+   de comprimirse hasta que las columnas de montos se parten. */
+.dos-columnas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pad-xl);
+}
+
+.columna {
+    flex: 1;
+    min-width: 300px;
+}
+
+/* La letra de la calificación es el dato que se busca de un vistazo en la
+   columna; el color lo pone la escala de riesgo desde el marcado. */
+.calificacion {
+    font-weight: var(--peso-fuerte);
+}

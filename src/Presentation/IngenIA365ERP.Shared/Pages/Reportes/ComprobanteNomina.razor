@@ -7,117 +7,119 @@
 
 <PageTitle>Comprobante de Nomina - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Comprobante de Pago de Nomina</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
-        <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_payslip is null)">PDF</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Comprobante de Pago de Nomina</h3>
+        <div>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="LoadPreview">Vista Previa</SfButton>
+            <SfButton CssClass="e-info" IconCss="e-icons e-download" OnClick="DownloadPdf" Disabled="@(_payslip is null)">PDF</SfButton>
+        </div>
     </div>
-</div>
 
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Ano</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Ano</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+        </div>
+        <div>
+            <label>Mes</label>
+            <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Periodo</label>
+            <SfDropDownList TValue="int" TItem="PeriodOption" @bind-Value="_period" DataSource="_periods" CssClass="e-small" Width="160px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Empleado</label>
+            <SfDropDownList TValue="string" TItem="EmployeeOption" @bind-Value="_employeeId" DataSource="_employees"
+                            CssClass="e-small" Width="300px" Placeholder="Seleccione empleado" AllowFiltering="true">
+                <DropDownListFieldSettings Text="Display" Value="Id" />
+            </SfDropDownList>
+        </div>
     </div>
-    <div>
-        <label>Mes</label>
-        <SfDropDownList TValue="int" TItem="MonthOption" @bind-Value="_month" DataSource="_months" CssClass="e-small" Width="160px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Periodo</label>
-        <SfDropDownList TValue="int" TItem="PeriodOption" @bind-Value="_period" DataSource="_periods" CssClass="e-small" Width="160px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Empleado</label>
-        <SfDropDownList TValue="string" TItem="EmployeeOption" @bind-Value="_employeeId" DataSource="_employees"
-                        CssClass="e-small" Width="300px" Placeholder="Seleccione empleado" AllowFiltering="true">
-            <DropDownListFieldSettings Text="Display" Value="Id" />
-        </SfDropDownList>
-    </div>
-</div>
 
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
-}
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
 
-@if (_payslip is not null)
-{
-    <!-- Employee Header -->
-    <div style="padding:16px;border:1px solid #333;border-radius:8px;margin-bottom:16px;background:#1e1e2e;">
-        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    @if (_payslip is not null)
+    {
+        <!-- Employee Header -->
+        <div class="tarjeta">
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:var(--gap-md);">
+                <div>
+                    <h4 style="margin:0 0 var(--gap-xs);">@_payslip.EmployeeName</h4>
+                    <span class="texto-tenue">Doc: @_payslip.DocumentNumber | Cargo: @_payslip.Position</span>
+                </div>
+                <div style="text-align:right;">
+                    <span class="texto-tenue">Periodo:</span> @_payslip.PeriodLabel<br />
+                    <span class="texto-tenue">Salario Base:</span> @_payslip.BaseSalary.ToString("N2")
+                </div>
+            </div>
+        </div>
+
+        <div class="rejilla-campos">
+            <!-- Devengados -->
             <div>
-                <h4 style="margin:0 0 4px;">@_payslip.EmployeeName</h4>
-                <span style="color:#999;">Doc: @_payslip.DocumentNumber | Cargo: @_payslip.Position</span>
+                <h4 style="color:var(--exito-texto);">Devengados</h4>
+                <SfGrid TValue="PayslipLine" DataSource="_payslip.Earnings" AllowSorting="false">
+                    <GridColumns>
+                        <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
+                        <GridColumn Field="Hours" HeaderText="Horas" Width="80" TextAlign="TextAlign.Center" />
+                        <GridColumn Field="Amount" HeaderText="Valor" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                    </GridColumns>
+                    <GridAggregates>
+                        <GridAggregate>
+                            <GridAggregateColumns>
+                                <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:var(--exito-texto);">@s?.Sum</b></FooterTemplate>
+                                </GridAggregateColumn>
+                            </GridAggregateColumns>
+                        </GridAggregate>
+                    </GridAggregates>
+                </SfGrid>
             </div>
-            <div style="text-align:right;">
-                <span style="color:#999;">Periodo:</span> @_payslip.PeriodLabel<br />
-                <span style="color:#999;">Salario Base:</span> @_payslip.BaseSalary.ToString("N2")
+
+            <!-- Deducciones -->
+            <div>
+                <h4 style="color:var(--peligro-texto);">Deducciones</h4>
+                <SfGrid TValue="PayslipLine" DataSource="_payslip.Deductions" AllowSorting="false">
+                    <GridColumns>
+                        <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
+                        <GridColumn Field="Hours" HeaderText="Horas" Width="80" TextAlign="TextAlign.Center" />
+                        <GridColumn Field="Amount" HeaderText="Valor" Width="150" Format="N2" TextAlign="TextAlign.Right" />
+                    </GridColumns>
+                    <GridAggregates>
+                        <GridAggregate>
+                            <GridAggregateColumns>
+                                <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:var(--peligro-texto);">@s?.Sum</b></FooterTemplate>
+                                </GridAggregateColumn>
+                            </GridAggregateColumns>
+                        </GridAggregate>
+                    </GridAggregates>
+                </SfGrid>
             </div>
         </div>
-    </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-        <!-- Devengados -->
-        <div>
-            <h4 style="color:#4caf50;margin-bottom:8px;">Devengados</h4>
-            <SfGrid TValue="PayslipLine" DataSource="_payslip.Earnings" AllowSorting="false">
-                <GridColumns>
-                    <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
-                    <GridColumn Field="Hours" HeaderText="Horas" Width="80" TextAlign="TextAlign.Center" />
-                    <GridColumn Field="Amount" HeaderText="Valor" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-                </GridColumns>
-                <GridAggregates>
-                    <GridAggregate>
-                        <GridAggregateColumns>
-                            <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:#4caf50;">@s?.Sum</b></FooterTemplate>
-                            </GridAggregateColumn>
-                        </GridAggregateColumns>
-                    </GridAggregate>
-                </GridAggregates>
-            </SfGrid>
+        <!-- Net Pay -->
+        <div style="padding:var(--gap-lg);border:2px solid var(--acento);border-radius:var(--radio);text-align:center;">
+            <span class="texto-tenue">NETO A PAGAR</span>
+            <h2 style="margin:var(--gap-xs) 0 0;color:var(--acento);">@_payslip.NetPay.ToString("N2")</h2>
         </div>
-
-        <!-- Deducciones -->
-        <div>
-            <h4 style="color:#f44336;margin-bottom:8px;">Deducciones</h4>
-            <SfGrid TValue="PayslipLine" DataSource="_payslip.Deductions" AllowSorting="false">
-                <GridColumns>
-                    <GridColumn Field="Concept" HeaderText="Concepto" Width="250" />
-                    <GridColumn Field="Hours" HeaderText="Horas" Width="80" TextAlign="TextAlign.Center" />
-                    <GridColumn Field="Amount" HeaderText="Valor" Width="150" Format="N2" TextAlign="TextAlign.Right" />
-                </GridColumns>
-                <GridAggregates>
-                    <GridAggregate>
-                        <GridAggregateColumns>
-                            <GridAggregateColumn Field="Amount" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b style="color:#f44336;">@s?.Sum</b></FooterTemplate>
-                            </GridAggregateColumn>
-                        </GridAggregateColumns>
-                    </GridAggregate>
-                </GridAggregates>
-            </SfGrid>
-        </div>
-    </div>
-
-    <!-- Net Pay -->
-    <div style="margin-top:24px;padding:20px;border:2px solid #00bcd4;border-radius:8px;text-align:center;">
-        <span style="font-size:14px;color:#999;">NETO A PAGAR</span>
-        <h2 style="margin:4px 0 0;color:#00bcd4;">@_payslip.NetPay.ToString("N2")</h2>
-    </div>
-}
-else if (!_loading && _searched)
-{
-    <p style="color:#999;">No se encontro comprobante de nomina para los parametros seleccionados.</p>
-}
+    }
+    else if (!_loading && _searched)
+    {
+        <p class="texto-tenue">No se encontro comprobante de nomina para los parametros seleccionados.</p>
+    }
+</div>
 
 @code {
     private int _year = DateTime.Today.Year;

@@ -7,114 +7,116 @@
 
 <PageTitle>CDT #@(_detail?.CertificateNumber) - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>CDT #@(_detail?.CertificateNumber ?? "...") - @(_detail?.PersonName ?? "Cargando...")</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
-                  OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
-        @if (_detail is not null && _detail.Status == "V")
-        {
-            <SfButton CssClass="e-success" IconCss="e-icons e-reload" OnClick="ShowRenewDialog">Renovar</SfButton>
-            <SfButton CssClass="e-danger" IconCss="e-icons e-close" OnClick="ShowCancelDialog">Cancelar Anticipado</SfButton>
-        }
-    </div>
-</div>
-
-@if (_loading)
-{
-    <div style="display:flex;justify-content:center;padding:40px;">
-        <SfSpinner Visible="true" />
-    </div>
-}
-else if (_detail is not null)
-{
-    <!-- Summary cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
-        <div class="kpi-card">
-            <span class="kpi-label">Monto</span>
-            <span class="kpi-value">@_detail.Amount.ToString("N0")</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Tasa Anual</span>
-            <span class="kpi-value">@_detail.InterestRate.ToString("N2")%</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Plazo (dias)</span>
-            <span class="kpi-value">@_detail.Term</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Interes Proyectado</span>
-            <span class="kpi-value" style="color:#27ae60;">@_detail.ProjectedInterest.ToString("N0")</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Vencimiento</span>
-            <span class="kpi-value" style="font-size:14px;">@(_detail.MaturityDate?.ToString() ?? "-")</span>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-label">Estado</span>
-            @{
-                var statusColor = _detail.Status switch { "V" => "#27ae60", "E" => "#f39c12", "C" => "#e74c3c", "R" => "#3498db", _ => "#888" };
+<div class="pagina">
+    <div class="page-header">
+        <h3>CDT #@(_detail?.CertificateNumber ?? "...") - @(_detail?.PersonName ?? "Cargando...")</h3>
+        <div>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                      OnClick='@(() => Nav.NavigateTo("/cartera/cdt"))'>Volver</SfButton>
+            @if (_detail is not null && _detail.Status == "V")
+            {
+                <SfButton CssClass="e-success" IconCss="e-icons e-reload" OnClick="ShowRenewDialog">Renovar</SfButton>
+                <SfButton CssClass="e-danger" IconCss="e-icons e-close" OnClick="ShowCancelDialog">Cancelar Anticipado</SfButton>
             }
-            <span class="kpi-value" style="color:@statusColor">@_detail.StatusText</span>
         </div>
     </div>
 
-    <SfTab>
-        <TabItems>
-            <!-- Tab 1: Informacion -->
-            <TabItem>
-                <ChildContent><TabHeader Text="Informacion" IconCss="e-icons e-description" /></ChildContent>
-                <ContentTemplate>
-                    <div style="padding:16px;">
-                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:600px;">
-                            <span style="color:#888;">Titular:</span><span>@_detail.PersonName</span>
-                            <span style="color:#888;">Documento:</span><span>@_detail.PersonCode</span>
-                            <span style="color:#888;">No. CDT:</span><span>@_detail.CertificateNumber</span>
-                            <span style="color:#888;">Emision:</span><span>@_detail.IssueDate</span>
-                            <span style="color:#888;">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
-                            <span style="color:#888;">Tipo Renovacion:</span><span>@GetRenewalText(_detail.RenewalType)</span>
-                            <span style="color:#888;">Capitalizado:</span><span>@(_detail.IsCapitalized ? "Si" : "No")</span>
+    @if (_loading)
+    {
+        <div class="cargando">
+            <SfSpinner Visible="true" />
+        </div>
+    }
+    else if (_detail is not null)
+    {
+        <!-- Summary cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <span class="kpi-label">Monto</span>
+                <span class="kpi-value">@_detail.Amount.ToString("N0")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Tasa Anual</span>
+                <span class="kpi-value">@_detail.InterestRate.ToString("N2")%</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Plazo (dias)</span>
+                <span class="kpi-value">@_detail.Term</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Interes Proyectado</span>
+                <span class="kpi-value valor-exito">@_detail.ProjectedInterest.ToString("N0")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Vencimiento</span>
+                <span class="kpi-value valor-texto">@(_detail.MaturityDate?.ToString() ?? "-")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Estado</span>
+                @{
+                    var statusColor = _detail.Status switch { "V" => "var(--exito-texto)", "E" => "var(--alerta-texto)", "C" => "var(--peligro-texto)", "R" => "var(--info-texto)", _ => "var(--texto-tenue)" };
+                }
+                <span class="kpi-value" style="color:@statusColor">@_detail.StatusText</span>
+            </div>
+        </div>
+
+        <SfTab>
+            <TabItems>
+                <!-- Tab 1: Informacion -->
+                <TabItem>
+                    <ChildContent><TabHeader Text="Informacion" IconCss="e-icons e-description" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="contenido-tab">
+                            <div class="lista-datos">
+                                <span class="texto-tenue">Titular:</span><span>@_detail.PersonName</span>
+                                <span class="texto-tenue">Documento:</span><span>@_detail.PersonCode</span>
+                                <span class="texto-tenue">No. CDT:</span><span>@_detail.CertificateNumber</span>
+                                <span class="texto-tenue">Emision:</span><span>@_detail.IssueDate</span>
+                                <span class="texto-tenue">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "-")</span>
+                                <span class="texto-tenue">Tipo Renovacion:</span><span>@GetRenewalText(_detail.RenewalType)</span>
+                                <span class="texto-tenue">Capitalizado:</span><span>@(_detail.IsCapitalized ? "Si" : "No")</span>
+                            </div>
                         </div>
-                    </div>
-                </ContentTemplate>
-            </TabItem>
-            <!-- Tab 2: Movimientos -->
-            <TabItem>
-                <ChildContent><TabHeader Text="Movimientos" IconCss="e-icons e-list-unordered" /></ChildContent>
-                <ContentTemplate>
-                    <div style="padding:16px;">
-                        <SfGrid TValue="CertEntryRow" DataSource="_detail.Entries" AllowPaging="true" AllowSorting="true"
-                                GridLines="GridLine.Both">
-                            <GridPageSettings PageSize="15" />
-                            <GridColumns>
-                                <GridColumn Field="@nameof(CertEntryRow.EntryDate)" HeaderText="Fecha" Width="120" Format="d" />
-                                <GridColumn Field="@nameof(CertEntryRow.EntryTypeText)" HeaderText="Tipo" Width="130" />
-                                <GridColumn Field="@nameof(CertEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
-                                <GridColumn Field="@nameof(CertEntryRow.CurrentRate)" HeaderText="Tasa" Width="80" TextAlign="TextAlign.Center" Format="N2" />
-                                <GridColumn Field="@nameof(CertEntryRow.Description)" HeaderText="Descripcion" Width="250" />
-                            </GridColumns>
-                        </SfGrid>
-                    </div>
-                </ContentTemplate>
-            </TabItem>
-        </TabItems>
-    </SfTab>
-}
+                    </ContentTemplate>
+                </TabItem>
+                <!-- Tab 2: Movimientos -->
+                <TabItem>
+                    <ChildContent><TabHeader Text="Movimientos" IconCss="e-icons e-list-unordered" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="contenido-tab">
+                            <SfGrid TValue="CertEntryRow" DataSource="_detail.Entries" AllowPaging="true" AllowSorting="true"
+                                    GridLines="GridLine.Both">
+                                <GridPageSettings PageSize="15" />
+                                <GridColumns>
+                                    <GridColumn Field="@nameof(CertEntryRow.EntryDate)" HeaderText="Fecha" Width="120" Format="d" />
+                                    <GridColumn Field="@nameof(CertEntryRow.EntryTypeText)" HeaderText="Tipo" Width="130" />
+                                    <GridColumn Field="@nameof(CertEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+                                    <GridColumn Field="@nameof(CertEntryRow.CurrentRate)" HeaderText="Tasa" Width="80" TextAlign="TextAlign.Center" Format="N2" />
+                                    <GridColumn Field="@nameof(CertEntryRow.Description)" HeaderText="Descripcion" Width="250" />
+                                </GridColumns>
+                            </SfGrid>
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+            </TabItems>
+        </SfTab>
+    }
+</div>
 
 <!-- Dialog: Renovar -->
 <SfDialog @bind-Visible="_showRenewDialog" Header="Renovar CDT" Width="420px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
+            <div class="campos-dialogo">
                 <p>CDT #@(_detail?.CertificateNumber) por valor de <strong>@(_detail?.Amount.ToString("N0"))</strong></p>
-                <p>Interes proyectado: <strong style="color:#27ae60;">@(_detail?.ProjectedInterest.ToString("N0"))</strong></p>
-                <div style="display:flex;align-items:center;gap:8px;">
+                <p>Interes proyectado: <strong class="texto-exito">@(_detail?.ProjectedInterest.ToString("N0"))</strong></p>
+                <div class="acciones">
                     <input type="checkbox" @bind="_renewWithInterest" id="cbCapitalize" />
                     <label for="cbCapitalize">Capitalizar intereses (sumar al nuevo CDT)</label>
                 </div>
                 @if (_renewWithInterest && _detail is not null)
                 {
-                    <p style="color:#3498db;">Nuevo monto: <strong>@((_detail.Amount + _detail.ProjectedInterest).ToString("N0"))</strong></p>
+                    <p class="texto-info">Nuevo monto: <strong>@((_detail.Amount + _detail.ProjectedInterest).ToString("N0"))</strong></p>
                 }
             </div>
         </Content>
@@ -129,8 +131,8 @@ else if (_detail is not null)
 <SfDialog @bind-Visible="_showCancelDialog" Header="Cancelar CDT Anticipadamente" Width="420px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="display:flex;flex-direction:column;gap:12px;padding:8px;">
-                <p style="color:#e74c3c;">Esta accion cancelara el CDT antes de su vencimiento.</p>
+            <div class="campos-dialogo">
+                <p class="texto-peligro">Esta accion cancelara el CDT antes de su vencimiento.</p>
                 <p>Se puede aplicar una penalizacion sobre los intereses acumulados.</p>
                 <label>Motivo de cancelacion</label>
                 <SfTextBox @bind-Value="_cancelReason" Placeholder="Motivo..." />

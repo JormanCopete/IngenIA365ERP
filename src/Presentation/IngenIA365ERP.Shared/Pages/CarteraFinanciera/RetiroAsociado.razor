@@ -7,14 +7,14 @@
 
 <PageTitle>Retiro de Asociado - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+<div class="page-header">
     <h3>Retiro de Asociado</h3>
 </div>
 
 <!-- Person search -->
-<div style="background:#1e1e2e;border-radius:8px;padding:20px;margin-bottom:20px;">
-    <h4 style="margin-top:0;">Buscar Asociado</h4>
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+<div class="panel">
+    <h4>Buscar Asociado</h4>
+    <div class="toolbar">
         <div style="flex:1;min-width:200px;">
             <label>Documento del Asociado</label>
             <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
@@ -24,14 +24,14 @@
 
     @if (_preview is not null)
     {
-        <div style="margin-top:16px;">
-            <p style="margin:4px 0;">Asociado: <strong style="color:#3498db;">@_preview.PersonName</strong></p>
+        <div style="margin-top:var(--pad-lg);">
+            <p style="margin:var(--gap-xs) 0;">Asociado: <strong style="color:var(--info-texto);">@_preview.PersonName</strong></p>
 
             <!-- Product summary -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:12px;">
-                <div class="kpi-card" style="@(_preview.ActiveLoansCount > 0 ? "border-color:#e74c3c" : "")">
+            <div class="kpi-grid" style="margin-top:var(--gap-md);">
+                <div class="kpi-card" style="@(_preview.ActiveLoansCount > 0 ? "border-color:var(--peligro)" : "")">
                     <span class="kpi-label">Creditos Vigentes</span>
-                    <span class="kpi-value" style="color:@(_preview.ActiveLoansCount > 0 ? "#e74c3c" : "#27ae60")">@_preview.ActiveLoansCount</span>
+                    <span class="kpi-value" style="color:@(_preview.ActiveLoansCount > 0 ? "var(--peligro)" : "var(--exito)")">@_preview.ActiveLoansCount</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-label">Saldo Ahorros</span>
@@ -41,18 +41,18 @@
                     <span class="kpi-label">Saldo Aportes</span>
                     <span class="kpi-value">@_preview.ContributionBalance.ToString("N0")</span>
                 </div>
-                <div class="kpi-card" style="@(_preview.CdtCount > 0 ? "border-color:#f39c12" : "")">
+                <div class="kpi-card" style="@(_preview.CdtCount > 0 ? "border-color:var(--alerta)" : "")">
                     <span class="kpi-label">CDTs Vigentes</span>
-                    <span class="kpi-value" style="color:@(_preview.CdtCount > 0 ? "#f39c12" : "#27ae60")">@_preview.CdtCount</span>
+                    <span class="kpi-value" style="color:@(_preview.CdtCount > 0 ? "var(--alerta)" : "var(--exito)")">@_preview.CdtCount</span>
                 </div>
             </div>
 
             @if (!_preview.CanWithdraw)
             {
                 <!-- Blocking reasons -->
-                <div style="margin-top:16px;padding:16px;background:#2c1a1a;border:1px solid #e74c3c;border-radius:8px;">
-                    <h4 style="color:#e74c3c;margin-top:0;">No es posible procesar el retiro</h4>
-                    <ul style="color:#e74c3c;margin:0;">
+                <div class="aviso aviso-error" style="margin-top:var(--pad-lg);">
+                    <h4>No es posible procesar el retiro</h4>
+                    <ul>
                         @foreach (var reason in _preview.BlockingReasons)
                         {
                             <li>@reason</li>
@@ -63,11 +63,11 @@
             else
             {
                 <!-- Can withdraw -->
-                <div style="margin-top:16px;padding:16px;background:#1a2c1a;border:1px solid #27ae60;border-radius:8px;">
-                    <h4 style="color:#27ae60;margin-top:0;">El asociado puede retirarse</h4>
+                <div class="aviso aviso-ok" style="margin-top:var(--pad-lg);">
+                    <h4>El asociado puede retirarse</h4>
                     <p>Total a devolver (aportes + ahorros): <strong>@((_preview.SavingsBalance + _preview.ContributionBalance).ToString("N0"))</strong></p>
 
-                    <div style="margin-top:12px;">
+                    <div style="margin-top:var(--gap-md);">
                         <label>Motivo de Retiro</label>
                         <SfDropDownList TValue="string" TItem="ReasonItem" @bind-Value="_selectedReasonId"
                                         DataSource="_withdrawalReasons" CssClass="e-small" Width="300px">
@@ -75,12 +75,12 @@
                         </SfDropDownList>
                     </div>
 
-                    <div style="margin-top:12px;">
+                    <div style="margin-top:var(--gap-md);">
                         <label>Fecha de Retiro</label>
                         <SfDatePicker TValue="DateTime?" @bind-Value="_withdrawalDate" Format="dd/MM/yyyy" Width="200px" CssClass="e-small" />
                     </div>
 
-                    <div style="margin-top:16px;">
+                    <div style="margin-top:var(--pad-lg);">
                         <SfButton CssClass="e-danger" IconCss="e-icons e-close" OnClick="ShowConfirmDialog">Procesar Retiro</SfButton>
                     </div>
                 </div>
@@ -107,8 +107,8 @@
 <SfDialog @bind-Visible="_showConfirmDialog" Header="Confirmar Retiro de Asociado" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:8px;">
-                <p style="color:#e74c3c;font-weight:bold;">Esta accion es irreversible.</p>
+            <div style="padding:var(--pad-sm);">
+                <p style="color:var(--peligro-texto);font-weight:var(--peso-fuerte);">Esta accion es irreversible.</p>
                 <p>Se marcara al asociado <strong>@_preview?.PersonName</strong> como RETIRADO.</p>
                 <p>Motivo: <strong>@(_withdrawalReasons.FirstOrDefault(r => r.Value == _selectedReasonId)?.Text ?? "-")</strong></p>
             </div>

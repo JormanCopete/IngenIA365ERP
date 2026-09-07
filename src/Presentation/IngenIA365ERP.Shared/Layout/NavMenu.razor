@@ -15,6 +15,12 @@
             @if (SidebarOpen) { <span>Dashboard</span> }
         </NavLink>
 
+        @* Todo lo operativo y los maestros son DE UNA COOPERATIVA: sus pantallas
+           piden la base de la cooperativa activa, y sin ella la API responde
+           Session.TenantNotSelected. Ofrecerlas igual a quien no tiene cooperativa
+           —el administrador maestro nunca la tiene— es invitarlo a un error. *@
+        @if (_tieneCooperativa)
+        {
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">OPERACIONES</span> }
         </div>
@@ -36,6 +42,13 @@
             <NavLink href="/contabilidad/cierre-periodo" class="nav-subitem">Cierre Periodo</NavLink>
             <NavLink href="/contabilidad/balance-prueba" class="nav-subitem">Balance de Prueba</NavLink>
             <NavLink href="/contabilidad/certificados-retencion" class="nav-subitem">Cert. Retencion</NavLink>
+            @* Los reportes de cada modulo viven en su modulo. Estaban en un grupo
+               "Reportes" aparte, que obligaba a saber de antemano que algo era un
+               reporte para encontrarlo. Lo transversal queda en SISTEMA. *@
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
+            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
+            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
@@ -71,6 +84,9 @@
             <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
             <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
             <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
+            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
@@ -90,6 +106,8 @@
             <NavLink href="/inventario/parametros-comisiones" class="nav-subitem">Comisiones</NavLink>
             <NavLink href="/inventario/movimientos/nuevo" class="nav-subitem">Nuevo Movimiento</NavLink>
             <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
@@ -98,11 +116,15 @@
             <NavLink href="/nomina/novedades" class="nav-subitem">Novedades</NavLink>
             <NavLink href="/nomina/conceptos" class="nav-subitem">Conceptos</NavLink>
             <NavLink href="/nomina/periodos-pago" class="nav-subitem">Periodos Pago</NavLink>
+            <NavLink href="/nomina/planes" class="nav-subitem">Planes de nomina</NavLink>
+            <NavLink href="/nomina/parametros-legales" class="nav-subitem">Parametros legales</NavLink>
             <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
             <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
             <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
             <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
             <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            <span class="nav-subgroup-title">Reportes</span>
+            <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-description" Title="CDT" Expanded="SidebarOpen">
@@ -154,22 +176,46 @@
             <NavLink href="/maestros/actividades-culturales" class="nav-subitem">Act. Culturales</NavLink>
             <NavLink href="/maestros/convenios" class="nav-subitem">Convenios</NavLink>
         </NavMenuGroup>
+        }
 
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">SISTEMA</span> }
         </div>
 
+        @* Para todo el mundo, con o sin cooperativa: el manual explica también
+           como entrar, elegir cooperativa y recuperar el acceso. *@
+        <NavLink href="/manual" class="nav-item">
+            <span class="e-icons e-circle-info"></span>
+            @if (SidebarOpen) { <span>Manual del sistema</span> }
+        </NavLink>
+
+        @if (_tieneCooperativa)
+        {
+        @* Transversal a todos los modulos: es la unica entrada de reportes que
+           no pertenece a ninguno, y por eso vive en SISTEMA y no en un grupo. *@
+        <NavLink href="/reportes" class="nav-item" Match="NavLinkMatch.All">
+            <span class="e-icons e-print-layout"></span>
+            @if (SidebarOpen) { <span>Centro de Reportes</span> }
+        </NavLink>
+
         <NavMenuGroup Icon="e-lock" Title="Administracion" Expanded="SidebarOpen">
-            <NavLink href="/admin/usuarios" class="nav-subitem">Usuarios</NavLink>
-            <NavLink href="/admin/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            @* Apuntaban a /admin/usuarios y /admin/roles, que son marcadores
+               vacios. Las pantallas reales viven bajo /security y estaban
+               huerfanas: existian, funcionaban y no habia como llegar. *@
+            <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
+            <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            <NavLink href="/admin/branches" class="nav-subitem">Sucursales</NavLink>
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
+            <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
         </NavMenuGroup>
+        }
 
         @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
         <NavMenuGroup Icon="e-user" Title="Mi Cuenta" Expanded="SidebarOpen">
             <NavLink href="/profile/password" class="nav-subitem">Cambiar Contraseña</NavLink>
             <NavLink href="/profile/mfa" class="nav-subitem">Autenticacion MFA</NavLink>
+            <NavLink href="/profile/seguridad/credenciales" class="nav-subitem">Mis Autenticadores</NavLink>
             <NavLink href="/profile/default-tenant" class="nav-subitem">Empresa por Defecto</NavLink>
         </NavMenuGroup>
 
@@ -185,22 +231,18 @@
         @if (_isMaster)
         {
             <NavMenuGroup Icon="e-settings" Title="Consola SaaS" Expanded="SidebarOpen">
+                <NavLink href="/admin/tenants" class="nav-subitem">Cooperativas</NavLink>
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                @* Vive en la base administrativa y lo gestiona el maestro: es el
+                   contenido del panel del login, que se sirve antes de elegir
+                   cooperativa. Por eso está aquí y no sólo en Administracion,
+                   que el maestro no ve. *@
+                <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
             </NavMenuGroup>
         }
 
-        <NavMenuGroup Icon="e-print-layout" Title="Reportes" Expanded="SidebarOpen">
-            <NavLink href="/reportes" class="nav-subitem">Centro de Reportes</NavLink>
-            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
-            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
-            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
-            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
-            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
-            <NavLink href="/reportes/comprobante-nomina" class="nav-subitem">Comprobante Nomina</NavLink>
-            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
-        </NavMenuGroup>
     </nav>
 </div>
 
@@ -212,6 +254,12 @@
     private bool _isTenantAdmin;
     private bool _isMaster;
     private string _activeTenantId = "";
+
+    /// <summary>
+    /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
+    /// secciones operativas: sin ella, esas pantallas sólo pueden fallar.
+    /// </summary>
+    private bool _tieneCooperativa => !string.IsNullOrEmpty(_activeTenantId);
 
     protected override async Task OnParametersSetAsync()
     {

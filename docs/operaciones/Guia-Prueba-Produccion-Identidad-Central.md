@@ -83,7 +83,42 @@ curl -s -X POST https://api.ingenia365.com/api/auth/login \
   -d '{"email":"master@tu-dominio.com","password":"TU_PASSWORD"}'
 ```
 
-**Respuesta esperada** (HTTP 200):
+> **El maestro NO entra con sólo contraseña.** Desde la constitución v2.0.0 el
+> segundo factor es obligatorio también para él — es la cuenta que crea
+> cooperativas, apaga la política de MFA de una cooperativa ajena y borra el
+> segundo factor de cualquiera. Este paso son **dos llamadas**, no una.
+
+**Respuesta esperada** (HTTP 200) — una de estas dos:
+
+```json
+{ "challenge": "MfaEnrollmentRequired", "challengeToken": "eyJ…", "isGlobalMasterAdmin": true }
+```
+
+La primera vez, porque el maestro todavía no tiene segundo factor. Inscribilo
+con el `challengeToken`:
+
+```bash
+curl -X POST "$API/api/profile/mfa/enroll" -H "Authorization: Bearer $CHALLENGE"
+# → devuelve secretBase32 y el QR. Cargalo en tu app de autenticación.
+
+curl -X POST "$API/api/profile/mfa/confirm" -H "Authorization: Bearer $CHALLENGE" \
+  -H "Content-Type: application/json" -d '{"code":"<6 dígitos>"}'
+# → devuelve los códigos de recuperación. GUARDALOS: con un solo maestro
+#   son la única vía de vuelta si perdés el teléfono.
+```
+
+Después repetí el login. A partir de ahí, y siempre:
+
+```json
+{ "challenge": "MfaRequired", "challengeToken": "eyJ…", "isGlobalMasterAdmin": true }
+```
+
+```bash
+curl -X POST "$API/api/auth/mfa/verify" -H "Authorization: Bearer $CHALLENGE" \
+  -H "Content-Type: application/json" -d '{"code":"<6 dígitos>","useRecoveryCode":false}'
+```
+
+**Ésa** es la respuesta que trae la sesión:
 
 ```json
 {
@@ -92,8 +127,7 @@ curl -s -X POST https://api.ingenia365.com/api/auth/login \
   "isGlobalMasterAdmin": true,
   "accessToken": "eyJ…",
   "refreshToken": "…",
-  "activeTenants": [],
-  "message": "Sesión master admin sin tenant activo."
+  "activeTenants": []
 }
 ```
 
@@ -101,9 +135,11 @@ curl -s -X POST https://api.ingenia365.com/api/auth/login \
 
 **Validaciones**:
 
-- ✅ `challenge` = `None` (login limpio, sin MFA ni tenant-select)
-- ✅ `isGlobalMasterAdmin` = `true`
-- ✅ `accessToken` presente
+- ✅ El login devuelve `challenge` = `MfaRequired` (o `MfaEnrollmentRequired` la
+  primera vez) y **sin** `accessToken`. Si te devolviera un `accessToken`
+  directamente, el maestro estaría entrando sin segundo factor: eso es un
+  defecto, no un atajo.
+- ✅ `mfa/verify` devuelve `challenge` = `None` y `isGlobalMasterAdmin` = `true`
 - ✅ El JWT (podés decodificarlo en jwt.io) contiene:
   `purpose=full`, `is_global_master_admin=true`, `active_tenant_id` ausente
 
@@ -111,9 +147,9 @@ curl -s -X POST https://api.ingenia365.com/api/auth/login \
 
 | Síntoma | Causa probable |
 |---|---|
-| HTTP 422 `Identity.InvalidCredentials` | Password incorrecto o hash mal sembrado |
-| HTTP 200 con `challenge=MfaRequired` | El master ya tiene MFA activo → seguí flujo MFA verify |
-| HTTP 429 `rate-limit` | Muchos intentos fallidos → esperar 15 min |
+| HTTP 401 `Identity.InvalidCredentials` | Password incorrecto o hash mal sembrado |
+| HTTP 401 `Identity.MfaInvalid` | Código TOTP incorrecto o reloj desfasado |
+| HTTP 401 `Identity.Locked.Soft` | Demasiados intentos → esperá los segundos que indica el mensaje |
 
 ---
 
@@ -156,13 +192,21 @@ curl -s -X POST https://api.ingenia365.com/api/saas/tenants/with-admin \
   }'
 ```
 
+> **`schemaName` ya no nombra un esquema: nombra la BASE DE DATOS física de la
+> cooperativa.** El campo conserva el nombre por compatibilidad, pero desde la
+> constitución v2.0.0 este POST **crea una base de datos** —más su base de
+> auditoría en MongoDB y su ranura en Redis—, no un espacio dentro de una base
+> compartida. Elegí el nombre con ese criterio: es el que verás en el motor.
+
 **Respuesta esperada** (HTTP 200):
 
 ```json
 {
   "tenantPublicId": "…",
   "invitationPublicId": "…",
-  "invitationExpiresAt": "2026-08-02T…"
+  "invitationExpiresAt": "2026-08-02T…",
+  "correoEnviado": true,
+  "motivoCorreoNoEnviado": null
 }
 ```
 
@@ -171,7 +215,14 @@ curl -s -X POST https://api.ingenia365.com/api/saas/tenants/with-admin \
 - ✅ HTTP 200 (no 500)
 - ✅ Los 3 IDs vienen no-null
 - ✅ Detrás de escena se emitió el evento auditable `Tenant.Created`
-- ✅ Se mandó un correo real al `firstAdminEmail`
+- ✅ **`correoEnviado` es `true`.** No lo des por hecho a partir del 200: la
+  empresa y la invitación se crean igual aunque el servidor de correo esté
+  caído, y en ese caso la respuesta llega igual con 200 pero con
+  `correoEnviado: false` y el motivo en `motivoCorreoNoEnviado`. Si ves
+  `false`, **nadie recibió el correo**: la invitación ya existe y hay que
+  reenviarla desde `/admin/tenants/{tenantPublicId}/invitaciones`
+  (`POST /api/tenants/{tenantPublicId}/invitations/{invitationPublicId}/reenviar`).
+  Seguí entonces por la tabla de "Si no llegó" del paso 3.
 
 **Si falla con `Tenant.NitConflict`**: ya existe un tenant con ese NIT —
 elegí otro NIT o buscá el existente.
@@ -199,7 +250,8 @@ correcto.
 |---|---|
 | No aparece en bandeja de entrada | Revisar carpeta Spam / Promociones |
 | SMTP corporativo bloqueó el envío | Revisar logs del dispatcher: `NotificationEmailDispatcher` |
-| Link apunta a dominio incorrecto | Verificar `EmailSender:InvitationLinkBaseUrl` en config de prod |
+| Link apunta a dominio incorrecto | Verificar `IdentityEmail:BaseUrl` en la config de prod (o la variable `IdentityEmail__BaseUrl`). Si el enlace dice `localhost:7200`, esa clave no está definida y rige el valor cableado por defecto |
+| Nada sale del servidor de correo | Revisar la sección `Smtp` (`Smtp__Host`, `Smtp__Port`, `Smtp__UseStartTls`, `Smtp__Username`, `Smtp__Password`). Ver [`correo-saliente.md`](correo-saliente.md) |
 
 ---
 
@@ -450,9 +502,21 @@ Si algún criterio falla, **no promover a producción hasta corregir**.
 
 Si la prueba en pre-prod falla o hay un incidente en prod:
 
-1. **Deshabilitar el flujo nuevo** con feature flag
-   `CentralIdentity:Enabled = false` en config.
-2. Los usuarios seguirán autenticándose con el flujo Phase 0 legacy.
+> **Este plan no se puede ejecutar.** La bandera `CentralIdentity:Enabled` no
+> existe —no aparece en un solo `.cs` ni `.json` del repositorio— y el flujo de
+> Fase 0 al que pretendía volver se retiró el 2026-08-25: sus rutas devuelven
+> 404. Un plan de rollback que no funciona es peor que no tenerlo, porque se
+> descubre durante el incidente.
+>
+> **El rollback real es de despliegue, no de configuración**: revertir a la
+> imagen anterior. Y hay que saber esto antes de decidirlo: los usuarios creados
+> en la identidad central y las cooperativas aprovisionadas durante la ventana
+> **no desaparecen** al revertir la imagen — sus bases quedan creadas. Volver
+> atrás es volver a una versión del código, no deshacer los datos.
+
+1. ~~**Deshabilitar el flujo nuevo** con feature flag~~
+   ~~`CentralIdentity:Enabled = false` en config.~~ — no existe.
+2. ~~Los usuarios seguirán autenticándose con el flujo Phase 0 legacy.~~ — retirado.
 3. Los tenants creados durante la ventana de prueba pueden marcarse
    `IsActive = 0` desde el master admin.
 4. Los correos ya enviados no se revocan — informar al destinatario que

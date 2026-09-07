@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Entities.Admin;
+
 namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 
 /// <summary>
@@ -18,19 +20,40 @@ namespace IngenIA365ERP.Application.Common.Interfaces.Identity;
 /// </summary>
 public interface ICentralJwtIssuer
 {
+    /// <param name="metodoMfa">
+    /// Con qué método demostró la persona su identidad en ESTA sesión.
+    /// <c>Ninguno</c> significa «no consta»: no tiene segundo factor, o entró con
+    /// un código de recuperación.
+    ///
+    /// <para>
+    /// <b>Obligatorio a propósito, sin valor por defecto.</b> Hay ocho sitios que
+    /// emiten tokens; con valor por defecto, el que se olvidara de pasarlo sellaría
+    /// «no consta» y esa sesión quedaría fuera de toda cooperativa con máscara
+    /// restrictiva — sin que fallara ninguna compilación ni ninguna prueba de los
+    /// otros siete. Poniéndolo obligatorio, el compilador los enumera de una vez.
+    /// </para>
+    /// </param>
     CentralAccessTokenResult IssueAccessToken(
         Guid centralUserId,
         string email,
         bool isGlobalMasterAdmin,
         Guid? activeTenantId,
         bool? tenantAdmin,
-        bool mfaVerified);
+        bool mfaVerified,
+        MetodosMfa metodoMfa);
 
+    /// <param name="metodoMfa">
+    /// Sólo tiene sentido en el desafío de <c>tenant-select</c>, que es el único
+    /// que se emite DESPUÉS de superar el segundo factor y por tanto el único que
+    /// tiene algo que sellar. En los demás propósitos va <c>Ninguno</c>, porque
+    /// todavía no se demostró nada.
+    /// </param>
     CentralAccessTokenResult IssueChallengeToken(
         Guid centralUserId,
         string email,
         bool isGlobalMasterAdmin,
         string purpose,
+        MetodosMfa metodoMfa,
         TimeSpan? lifetime = null);
 
     CentralRefreshTokenResult IssueRefreshToken();

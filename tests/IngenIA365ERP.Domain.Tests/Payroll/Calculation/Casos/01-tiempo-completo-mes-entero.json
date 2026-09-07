@@ -1,0 +1,23 @@
+{
+  "nombre": "Tiempo completo, mes entero, salario de 2.000.000",
+  "descripcion": "Empleado estándar, clase de riesgo I, todo marzo de 2026. Tiene auxilio de transporte (salario ≤ 2 SMMLV). Sin fondo de solidaridad (IBC < 4 SMMLV) ni retención (base 29,92 UVT < 95). Valores 2026 de la semilla; verificación manual pendiente de firma de la contadora.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Ana Pérez", "clase": "Standard", "ingreso": "2025-01-15",
+    "salarios": [ { "desde": "2025-01-15", "mensual": 2000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2000000, "AUX_TRANSPORTE": 249095,
+      "SALUD_EMP": 80000, "PENSION_EMP": 80000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 170000, "PENSION_EMPLEADOR": 240000, "ARL": 10440, "SENA": 40000, "ICBF": 60000, "CAJA": 80000,
+      "PROV_CESANTIAS": 187350, "PROV_INT_CESANTIAS": 22491, "PROV_PRIMA": 187350, "PROV_VACACIONES": 83400
+    },
+    "totales": { "devengos": 2249095, "deducciones": 160000, "aportesEmpleador": 600440, "provisiones": 480591, "neto": 2089095, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30, "diasAusencia": 0
+  }
+}

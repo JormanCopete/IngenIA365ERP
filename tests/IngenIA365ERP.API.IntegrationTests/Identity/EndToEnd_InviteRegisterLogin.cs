@@ -26,15 +26,7 @@ public sealed class EndToEnd_InviteRegisterLogin(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master — sin membresías: sesión operativa master (challenge None).
-        var loginMasterResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, loginMasterResp.StatusCode);
-        var loginMaster = await ReadJsonAsync(loginMasterResp);
-        Assert.Equal("None", loginMaster.GetProperty("challenge").GetString());
-        var masterToken = loginMaster.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         // 2) El master registra un tenant (necesario para poder invitar sobre él).

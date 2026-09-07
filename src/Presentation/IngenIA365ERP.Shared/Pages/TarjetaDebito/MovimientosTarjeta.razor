@@ -6,51 +6,53 @@
 
 <PageTitle>Movimientos Tarjeta Debito - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Movimientos Tarjeta Debito</h3>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Movimientos Tarjeta Debito</h3>
+    </div>
 
-<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Tarjeta (PublicId)</label>
-        <SfTextBox @bind-Value="_cardPublicId" Placeholder="GUID de la tarjeta" Width="320px" />
+    <div class="toolbar">
+        <div>
+            <label>Tarjeta (PublicId)</label>
+            <SfTextBox @bind-Value="_cardPublicId" Placeholder="GUID de la tarjeta" Width="320px" />
+        </div>
+        <div>
+            <label>Fecha Desde</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Placeholder="Desde" Width="160px" />
+        </div>
+        <div>
+            <label>Fecha Hasta</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Placeholder="Hasta" Width="160px" />
+        </div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@Search">Buscar</SfButton>
     </div>
-    <div>
-        <label>Fecha Desde</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Placeholder="Desde" Width="160px" />
-    </div>
-    <div>
-        <label>Fecha Hasta</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Placeholder="Hasta" Width="160px" />
-    </div>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="@Search">Buscar</SfButton>
-</div>
 
-<SfGrid @ref="_grid" TValue="TransactionItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="Date" HeaderText="Fecha" Width="180" Format="dd/MM/yyyy HH:mm" />
-        <GridColumn Field="CardNumber" HeaderText="Tarjeta" Width="180" />
-        <GridColumn Field="TypeText" HeaderText="Tipo" Width="150" />
-        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
-        <GridColumn Field="MerchantCode" HeaderText="Comercio" Width="160" />
-        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
-            <Template>
-                @{
-                    var t = context as TransactionItem;
-                    var badge = t?.Status switch
-                    {
-                        "A" => "e-badge e-badge-success",
-                        "R" => "e-badge e-badge-danger",
-                        "V" => "e-badge e-badge-warning",
-                        _ => "e-badge e-badge-info"
-                    };
-                    <span class="@badge">@t?.StatusText</span>
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="TransactionItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="Date" HeaderText="Fecha" Width="180" Format="dd/MM/yyyy HH:mm" />
+            <GridColumn Field="CardNumber" HeaderText="Tarjeta" Width="180" />
+            <GridColumn Field="TypeText" HeaderText="Tipo" Width="150" />
+            <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="MerchantCode" HeaderText="Comercio" Width="160" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+                <Template>
+                    @{
+                        var t = context as TransactionItem;
+                        var badge = t?.Status switch
+                        {
+                            "A" => "e-badge e-badge-success",
+                            "R" => "e-badge e-badge-danger",
+                            "V" => "e-badge e-badge-warning",
+                            _ => "e-badge e-badge-info"
+                        };
+                        <span class="@badge">@t?.StatusText</span>
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 @code {
     private SfGrid<TransactionItem>? _grid;

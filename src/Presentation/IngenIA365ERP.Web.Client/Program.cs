@@ -15,7 +15,12 @@ Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQx
 builder.Services.AddSyncfusionBlazor();
 
 // Read AppMode from wwwroot/appsettings(.{Environment}).json
-AppMode.Configure(builder.Configuration);
+//
+// El origen va como segundo argumento porque la base puede venir RELATIVA ("/"),
+// y resolverla es responsabilidad de AppMode: asi lo que circula por la
+// aplicacion —incluido AppSettings.GetApiBaseUrl(), que concatenan 19
+// pantallas— ya es absoluto. Ver AppMode.ResolverBase.
+AppMode.Configure(builder.Configuration, builder.HostEnvironment.BaseAddress);
 
 // Add device-specific services used by the IngenIA365ERP.Shared project.
 // SecureStorage + TenantService are Singletons because IHttpClientFactory creates
@@ -34,6 +39,11 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 
 // Named HttpClient used by all pages/services. Pages get this via the default
 // HttpClient injection below.
+//
+// AppMode.ApiBaseUrl YA viene resuelto y absoluto: la resolución vive allí y no
+// aquí, porque no es sólo este HttpClient quien la necesita —19 pantallas
+// concatenan AppSettings.GetApiBaseUrl()— y tener dos copias de esa lógica fue
+// justamente el defecto: una se arregló y la otra siguió rota.
 var apiBaseUrl = AppMode.UseMock ? builder.HostEnvironment.BaseAddress : AppMode.ApiBaseUrl;
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthBearerHandler>()
@@ -66,10 +76,21 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CentralAuthCli
 // change password, forgot/reset). Reusa CentralAuthClient para resolver
 // qué token enviar (access full o challenge mfa-enroll).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ProfileClient>();
+// Puente con navigator.credentials (passkeys). Va en los dos hosts porque el
+// prerender del servidor instancia las mismas pantallas; ahí devuelve
+// «no disponible» y el botón aparece recién en el primer render interactivo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.WebAuthnInterop>();
 // Feature 003 (US6) — cliente Fase 0 per-tenant que usa la consola de
 // aprobaciones de MFA reset (request/approve/list). Nunca estuvo registrado
 // y la página crasheaba el runtime WASM al inyectarlo.
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.AuthClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.MfaResetClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PreferenciasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PromocionesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClient>();
+// Feature 005 — cliente tipado del módulo de nómina (planes, períodos, novedades, liquidación).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

@@ -8,219 +8,221 @@
 
 <PageTitle>@(_isNew ? "Nuevo Comprobante" : "Comprobante") - IngenIA365ERP</PageTitle>
 
-<!-- Toolbar -->
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>@(_isNew ? "Nuevo Comprobante Contable" : $"Comprobante {_header.VoucherTypeCode} - {_header.DocumentNumber}")</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
-                  OnClick='@(() => Nav.NavigateTo("/contabilidad/comprobantes/lista"))'>Volver a Lista</SfButton>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
-                  OnClick="SaveDocument">Guardar</SfButton>
-        @if (!_isNew && !_header.IsClosed && !_header.IsVoided)
-        {
-            <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(!IsBalanced)"
-                      OnClick="PostDocument">Contabilizar</SfButton>
-        }
-        @if (!_isNew && _header.IsClosed && !_header.IsVoided)
-        {
-            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
-                      OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
-        }
+<div class="pagina">
+    <!-- Toolbar -->
+    <div class="page-header">
+        <h3>@(_isNew ? "Nuevo Comprobante Contable" : $"Comprobante {_header.VoucherTypeCode} - {_header.DocumentNumber}")</h3>
+        <div>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                      OnClick='@(() => Nav.NavigateTo("/contabilidad/comprobantes/lista"))'>Volver a Lista</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
+                      OnClick="SaveDocument">Guardar</SfButton>
+            @if (!_isNew && !_header.IsClosed && !_header.IsVoided)
+            {
+                <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(!IsBalanced)"
+                          OnClick="PostDocument">Contabilizar</SfButton>
+            }
+            @if (!_isNew && _header.IsClosed && !_header.IsVoided)
+            {
+                <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                          OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
+            }
+        </div>
     </div>
-</div>
 
-<!-- Status badge -->
-@if (!_isNew)
-{
-    var badge = _header.IsVoided ? "e-badge e-badge-danger"
-              : _header.IsClosed ? "e-badge e-badge-success"
-              : "e-badge e-badge-warning";
-    var text = _header.IsVoided ? "Anulado" : _header.IsClosed ? "Contabilizado" : "Borrador";
-    <div style="margin-bottom:12px;">
-        <span class="@badge" style="font-size:14px;padding:4px 12px;">@text</span>
-    </div>
-}
-
-<!-- Header fields -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:20px;">
-    <div>
-        <label>Tipo Comprobante *</label>
-        <SfDropDownList TValue="string" TItem="VoucherTypeItem" @bind-Value="_header.VoucherTypeCode"
-                        DataSource="_voucherTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
-            <DropDownListFieldSettings Text="Display" Value="Code" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Numero</label>
-        <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
-                   Readonly="true" CssClass="e-disabled" />
-    </div>
-    <div>
-        <label>Fecha *</label>
-        <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
-    </div>
-    <div style="grid-column:span 2;">
-        <label>Descripcion *</label>
-        <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del comprobante" Enabled="@IsEditable" />
-    </div>
-</div>
-
-<!-- Detail lines -->
-<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-    <h4 style="margin:0;">Detalle de Movimientos</h4>
-    @if (IsEditable)
+    <!-- Status badge -->
+    @if (!_isNew)
     {
-        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
+        var badge = _header.IsVoided ? "e-badge e-badge-danger"
+                  : _header.IsClosed ? "e-badge e-badge-success"
+                  : "e-badge e-badge-warning";
+        var text = _header.IsVoided ? "Anulado" : _header.IsClosed ? "Contabilizado" : "Borrador";
+        <div>
+            <span class="@badge" style="font-size:var(--texto-md);padding:var(--pad-xs) var(--pad-md);">@text</span>
+        </div>
     }
-</div>
 
-<div style="overflow-x:auto;">
-    <table class="e-table" style="width:100%;border-collapse:collapse;">
-        <thead>
-            <tr style="background:var(--sf-grid-header-bg, #f5f5f5);">
-                <th style="width:40px;text-align:center;">#</th>
-                <th style="width:140px;">Cuenta</th>
-                <th style="width:200px;">Nombre Cuenta</th>
-                <th style="width:130px;">Tercero</th>
-                <th style="width:140px;">Centro Costo</th>
-                <th style="width:120px;">Sucursal</th>
-                <th style="width:140px;text-align:right;">Debito</th>
-                <th style="width:140px;text-align:right;">Credito</th>
-                <th style="width:200px;">Descripcion</th>
-                @if (IsEditable) { <th style="width:50px;"></th> }
-            </tr>
-        </thead>
-        <tbody>
-            @for (var i = 0; i < _lines.Count; i++)
-            {
-                var idx = i;
-                var line = _lines[idx];
-                <tr style="border-bottom:1px solid #e0e0e0;">
-                    <td style="text-align:center;color:#888;">@(idx + 1)</td>
-                    <td>
-                        <div style="display:flex;gap:4px;">
-                            <SfTextBox @bind-Value="line.AccountCode" Placeholder="Cuenta" CssClass="e-small"
-                                       Enabled="@IsEditable" @onblur="@(() => LookupAccount(idx))" />
-                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
-                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenAccountSearch(idx))" />
-                        </div>
-                    </td>
-                    <td><span style="font-size:12px;color:#666;">@line.AccountName</span></td>
-                    <td>
-                        <div style="display:flex;gap:4px;">
-                            <SfTextBox @bind-Value="line.PersonCode" Placeholder="NIT" CssClass="e-small"
-                                       Enabled="@IsEditable" @onblur="@(() => LookupPerson(idx))" />
-                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
-                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenPersonSearch(idx))" />
-                        </div>
-                    </td>
-                    <td>
-                        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.CostCenterCode"
-                                        DataSource="_costCenters" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
-                            <DropDownListFieldSettings Text="Name" Value="Value" />
-                        </SfDropDownList>
-                    </td>
-                    <td>
-                        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.BranchCode"
-                                        DataSource="_branches" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
-                            <DropDownListFieldSettings Text="Name" Value="Value" />
-                        </SfDropDownList>
-                    </td>
-                    <td>
-                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Debit" Format="N2" Min="0"
-                                          CssClass="e-small" Enabled="@IsEditable"
-                                          ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnDebitChange(idx, e.Value))" />
-                    </td>
-                    <td>
-                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Credit" Format="N2" Min="0"
-                                          CssClass="e-small" Enabled="@IsEditable"
-                                          ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnCreditChange(idx, e.Value))" />
-                    </td>
-                    <td>
-                        <SfTextBox @bind-Value="line.Description" Placeholder="Detalle" CssClass="e-small"
-                                   Enabled="@IsEditable" />
-                    </td>
-                    @if (IsEditable)
-                    {
-                        <td style="text-align:center;">
-                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
-                                      OnClick="@(() => RemoveLine(idx))" />
-                        </td>
-                    }
+    <!-- Header fields -->
+    <div class="rejilla-campos">
+        <div>
+            <label>Tipo Comprobante *</label>
+            <SfDropDownList TValue="string" TItem="VoucherTypeItem" @bind-Value="_header.VoucherTypeCode"
+                            DataSource="_voucherTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
+                <DropDownListFieldSettings Text="Display" Value="Code" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Numero</label>
+            <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
+                       Readonly="true" CssClass="e-disabled" />
+        </div>
+        <div>
+            <label>Fecha *</label>
+            <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
+        </div>
+        <div class="campo-ancho">
+            <label>Descripcion *</label>
+            <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del comprobante" Enabled="@IsEditable" />
+        </div>
+    </div>
+
+    <!-- Detail lines -->
+    <div class="page-header">
+        <h4>Detalle de Movimientos</h4>
+        @if (IsEditable)
+        {
+            <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
+        }
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="e-table tabla">
+            <thead>
+                <tr>
+                    <th style="width:40px;text-align:center;">#</th>
+                    <th style="width:140px;">Cuenta</th>
+                    <th style="width:200px;">Nombre Cuenta</th>
+                    <th style="width:130px;">Tercero</th>
+                    <th style="width:140px;">Centro Costo</th>
+                    <th style="width:120px;">Sucursal</th>
+                    <th class="monto" style="width:140px;">Debito</th>
+                    <th class="monto" style="width:140px;">Credito</th>
+                    <th style="width:200px;">Descripcion</th>
+                    @if (IsEditable) { <th style="width:50px;"></th> }
                 </tr>
-            }
-            @if (_lines.Count == 0)
-            {
-                <tr><td colspan="@(IsEditable ? 10 : 9)" style="text-align:center;padding:20px;color:#888;">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
-            }
-        </tbody>
-    </table>
-</div>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < _lines.Count; i++)
+                {
+                    var idx = i;
+                    var line = _lines[idx];
+                    <tr>
+                        <td class="texto-tenue" style="text-align:center;">@(idx + 1)</td>
+                        <td>
+                            <div class="campo-con-boton">
+                                <SfTextBox @bind-Value="line.AccountCode" Placeholder="Cuenta" CssClass="e-small"
+                                           Enabled="@IsEditable" @onblur="@(() => LookupAccount(idx))" />
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                          Disabled="@(!IsEditable)" OnClick="@(() => OpenAccountSearch(idx))" />
+                            </div>
+                        </td>
+                        <td><span class="muted">@line.AccountName</span></td>
+                        <td>
+                            <div class="campo-con-boton">
+                                <SfTextBox @bind-Value="line.PersonCode" Placeholder="NIT" CssClass="e-small"
+                                           Enabled="@IsEditable" @onblur="@(() => LookupPerson(idx))" />
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                          Disabled="@(!IsEditable)" OnClick="@(() => OpenPersonSearch(idx))" />
+                            </div>
+                        </td>
+                        <td>
+                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.CostCenterCode"
+                                            DataSource="_costCenters" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
+                                <DropDownListFieldSettings Text="Name" Value="Value" />
+                            </SfDropDownList>
+                        </td>
+                        <td>
+                            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="line.BranchCode"
+                                            DataSource="_branches" CssClass="e-small" Enabled="@IsEditable" Placeholder="--">
+                                <DropDownListFieldSettings Text="Name" Value="Value" />
+                            </SfDropDownList>
+                        </td>
+                        <td>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="line.Debit" Format="N2" Min="0"
+                                              CssClass="e-small" Enabled="@IsEditable"
+                                              ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnDebitChange(idx, e.Value))" />
+                        </td>
+                        <td>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="line.Credit" Format="N2" Min="0"
+                                              CssClass="e-small" Enabled="@IsEditable"
+                                              ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<decimal> e) => OnCreditChange(idx, e.Value))" />
+                        </td>
+                        <td>
+                            <SfTextBox @bind-Value="line.Description" Placeholder="Detalle" CssClass="e-small"
+                                       Enabled="@IsEditable" />
+                        </td>
+                        @if (IsEditable)
+                        {
+                            <td style="text-align:center;">
+                                <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                          OnClick="@(() => RemoveLine(idx))" />
+                            </td>
+                        }
+                    </tr>
+                }
+                @if (_lines.Count == 0)
+                {
+                    <tr><td class="texto-tenue" colspan="@(IsEditable ? 10 : 9)" style="text-align:center;padding:var(--gap-lg);">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
-<!-- Totals footer -->
-<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Debitos</span><br/>
-        <strong style="font-size:16px;">@TotalDebit.ToString("N2")</strong>
+    <!-- Totals footer -->
+    <div class="totales">
+        <div>
+            <span class="muted">Total Debitos</span>
+            <strong class="valor-total">@TotalDebit.ToString("N2")</strong>
+        </div>
+        <div>
+            <span class="muted">Total Creditos</span>
+            <strong class="valor-total">@TotalCredit.ToString("N2")</strong>
+        </div>
+        <div>
+            <span class="muted">Diferencia</span>
+            <strong class="valor-total @(IsBalanced ? "cuadre-ok" : "cuadre-error")">@Difference.ToString("N2")</strong>
+        </div>
     </div>
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Creditos</span><br/>
-        <strong style="font-size:16px;">@TotalCredit.ToString("N2")</strong>
-    </div>
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Diferencia</span><br/>
-        <strong style="font-size:16px;color:@(IsBalanced ? "green" : "red");">@Difference.ToString("N2")</strong>
-    </div>
-</div>
 
-<!-- Account search dialog -->
-<SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre de cuenta" CssClass="e-small" />
-                    <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
+    <!-- Account search dialog -->
+    <SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div>
+                    <div class="toolbar" style="margin-bottom:var(--gap-md);">
+                        <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre de cuenta" CssClass="e-small" />
+                        <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
+                    </div>
+                    <SfGrid TValue="AccountSearchItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnAccountSelected" TValue="AccountSearchItem" />
+                        <GridColumns>
+                            <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+                            <GridColumn Field="Nature" HeaderText="Naturaleza" Width="100" />
+                        </GridColumns>
+                    </SfGrid>
                 </div>
-                <SfGrid TValue="AccountSearchItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnAccountSelected" TValue="AccountSearchItem" />
-                    <GridColumns>
-                        <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
-                        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
-                        <GridColumn Field="Nature" HeaderText="Naturaleza" Width="100" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
 
-<!-- Person search dialog -->
-<SfDialog @bind-Visible="_showPersonSearch" Header="Buscar Tercero" Width="600px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <SfTextBox @bind-Value="_personSearchText" Placeholder="NIT o nombre" CssClass="e-small" />
-                    <SfButton CssClass="e-primary e-small" OnClick="SearchPersons">Buscar</SfButton>
+    <!-- Person search dialog -->
+    <SfDialog @bind-Visible="_showPersonSearch" Header="Buscar Tercero" Width="600px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div>
+                    <div class="toolbar" style="margin-bottom:var(--gap-md);">
+                        <SfTextBox @bind-Value="_personSearchText" Placeholder="NIT o nombre" CssClass="e-small" />
+                        <SfButton CssClass="e-primary e-small" OnClick="SearchPersons">Buscar</SfButton>
+                    </div>
+                    <SfGrid TValue="PersonSearchItem" DataSource="_personSearchResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnPersonSelected" TValue="PersonSearchItem" />
+                        <GridColumns>
+                            <GridColumn Field="IdentificationNumber" HeaderText="NIT" Width="140" />
+                            <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
+                        </GridColumns>
+                    </SfGrid>
                 </div>
-                <SfGrid TValue="PersonSearchItem" DataSource="_personSearchResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnPersonSelected" TValue="PersonSearchItem" />
-                    <GridColumns>
-                        <GridColumn Field="IdentificationNumber" HeaderText="NIT" Width="140" />
-                        <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
 
-<!-- Void confirmation -->
-<ConfirmDialog @bind-Visible="_showVoidConfirm" OnConfirm="VoidDocument"
-               Message="Esta seguro de anular este comprobante? Esta accion no se puede deshacer." />
+    <!-- Void confirmation -->
+    <ConfirmDialog @bind-Visible="_showVoidConfirm" OnConfirm="VoidDocument"
+                   Message="Esta seguro de anular este comprobante? Esta accion no se puede deshacer." />
+</div>
 
 @code {
     [Parameter] public Guid? Id { get; set; }

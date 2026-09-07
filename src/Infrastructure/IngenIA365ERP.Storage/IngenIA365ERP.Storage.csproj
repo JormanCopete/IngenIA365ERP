@@ -6,6 +6,7 @@
     <RootNamespace>IngenIA365ERP.Storage</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="CsvHelper" Version="33.*" />
     <PackageReference Include="MailKit" Version="4.*" />
     <PackageReference Include="MimeKit" Version="4.*" />
     <PackageReference Include="RazorEngineCore" Version="2025.*" />
@@ -26,4 +27,8 @@
          IPasswordResetEmailDispatcher / IPasswordChangedNotifier. -->
     <None Update="Templates\*.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+  </ItemGroup>
+
 </Project>

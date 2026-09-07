@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Alguien pidió retirar tu segundo factor</title>
+</head>
+<!--
+  La jerarquía visual de este correo es al revés de lo habitual, y a propósito.
+
+  El botón grande y de color es CANCELAR. Confirmar es un enlace pequeño al
+  final. El motivo: quien recibe este correo sin haberlo pedido está viendo un
+  intento de quitarle el segundo factor, y en ese caso el aviso sólo sirve si
+  pararlo es lo más fácil que puede hacer. Quien sí lo pidió sabe que lo pidió y
+  va a buscar el enlace aunque esté abajo.
+-->
+<body style="font-family: Arial, Helvetica, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="color: #b91c1c; font-size: 22px;">Alguien pidió retirar tu segundo factor</h1>
+
+  <p>
+    Se pidió retirar todos los autenticadores de tu cuenta de IngenIA365ERP
+    (apps de códigos y llaves de seguridad). Quien lo pidió sabía tu contraseña.
+  </p>
+
+  <p style="background-color: #fef2f2; border-left: 4px solid #b91c1c; padding: 12px 16px;">
+    <strong>Si no fuiste vos, cancelalo ahora</strong> y cambiá tu contraseña:
+    alguien la conoce.
+  </p>
+
+  <p style="margin: 24px 0;">
+    <a href="{{EnlaceDeCancelacion}}"
+       style="background-color: #b91c1c; color: #ffffff; padding: 14px 28px;
+              text-decoration: none; border-radius: 4px; display: inline-block;
+              font-size: 16px; font-weight: bold;">
+      No fui yo — cancelar
+    </a>
+  </p>
+
+  <p style="color: #6b7280; font-size: 14px;">
+    Cancelar no te pide contraseña ni nada más. Si el botón no funciona, copiá
+    este enlace:<br>
+    <span style="word-break: break-all;">{{EnlaceDeCancelacion}}</span>
+  </p>
+
+  <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+
+  <h2 style="font-size: 16px; color: #374151;">Si fuiste vos</h2>
+
+  <p>
+    La solicitud <strong>no se puede completar hasta el {{EjecutableDesde}}</strong>.
+    Esa espera existe para que, si no hubieras sido vos, tuvieras tiempo de
+    enterarte y pararla.
+  </p>
+
+  <p>
+    A partir de esa hora, completá la recuperación aquí — te va a pedir tu
+    contraseña otra vez:<br>
+    <a href="{{EnlaceDeConfirmacion}}" style="color: #1e40af; word-break: break-all;">
+      {{EnlaceDeConfirmacion}}
+    </a>
+  </p>
+
+  <p style="color: #6b7280; font-size: 14px;">
+    El enlace caduca el {{ExpiraEn}}. Al completarla, tus autenticadores actuales
+    dejan de servir y vas a tener que inscribir uno nuevo al entrar. No te devuelve
+    la sesión: recuperar no es entrar.
+  </p>
+
+  <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+
+  <p style="color: #6b7280; font-size: 13px;">
+    Solicitud hecha desde la dirección {{IpSolicitante}}.<br>
+    Si preferís no usar esta vía, un código de respaldo te deja entrar ahora mismo,
+    y dos administradores de tu empresa también pueden restablecerlo.
+  </p>
+
+  <p style="color: #9ca3af; font-size: 12px;">IngenIA365ERP</p>
+</body>
+</html>

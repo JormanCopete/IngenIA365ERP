@@ -1,36 +1,42 @@
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Application.Identity.Auth.Login;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace IngenIA365ERP.Application.Identity.Auth.MfaVerify;
 
 /// <summary>
-/// T067 — Verifica el TOTP del segundo factor y, si OK, decide auto-select
-/// vs TenantSelection (misma lógica que el final del <c>LoginCommandHandler</c>).
+/// T067 — Verifica el segundo factor con un código: TOTP o código de
+/// recuperación de un solo uso.
+///
+/// <para>
+/// Lo que pasa DESPUÉS de superarlo —auto-seleccionar cooperativa, pedir que se
+/// elija, o la salida del maestro global— vive en
+/// <see cref="IEmisorDeSesionTrasSegundoFactor"/>, porque el ingreso con passkey
+/// tiene que hacer exactamente lo mismo.
+/// </para>
 /// </summary>
 public sealed class MfaVerifyCommandHandler(
     ICurrentCentralUserContext currentUser,
     ICentralIdentityProvider centralIdentity,
-    ITenantMembershipReader memberships,
-    ICentralJwtIssuer jwtIssuer,
-    ICentralRefreshTokenStore refreshStore,
+    IEmisorDeSesionTrasSegundoFactor emisorDeSesion,
     IAuditAppendOnlyWriter auditWriter,
+    ILoginAttemptCounter contadorDeIntentos,
     IDateTimeService clock,
     ILogger<MfaVerifyCommandHandler> logger)
     : IRequestHandler<MfaVerifyCommand, Result<LoginResult>>
 {
-    private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
-    private static readonly TimeSpan ChallengeTokenLifetime = TimeSpan.FromMinutes(5);
-
     public async Task<Result<LoginResult>> Handle(MfaVerifyCommand request, CancellationToken ct)
     {
-        // 1) Validar el purpose del challengeToken (defensa en profundidad —
-        //    el endpoint también monta el filter RequirePurpose("mfa-verify")).
+        // 1) Validar el purpose del challengeToken. Los handlers lo comprueban
+        //    ellos mismos: el atributo que el comentario original mencionaba no
+        //    existe en este repositorio.
         if (currentUser.CentralUserId is null || !currentUser.IsAuthenticated)
         {
             return Result.Failure<LoginResult>(
@@ -60,8 +66,30 @@ public sealed class MfaVerifyCommandHandler(
                 "El usuario no tiene MFA habilitado; reinicia el login.");
         }
 
-        // 2) Verificar el segundo factor: TOTP o recovery code one-shot (FR-108/FR-109).
-        //    El error hacia el cliente es genérico en ambas ramas; la auditoría distingue.
+        // 1b) Límite de intentos del SEGUNDO FACTOR.
+        //
+        // No lo tenía. Un TOTP son seis dígitos y aquí se llega con la contraseña
+        // ya acertada, así que sin límite el segundo factor no añade nada frente
+        // a quien ya robó la credencial: se prueba el millón.
+        //
+        // El ámbito es propio y no el del login a propósito. Un login correcto
+        // llama a ResetAsync, y a este endpoint sólo se llega tras un login
+        // correcto: con el contador compartido, el atacante se regalaría un
+        // reset volviendo a iniciar sesión cada pocos intentos.
+        var correo = user.Email ?? string.Empty;
+        var bloqueo = await contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Mfa, correo, ct);
+        if (bloqueo.IsLocked)
+        {
+            await EmitAuditAsync(user.Id, user.Email,
+                AuditEventTypes.CentralUserMfaFailed, request, now, ct);
+            return Result.Failure<LoginResult>(
+                "Identity.Locked.Soft",
+                $"Demasiados intentos con el segundo factor. Reintenta en {bloqueo.RetryAfterSeconds} segundos.");
+        }
+
+        // 2) Verificar: TOTP o código de recuperación de un solo uso.
+        //    El error hacia el cliente es genérico en ambas ramas; la auditoría
+        //    sí distingue.
         int? recoveryCodesRemaining = null;
         if (request.UseRecoveryCode)
         {
@@ -70,6 +98,7 @@ public sealed class MfaVerifyCommandHandler(
             {
                 await EmitAuditAsync(user.Id, user.Email,
                     AuditEventTypes.CentralUserMfaRecoveryCodeFailed, request, now, ct);
+                await contadorDeIntentos.RecordFailureAsync(AmbitoDeIntentos.Mfa, correo, ct);
                 return Result.Failure<LoginResult>(
                     "Identity.MfaInvalid", "Código MFA inválido.");
             }
@@ -85,6 +114,7 @@ public sealed class MfaVerifyCommandHandler(
             {
                 await EmitAuditAsync(user.Id, user.Email,
                     AuditEventTypes.CentralUserMfaFailed, request, now, ct);
+                await contadorDeIntentos.RecordFailureAsync(AmbitoDeIntentos.Mfa, correo, ct);
                 return Result.Failure<LoginResult>(
                     "Identity.MfaInvalid", "Código MFA inválido.");
             }
@@ -93,111 +123,33 @@ public sealed class MfaVerifyCommandHandler(
                 AuditEventTypes.CentralUserMfaSuccess, request, now, ct);
         }
 
-        // 3) Cargar membresías y decidir auto-select vs TenantSelection.
-        //    Misma lógica que LoginCommandHandler.IssueOperationalOrSelectorAsync —
-        //    duplicación controlada hasta que un tercer caller justifique extraer.
-        var active = await memberships.GetActiveMembershipsAsync(user.Id, ct);
+        // Segundo factor superado: el contador vuelve a cero. Va aquí y no al
+        // final para que valga igual por TOTP que por código de recuperación.
+        await contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Mfa, correo, ct);
 
-        if (active.Count == 0)
-        {
-            // Edge: el usuario perdió todas las membresías entre login y mfa/verify.
-            return Result.Success(new LoginResult(
-                Challenge: LoginChallenges.NoActiveMembership,
-                CentralUserId: user.Id,
-                Email: user.Email,
-                IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-                Message: "No tienes acceso a ninguna empresa. Solicita una invitación."));
-        }
+        // 3) Emitir la sesión.
+        //
+        // Este bloque tenía cien líneas y un comentario que decía «duplicación
+        // controlada hasta que un tercer caller justifique extraer». El ingreso
+        // con passkey es ese tercer llamador: verifica una firma en vez de un
+        // código, pero a partir de aquí tiene que pasar exactamente lo mismo.
+        // Copiarlo habría significado que arreglar un caso límite en un sitio
+        // dejara el otro roto — y el caso límite de aquí es la salida del maestro
+        // global, que ya se perdió una vez.
+        // Con QUÉ entró, que ya no es un detalle: una cooperativa puede aceptar el
+        // TOTP y no la passkey, o al revés.
+        //
+        // El código de recuperación sella `Ninguno` y no `Totp`. No es un tecnicismo:
+        // un código de recuperación demuestra identidad pero no demuestra que la
+        // persona tenga a mano ningún método concreto — es literalmente lo que se usa
+        // cuando NO se tiene. Sellarlo como TOTP dejaría entrar a una cooperativa
+        // sólo-passkey a quien acaba de decir que perdió su autenticador.
+        var metodoDemostrado = request.UseRecoveryCode
+            ? MetodosMfa.Ninguno
+            : MetodosMfa.Totp;
 
-        if (active.Count == 1)
-        {
-            return await IssueOperationalAsync(user, active[0], isAutoSelected: true, recoveryCodesRemaining, ct);
-        }
-
-        if (user.DefaultTenantId.HasValue)
-        {
-            var defaultMembership = active.FirstOrDefault(m => m.TenantId == user.DefaultTenantId.Value);
-            if (defaultMembership is not null)
-            {
-                return await IssueOperationalAsync(user, defaultMembership, isAutoSelected: true, recoveryCodesRemaining, ct);
-            }
-            // DefaultTenantId zombi → limpiar.
-            await centralIdentity.SetDefaultTenantAsync(user.Id, null, ct);
-        }
-
-        var challenge = jwtIssuer.IssueChallengeToken(
-            centralUserId: user.Id,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            purpose: CentralJwtPurposes.TenantSelect,
-            lifetime: ChallengeTokenLifetime);
-
-        return Result.Success(new LoginResult(
-            Challenge: LoginChallenges.TenantSelection,
-            CentralUserId: user.Id,
-            Email: user.Email,
-            IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            ChallengeToken: challenge.Jwt,
-            ChallengeTokenPurpose: CentralJwtPurposes.TenantSelect,
-            ExpiresInSeconds: (int)ChallengeTokenLifetime.TotalSeconds,
-            ActiveTenants: active
-                .Select(m => new ActiveTenantSummary(m.TenantId, m.TenantName, m.IsTenantAdmin))
-                .ToList(),
-            DefaultTenantPublicId: null,
-            AutoSelected: false,
-            RecoveryCodesRemaining: recoveryCodesRemaining));
-    }
-
-    private async Task<Result<LoginResult>> IssueOperationalAsync(
-        Domain.Entities.Admin.CentralUser user,
-        ActiveMembershipInfo membership,
-        bool isAutoSelected,
-        int? recoveryCodesRemaining,
-        CancellationToken ct)
-    {
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId: user.Id,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            activeTenantId: membership.TenantId,
-            tenantAdmin: membership.IsTenantAdmin,
-            mfaVerified: true);
-
-        var refresh = jwtIssuer.IssueRefreshToken();
-        var familyId = Guid.NewGuid();
-        await refreshStore.StoreAsync(
-            tokenHashHex: refresh.HashHex,
-            session: new CentralRefreshSession(
-                CentralUserId: user.Id,
-                ActiveTenantPublicId: membership.TenantId,
-                FamilyId: familyId,
-                IssuedAt: clock.UtcNow,
-                IpAddress: null,
-                UserAgent: null,
-                ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
-            ttl: RefreshTokenTtl,
-            ct: ct);
-
-        return Result.Success(new LoginResult(
-            Challenge: LoginChallenges.None,
-            CentralUserId: user.Id,
-            Email: user.Email,
-            IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            AccessToken: access.Jwt,
-            AccessTokenExpiresAt: access.ExpiresAt,
-            RefreshToken: refresh.Token,
-            RefreshTokenExpiresAt: refresh.ExpiresAt,
-            ExpiresInSeconds: (int)(access.ExpiresAt - clock.UtcNow).TotalSeconds,
-            AutoSelected: isAutoSelected,
-            ActiveTenantPublicId: membership.TenantId,
-            ActiveTenantName: membership.TenantName,
-            DefaultTenantPublicId: user.DefaultTenantId,
-            ActiveTenants: new[]
-            {
-                new ActiveTenantSummary(membership.TenantId, membership.TenantName, membership.IsTenantAdmin)
-            },
-            RecoveryCodesRemaining: recoveryCodesRemaining));
+        return await emisorDeSesion.EmitirAsync(
+            user, metodoDemostrado, recoveryCodesRemaining, ct);
     }
 
     private async Task EmitAuditAsync(

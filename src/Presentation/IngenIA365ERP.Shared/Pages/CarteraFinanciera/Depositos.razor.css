@@ -1,0 +1,40 @@
+/* Depósitos — lo que no cubre componentes.css. */
+
+/* Panel de superficie sobre el lienzo de la página. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-lg);
+    background: var(--superficie-1);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+}
+
+.panel > h4 {
+    margin: 0;
+}
+
+/* Anchos mínimos de la fila de captura: sin ellos el selector de cuenta, que
+   lleva el número, la línea y el saldo en un solo renglón, se corta. */
+.campo-busqueda   { flex: 1; min-width: 200px; }
+.campo-cuenta     { min-width: 220px; }
+.campo-monto      { min-width: 150px; }
+.campo-referencia { min-width: 200px; }
+
+.asociado {
+    margin: 0;
+    color: var(--exito-texto);
+}
+
+.sin-cuentas {
+    margin: 0;
+    color: var(--alerta-texto);
+}
+
+/* Pastilla de tipo de movimiento; la geometría la pone .badge global. */
+.badge-deposito {
+    background: var(--exito);
+    color: var(--acento-texto);
+    border-color: transparent;
+}

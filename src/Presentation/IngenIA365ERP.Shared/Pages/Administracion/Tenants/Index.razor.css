@@ -1,0 +1,16 @@
+/* La columna de estado usa `.badge ok` / `.badge warn`. `.badge` sí existe en
+   componentes.css, pero los modificadores no estaban definidos en ningún sitio:
+   "Activa", "Suspendida" e "Inactiva" salían las tres del mismo gris, que es
+   justo la distinción que esta columna existe para hacer. */
+
+.badge.ok {
+    background: var(--exito-fondo);
+    color: var(--exito-texto);
+    border-color: var(--exito);
+}
+
+.badge.warn {
+    background: var(--alerta-fondo);
+    color: var(--alerta-texto);
+    border-color: var(--alerta);
+}

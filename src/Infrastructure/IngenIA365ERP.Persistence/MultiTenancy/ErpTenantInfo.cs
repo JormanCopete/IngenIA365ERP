@@ -11,6 +11,21 @@ public class ErpTenantInfo : ITenantInfo
     public string? Name { get; set; }
     public string? ConnectionString { get; set; }
     public string SchemaName { get; set; } = "dbo";
+
+    /// <summary>
+    /// Base física de la cooperativa (Principio IV). Puede venir null en filas
+    /// anteriores al modelo de base por cooperativa; entonces manda SchemaName.
+    /// </summary>
+    public string? DatabaseName { get; set; }
+
+    /// <summary>
+    /// "Provisioning" | "Ready" | "Failed" (ver EstadoDeAprovisionamiento).
+    /// Una cooperativa registrada no es todavía una cooperativa usable: entre el
+    /// alta y el final del aprovisionamiento su base existe sin tablas, y un
+    /// trabajo de fondo que la recorra revienta con «relation does not exist».
+    /// </summary>
+    public string? ProvisioningState { get; set; }
+
     public string LicenseType { get; set; } = "Basic";
     public bool IsActive { get; set; } = true;
     public int MaxUsers { get; set; } = 10;

@@ -27,6 +27,15 @@ public class PayPeriodConfiguration : IEntityTypeConfiguration<PayPeriod>
         builder.Property(e => e.AdvanceLiquidation).HasMaxLength(1).IsRequired();
         builder.Property(e => e.AdvanceCrossing).HasMaxLength(1).IsRequired();
 
+        // Feature 005: el periodo pertenece a un plan de nomina (PlanId legado es el
+        // numero de planilla y no se reinterpreta). El estado es enum almacenado como int.
+        builder.Property(e => e.ApprovedBy).HasMaxLength(100);
+        builder.HasOne(e => e.PayrollPlan)
+            .WithMany()
+            .HasForeignKey(e => e.PayrollPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.PayrollPlanId, e.StartDate }).HasDatabaseName("IX_PAY_PayPeriods_Plan_StartDate");
+
         builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

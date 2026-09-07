@@ -7,10 +7,12 @@
 <PageTitle>Roles del usuario — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>Roles del usuario</h1>
+    <div class="page-header">
+        <h1>Roles del usuario</h1>
+    </div>
     <p><code>@PublicId</code></p>
 
-    @if (_error is not null) { <p class="error">@_error</p> }
+    @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
 
     <h2>Roles asignados</h2>
     @if (_assigned.Count == 0) { <p>Ninguno.</p> }
@@ -28,17 +30,21 @@
     }
 
     <h2>Asignar rol</h2>
-    <select @bind="_selectedRolePublicId">
-        <option value="">— elegir rol —</option>
-        @foreach (var r in _availableRoles)
-        {
-            <option value="@r.PublicId">@r.Code — @r.Name</option>
-        }
-    </select>
-    <button @onclick="AssignAsync" disabled="@(string.IsNullOrEmpty(_selectedRolePublicId))">Asignar</button>
+    <div class="acciones">
+        <select @bind="_selectedRolePublicId">
+            <option value="">— elegir rol —</option>
+            @foreach (var r in _availableRoles)
+            {
+                <option value="@r.PublicId">@r.Code — @r.Name</option>
+            }
+        </select>
+        <button class="primary" @onclick="AssignAsync" disabled="@(string.IsNullOrEmpty(_selectedRolePublicId))">Asignar</button>
+    </div>
 
     <hr />
-    <button @onclick="Back">Volver</button>
+    <div class="acciones">
+        <button @onclick="Back">Volver</button>
+    </div>
 </div>
 
 @code {

@@ -36,12 +36,56 @@ public static class BuiltInRolesSeeder
             "Consultas sobre todos los módulos. No puede crear / editar."),
     ];
 
+    /// <summary>
+    /// Permisos SaaS-globales: operan SOBRE las cooperativas, no dentro de una.
+    /// Ningún rol los recibe, ni siquiera CompanyAdmin. Sólo el administrador
+    /// maestro, por el atajo de <c>PermissionAuthorizationFilter</c>.
+    ///
+    /// <para>
+    /// Sin esta lista, los globs de abajo los reparten solos: <c>"*"</c> se los da
+    /// enteros a CompanyAdmin —incluido <c>Admin.Tenants.Suspend</c>— y
+    /// <c>"*.View"</c> le da <c>Admin.Tenants.View</c> a ReadOnly, Operator y
+    /// Auditor. Como <c>ProvisionTenantSchemaCommandHandler</c> clona estos
+    /// vínculos a cada cooperativa, y <c>/api/saas/tenants</c> está exento de la
+    /// resolución de tenant y no filtra por cooperativa, el administrador de la
+    /// cooperativa A podría listar y suspender la B. Es fuga entre cooperativas
+    /// contra el Principio IV.
+    /// </para>
+    ///
+    /// <para>
+    /// Hoy está dormido porque el token central no lleva claims <c>perm</c> y la
+    /// comprobación nunca da verdadera. Deja de estarlo en cuanto los permisos se
+    /// resuelvan de verdad — por eso se cierra ANTES de tocar el filtro.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Admin.Branches NO va aquí</b>: pese al prefijo, las sucursales son de
+    /// la cooperativa.
+    /// </para>
+    /// </summary>
+    private static readonly string[] PermisosSaasGlobales =
+    [
+        "Admin.Tenants.View",
+        "Admin.Tenants.Create",
+        "Admin.Tenants.Update",
+        "Admin.Tenants.Suspend",
+        "Admin.Tenants.Activate",
+        "Saas.AuditLog.Verify",
+    ];
+
+    internal static bool EsSaasGlobal(string codigo) =>
+        PermisosSaasGlobales.Contains(codigo, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Patrón glob de permisos por rol.</summary>
-    private static readonly Dictionary<string, string[]> PermissionPatterns = new()
+    internal static readonly Dictionary<string, string[]> PermissionPatterns = new()
     {
         ["CompanyAdmin"] = ["*"],                                   // todo dentro del tenant
-        ["Auditor"]      = ["*.View", "AuditLog.*"],                // read-only + audit completo
-        ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn"],
+        // Nomina (feature 005): el auditor exporta el detalle con explicaciones; el
+        // operador registra novedades y calcula, pero NO aprueba, ni marca pagos, ni
+        // reversa (segregacion de funciones, FR-020).
+        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export"],
+        ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn",
+                            "Payroll.Novelties.*", "Payroll.Runs.Calculate"],
         ["ReadOnly"]     = ["*.View"],
     };
 
@@ -50,14 +94,26 @@ public static class BuiltInRolesSeeder
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Role>>();
+        await SeedAsync(db, logger);
+    }
 
+    /// <summary>
+    /// Siembra sobre el contexto que se le pase. Ver la nota de la sobrecarga
+    /// equivalente en <see cref="DomainPermissionCatalogSeeder"/>: los roles tienen
+    /// que existir dentro del esquema de cada cooperativa, no solo en dbo.
+    /// </summary>
+    public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
+    {
         try
         {
-            // El seed corre con TenantId = null (rol SaaS-global "plantilla").
-            // ProvisionTenantSchemaCommand (T073) replicará la plantilla a cada
-            // tenant nuevo cambiando TenantId.
+            // Los roles se siembran con TenantId = null, y ahora eso es lo correcto y
+            // no un provisional: con aislamiento por esquema, dentro del esquema de
+            // una cooperativa todos los roles son suyos y la columna no discrimina
+            // nada. Ya no hay plantillas que replicar — este seeder corre una vez
+            // por esquema.
             await SeedRolesAsync(db, logger);
             await SeedRolePermissionsAsync(db, logger);
+            await PurgarPermisosSaasGlobalesAsync(db, logger);
         }
         catch (Exception ex) when (IsSchemaIssue(ex))
         {
@@ -132,6 +188,72 @@ public static class BuiltInRolesSeeder
         }
     }
 
+    /// <summary>
+    /// Retira los vínculos rol↔permiso SaaS-global que el glob repartió antes de
+    /// que existiera <see cref="PermisosSaasGlobales"/>.
+    ///
+    /// <para>
+    /// Dejar de insertarlos no basta: el sembrado es sólo-inserción, así que las
+    /// filas ya creadas sobreviven a todos los arranques. Y no están sólo en las
+    /// plantillas — <c>ProvisionTenantSchemaCommandHandler</c> ya las clonó a
+    /// cada cooperativa aprovisionada. Por eso esto barre TODOS los roles, no
+    /// sólo los de <c>TenantId == null</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// Idempotente: cuando no queda ninguno, no toca la base ni escribe log.
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// Qué códigos le tocan a un rol built-in, dado el catálogo. Es el reparto
+    /// entero, sin base de datos de por medio, para poder fijarlo con pruebas:
+    /// el glob concede, y <see cref="PermisosSaasGlobales"/> retiene.
+    /// </summary>
+    internal static HashSet<string> CodigosParaRol(
+        string codigoRol, IEnumerable<string> codigosCatalogo)
+    {
+        if (!PermissionPatterns.TryGetValue(codigoRol, out var patrones))
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return codigosCatalogo
+            .Where(c => patrones.Any(pat => MatchesGlob(pat, c)))
+            .Where(c => !EsSaasGlobal(c))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static async Task PurgarPermisosSaasGlobalesAsync(
+        IApplicationDbContext db, ILogger logger)
+    {
+        var globales = (await db.Permissions
+                .IgnoreQueryFilters()
+                .Select(p => new { p.Id, p.Resource, p.Action })
+                .ToListAsync())
+            .Where(p => EsSaasGlobal($"{p.Resource}.{p.Action}"))
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        if (globales.Count == 0) return;
+
+        var sobrantes = await db.RolePermissions
+            .IgnoreQueryFilters()
+            .Where(rp => globales.Contains(rp.PermissionId))
+            .ToListAsync();
+
+        if (sobrantes.Count == 0) return;
+
+        db.RolePermissions.RemoveRange(sobrantes);
+        await db.SaveChangesAsync(default);
+
+        // Warning y no Information a propósito: si esto aparece en un arranque
+        // que no sea el primero tras el cambio, alguien volvió a repartirlos.
+        logger.LogWarning(
+            "Retirados {Cantidad} vínculo(s) rol↔permiso SaaS-global. Esos permisos " +
+            "operan sobre las cooperativas y sólo los ejerce el administrador maestro.",
+            sobrantes.Count);
+    }
+
     private static async Task SeedRolePermissionsAsync(IApplicationDbContext db, ILogger logger)
     {
         var roles = await db.Roles
@@ -161,13 +283,13 @@ public static class BuiltInRolesSeeder
         var inserted = 0;
         foreach (var role in roles)
         {
-            if (!PermissionPatterns.TryGetValue(role.Code, out var patterns))
-            {
-                continue;
-            }
+
+            var concedidos = CodigosParaRol(
+                role.Code,
+                permissions.Select(p => $"{p.Resource}.{p.Action}"));
 
             var matching = permissions
-                .Where(p => patterns.Any(pat => MatchesGlob(pat, $"{p.Resource}.{p.Action}")))
+                .Where(p => concedidos.Contains($"{p.Resource}.{p.Action}"))
                 .ToList();
 
             foreach (var perm in matching)
@@ -200,7 +322,7 @@ public static class BuiltInRolesSeeder
     /// Ejemplos: <c>"*"</c> match todo; <c>"*.View"</c> match cualquier recurso
     /// con action View; <c>"Admin.*"</c> match todo bajo Admin.
     /// </summary>
-    private static bool MatchesGlob(string pattern, string value)
+    internal static bool MatchesGlob(string pattern, string value)
     {
         if (pattern == "*") return true;
 

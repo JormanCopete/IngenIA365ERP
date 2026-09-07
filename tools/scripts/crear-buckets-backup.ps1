@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # crear-buckets-backup.ps1 - Crea y configura en AWS el bucket de respaldos del
 # ERP y, si hay permisos, el usuario IAM con su llave instalada en los clusteres.
 #

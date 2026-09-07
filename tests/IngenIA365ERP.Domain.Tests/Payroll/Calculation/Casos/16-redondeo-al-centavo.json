@@ -1,0 +1,23 @@
+{
+  "nombre": "Política de redondeo al centavo con salario de 1.999.999",
+  "descripcion": "Con la política Centavo cada línea se redondea a dos decimales: salud y pensión quedan en 79.999,96; el neto 2.089.094,08 coincide con la suma de líneas y no hace falta ajuste.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Pilar Duque", "clase": "Standard", "ingreso": "2023-05-02",
+    "salarios": [ { "desde": "2023-05-02", "mensual": 1999999 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Centavo", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1999999.00, "AUX_TRANSPORTE": 249095.00,
+      "SALUD_EMP": 79999.96, "PENSION_EMP": 79999.96, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 169999.92, "PENSION_EMPLEADOR": 239999.88, "ARL": 10439.99, "SENA": 39999.98, "ICBF": 59999.97, "CAJA": 79999.96,
+      "PROV_CESANTIAS": 187349.53, "PROV_INT_CESANTIAS": 22490.94, "PROV_PRIMA": 187349.53, "PROV_VACACIONES": 83399.96
+    },
+    "totales": { "devengos": 2249094.00, "deducciones": 159999.92, "aportesEmpleador": 600439.70, "provisiones": 480589.96, "neto": 2089094.08, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

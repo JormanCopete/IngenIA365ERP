@@ -6,38 +6,40 @@
 
 <PageTitle>Cuentas de Producto - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Cuentas de Producto</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas de Producto</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="ProductAccountItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="ProductGroupId" HeaderText="Grupo" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="TransactionTypeId" HeaderText="Tipo Movto" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="WarehouseId" HeaderText="Bodega" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="LocationId" HeaderText="Ubicacion" Width="100" TextAlign="TextAlign.Right" />
-        <GridColumn Field="VatAccountCode" HeaderText="Cuenta IVA" Width="130" />
-        <GridColumn Field="DiscountAccountCode" HeaderText="Cuenta Dcto" Width="130" />
-        <GridColumn Field="TaxableSalesAccountCode" HeaderText="Ventas Gravadas" Width="140" />
-        <GridColumn Field="NetAccountCode" HeaderText="Cuenta Neto" Width="130" />
-        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as ProductAccountItem;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+    <SfGrid @ref="_grid" TValue="ProductAccountItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="ProductGroupId" HeaderText="Grupo" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="TransactionTypeId" HeaderText="Tipo Movto" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="WarehouseId" HeaderText="Bodega" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="LocationId" HeaderText="Ubicacion" Width="100" TextAlign="TextAlign.Right" />
+            <GridColumn Field="VatAccountCode" HeaderText="Cuenta IVA" Width="130" />
+            <GridColumn Field="DiscountAccountCode" HeaderText="Cuenta Dcto" Width="130" />
+            <GridColumn Field="TaxableSalesAccountCode" HeaderText="Ventas Gravadas" Width="140" />
+            <GridColumn Field="NetAccountCode" HeaderText="Cuenta Neto" Width="130" />
+            <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as ProductAccountItem;
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => OpenEdit(item!))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => OpenDelete(item!))" />
+                    }
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <div>
                     <label>Grupo de Producto *</label>
                     <SfNumericTextBox TValue="int" @bind-Value="_model.ProductGroupId" Placeholder="Id grupo" Min="0" />

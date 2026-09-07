@@ -1,0 +1,23 @@
+{
+  "nombre": "Período quincenal (1 al 15) con salario de 3.000.000",
+  "descripcion": "Plan quincenal: 15 días comerciales. Salario 1.500.000, auxilio 249.095 × 15/30 = 124.547,50 → 124.548. Las provisiones se liquidan sobre la base prestacional de la quincena (1.624.548): prima 8,33 % = 135.324,85 → 135.325. Los topes en UVT de la retención se proporcionan a los 15 días.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-15", "periodicidad": "Biweekly" },
+  "empleado": {
+    "nombre": "Úrsula Bernal", "clase": "Standard", "ingreso": "2021-06-01",
+    "salarios": [ { "desde": "2021-06-01", "mensual": 3000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1500000, "AUX_TRANSPORTE": 124548,
+      "SALUD_EMP": 60000, "PENSION_EMP": 60000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 127500, "PENSION_EMPLEADOR": 180000, "ARL": 7830, "SENA": 30000, "ICBF": 45000, "CAJA": 60000,
+      "PROV_CESANTIAS": 135325, "PROV_INT_CESANTIAS": 16245, "PROV_PRIMA": 135325, "PROV_VACACIONES": 62550
+    },
+    "totales": { "devengos": 1624548, "deducciones": 120000, "aportesEmpleador": 450330, "provisiones": 349445, "neto": 1504548, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 15
+  }
+}

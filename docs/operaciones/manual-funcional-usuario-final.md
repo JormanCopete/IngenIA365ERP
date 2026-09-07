@@ -76,7 +76,7 @@ Eres el responsable técnico del producto IngenIA365ERP. Tu trabajo es:
 El administrador de tu cooperativa (o el master admin) ingresó tu correo en
 el sistema. Vas a recibir un mensaje como este:
 
-> **De:** no-reply@ingenia365.com
+> **De:** No Responder IngenIA365 ERP — noresponder.ingenia365erp@notifica365.com
 > **Asunto:** Invitación a Coop. Solidaria — IngenIA365ERP
 >
 > Hola Ana,
@@ -700,8 +700,9 @@ Contactá al admin de la cooperativa donde deberías estar.
 
 - Revisá la carpeta de **spam o promociones**.
 - Verificá con quien te invitó que escribió bien tu correo.
-- El correo viene de `no-reply@ingenia365.com`. Marcalo como contacto seguro
-  para que no caiga en spam.
+- El correo viene de `noresponder.ingenia365erp@notifica365.com` (aparece como
+  “No Responder IngenIA365 ERP”). Marcalo como contacto seguro para que no
+  caiga en spam.
 - Si pasaron más de 5 minutos y nada, pedí que reenvíen.
 
 ### ❌ "Acabo de cambiar mi contraseña pero me sigue pidiendo la vieja en otra app"

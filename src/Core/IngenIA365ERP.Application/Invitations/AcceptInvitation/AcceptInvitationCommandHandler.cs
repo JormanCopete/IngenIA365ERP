@@ -1,11 +1,12 @@
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Services;
+using IngenIA365ERP.Application.Identity.Auth.Common;
 using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -53,6 +54,7 @@ public sealed class AcceptInvitationCommandHandler(
     ISecureTokenGenerator tokens,
     IDateTimeService clock,
     ICurrentCentralUserContext currentUser,
+    IMfaDirectory credenciales,
     IAuditAppendOnlyWriter auditWriter,
     ILogger<AcceptInvitationCommandHandler> logger)
     : IRequestHandler<AcceptInvitationCommand, Result<AcceptInvitationResult>>
@@ -158,7 +160,13 @@ public sealed class AcceptInvitationCommandHandler(
         // 7) Provisionar SEC_Users en el tenant (asunción multi-tenancy, ver
         //    XML doc del handler).
         var provisioning = await tenantUserProvisioner.EnsureExistsAsync(
-            centralUserId, invitation.Email, tenant.PublicId, ct);
+            centralUserId,
+            invitation.Email,
+            tenant.PublicId,
+            tenant.DatabaseName ?? tenant.SchemaName,
+            tenant.ConnectionString,
+            invitation.InviteAsTenantAdmin,
+            ct);
         if (provisioning.IsFailure)
         {
             return Result.Failure<AcceptInvitationResult>(provisioning.Error.Code, provisioning.Error.Message);
@@ -200,13 +208,36 @@ public sealed class AcceptInvitationCommandHandler(
         string? challengePurpose = null;
         if (!request.UseActiveSession)
         {
-            if (user.TwoFactorEnabled)
+            // La politica se lee ANTES de decidir, y no dentro de un `else if`.
+            // Estaba al reves: se preguntaba primero si la persona tenia segundo
+            // factor, asi que quien lo tenia nunca llegaba a mirar la politica y
+            // recibia «verifica» aunque su metodo no valiera en esta cooperativa.
+            // Verificaba bien, y el rechazo llegaba despues — sin ningun token con
+            // el que arreglarlo.
+            var politica = await db.TenantMfaPolicies.AsNoTracking()
+                .Where(p => p.TenantId == tenant.PublicId)
+                .Select(p => new { p.IsRequired, p.AllowedMethodsMask })
+                .FirstOrDefaultAsync(ct);
+
+            var exige = politica?.IsRequired ?? false;
+            var aceptados = politica?.AllowedMethodsMask ?? ConversionDeMetodosMfa.Todos;
+
+            var metodosQueTiene = user.TwoFactorEnabled
+                ? await credenciales.MetodosActivosAsync(centralUserId, ct)
+                : MetodosMfa.Ninguno;
+
+            var tieneAlgunoQueSirve =
+                user.TwoFactorEnabled
+                && (!exige
+                    || !GuardiaDeMetodos.Restringe(aceptados)
+                    || (metodosQueTiene & aceptados) != MetodosMfa.Ninguno);
+
+            if (tieneAlgunoQueSirve)
             {
                 mfaChallenge = "MfaRequired";
                 challengePurpose = CentralJwtPurposes.MfaVerify;
             }
-            else if (await db.TenantMfaPolicies.AsNoTracking()
-                         .AnyAsync(p => p.TenantId == tenant.PublicId && p.IsRequired, ct))
+            else if (exige)
             {
                 mfaChallenge = "MfaEnrollmentRequired";
                 challengePurpose = CentralJwtPurposes.MfaEnroll;
@@ -225,7 +256,10 @@ public sealed class AcceptInvitationCommandHandler(
                 isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
                 activeTenantId: tenant.PublicId,
                 tenantAdmin: membership.IsTenantAdmin,
-                mfaVerified: false);
+                mfaVerified: false,
+                // No verifico nada en este flujo: si tuviera segundo factor, no
+                // estaria en esta rama.
+                metodoMfa: MetodosMfa.Ninguno);
 
             refresh = jwtIssuer.IssueRefreshToken();
 
@@ -241,13 +275,15 @@ public sealed class AcceptInvitationCommandHandler(
                     IpAddress: null,
                     UserAgent: null,
                     ReplacedByTokenHashHex: null,
-                    SecurityStamp: user.SecurityStamp),
+                    SecurityStamp: user.SecurityStamp,
+                    MetodoMfa: MetodosMfa.Ninguno),
                 RefreshTokenTtl, ct);
         }
         else
         {
             challengeToken = jwtIssuer.IssueChallengeToken(
-                centralUserId, user.Email, user.IsGlobalMasterAdmin, challengePurpose!, null);
+                centralUserId, user.Email, user.IsGlobalMasterAdmin, challengePurpose!,
+                MetodosMfa.Ninguno, null);
         }
 
         // 10) Audit events (FR-024) — además del AuditBehavior automático que

@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Security.Auth.Common;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -12,22 +13,23 @@ public sealed class RequestMfaResetCommandHandler : IRequestHandler<RequestMfaRe
     private const int ExpiryHours = 24;
 
     private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentCentralUserContext _usuarioCentral;
     private readonly IDateTimeService _clock;
 
     public RequestMfaResetCommandHandler(
         IApplicationDbContext db,
-        ICurrentUserService currentUser,
+        ICurrentCentralUserContext usuarioCentral,
         IDateTimeService clock)
     {
         _db = db;
-        _currentUser = currentUser;
+        _usuarioCentral = usuarioCentral;
         _clock = clock;
     }
 
     public async Task<Result<MfaResetRequestResult>> Handle(RequestMfaResetCommand request, CancellationToken ct)
     {
-        if (_currentUser.UserId is null)
+        var quienSolicita = await QuienLlamaEnLaCooperativa.IdAsync(_db, _usuarioCentral, ct);
+        if (quienSolicita is null)
         {
             return Result.Failure<MfaResetRequestResult>("Generic.Unauthorized", "No autenticado.");
         }
@@ -43,7 +45,7 @@ public sealed class RequestMfaResetCommandHandler : IRequestHandler<RequestMfaRe
         var entry = new MfaResetRequest
         {
             UserId = target.Id,
-            RequestedBy = _currentUser.UserId.Value,
+            RequestedBy = quienSolicita.Value,
             RequestedAt = now,
             Reason = request.Reason,
             ExpiresAt = now.AddHours(ExpiryHours),

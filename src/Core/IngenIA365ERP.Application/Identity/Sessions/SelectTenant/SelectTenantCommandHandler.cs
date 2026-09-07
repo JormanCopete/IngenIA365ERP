@@ -1,10 +1,13 @@
 using IngenIA365ERP.Application.Common.Audit;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
+
+using IngenIA365ERP.Application.Identity.Auth.Common;
 
 namespace IngenIA365ERP.Application.Identity.Sessions.SelectTenant;
 
@@ -62,6 +65,20 @@ public sealed class SelectTenantCommandHandler(
                 "No tienes membresía activa con la empresa indicada.");
         }
 
+        // Esta puerta NO comprobaba ninguna politica: solo membresia activa. Sin
+        // el filtro aqui, la comprobacion del auto-select se rodea simplemente
+        // eligiendo la cooperativa a mano desde el selector.
+        var metodoDemostrado = currentUser.MetodoMfa;
+        if (GuardiaDeMetodos.Evaluar(
+                chosen.IsMfaRequiredByTenant, chosen.MetodosAceptados, metodoDemostrado)
+            != GuardiaDeMetodos.Veredicto.Admite)
+        {
+            return Result.Failure<SelectTenantResult>(
+                "Tenant.MfaMethodNotAccepted",
+                $"'{chosen.TenantName}' no acepta el metodo con el que entraste. " +
+                $"Metodos que acepta: {string.Join(", ", ConversionDeMetodosMfa.ALiterales(chosen.MetodosAceptados))}.");
+        }
+
         var now = clock.UtcNow;
 
         var access = jwtIssuer.IssueAccessToken(
@@ -70,7 +87,8 @@ public sealed class SelectTenantCommandHandler(
             isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
             activeTenantId: chosen.TenantId,
             tenantAdmin: chosen.IsTenantAdmin,
-            mfaVerified: user.TwoFactorEnabled);
+            mfaVerified: user.TwoFactorEnabled,
+            metodoMfa: metodoDemostrado);
 
         var refresh = jwtIssuer.IssueRefreshToken();
         var familyId = Guid.NewGuid();
@@ -85,7 +103,8 @@ public sealed class SelectTenantCommandHandler(
                 IpAddress: null,
                 UserAgent: null,
                 ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
+                SecurityStamp: user.SecurityStamp,
+                MetodoMfa: metodoDemostrado),
             ttl: RefreshTokenTtl,
             ct: ct);
 

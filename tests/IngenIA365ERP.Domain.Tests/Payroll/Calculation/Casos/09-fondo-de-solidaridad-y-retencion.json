@@ -1,0 +1,23 @@
+{
+  "nombre": "Salario de 8.000.000: fondo de solidaridad por tabla y retención en la fuente",
+  "descripcion": "IBC de 4,57 SMMLV → tramo 4–16 del FSP_TABLA al 1 % sobre toda la base (80.000). Sin auxilio de transporte. Retención procedimiento 1: base depurada 5.460.000 = 104,25 UVT → tramo 95–150 al 19 % marginal = 1,76 UVT = 92.047, aproximada al múltiplo de mil: 92.000. ARL clase III.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Inés Prada", "clase": "Standard", "ingreso": "2021-01-18",
+    "salarios": [ { "desde": "2021-01-18", "mensual": 8000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 3, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 8000000,
+      "SALUD_EMP": 320000, "PENSION_EMP": 320000, "FSP": 80000, "RETEFTE": 92000,
+      "SALUD_EMPLEADOR": 680000, "PENSION_EMPLEADOR": 960000, "ARL": 194880, "SENA": 160000, "ICBF": 240000, "CAJA": 320000,
+      "PROV_CESANTIAS": 666400, "PROV_INT_CESANTIAS": 80000, "PROV_PRIMA": 666400, "PROV_VACACIONES": 333600
+    },
+    "totales": { "devengos": 8000000, "deducciones": 812000, "aportesEmpleador": 2554880, "provisiones": 1746400, "neto": 7188000, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30
+  }
+}

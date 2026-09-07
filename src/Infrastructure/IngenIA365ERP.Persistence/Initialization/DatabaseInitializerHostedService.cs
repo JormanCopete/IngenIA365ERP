@@ -66,14 +66,7 @@ public sealed class DatabaseInitializerHostedService(
                 await MigrateAsync("admin", adminDb, cancellationToken);
                 await MigrateAsync("operativa", appDb, cancellationToken);
 
-                var tenantSchemas = scope.ServiceProvider.GetRequiredService<TenantSchemaService>();
-                foreach (var tenant in await tenantSchemas.ListTenantsAsync())
-                {
-                    if (string.IsNullOrWhiteSpace(tenant.Schema) ||
-                        tenant.Schema.Equals("dbo", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    await tenantSchemas.MigrateTenantSchemaAsync(tenant.Schema!, cancellationToken);
-                }
+                await PonerAlDiaLasCooperativasAsync(scope, adminDb, cancellationToken);
             }
 
             // 4) Seeding de arranque (US3): opcional hasta que el orquestador exista.
@@ -158,11 +151,97 @@ public sealed class DatabaseInitializerHostedService(
     /// <summary>Cadena apuntada a la base de sistema (master / postgres) para lock y espera.</summary>
     internal static string ToServerLevelConnectionString(string connectionString, DatabaseProvider provider)
     {
-        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
-        var dbKey = builder.ContainsKey("Database") ? "Database"
-                  : builder.ContainsKey("Initial Catalog") ? "Initial Catalog" : null;
-        if (dbKey is not null)
-            builder[dbKey] = provider == DatabaseProvider.PostgreSql ? "postgres" : "master";
-        return builder.ConnectionString;
+        return Providers.ConnectionStringTargeting.ANivelDeServidor(connectionString, provider);
+    }
+
+    /// <summary>
+    /// Lleva la base de cada cooperativa al nivel actual, y le asigna ranura de
+    /// caché si le falta.
+    ///
+    /// <para>
+    /// <b>Antes migraba ESQUEMAS, y eso se volvió destructivo en silencio.</b> Con
+    /// base por cooperativa, <c>SchemaName</c> pasó a valer el nombre de la base
+    /// —<c>coop_alfa</c>—, así que este bucle creaba un esquema con ese nombre
+    /// <i>dentro de la base plantilla</i>: 277 tablas por cooperativa, en cada
+    /// arranque, que nadie lee. Medido: dos cooperativas dejaron 554 tablas de
+    /// basura. No filtraba datos, pero dejaba la plantilla con una copia por
+    /// cooperativa y hacía creer a quien la mirara que el modelo seguía siendo por
+    /// esquema.
+    /// </para>
+    ///
+    /// <para>
+    /// Y era la misma asimetría de siempre: el arranque hacía una cosa y el
+    /// aprovisionamiento otra para la misma cooperativa. Ahora los dos caminos
+    /// llaman al mismo aprovisionador, que es idempotente.
+    /// </para>
+    /// </summary>
+    private async Task PonerAlDiaLasCooperativasAsync(
+        IServiceScope scope, DbContext.AdminDbContext adminDb, CancellationToken ct)
+    {
+        var aprovisionador = scope.ServiceProvider
+            .GetService<Application.Common.Interfaces.ITenantDatabaseProvisioner>();
+        var ranuras = scope.ServiceProvider
+            .GetService<Application.Common.Interfaces.ITenantCacheSlotAllocator>();
+        var auditoria = scope.ServiceProvider
+            .GetService<Application.Common.Interfaces.IAuditStoreProvisioner>();
+
+        if (aprovisionador is null) return;
+
+        var cooperativas = await adminDb.Tenants
+            .Where(t => t.IsActive)
+            .Select(t => new { t.Id, t.PublicId, t.Name, t.DatabaseName, t.SchemaName,
+                               t.ConnectionString, t.Subdomain, t.RedisDbIndex, t.AuditDatabaseName })
+            .ToListAsync(ct);
+
+        foreach (var c in cooperativas)
+        {
+            var baseDeDatos = c.DatabaseName ?? c.SchemaName;
+            if (string.IsNullOrWhiteSpace(baseDeDatos) ||
+                baseDeDatos.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                await aprovisionador.AprovisionarAsync(
+                    baseDeDatos, c.Subdomain ?? baseDeDatos, c.ConnectionString, ct);
+
+                // Reparación: una cooperativa registrada antes de que existiera el
+                // reparto de ranuras se queda sin ella, y su caché cae al espacio
+                // global. No es fuga —la clave lleva la cooperativa— pero es
+                // inconsistente, y sin esto haría falta tocar la fila a mano.
+                if (c.RedisDbIndex is null && ranuras is not null)
+                {
+                    var fila = await adminDb.Tenants.FirstAsync(t => t.Id == c.Id, ct);
+                    fila.RedisDbIndex = await ranuras.ReservarAsync(c.Name, ct);
+                    await adminDb.SaveChangesAsync(ct);
+                    logger.LogInformation(
+                        "Ranura de caché {Ranura} asignada a {Cooperativa} (le faltaba).",
+                        fila.RedisDbIndex, c.Name);
+                }
+
+                // Misma reparación para la auditoría: una cooperativa registrada
+                // antes de que existiera el aislamiento por base no tiene la suya, y
+                // MongoDB se la crearía sola al primer evento, sin índices ni TTL.
+                if (c.AuditDatabaseName is null && auditoria is not null)
+                {
+                    var fila = await adminDb.Tenants.FirstAsync(t => t.Id == c.Id, ct);
+                    fila.AuditDatabaseName = await auditoria.AprovisionarAsync(
+                        c.PublicId.ToString("N"), ct);
+                    await adminDb.SaveChangesAsync(ct);
+                    logger.LogInformation(
+                        "Base de auditoría {Base} creada para {Cooperativa} (le faltaba).",
+                        fila.AuditDatabaseName, c.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Una cooperativa rota NO impide arrancar ni afecta a las demas.
+                logger.LogError(ex,
+                    "No se pudo poner al día la cooperativa {Cooperativa} (base {Base}). " +
+                    "El resto sigue.", c.Name, baseDeDatos);
+            }
+        }
     }
 }

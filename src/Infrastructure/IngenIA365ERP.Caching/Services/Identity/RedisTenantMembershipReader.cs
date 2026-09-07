@@ -26,7 +26,23 @@ namespace IngenIA365ERP.Caching.Services.Identity;
 /// </summary>
 internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
 {
-    public const string KeyPrefix = "memberships:";
+    /// <summary>
+    /// El <c>v2</c> no es decorativo. <see cref="ActiveMembershipInfo"/> se
+    /// serializa entero bajo esta clave, y al añadirle los métodos aceptados las
+    /// entradas ya calientes —escritas por el binario anterior— no traen ese campo.
+    /// Sin subir el prefijo, durante los 60 segundos siguientes al despliegue cada
+    /// cooperativa se leería con el valor por defecto del campo ausente,
+    /// simultáneamente en las siete puertas. Y se cura solo, que es lo peor que le
+    /// puede pasar a un síntoma: para cuando alguien mira, ya no está.
+    ///
+    /// <para>
+    /// Va por <c>v3</c> desde que el record lleva además la recuperación por
+    /// correo. Se sube el prefijo en CADA campo que se le añade, sin excepción: el
+    /// coste es un minuto de lecturas frías y la alternativa es un fallo que se
+    /// cura solo.
+    /// </para>
+    /// </summary>
+    public const string KeyPrefix = "memberships:v3:";
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
 
     private readonly IConnectionMultiplexer _redis;
@@ -62,7 +78,18 @@ internal sealed class RedisTenantMembershipReader : ITenantMembershipReader
                 m.TenantId,
                 t.Name,
                 m.IsTenantAdmin,
-                p != null && p.IsRequired))
+                p != null && p.IsRequired,
+                // Sin fila de política no hay restricción: acepta todo. Es el mismo
+                // criterio que la línea de arriba usa para IsRequired, y tiene que
+                // seguir siéndolo — «no hay política» no puede significar «exige» en
+                // una columna y «no acepta nada» en la otra.
+                p != null ? p.AllowedMethodsMask : ConversionDeMetodosMfa.Todos,
+                // Sin fila de política, la recuperación por correo está APAGADA.
+                // Es el criterio opuesto al de los métodos, y a propósito: allí «no
+                // hay política» significa «no restringe», y aquí significaría
+                // «habilita una vía que nadie encendió».
+                p != null && p.AllowEmailRecovery,
+                p != null ? p.EmailRecoveryDelayHours : TenantMfaPolicy.DemoraPorDefectoEnHoras))
             .ToListAsync(ct);
 
         var json = JsonSerializer.Serialize(fresh);

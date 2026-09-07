@@ -1,0 +1,416 @@
+/* =============================================================================
+   Sistema de diseño de IngenIA365
+   =============================================================================
+
+   Este archivo es la ÚNICA fuente de verdad del aspecto visual. Las 189
+   pantallas no declaran colores propios: consumen estas variables, y los
+   componentes de SyncFusion las heredan por el mapeo del final. Cambiar la
+   identidad de todo el producto es cambiar este archivo.
+
+   La paleta NO se invento: se midió sobre los PDF comerciales (catálogo y
+   propuesta), ponderando cada color por la superficie que cubre. El morado
+   #4a1c63 ocupa 11% del catálogo y 20% de la propuesta; el dorado aparece
+   siempre como acento, nunca como superficie.
+
+   ORDEN DE LAS CAPAS — importa, y es el mismo de abajo hacia arriba:
+     1. Rampas de marca .... valores literales, iguales en claro y oscuro
+     2. Tokens semánticos .. lo que consumen las pantallas (superficie, texto…)
+     3. Densidad ........... tamaños, remapeados por [data-densidad]
+     4. Tipografía ......... escala, remapeada por [data-escala]
+     5. Mapeo a SyncFusion . para que sus componentes hereden la identidad
+
+   Las pantallas SOLO deben usar la capa 2 en adelante. Si una pantalla
+   referencia --morado-700 directamente, deja de responder al cambio de tema.
+   ========================================================================== */
+
+/* --- 1. Rampas de marca --------------------------------------------------- */
+
+:root {
+    /* Morado corporativo. El 700 es el color de marca; los extremos existen
+       para dar profundidad sin recurrir a degradados. */
+    --morado-50:  #f3eef7;
+    --morado-100: #e2d8ea;
+    --morado-200: #d9cfe2;
+    --morado-300: #b79ecf;
+    --morado-400: #9370b5;
+    --morado-500: #74469a;
+    --morado-600: #5d2e7b;
+    --morado-700: #4a1c63;   /* color de marca */
+    --morado-800: #3a1450;
+    --morado-900: #2a0f38;
+
+    /* Dorado. Se reserva para ACENTOS: llamadas a la acción, indicadores,
+       elementos destacados. Usado como superficie grande cansa la vista y
+       resta seriedad a un producto financiero. */
+    --dorado-100: #fdf8e7;
+    --dorado-200: #fbf3d8;
+    --dorado-300: #f9e3a0;
+    --dorado-400: #f5d268;
+    --dorado-500: #f2c230;
+    --dorado-600: #e0a800;   /* acento de marca */
+    --dorado-700: #c99a00;
+    --dorado-800: #8a6600;
+    --dorado-900: #6b4f00;
+
+    /* Roles semánticos. El verde sale de los PDF; el rojo y el ámbar se
+       eligieron para cumplir contraste AA sobre superficies claras y oscuras. */
+    --exito-fondo: #e8f5e9;
+    --exito:       #2e7d32;
+    --exito-texto: #1b5e20;
+
+    --peligro-fondo: #fdecea;
+    --peligro:       #c62828;
+    --peligro-texto: #8e1a1a;
+
+    --alerta-fondo: #fff8e1;
+    --alerta:       #aa6500;   /* 4.59:1 sobre blanco; #b26a00 se quedaba en 4.24 */
+    --alerta-texto: #7a4700;
+
+    --info-fondo: #e8f0fb;
+    --info:       #1e5fa8;
+    --info-texto: #143f70;
+
+    /* Escala de riesgo de cartera. NO es decoración: la calificación A–E y los
+       tramos de mora son conceptos del negocio, y el color es la forma en que
+       el analista los lee de un vistazo. Por eso tienen rampa propia y no se
+       reducen a exito/alerta/peligro, que solo dan tres pasos.
+
+       Antes cada pantalla inventaba su paleta: CalificacionCartera pintaba la
+       "A" de #4caf50 y CarteraCreditos de #27ae60, para la misma categoría.
+       Acá se define una vez.
+
+         a ..... A, o sin mora
+         leve .. mora de 1 a 30 días
+         b ..... B, o mora > 30
+         c ..... C, o mora > 60
+         d ..... D, o mora > 90
+         e ..... E, o mora > 180
+         nd .... sin clasificar
+
+       DOS ROLES, DOS JUEGOS DE TOKENS. Un color no puede contrastar a la vez
+       con el blanco del texto de una pastilla y con el fondo casi negro del
+       tema oscuro: son exigencias opuestas y no existe valor que cumpla las
+       dos. Por eso:
+
+         --riesgo-X ....... RELLENO. Fondo de pastilla con texto blanco encima.
+                            Fijo en ambos temas, ≥4.5:1 contra blanco.
+         --riesgo-X-txt ... TEXTO sobre la superficie de la página. Cambia con
+                            el tema, ≥4.5:1 contra la superficie de cada uno.
+
+       Los valores del relleno se bajaron respecto del primer borrador, que se
+       veía mejor pero no pasaba: #b59000 daba 3.02:1 y #c17d00 3.39:1 sobre
+       blanco, contra un mínimo de 4.5:1. */
+    --riesgo-a:    #2e7d32;
+    --riesgo-leve: #8f7200;
+    --riesgo-b:    #a26900;
+    --riesgo-c:    #c05818;
+    --riesgo-d:    #c62828;
+    --riesgo-e:    #8e1a1a;
+    --riesgo-nd:   #767676;
+
+    /* En tema claro el texto usa el mismo valor que el relleno: sobre fondo
+       blanco ya cumple. El tema oscuro los redefine. */
+    --riesgo-a-txt:    var(--riesgo-a);
+    --riesgo-leve-txt: var(--riesgo-leve);
+    --riesgo-b-txt:    var(--riesgo-b);
+    --riesgo-c-txt:    var(--riesgo-c);
+    --riesgo-d-txt:    var(--riesgo-d);
+    --riesgo-e-txt:    var(--riesgo-e);
+    --riesgo-nd-txt:   var(--riesgo-nd);
+}
+
+/* --- 2. Tokens semánticos: modo claro (por defecto) ----------------------- */
+
+:root {
+    /* Superficies, de la más baja (fondo de página) a la más alta (emergentes).
+       El fondo lleva un tinte morado casi imperceptible: separa el lienzo de
+       las tarjetas blancas sin recurrir a bordes por todos lados. */
+    --superficie-0: #f7f5f9;
+    --superficie-1: #ffffff;
+    --superficie-2: #ffffff;
+    --superficie-3: #ffffff;
+
+    /* Barra lateral en morado profundo: ancla la identidad en todas las
+       pantallas sin teñir el área de trabajo, donde se leen las cifras. */
+    --lateral-fondo:        var(--morado-800);
+    --lateral-texto:        #ede8f2;
+    --lateral-texto-tenue:  #b9abc7;
+    --lateral-activo-fondo: var(--morado-600);
+    --lateral-activo-borde: var(--dorado-600);
+    /* La barra lateral es oscura en los dos temas, así que su texto resaltado
+       es blanco siempre — pero se declara como token para que ninguna hoja de
+       estilos vuelva a escribir un color a mano. */
+    --lateral-texto-activo: #ffffff;
+    --lateral-hover:        rgba(255, 255, 255, .07);
+
+    --texto-primario:   #222222;
+    --texto-secundario: #5a5a5a;
+    --texto-tenue:      #8a8a8a;
+    --texto-invertido:  #ffffff;
+    --texto-marca:      var(--morado-700);
+    --texto-enlace:     var(--morado-600);
+
+    --borde:        #e5e1ea;
+    --borde-fuerte: #cec7d6;
+    --borde-foco:   var(--morado-500);
+
+    --acento:          var(--morado-700);
+    --acento-hover:    var(--morado-600);
+    --acento-activo:   var(--morado-800);
+    --acento-suave:    var(--morado-50);
+    --acento-texto:    #ffffff;
+
+    --realce:        var(--dorado-600);
+    --realce-suave:  var(--dorado-100);
+    --realce-texto:  var(--dorado-900);
+
+    /* Sombras suaves y de un solo tono. Las sombras marcadas envejecen mal y
+       en pantallas densas generan ruido. */
+    --sombra-1: 0 1px 2px rgba(42, 15, 56, .06);
+    --sombra-2: 0 2px 8px rgba(42, 15, 56, .08);
+    --sombra-3: 0 8px 24px rgba(42, 15, 56, .12);
+    --sombra-foco: 0 0 0 3px rgba(74, 28, 99, .18);
+}
+
+/* --- 2b. Modo oscuro ------------------------------------------------------ */
+
+/* El oscuro NO es el claro invertido: los morados se aclaran para conservar
+   contraste sobre fondo oscuro, y las superficies llevan tinte morado para que
+   siga siendo el mismo producto y no un tema genérico. */
+:root[data-tema="oscuro"] {
+    --superficie-0: #17131c;
+    --superficie-1: #201a27;
+    --superficie-2: #2a2233;
+    --superficie-3: #332a3d;
+
+    --lateral-fondo:        #120e17;
+    --lateral-texto:        #e6e0ec;
+    --lateral-texto-tenue:  #9c90aa;
+    --lateral-activo-fondo: var(--morado-700);
+    --lateral-activo-borde: var(--dorado-500);
+
+    --texto-primario:   #ece9f0;
+    --texto-secundario: #a99fb5;
+    --texto-tenue:      #7d7488;
+    --texto-invertido:  #17131c;
+    --texto-marca:      var(--morado-300);
+    --texto-enlace:     var(--morado-300);
+
+    --borde:        #3a3143;
+    --borde-fuerte: #4d4258;
+    --borde-foco:   var(--morado-400);
+
+    --acento:        var(--morado-500);
+    --acento-hover:  var(--morado-400);
+    --acento-activo: var(--morado-600);
+    --acento-suave:  #2b2135;
+    --acento-texto:  #ffffff;
+
+    --realce:       var(--dorado-500);
+    --realce-suave: #33291a;
+    --realce-texto: var(--dorado-300);
+
+    /* Sobre fondo oscuro las sombras casi no se ven: la profundidad la da el
+       escalón de superficie, no la sombra. */
+    --sombra-1: 0 1px 2px rgba(0, 0, 0, .32);
+    --sombra-2: 0 2px 8px rgba(0, 0, 0, .40);
+    --sombra-3: 0 8px 24px rgba(0, 0, 0, .52);
+    --sombra-foco: 0 0 0 3px rgba(147, 112, 181, .30);
+
+    --exito-fondo:   #16301a;
+    --peligro-fondo: #3a1618;
+    --alerta-fondo:  #33280e;
+    --info-fondo:    #14243a;
+
+    /* Solo se redefine el rol TEXTO. El relleno se mantiene: sigue llevando
+       texto blanco encima y en tema oscuro se ve igual de bien.
+
+       El paso E rompe la lógica de "más oscuro es peor" que sí funciona en el
+       tema claro: sobre fondo oscuro un rojo más profundo cae por debajo del
+       contraste mínimo (#c85450 daba 3.98:1). Acá la severidad se lee como
+       rojo más saturado y menos rosado, no como rojo más oscuro. */
+    --riesgo-a-txt:    #66bb6a;
+    --riesgo-leve-txt: #e3c04a;
+    --riesgo-b-txt:    #eda93c;
+    --riesgo-c-txt:    #f0854a;
+    --riesgo-d-txt:    #f7908b;
+    --riesgo-e-txt:    #e35c58;
+    --riesgo-nd-txt:   #9a90a6;
+
+    /* Los semánticos tenían el mismo defecto: --exito-texto era #1b5e20, un
+       verde pensado para fondo claro, y en tema oscuro quedaba ilegible. */
+    --exito-texto:   #7cc47f;
+    --peligro-texto: #f08a86;
+    --alerta-texto:  #e0b755;
+    --info-texto:    #7fb2ea;
+}
+
+/* Sin preferencia guardada se respeta la del sistema operativo. Una vez que el
+   usuario elige, manda data-tema y esta regla deja de aplicar. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-tema]) {
+        color-scheme: dark;
+    }
+}
+
+/* --- 3. Densidad ---------------------------------------------------------- */
+
+/* Cómoda por defecto. La compacta la elige quien concilia todo el día y
+   necesita ver más filas sin desplazarse; no es "la misma pantalla más chica",
+   solo cambia el aire. */
+:root {
+    /* La altura se deriva de --escala, no es fija. Con texto grande un control
+       de altura fija aprieta el contenido y llega a recortarlo — justo para
+       quien eligió texto grande porque le cuesta leer. */
+    --alto-control: calc(36px * var(--escala));
+    --pad-xs: 4px;
+    --pad-sm: 8px;
+    --pad-md: 12px;
+    --pad-lg: 16px;
+    --pad-xl: 24px;
+    --gap-xs: 4px;
+    --gap-sm: 8px;
+    --gap-md: 12px;
+    --gap-lg: 20px;
+    --gap-xl: 32px;
+    --alto-fila: calc(40px * var(--escala));
+    --radio-sm: 4px;
+    --radio: 8px;
+    --radio-lg: 12px;
+    --radio-pill: 999px;
+}
+
+:root[data-densidad="compacta"] {
+    --alto-control: calc(30px * var(--escala));
+    --pad-xs: 2px;
+    --pad-sm: 6px;
+    --pad-md: 8px;
+    --pad-lg: 12px;
+    --pad-xl: 16px;
+    --gap-xs: 2px;
+    --gap-sm: 6px;
+    --gap-md: 8px;
+    --gap-lg: 14px;
+    --gap-xl: 22px;
+    --alto-fila: calc(32px * var(--escala));
+}
+
+/* --- 4. Tipografía -------------------------------------------------------- */
+
+:root {
+    /* Inter: diseñada para interfaces. Lo que la hace correcta acá es
+       font-variant-numeric tabular: alinea las columnas de montos, que en un
+       ERP financiero se leen en vertical. */
+    --fuente: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --fuente-mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+
+    --escala: 1;
+    --texto-xs:  calc(11px * var(--escala));
+    --texto-sm:  calc(13px * var(--escala));
+    --texto-md:  calc(14px * var(--escala));
+    --texto-lg:  calc(16px * var(--escala));
+    --texto-xl:  calc(20px * var(--escala));
+    --texto-2xl: calc(26px * var(--escala));
+
+    --peso-normal: 400;
+    --peso-medio:  500;
+    --peso-fuerte: 600;
+
+    --interlineado: 1.5;
+    --interlineado-compacto: 1.3;
+}
+
+/* Accesibilidad: escala la tipografía SIN romper la maquetación, porque los
+   tamaños se derivan de --escala en vez de estar fijos. */
+:root[data-escala="grande"]     { --escala: 1.125; }
+:root[data-escala="muy-grande"] { --escala: 1.25;  }
+
+/* --- 4b. Alto contraste --------------------------------------------------- */
+
+/* Refuerza bordes y oscurece textos secundarios. Se combina con el tema de alto
+   contraste de SyncFusion, que se carga aparte. */
+:root[data-contraste="alto"] {
+    --borde:        #767676;
+    --borde-fuerte: #3d3d3d;
+    --texto-secundario: #3d3d3d;
+    --texto-tenue:      #4a4a4a;
+    --sombra-foco: 0 0 0 3px rgba(74, 28, 99, .45);
+}
+
+:root[data-contraste="alto"][data-tema="oscuro"] {
+    --borde:        #9a9a9a;
+    --borde-fuerte: #c7c7c7;
+    --texto-secundario: #d6d0dc;
+    --texto-tenue:      #c2bac9;
+}
+
+/* --- 5. Movimiento -------------------------------------------------------- */
+
+:root {
+    --dur-rapida: 120ms;
+    --dur-normal: 200ms;
+    --dur-lenta:  320ms;
+    --curva: cubic-bezier(.2, 0, 0, 1);
+}
+
+/* Respetar a quien pidió menos movimiento no es opcional: para algunas personas
+   las transiciones producen malestar real. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --dur-rapida: 1ms;
+        --dur-normal: 1ms;
+        --dur-lenta:  1ms;
+    }
+}
+
+/* Se aplica solo durante el cambio de tema, desde preferencias.js.
+   Sin esto, los elementos con `transition` sobre una propiedad cuyo valor sale
+   de una variable CSS conservan el color anterior al cambiar la variable: el
+   navegador no siempre recalcula. Verificado en el botón del login, donde la
+   variable ya tenía el morado oscuro y el botón seguía pintado con el claro.
+   Además evita que toda la interfaz haga un fundido de color simultáneo. */
+.sin-transiciones, .sin-transiciones * {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* =============================================================================
+   6. Mapeo a SyncFusion
+   =============================================================================
+   ESTO es lo que evita reescribir 189 pantallas. Los componentes de SyncFusion
+   (grillas, formularios, menús, diálogos) leen sus propias variables
+   --color-sf-*; al apuntarlas a nuestros tokens, heredan la identidad y el
+   cambio de tema automáticamente.
+
+   Si mañana cambia la marca, cambia la capa 1 y esto sigue funcionando.
+   ========================================================================== */
+
+:root {
+    --color-sf-primary:            var(--acento);
+    --color-sf-primary-light:      var(--morado-400);
+    --color-sf-primary-dark:       var(--acento-activo);
+    --color-sf-primary-text-color: var(--acento-texto);
+
+    --color-sf-content-bg-color:      var(--superficie-1);
+    --color-sf-content-bg-color-alt1: var(--superficie-0);
+    --color-sf-content-bg-color-alt2: var(--acento-suave);
+    --color-sf-content-text-color:      var(--texto-primario);
+    --color-sf-content-text-color-alt1: var(--texto-secundario);
+    --color-sf-content-text-color-alt2: var(--texto-tenue);
+
+    --color-sf-border:         var(--borde);
+    --color-sf-border-light:   var(--borde);
+    --color-sf-border-alt:     var(--borde);
+    --color-sf-border-dark:    var(--borde-fuerte);
+    --color-sf-border-hover:   var(--borde-fuerte);
+    --color-sf-border-focus:   var(--borde-foco);
+    --color-sf-border-error:   var(--peligro);
+
+    --color-sf-success:  var(--exito);
+    --color-sf-warning:  var(--alerta);
+    --color-sf-error:    var(--peligro);
+    --color-sf-info:     var(--info);
+
+    --color-sf-flyout-bg-color: var(--superficie-3);
+    --color-sf-shadow: var(--sombra-2);
+}

@@ -7,9 +7,9 @@
 
 <PageTitle>Ciudades - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Ciudades</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar ciudad..." @bind-Value="_search" Width="240px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
         <SfDropDownList TValue="Guid?" TItem="LookupOption"
@@ -51,9 +51,9 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                <div class="pagina">
                     <div>
-                        <label>Departamento <span style="color:red">*</span></label>
+                        <label>Departamento <span style="color:var(--peligro-texto)">*</span></label>
                         <SfDropDownList TValue="Guid?" TItem="LookupOption"
                                         @bind-Value="_model.DepartmentPublicId"
                                         DataSource="@_departments"
@@ -64,7 +64,7 @@
                         <ValidationMessage For="@(() => _model.DepartmentPublicId)" />
                     </div>
                     <div>
-                        <label>Nombre <span style="color:red">*</span></label>
+                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la ciudad"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />

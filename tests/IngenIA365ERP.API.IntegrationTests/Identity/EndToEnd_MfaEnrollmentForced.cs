@@ -30,15 +30,7 @@ public sealed class EndToEnd_MfaEnrollmentForced(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login del master (sin membresías → sesión operativa master).
-        var masterLoginResp = await http.PostAsJsonAsync("/api/auth/login", new
-        {
-            email = CentralIdentityApiFixture.MasterEmail,
-            password = CentralIdentityApiFixture.MasterPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, masterLoginResp.StatusCode);
-        var masterLogin = await ReadJsonAsync(masterLoginResp);
-        Assert.Equal("None", masterLogin.GetProperty("challenge").GetString());
-        var masterToken = masterLogin.GetProperty("accessToken").GetString();
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
         Assert.False(string.IsNullOrWhiteSpace(masterToken));
 
         // 2) Registrar tenant + invitación del primer admin (atómico).

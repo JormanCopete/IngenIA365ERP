@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Security
 @inject CentralAuthClient AuthClient
 @inject NavigationManager Nav
+@inject PromocionesClient Promociones
 
 @*
     T077 — Login centralizado (Feature 002). Sin combo box de cooperativa:
@@ -15,45 +16,118 @@
 
 <PageTitle>Iniciar sesión — IngenIA365ERP</PageTitle>
 
-<div class="auth-card" style="max-width: 420px; margin: 32px auto;">
-    <h1>Iniciar sesión</h1>
-    <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="login">
-        <DataAnnotationsValidator />
+<div class="login-pantalla">
+    <section class="login-formulario">
+        <div class="auth-card">
+            <div class="login-marca">
+                <span class="login-marca-nombre">IngenIA365<span class="login-marca-sufijo">ERP</span></span>
+                <span class="login-marca-bajada">Gestión financiera para cooperativas</span>
+            </div>
+            <h1>Iniciar sesión</h1>
+            <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="login">
+                <DataAnnotationsValidator />
 
-        <label>Correo</label>
-        <InputText
-            @bind-Value="_model.Email"
-            type="email"
-            autocomplete="username"
-            placeholder="tu.correo@cooperativa.co" />
-        <ValidationMessage For="@(() => _model.Email)" />
+                <label>Correo</label>
+                <InputText
+                    @bind-Value="_model.Email"
+                    type="email"
+                    autocomplete="username"
+                    placeholder="tu.correo@cooperativa.co" />
+                <ValidationMessage For="@(() => _model.Email)" />
 
-        <label>Contraseña</label>
-        <InputText
-            @bind-Value="_model.Password"
-            type="password"
-            autocomplete="current-password" />
-        <ValidationMessage For="@(() => _model.Password)" />
+                <label>Contraseña</label>
+                <InputText
+                    @bind-Value="_model.Password"
+                    type="password"
+                    autocomplete="current-password" />
+                <ValidationMessage For="@(() => _model.Password)" />
 
-        <button type="submit" disabled="@_busy" style="margin-top: 16px;">
-            @(_busy ? "Validando..." : "Continuar")
-        </button>
-    </EditForm>
+                <button type="submit" disabled="@_busy" style="margin-top: 16px;">
+                    @(_busy ? "Validando..." : "Continuar")
+                </button>
+            </EditForm>
 
-    @if (!string.IsNullOrEmpty(_error))
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="error" role="alert">@_error</p>
+            }
+
+    <p class="login-olvide">
+                <NavLink href="/auth/forgot-password">¿Olvidaste tu contraseña?</NavLink>
+            </p>
+        </div>
+    </section>
+
+    @*
+        Panel promocional. Va DESPUÉS del formulario en el orden del documento,
+        aunque se pinte a la izquierda: quien navega con teclado o lector de
+        pantalla llega primero a lo que vino a hacer, que es entrar. El orden
+        visual lo decide la rejilla, no el marcado.
+
+        Se oculta entero si no hay contenido: un panel vacío ocupando media
+        pantalla se ve como un error de carga.
+    *@
+    @if (_promos.Count > 0)
     {
-        <p class="error" role="alert" style="margin-top: 12px;">@_error</p>
-    }
+        var promo = _promos[_indice];
+        <aside class="login-promo" aria-label="Novedades de IngenIA365">
+            <article class="login-promo-pieza" @key="promo.PublicId">
+                @if (promo.TieneImagen)
+                {
+                    <img class="login-promo-imagen"
+                         src="@PromocionesClient.RutaImagen(promo.PublicId)"
+                         alt="@promo.ImagenTextoAlternativo" />
+                }
+                <h2>@promo.Titulo</h2>
+                @if (!string.IsNullOrWhiteSpace(promo.Texto))
+                {
+                    <p>@promo.Texto</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(promo.Enlace) && !string.IsNullOrWhiteSpace(promo.TextoEnlace))
+                {
+                    <a class="login-promo-enlace" href="@promo.Enlace"
+                       target="_blank" rel="noopener noreferrer">@promo.TextoEnlace</a>
+                }
+            </article>
 
-    <p style="margin-top: 16px; font-size: 13px;">
-        <NavLink href="/auth/forgot-password">¿Olvidaste tu contraseña?</NavLink>
-    </p>
+            @if (_promos.Count > 1)
+            {
+                <nav class="login-promo-puntos" aria-label="Elegir novedad">
+                    @for (var i = 0; i < _promos.Count; i++)
+                    {
+                        var indice = i;
+                        <button type="button"
+                                class="@(indice == _indice ? "punto punto-activo" : "punto")"
+                                aria-label="@($"Novedad {indice + 1} de {_promos.Count}")"
+                                aria-current="@(indice == _indice ? "true" : null)"
+                                @onclick="() => Mostrar(indice)"></button>
+                    }
+                </nav>
+            }
+        </aside>
+    }
 </div>
 
 @code {
     private readonly LoginInput _model = new();
     private bool _busy;
     private string? _error;
+    private IReadOnlyList<PromoPublica> _promos = [];
+    private int _indice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // El fallo al traer promociones NO puede impedir iniciar sesion. Es
+        // contenido accesorio servido por un endpoint anonimo: si la consulta
+        // cae, el login tiene que seguir funcionando igual.
+        var r = await Promociones.ListarPublicasAsync();
+        if (r.IsSuccess && r.Value is { Count: > 0 } piezas)
+        {
+            _promos = piezas;
+        }
+    }
+
+    private void Mostrar(int indice) => _indice = indice;
 
     private async Task SubmitAsync()
     {

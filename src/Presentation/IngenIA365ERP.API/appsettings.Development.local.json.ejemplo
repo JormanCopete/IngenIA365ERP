@@ -1,0 +1,16 @@
+{
+  "_comentario": [
+    "Copia este archivo como appsettings.Development.local.json y ajusta lo tuyo.",
+    "Git lo ignora: es de esta maquina y de nadie mas.",
+    "Gana sobre appsettings.Development.<SistemaOperativo>.json.",
+    "Solo hace falta declarar lo que cambia; el resto se hereda."
+  ],
+  "Infraestructura": {
+    "Destinos": {
+      "Redis": "Wsl"
+    },
+    "Redis": {
+      "Wsl": "172.24.80.1:6379,abortConnect=false"
+    }
+  }
+}

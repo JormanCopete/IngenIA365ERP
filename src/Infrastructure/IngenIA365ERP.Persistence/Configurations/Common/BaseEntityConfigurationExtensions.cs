@@ -39,6 +39,19 @@ public static class BaseEntityConfigurationExtensions
             // Solo se aplica a entidades sin filtro explícito previo y que no son
             // de catálogos lookup inmutables (esos quedarán marcados con [Lookup]
             // en T099 — hasta entonces, todo lo derivado de BaseEntity está sujeto).
+            //
+            // Y SOLO sobre tipos RAÍZ. EF admite filtro global únicamente en la
+            // raíz de una jerarquía: ponerlo en un tipo derivado invalida el modelo
+            // entero («A filter may only be applied to the root entity type»).
+            //
+            // Sin este `continue` no bastaría con declarar el filtro en la raíz:
+            // las anotaciones de EF no se heredan, así que GetQueryFilter() sobre
+            // un tipo derivado devuelve null igualmente y esta convención le
+            // pondría uno propio. Reventaría antes que cualquier prueba —los
+            // factories de diseño construyen el contexto real, así que ni se
+            // podría generar una migración.
+            if (entityType.BaseType is not null) continue;
+
             if (entityType.GetQueryFilter() is null)
             {
                 var parameter = System.Linq.Expressions.Expression.Parameter(clr, "e");

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Domain.Entities.Admin;
 
 namespace IngenIA365ERP.API.Services;
 
@@ -49,6 +50,17 @@ internal sealed class CurrentCentralUserContextAccessor(
 
     public bool MfaVerified =>
         bool.TryParse(User?.FindFirst("mfa_verified")?.Value, out var v) && v;
+
+    /// <summary>
+    /// Un claim ausente, uno vacío y uno con basura dan todos <c>Ninguno</c>. No se
+    /// distinguen a propósito: los tres significan «no consta con qué entró», y
+    /// lanzar aquí tumbaría el ingreso de quien trae un token emitido por la
+    /// versión anterior.
+    /// </summary>
+    public MetodosMfa MetodoMfa =>
+        int.TryParse(User?.FindFirst("mfa_method")?.Value, out var v)
+            ? (MetodosMfa)v
+            : MetodosMfa.Ninguno;
 
     public bool IsAuthenticated => CentralUserId.HasValue;
 }

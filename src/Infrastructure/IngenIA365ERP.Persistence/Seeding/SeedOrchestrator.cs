@@ -3,6 +3,7 @@ using IngenIA365ERP.Persistence.Initialization;
 using IngenIA365ERP.Persistence.MultiTenancy;
 using IngenIA365ERP.Persistence.Providers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -62,6 +63,45 @@ public sealed class SeedOrchestrator(
         }
     }
 
+    /// <summary>
+    /// Siembra UNA cooperativa recién aprovisionada, aplicando la misma política de
+    /// categorías que el arranque.
+    ///
+    /// <para>
+    /// Existe para que esa política viva en un solo sitio. Estaba en dos: el
+    /// arranque sembraba paramétricos y de demostración, y el aprovisionador sólo
+    /// paramétricos. La consecuencia medida es que el contenido de una cooperativa
+    /// dependía de si el servicio se había reiniciado después de crearla — dos
+    /// cooperativas creadas el mismo día con el mismo código acababan distintas.
+    /// Esa clase de asimetría hace que un fallo aparezca en un entorno y no en
+    /// otro.
+    /// </para>
+    /// </summary>
+    public async Task<int> SembrarCooperativaAsync(string identificador, CancellationToken ct)
+    {
+        var total = 0;
+
+        if (options.Value.Seed.RunParametricSeed)
+        {
+            var r = await RunAsync(SeedCategory.Parametric, SeedScope.Tenant, identificador, ct);
+            total += r.Sum(x => x.Inserted);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Seed paramétrico omitido para {Identificador} (Database:Seed:RunParametricSeed=false).",
+                identificador);
+        }
+
+        if (EffectiveRunTestSeed())
+        {
+            var r = await RunAsync(SeedCategory.Test, SeedScope.Tenant, identificador, ct);
+            total += r.Sum(x => x.Inserted);
+        }
+
+        return total;
+    }
+
     /// <summary>Default por ambiente: on en Development/QA, off en Production salvo opt-in (FR-017).</summary>
     public bool EffectiveRunTestSeed() =>
         options.Value.Seed.RunTestSeed
@@ -77,18 +117,32 @@ public sealed class SeedOrchestrator(
         using var outerScope = serviceProvider.CreateScope();
         var sp = outerScope.ServiceProvider;
 
-        // FR-021 — nunca sembrar sobre esquema desactualizado.
-        var guard = sp.GetRequiredService<PendingMigrationsGuard>();
-        var pending = await guard.ComputeAsync(ct);
-        if (pending.HasAny)
-            throw new InvalidOperationException(
-                $"[Database.Seed.SchemaOutdated] Hay migraciones pendientes — aplique las migraciones antes de sembrar: {pending.Describe()}");
-
         var seeders = sp.GetServices<IDataSeeder>()
             .Where(s => s.Category == category)
             .Where(s => scope is null || s.Scope == scope)
             .OrderBy(s => s.Order)
             .ToList();
+
+        // Los objetivos, resueltos una sola vez y antes del guarda.
+        //
+        // El guarda comprueba EXACTAMENTE las bases que este sembrado va a
+        // escribir, con las mismas coordenadas con las que luego se abren. Antes
+        // preguntaba por todas, y entonces el estado de una cooperativa decidia
+        // el destino de otra: al aprovisionar coop_beta el guarda encontro una
+        // migracion pendiente en coop_alfa y aborto el sembrado de beta, que
+        // quedo creada y migrada pero sin roles ni permisos, y sin ruido salvo
+        // una linea de error. Ninguna cooperativa puede bloquear a otra
+        // (Principio IV).
+        List<ErpTenantInfo?> objetivos = seeders.Any(s => s.Scope != SeedScope.Admin)
+            ? await ResolveTenantTargetsAsync(sp, tenantIdentifier)
+            : [];
+
+        // FR-021 — nunca sembrar sobre una base desactualizada.
+        var guard = sp.GetRequiredService<PendingMigrationsGuard>();
+        var pending = await guard.ComputeAsync(ct, objetivos);
+        if (pending.HasAny)
+            throw new InvalidOperationException(
+                $"[Database.Seed.SchemaOutdated] Hay migraciones pendientes — aplique las migraciones antes de sembrar: {pending.Describe()}");
 
         var results = new List<SeederRunResult>();
         foreach (var seeder in seeders)
@@ -104,7 +158,7 @@ public sealed class SeedOrchestrator(
             }
             else
             {
-                foreach (var tenant in await ResolveTenantTargetsAsync(sp, tenantIdentifier))
+                foreach (var tenant in objetivos)
                 {
                     inserted += await RunTenantSeederAsync(sp, seeder, tenant, ct);
                     tenantsTouched++;
@@ -137,10 +191,37 @@ public sealed class SeedOrchestrator(
     private async Task<int> RunTenantSeederAsync(
         IServiceProvider sp, IDataSeeder seeder, ErpTenantInfo? tenant, CancellationToken ct)
     {
-        // Un ApplicationDbContext NUEVO por esquema — jamas se comparte entre
-        // tenants dentro de una misma operacion (principio IV).
-        var dbOptions = sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
-        await using var tenantDb = new ApplicationDbContext(dbOptions, tenant, currentUserService: null);
+        // Un ApplicationDbContext NUEVO por cooperativa, con SU conexion — jamas se
+        // comparte entre cooperativas dentro de una misma operacion (Principio IV).
+        //
+        // Las opciones NO se toman del contenedor. Ahi la cadena sale de la
+        // cooperativa del ambito, y este orquestador corre sin peticion detras: le
+        // llegaria siempre la plantilla, asi que sembraria N veces la misma base
+        // creyendo que siembra N cooperativas.
+        var configurador = sp.GetRequiredService<Providers.IDbProviderConfigurator>();
+        var resolutor = sp.GetRequiredService<MultiTenancy.TenantConnectionResolver>();
+
+        var cadena = tenant is null
+            ? resolutor.Plantilla
+            : resolutor.Resolver(tenant.SchemaName, tenant.ConnectionString, tenant.Name);
+
+        var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
+        // Los interceptores se registran como ISaveChangesInterceptor. Pedir
+        // IInterceptor compila —por covarianza— y devuelve CERO: contextos
+        // sembrando sin auditoria ni borrado logico, sin una sola senal.
+        constructor.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
+        configurador.Configure(constructor, cadena, Providers.MigrationsTarget.Application);
+
+        await using var tenantDb = new ApplicationDbContext(
+            constructor.Options,
+            tenant is null ? null : new MultiTenancy.ErpTenantInfo
+            {
+                Identifier = tenant.Identifier,
+                Name = tenant.Name,
+                SchemaName = "dbo",
+                ConnectionString = cadena,
+            },
+            currentUserService: null);
         var context = NewContext(admin: null, tenantDb: tenantDb, tenant: tenant);
 
         var strategy = tenantDb.Database.CreateExecutionStrategy();
@@ -157,8 +238,19 @@ public sealed class SeedOrchestrator(
     private static async Task<List<ErpTenantInfo?>> ResolveTenantTargetsAsync(
         IServiceProvider sp, string? tenantIdentifier)
     {
-        var schemaService = sp.GetRequiredService<TenantSchemaService>();
-        var registered = await schemaService.ListTenantsAsync();
+        // El registro se lee del contexto del registro, no de TenantSchemaService.
+        //
+        // Ese servicio recibe DbContextOptions<ApplicationDbContext> por
+        // constructor, y construirlas exige la cooperativa del ambito. Resolverlo
+        // aqui lanzaba dentro de POST /api/saas/tenants/with-admin — la peticion
+        // que CREA una cooperativa, donde por definicion no hay ninguna resuelta.
+        // El alta quedaba registrada pero sin base y sin roles, y su primer
+        // administrador sin un solo permiso: 404 en todas las pantallas. El
+        // arranque siguiente lo reparaba, asi que en desarrollo pasaba por bueno.
+        //
+        // Para listar cooperativas no hace falta nada de eso.
+        var registro = sp.GetRequiredService<MultiTenancy.TenantDbContext>();
+        var registered = await registro.Tenants.OrderBy(t => t.Identifier).ToListAsync();
 
         if (tenantIdentifier is not null)
         {

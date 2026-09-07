@@ -9,163 +9,165 @@
 <PageTitle>Movimiento de Inventario - IngenIA365ERP</PageTitle>
 
 <!-- Toolbar -->
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <h3>@(_isNew ? "Nuevo Movimiento de Inventario" : $"Movimiento {_header.DocumentTypeName} - {_header.DocumentNumber}")</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
-                  OnClick='@(() => Nav.NavigateTo("/inventario/movimientos"))'>Volver a Lista</SfButton>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
-                  OnClick="SaveDocument">Guardar</SfButton>
-        @if (!_isNew && !_header.IsVoided)
-        {
-            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
-                      OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
-        }
-    </div>
-</div>
-
-<!-- Status badge -->
-@if (!_isNew)
-{
-    var badge = _header.IsVoided ? "e-badge e-badge-danger" : "e-badge e-badge-success";
-    var text = _header.IsVoided ? "Anulado" : "Activo";
-    <div style="margin-bottom:12px;">
-        <span class="@badge" style="font-size:14px;padding:4px 12px;">@text</span>
-    </div>
-}
-
-<!-- Header fields -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:20px;">
-    <div>
-        <label>Tipo Documento *</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DocumentType"
-                        DataSource="_docTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-            <DropDownListEvents TValue="string" TItem="DropOption" ValueChange="OnDocTypeChanged" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Tipo Movimiento *</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.TransactionTypeCode"
-                        DataSource="_transactionTypes" Enabled="@IsEditable" Placeholder="Seleccione">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Numero</label>
-        <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
-                   Readonly="true" CssClass="e-disabled" />
-    </div>
-    <div>
-        <label>Fecha *</label>
-        <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
-    </div>
-    <div>
-        <label>Bodega Origen *</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.WarehouseCode"
-                        DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    @if (_header.DocumentType == "T")
-    {
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_isNew ? "Nuevo Movimiento de Inventario" : $"Movimiento {_header.DocumentTypeName} - {_header.DocumentNumber}")</h3>
         <div>
-            <label>Bodega Destino *</label>
-            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DestinationWarehouseCode"
-                            DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega destino">
+            <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                      OnClick='@(() => Nav.NavigateTo("/inventario/movimientos"))'>Volver a Lista</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(!CanSave)"
+                      OnClick="SaveDocument">Guardar</SfButton>
+            @if (!_isNew && !_header.IsVoided)
+            {
+                <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                          OnClick="@(() => _showVoidConfirm = true)">Anular</SfButton>
+            }
+        </div>
+    </div>
+
+    <!-- Status badge -->
+    @if (!_isNew)
+    {
+        var badge = _header.IsVoided ? "e-badge e-badge-danger" : "e-badge e-badge-success";
+        var text = _header.IsVoided ? "Anulado" : "Activo";
+        <div>
+            <span class="@badge" style="font-size:var(--texto-md);padding:var(--pad-xs) var(--pad-md);">@text</span>
+        </div>
+    }
+
+    <!-- Header fields -->
+    <div class="rejilla-campos">
+        <div>
+            <label>Tipo Documento *</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DocumentType"
+                            DataSource="_docTypes" Enabled="@IsEditable" Placeholder="Seleccione tipo">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+                <DropDownListEvents TValue="string" TItem="DropOption" ValueChange="OnDocTypeChanged" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Tipo Movimiento *</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.TransactionTypeCode"
+                            DataSource="_transactionTypes" Enabled="@IsEditable" Placeholder="Seleccione">
                 <DropDownListFieldSettings Text="Name" Value="Value" />
             </SfDropDownList>
         </div>
-    }
-    <div>
-        <label>Referencia</label>
-        <SfTextBox @bind-Value="_header.Reference" Placeholder="Referencia externa" Enabled="@IsEditable" />
+        <div>
+            <label>Numero</label>
+            <SfTextBox Value="@(_header.DocumentNumber > 0 ? _header.DocumentNumber.ToString() : "(Automatico)")"
+                       Readonly="true" CssClass="e-disabled" />
+        </div>
+        <div>
+            <label>Fecha *</label>
+            <SfDatePicker TValue="DateTime" @bind-Value="_header.DocumentDate" Format="dd/MM/yyyy" Enabled="@IsEditable" />
+        </div>
+        <div>
+            <label>Bodega Origen *</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.WarehouseCode"
+                            DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        @if (_header.DocumentType == "T")
+        {
+            <div>
+                <label>Bodega Destino *</label>
+                <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_header.DestinationWarehouseCode"
+                                DataSource="_warehouses" Enabled="@IsEditable" Placeholder="Seleccione bodega destino">
+                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                </SfDropDownList>
+            </div>
+        }
+        <div>
+            <label>Referencia</label>
+            <SfTextBox @bind-Value="_header.Reference" Placeholder="Referencia externa" Enabled="@IsEditable" />
+        </div>
+        <div class="campo-ancho">
+            <label>Descripcion</label>
+            <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del movimiento" Enabled="@IsEditable" />
+        </div>
     </div>
-    <div style="grid-column:span 2;">
-        <label>Descripcion</label>
-        <SfTextBox @bind-Value="_header.Description" Placeholder="Descripcion del movimiento" Enabled="@IsEditable" />
+
+    <!-- Detail lines -->
+    <div class="page-header">
+        <h4>Detalle de Productos</h4>
+        @if (IsEditable)
+        {
+            <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
+        }
     </div>
-</div>
 
-<!-- Detail lines -->
-<div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-    <h4 style="margin:0;">Detalle de Productos</h4>
-    @if (IsEditable)
-    {
-        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="AddLine">Agregar Linea</SfButton>
-    }
-</div>
-
-<div style="overflow-x:auto;">
-    <table class="e-table" style="width:100%;border-collapse:collapse;">
-        <thead>
-            <tr style="background:var(--sf-grid-header-bg, #f5f5f5);">
-                <th style="width:40px;text-align:center;">#</th>
-                <th style="width:160px;">Codigo Producto</th>
-                <th style="width:260px;">Nombre Producto</th>
-                <th style="width:130px;text-align:right;">Cantidad</th>
-                <th style="width:140px;text-align:right;">Costo Unitario</th>
-                <th style="width:140px;text-align:right;">Total</th>
-                @if (IsEditable) { <th style="width:50px;"></th> }
-            </tr>
-        </thead>
-        <tbody>
-            @for (var i = 0; i < _lines.Count; i++)
-            {
-                var idx = i;
-                var line = _lines[idx];
-                <tr style="border-bottom:1px solid #e0e0e0;">
-                    <td style="text-align:center;color:#888;">@(idx + 1)</td>
-                    <td>
-                        <div style="display:flex;gap:4px;">
-                            <SfTextBox @bind-Value="line.ProductCode" Placeholder="Codigo" CssClass="e-small"
-                                       Enabled="@IsEditable" @onblur="@(() => LookupProduct(idx))" />
-                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
-                                      Disabled="@(!IsEditable)" OnClick="@(() => OpenProductSearch(idx))" />
-                        </div>
-                    </td>
-                    <td><span style="font-size:12px;color:#666;">@line.ProductName</span></td>
-                    <td>
-                        <SfNumericTextBox TValue="decimal" @bind-Value="line.Quantity" Format="N2" Min="0"
-                                          CssClass="e-small" Enabled="@IsEditable" />
-                    </td>
-                    <td>
-                        <SfNumericTextBox TValue="decimal" @bind-Value="line.UnitCost" Format="N2" Min="0"
-                                          CssClass="e-small" Enabled="@IsEditable" />
-                    </td>
-                    <td style="text-align:right;font-weight:600;">
-                        @((line.Quantity * line.UnitCost).ToString("N2"))
-                    </td>
-                    @if (IsEditable)
-                    {
-                        <td style="text-align:center;">
-                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
-                                      OnClick="@(() => RemoveLine(idx))" />
-                        </td>
-                    }
+    <div style="overflow-x:auto;">
+        <table class="e-table tabla">
+            <thead>
+                <tr>
+                    <th style="width:40px;text-align:center;">#</th>
+                    <th style="width:160px;">Codigo Producto</th>
+                    <th style="width:260px;">Nombre Producto</th>
+                    <th class="monto" style="width:130px;">Cantidad</th>
+                    <th class="monto" style="width:140px;">Costo Unitario</th>
+                    <th class="monto" style="width:140px;">Total</th>
+                    @if (IsEditable) { <th style="width:50px;"></th> }
                 </tr>
-            }
-            @if (_lines.Count == 0)
-            {
-                <tr><td colspan="@(IsEditable ? 7 : 6)" style="text-align:center;padding:20px;color:#888;">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
-            }
-        </tbody>
-    </table>
-</div>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < _lines.Count; i++)
+                {
+                    var idx = i;
+                    var line = _lines[idx];
+                    <tr>
+                        <td class="texto-tenue columna-num">@(idx + 1)</td>
+                        <td>
+                            <div style="display:flex;gap:var(--gap-xs);">
+                                <SfTextBox @bind-Value="line.ProductCode" Placeholder="Codigo" CssClass="e-small"
+                                           Enabled="@IsEditable" @onblur="@(() => LookupProduct(idx))" />
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search"
+                                          Disabled="@(!IsEditable)" OnClick="@(() => OpenProductSearch(idx))" />
+                            </div>
+                        </td>
+                        <td><span class="muted">@line.ProductName</span></td>
+                        <td>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="line.Quantity" Format="N2" Min="0"
+                                              CssClass="e-small" Enabled="@IsEditable" />
+                        </td>
+                        <td>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="line.UnitCost" Format="N2" Min="0"
+                                              CssClass="e-small" Enabled="@IsEditable" />
+                        </td>
+                        <td class="monto" style="font-weight:var(--peso-fuerte);">
+                            @((line.Quantity * line.UnitCost).ToString("N2"))
+                        </td>
+                        @if (IsEditable)
+                        {
+                            <td class="columna-num">
+                                <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                          OnClick="@(() => RemoveLine(idx))" />
+                            </td>
+                        }
+                    </tr>
+                }
+                @if (_lines.Count == 0)
+                {
+                    <tr><td colspan="@(IsEditable ? 7 : 6)" class="texto-tenue fila-vacia">No hay lineas. Haga clic en "Agregar Linea" para comenzar.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
-<!-- Totals footer -->
-<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:16px;padding:12px;background:var(--sf-grid-header-bg, #f5f5f5);border-radius:4px;">
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Lineas</span><br/>
-        <strong style="font-size:16px;">@_lines.Count</strong>
-    </div>
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Total Cantidad</span><br/>
-        <strong style="font-size:16px;">@TotalQuantity.ToString("N2")</strong>
-    </div>
-    <div style="text-align:right;">
-        <span style="font-size:12px;color:#666;">Valor Total</span><br/>
-        <strong style="font-size:16px;">@TotalAmount.ToString("N2")</strong>
+    <!-- Totals footer -->
+    <div class="barra-totales">
+        <div>
+            <span class="label">Total Lineas</span>
+            <strong>@_lines.Count</strong>
+        </div>
+        <div>
+            <span class="label">Total Cantidad</span>
+            <strong>@TotalQuantity.ToString("N2")</strong>
+        </div>
+        <div>
+            <span class="label">Valor Total</span>
+            <strong>@TotalAmount.ToString("N2")</strong>
+        </div>
     </div>
 </div>
 
@@ -173,8 +175,8 @@
 <SfDialog @bind-Visible="_showProductSearch" Header="Buscar Producto" Width="650px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
+            <div style="padding:var(--pad-md);">
+                <div class="acciones" style="margin-bottom:var(--gap-md);">
                     <SfTextBox @bind-Value="_productSearchText" Placeholder="Codigo o nombre de producto" CssClass="e-small" />
                     <SfButton CssClass="e-primary e-small" OnClick="SearchProducts">Buscar</SfButton>
                 </div>

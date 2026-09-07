@@ -6,115 +6,117 @@
 
 <PageTitle>Calificacion de Cartera - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Calificacion de Cartera</h3>
-</div>
-
-<!-- Parameters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
-    <div>
-        <label>Fecha de Calificacion</label>
-        <SfDatePicker TValue="DateTime?" @bind-Value="_classificationDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
+<div class="pagina">
+    <div class="page-header">
+        <h3>Calificacion de Cartera</h3>
     </div>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="@(() => _showConfirm = true)">Ejecutar Calificacion</SfButton>
-    <SfButton CssClass="e-info e-small" IconCss="e-icons e-reload" OnClick="LoadCurrentData">Actualizar</SfButton>
-</div>
 
-@if (_processing)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#4caf50" />
-    <p>Procesando calificacion...</p>
-}
-
-<!-- Distribution Chart -->
-@if (_currentDistribution is not null && _currentDistribution.Count > 0)
-{
-    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
-        <div style="flex:1;min-width:300px;">
-            <h4>Distribucion por Categoria</h4>
-            <SfChart Title="Calificacion de Cartera">
-                <ChartSeriesCollection>
-                    <ChartSeries DataSource="_currentDistribution" XName="Classification" YName="TotalBalance"
-                                 Type="ChartSeriesType.Column" InnerRadius="60%">
-                    </ChartSeries>
-                </ChartSeriesCollection>
-                <ChartTooltipSettings Enable="true" Format="${point.x}: $${point.y:N2}" />
-            </SfChart>
+    <!-- Parameters -->
+    <div class="toolbar">
+        <div>
+            <label>Fecha de Calificacion</label>
+            <SfDatePicker TValue="DateTime?" @bind-Value="_classificationDate" Format="dd/MM/yyyy" CssClass="e-small" Width="180px" />
         </div>
-        <div style="flex:1;min-width:300px;">
-            <SfGrid TValue="ClassificationItem" DataSource="_currentDistribution" AllowSorting="true">
-                <GridColumns>
-                    <GridColumn Field="Classification" HeaderText="Categoria" Width="100" TextAlign="TextAlign.Center">
-                        <Template>
-                            @{
-                                var item = context as ClassificationItem;
-                                var color = item?.Classification switch
-                                {
-                                    "A" => "#4caf50",
-                                    "B" => "#ffc107",
-                                    "C" => "#ff9800",
-                                    "D" => "#ff5722",
-                                    "E" => "#f44336",
-                                    _ => "#999"
-                                };
-                            }
-                            <span style="font-weight:bold;color:@color;">@item?.Classification</span>
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Field="Count" HeaderText="Cantidad" Width="100" TextAlign="TextAlign.Center" />
-                    <GridColumn Field="TotalBalance" HeaderText="Saldo Total" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-                    <GridColumn Field="ProvisionRate" HeaderText="% Provision" Width="120" Format="N1" TextAlign="TextAlign.Right" />
-                    <GridColumn Field="ProvisionAmount" HeaderText="Provision" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-                </GridColumns>
-                <GridAggregates>
-                    <GridAggregate>
-                        <GridAggregateColumns>
-                            <GridAggregateColumn Field="Count" Type="AggregateType.Sum">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
-                            </GridAggregateColumn>
-                            <GridAggregateColumn Field="TotalBalance" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                            </GridAggregateColumn>
-                            <GridAggregateColumn Field="ProvisionAmount" Type="AggregateType.Sum" Format="N2">
-                                <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
-                            </GridAggregateColumn>
-                        </GridAggregateColumns>
-                    </GridAggregate>
-                </GridAggregates>
-            </SfGrid>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="@(() => _showConfirm = true)">Ejecutar Calificacion</SfButton>
+        <SfButton CssClass="e-info e-small" IconCss="e-icons e-reload" OnClick="LoadCurrentData">Actualizar</SfButton>
+    </div>
+
+    @if (_processing)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--exito)" />
+        <p>Procesando calificacion...</p>
+    }
+
+    <!-- Distribution Chart -->
+    @if (_currentDistribution is not null && _currentDistribution.Count > 0)
+    {
+        <div class="dos-columnas">
+            <div class="columna">
+                <h4>Distribucion por Categoria</h4>
+                <SfChart Title="Calificacion de Cartera">
+                    <ChartSeriesCollection>
+                        <ChartSeries DataSource="_currentDistribution" XName="Classification" YName="TotalBalance"
+                                     Type="ChartSeriesType.Column" InnerRadius="60%">
+                        </ChartSeries>
+                    </ChartSeriesCollection>
+                    <ChartTooltipSettings Enable="true" Format="${point.x}: $${point.y:N2}" />
+                </SfChart>
+            </div>
+            <div class="columna">
+                <SfGrid TValue="ClassificationItem" DataSource="_currentDistribution" AllowSorting="true">
+                    <GridColumns>
+                        <GridColumn Field="Classification" HeaderText="Categoria" Width="100" TextAlign="TextAlign.Center">
+                            <Template>
+                                @{
+                                    var item = context as ClassificationItem;
+                                    var color = item?.Classification switch
+                                    {
+                                        "A" => "var(--riesgo-a-txt)",
+                                        "B" => "var(--riesgo-b-txt)",
+                                        "C" => "var(--riesgo-c-txt)",
+                                        "D" => "var(--riesgo-d-txt)",
+                                        "E" => "var(--riesgo-e-txt)",
+                                        _ => "var(--riesgo-nd-txt)"
+                                    };
+                                }
+                                <span class="calificacion" style="color:@color">@item?.Classification</span>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="Count" HeaderText="Cantidad" Width="100" TextAlign="TextAlign.Center" />
+                        <GridColumn Field="TotalBalance" HeaderText="Saldo Total" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="ProvisionRate" HeaderText="% Provision" Width="120" Format="N1" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="ProvisionAmount" HeaderText="Provision" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                    </GridColumns>
+                    <GridAggregates>
+                        <GridAggregate>
+                            <GridAggregateColumns>
+                                <GridAggregateColumn Field="Count" Type="AggregateType.Sum">
+                                    <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
+                                </GridAggregateColumn>
+                                <GridAggregateColumn Field="TotalBalance" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                                </GridAggregateColumn>
+                                <GridAggregateColumn Field="ProvisionAmount" Type="AggregateType.Sum" Format="N2">
+                                    <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>@s?.Sum</b></FooterTemplate>
+                                </GridAggregateColumn>
+                            </GridAggregateColumns>
+                        </GridAggregate>
+                    </GridAggregates>
+                </SfGrid>
+            </div>
         </div>
-    </div>
-}
+    }
 
-<!-- History Chart -->
-@if (_history is not null && _history.Count > 0)
-{
-    <h4>Historico de Calificacion (Ultimos 12 meses)</h4>
-    <SfChart Title="Evolucion de Calificacion">
-        <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
-        <ChartPrimaryYAxis LabelFormat="N0" />
-        <ChartSeriesCollection>
-            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountA" Name="A" Type="ChartSeriesType.StackingColumn" />
-            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountB" Name="B" Type="ChartSeriesType.StackingColumn" />
-            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountC" Name="C" Type="ChartSeriesType.StackingColumn" />
-            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountD" Name="D" Type="ChartSeriesType.StackingColumn" />
-            <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountE" Name="E" Type="ChartSeriesType.StackingColumn" />
-        </ChartSeriesCollection>
-        <ChartTooltipSettings Enable="true" />
-        <ChartLegendSettings Visible="true" />
-    </SfChart>
-}
+    <!-- History Chart -->
+    @if (_history is not null && _history.Count > 0)
+    {
+        <h4>Historico de Calificacion (Ultimos 12 meses)</h4>
+        <SfChart Title="Evolucion de Calificacion">
+            <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
+            <ChartPrimaryYAxis LabelFormat="N0" />
+            <ChartSeriesCollection>
+                <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountA" Name="A" Type="ChartSeriesType.StackingColumn" />
+                <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountB" Name="B" Type="ChartSeriesType.StackingColumn" />
+                <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountC" Name="C" Type="ChartSeriesType.StackingColumn" />
+                <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountD" Name="D" Type="ChartSeriesType.StackingColumn" />
+                <ChartSeries DataSource="_history" XName="PeriodLabel" YName="AmountE" Name="E" Type="ChartSeriesType.StackingColumn" />
+            </ChartSeriesCollection>
+            <ChartTooltipSettings Enable="true" />
+            <ChartLegendSettings Visible="true" />
+        </SfChart>
+    }
 
-<!-- Result -->
-@if (_result is not null)
-{
-    <div style="margin-top:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;background:#1b5e20;">
-        <h5>Resultado</h5>
-        <p>Obligaciones procesadas: @_result.PortfoliosProcessed</p>
-        <p>Total provision: @_result.TotalProvision.ToString("N2")</p>
-    </div>
-}
+    <!-- Result -->
+    @if (_result is not null)
+    {
+        <div class="aviso aviso-ok">
+            <h5>Resultado</h5>
+            <p>Obligaciones procesadas: @_result.PortfoliosProcessed</p>
+            <p>Total provision: @_result.TotalProvision.ToString("N2")</p>
+        </div>
+    }
+</div>
 
 <ConfirmDialog @bind-Visible="_showConfirm"
                Title="Ejecutar Calificacion"
@@ -212,8 +214,3 @@
         public Guid? AccountingDocumentId { get; set; }
     }
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
-</style>

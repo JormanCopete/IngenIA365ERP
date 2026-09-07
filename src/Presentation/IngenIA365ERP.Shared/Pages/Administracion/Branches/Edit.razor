@@ -9,14 +9,16 @@
 <PageTitle>@(_isNew ? "Nueva sucursal" : "Editar sucursal") — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
-    <h1>@(_isNew ? "Crear sucursal" : "Editar sucursal")</h1>
+    <div class="page-header">
+        <h1>@(_isNew ? "Crear sucursal" : "Editar sucursal")</h1>
+    </div>
 
     <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="branch-edit">
         <DataAnnotationsValidator />
 
         @if (_isNew)
         {
-            <div class="row">
+            <div class="row toolbar">
                 <label>Tenant (PublicId)<InputText @bind-Value="_model.TenantPublicIdText" /></label>
                 <label>Código<InputText @bind-Value="_model.Code" /></label>
             </div>
@@ -26,20 +28,20 @@
             <p>Editando sucursal <code>@PublicId</code></p>
         }
 
-        <div class="row">
+        <div class="row toolbar">
             <label>Nombre<InputText @bind-Value="_model.Name" /></label>
             <label>Teléfono<InputText @bind-Value="_model.Phone" /></label>
         </div>
-        <div class="row">
+        <div class="row toolbar">
             <label>Dirección<InputText @bind-Value="_model.Address" /></label>
             <label>Email<InputText @bind-Value="_model.Email" /></label>
         </div>
-        <div class="row">
-            <label><InputCheckbox @bind-Value="_model.IsHeadquarters" /> Sucursal matriz</label>
+        <div class="row toolbar">
+            <label class="campo-check"><InputCheckbox @bind-Value="_model.IsHeadquarters" /> Sucursal matriz</label>
         </div>
 
         <ValidationSummary />
-        @if (_error is not null) { <p class="error">@_error</p> }
+        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
 
         <div class="actions">
             <button type="submit" class="primary" disabled="@_saving">Guardar</button>

@@ -1,0 +1,49 @@
+/* Detalle de cuenta de ahorro — lo que no cubre componentes.css. */
+
+.cargando {
+    display: flex;
+    justify-content: center;
+    padding: var(--gap-xl);
+}
+
+/* Relleno del contenido de una pestaña de SfTab, que viene sin aire propio. */
+.contenido-tab {
+    padding: var(--pad-lg);
+}
+
+/* Ficha de dos columnas: etiqueta a la izquierda, dato a la derecha. El tope
+   de ancho mantiene el par a distancia legible. */
+.lista-datos {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gap-md);
+    max-width: 600px;
+}
+
+/* Cifras que en realidad son texto (la línea de ahorro, una fecha): con el
+   tamaño de cifra se parten en dos renglones. */
+.kpi-value.valor-texto { font-size: var(--texto-md); }
+
+.texto-alerta { color: var(--alerta-texto); }
+
+/* Pastillas de tipo de movimiento; la geometría la pone .badge global. */
+.badge-deposito {
+    background: var(--exito);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+.badge-retiro {
+    background: var(--peligro);
+    color: var(--acento-texto);
+    border-color: transparent;
+}
+
+/* Formulario dentro de un SfDialog. Repetido en siete pantallas del grupo:
+   candidato a subir a componentes.css. */
+.campos-dialogo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--pad-sm);
+}

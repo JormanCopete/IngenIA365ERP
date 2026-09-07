@@ -138,6 +138,22 @@ public interface IApplicationDbContext
     DbSet<Absence> Absences { get; }
     DbSet<TaxCertificate> TaxCertificates { get; }
 
+    // Payroll — feature 005 (novedades y liquidacion)
+    DbSet<PayrollPlan> PayrollPlans { get; }
+    DbSet<PayrollConceptDefinition> PayrollConceptDefinitions { get; }
+    DbSet<PayrollConceptDefinitionAccount> PayrollConceptDefinitionAccounts { get; }
+    DbSet<PayrollLegalParameter> PayrollLegalParameters { get; }
+    DbSet<PayrollLegalParameterRange> PayrollLegalParameterRanges { get; }
+    DbSet<PayrollNovelty> PayrollNovelties { get; }
+    DbSet<PayrollRecurringNovelty> PayrollRecurringNovelties { get; }
+    DbSet<EmployeeWithholdingRate> EmployeeWithholdingRates { get; }
+    DbSet<EmployeeTaxDeduction> EmployeeTaxDeductions { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRun> PayrollRuns { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRunEmployee> PayrollRunEmployees { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines { get; }
+    DbSet<PayrollPayment> PayrollPayments { get; }
+    DbSet<PayslipDelivery> PayslipDeliveries { get; }
+
     // Inventory
     DbSet<Product> Products { get; }
     DbSet<ProductGroup> ProductGroups { get; }
@@ -180,6 +196,9 @@ public interface IApplicationDbContext
     // Security
     DbSet<User> Users { get; }
     DbSet<Role> Roles { get; }
+
+    // Parametros de configuracion de la cooperativa (COR_SystemSettings).
+    DbSet<SystemSetting> SystemSettings { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<LoginAttempt> LoginAttempts { get; }
     DbSet<UserTenantAssignment> UserTenantAssignments { get; }
@@ -193,8 +212,9 @@ public interface IApplicationDbContext
     DbSet<UserRole> UserRoles { get; }
 
     // Admin
-    DbSet<Tenant> Tenants { get; }
-    DbSet<TenantBranch> TenantBranches { get; }
+    // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
+    // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
+    // ese contexto y decirlo, en vez de alcanzarlas por la puerta de atras.
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -15,21 +15,34 @@ namespace IngenIA365ERP.Application.Tests.Audit.ExportAuditLogPdf;
 /// </summary>
 public class ExportAuditLogPdfQueryHandlerTests
 {
+    /// <summary>PublicId de la cooperativa: lo que nombra la base de auditoría.</summary>
+    private const string PublicaDePrueba = "7327a55915034f50a2c134bd5b2132ab";
+
     private static (ExportAuditLogPdfQueryHandler Handler,
                     IAuditPdfExporter Exporter,
-                    TestApplicationDbContext Db,
+                    TestAdminDbContext Admin,
                     ICurrentUserService Cu)
         Build(string? tenantId = "1", DateTime? now = null)
     {
         var db = TestDbContextFactory.Create();
+        // La cooperativa de la portada se lee del registro real, en la base
+        // administrativa, no de la copia que el modelo operativo replicaba.
+        var admin = TestAdminDbContext.Create();
         var exporter = Substitute.For<IAuditPdfExporter>();
         var cu = Substitute.For<ICurrentUserService>();
         cu.TenantId.Returns(tenantId);
         cu.UserName.Returns("ana@demo");
+
+        // El Id interno resuelve la portada; el PublicId localiza la base de
+        // auditoria. Son dos identificadores distintos y el handler necesita
+        // los dos: confundirlos daba portada correcta y contenido vacio.
+        var cooperativa = Substitute.For<ICurrentTenantService>();
+        cooperativa.TenantId.Returns(PublicaDePrueba);
+
         var clock = Substitute.For<IDateTimeService>();
         clock.UtcNow.Returns(now ?? new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc));
 
-        return (new ExportAuditLogPdfQueryHandler(exporter, db, cu, clock), exporter, db, cu);
+        return (new ExportAuditLogPdfQueryHandler(exporter, db, admin, cu, cooperativa, clock), exporter, admin, cu);
     }
 
     [Fact]
@@ -65,7 +78,10 @@ public class ExportAuditLogPdfQueryHandlerTests
         result.Value.KeyVersion.Should().Be("dev-v1");
 
         await exporter.Received(1).ExportAsync(
-            Arg.Is<AuditExportFilters>(f => f.TenantId == tenantId),
+            // El filtro lleva el PublicId, no el Id interno. Esta línea decía
+            // tenantId —«1»— y con eso el export apuntaba a una base de
+            // auditoría que no existe: la prueba fijaba el defecto.
+            Arg.Is<AuditExportFilters>(f => f.TenantId == PublicaDePrueba),
             Arg.Is<AuditPdfHeader>(h =>
                 h.Nit == "900000001-1" &&
                 h.LegalName == "Cooperativa Demo S.A.S." &&
@@ -135,17 +151,21 @@ public class ExportAuditLogPdfQueryHandlerTests
             Arg.Any<CancellationToken>());
     }
 
-    private static (ExportAuditLogPdfQueryHandler, IAuditPdfExporter, TestApplicationDbContext,
+    private static (ExportAuditLogPdfQueryHandler, IAuditPdfExporter, TestAdminDbContext,
                     ICurrentUserService)
-        BuildWithDb(TestApplicationDbContext existingDb, string tenantId)
+        BuildWithDb(TestAdminDbContext adminExistente, string tenantId)
     {
         var exporter = Substitute.For<IAuditPdfExporter>();
         var cu = Substitute.For<ICurrentUserService>();
         cu.TenantId.Returns(tenantId);
         cu.UserName.Returns("ana@demo");
+        var cooperativa = Substitute.For<ICurrentTenantService>();
+        cooperativa.TenantId.Returns(PublicaDePrueba);
+
         var clock = Substitute.For<IDateTimeService>();
         clock.UtcNow.Returns(new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc));
-        return (new ExportAuditLogPdfQueryHandler(exporter, existingDb, cu, clock),
-            exporter, existingDb, cu);
+        return (new ExportAuditLogPdfQueryHandler(
+                exporter, TestDbContextFactory.Create(), adminExistente, cu, cooperativa, clock),
+            exporter, adminExistente, cu);
     }
 }

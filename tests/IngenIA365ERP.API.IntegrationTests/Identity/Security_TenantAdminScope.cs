@@ -26,8 +26,7 @@ public sealed class Security_TenantAdminScope(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
 
         // 1) Login master y registro de DOS tenants, cada uno con su primer admin.
-        var masterToken = await LoginAsync(
-            http, CentralIdentityApiFixture.MasterEmail, CentralIdentityApiFixture.MasterPassword);
+        var masterToken = await fx.IniciarSesionMaestroAsync(http);
 
         var tenantA = await RegisterTenantWithAdminAsync(http, masterToken,
             name: "Coop. Alcance A", schema: "tenant_scope_a", nit: "900111222",

@@ -9,7 +9,14 @@
 "contraseña correcta no funciona"; soporte con tickets en cascada.
 
 **Diagnóstico**:
-- Revisar `SEC_Users.FailedLoginAttempts` y `LockoutEndAt` por tenant.
+- Revisar el contador en Redis, que es donde vive el bloqueo:
+  `bloqueo:password:<CORREO EN MAYÚSCULAS>` (existe y con TTL ⇒ bloqueado) e
+  `intentos:password:<CORREO EN MAYÚSCULAS>` (cuántos fallos lleva).
+  **No** mirar `SEC_Users.FailedLoginAttempts` ni `LockoutEndAt`: esas columnas
+  quedaron sin nadie que las escriba cuando el login pasó a la identidad
+  central, y responden siempre lo mismo.
+- Para desbloquear a alguien, la pantalla de usuarios ya limpia ese contador;
+  a mano es `DEL` de las dos claves.
 - Cruzar IPs en audit log (`Module=Security`, `Action=LoginFailed`) — ¿es
   un ataque distribuido o un cliente legítimo con cache de password viejo?
 - Revisar dashboard de latencia: ¿`/api/auth/login` está timeouting y los
@@ -82,11 +89,29 @@ para implementar fallback persistente real.
 **Cuándo**: programada cada 12 meses, o inmediata tras sospecha de leak.
 
 **Procedimiento (RSA — JWT signing)**:
-1. Generar nuevo par RSA con `IRsaKeyProvider.RotateAsync()`.
-2. Dejar la clave antigua en el ring 24 h para que los JWT en circulación
-   sigan validando hasta que el cliente refresque.
-3. Tras 24 h, retirar la clave vieja del ring.
-4. Forzar `/api/auth/logout-all` para usuarios privilegiados.
+
+> **No hay anillo de claves.** Este runbook describía `IRsaKeyProvider.RotateAsync()`
+> y una convivencia de 24 h entre la clave vieja y la nueva. Nada de eso existe:
+> hay **una** clave, la del PEM en `JwtSettings:PrivateKeyPath`, cargada al
+> arrancar. Cambiarla invalida **todos** los tokens en circulación de golpe,
+> incluidos los que están en vuelo. No es un defecto que se pueda esquivar con
+> el procedimiento; es la consecuencia de tener una sola clave, y hay que
+> planificar la ventana en consecuencia.
+
+1. Generar el par nuevo y dejarlo donde apunte `JwtSettings:PrivateKeyPath`
+   (montado como secreto en el despliegue, nunca versionado).
+2. Reiniciar el servicio. Desde ese instante, todo access y refresh token
+   emitido con la clave anterior deja de validar: cada persona vuelve a iniciar
+   sesión, **con su segundo factor**.
+3. Comprobar que el arranque no cayó a una clave efímera: en `Production` el
+   servicio falla al arrancar si no encuentra el PEM (`RsaKeyGuard`), y ese
+   fallo es la señal de que el secreto no se montó bien. Un arranque limpio con
+   login correcto es la verificación.
+4. Si lo que se filtró es un **token** y no la clave, no hace falta rotar nada:
+   cada persona privilegiada llama a `POST /api/auth/logout-all` con **su
+   propio** token. Rota su `SecurityStamp` y con eso caen todas sus sesiones, en
+   todos sus dispositivos. No es un endpoint de administración: cierra las
+   sesiones de quien llama, no las de otro.
 
 **Procedimiento (KEK — DataProtection)**:
 1. `IDataProtectionProvider.CreateProtector(...)` mantiene N claves en su

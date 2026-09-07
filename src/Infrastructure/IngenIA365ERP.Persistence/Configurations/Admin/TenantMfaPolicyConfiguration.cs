@@ -26,6 +26,27 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
             .HasDatabaseName("UX_ADM_TenantMfaPolicies_TenantId");
 
         builder.Property(e => e.IsRequired).HasDefaultValue(false);
+
+        // Entero explícito, no el nombre del enum: la máscara es aritmética de bits
+        // y guardarla como texto obligaría a leer «Totp, WebAuthn» y volver a
+        // parsearlo. El default en la BASE importa tanto como el de la entidad —
+        // las filas que ya existen se rellenan con él al migrar, y si fuera 0
+        // (Ninguno) toda cooperativa que hoy exige MFA quedaría en el estado
+        // imposible que la entidad prohíbe.
+        builder.Property(e => e.AllowedMethodsMask)
+            .HasConversion<int>()
+            .HasDefaultValue(ConversionDeMetodosMfa.Todos);
+
+        builder.Property(e => e.AllowEmailRecovery).HasDefaultValue(false);
+
+        // El default de la BASE tiene que ser 24, no 0. Sin decirlo, EF pone 0 —el
+        // default del int— y toda fila existente quedaría con «cero horas de
+        // espera», que es exactamente el diseño sin demora que se descartó: sin
+        // espera no hay aviso que llegue a tiempo ni cancelación posible, y el
+        // segundo factor pasa a valer lo que valga el buzón.
+        builder.Property(e => e.EmailRecoveryDelayHours)
+            .HasDefaultValue(TenantMfaPolicy.DemoraPorDefectoEnHoras);
+
         builder.Property(e => e.CreatedAt);
 
         builder.Property(e => e.RowVersion).IsRowVersion();

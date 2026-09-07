@@ -6,61 +6,63 @@
 
 <PageTitle>Cheques - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Cheques</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Cheque</SfButton>
-</div>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cheques</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Cheque</SfButton>
+    </div>
 
-<SfGrid @ref="_grid" TValue="CheckItem" DataSource="@_items"
-    AllowPaging="true" AllowSorting="true" AllowFiltering="true">
-    <GridColumns>
-        <GridColumn Field="BankName" HeaderText="Banco" Width="180" />
-        <GridColumn Field="CheckNumber" HeaderText="Numero" Width="120" TextAlign="TextAlign.Right" />
-        <GridColumn Field="PayeeName" HeaderText="Beneficiario" Width="220" />
-        <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
-        <GridColumn Field="IssueDate" HeaderText="Fecha Emision" Width="130" Format="dd/MM/yyyy" />
-        <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
-            <Template>
-                @{
-                    var item = context as CheckItem;
-                    var badgeClass = item?.Status switch
-                    {
-                        "E" => "e-badge e-badge-info",
-                        "C" => "e-badge e-badge-success",
-                        "A" => "e-badge e-badge-danger",
-                        "D" => "e-badge e-badge-warning",
-                        _ => "e-badge"
-                    };
-                    <span class="@badgeClass">@item?.StatusText</span>
-                }
-            </Template>
-        </GridColumn>
-        <GridColumn HeaderText="Acciones" Width="200" TextAlign="TextAlign.Center">
-            <Template>
-                @{
-                    var item = context as CheckItem;
-                    @if (item?.Status == "E")
-                    {
-                        <SfButton CssClass="e-flat e-small e-success" Content="Cobrar"
-                            OnClick="@(() => ProcessAction(item!, "C"))" />
-                        <SfButton CssClass="e-flat e-small e-danger" Content="Anular"
-                            OnClick="@(() => ProcessAction(item!, "V"))" />
+    <SfGrid @ref="_grid" TValue="CheckItem" DataSource="@_items"
+        AllowPaging="true" AllowSorting="true" AllowFiltering="true">
+        <GridColumns>
+            <GridColumn Field="BankName" HeaderText="Banco" Width="180" />
+            <GridColumn Field="CheckNumber" HeaderText="Numero" Width="120" TextAlign="TextAlign.Right" />
+            <GridColumn Field="PayeeName" HeaderText="Beneficiario" Width="220" />
+            <GridColumn Field="Amount" HeaderText="Monto" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            <GridColumn Field="IssueDate" HeaderText="Fecha Emision" Width="130" Format="dd/MM/yyyy" />
+            <GridColumn Field="StatusText" HeaderText="Estado" Width="130">
+                <Template>
+                    @{
+                        var item = context as CheckItem;
+                        var badgeClass = item?.Status switch
+                        {
+                            "E" => "e-badge e-badge-info",
+                            "C" => "e-badge e-badge-success",
+                            "A" => "e-badge e-badge-danger",
+                            "D" => "e-badge e-badge-warning",
+                            _ => "e-badge"
+                        };
+                        <span class="@badgeClass">@item?.StatusText</span>
                     }
-                    @if (item?.Status == "C")
-                    {
-                        <SfButton CssClass="e-flat e-small e-warning" Content="Devolver"
-                            OnClick="@(() => ProcessAction(item!, "R"))" />
+                </Template>
+            </GridColumn>
+            <GridColumn HeaderText="Acciones" Width="200" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var item = context as CheckItem;
+                        @if (item?.Status == "E")
+                        {
+                            <SfButton CssClass="e-flat e-small e-success" Content="Cobrar"
+                                OnClick="@(() => ProcessAction(item!, "C"))" />
+                            <SfButton CssClass="e-flat e-small e-danger" Content="Anular"
+                                OnClick="@(() => ProcessAction(item!, "V"))" />
+                        }
+                        @if (item?.Status == "C")
+                        {
+                            <SfButton CssClass="e-flat e-small e-warning" Content="Devolver"
+                                OnClick="@(() => ProcessAction(item!, "R"))" />
+                        }
                     }
-                }
-            </Template>
-        </GridColumn>
-    </GridColumns>
-</SfGrid>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</div>
 
 <SfDialog @bind-Visible="_showDialog" Header="Registrar Cheque" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div style="padding:var(--pad-md);display:flex;flex-direction:column;gap:var(--pad-lg);">
                 <div>
                     <label>Banco (PublicId) *</label>
                     <SfTextBox @bind-Value="_model.BankPublicId" Placeholder="GUID del banco" />

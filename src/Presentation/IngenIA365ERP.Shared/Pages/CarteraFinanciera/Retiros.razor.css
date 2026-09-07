@@ -1,0 +1,23 @@
+/* Bloque de trabajo sobre la superficie de la pagina. componentes.css todavia
+   no tiene una clase de panel; mientras no la tenga, vive aca con ambito y en
+   tokens, en vez de repetirse en linea. */
+
+.panel {
+    background: var(--superficie-1);
+    border-radius: var(--radio);
+    padding: var(--gap-lg);
+    margin-bottom: var(--gap-lg);
+}
+
+.panel > h4 {
+    margin-top: 0;
+}
+
+/* La forma de la pastilla la pone .badge de componentes.css; aca solo el color,
+   que marca que el movimiento es una salida de dinero. El bloque <style> que
+   estaba dentro del .razor repetia padding, radio y tamano de texto. */
+.badge-retiro {
+    background: var(--peligro);
+    color: var(--acento-texto);
+    border-color: var(--peligro);
+}

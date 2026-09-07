@@ -43,6 +43,52 @@ public class Tenant : AuditableEntity
     [MaxLength(100)]
     public string? DatabaseName { get; set; }
 
+    /// <summary>
+    /// Cadena de conexión propia, cuando la cooperativa vive fuera de la instancia
+    /// por defecto. Null es lo normal: entonces se compone de la plantilla más
+    /// <see cref="DatabaseName"/>.
+    ///
+    /// <para>
+    /// Existe para que trasladar una cooperativa a su propio servidor sea un
+    /// cambio de DATO y no de código, como exige el Principio IV.
+    /// </para>
+    /// </summary>
+    public string? ConnectionString { get; set; }
+
+    /// <summary>
+    /// Base de auditoría de esta cooperativa en MongoDB. El rastro regulatorio se
+    /// aísla igual que los datos (Principio IV y Principio X).
+    /// </summary>
+    public string? AuditDatabaseName { get; set; }
+
+    /// <summary>
+    /// Base lógica de Redis asignada. Estable entre reinicios: se guarda, no se
+    /// deriva, porque derivarla del Id la movería si la cooperativa se re-registra
+    /// y el caché quedaría leyendo el espacio de otra.
+    /// </summary>
+    public int? RedisDbIndex { get; set; }
+
+    /// <summary>
+    /// Última migración aplicada a la base de esta cooperativa. El arranque la
+    /// compara con el árbol del ensamblado para decidir si puede servirla.
+    /// </summary>
+    public string? MigrationsVersion { get; set; }
+
+    /// <summary>
+    /// Dónde está el aprovisionamiento: <c>Pending</c>, <c>Provisioning</c>,
+    /// <c>Ready</c> o <c>Failed</c>.
+    ///
+    /// <para>
+    /// Hace falta porque crear una base no es instantáneo ni infalible, y hasta
+    /// ahora una cooperativa a medias era indistinguible de una lista: la fila
+    /// existía en la consola y su base no. Con esto el fallo se ve.
+    /// </para>
+    /// </summary>
+    public string ProvisioningState { get; set; } = "Pending";
+
+    /// <summary>Por qué falló el aprovisionamiento, si falló. Para quien lo repare.</summary>
+    public string? ProvisioningError { get; set; }
+
     [MaxLength(200)]
     public string ContactEmail { get; set; } = string.Empty;
 

@@ -6,111 +6,113 @@
 
 <PageTitle>Certificados de Retencion - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Certificados de Retencion en la Fuente</h3>
-</div>
-
-<!-- Year Selector and Generate -->
-<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
-    <div>
-        <label>Ano Gravable</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
+<div class="pagina">
+    <div class="page-header">
+        <h3>Certificados de Retencion en la Fuente</h3>
     </div>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="@(() => _showGenerateConfirm = true)">Generar Certificados</SfButton>
-    <SfButton CssClass="e-info e-small" IconCss="e-icons e-reload" OnClick="LoadCertificates">Consultar</SfButton>
-</div>
 
-@if (_loading)
-{
-    <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                   TrackColor="#333" ProgressColor="#00bcd4" />
-}
-
-@if (_genResult is not null)
-{
-    <div style="margin-bottom:16px;padding:12px;border:1px solid #4caf50;border-radius:4px;">
-        <p>Se generaron <b>@_genResult.CertificatesGenerated</b> certificados para el ano @_genResult.Year.</p>
-        <p>Total retencion: <b>@_genResult.TotalWithholding.ToString("N2")</b></p>
-    </div>
-}
-
-<!-- Certificates Grid -->
-@if (_certificates is not null && _certificates.Count > 0)
-{
-    <SfGrid TValue="TaxCertItem" DataSource="_certificates" AllowPaging="true" AllowSorting="true"
-            AllowFiltering="true" AllowExcelExport="true" @ref="_grid">
-        <GridPageSettings PageSize="20" />
-        <GridColumns>
-            <GridColumn Field="TaxId" HeaderText="Identificacion" Width="140" />
-            <GridColumn Field="PersonName" HeaderText="Nombre" Width="300" />
-            <GridColumn Field="TotalBase" HeaderText="Base Gravable" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="TotalWithholding" HeaderText="Retencion" Width="160" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="Rate" HeaderText="Tarifa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-            <GridColumn Field="IssueDate" HeaderText="Fecha Expedicion" Width="140" Format="d" Type="ColumnType.Date" />
-        </GridColumns>
-        <GridAggregates>
-            <GridAggregate>
-                <GridAggregateColumns>
-                    <GridAggregateColumn Field="TotalBase" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                    <GridAggregateColumn Field="TotalWithholding" Type="AggregateType.Sum" Format="N2">
-                        <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
-                    </GridAggregateColumn>
-                </GridAggregateColumns>
-            </GridAggregate>
-        </GridAggregates>
-    </SfGrid>
-}
-else if (!_loading && _certificates is not null)
-{
-    <p style="color:#999;">No se encontraron certificados para el ano @_year.</p>
-}
-
-<hr style="border-color:#444;margin:24px 0;" />
-
-<!-- Individual Search -->
-<h4>Consulta Individual</h4>
-<div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
-    <div style="flex:1;max-width:400px;">
-        <label>Buscar Persona</label>
-        <SfTextBox @bind-Value="_searchTerm" Placeholder="Nombre o identificacion..." CssClass="e-small" />
-    </div>
-    <SfButton CssClass="e-info e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar</SfButton>
-</div>
-
-@if (_searchResults is not null && _searchResults.Count > 0)
-{
-    <SfGrid TValue="PersonItem" DataSource="_searchResults" AllowSelection="true">
-        <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single" />
-        <GridEvents RowSelected="OnPersonSelected" TValue="PersonItem" />
-        <GridColumns>
-            <GridColumn Field="TaxId" HeaderText="Identificacion" Width="140" />
-            <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
-        </GridColumns>
-    </SfGrid>
-}
-
-@if (_individualCert is not null)
-{
-    <div style="margin-top:16px;padding:16px;border:1px solid #444;border-radius:4px;">
-        <h5>Certificado de @_individualCert.PersonName</h5>
-        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;">
-            <div class="info-card"><span class="label">NIT / CC</span><span>@_individualCert.TaxId</span></div>
-            <div class="info-card"><span class="label">Ano</span><span>@_individualCert.Year</span></div>
-            <div class="info-card"><span class="label">Base Gravable</span><span>@_individualCert.TotalBase.ToString("N2")</span></div>
-            <div class="info-card"><span class="label">Retencion</span><span>@_individualCert.TotalWithholding.ToString("N2")</span></div>
-            <div class="info-card"><span class="label">Tarifa</span><span>@_individualCert.Rate.ToString("N2")%</span></div>
-            <div class="info-card"><span class="label">Expedido por</span><span>@_individualCert.PayerName</span></div>
+    <!-- Year Selector and Generate -->
+    <div class="toolbar">
+        <div>
+            <label>Ano Gravable</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Min="2000" Max="2099" Format="####" Width="120px" CssClass="e-small" />
         </div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="@(() => _showGenerateConfirm = true)">Generar Certificados</SfButton>
+        <SfButton CssClass="e-info e-small" IconCss="e-icons e-reload" OnClick="LoadCertificates">Consultar</SfButton>
     </div>
-}
 
-<ConfirmDialog @bind-Visible="_showGenerateConfirm"
-               Title="Generar Certificados"
-               Message="@($"Esta seguro de generar los certificados de retencion para el ano {_year}? Se reemplazaran los existentes.")"
-               ConfirmText="Generar"
-               OnConfirm="GenerateCertificates" />
+    @if (_loading)
+    {
+        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
+                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
+    }
+
+    @if (_genResult is not null)
+    {
+        <div class="aviso aviso-ok">
+            <p>Se generaron <b>@_genResult.CertificatesGenerated</b> certificados para el ano @_genResult.Year.</p>
+            <p>Total retencion: <b>@_genResult.TotalWithholding.ToString("N2")</b></p>
+        </div>
+    }
+
+    <!-- Certificates Grid -->
+    @if (_certificates is not null && _certificates.Count > 0)
+    {
+        <SfGrid TValue="TaxCertItem" DataSource="_certificates" AllowPaging="true" AllowSorting="true"
+                AllowFiltering="true" AllowExcelExport="true" @ref="_grid">
+            <GridPageSettings PageSize="20" />
+            <GridColumns>
+                <GridColumn Field="TaxId" HeaderText="Identificacion" Width="140" />
+                <GridColumn Field="PersonName" HeaderText="Nombre" Width="300" />
+                <GridColumn Field="TotalBase" HeaderText="Base Gravable" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalWithholding" HeaderText="Retencion" Width="160" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Rate" HeaderText="Tarifa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="IssueDate" HeaderText="Fecha Expedicion" Width="140" Format="d" Type="ColumnType.Date" />
+            </GridColumns>
+            <GridAggregates>
+                <GridAggregate>
+                    <GridAggregateColumns>
+                        <GridAggregateColumn Field="TotalBase" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                        <GridAggregateColumn Field="TotalWithholding" Type="AggregateType.Sum" Format="N2">
+                            <FooterTemplate>@{ var s = context as AggregateTemplateContext; }<b>Total: @s?.Sum</b></FooterTemplate>
+                        </GridAggregateColumn>
+                    </GridAggregateColumns>
+                </GridAggregate>
+            </GridAggregates>
+        </SfGrid>
+    }
+    else if (!_loading && _certificates is not null)
+    {
+        <p class="texto-tenue">No se encontraron certificados para el ano @_year.</p>
+    }
+
+    <hr style="border-color:var(--borde);" />
+
+    <!-- Individual Search -->
+    <h4>Consulta Individual</h4>
+    <div class="toolbar">
+        <div style="flex:1;max-width:400px;">
+            <label>Buscar Persona</label>
+            <SfTextBox @bind-Value="_searchTerm" Placeholder="Nombre o identificacion..." CssClass="e-small" />
+        </div>
+        <SfButton CssClass="e-info e-small" IconCss="e-icons e-search" OnClick="SearchPerson">Buscar</SfButton>
+    </div>
+
+    @if (_searchResults is not null && _searchResults.Count > 0)
+    {
+        <SfGrid TValue="PersonItem" DataSource="_searchResults" AllowSelection="true">
+            <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single" />
+            <GridEvents RowSelected="OnPersonSelected" TValue="PersonItem" />
+            <GridColumns>
+                <GridColumn Field="TaxId" HeaderText="Identificacion" Width="140" />
+                <GridColumn Field="FullName" HeaderText="Nombre" Width="300" />
+            </GridColumns>
+        </SfGrid>
+    }
+
+    @if (_individualCert is not null)
+    {
+        <div class="info-card">
+            <h5>Certificado de @_individualCert.PersonName</h5>
+            <div class="rejilla-tarjetas">
+                <div class="info-card"><span class="label">NIT / CC</span><span>@_individualCert.TaxId</span></div>
+                <div class="info-card"><span class="label">Ano</span><span>@_individualCert.Year</span></div>
+                <div class="info-card"><span class="label">Base Gravable</span><span>@_individualCert.TotalBase.ToString("N2")</span></div>
+                <div class="info-card"><span class="label">Retencion</span><span>@_individualCert.TotalWithholding.ToString("N2")</span></div>
+                <div class="info-card"><span class="label">Tarifa</span><span>@_individualCert.Rate.ToString("N2")%</span></div>
+                <div class="info-card"><span class="label">Expedido por</span><span>@_individualCert.PayerName</span></div>
+            </div>
+        </div>
+    }
+
+    <ConfirmDialog @bind-Visible="_showGenerateConfirm"
+                   Title="Generar Certificados"
+                   Message="@($"Esta seguro de generar los certificados de retencion para el ano {_year}? Se reemplazaran los existentes.")"
+                   ConfirmText="Generar"
+                   OnConfirm="GenerateCertificates" />
+</div>
 
 @code {
     private SfGrid<TaxCertItem>? _grid;
@@ -219,8 +221,3 @@ else if (!_loading && _certificates is not null)
         public string FullName { get; set; } = "";
     }
 }
-
-<style>
-    .info-card { padding: 12px; border: 1px solid #444; border-radius: 4px; min-width: 140px; }
-    .info-card .label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
-</style>

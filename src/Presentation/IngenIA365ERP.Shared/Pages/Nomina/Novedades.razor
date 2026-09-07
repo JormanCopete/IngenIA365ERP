@@ -1,14 +1,832 @@
 @page "/nomina/novedades"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
 
-<PageTitle>Novedades de Nomina - IngenIA365ERP</PageTitle>
+<PageTitle>Novedades de nómina - IngenIA365ERP</PageTitle>
 
-<div class="module-placeholder">
-    <div class="placeholder-icon">
-        <span class="e-icons e-people"></span>
+<div class="page-header">
+    <h3>Novedades del período</h3>
+    <div>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-repeat" OnClick="@AbrirRecurrentes" Title="Novedades que se repiten cada período">Recurrentes</SfButton>
+        @if (_periodo is not null && _periodo.EstaAbierto)
+        {
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@AbrirImportar" Title="Cargar novedades desde un archivo CSV">Importar</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-user" OnClick="@AbrirCambioSalario">Cambio de salario</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nuevo</SfButton>
+        }
+        else if (_periodo is not null && _periodo.Status == "Approved")
+        {
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAjusteRetroactivo">Registrar ajuste en el siguiente período</SfButton>
+        }
     </div>
-    <h2>Novedades de Nomina</h2>
-    <p>Modulo en construccion</p>
-    <SfProgressBar Type="ProgressType.Linear" Value="0" Minimum="0" Maximum="100"
-                   Height="4" TrackColor="#333" ProgressColor="#00bcd4" IsIndeterminate="true" />
 </div>
+
+<SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
+
+@if (_periodo is not null && _periodo.Status == "Calculated")
+{
+    <div class="info-card">
+        <span class="label">Borrador calculado</span>
+        <p>Cualquier novedad que registres, corrijas o anules deja el borrador desactualizado: habrá que recalcular antes de aprobar.</p>
+    </div>
+}
+@if (_periodo is not null && _periodo.Status == "Approved")
+{
+    <div class="info-card">
+        <span class="label">Período aprobado</span>
+        <p>Las novedades de este período son inmutables. Lo que falte se registra como ajuste retroactivo en el siguiente período abierto, con referencia a este.</p>
+    </div>
+}
+
+<div class="toolbar">
+    <SfTextBox @bind-Value="_buscar" Placeholder="Buscar empleado o concepto" ShowClearButton="true"
+               ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await CargarAsync())" />
+    <label>
+        Tipo
+        <select class="e-input" value="@_filtroNaturaleza" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => { _filtroNaturaleza = e.Value?.ToString() ?? ""; })">
+            <option value="">Todos</option>
+            <option value="Earning">Devengos</option>
+            <option value="Deduction">Deducciones</option>
+            <option value="Informative">Informativos</option>
+        </select>
+    </label>
+    <label>
+        Estado
+        <select class="e-input" value="@_filtroEstado" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => { _filtroEstado = e.Value?.ToString() ?? ""; await CargarAsync(); })">
+            <option value="">Todas</option>
+            <option value="Active">Activas</option>
+            <option value="Superseded">Corregidas</option>
+            <option value="Cancelled">Anuladas</option>
+        </select>
+    </label>
+    <label>
+        Origen
+        <select class="e-input" value="@_filtroOrigen" @onchange="@(async (Microsoft.AspNetCore.Components.ChangeEventArgs e) => { _filtroOrigen = e.Value?.ToString() ?? ""; await CargarAsync(); })">
+            <option value="">Todos</option>
+            <option value="Manual">Manual</option>
+            <option value="Import">Importada</option>
+            <option value="Recurring">Recurrente</option>
+            <option value="Retroactive">Retroactiva</option>
+            <option value="LoanDeduction">Cartera</option>
+            <option value="CarryOver">Traslado</option>
+        </select>
+    </label>
+    <span class="texto-tenue">@_visibles.Count() novedad(es)</span>
+</div>
+
+<SfGrid TValue="NovedadDto" DataSource="@_visibles" AllowPaging="true" AllowSorting="true" RowHeight="38">
+    <GridPageSettings PageSize="25" />
+    <GridColumns>
+        <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="200" />
+        <GridColumn HeaderText="Concepto" Width="220">
+            <Template>
+                @{
+                    var n = (NovedadDto)context;
+                    <span class="@(n.EsActiva ? "" : "texto-tenue")">@n.ConceptName</span>
+                    <small class="texto-tenue"> @n.NaturalezaTexto</small>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="CantidadOValor" HeaderText="Cantidad / valor" Width="120" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Fechas" HeaderText="Fechas" Width="150" />
+        <GridColumn HeaderText="Días" Width="90" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var n = (NovedadDto)context;
+                    if (n.DaysInPeriod > 0) { <span>@n.DaysInPeriod</span> }
+                    if (n.CarryOverDays > 0) { <small class="texto-tenue"> (+@n.CarryOverDays sig.)</small> }
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="EstimatedAmount" HeaderText="Valor previsto" Width="130" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="OrigenTexto" HeaderText="Origen" Width="100" />
+        <GridColumn HeaderText="Estado" Width="110" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var n = (NovedadDto)context;
+                    <span class="e-badge @(n.Status == "Active" ? "e-badge-success" : n.Status == "Cancelled" ? "e-badge-danger" : "e-badge-secondary")" title="@n.StatusReason">@n.EstadoTexto</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var n = (NovedadDto)context;
+                    if (n.EsActiva && _periodo is { EstaAbierto: true } && n.Origin != "LoanDeduction" && n.Origin != "CarryOver")
+                    {
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Corregir" OnClick="@(() => AbrirCorregir(n))" />
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" Title="Anular" OnClick="@(() => AbrirAnular(n))" />
+                    }
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Historial" OnClick="@(() => AbrirHistorial(n))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+
+@* ---------------------------------------------------------------- nueva / corregir --- *@
+<SfDialog @bind-Visible="_mostrarNovedad" Header="@_tituloNovedad" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_form" OnValidSubmit="GuardarNovedad">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_corrigiendo is null)
+                    {
+                        <div class="campo">
+                            <label>Empleado</label>
+                            @if (_form.Empleado is null)
+                            {
+                                <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ShowClearButton="true"
+                                           ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await BuscarEmpleadosAsync())" />
+                                @if (_empleadosEncontrados.Count > 0)
+                                {
+                                    <div class="picker-resultados">
+                                        @foreach (var e in _empleadosEncontrados)
+                                        {
+                                            <div class="picker-opcion" @onclick="() => _form.Empleado = e">
+                                                <span class="e-badge e-badge-info">@e.IdentificationNumber</span> <strong>@e.FullName</strong>
+                                                <small class="texto-tenue"> salario @e.Salary.ToString("N0")</small>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="persona-chip">
+                                    <span class="e-badge e-badge-info">@_form.Empleado.IdentificationNumber</span>
+                                    <strong>@_form.Empleado.FullName</strong>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => _form.Empleado = null)" Title="Cambiar" />
+                                </div>
+                            }
+                            <ValidationMessage For="() => _form.EmpleadoId" />
+                        </div>
+
+                        <label class="campo">
+                            Concepto
+                            <select class="e-input" value="@_form.ConceptCode" @onchange="OnConceptoCambiado">
+                                <option value="">Elegí un concepto…</option>
+                                @foreach (var grupo in _conceptosRegistrables.GroupBy(c => c.NaturalezaTexto))
+                                {
+                                    <optgroup label="@grupo.Key">
+                                        @foreach (var c in grupo)
+                                        {
+                                            <option value="@c.Code">@c.Name</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </label>
+                        <ValidationMessage For="() => _form.ConceptCode" />
+                    }
+                    else
+                    {
+                        <div class="info-card">
+                            <span class="label">Corrigiendo</span>
+                            <p><strong>@_corrigiendo.EmployeeName</strong> · @_corrigiendo.ConceptName</p>
+                        </div>
+                    }
+
+                    @if (_concepto is not null)
+                    {
+                        @if (_concepto.RequiresQuantity || (_concepto.CalculationKind == "QuantityTimesUnit" && !_concepto.RequiresDates))
+                        {
+                            <SfNumericTextBox TValue="decimal?" @bind-Value="_form.Quantity" Placeholder="@($"Cantidad ({_concepto.UnidadTexto})")" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" />
+                        }
+                        @if (_concepto.RequiresAmount || _concepto.CalculationKind == "FixedAmount" && !_concepto.IsAutomatic && _concepto.FixedAmount is null)
+                        {
+                            <SfNumericTextBox TValue="decimal?" @bind-Value="_form.Amount" Placeholder="Valor" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
+                        }
+                        @if (_concepto.RequiresDates)
+                        {
+                            <SfDatePicker TValue="DateTime?" @bind-Value="_form.StartDate" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" />
+                            <SfDatePicker TValue="DateTime?" @bind-Value="_form.EndDate" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
+                            @if (_form.StartDate is { } s && _form.EndDate is { } e && _periodo is not null && e > _periodo.EndDate)
+                            {
+                                <p class="texto-tenue">Los días posteriores al @_periodo.EndDate.ToString("dd/MM/yyyy") se trasladan al período siguiente.</p>
+                            }
+                        }
+                        @if (_concepto.MaxQuantity is { } mq) { <p class="texto-tenue">Máximo @mq.ToString("0.##") @_concepto.UnidadTexto.</p> }
+                        @if (_concepto.MaxAmount is { } ma) { <p class="texto-tenue">Máximo @ma.ToString("N0").</p> }
+                    }
+
+                    <SfTextBox @bind-Value="_form.Notes" Placeholder="Observación" FloatLabelType="FloatLabelType.Always" Multiline="true" />
+                    <ValidationMessage For="() => _form.Notes" />
+
+                    @if (_corrigiendo is not null)
+                    {
+                        <SfTextBox @bind-Value="_form.Reason" Placeholder="Motivo de la corrección" FloatLabelType="FloatLabelType.Always" />
+                        <ValidationMessage For="() => _form.Reason" />
+                    }
+                    @if (_retroactivoDe is not null)
+                    {
+                        <p class="texto-tenue">Ajuste retroactivo del período @_retroactivoDe.Etiqueta; quedará en @_periodoDestinoRetroactivo?.Etiqueta con referencia al original.</p>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarNovedad = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------------- anular --- *@
+<SfDialog @bind-Visible="_mostrarAnular" Header="Anular novedad" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="pagina">
+                <p>Se anula <strong>@_anulando?.ConceptName</strong> de <strong>@_anulando?.EmployeeName</strong>. La novedad queda visible como anulada.</p>
+                <SfTextBox @bind-Value="_motivoAnulacion" Placeholder="Motivo (obligatorio)" FloatLabelType="FloatLabelType.Always" />
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAnular = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-danger" type="button" Disabled="@(_guardando || string.IsNullOrWhiteSpace(_motivoAnulacion))" OnClick="@ConfirmarAnular">Anular</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------------- historial --- *@
+<SfDialog @bind-Visible="_mostrarHistorial" Header="Historial de la novedad" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <table class="data-grid">
+                <thead><tr><th>Versión</th><th>Cantidad / valor</th><th>Fechas</th><th>Estado</th><th>Motivo</th><th>Quién</th><th>Cuándo</th></tr></thead>
+                <tbody>
+                    @foreach (var (h, i) in _historial.Select((h, i) => (h, i + 1)))
+                    {
+                        <tr class="@(h.EsActiva ? "" : "texto-tenue")">
+                            <td>@i</td>
+                            <td class="monto">@h.CantidadOValor</td>
+                            <td>@h.Fechas</td>
+                            <td>@h.EstadoTexto</td>
+                            <td>@h.StatusReason</td>
+                            <td>@(h.UpdatedBy ?? h.CreatedBy)</td>
+                            <td>@((h.UpdatedAt ?? h.CreatedAt).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------- cambio de salario --- *@
+<SfDialog @bind-Visible="_mostrarSalario" Header="Cambio de salario" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_salario" OnValidSubmit="GuardarCambioSalario">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    <div class="campo">
+                        <label>Empleado</label>
+                        @if (_salario.Empleado is null)
+                        {
+                            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ShowClearButton="true"
+                                       ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await BuscarEmpleadosAsync())" />
+                            @if (_empleadosEncontrados.Count > 0)
+                            {
+                                <div class="picker-resultados">
+                                    @foreach (var e in _empleadosEncontrados)
+                                    {
+                                        <div class="picker-opcion" @onclick="async () => await ElegirEmpleadoSalario(e)">
+                                            <span class="e-badge e-badge-info">@e.IdentificationNumber</span> <strong>@e.FullName</strong>
+                                            <small class="texto-tenue"> salario @e.Salary.ToString("N0")</small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="persona-chip">
+                                <span class="e-badge e-badge-info">@_salario.Empleado.IdentificationNumber</span>
+                                <strong>@_salario.Empleado.FullName</strong>
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => { _salario.Empleado = null; _historialSalarios = []; })" Title="Cambiar" />
+                            </div>
+                        }
+                        <ValidationMessage For="() => _salario.EmpleadoId" />
+                    </div>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_salario.NewSalary" Placeholder="Salario nuevo" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
+                    <ValidationMessage For="() => _salario.NewSalary" />
+                    <SfDatePicker TValue="DateTime" @bind-Value="_salario.EffectiveFrom" Placeholder="Fecha de efecto" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_salario.Reason" Placeholder="Motivo" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _salario.Reason" />
+
+                    @if (_historialSalarios.Count > 0)
+                    {
+                        <span class="label">Historial de salarios</span>
+                        <table class="data-grid">
+                            <thead><tr><th>Desde</th><th class="monto">Salario</th><th>Registró</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in _historialSalarios)
+                                {
+                                    <tr><td>@s.EffectiveDate.ToString("dd/MM/yyyy")</td><td class="monto">@s.NewSalary.ToString("N0")</td><td>@s.RegisteredBy</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarSalario = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------- importar --- *@
+<SfDialog @bind-Visible="_mostrarImportar" Header="Importar novedades desde archivo" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-tenue">CSV separado por punto y coma con las columnas documento, concepto, cantidad, valor, desde, hasta y observación. Cada fila pasa las mismas reglas que el registro manual: si una falla, no entra ninguna. Máximo 5 MB.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" type="button" Disabled="@_guardando" OnClick="@DescargarPlantilla">Descargar plantilla</SfButton>
+                <InputFile OnChange="@OnArchivoElegido" accept=".csv,text/csv" />
+                <SfButton CssClass="e-primary" IconCss="e-icons e-upload-1" type="button" Disabled="@(_guardando || _archivo is null)" OnClick="@Importar">Importar</SfButton>
+            </div>
+            @if (_archivo is not null)
+            {
+                <p class="texto-tenue">@_archivo.Name · @((_archivo.Size / 1024m).ToString("N0")) KB</p>
+            }
+            @if (_importacion is not null)
+            {
+                @if (_importacion.TieneErrores)
+                {
+                    <div class="info-card">
+                        <span class="label">No se importó nada</span>
+                        <p>@_importacion.Errors.Count error(es). Corregí el archivo y volvé a subirlo.</p>
+                        <table class="data-grid">
+                            <thead><tr><th>Fila</th><th>Columna</th><th>Error</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _importacion.Errors)
+                                {
+                                    <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="info-card"><span class="label">Listo</span><p>@_importacion.Applied novedad(es) importadas en el lote @_importacion.BatchId.ToString()[..8].</p></div>
+                }
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------- recurrentes --- *@
+<SfDialog @bind-Visible="_mostrarRecurrentes" Header="Novedades recurrentes" Width="960px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-tenue">Una novedad que se repite cada período se registra una vez: en cada cálculo aparece como novedad «Recurrente» con su número de cuota, y al aprobar se cuenta la cuota emitida. Al llegar a la última deja de generarse.</p>
+            <div class="toolbar">
+                <label class="campo-check"><input type="checkbox" @bind="_soloRecurrentesActivas" @bind:after="CargarRecurrentesAsync" /> Sólo activas</label>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" type="button" OnClick="@(() => { _nuevaRecurrente = new FormRecurrente(); _mostrarNuevaRecurrente = true; })">Nueva recurrente</SfButton>
+            </div>
+            <SfGrid TValue="RecurrenteDto" DataSource="@_recurrentes" AllowPaging="true" AllowSorting="true" RowHeight="38">
+                <GridPageSettings PageSize="15" />
+                <GridColumns>
+                    <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="180" />
+                    <GridColumn Field="ConceptName" HeaderText="Concepto" Width="180" />
+                    <GridColumn Field="CantidadOValor" HeaderText="Cantidad / valor" Width="120" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="Vigencia" HeaderText="Vigencia" Width="170" />
+                    <GridColumn Field="Cuotas" HeaderText="Cuotas" Width="110" />
+                    <GridColumn HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
+                        <Template>
+                            @{
+                                var r = (RecurrenteDto)context;
+                                <span class="e-badge @(r.IsActive ? "e-badge-success" : "e-badge-secondary")" title="@r.DeactivationReason">@(r.IsActive ? "Activa" : "Desactivada")</span>
+                            }
+                        </Template>
+                    </GridColumn>
+                    <GridColumn HeaderText="" Width="70" TextAlign="TextAlign.Center">
+                        <Template>
+                            @{
+                                var r = (RecurrenteDto)context;
+                                if (r.IsActive)
+                                {
+                                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" Title="Desactivar" OnClick="@(() => { _desactivando = r; _motivoDesactivacion = string.Empty; _mostrarDesactivar = true; })" />
+                                }
+                            }
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </SfGrid>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarNuevaRecurrente" Header="Nueva novedad recurrente" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <EditForm Model="_nuevaRecurrente" OnValidSubmit="GuardarRecurrente">
+                <DataAnnotationsValidator />
+                <div class="formulario">
+                    <label>Empleado
+                        @if (_nuevaRecurrente.Empleado is null)
+                        {
+                            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await BuscarEmpleadosAsync())" />
+                            <ul class="lista-resultados">
+                                @foreach (var e in _empleadosEncontrados)
+                                {
+                                    <li><button type="button" class="e-btn e-flat" @onclick="@(() => _nuevaRecurrente.Empleado = e)">@e.FullName <small class="texto-tenue">@e.IdentificationNumber</small></button></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <span>@_nuevaRecurrente.Empleado.FullName <small class="texto-tenue">@_nuevaRecurrente.Empleado.IdentificationNumber</small>
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => _nuevaRecurrente.Empleado = null)" Title="Cambiar" /></span>
+                        }
+                    </label>
+                    <label>Concepto
+                        <select class="e-input" @bind="_nuevaRecurrente.ConceptCode">
+                            <option value="">Elegí un concepto</option>
+                            @foreach (var c in _conceptosRegistrables.Where(c => !c.RequiresDates))
+                            {
+                                <option value="@c.Code">@c.Name (@c.NaturalezaTexto)</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Cantidad <SfNumericTextBox TValue="decimal?" @bind-Value="_nuevaRecurrente.Quantity" Format="0.##" Min="0" ShowSpinButton="false" /></label>
+                    <label>Valor <SfNumericTextBox TValue="decimal?" @bind-Value="_nuevaRecurrente.Amount" Format="N0" Min="0" ShowSpinButton="false" /></label>
+                    <label>Desde <SfDatePicker TValue="DateTime" @bind-Value="_nuevaRecurrente.StartDate" Format="dd/MM/yyyy" /></label>
+                    <label>Hasta (opcional) <SfDatePicker TValue="DateTime?" @bind-Value="_nuevaRecurrente.EndDate" Format="dd/MM/yyyy" /></label>
+                    <label>Cuotas (opcional) <SfNumericTextBox TValue="int?" @bind-Value="_nuevaRecurrente.TotalInstallments" Min="1" Format="0" /></label>
+                    <label>Observación <SfTextBox @bind-Value="_nuevaRecurrente.Notes" MaxLength="500" /></label>
+                </div>
+                <ValidationSummary />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarNuevaRecurrente = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@(_guardando || _nuevaRecurrente.Empleado is null)">Guardar</SfButton>
+                </div>
+            </EditForm>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDesactivar" Header="Desactivar novedad recurrente" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_desactivando is not null)
+            {
+                <p>@_desactivando.EmployeeName · @_desactivando.ConceptName · @_desactivando.Cuotas</p>
+                <p class="texto-tenue">Las novedades ya generadas en períodos aún no aprobados quedarán anuladas.</p>
+            }
+            <label>Motivo <SfTextBox @bind-Value="_motivoDesactivacion" Multiline="true" MaxLength="300" /></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDesactivar = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-danger" type="button" Disabled="@(_guardando || string.IsNullOrWhiteSpace(_motivoDesactivacion))" OnClick="@ConfirmarDesactivar">Desactivar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private SelectorDePeriodo? _selector;
+    private PeriodoPagoDto? _periodo;
+    private List<NovedadDto> _todas = [];
+    private List<ConceptoDto> _conceptos = [];
+    private string _buscar = string.Empty, _filtroNaturaleza = string.Empty, _filtroEstado = string.Empty, _filtroOrigen = string.Empty;
+
+    private bool _mostrarNovedad, _mostrarAnular, _mostrarHistorial, _mostrarSalario, _guardando;
+    private string _tituloNovedad = string.Empty;
+    private FormNovedad _form = new();
+    private ConceptoDto? _concepto;
+    private NovedadDto? _corrigiendo, _anulando;
+    private string _motivoAnulacion = string.Empty;
+    private List<NovedadDto> _historial = [];
+    private PeriodoPagoDto? _retroactivoDe, _periodoDestinoRetroactivo;
+
+    private string _buscarEmpleado = string.Empty;
+    private List<EmpleadoResumenDto> _empleadosEncontrados = [];
+    private FormSalario _salario = new();
+    private List<CambioSalarioDto> _historialSalarios = [];
+
+    // US6: importación y recurrentes
+    private bool _mostrarImportar, _mostrarRecurrentes, _mostrarNuevaRecurrente, _mostrarDesactivar, _soloRecurrentesActivas = true;
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _archivo;
+    private ResultadoImportacionDto? _importacion;
+    private List<RecurrenteDto> _recurrentes = [];
+    private FormRecurrente _nuevaRecurrente = new();
+    private RecurrenteDto? _desactivando;
+    private string _motivoDesactivacion = string.Empty;
+    private const long MaxImportacion = 5 * 1024 * 1024;
+
+    private void AbrirImportar() { _archivo = null; _importacion = null; _mostrarImportar = true; }
+
+    private void OnArchivoElegido(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _archivo = e.File;
+        _importacion = null;
+    }
+
+    private async Task DescargarPlantilla()
+    {
+        var res = await Nomina.PlantillaImportacionAsync();
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    private async Task Importar()
+    {
+        if (_periodo is null || _archivo is null || _guardando) return;
+        if (_archivo.Size > MaxImportacion) { await Notification.ErrorAsync("El archivo pesa más de 5 MB. Dividilo en varios lotes."); return; }
+        _guardando = true;
+        try
+        {
+            await using var stream = _archivo.OpenReadStream(MaxImportacion);
+            var res = await Nomina.ImportarNovedadesAsync(_periodo.PublicId, stream, _archivo.Name);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo importar el archivo."); return; }
+            _importacion = res.Value;
+            if (!_importacion!.TieneErrores)
+            {
+                await Notification.SuccessAsync($"{_importacion.Applied} novedad(es) importadas.");
+                await CargarAsync();
+            }
+        }
+        finally { _guardando = false; }
+    }
+
+    private async Task AbrirRecurrentes()
+    {
+        _mostrarRecurrentes = true;
+        await CargarRecurrentesAsync();
+    }
+
+    private async Task CargarRecurrentesAsync()
+    {
+        var res = await Nomina.ListarRecurrentesAsync(null, _soloRecurrentesActivas ? true : null);
+        if (res.IsSuccess) _recurrentes = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las recurrentes.");
+        StateHasChanged();
+    }
+
+    private async Task GuardarRecurrente()
+    {
+        if (_nuevaRecurrente.Empleado is null || _guardando) return;
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.CrearRecurrenteAsync(new CrearRecurrenteRequest(_nuevaRecurrente.Empleado.PublicId, _nuevaRecurrente.ConceptCode,
+                _nuevaRecurrente.Quantity, _nuevaRecurrente.Amount, _nuevaRecurrente.StartDate, _nuevaRecurrente.EndDate, _nuevaRecurrente.TotalInstallments, _nuevaRecurrente.Notes));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar la recurrente."); return; }
+            _mostrarNuevaRecurrente = false;
+            await Notification.SuccessAsync("Novedad recurrente registrada. Entrará en el próximo cálculo de cada período que cubra.");
+            await CargarRecurrentesAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private async Task ConfirmarDesactivar()
+    {
+        if (_desactivando is null || _guardando) return;
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.DesactivarRecurrenteAsync(_desactivando.PublicId, _motivoDesactivacion.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo desactivar."); return; }
+            _mostrarDesactivar = false;
+            await Notification.SuccessAsync("Recurrente desactivada.");
+            await CargarRecurrentesAsync();
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private sealed class FormRecurrente
+    {
+        public EmpleadoResumenDto? Empleado { get; set; }
+        [Required(ErrorMessage = "El concepto es obligatorio.")]
+        public string ConceptCode { get; set; } = string.Empty;
+        public decimal? Quantity { get; set; }
+        public decimal? Amount { get; set; }
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public DateTime? EndDate { get; set; }
+        public int? TotalInstallments { get; set; }
+        [StringLength(500, ErrorMessage = "Máximo 500 caracteres.")]
+        public string? Notes { get; set; }
+    }
+
+    private IEnumerable<NovedadDto> _visibles => _todas.Where(n => string.IsNullOrEmpty(_filtroNaturaleza) || n.Nature == _filtroNaturaleza);
+
+    private IEnumerable<ConceptoDto> _conceptosRegistrables =>
+        _conceptos.Where(c => c.RegistrableComoNovedad && c.Nature is "Earning" or "Deduction" or "Informative" && c.Code != "DESC_CARTERA");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var conceptos = await Nomina.ListarConceptosAsync();
+        if (conceptos.IsSuccess) _conceptos = conceptos.Value!.ToList();
+        else await Notification.ErrorAsync(conceptos.ErrorMessage ?? "No se pudieron cargar los conceptos.");
+    }
+
+    private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
+    {
+        _periodo = periodo;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (_periodo is null) { _todas = []; return; }
+        var res = await Nomina.ListarNovedadesAsync(_periodo.PublicId, null, null,
+            string.IsNullOrEmpty(_filtroEstado) ? null : _filtroEstado,
+            string.IsNullOrEmpty(_filtroOrigen) ? null : _filtroOrigen,
+            string.IsNullOrWhiteSpace(_buscar) ? null : _buscar);
+        if (res.IsSuccess) _todas = res.Value!.ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las novedades.");
+        StateHasChanged();
+    }
+
+    // ------------------------------------------------------------------ nueva ---
+
+    private void AbrirNueva()
+    {
+        _form = new FormNovedad();
+        _concepto = null;
+        _corrigiendo = null;
+        _retroactivoDe = null;
+        _periodoDestinoRetroactivo = null;
+        _empleadosEncontrados = [];
+        _buscarEmpleado = string.Empty;
+        _tituloNovedad = "Nueva novedad";
+        _mostrarNovedad = true;
+    }
+
+    private async Task AbrirAjusteRetroactivo()
+    {
+        if (_periodo is null) return;
+        var res = await Nomina.ListarPeriodosAsync(_periodo.PlanPublicId, "Open", 1, 50);
+        var destino = res.IsSuccess ? res.Value!.Items.Where(p => p.StartDate > _periodo.EndDate).OrderBy(p => p.StartDate).FirstOrDefault() : null;
+        if (destino is null)
+        {
+            await Notification.WarningAsync("No hay un período abierto posterior: creá el siguiente período del plan antes de registrar el ajuste.");
+            return;
+        }
+        AbrirNueva();
+        _retroactivoDe = _periodo;
+        _periodoDestinoRetroactivo = destino;
+        _tituloNovedad = $"Ajuste retroactivo de {_periodo.Etiqueta}";
+    }
+
+    private void OnConceptoCambiado(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _form.ConceptCode = e.Value?.ToString() ?? string.Empty;
+        _concepto = _conceptos.FirstOrDefault(c => c.Code == _form.ConceptCode);
+        _form.Quantity = null; _form.Amount = null; _form.StartDate = null; _form.EndDate = null;
+    }
+
+    private async Task BuscarEmpleadosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarEmpleado) || _buscarEmpleado.Trim().Length < 2) { _empleadosEncontrados = []; return; }
+        var res = await Nomina.BuscarEmpleadosAsync(_buscarEmpleado);
+        _empleadosEncontrados = res.IsSuccess ? res.Value!.Items.ToList() : [];
+    }
+
+    private async Task GuardarNovedad()
+    {
+        if (_guardando) return;
+        _guardando = true;
+        try
+        {
+            if (_corrigiendo is null)
+            {
+                if (_form.Empleado is null) { await Notification.WarningAsync("Elegí el empleado."); return; }
+                if (_concepto is null) { await Notification.WarningAsync("Elegí el concepto."); return; }
+                var periodoDestino = _retroactivoDe is null ? _periodo! : _periodoDestinoRetroactivo!;
+                var res = await Nomina.RegistrarNovedadAsync(periodoDestino.PublicId, new RegistrarNovedadRequest(
+                    _form.Empleado.PublicId, _concepto.Code, _form.Quantity, _form.Amount, _form.StartDate, _form.EndDate, _form.Notes,
+                    _retroactivoDe?.PublicId));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar la novedad."); return; }
+                await Notification.SuccessAsync(_retroactivoDe is null ? "Novedad registrada." : $"Ajuste registrado en {periodoDestino.Etiqueta}.");
+            }
+            else
+            {
+                var res = await Nomina.CorregirNovedadAsync(_corrigiendo.PublicId, new CorregirNovedadRequest(
+                    _form.Quantity, _form.Amount, _form.StartDate, _form.EndDate, _form.Notes, _form.Reason));
+                if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo corregir la novedad."); return; }
+                await Notification.SuccessAsync("Novedad corregida: la versión anterior queda en el historial.");
+            }
+            _mostrarNovedad = false;
+            await CargarAsync();
+            if (_selector is not null) await _selector.RefrescarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    // ------------------------------------------------------------ corregir/anular ---
+
+    private void AbrirCorregir(NovedadDto n)
+    {
+        _corrigiendo = n;
+        _retroactivoDe = null;
+        _concepto = _conceptos.FirstOrDefault(c => c.Code == n.ConceptCode);
+        _form = new FormNovedad
+        {
+            EmpleadoId = n.EmployeePublicId.ToString(), ConceptCode = n.ConceptCode, Quantity = n.Quantity, Amount = n.Amount,
+            StartDate = n.StartDate, EndDate = n.EndDate, Notes = n.Notes,
+        };
+        _tituloNovedad = "Corregir novedad";
+        _mostrarNovedad = true;
+    }
+
+    private void AbrirAnular(NovedadDto n) { _anulando = n; _motivoAnulacion = string.Empty; _mostrarAnular = true; }
+
+    private async Task ConfirmarAnular()
+    {
+        if (_anulando is null || _guardando) return;
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.AnularNovedadAsync(_anulando.PublicId, _motivoAnulacion.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo anular la novedad."); return; }
+            await Notification.SuccessAsync("Novedad anulada.");
+            _mostrarAnular = false;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private async Task AbrirHistorial(NovedadDto n)
+    {
+        var res = await Nomina.HistorialNovedadAsync(n.PublicId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial."); return; }
+        _historial = res.Value!.ToList();
+        _mostrarHistorial = true;
+    }
+
+    // ------------------------------------------------------------ cambio de salario ---
+
+    private void AbrirCambioSalario()
+    {
+        _salario = new FormSalario { EffectiveFrom = _periodo?.StartDate ?? DateTime.Today };
+        _historialSalarios = [];
+        _empleadosEncontrados = [];
+        _buscarEmpleado = string.Empty;
+        _mostrarSalario = true;
+    }
+
+    private async Task ElegirEmpleadoSalario(EmpleadoResumenDto e)
+    {
+        _salario.Empleado = e;
+        _salario.NewSalary = e.Salary;
+        var res = await Nomina.HistorialSalariosAsync(e.PublicId);
+        _historialSalarios = res.IsSuccess ? res.Value!.ToList() : [];
+    }
+
+    private async Task GuardarCambioSalario()
+    {
+        if (_guardando) return;
+        if (_salario.Empleado is null) { await Notification.WarningAsync("Elegí el empleado."); return; }
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.RegistrarCambioDeSalarioAsync(_salario.Empleado.PublicId,
+                new CambioSalarioRequest(_salario.NewSalary, _salario.EffectiveFrom, _salario.Reason));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar el cambio de salario."); return; }
+            await Notification.SuccessAsync("Cambio de salario registrado.");
+            _mostrarSalario = false;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    // ------------------------------------------------------------------- modelos ---
+
+    private sealed class FormNovedad
+    {
+        public EmpleadoResumenDto? Empleado { get; set; }
+        public string EmpleadoId { get; set; } = string.Empty;
+        public string ConceptCode { get; set; } = string.Empty;
+        public decimal? Quantity { get; set; }
+        public decimal? Amount { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        [StringLength(500, ErrorMessage = "Máximo 500 caracteres.")]
+        public string? Notes { get; set; }
+        [StringLength(300, ErrorMessage = "Máximo 300 caracteres.")]
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    private sealed class FormSalario
+    {
+        public EmpleadoResumenDto? Empleado { get; set; }
+        public string EmpleadoId { get; set; } = string.Empty;
+        [Range(1, 999_999_999, ErrorMessage = "El salario debe ser mayor que cero.")]
+        public decimal NewSalary { get; set; }
+        public DateTime EffectiveFrom { get; set; } = DateTime.Today;
+        [Required(ErrorMessage = "El motivo es obligatorio.")]
+        [StringLength(300, ErrorMessage = "Máximo 300 caracteres.")]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

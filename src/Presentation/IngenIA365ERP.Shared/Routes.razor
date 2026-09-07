@@ -5,8 +5,7 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    @if (routeData.PageType == typeof(Pages.Security.Login)
-                         || routeData.PageType == typeof(Pages.Login))
+                    @if (routeData.PageType == typeof(Pages.Security.Login))
                     {
                         <RouteView RouteData="routeData" />
                     }

@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Invitations.PreviewInvitation;
 using IngenIA365ERP.Application.Invitations.RevokeInvitation;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using IngenIA365ERP.Application.Invitations.GestionInvitaciones;
 
 namespace IngenIA365ERP.API.Endpoints;
 
@@ -43,6 +44,15 @@ public sealed class InvitationsModule : ICarterModule
         tenantScoped.MapPost("/", IssueByTenantAdminAsync)
             .WithName("Invitations_IssueByTenantAdmin");
 
+        // Faltaba poder VER las invitaciones emitidas: se podia crear una y
+        // revocarla conociendo su id, pero no consultar cuales existian ni en
+        // que estado estaban. Si el correo no llegaba, no quedaba rastro.
+        tenantScoped.MapGet("/", ListarAsync)
+            .WithName("Invitations_Listar");
+
+        tenantScoped.MapPost("/{invitacionPublicId:guid}/reenviar", ReenviarAsync)
+            .WithName("Invitations_Reenviar");
+
         // ---------- Master admin emite ----------
         var saas = app
             .MapGroup("/api/saas/invitations")
@@ -71,6 +81,22 @@ public sealed class InvitationsModule : ICarterModule
             .WithName("Invitations_Revoke")
             .RequireAuthorization();
     }
+
+    // ---------- Listar / reenviar ----------
+
+    private static async Task<object?> ListarAsync(
+        Guid tenantPublicId,
+        [FromQuery] bool incluirCerradas,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new ListarInvitacionesQuery(tenantPublicId, incluirCerradas), ct);
+
+    private static async Task<object?> ReenviarAsync(
+        Guid tenantPublicId,
+        Guid invitacionPublicId,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new ReenviarInvitacionCommand(invitacionPublicId), ct);
 
     // ---------- Issue (tenant admin) ----------
 

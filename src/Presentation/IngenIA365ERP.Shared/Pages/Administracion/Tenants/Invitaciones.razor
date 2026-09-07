@@ -1,0 +1,287 @@
+@page "/admin/tenants/{TenantPublicId:guid}/invitaciones"
+@using IngenIA365ERP.Shared.Services.Security
+@inject CooperativasClient Clientes
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>Invitaciones — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <div>
+            <h2>Invitaciones</h2>
+            <p class="texto-apoyo">@(_nombreCooperativa ?? "Cooperativa")</p>
+        </div>
+        <div>
+            <label class="campo-check">
+                <input type="checkbox" @bind="_incluirCerradas" @bind:after="CargarAsync" />
+                <span>Incluir aceptadas y canceladas</span>
+            </label>
+            <button class="boton-secundario" type="button" @onclick="Volver">Volver</button>
+        </div>
+    </div>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_error ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    @* Faltaba. La pantalla listaba, reenviaba y cancelaba invitaciones, y el
+       botón «Invitar persona» de Usuarios traía aquí — a una lista vacía sin
+       ningún sitio desde el que invitar. Se invita, no se crea: la invitación es
+       lo único que da de alta las dos mitades de la persona (la identidad central
+       y su usuario en la cooperativa). *@
+    <section class="tarjeta">
+        <h3>Invitar a una persona</h3>
+        <p class="texto-apoyo">
+            Recibe un correo con un enlace que vence en unos días. Con ese enlace crea
+            su contraseña —o entra con la que ya tiene, si ya usa IngenIA365ERP en otra
+            cooperativa— y queda como miembro de @(_nombreCooperativa ?? "esta cooperativa").
+            Los roles se le asignan después, desde <a href="/security/users">Usuarios</a>.
+        </p>
+        <div class="toolbar">
+            <input type="email" placeholder="correo@dominio.com"
+                   aria-label="Correo de la persona a invitar"
+                   @bind="_correoNuevo" @bind:event="oninput"
+                   disabled="@_enviando"
+                   @onkeydown="EnviarConEnter" />
+            @if (_esMaestro)
+            {
+                <label class="campo-check">
+                    <input type="checkbox" @bind="_comoAdministradora" disabled="@_enviando" />
+                    <span>Como administradora de la cooperativa</span>
+                </label>
+            }
+            <button class="boton-principal" type="button"
+                    disabled="@(_enviando || !CorreoValido)"
+                    @onclick="InvitarAsync">
+                @(_enviando ? "Enviando…" : "Enviar invitación")
+            </button>
+        </div>
+    </section>
+
+    @if (_cargando)
+    {
+        <p class="texto-apoyo">Cargando…</p>
+    }
+    else if (_invitaciones.Count == 0)
+    {
+        <div class="tarjeta">
+            <p class="texto-apoyo">
+                @(_incluirCerradas
+                    ? "Esta cooperativa no tiene invitaciones."
+                    : "No hay invitaciones pendientes. Marcá la casilla para ver las cerradas.")
+            </p>
+        </div>
+    }
+    else
+    {
+        <section class="tarjeta">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th scope="col">Correo</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Rol</th>
+                        <th scope="col">Enviada</th>
+                        <th scope="col">Vence</th>
+                        <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _invitaciones)
+                    {
+                        <tr @key="i.PublicId">
+                            <td>@i.Email</td>
+                            <td>
+                                @* Estado con texto además del color: una pastilla de
+                                   color sola no la puede leer quien no distingue bien. *@
+                                <span class="pastilla @ClasePastilla(i)">@EtiquetaEstado(i)</span>
+                            </td>
+                            <td>@(i.ComoAdministrador ? "Administradora" : "Miembro")</td>
+                            <td class="texto-apoyo">@i.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="texto-apoyo">@i.ExpiraEn.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td class="celda-acciones">
+                                @if (i.Estado == "Pending")
+                                {
+                                    <button class="boton-principal" type="button"
+                                            disabled="@(_ocupada == i.PublicId)"
+                                            @onclick="() => ReenviarAsync(i)">
+                                        @(_ocupada == i.PublicId ? "Enviando…" : "Reenviar")
+                                    </button>
+                                    <button class="boton-peligro" type="button"
+                                            disabled="@(_ocupada == i.PublicId)"
+                                            @onclick="() => RevocarAsync(i)">Cancelar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+
+        <p class="texto-apoyo">
+            Reenviar genera un enlace nuevo y anula el anterior: el token original
+            sólo se guarda cifrado y no se puede recuperar. Si la persona encuentra
+            el correo viejo, ese enlace ya no funcionará.
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TenantPublicId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<InvitacionResumen> _invitaciones = [];
+    private string? _nombreCooperativa;
+    private bool _incluirCerradas;
+    private bool _cargando = true;
+    private Guid? _ocupada;
+    private string? _mensaje;
+    private bool _error;
+
+    // Formulario de invitación.
+    private string? _correoNuevo;
+    private bool _comoAdministradora;
+    private bool _enviando;
+    private bool _esMaestro;
+
+    private bool CorreoValido =>
+        !string.IsNullOrWhiteSpace(_correoNuevo)
+        && System.Net.Mail.MailAddress.TryCreate(_correoNuevo.Trim(), out _);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _esMaestro = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var m) && m;
+        }
+
+        await CargarNombreAsync();
+        await CargarAsync();
+    }
+
+    private async Task InvitarAsync()
+    {
+        if (!CorreoValido || _enviando) return;
+
+        var correo = _correoNuevo!.Trim();
+        _enviando = true;
+        try
+        {
+            var r = await Clientes.InvitarAsync(
+                TenantPublicId, correo,
+                comoAdministradora: _esMaestro && _comoAdministradora,
+                comoMaestro: _esMaestro);
+
+            _error = !r.IsSuccess;
+            if (r.IsSuccess && r.Value is { } emitida)
+            {
+                _mensaje = $"Invitación enviada a {correo}. El enlace vence el {emitida.ExpiresAt.ToLocalTime():dd/MM/yyyy}.";
+                _correoNuevo = null;
+                _comoAdministradora = false;
+                await CargarAsync();
+            }
+            else
+            {
+                // Si lo que falló fue el servidor de correo, la invitación quedó
+                // creada igual y aparece abajo como pendiente: se reenvía desde ahí.
+                _mensaje = (r.ErrorMessage ?? "No se pudo emitir la invitación.") +
+                           " Si el problema fue el envío del correo, la invitación quedó creada y podés reenviarla desde la lista.";
+                await CargarAsync();
+            }
+        }
+        finally { _enviando = false; }
+    }
+
+    private Task EnviarConEnter(KeyboardEventArgs e) =>
+        e.Key == "Enter" ? InvitarAsync() : Task.CompletedTask;
+
+    private async Task CargarNombreAsync()
+    {
+        var r = await Clientes.ListarAsync(incluirSuspendidas: true);
+        if (r.IsSuccess && r.Value is not null)
+        {
+            _nombreCooperativa = r.Value.Items
+                .FirstOrDefault(t => t.PublicId == TenantPublicId)?.Name;
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        var r = await Clientes.ListarInvitacionesAsync(TenantPublicId, _incluirCerradas);
+        _cargando = false;
+
+        if (r.IsSuccess && r.Value is not null)
+        {
+            _invitaciones = [.. r.Value];
+        }
+        else
+        {
+            _error = true;
+            _mensaje = r.ErrorMessage ?? "No se pudieron cargar las invitaciones.";
+        }
+    }
+
+    private async Task ReenviarAsync(InvitacionResumen i)
+    {
+        _ocupada = i.PublicId;
+        try
+        {
+            var r = await Clientes.ReenviarInvitacionAsync(TenantPublicId, i.PublicId);
+            _error = !r.IsSuccess;
+            _mensaje = r.IsSuccess && r.Value is { } res
+                ? $"Enviado de nuevo a {res.Email}. El enlace vence el {res.ExpiraEn.ToLocalTime():dd/MM/yyyy}."
+                : r.ErrorMessage;
+            if (r.IsSuccess) await CargarAsync();
+        }
+        finally { _ocupada = null; }
+    }
+
+    private async Task RevocarAsync(InvitacionResumen i)
+    {
+        _ocupada = i.PublicId;
+        try
+        {
+            var r = await Clientes.RevocarInvitacionAsync(i.PublicId);
+            _error = !r.IsSuccess;
+            _mensaje = r.IsSuccess
+                ? $"Invitación de {i.Email} cancelada."
+                : r.ErrorMessage;
+            if (r.IsSuccess) await CargarAsync();
+        }
+        finally { _ocupada = null; }
+    }
+
+    // El maestro llega desde la consola de cooperativas; el administrador de una
+    // cooperativa llega desde Usuarios, y /admin/tenants no es suyo.
+    private void Volver() => Nav.NavigateTo(_esMaestro ? "/admin/tenants" : "/security/users");
+
+    // Una invitación vencida sigue con estado Pending en la base: expira por
+    // fecha, no por un cambio de estado. Mostrarla como "Pendiente" haría creer
+    // que el enlace todavía sirve.
+    private static string EtiquetaEstado(InvitacionResumen i) => i.Expirada
+        ? "Vencida"
+        : i.Estado switch
+        {
+            "Pending" => "Pendiente",
+            "Accepted" => "Aceptada",
+            "Revoked" => "Cancelada",
+            "Superseded" => "Reemplazada",
+            "Expired" => "Vencida",
+            _ => i.Estado,
+        };
+
+    private static string ClasePastilla(InvitacionResumen i) => i.Expirada
+        ? "pastilla-alerta"
+        : i.Estado switch
+        {
+            "Pending" => "pastilla-info",
+            "Accepted" => "pastilla-exito",
+            "Revoked" => "pastilla-peligro",
+            _ => "pastilla-tenue",
+        };
+}

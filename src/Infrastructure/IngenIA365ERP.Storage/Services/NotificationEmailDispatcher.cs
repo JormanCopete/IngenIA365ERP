@@ -72,10 +72,63 @@ public sealed class NotificationEmailDispatcher : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Un lote POR COOPERATIVA, no uno global.
+    ///
+    /// <para>
+    /// Antes sacaba un solo <c>IApplicationDbContext</c> del contenedor y barria las
+    /// notificaciones pendientes sin filtrar por cooperativa. Funcionaba por
+    /// accidente: como todo vivia en <c>dbo</c>, "sin filtro" y "un solo esquema"
+    /// coincidian. Con el aislamiento cableado, ese contexto —creado en un ambito
+    /// sin peticion HTTP— resuelve a <c>dbo</c>, que ya no guarda las notificaciones
+    /// de nadie. Encontraria cero filas y volveria a dormir quince segundos,
+    /// indefinidamente y sin un solo error en el registro: el correo dejaria de
+    /// salir y nada lo diria.
+    /// </para>
+    /// </summary>
     private async Task ProcessOneBatchAsync(CancellationToken ct)
     {
         using var scope = _services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        var cooperativas = scope.ServiceProvider.GetRequiredService<ITenantDirectory>();
+        var fabrica = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory>();
+
+        foreach (var cooperativa in await CooperativasAsync(cooperativas, ct))
+        {
+            if (ct.IsCancellationRequested) return;
+
+            await using var ambito = fabrica.Abrir(
+                cooperativa.DatabaseName ?? cooperativa.SchemaName, cooperativa.ConnectionString);
+            await ProcesarLoteDeAsync(ambito.Db, scope, cooperativa.Name, ct);
+        }
+    }
+
+    /// <summary>
+    /// Los esquemas de las cooperativas activas. Si el directorio falla, se registra
+    /// y se devuelve vacio: el despachador reintenta al siguiente ciclo, y tumbar el
+    /// servicio de fondo por un fallo transitorio de lectura seria peor.
+    /// </summary>
+    private async Task<IReadOnlyList<TenantDirectoryEntry>> CooperativasAsync(
+        ITenantDirectory directorio, CancellationToken ct)
+    {
+        try
+        {
+            var todas = await directorio.ListActiveAsync(ct);
+            return [.. todas.Where(c =>
+                !string.IsNullOrWhiteSpace(c.DatabaseName) ||
+                !string.IsNullOrWhiteSpace(c.ConnectionString))];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "No se pudieron enumerar las cooperativas para despachar correo. " +
+                "Se reintenta en el siguiente ciclo.");
+            return [];
+        }
+    }
+
+    private async Task ProcesarLoteDeAsync(
+        IApplicationDbContext db, IServiceScope scope, string esquema, CancellationToken ct)
+    {
         var sender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
         var templates = scope.ServiceProvider.GetRequiredService<INotificationTemplateRenderer>();
 

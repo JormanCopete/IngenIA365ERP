@@ -33,7 +33,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfNumericTextBox TValue="int" @bind-Value="_model.PayrollCompanyId" Placeholder="Empresa Nomina" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeStart" Placeholder="UVT Rango Inicio" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeEnd" Placeholder="UVT Rango Fin" FloatLabelType="FloatLabelType.Always" />

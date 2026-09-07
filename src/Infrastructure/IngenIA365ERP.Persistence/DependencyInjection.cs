@@ -3,6 +3,7 @@ using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Interceptors;
 using IngenIA365ERP.Persistence.MultiTenancy;
 using IngenIA365ERP.Persistence.Providers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -93,15 +94,96 @@ public static class DependencyInjection
             providerConfigurator.Configure(options, adminConnectionString, MigrationsTarget.Admin));
         services.AddScoped<IAdminDbContext>(sp => sp.GetRequiredService<AdminDbContext>());
 
+        // Directorio de credenciales de segundo factor. Es el unico sitio que
+        // escribe ADM_MfaCredentials y, con el, TwoFactorEnabled.
+        services.AddScoped<
+            Application.Common.Interfaces.Identity.IMfaDirectory,
+            Identity.MfaDirectory>();
+
         // Main application DbContext (tenant-scoped)
+        // La cadena sale de la cooperativa del ambito, no de la configuracion.
+        //
+        // Esta lambda se evalua UNA VEZ POR AMBITO —medido, no supuesto— asi que
+        // cada peticion construye sus opciones con la conexion de SU cooperativa.
+        // Si se evaluara una sola vez por proceso, la cadena quedaria congelada en
+        // la primera cooperativa que entrase y todas las demas leerian sus datos.
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
-            providerConfigurator.Configure(options, operationalConnectionString, MigrationsTarget.Application);
+            var cooperativa = sp.GetRequiredService<ErpTenantInfo>();
+            providerConfigurator.Configure(
+                options, cooperativa.ConnectionString!, MigrationsTarget.Application);
+        });
+
+        // ---- El cable del aislamiento entre cooperativas ----
+        //
+        // ApplicationDbContext ya sabia elegir esquema: OnModelCreating hace
+        // `_tenantInfo?.Schema ?? "dbo"`. Lo que faltaba es que alguien pusiera ese
+        // ErpTenantInfo en el contenedor. Nadie lo hacia, en todo el repositorio, asi
+        // que el operador `??` degradaba a dbo en cada peticion, en silencio: todas
+        // las cooperativas compartiendo un unico esquema, sin excepcion ni log.
+        //
+        // No hace falta tocar la firma del constructor: ApplicationDbContext ya
+        // declara (DbContextOptions, ErpTenantInfo? = null, ICurrentUserService? = null)
+        // y el contenedor elige el constructor de mas parametros que pueda satisfacer.
+        // Se registra el TIPO CONCRETO porque la anotacion de nulabilidad no la honra.
+        services.AddScoped<TenantConnectionResolver>();
+
+        services.AddScoped(sp =>
+        {
+            var resolutor = sp.GetRequiredService<TenantConnectionResolver>();
+            var peticion = sp.GetService<IHttpContextAccessor>()?.HttpContext;
+
+            // Sin peticion HTTP —arranque, trabajos de fondo, la CLI de migraciones—
+            // no hay cooperativa de la que tirar. Va contra la instancia por defecto,
+            // donde viven el arbol de migraciones y la plantilla. Se comprueba el
+            // HttpContext y no la cooperativa porque por esa via son indistinguibles.
+            if (peticion is null)
+            {
+                return new ErpTenantInfo { SchemaName = "dbo", ConnectionString = resolutor.Plantilla };
+            }
+
+            var baseDeDatos = peticion.Items.TryGetValue("TenantDatabase", out var b) ? b as string : null;
+            var propia = peticion.Items.TryGetValue("TenantConnectionOverride", out var c) ? c as string : null;
+
+            // Dentro de una peticion, una cooperativa sin resolver NO puede caer a la
+            // base de plantilla. No hay segunda barrera que lo recoja: ninguna entidad
+            // implementa ITenantEntity y los filtros globales son todos de borrado
+            // logico. Si esto sale mal, nada lo detiene y los datos se mezclan.
+            if (string.IsNullOrWhiteSpace(baseDeDatos) && string.IsNullOrWhiteSpace(propia))
+            {
+                throw new InvalidOperationException(
+                    "Se pidio la base operativa dentro de una peticion sin cooperativa resuelta " +
+                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a la base de " +
+                    "plantilla mezclaria los datos de todas las cooperativas. Si esta ruta debe " +
+                    "funcionar sin cooperativa, no tiene que usar IApplicationDbContext.");
+            }
+
+            var actual = sp.GetRequiredService<ICurrentTenantService>();
+            return new ErpTenantInfo
+            {
+                SchemaName = "dbo",
+                ConnectionString = resolutor.Resolver(baseDeDatos, propia, actual.TenantName),
+                Name = actual.TenantName,
+                Id = actual.TenantId,
+            };
         });
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<TenantSchemaService>();
+
+        // Aprovisionador por BASE. Convive con el de esquema y todavia no lo llama
+        // nadie: se registra para poder probarlo contra PostgreSQL real antes de que
+        // nada dependa de el.
+        services.AddScoped<ITenantDatabaseProvisioner, TenantDatabaseProvisioner>();
+
+        // Para los handlers que escriben en una cooperativa que no es la de la
+        // peticion: aceptar una invitacion, aprovisionar un esquema.
+        services.AddScoped<ITenantDbContextFactory, TenantDbContextFactory>();
+
+        // Ranura de Redis por cooperativa: se lee de ADM_Tenants, no se deriva.
+        services.AddScoped<ITenantCacheSlots, TenantCacheSlots>();
+        services.AddScoped<ITenantCacheSlotAllocator, TenantCacheSlotAllocator>();
 
         // Directorio de tenants (BD IngenIA365ERP_Admin) accesible desde Application
         // sin acoplar a EF/Persistence.
@@ -115,8 +197,16 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CurrenciesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DocumentTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ChartOfAccountsSeeder>();
+        // Nomina (feature 005): plan por defecto, conceptos estandar, parametros legales
+        // del ano y tipo de comprobante NM. Idempotentes por clave natural.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollPlansSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollVoucherTypeSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
+        // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.
+        services.AddScoped<Application.Payroll.Concepts.IPayrollSeedApplier, Seeding.PayrollSeedApplier>();
         services.AddScoped<Application.Common.Interfaces.Database.IDatabaseStatusReader, Initialization.DatabaseStatusReader>();
         services.AddHostedService<Initialization.DatabaseInitializerHostedService>();
 

@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.SoftDelete;
@@ -15,15 +16,14 @@ namespace IngenIA365ERP.API.IntegrationTests.SoftDelete;
 /// Estado RED esperado hoy: sin auth → 401/404. GREEN cuando el fixture
 /// aprovisione un usuario admin autenticado con permisos.
 /// </summary>
-public class UserSoftDeleteRestoreTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class UserSoftDeleteRestoreTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public UserSoftDeleteRestoreTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task Disable_endpoint_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var fakeUserId = Guid.NewGuid();
 
         var resp = await client.PostAsync($"/api/admin/users/{fakeUserId}/disable", null);
@@ -38,7 +38,7 @@ public class UserSoftDeleteRestoreTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task Restore_endpoint_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var fakeUserId = Guid.NewGuid();
 
         var resp = await client.PostAsync($"/api/admin/users/{fakeUserId}/restore", null);
@@ -53,7 +53,7 @@ public class UserSoftDeleteRestoreTests : IClassFixture<ApiTestFixture>
     {
         // Restore es una mutación → debe ser POST. Un GET no debe estar
         // mapeado (defensa contra CSRF-via-image-tag y enumeración).
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
         var fakeUserId = Guid.NewGuid();
 
         var resp = await client.GetAsync($"/api/admin/users/{fakeUserId}/restore");

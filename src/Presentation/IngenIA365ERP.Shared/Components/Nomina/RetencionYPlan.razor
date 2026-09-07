@@ -1,0 +1,172 @@
+@*
+    RetencionYPlan — pestaña «Retención y plan» del detalle del empleado (contracts/ui.md §6):
+    plan de nómina y fecha de efecto, clase de empleado, procedimiento de retención (1 ó 2),
+    porcentajes con vigencia si es 2, y deducciones y rentas exentas declaradas con vigencia.
+*@
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+<div class="panel-pestana">
+    @if (_datos is null)
+    {
+        <p class="texto-tenue">Cargando…</p>
+    }
+    else
+    {
+        <div class="form-grid">
+            <div class="campo">
+                <label>Plan de nómina</label>
+                <div class="toolbar">
+                    <select class="e-input" @bind="_planId">
+                        @foreach (var p in _planes) { <option value="@p.PublicId">@p.Name (@p.PeriodicidadTexto)</option> }
+                    </select>
+                    <SfDatePicker TValue="DateTime" @bind-Value="_planDesde" Placeholder="Rige desde" FloatLabelType="FloatLabelType.Always" Width="170px" />
+                    <SfButton CssClass="e-outline" type="button" Disabled="@(_guardando || _planId == _datos.PlanPublicId.ToString())" OnClick="@CambiarPlan">Cambiar plan</SfButton>
+                </div>
+                <p class="texto-tenue">Plan actual: @_datos.PlanName@(_datos.PlanEffectiveFrom is { } ef ? $" desde {ef:dd/MM/yyyy}" : string.Empty). La fecha de efecto debe ser posterior al período abierto del plan actual.</p>
+            </div>
+
+            <label class="campo">
+                Clase de empleado
+                <select class="e-input" @bind="_clase">
+                    <option value="Standard">Estándar</option>
+                    <option value="IntegralSalary">Salario integral</option>
+                    <option value="Apprentice">Aprendiz</option>
+                    <option value="Intern">Pasante</option>
+                    <option value="Pensioner">Pensionado</option>
+                </select>
+            </label>
+
+            <label class="campo">
+                Procedimiento de retención
+                <select class="e-input" @bind="_procedimiento">
+                    <option value="1">Procedimiento 1 (tabla por rangos sobre la base depurada)</option>
+                    <option value="2">Procedimiento 2 (porcentaje fijo semestral)</option>
+                </select>
+            </label>
+        </div>
+
+        @if (_procedimiento == "2")
+        {
+            <span class="label">Porcentajes con vigencia</span>
+            <table class="data-grid">
+                <thead><tr><th>Porcentaje %</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _tasas)
+                    {
+                        <tr>
+                            <td><SfNumericTextBox TValue="decimal" @bind-Value="t.RatePercent" Decimals="3" Min="0" Max="100" /></td>
+                            <td><SfDatePicker TValue="DateTime" @bind-Value="t.ValidFrom" /></td>
+                            <td><SfDatePicker TValue="DateTime?" @bind-Value="t.ValidTo" Placeholder="abierta" /></td>
+                            <td><SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" OnClick="@(() => _tasas.Remove(t))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@(() => _tasas.Add(new FilaTasa { ValidFrom = DateTime.Today }))">Agregar porcentaje</SfButton>
+            <p class="texto-tenue">Si el período a liquidar no tiene porcentaje vigente, el cálculo se niega para este empleado y lo nombra: no cae al procedimiento 1.</p>
+        }
+
+        <span class="label">Deducciones y rentas exentas declaradas</span>
+        <table class="data-grid">
+            <thead><tr><th>Tipo</th><th>Valor mensual</th><th>Porcentaje %</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in _deducciones)
+                {
+                    <tr>
+                        <td>
+                            <select class="e-input" @bind="d.Kind">
+                                <option value="HousingInterest">Intereses de vivienda</option>
+                                <option value="PrepaidHealth">Medicina prepagada</option>
+                                <option value="Dependents">Dependientes</option>
+                                <option value="VoluntaryPension">Pensión voluntaria</option>
+                                <option value="AfcSavings">Ahorro AFC</option>
+                            </select>
+                        </td>
+                        <td><SfNumericTextBox TValue="decimal?" @bind-Value="d.MonthlyAmount" Format="N0" Min="0" /></td>
+                        <td><SfNumericTextBox TValue="decimal?" @bind-Value="d.Percent" Decimals="2" Min="0" Max="100" /></td>
+                        <td><SfDatePicker TValue="DateTime" @bind-Value="d.ValidFrom" /></td>
+                        <td><SfDatePicker TValue="DateTime?" @bind-Value="d.ValidTo" Placeholder="abierta" /></td>
+                        <td><SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" OnClick="@(() => _deducciones.Remove(d))" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@(() => _deducciones.Add(new FilaDeduccion { ValidFrom = DateTime.Today }))">Agregar deducción</SfButton>
+        <p class="texto-tenue">Los topes de cada deducción (UVT, porcentaje del ingreso) son parámetros legales; aquí sólo se declara lo que el empleado certifica.</p>
+
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" type="button" Disabled="@_guardando" OnClick="@Guardar">Guardar retención</SfButton>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    private RetencionEmpleadoDto? _datos;
+    private List<PlanNominaDto> _planes = [];
+    private string _planId = string.Empty, _clase = "Standard", _procedimiento = "1";
+    private DateTime _planDesde = DateTime.Today;
+    private List<FilaTasa> _tasas = [];
+    private List<FilaDeduccion> _deducciones = [];
+    private bool _guardando;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_datos is not null && _datos.EmployeePublicId == EmployeeId) return;
+        var planes = await Nomina.ListarPlanesAsync();
+        if (planes.IsSuccess) _planes = planes.Value!.ToList();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        var res = await Nomina.RetencionDeEmpleadoAsync(EmployeeId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la retención del empleado."); return; }
+        _datos = res.Value!;
+        _planId = _datos.PlanPublicId.ToString();
+        _clase = _datos.EmployeeClass;
+        _procedimiento = _datos.Procedure.ToString();
+        _tasas = _datos.Rates.Select(r => new FilaTasa { RatePercent = r.RatePercent, ValidFrom = r.ValidFrom, ValidTo = r.ValidTo }).ToList();
+        _deducciones = _datos.Deductions.Select(d => new FilaDeduccion { Kind = d.Kind, MonthlyAmount = d.MonthlyAmount, Percent = d.Percent, ValidFrom = d.ValidFrom, ValidTo = d.ValidTo }).ToList();
+    }
+
+    private async Task Guardar()
+    {
+        if (_guardando) return;
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.GuardarRetencionDeEmpleadoAsync(EmployeeId, new GuardarRetencionRequest(
+                byte.Parse(_procedimiento),
+                _tasas.Select(t => new TasaRetencionDto(t.RatePercent, t.ValidFrom, t.ValidTo)).ToList(),
+                _deducciones.Select(d => new DeduccionTributariaDto(d.Kind, d.MonthlyAmount, d.Percent, d.ValidFrom, d.ValidTo)).ToList(),
+                _clase));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo guardar."); return; }
+            await Notification.SuccessAsync("Retención guardada. Si había un borrador calculado, quedó desactualizado.");
+            _datos = null;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private async Task CambiarPlan()
+    {
+        if (_guardando || !Guid.TryParse(_planId, out var plan)) return;
+        _guardando = true;
+        try
+        {
+            var res = await Nomina.CambiarPlanDeEmpleadoAsync(EmployeeId, new CambiarPlanEmpleadoRequest(plan, _planDesde));
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cambiar el plan."); return; }
+            await Notification.SuccessAsync("Plan cambiado.");
+            _datos = null;
+            await CargarAsync();
+        }
+        finally { _guardando = false; }
+    }
+
+    private sealed class FilaTasa { public decimal RatePercent { get; set; } public DateTime ValidFrom { get; set; } public DateTime? ValidTo { get; set; } }
+    private sealed class FilaDeduccion { public string Kind { get; set; } = "HousingInterest"; public decimal? MonthlyAmount { get; set; } public decimal? Percent { get; set; } public DateTime ValidFrom { get; set; } public DateTime? ValidTo { get; set; } }
+}

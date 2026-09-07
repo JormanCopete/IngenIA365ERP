@@ -1,0 +1,78 @@
+/* Buscador de personas. Todo esto venía en diecisiete `style=` dentro del
+   .razor, incluido el resaltado del hover, que se hacía desde JS con un color
+   literal (`this.style.background='rgba(0,188,212,0.12)'`) — un cian que no
+   pertenecía a la paleta y que en tema oscuro quedaba fuera de lugar. */
+
+/* --- Chip de la persona ya elegida ---------------------------------------- */
+
+.persona-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: var(--pad-sm);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-2);
+}
+
+.persona-nombre {
+    flex: 1;
+}
+
+/* --- Listado de resultados ------------------------------------------------ */
+
+.picker-resultados {
+    margin-top: var(--gap-xs);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--superficie-1);
+}
+
+.picker-opcion {
+    padding: var(--pad-sm) var(--pad-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--borde);
+    transition: background var(--dur-rapida) var(--curva);
+}
+
+.picker-opcion:last-child {
+    border-bottom: none;
+}
+
+.picker-opcion:hover {
+    background: var(--acento-suave);
+}
+
+.picker-opcion-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--gap-sm);
+}
+
+.picker-opcion-identidad,
+.picker-opcion-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+}
+
+.picker-opcion-meta {
+    font-size: var(--texto-xs);
+    color: var(--texto-tenue);
+}
+
+/* --- Notas de estado (buscando / sin resultados / ayuda) ------------------ */
+
+.picker-nota {
+    margin-top: var(--gap-xs);
+    font-size: var(--texto-sm);
+    color: var(--texto-tenue);
+}
+
+/* Las pastillas del picker van un punto por debajo del texto de la fila. */
+.person-search-picker .e-badge {
+    font-size: var(--texto-xs);
+}

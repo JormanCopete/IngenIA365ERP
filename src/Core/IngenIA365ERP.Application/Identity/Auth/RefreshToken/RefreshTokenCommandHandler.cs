@@ -1,10 +1,13 @@
-using System.Security.Cryptography;
-using System.Text;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
+using System.Text;
+
+using IngenIA365ERP.Application.Identity.Auth.Common;
 
 namespace IngenIA365ERP.Application.Identity.Auth.RefreshToken;
 
@@ -97,6 +100,27 @@ public sealed class RefreshTokenCommandHandler(
                     "Tu membresía con la empresa activa ya no es vigente.");
             }
             membershipAdmin = current.IsTenantAdmin;
+
+            // La politica de metodos se REEVALUA en cada refresh, y esto es lo que
+            // hace que llegue a morder alguna vez. El refresh se renueva a si mismo
+            // cada doce horas indefinidamente: sin esta comprobacion, una sesion
+            // emitida antes de que la cooperativa restringiera metodos seguiria
+            // renovandose para siempre y la politica no afectaria jamas a quien ya
+            // estaba dentro — que suele ser todo el mundo.
+            //
+            // No se invalida la familia: no es un token robado ni una sesion
+            // ilegitima, es alguien a quien le cambiaron las reglas mientras
+            // trabajaba. Se le corta la renovacion y vuelve por el login, donde el
+            // emisor le dara el token de inscripcion y le dira que inscribir.
+            if (GuardiaDeMetodos.Evaluar(
+                    current.IsMfaRequiredByTenant, current.MetodosAceptados, session.MetodoMfa)
+                != GuardiaDeMetodos.Veredicto.Admite)
+            {
+                return Result.Failure<RefreshTokenResult>(
+                    "Tenant.MfaMethodNotAccepted",
+                    $"'{current.TenantName}' cambio los metodos de segundo factor que acepta. " +
+                    "Volve a iniciar sesion para inscribir uno valido.");
+            }
         }
 
         // Emitir nuevos tokens — preservando la familyId del refresh anterior.
@@ -106,7 +130,10 @@ public sealed class RefreshTokenCommandHandler(
             isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
             activeTenantId: session.ActiveTenantPublicId,
             tenantAdmin: membershipAdmin,
-            mfaVerified: user.TwoFactorEnabled);
+            mfaVerified: user.TwoFactorEnabled,
+            // Se arrastra el metodo de la sesion original: el refresh no vuelve a
+            // demostrar nada, solo prolonga lo que ya se demostro.
+            metodoMfa: session.MetodoMfa);
 
         var newRefresh = jwtIssuer.IssueRefreshToken();
         var newSession = session with

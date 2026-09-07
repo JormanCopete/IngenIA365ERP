@@ -3,8 +3,8 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Identity.Profile.Common;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace IngenIA365ERP.Application.Identity.Profile.DisableMfa;
@@ -12,7 +12,6 @@ namespace IngenIA365ERP.Application.Identity.Profile.DisableMfa;
 public sealed class DisableMfaCommandHandler(
     ICurrentCentralUserContext currentUser,
     ICentralIdentityProvider centralIdentity,
-    IAdminDbContext adminDb,
     ITenantMembershipReader memberships,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
@@ -38,15 +37,15 @@ public sealed class DisableMfaCommandHandler(
                 "Identity.InvalidCredentials", "La contraseña actual no es correcta.");
         }
 
-        // 2) Comprobar políticas MFA: si alguna empresa la exige, rechazar.
-        var active = await memberships.GetActiveMembershipsAsync(centralUserId, ct);
-        var requiringTenant = active.FirstOrDefault(m => m.IsMfaRequiredByTenant);
-        if (requiringTenant is not null)
-        {
-            return Result.Failure(
-                "Profile.Mfa.RequiredByTenantPolicy",
-                $"No puedes desactivar MFA: la empresa '{requiringTenant.TenantName}' lo exige.");
-        }
+        // 2) ¿Puede quedarse sin segundo factor?
+        //
+        // La regla vive en GuardiaDeSegundoFactor porque ahora hay dos caminos que
+        // llevan aquí: desactivar el MFA entero y revocar la última credencial.
+        // Duplicarla habría dejado abierta la puerta de al lado, que además es la
+        // que la gente usa a diario.
+        var puede = await GuardiaDeSegundoFactor.PuedeQuedarseSinSegundoFactorAsync(
+            centralUserId, currentUser.IsGlobalMasterAdmin, memberships, ct);
+        if (puede.IsFailure) return puede;
 
         // 3) Desactivar.
         await centralIdentity.DisableMfaAsync(centralUserId, ct);

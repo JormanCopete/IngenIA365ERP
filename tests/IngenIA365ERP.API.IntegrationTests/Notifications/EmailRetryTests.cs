@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Infrastructure;
 
 namespace IngenIA365ERP.API.IntegrationTests.Notifications;
@@ -12,15 +13,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Notifications;
 /// <c>NotificationDeliveryFailure</c> → la in-app sigue visible) requiere
 /// Docker + un MailHog/smtp4dev sandbox; queda gateado en RED.
 /// </summary>
-public class EmailRetryTests : IClassFixture<ApiTestFixture>
+[Collection(IdentidadCentralCollection.Nombre)]
+public class EmailRetryTests(CentralIdentityApiFixture fx)
 {
-    private readonly ApiTestFixture _fx;
-    public EmailRetryTests(ApiTestFixture fx) => _fx = fx;
 
     [Fact]
     public async Task Notifications_inbox_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.GetAsync("/api/notifications/");
 
@@ -31,7 +31,7 @@ public class EmailRetryTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task MarkRead_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.PostAsync(
             $"/api/notifications/{Guid.NewGuid()}/read", null);
@@ -43,7 +43,7 @@ public class EmailRetryTests : IClassFixture<ApiTestFixture>
     [Fact]
     public async Task MarkAllRead_requires_authorization()
     {
-        var client = _fx.CreateClient();
+        var client = fx.CreateClient();
 
         var resp = await client.PostAsync("/api/notifications/read-all", null);
 

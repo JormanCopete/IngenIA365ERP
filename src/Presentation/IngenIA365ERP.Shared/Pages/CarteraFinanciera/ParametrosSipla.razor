@@ -34,7 +34,7 @@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
+            <div class="pagina">
                 <SfTextBox @bind-Value="_model.ConceptCode" Placeholder="Codigo Concepto" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.CompanyCode" Placeholder="Codigo Empresa" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="decimal" @bind-Value="_model.MonthlyCreditMoves" Placeholder="Movimientos Credito Mensuales" Format="N2" FloatLabelType="FloatLabelType.Always" />

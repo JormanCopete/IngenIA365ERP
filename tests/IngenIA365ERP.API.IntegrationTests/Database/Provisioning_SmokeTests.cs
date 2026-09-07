@@ -24,17 +24,43 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         using var scope = fixture.Factory.Services.CreateScope();
         var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+        // Se compara contra el MODELO, no contra un número escrito a mano.
+        //
+        // El número se quedó viejo en cuanto el corte a base-por-cooperativa
+        // sacó las tablas ADM_* del contexto operativo: la prueba pedía 286 y
+        // encontraba 277, y lo que delataba no era un esquema incompleto sino
+        // su propia constante. Preguntándole al modelo no puede volver a pasar.
+        var esperadas = appDb.Model.GetEntityTypes()
+            .Select(e => e.GetTableName())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        esperadas.Count.Should().BeGreaterThan(250,
+            "si el modelo viniera vacío esta prueba pasaría sin comprobar nada");
+
         // information_schema es ANSI — misma consulta en ambos motores.
         await using var conn = appDb.Database.GetDbConnection();
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT COUNT(*) FROM information_schema.tables " +
+            "SELECT table_name FROM information_schema.tables " +
             "WHERE table_schema = 'dbo' AND table_type = 'BASE TABLE'";
-        var tables = Convert.ToInt32(await cmd.ExecuteScalarAsync());
 
-        tables.Should().BeGreaterThanOrEqualTo(286,
-            $"el esquema operativo completo (270 entidades) debe existir en {CentralIdentityApiFixture.ProviderKey}");
+        var presentes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var lector = await cmd.ExecuteReaderAsync())
+        {
+            while (await lector.ReadAsync()) presentes.Add(lector.GetString(0));
+        }
+
+        esperadas.Except(presentes).Should().BeEmpty(
+            $"el esquema operativo completo debe existir en {CentralIdentityApiFixture.ProviderKey}");
+
+        // Principio IV: el catálogo administrativo vive FUERA de toda base de
+        // cooperativa. Una tabla ADM_* aquí dentro no daría error nunca — daría
+        // dos catálogos, uno por cooperativa, divergiendo en silencio.
+        presentes.Where(t => t.StartsWith("ADM_", StringComparison.OrdinalIgnoreCase))
+            .Should().BeEmpty("la base administrativa es una sola y no se replica por cooperativa");
     }
 
     [Fact]

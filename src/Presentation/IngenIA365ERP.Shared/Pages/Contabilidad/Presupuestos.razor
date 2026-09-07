@@ -6,270 +6,272 @@
 
 <PageTitle>Presupuestos - IngenIA365ERP</PageTitle>
 
-<div class="page-header">
-    <h3>Presupuestos</h3>
-    <div style="display:flex;gap:8px;">
-        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="OpenCreate">Nuevo Presupuesto</SfButton>
+<div class="pagina">
+    <div class="page-header">
+        <h3>Presupuestos</h3>
+        <div>
+            <SfButton CssClass="e-primary e-small" IconCss="e-icons e-export-excel" OnClick="ExportExcel">Exportar Excel</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="OpenCreate">Nuevo Presupuesto</SfButton>
+        </div>
     </div>
-</div>
 
-<!-- Filters -->
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:end;">
-    <div>
-        <label>Anio</label>
-        <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
-                          CssClass="e-small" Width="100px" />
+    <!-- Filters -->
+    <div class="toolbar">
+        <div>
+            <label>Anio</label>
+            <SfNumericTextBox TValue="int" @bind-Value="_year" Format="####" Min="2000" Max="2099"
+                              CssClass="e-small" Width="100px" />
+        </div>
+        <div>
+            <label>Sucursal</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <div>
+            <label>Centro Costo</label>
+            <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters"
+                            CssClass="e-small" Width="150px">
+                <DropDownListFieldSettings Text="Name" Value="Value" />
+            </SfDropDownList>
+        </div>
+        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
     </div>
-    <div>
-        <label>Sucursal</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_branchFilter" DataSource="_branches"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <div>
-        <label>Centro Costo</label>
-        <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_costCenterFilter" DataSource="_costCenters"
-                        CssClass="e-small" Width="150px">
-            <DropDownListFieldSettings Text="Name" Value="Value" />
-        </SfDropDownList>
-    </div>
-    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-search" OnClick="LoadData">Buscar</SfButton>
-</div>
 
-<!-- Tab: Presupuesto / Ejecucion -->
-<SfTab>
-    <TabItems>
-        <TabItem>
-            <ChildContent><TabHeader Text="Presupuesto" /></ChildContent>
-            <ContentTemplate>
-                <SfGrid @ref="_grid" TValue="BudgetItem" DataSource="_items" AllowPaging="true" AllowSorting="true"
-                        AllowExcelExport="true" Height="500">
-                    <GridPageSettings PageSize="30" />
-                    <GridColumns>
-                        <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" IsFrozen="true" />
-                        <GridColumn Field="AccountName" HeaderText="Nombre" Width="220" IsFrozen="true" />
-                        <GridColumn Field="Jan" HeaderText="Ene" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Feb" HeaderText="Feb" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Mar" HeaderText="Mar" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Apr" HeaderText="Abr" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="May" HeaderText="May" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Jun" HeaderText="Jun" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Jul" HeaderText="Jul" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Aug" HeaderText="Ago" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Sep" HeaderText="Sep" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Oct" HeaderText="Oct" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Nov" HeaderText="Nov" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Dec" HeaderText="Dic" Width="110" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Total" HeaderText="Total" Width="130" Format="N0" TextAlign="TextAlign.Right">
-                            <Template>
-                                @{ var item = context as BudgetItem; }
-                                <strong>@item?.Total.ToString("N0")</strong>
-                            </Template>
-                        </GridColumn>
-                        <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
-                            <Template>
-                                @{ var item = context as BudgetItem; }
-                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
-                                          OnClick="@(() => OpenEdit(item!))" />
-                            </Template>
-                        </GridColumn>
-                    </GridColumns>
-                    <GridAggregates>
-                        <GridAggregate>
-                            <GridAggregateColumns>
-                                <GridAggregateColumn Field="Jan" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Feb" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Mar" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Apr" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="May" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Jun" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Jul" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Aug" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Sep" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Oct" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Nov" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Dec" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Total" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                            </GridAggregateColumns>
-                        </GridAggregate>
-                    </GridAggregates>
-                </SfGrid>
-            </ContentTemplate>
-        </TabItem>
-        <TabItem>
-            <ChildContent><TabHeader Text="Ejecucion Presupuestal" /></ChildContent>
-            <ContentTemplate>
-                <div style="margin:12px 0;">
-                    <SfButton CssClass="e-primary e-small" IconCss="e-icons e-reload" OnClick="LoadExecution">Cargar Ejecucion</SfButton>
-                </div>
-                <SfGrid TValue="BudgetExecutionItem" DataSource="_executionItems" AllowPaging="true" AllowSorting="true" Height="500">
-                    <GridPageSettings PageSize="30" />
-                    <GridColumns>
-                        <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" IsFrozen="true" />
-                        <GridColumn Field="AccountName" HeaderText="Nombre" Width="220" IsFrozen="true" />
-                        <GridColumn Field="BudgetedAmount" HeaderText="Presupuestado" Width="150" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="ActualAmount" HeaderText="Ejecutado" Width="150" Format="N0" TextAlign="TextAlign.Right" />
-                        <GridColumn Field="Variance" HeaderText="Variacion" Width="150" Format="N0" TextAlign="TextAlign.Right">
-                            <Template>
-                                @{
-                                    var item = context as BudgetExecutionItem;
-                                    var color = (item?.Variance ?? 0) >= 0 ? "green" : "red";
-                                }
-                                <span style="color:@color;font-weight:bold;">@item?.Variance.ToString("N0")</span>
-                            </Template>
-                        </GridColumn>
-                        <GridColumn Field="ExecutionPercent" HeaderText="% Ejecucion" Width="140" TextAlign="TextAlign.Right">
-                            <Template>
-                                @{
-                                    var item = context as BudgetExecutionItem;
-                                    var pct = item?.ExecutionPercent ?? 0;
-                                    var color = pct > 100 ? "red" : pct > 80 ? "orange" : "green";
-                                }
-                                <span style="color:@color;font-weight:bold;">@pct.ToString("N1")%</span>
-                            </Template>
-                        </GridColumn>
-                        <GridColumn HeaderText="Progreso" Width="150">
-                            <Template>
-                                @{
-                                    var item = context as BudgetExecutionItem;
-                                    var pct = Math.Min(item?.ExecutionPercent ?? 0, 100);
-                                    var barColor = pct > 90 ? "#f44336" : pct > 70 ? "#ff9800" : "#4caf50";
-                                }
-                                <div style="background:#e0e0e0;border-radius:4px;height:8px;width:100%;">
-                                    <div style="background:@barColor;border-radius:4px;height:8px;width:@(pct)%;"></div>
-                                </div>
-                            </Template>
-                        </GridColumn>
-                    </GridColumns>
-                    <GridAggregates>
-                        <GridAggregate>
-                            <GridAggregateColumns>
-                                <GridAggregateColumn Field="BudgetedAmount" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="ActualAmount" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                                <GridAggregateColumn Field="Variance" Type="AggregateType.Sum" Format="N0">
-                                    <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
-                                </GridAggregateColumn>
-                            </GridAggregateColumns>
-                        </GridAggregate>
-                    </GridAggregates>
-                </SfGrid>
-            </ContentTemplate>
-        </TabItem>
-    </TabItems>
-</SfTab>
+    <!-- Tab: Presupuesto / Ejecucion -->
+    <SfTab>
+        <TabItems>
+            <TabItem>
+                <ChildContent><TabHeader Text="Presupuesto" /></ChildContent>
+                <ContentTemplate>
+                    <SfGrid @ref="_grid" TValue="BudgetItem" DataSource="_items" AllowPaging="true" AllowSorting="true"
+                            AllowExcelExport="true" Height="500">
+                        <GridPageSettings PageSize="30" />
+                        <GridColumns>
+                            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" IsFrozen="true" />
+                            <GridColumn Field="AccountName" HeaderText="Nombre" Width="220" IsFrozen="true" />
+                            <GridColumn Field="Jan" HeaderText="Ene" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Feb" HeaderText="Feb" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Mar" HeaderText="Mar" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Apr" HeaderText="Abr" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="May" HeaderText="May" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Jun" HeaderText="Jun" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Jul" HeaderText="Jul" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Aug" HeaderText="Ago" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Sep" HeaderText="Sep" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Oct" HeaderText="Oct" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Nov" HeaderText="Nov" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Dec" HeaderText="Dic" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Total" HeaderText="Total" Width="130" Format="N0" TextAlign="TextAlign.Right">
+                                <Template>
+                                    @{ var item = context as BudgetItem; }
+                                    <strong>@item?.Total.ToString("N0")</strong>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
+                                <Template>
+                                    @{ var item = context as BudgetItem; }
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                                              OnClick="@(() => OpenEdit(item!))" />
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                        <GridAggregates>
+                            <GridAggregate>
+                                <GridAggregateColumns>
+                                    <GridAggregateColumn Field="Jan" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Feb" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Mar" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Apr" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="May" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Jun" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Jul" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Aug" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Sep" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Oct" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Nov" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Dec" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Total" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                </GridAggregateColumns>
+                            </GridAggregate>
+                        </GridAggregates>
+                    </SfGrid>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Ejecucion Presupuestal" /></ChildContent>
+                <ContentTemplate>
+                    <div style="margin:var(--gap-md) 0;">
+                        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-reload" OnClick="LoadExecution">Cargar Ejecucion</SfButton>
+                    </div>
+                    <SfGrid TValue="BudgetExecutionItem" DataSource="_executionItems" AllowPaging="true" AllowSorting="true" Height="500">
+                        <GridPageSettings PageSize="30" />
+                        <GridColumns>
+                            <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="120" IsFrozen="true" />
+                            <GridColumn Field="AccountName" HeaderText="Nombre" Width="220" IsFrozen="true" />
+                            <GridColumn Field="BudgetedAmount" HeaderText="Presupuestado" Width="150" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="ActualAmount" HeaderText="Ejecutado" Width="150" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Variance" HeaderText="Variacion" Width="150" Format="N0" TextAlign="TextAlign.Right">
+                                <Template>
+                                    @{
+                                        var item = context as BudgetExecutionItem;
+                                        var color = (item?.Variance ?? 0) >= 0 ? "var(--exito-texto)" : "var(--peligro-texto)";
+                                    }
+                                    <span style="color:@color;font-weight:bold;">@item?.Variance.ToString("N0")</span>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn Field="ExecutionPercent" HeaderText="% Ejecucion" Width="140" TextAlign="TextAlign.Right">
+                                <Template>
+                                    @{
+                                        var item = context as BudgetExecutionItem;
+                                        var pct = item?.ExecutionPercent ?? 0;
+                                        var color = pct > 100 ? "var(--peligro-texto)" : pct > 80 ? "var(--alerta-texto)" : "var(--exito-texto)";
+                                    }
+                                    <span style="color:@color;font-weight:bold;">@pct.ToString("N1")%</span>
+                                </Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Progreso" Width="150">
+                                <Template>
+                                    @{
+                                        var item = context as BudgetExecutionItem;
+                                        var pct = Math.Min(item?.ExecutionPercent ?? 0, 100);
+                                        var barColor = pct > 90 ? "var(--peligro)" : pct > 70 ? "var(--alerta)" : "var(--exito)";
+                                    }
+                                    <div class="barra-progreso">
+                                        <div class="barra-progreso-relleno" style="background:@barColor;width:@(pct)%;"></div>
+                                    </div>
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                        <GridAggregates>
+                            <GridAggregate>
+                                <GridAggregateColumns>
+                                    <GridAggregateColumn Field="BudgetedAmount" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="ActualAmount" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                    <GridAggregateColumn Field="Variance" Type="AggregateType.Sum" Format="N0">
+                                        <FooterTemplate>@{ var s = (context as AggregateTemplateContext); }<b>@s?.Sum</b></FooterTemplate>
+                                    </GridAggregateColumn>
+                                </GridAggregateColumns>
+                            </GridAggregate>
+                        </GridAggregates>
+                    </SfGrid>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
 
-<!-- Create/Edit dialog -->
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="700px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:16px;">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                    <div>
-                        <label>Cuenta *</label>
-                        <div style="display:flex;gap:4px;">
-                            <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta" />
-                            <SfButton CssClass="e-flat" IconCss="e-icons e-search" OnClick="@(() => _showAccountSearch = true)" />
+    <!-- Create/Edit dialog -->
+    <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="700px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div class="columna-formulario">
+                    <div class="rejilla-campos">
+                        <div>
+                            <label>Cuenta *</label>
+                            <div class="campo-con-boton">
+                                <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta" />
+                                <SfButton CssClass="e-flat" IconCss="e-icons e-search" OnClick="@(() => _showAccountSearch = true)" />
+                            </div>
+                        </div>
+                        <div>
+                            <label>Nombre Cuenta</label>
+                            <SfTextBox Value="@_model.AccountName" Readonly="true" CssClass="e-disabled" />
                         </div>
                     </div>
-                    <div>
-                        <label>Nombre Cuenta</label>
-                        <SfTextBox Value="@_model.AccountName" Readonly="true" CssClass="e-disabled" />
+
+                    <h5 class="titulo-seccion">Valores Mensuales</h5>
+                    <div class="rejilla-meses">
+                        <div><label>Enero</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jan" Format="N0" /></div>
+                        <div><label>Febrero</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Feb" Format="N0" /></div>
+                        <div><label>Marzo</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Mar" Format="N0" /></div>
+                        <div><label>Abril</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Apr" Format="N0" /></div>
+                        <div><label>Mayo</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.May" Format="N0" /></div>
+                        <div><label>Junio</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jun" Format="N0" /></div>
+                        <div><label>Julio</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jul" Format="N0" /></div>
+                        <div><label>Agosto</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Aug" Format="N0" /></div>
+                        <div><label>Septiembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Sep" Format="N0" /></div>
+                        <div><label>Octubre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Oct" Format="N0" /></div>
+                        <div><label>Noviembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Nov" Format="N0" /></div>
+                        <div><label>Diciembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Dec" Format="N0" /></div>
+                    </div>
+
+                    <div class="total-anual">
+                        <strong>Total: @_model.Total.ToString("N0")</strong>
+                    </div>
+
+                    <div class="acciones">
+                        <SfButton CssClass="e-flat e-small" OnClick="DistributeEvenly">Distribuir Uniforme</SfButton>
+                        <div class="acciones">
+                            <label class="muted">Total anual:</label>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_distributeTotal" Format="N0" Width="140px" CssClass="e-small" />
+                        </div>
                     </div>
                 </div>
+            </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
+            <DialogButton Content="Guardar" IsPrimary="true" OnClick="Save" />
+        </DialogButtons>
+    </SfDialog>
 
-                <h5 style="margin:8px 0 0 0;">Valores Mensuales</h5>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-                    <div><label>Enero</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jan" Format="N0" /></div>
-                    <div><label>Febrero</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Feb" Format="N0" /></div>
-                    <div><label>Marzo</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Mar" Format="N0" /></div>
-                    <div><label>Abril</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Apr" Format="N0" /></div>
-                    <div><label>Mayo</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.May" Format="N0" /></div>
-                    <div><label>Junio</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jun" Format="N0" /></div>
-                    <div><label>Julio</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Jul" Format="N0" /></div>
-                    <div><label>Agosto</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Aug" Format="N0" /></div>
-                    <div><label>Septiembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Sep" Format="N0" /></div>
-                    <div><label>Octubre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Oct" Format="N0" /></div>
-                    <div><label>Noviembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Nov" Format="N0" /></div>
-                    <div><label>Diciembre</label><SfNumericTextBox TValue="decimal" @bind-Value="_model.Dec" Format="N0" /></div>
-                </div>
-
-                <div style="text-align:right;font-size:16px;">
-                    <strong>Total: @_model.Total.ToString("N0")</strong>
-                </div>
-
-                <div style="display:flex;gap:8px;">
-                    <SfButton CssClass="e-flat e-small" OnClick="DistributeEvenly">Distribuir Uniforme</SfButton>
-                    <div style="display:flex;gap:4px;align-items:center;">
-                        <label style="font-size:12px;">Total anual:</label>
-                        <SfNumericTextBox TValue="decimal" @bind-Value="_distributeTotal" Format="N0" Width="140px" CssClass="e-small" />
+    <!-- Account search for budget dialog -->
+    <SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <div>
+                    <div class="toolbar" style="margin-bottom:var(--gap-md);">
+                        <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre" CssClass="e-small" />
+                        <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
                     </div>
+                    <SfGrid TValue="AccountItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
+                        <GridPageSettings PageSize="10" />
+                        <GridEvents RowSelected="OnAccountSelected" TValue="AccountItem" />
+                        <GridColumns>
+                            <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+                        </GridColumns>
+                    </SfGrid>
                 </div>
-            </div>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="Save" />
-    </DialogButtons>
-</SfDialog>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
 
-<!-- Account search for budget dialog -->
-<SfDialog @bind-Visible="_showAccountSearch" Header="Buscar Cuenta" Width="600px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <div style="padding:10px;">
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <SfTextBox @bind-Value="_accountSearchText" Placeholder="Codigo o nombre" CssClass="e-small" />
-                    <SfButton CssClass="e-primary e-small" OnClick="SearchAccounts">Buscar</SfButton>
-                </div>
-                <SfGrid TValue="AccountItem" DataSource="_accountSearchResults" AllowPaging="true" Height="300">
-                    <GridPageSettings PageSize="10" />
-                    <GridEvents RowSelected="OnAccountSelected" TValue="AccountItem" />
-                    <GridColumns>
-                        <GridColumn Field="AccountCode" HeaderText="Codigo" Width="140" />
-                        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
-                    </GridColumns>
-                </SfGrid>
-            </div>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
-
-<!-- Delete confirmation -->
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
-               Message="Esta seguro de eliminar este presupuesto?" />
+    <!-- Delete confirmation -->
+    <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
+                   Message="Esta seguro de eliminar este presupuesto?" />
+</div>
 
 @code {
     private SfGrid<BudgetItem>? _grid;

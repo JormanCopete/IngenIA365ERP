@@ -7,9 +7,9 @@
 
 <PageTitle>Comites - IngenIA365ERP</PageTitle>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+<div class="page-header">
     <h3>Comites</h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div>
         <SfTextBox Placeholder="Buscar comite..." @bind-Value="_search" Width="280px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
         <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Comite</SfButton>
@@ -50,9 +50,9 @@
         <Content>
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
-                <div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+                <div class="pagina">
                     <div>
-                        <label>Nombre <span style="color:red">*</span></label>
+                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
                         <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del comite"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />

@@ -1,0 +1,32 @@
+/* Bloque de trabajo sobre la superficie de la pagina. componentes.css todavia
+   no tiene una clase de panel; mientras no la tenga, vive aca con ambito y en
+   tokens, en vez de repetirse en linea. */
+
+.panel {
+    background: var(--superficie-1);
+    border-radius: var(--radio);
+    padding: var(--gap-lg);
+    margin-bottom: var(--gap-lg);
+}
+
+.panel > h4 {
+    margin-top: 0;
+}
+
+/* Los avisos de "puede retirarse" / "no es posible" llevan titulo y lista
+   dentro; el color y el fondo los pone .aviso-ok / .aviso-error, aca solo se
+   quitan los margenes que dejarian el aviso descuadrado.
+
+   `color: inherit` no es adorno: app.css declara `h1..h6 { color:
+   var(--texto-primario) }`, y una regla puesta sobre el propio elemento le gana
+   siempre a lo que se hereda del contenedor. Sin esto el titulo "No es posible
+   procesar el retiro" sale en gris de texto normal sobre el fondo rojo, en vez
+   del rojo que tenia antes en linea. */
+.aviso > h4 {
+    margin-top: 0;
+    color: inherit;
+}
+
+.aviso > ul {
+    margin: 0;
+}

@@ -2,7 +2,9 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
+using IngenIA365ERP.Application.Identity.Profile.Common;
 using IngenIA365ERP.Application.Identity.Profile.ConfirmMfaEnrollment;
+using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
@@ -14,6 +16,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     private static readonly Guid UserId = Guid.NewGuid();
     private const string Email = "u@x.co";
     private const string Secret = "ABCDEFGHIJKLMNOP";
+    private static readonly Guid TenantA = Guid.NewGuid();
 
     private readonly ICurrentCentralUserContext _currentUser;
     private readonly ICentralIdentityProvider _identity;
@@ -37,8 +40,18 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
         _currentUser.Purpose.Returns(CentralJwtPurposes.Full);
     }
 
+    /// <summary>
+    /// El elevador va REAL, armado con los mismos sustitutos. Un doble diría
+    /// «se llamó al elevador», que es una afirmación sobre la estructura del
+    /// código; así las pruebas siguen afirmando qué sale por la puerta.
+    /// </summary>
+    private IElevadorDeSesionTrasInscripcion Elevador() =>
+        new ElevadorDeSesionTrasInscripcion(
+            _identity, _memberships, _jwt, _refresh,
+            NullLogger<ElevadorDeSesionTrasInscripcion>.Instance);
+
     private ConfirmMfaEnrollmentCommandHandler NewHandler() => new(
-        _currentUser, _identity, _pending, _memberships, _jwt, _refresh,
+        _currentUser, _identity, _pending, _memberships, Elevador(),
         Substitute.For<IAuditAppendOnlyWriter>(),
         Substitute.For<IDateTimeService>(),
         NullLogger<ConfirmMfaEnrollmentCommandHandler>.Instance);
@@ -58,8 +71,8 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     public async Task Codigo_invalido_devuelve_error()
     {
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
-            .Returns(new MfaPendingEnrollment(Secret, new[] { "code1" }, DateTime.UtcNow));
-        _identity.ConfirmMfaSetupAsync(UserId, Secret, "999999", Arg.Any<CancellationToken>())
+            .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
+        _identity.ConfirmMfaSetupAsync(UserId, Secret, "999999", Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(false, new[] { "Profile.Mfa.InvalidCode" }));
 
         var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("999999"), default);
@@ -73,8 +86,8 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     {
         var codes = new[] { "code1", "code2" };
         _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
-            .Returns(new MfaPendingEnrollment(Secret, codes, DateTime.UtcNow));
-        _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<CancellationToken>())
+            .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
+        _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new MfaConfirmResult(true, Array.Empty<string>(), codes));
 
         var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("123456"), default);
@@ -83,5 +96,71 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
         result.Value.RecoveryCodes.Should().BeEquivalentTo(codes);
         result.Value.AccessToken.Should().BeNull("purpose=full → no se eleva sesión");
         await _pending.Received(1).ClearAsync(UserId, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// La rama que no tenía ninguna prueba, y por eso el defecto del cliente
+    /// —tokens emitidos y descartados— vivió sin que nada lo señalara.
+    /// </summary>
+    [Fact]
+    public async Task Inscripcion_forzada_con_una_cooperativa_eleva_la_sesion()
+    {
+        PrepararConfirmacionValida();
+        _currentUser.Purpose.Returns(CentralJwtPurposes.MfaEnroll);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new CentralUser { Id = UserId, Email = Email, TwoFactorEnabled = true });
+        _memberships.GetActiveMembershipsAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new[] { new ActiveMembershipInfo(TenantA, "Coop A", false, true) });
+
+        var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("123456"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AccessToken.Should().Be("access-jwt");
+        result.Value.RefreshToken.Should().Be("refresh-token");
+        result.Value.ActiveTenantPublicId.Should().Be(TenantA);
+        result.Value.ActiveTenantName.Should().Be("Coop A");
+    }
+
+    /// <summary>
+    /// Con dos cooperativas hay que elegir, y esa pantalla necesita otro token que
+    /// aquí no se emite. Devolver uno operativo sin cooperativa activa metería a la
+    /// persona en el sistema sin haber elegido en cuál está.
+    /// </summary>
+    [Fact]
+    public async Task Con_varias_cooperativas_no_se_eleva_nada()
+    {
+        PrepararConfirmacionValida();
+        _currentUser.Purpose.Returns(CentralJwtPurposes.MfaEnroll);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new CentralUser { Id = UserId, Email = Email, TwoFactorEnabled = true });
+        _memberships.GetActiveMembershipsAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new[]
+            {
+                new ActiveMembershipInfo(TenantA, "Coop A", false, true),
+                new ActiveMembershipInfo(Guid.NewGuid(), "Coop B", false, true),
+            });
+
+        var result = await NewHandler().Handle(new ConfirmMfaEnrollmentCommand("123456"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.RecoveryCodes.Should().NotBeEmpty("el autenticador quedó inscrito igual");
+        result.Value.AccessToken.Should().BeNull();
+    }
+
+    private void PrepararConfirmacionValida()
+    {
+        _pending.GetAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new MfaPendingEnrollment(Secret, DateTime.UtcNow));
+        _identity.ConfirmMfaSetupAsync(UserId, Secret, "123456", Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new MfaConfirmResult(true, Array.Empty<string>(), new[] { "code1", "code2" }));
+
+        _jwt.IssueAccessToken(
+                Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
+                Arg.Any<Guid?>(), Arg.Any<bool?>(), Arg.Any<bool>(), Arg.Any<MetodosMfa>())
+            .Returns(new CentralAccessTokenResult(
+                "access-jwt", DateTime.UtcNow.AddMinutes(15), "jti", "full"));
+        _jwt.IssueRefreshToken()
+            .Returns(new CentralRefreshTokenResult(
+                "refresh-token", "refresh-hash", DateTime.UtcNow.AddHours(12)));
     }
 }

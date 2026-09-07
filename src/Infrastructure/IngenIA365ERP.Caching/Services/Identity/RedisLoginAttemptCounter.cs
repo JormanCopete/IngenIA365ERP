@@ -4,24 +4,16 @@ using StackExchange.Redis;
 namespace IngenIA365ERP.Caching.Services.Identity;
 
 /// <summary>
-/// Contador de fallos de login por email con escalado progresivo (T040, research D-11).
-/// Key: <c>login-attempts:{normalizedEmail}</c> con INCR + EXPIRE atómicos.
-/// El bloqueo en sí se escribe en <c>login-locked:{normalizedEmail}</c> con TTL
-/// igual al LockSeconds del nivel disparado.
+/// Contador de fallos por email con escalado progresivo (T040, research D-11).
+/// Key: <c>intentos:{ambito}:{email}</c> con INCR + EXPIRE atómicos. El bloqueo
+/// en sí se escribe en <c>bloqueo:{ambito}:{email}</c> con TTL igual al
+/// LockSeconds del nivel disparado.
 /// </summary>
 internal sealed class RedisLoginAttemptCounter : ILoginAttemptCounter
 {
-    private const string CounterKeyPrefix = "login-attempts:";
-    private const string LockKeyPrefix = "login-locked:";
+    private const string CounterKeyPrefix = "intentos:";
+    private const string LockKeyPrefix = "bloqueo:";
 
-    // Escalado por research D-11. Umbrales SIEMPRE en orden ascendente.
-    private static readonly (int AfterFailures, int LockSeconds)[] Thresholds =
-    [
-        (5,  60),     // 1 min
-        (10, 300),    // 5 min
-        (15, 900),    // 15 min
-        (20, 3600),   // 60 min — requiere reset administrativo si vuelve a dispararse
-    ];
 
     // El contador EXPIRA si no hay actividad por este tiempo (ventana de "olvido").
     private static readonly TimeSpan CounterTtl = TimeSpan.FromHours(24);
@@ -33,11 +25,12 @@ internal sealed class RedisLoginAttemptCounter : ILoginAttemptCounter
         _redis = redis;
     }
 
-    public async Task<LoginLockoutState> CheckAsync(string normalizedEmail, CancellationToken ct)
+    public async Task<LoginLockoutState> CheckAsync(
+        AmbitoDeIntentos ambito, string normalizedEmail, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
-        var lockKey = LockKey(normalizedEmail);
-        var counterKey = CounterKey(normalizedEmail);
+        var lockKey = LockKey(ambito, normalizedEmail);
+        var counterKey = CounterKey(ambito, normalizedEmail);
 
         var ttl = await db.KeyTimeToLiveAsync(lockKey);
         if (ttl is { TotalSeconds: > 0 })
@@ -50,45 +43,46 @@ internal sealed class RedisLoginAttemptCounter : ILoginAttemptCounter
         return new LoginLockoutState(IsLocked: false, RetryAfterSeconds: 0, FailureCount: current);
     }
 
-    public async Task<LoginLockoutVerdict> RecordFailureAsync(string normalizedEmail, CancellationToken ct)
+    public async Task<LoginLockoutVerdict> RecordFailureAsync(
+        AmbitoDeIntentos ambito, string normalizedEmail, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
-        var counterKey = CounterKey(normalizedEmail);
+        var counterKey = CounterKey(ambito, normalizedEmail);
 
         var newCount = (int)await db.StringIncrementAsync(counterKey);
         await db.KeyExpireAsync(counterKey, CounterTtl);
 
-        // Determinar el lock más alto que el contador supera (ascendente → último que aplica).
-        (int after, int seconds)? hit = null;
-        foreach (var (after, seconds) in Thresholds)
-        {
-            if (newCount >= after) hit = (after, seconds);
-        }
+        // La politica vive en EscaladoDeBloqueo, no aqui: el fallo que costo
+        // caro era una condicion enterrada entre dos llamadas a Redis, y asi no
+        // se podia comprobar sin levantar uno.
+        var veredicto = EscaladoDeBloqueo.Decidir(newCount);
+        if (!veredicto.ShouldLock) return veredicto;
 
-        if (hit is null)
-        {
-            return new LoginLockoutVerdict(ShouldLock: false, LockSeconds: 0, FailureCount: newCount);
-        }
-
-        // Aplicar lock solo si el contador acaba de cruzar el umbral (es decir, igual exacto).
-        // Esto evita re-bloquear en cada fallo posterior dentro de la misma ventana.
-        if (newCount == hit.Value.after)
-        {
-            await db.StringSetAsync(LockKey(normalizedEmail), "1", TimeSpan.FromSeconds(hit.Value.seconds));
-            return new LoginLockoutVerdict(ShouldLock: true, LockSeconds: hit.Value.seconds, FailureCount: newCount);
-        }
-
-        // Entre umbrales (ej. 6º fallo cuando el lock de 1min ya está activo) — no re-bloquear.
-        return new LoginLockoutVerdict(ShouldLock: false, LockSeconds: 0, FailureCount: newCount);
+        await db.StringSetAsync(
+            LockKey(ambito, normalizedEmail), "1", TimeSpan.FromSeconds(veredicto.LockSeconds));
+        return veredicto;
     }
 
-    public async Task ResetAsync(string normalizedEmail, CancellationToken ct)
+    public async Task ResetAsync(
+        AmbitoDeIntentos ambito, string normalizedEmail, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
-        await db.KeyDeleteAsync(CounterKey(normalizedEmail));
-        await db.KeyDeleteAsync(LockKey(normalizedEmail));
+        await db.KeyDeleteAsync(CounterKey(ambito, normalizedEmail));
+        await db.KeyDeleteAsync(LockKey(ambito, normalizedEmail));
     }
 
-    private static string CounterKey(string normalizedEmail) => $"{CounterKeyPrefix}{normalizedEmail}";
-    private static string LockKey(string normalizedEmail) => $"{LockKeyPrefix}{normalizedEmail}";
+    private static string CounterKey(AmbitoDeIntentos ambito, string normalizedEmail) =>
+        $"{CounterKeyPrefix}{Nombre(ambito)}:{normalizedEmail}";
+
+    private static string LockKey(AmbitoDeIntentos ambito, string normalizedEmail) =>
+        $"{LockKeyPrefix}{Nombre(ambito)}:{normalizedEmail}";
+
+    /// <summary>Nombre explícito y no <c>ToString()</c>: renombrar el enum no puede mover las claves de Redis.</summary>
+    private static string Nombre(AmbitoDeIntentos ambito) => ambito switch
+    {
+        AmbitoDeIntentos.Password => "password",
+        AmbitoDeIntentos.Mfa => "mfa",
+        AmbitoDeIntentos.RecuperacionMfa => "recuperacion-mfa",
+        _ => throw new ArgumentOutOfRangeException(nameof(ambito), ambito, "Ámbito de intentos desconocido."),
+    };
 }

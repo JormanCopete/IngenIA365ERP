@@ -26,6 +26,22 @@ public class Employee : AuditableEntity
 
     public int PayrollCompanyId { get; set; }
 
+    // === NOMINA (feature 005) ===
+
+    /// <summary>Plan de nómina al que pertenece; exactamente uno (FR-037).</summary>
+    public int PayrollPlanId { get; set; }
+
+    /// <summary>Fecha de efecto del último cambio de plan; rige desde el primer período posterior.</summary>
+    public DateTime? PayrollPlanEffectiveFrom { get; set; }
+
+    /// <summary>Procedimiento de retención en la fuente: 1 (tabla cada período) o 2 (porcentaje fijo semestral).</summary>
+    public byte WithholdingProcedure { get; set; } = 1;
+
+    /// <summary>Decide qué conceptos aplican por parametrización, nunca por casos en el motor.</summary>
+    public Enums.Payroll.EmployeeClass EmployeeClass { get; set; } = Enums.Payroll.EmployeeClass.Standard;
+
+    public PayrollPlan? PayrollPlan { get; set; }
+
     [MaxLength(8)]
     public string CostCenterId { get; set; } = string.Empty;
 
