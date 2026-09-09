@@ -18,9 +18,18 @@
 > `app.ingenia365.com` (antes 404); `/appsettings.json` de la Web ya trae el
 > `ApiBaseUrl` relativo; ningún `CryptographicException`, `MigrationsPending` ni
 > `LecturaHeredada` en los logs; los dos únicos 500 por pod son los sondeos de
-> `/health/live` durante el calentamiento. **Pendiente y sólo puede hacerlo el
-> maestro**: entrar, inscribir, salir, volver a entrar (dos logins) y guardar los
-> códigos de respaldo. Y las 48 horas de vigilancia.
+> `/health/live` durante el calentamiento. El cierre lo hizo el maestro el
+> 2026-09-09, tras resembrar su cuenta por contraseña perdida (Caso 3 de
+> [rescate-del-administrador-maestro.md](rescate-del-administrador-maestro.md)):
+> inscribió su autenticador, entró dos veces (10:19 y 10:22 UTC, ambas `Success`
+> en `ADM_CentralUserLoginAttempts`) y recibió sus diez códigos de respaldo; una
+> credencial TOTP en `ADM_MfaCredentials`, `TwoFactorEnabled = true`, y en las 48
+> horas siguientes al despliegue ningún `CryptographicException` ni
+> `[Mfa.LecturaHeredada]` en los dos pods. **Y la prueba del llavero compartido
+> salió sola**: según los logs, `POST /api/profile/mfa/enroll` (que cifra el
+> secreto) lo atendió el pod `qmc8t`, `POST /api/profile/mfa/confirm` (que lo
+> descifra) lo atendió `7k4h5`, y `POST /api/auth/mfa/verify` volvió a `qmc8t`. Con
+> el llavero efímero de antes, la confirmación habría fallado.
 >
 > Lo que sigue es el procedimiento tal como se pensó, y vale para repetirlo en otro
 > ambiente: son ~30 commits y **9 migraciones administrativas**, una de ellas de

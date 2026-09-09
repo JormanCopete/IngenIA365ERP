@@ -30,9 +30,12 @@ aprovisionamiento de una base por cooperativa y la nómina de la feature 005.
 Se aplicaron 13 migraciones administrativas y 7 operativas por el Job PreSync de
 Argo, con respaldo previo (`erp-db-pre-nomina-mfa-20260907`) y las tres consultas
 de [despliegue-rediseno-mfa.md](despliegue-rediseno-mfa.md) respondidas contra la
-base: 0 cooperativas, 0 adjuntos, maestro sin segundo factor. **El maestro todavía
-no ha inscrito su segundo factor** —su primer login devolverá
-`MfaEnrollmentRequired`— y P13 sigue abierto en PDN.
+base: 0 cooperativas, 0 adjuntos, maestro sin segundo factor. El 2026-09-09 hubo
+que **resembrar al maestro** porque nadie recordaba la contraseña de agosto (Caso 3
+de [rescate-del-administrador-maestro.md](rescate-del-administrador-maestro.md)); ese
+mismo día inscribió su autenticador, entró dos veces y recibió sus diez códigos de
+respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo único
+que separa a producción de su primera cooperativa es P14.
 
 ### Respaldos
 
@@ -213,7 +216,7 @@ Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
 |---|---|
 | DEV | ✅ 2026-09-04 (`rolcreatedb = t`) |
 | QA | ✅ 2026-09-04 — primera cooperativa `coop_prueba` aprovisionada en `Ready`, invitación entregada y aceptada |
-| PDN | ⏳ pendiente — **desde el 2026-09-07 producción ya tiene la consola SaaS que registra cooperativas**: hacerlo antes de la primera real (verificado ese día: `rolcreatedb = f`) |
+| PDN | ✅ 2026-09-09 (`rolcreatedb = t`, verificado contra el clúster). Lo que sigue faltando antes de la primera cooperativa real es **P14** |
 
 > Al aprovisionar apareció una carrera, una sola vez y sin daño:
 > `NotificationEmailDispatcher` recorre `ListActiveAsync()` —que filtra por
