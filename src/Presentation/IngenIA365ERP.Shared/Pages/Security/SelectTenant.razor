@@ -94,7 +94,7 @@
                 _error = MapError(result.ErrorCode, result.ErrorMessage);
                 return;
             }
-            Nav.NavigateTo("/");
+            Nav.NavigateTo(AuthClient.DestinoTrasEntrar());
         }
         catch (Exception ex)
         {

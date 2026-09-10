@@ -59,6 +59,10 @@
                     </ToolbarItems>
                 </SfToolbar>
 
+                @* Cuenta atrás de la sesión (últimos cinco minutos de las doce horas).
+                   No es modal: la pantalla de abajo sigue viva. *@
+                <AvisoDeVencimientoDeSesion />
+
                 <div class="erp-content">
                     @Body
                 </div>

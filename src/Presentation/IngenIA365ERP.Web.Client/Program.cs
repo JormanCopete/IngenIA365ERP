@@ -34,6 +34,12 @@ builder.Services.AddSingleton<ISecureStorage, BrowserSessionSecureStorage>();
 builder.Services.AddSingleton<ITenantService, TenantService>();
 
 // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
+// Renovación silenciosa (RenovadorDeSesion): singleton por la misma razón que
+// ISecureStorage —el handler y las pantallas tienen que ver la misma sesión— y
+// su handler va PRIMERO en la cadena, para que AuthBearerHandler encuentre la
+// cabecera ya puesta con un token que no está por vencer.
+builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Security.RenovadorDeSesion>();
+builder.Services.AddTransient<RenovacionDeSesionHandler>();
 builder.Services.AddTransient<AuthBearerHandler>();
 builder.Services.AddTransient<TenantDelegatingHandler>();
 
@@ -46,6 +52,7 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 // justamente el defecto: una se arregló y la otra siguió rota.
 var apiBaseUrl = AppMode.UseMock ? builder.HostEnvironment.BaseAddress : AppMode.ApiBaseUrl;
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
+    .AddHttpMessageHandler<RenovacionDeSesionHandler>()
     .AddHttpMessageHandler<AuthBearerHandler>()
     .AddHttpMessageHandler<TenantDelegatingHandler>();
 builder.Services.AddScoped(sp =>

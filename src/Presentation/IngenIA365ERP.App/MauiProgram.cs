@@ -45,11 +45,15 @@ namespace IngenIA365ERP.App
             builder.Services.AddSingleton<ITenantService, TenantService>();
 
             // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
+            // Renovación silenciosa: ver la nota en Web.Client/Program.cs.
+            builder.Services.AddSingleton<Shared.Services.Security.RenovadorDeSesion>();
+            builder.Services.AddTransient<RenovacionDeSesionHandler>();
             builder.Services.AddTransient<AuthBearerHandler>();
             builder.Services.AddTransient<TenantDelegatingHandler>();
 
             // Named HttpClient used by all pages/services.
             builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
+                .AddHttpMessageHandler<RenovacionDeSesionHandler>()
                 .AddHttpMessageHandler<AuthBearerHandler>()
                 .AddHttpMessageHandler<TenantDelegatingHandler>();
             builder.Services.AddSingleton(sp =>

@@ -227,6 +227,31 @@ si pudo entrar, no las necesitaba.
 
 Renueva el access token usando el refresh token (rotation).
 
+**Duración de la sesión.** Dos límites, configurables en la sección `Sesion` de la
+API (`Sesion__InactividadMinutos`, por defecto 30; `Sesion__DuracionMaximaHoras`, por
+defecto 12) y publicados en `GET /api/auth/session-policy` para que el cliente cuente
+con los mismos números:
+
+- **Duración máxima**, desde el ingreso. Tope absoluto: cada canje devuelve un refresh
+  nuevo cuyo `refreshTokenExpiresAt` es **el mismo** del ingreso, no doce horas más.
+  Hasta el 2026-09-10 cada rotación abría otras doce horas, así que una sesión que se
+  renovara sola no vencía nunca.
+- **Inactividad**. El servidor la mide entre rotaciones (no ve cada petición): un
+  refresh que llegue más de `InactividadMinutos` después de la rotación anterior se
+  rechaza. Para que eso no expulse a alguien activo que lleva veinte minutos leyendo,
+  el cliente rota sola la sesión de una pestaña activa dos minutos antes de ese límite,
+  y **corta exactamente a los 30 minutos** la pestaña sin peticiones propias: cinco
+  minutos antes avisa con «Seguir trabajando» (que rota y reinicia el reloj) y al
+  llegar a cero cierra la sesión local, revoca el refresh con `/logout` y vuelve al
+  login con `?returnUrl=`. Recargar la página cuenta como actividad; mover el ratón o
+  escribir sin guardar, no.
+
+El cliente (`RenovadorDeSesion`) renueva en silencio cuando al access le queda menos
+de un minuto y, con un 401 inesperado, renueva y reintenta una vez. En los últimos
+cinco minutos de la duración máxima muestra una cuenta atrás no modal
+(`AvisoDeVencimientoDeSesion`) para que la persona termine lo que hace y vuelva a
+entrar; si coinciden los dos avisos manda ése, que no se puede extender.
+
 **Request**:
 
 ```json
@@ -239,11 +264,29 @@ Renueva el access token usando el refresh token (rotation).
   ```json
   {
     "accessToken": "eyJ...",
+    "accessTokenExpiresAt": "2026-09-10T12:15:00Z",
     "refreshToken": "eyJ... (nuevo, el anterior queda invalidado)",
-    "expiresInSeconds": 1800
+    "refreshTokenExpiresAt": "2026-09-10T23:40:00Z  (el tope de la sesión, fijo desde el ingreso)",
+    "expiresInSeconds": 900
   }
   ```
 - `401 Unauthorized` con `Identity.RefreshToken.Invalid` (token revocado, expirado, o family-violation).
+- `401 Unauthorized` con `Identity.RefreshToken.Reused` (el token ya había rotado; la familia entera queda invalidada).
+- `401 Unauthorized` con `Identity.RefreshToken.SessionExpired` (la sesión alcanzó su duración máxima; no se invalida nada, sólo hay que volver a entrar).
+- `401 Unauthorized` con `Identity.RefreshToken.InactivityExpired` (más de `InactividadMinutos` desde la rotación anterior; tampoco se invalida nada).
+- `422` con `Tenant.MfaMethodNotAccepted` (la cooperativa dejó de aceptar el método con el que se entró; ver `tenant-mfa-policy.md`).
+
+---
+
+## GET /api/auth/session-policy
+
+Anónima. Los límites de sesión vigentes, tal como el servidor los hace cumplir en
+`/refresh`; el cliente los lee al montar el layout y, si no puede, usa estos mismos
+valores por defecto.
+
+```json
+{ "inactivityMinutes": 30, "maxDurationHours": 12 }
+```
 
 ---
 

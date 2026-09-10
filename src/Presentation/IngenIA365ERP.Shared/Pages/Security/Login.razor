@@ -51,6 +51,10 @@
             {
                 <p class="error" role="alert">@_error</p>
             }
+            else if (_motivoDeVuelta is not null)
+            {
+                <p class="aviso aviso-info" role="status">@_motivoDeVuelta</p>
+            }
 
     <p class="login-olvide">
                 <NavLink href="/auth/forgot-password">¿Olvidaste tu contraseña?</NavLink>
@@ -115,8 +119,46 @@
     private IReadOnlyList<PromoPublica> _promos = [];
     private int _indice;
 
+    /// <summary>
+    /// Ruta a la que volver después de entrar. La ponen <c>RedirectToLogin</c> y el
+    /// aviso de vencimiento de sesión; así quien vuelve tras las doce horas aterriza
+    /// en la pantalla donde estaba, no en el tablero.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    /// <summary>Por qué se volvió al login, cuando fue el sistema y no la persona.</summary>
+    private string? _motivoDeVuelta;
+
     protected override async Task OnInitializedAsync()
     {
+        _motivoDeVuelta = AuthClient.SessionEndedCode switch
+        {
+            RenovadorDeSesion.CodigoInactividad =>
+                "Tu sesión se cerró por inactividad. Volvé a entrar para continuar donde estabas.",
+            "Identity.RefreshToken.InactivityExpired" =>
+                "Tu sesión se cerró por inactividad. Volvé a entrar para continuar donde estabas.",
+            "Identity.RefreshToken.SessionExpired" =>
+                "Tu sesión alcanzó su duración máxima. Volvé a entrar para continuar donde estabas.",
+            "Tenant.MfaMethodNotAccepted" =>
+                "Tu cooperativa cambió los métodos de segundo factor que acepta. Volvé a entrar para inscribir uno válido.",
+            null => null,
+            _ => "Tu sesión terminó. Volvé a entrar para continuar.",
+        };
+
+        if (!string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            // La query trae la URL absoluta escapada; se guarda sólo la parte local.
+            // Se mira el "/" inicial antes de intentar parsear: en el runtime del
+            // navegador (Unix) Uri.TryCreate("/x", Absolute) da true con file:///x,
+            // y ya costó un defecto fiarse de ese parseo.
+            AuthClient.ReturnUrl = ReturnUrl.StartsWith('/')
+                ? ReturnUrl
+                : Uri.TryCreate(ReturnUrl, UriKind.Absolute, out var abs) && abs.Scheme is "http" or "https"
+                    ? abs.PathAndQuery
+                    : null;
+        }
+
         // El fallo al traer promociones NO puede impedir iniciar sesion. Es
         // contenido accesorio servido por un endpoint anonimo: si la consulta
         // cae, el login tiene que seguir funcionando igual.
@@ -147,7 +189,7 @@
             {
                 case "None":
                     // autoSelected — el AuthClient ya almacenó access+refresh.
-                    Nav.NavigateTo("/");
+                    Nav.NavigateTo(AuthClient.DestinoTrasEntrar());
                     break;
                 case "MfaRequired":
                     Nav.NavigateTo("/security/mfa-challenge");
