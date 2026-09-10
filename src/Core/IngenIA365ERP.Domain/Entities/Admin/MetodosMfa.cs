@@ -88,6 +88,16 @@ public enum MetodosMfa
 public static class ConversionDeMetodosMfa
 {
     /// <summary>
+    /// Valor que NUNCA es una máscara legítima, para que EF distinga «no asignado» de
+    /// <see cref="MetodosMfa.Ninguno"/> al insertar. Sin él, EF toma el cero —que es
+    /// el default del CLR— como «no me lo dieron», lo omite del INSERT y la base
+    /// pone su propio default (todos): una política que deliberadamente no acepta
+    /// ningún método quedaría guardada como que acepta todo. Es el valor que
+    /// <c>HasSentinel</c> recibe en las dos configuraciones de política.
+    /// </summary>
+    public const MetodosMfa SinAsignar = (MetodosMfa)(-1);
+
+    /// <summary>
     /// De discriminador a máscara. Un tipo desconocido da
     /// <see cref="MetodosMfa.Ninguno"/> —no lanza— porque esto corre en el camino
     /// del ingreso: una fila con un discriminador que este binario no entiende no

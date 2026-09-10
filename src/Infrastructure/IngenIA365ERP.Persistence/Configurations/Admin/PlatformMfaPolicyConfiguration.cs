@@ -33,9 +33,13 @@ public class PlatformMfaPolicyConfiguration : IEntityTypeConfiguration<PlatformM
             .HasFilter("[IsDeleted] = 0")
             .HasDatabaseName("UX_ADM_PlatformMfaPolicy_Scope");
 
+        // Ver la nota en TenantMfaPolicyConfiguration: sin sentinel, un cero se
+        // guardaba como «todos». Aquí el Domain no admite Ninguno, pero el aviso de
+        // EF salía igual y la regla es la misma.
         builder.Property(e => e.AllowedMethodsMask)
             .HasConversion<int>()
-            .HasDefaultValue(ConversionDeMetodosMfa.Todos);
+            .HasDefaultValue(ConversionDeMetodosMfa.Todos)
+            .HasSentinel(ConversionDeMetodosMfa.SinAsignar);
 
         builder.Property(e => e.CreatedBy).HasMaxLength(256);
         builder.Property(e => e.UpdatedBy).HasMaxLength(256);
