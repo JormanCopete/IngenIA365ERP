@@ -34,7 +34,12 @@ public sealed class RefreshTokenCommandHandler(
     ILogger<RefreshTokenCommandHandler> logger)
     : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResult>>
 {
-    private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
+    /// <summary>
+    /// Duración máxima de una sesión desde el ingreso. Es lo que el cliente muestra
+    /// como «tu sesión termina en…» y lo que este handler hace cumplir: pasado el
+    /// tope no hay rotación posible y hay que volver por el login.
+    /// </summary>
+    public static readonly TimeSpan DuracionMaximaDeSesion = TimeSpan.FromHours(12);
 
     public async Task<Result<RefreshTokenResult>> Handle(
         RefreshTokenCommand request, CancellationToken ct)
@@ -65,6 +70,20 @@ public sealed class RefreshTokenCommandHandler(
             return Result.Failure<RefreshTokenResult>(
                 "Identity.RefreshToken.Reused",
                 "Token reutilizado detectado; toda la sesión fue invalidada por seguridad.");
+        }
+
+        // El tope absoluto de la sesión. Se comprueba ANTES de mirar al usuario o la
+        // membresía: una sesión vencida no tiene nada que renovar, sea quien sea.
+        // No se invalida la familia —no es un ataque, es el reloj— pero el token
+        // tampoco sirve más: la key expira sola en Redis a la misma hora.
+        var ahora = clock.UtcNow;
+        var vence = session.SessionExpiresAt ?? session.IssuedAt.Add(DuracionMaximaDeSesion);
+        if (ahora >= vence)
+        {
+            return Result.Failure<RefreshTokenResult>(
+                "Identity.RefreshToken.SessionExpired",
+                $"La sesión alcanzó su duración máxima de {DuracionMaximaDeSesion.TotalHours:0} horas. " +
+                "Iniciá sesión de nuevo para continuar.");
         }
 
         // Verificar usuario sigue activo.
@@ -102,10 +121,10 @@ public sealed class RefreshTokenCommandHandler(
             membershipAdmin = current.IsTenantAdmin;
 
             // La politica de metodos se REEVALUA en cada refresh, y esto es lo que
-            // hace que llegue a morder alguna vez. El refresh se renueva a si mismo
-            // cada doce horas indefinidamente: sin esta comprobacion, una sesion
+            // hace que llegue a morder antes del tope: el access dura quince minutos
+            // y la sesion hasta doce horas, asi que sin esta comprobacion una sesion
             // emitida antes de que la cooperativa restringiera metodos seguiria
-            // renovandose para siempre y la politica no afectaria jamas a quien ya
+            // renovandose el resto del dia y la politica no afectaria a quien ya
             // estaba dentro — que suele ser todo el mundo.
             //
             // No se invalida la familia: no es un token robado ni una sesion
@@ -135,24 +154,29 @@ public sealed class RefreshTokenCommandHandler(
             // demostrar nada, solo prolonga lo que ya se demostro.
             metodoMfa: session.MetodoMfa);
 
+        // El refresh nuevo hereda el tope: mismo vencimiento, TTL de lo que quede.
+        // Antes iba un TTL fijo de doce horas y por eso la sesión se deslizaba.
         var newRefresh = jwtIssuer.IssueRefreshToken();
         var newSession = session with
         {
-            IssuedAt = clock.UtcNow,
+            IssuedAt = ahora,
             ReplacedByTokenHashHex = null,
             IpAddress = request.IpAddress,
             UserAgent = request.UserAgent,
+            SessionExpiresAt = vence,
         };
 
-        await refreshStore.StoreAsync(newRefresh.HashHex, newSession, RefreshTokenTtl, ct);
+        await refreshStore.StoreAsync(newRefresh.HashHex, newSession, vence - ahora, ct);
         await refreshStore.MarkRotatedAsync(oldHash, newRefresh.HashHex, ct);
 
         return Result.Success(new RefreshTokenResult(
             AccessToken: access.Jwt,
             AccessTokenExpiresAt: access.ExpiresAt,
             RefreshToken: newRefresh.Token,
-            RefreshTokenExpiresAt: newRefresh.ExpiresAt,
-            ExpiresInSeconds: (int)(access.ExpiresAt - clock.UtcNow).TotalSeconds));
+            // Lo que el cliente usa para avisar «tu sesión termina en…»: el tope, no
+            // el vencimiento nominal del token recién acuñado.
+            RefreshTokenExpiresAt: vence,
+            ExpiresInSeconds: (int)(access.ExpiresAt - ahora).TotalSeconds));
     }
 
     private static string HashHex(string plainToken)

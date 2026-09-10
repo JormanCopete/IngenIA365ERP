@@ -182,7 +182,7 @@
                 case "None" when !string.IsNullOrWhiteSpace(body.AccessToken)
                                  && !string.IsNullOrWhiteSpace(body.RefreshToken):
                     await AuthClient.AdoptSessionAsync(
-                        body.AccessToken!, body.AccessTokenExpiresAt, body.RefreshToken!);
+                        body.AccessToken!, body.AccessTokenExpiresAt, body.RefreshToken!, body.RefreshTokenExpiresAt);
                     Nav.NavigateTo("/");
                     return;
                 case "MfaRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):

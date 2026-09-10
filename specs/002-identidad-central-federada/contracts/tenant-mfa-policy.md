@@ -101,9 +101,9 @@ ningún segundo factor: a esas personas ya las afectaba `isRequired`.
   código que iba a verificar bien para nada.
 - **Las sesiones abiertas dejan de renovarse.** En su próximo `/api/auth/refresh`
   se reevalúa la política y, si el método sellado ya no vale, se responde
-  `Tenant.MfaMethodNotAccepted` y la persona vuelve por el login. Sin eso el
-  refresh se renueva a sí mismo cada doce horas indefinidamente y la política no
-  llegaría a morder nunca a quien ya estaba dentro — que suele ser todo el mundo.
+  `Tenant.MfaMethodNotAccepted` y la persona vuelve por el login. Sin eso, con la
+  renovación silenciosa del cliente, la política no mordería hasta el tope de las
+  doce horas a quien ya estaba dentro — que suele ser todo el mundo.
 
 **Auditoría**: `TenantMfaPolicy.Activated`, `TenantMfaPolicy.Deactivated`, o
 `TenantMfaPolicy.MethodsChanged` cuando cambian los métodos sin cambiar la

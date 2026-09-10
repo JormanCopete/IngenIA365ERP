@@ -84,4 +84,20 @@ public sealed record CentralRefreshSession(
     /// política, sólo el binario.
     /// </para>
     /// </summary>
-    MetodosMfa MetodoMfa = MetodosMfa.Ninguno);
+    MetodosMfa MetodoMfa = MetodosMfa.Ninguno,
+
+    /// <summary>
+    /// Hasta cuándo vive esta sesión, contando desde el ingreso. Es un tope
+    /// <b>absoluto</b>: el refresh lo arrastra tal cual y no lo corre. Antes de este
+    /// campo cada rotación daba otras doce horas, así que una sesión con renovación
+    /// silenciosa no vencía nunca — y «el token vence a las doce horas» era falso
+    /// para cualquiera que siguiera trabajando.
+    ///
+    /// <para>
+    /// <c>null</c> significa «nació sin el dato»: las siete puertas que emiten sesión
+    /// no lo fijan, y las sesiones ya vivas en Redis tampoco lo traen. En ambos casos
+    /// vale <c>IssuedAt + 12 h</c>, que en la emisión es exactamente el tope; el
+    /// primer refresh lo materializa y de ahí en adelante viaja explícito.
+    /// </para>
+    /// </summary>
+    DateTime? SessionExpiresAt = null);

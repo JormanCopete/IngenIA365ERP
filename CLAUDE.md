@@ -23,6 +23,18 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   **obligatorio también para el administrador maestro**: su login devuelve un
   challenge, nunca una sesión directa. Los fallos de autenticación responden
   401, no 422.
+- **Sesión**: access de 15 minutos, **sesión de 12 horas desde el ingreso** (tope
+  absoluto: el refresh rota pero no lo corre; pasado, `Identity.RefreshToken.SessionExpired`).
+  En el cliente la sesión la administra **un solo objeto**, `RenovadorDeSesion`
+  (singleton, como `ISecureStorage`, porque los handlers HTTP viven en otro scope):
+  renueva en silencio cuando al access le queda menos de un minuto, ante un 401
+  inesperado renueva y reintenta una vez (cuerpos hasta 8 MB), y una sola renovación
+  en vuelo, porque el refresh rota y un segundo canje del mismo token es «reuso» y
+  mata la familia. `RenovacionDeSesionHandler` va **primero** en la cadena del
+  cliente `api`. Los últimos cinco minutos los cuenta `AvisoDeVencimientoDeSesion`
+  en el layout, sin modal y sin navegar: la persona termina y vuelve a entrar, y
+  `?returnUrl=` la devuelve a la pantalla donde estaba. Hasta el 2026-09-10 nadie
+  llamaba al refresh y la app expulsaba a los quince minutos.
 - **Segundo factor**: vive en `ADM_MfaCredentials`, una tabla con discriminador
   (TPH) — no en la columna `ADM_CentralUsers.MfaSecret`. Esa columna **sigue
   escribiéndose** como red de rollback mientras dure el traslado, y la
@@ -130,8 +142,8 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 674 en 142 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 749 (136 Domain, 557 Application, 54 Architecture, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 131 el 2026-09-06 con Docker: 130 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 770 (136 Domain, 560 Application, 54 Architecture, 18 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 133 el 2026-09-10 con Docker: 132 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop

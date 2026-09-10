@@ -69,7 +69,8 @@ public sealed class ProfileClient
 
             if (parsed.IsSuccess && parsed.Value is { } cuerpo)
             {
-                await AdoptarSiVinoSesionAsync(cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken);
+                await AdoptarSiVinoSesionAsync(
+                    cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt);
             }
 
             return parsed;
@@ -88,10 +89,10 @@ public sealed class ProfileClient
     /// qué. Es lo que pasaba: los tokens llegaban y se descartaban.
     /// </summary>
     private async Task AdoptarSiVinoSesionAsync(
-        string? accessToken, DateTime? expiraEn, string? refreshToken)
+        string? accessToken, DateTime? expiraEn, string? refreshToken, DateTime? sesionVenceEn)
     {
         if (string.IsNullOrWhiteSpace(accessToken)) return;
-        await _auth.AdoptSessionAsync(accessToken, expiraEn, refreshToken);
+        await _auth.AdoptSessionAsync(accessToken, expiraEn, refreshToken, sesionVenceEn);
     }
 
     public async Task<InvitationApiResult<EmptyResponse>> DisableMfaAsync(
@@ -175,7 +176,8 @@ public sealed class ProfileClient
 
             if (parsed.IsSuccess && parsed.Value is { } cuerpo)
             {
-                await AdoptarSiVinoSesionAsync(cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken);
+                await AdoptarSiVinoSesionAsync(
+                    cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt);
             }
 
             return parsed;

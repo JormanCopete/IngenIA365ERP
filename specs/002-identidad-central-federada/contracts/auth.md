@@ -227,6 +227,16 @@ si pudo entrar, no las necesitaba.
 
 Renueva el access token usando el refresh token (rotation).
 
+**Duración de la sesión.** El access token dura 15 minutos y **la sesión, 12 horas
+desde el ingreso**. Es un tope absoluto: cada canje devuelve un refresh nuevo cuyo
+`refreshTokenExpiresAt` es **el mismo** del ingreso, no doce horas más. Hasta el
+2026-09-10 cada rotación abría otras doce horas, así que una sesión que se renovara
+sola no vencía nunca. El cliente (`RenovadorDeSesion`) renueva en silencio cuando al
+access le queda menos de un minuto, y con un 401 inesperado renueva y reintenta una
+vez; en los últimos cinco minutos del tope muestra una cuenta atrás no modal
+(`AvisoDeVencimientoDeSesion`) para que la persona termine lo que hace y vuelva a
+entrar.
+
 **Request**:
 
 ```json
@@ -239,11 +249,16 @@ Renueva el access token usando el refresh token (rotation).
   ```json
   {
     "accessToken": "eyJ...",
+    "accessTokenExpiresAt": "2026-09-10T12:15:00Z",
     "refreshToken": "eyJ... (nuevo, el anterior queda invalidado)",
-    "expiresInSeconds": 1800
+    "refreshTokenExpiresAt": "2026-09-10T23:40:00Z  (el tope de la sesión, fijo desde el ingreso)",
+    "expiresInSeconds": 900
   }
   ```
 - `401 Unauthorized` con `Identity.RefreshToken.Invalid` (token revocado, expirado, o family-violation).
+- `401 Unauthorized` con `Identity.RefreshToken.Reused` (el token ya había rotado; la familia entera queda invalidada).
+- `401 Unauthorized` con `Identity.RefreshToken.SessionExpired` (la sesión alcanzó las 12 horas; no se invalida nada, sólo hay que volver a entrar).
+- `422` con `Tenant.MfaMethodNotAccepted` (la cooperativa dejó de aceptar el método con el que se entró; ver `tenant-mfa-policy.md`).
 
 ---
 

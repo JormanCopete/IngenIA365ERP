@@ -22,73 +22,35 @@ namespace IngenIA365ERP.Shared.Services.Security;
 /// challenge se descarta.
 /// </para>
 /// </summary>
-public sealed class CentralAuthClient
+public sealed class CentralAuthClient : IDisposable
 {
-    private const string RefreshTokenKey = "refresh_token";
-
     private readonly HttpClient _http;
-    private readonly ISecureStorage _storage;
     private readonly AuthenticationStateProvider _authState;
 
-    // Operational session.
-    private string? _accessToken;
-    private DateTime _accessTokenExpiresAt;
-    private string? _refreshToken;
+    // La sesión operativa (tokens, vencimientos, renovación) vive en el renovador,
+    // que es singleton para que el handler HTTP y esta clase vean lo mismo. Aquí
+    // sólo queda lo que es de este flujo: el desafío en curso y la identidad cacheada.
+    private readonly RenovadorDeSesion _sesion;
 
     // Challenge token (temporary, scoped).
     private string? _challengeToken;
 
     public CentralAuthClient(
-        HttpClient http, ISecureStorage storage, AuthenticationStateProvider authState)
+        HttpClient http, RenovadorDeSesion sesion, AuthenticationStateProvider authState)
     {
         _http = http;
-        _storage = storage;
+        _sesion = sesion;
         _authState = authState;
+        _sesion.SesionTerminada += OnSesionTerminada;
     }
 
-    public string? CurrentAccessToken => _accessToken;
-
-    private bool _restoreAttempted;
+    public string? CurrentAccessToken => _sesion.AccessToken;
 
     /// <summary>
     /// Feature 003 (US4, FR-113): rehidrata la sesión desde el storage del
-    /// navegador tras una recarga. Este servicio es scoped — un F5 lo
-    /// reconstruye con los campos vacíos aunque sessionStorage aún tenga los
-    /// tokens. Idempotente; retorna true si hay sesión utilizable.
+    /// navegador tras una recarga. Idempotente; retorna true si hay sesión utilizable.
     /// </summary>
-    public async Task<bool> TryRestoreSessionAsync()
-    {
-        if (_accessToken is not null) return true;
-        if (_restoreAttempted) return false;
-        _restoreAttempted = true;
-
-        var stored = await _storage.GetAsync(AuthBearerHandler.TokenKey);
-        if (string.IsNullOrWhiteSpace(stored)) return false;
-
-        _accessToken = stored;
-        _accessTokenExpiresAt = ReadJwtExpiryUtc(stored) ?? DateTime.UtcNow.AddMinutes(5);
-        _refreshToken = await _storage.GetAsync(RefreshTokenKey);
-        return true;
-    }
-
-    private static DateTime? ReadJwtExpiryUtc(string jwt)
-    {
-        try
-        {
-            var parts = jwt.Split('.');
-            if (parts.Length < 2) return null;
-            var payload = parts[1].Replace('-', '+').Replace('_', '/');
-            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
-            using var doc = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(payload));
-            return doc.RootElement.TryGetProperty("exp", out var exp)
-                ? DateTimeOffset.FromUnixTimeSeconds(exp.GetInt64()).UtcDateTime
-                : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    public Task<bool> TryRestoreSessionAsync() => _sesion.RestaurarAsync();
 
     /// <summary>
     /// JWT temporal scoped (purpose=mfa-verify, mfa-enroll, tenant-select)
@@ -113,8 +75,7 @@ public sealed class CentralAuthClient
     /// </summary>
     public IReadOnlyList<string>? MetodosQueLeServirian { get; private set; }
 
-    public bool IsAuthenticated =>
-        !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTime.UtcNow;
+    public bool IsAuthenticated => _sesion.AccessTokenVigente;
 
     public event EventHandler? Authenticated;
     public event EventHandler? SignedOut;
@@ -345,7 +306,8 @@ public sealed class CentralAuthClient
             var parsed = await CentralAuthApi.ParseAsync<SelectTenantResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {
-                await AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
+                await AdoptSessionAsync(
+                    body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken, body.RefreshTokenExpiresAt);
             }
             return parsed;
         }
@@ -368,12 +330,13 @@ public sealed class CentralAuthClient
     public async Task<MeResponse?> GetMeAsync(bool forceRefresh = false, CancellationToken ct = default)
     {
         if (_me is not null && !forceRefresh) return _me;
-        if (string.IsNullOrWhiteSpace(_accessToken) && !await TryRestoreSessionAsync()) return null;
+        var token = await _sesion.TokenVigenteAsync(ct);
+        if (string.IsNullOrWhiteSpace(token)) return null;
 
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             var parsed = await CentralAuthApi.ParseAsync<MeResponse>(resp, ct);
             _me = parsed.IsSuccess ? parsed.Value : null;
@@ -389,15 +352,16 @@ public sealed class CentralAuthClient
 
     public async Task LogoutAsync(CancellationToken ct = default)
     {
-        if (!string.IsNullOrWhiteSpace(_accessToken))
+        await _sesion.RestaurarAsync();
+        if (_sesion.TieneSesion)
         {
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout")
                 {
-                    Content = JsonContent.Create(new { refreshToken = _refreshToken }),
+                    Content = JsonContent.Create(new { refreshToken = _sesion.RefreshToken }),
                 };
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _sesion.AccessToken);
                 await _http.SendAsync(req, ct);
             }
             catch (HttpRequestException ex)
@@ -409,17 +373,62 @@ public sealed class CentralAuthClient
             }
         }
 
-        _accessToken = null;
-        _accessTokenExpiresAt = DateTime.MinValue;
-        _refreshToken = null;
+        _sesion.Limpiar();
+        OlvidarSesionLocal();
+    }
+
+    /// <summary>
+    /// El renovador no pudo canjear el refresh y el servidor fue categórico
+    /// (vencida, revocada, reusada, política de métodos). Ya no hay tokens: se
+    /// notifica al estado de autenticación para que <c>AuthorizeView</c> lleve a la
+    /// persona al login, con la URL actual como retorno.
+    /// </summary>
+    private void OnSesionTerminada(string codigo)
+    {
+        SessionEndedCode = codigo;
+        OlvidarSesionLocal();
+    }
+
+    /// <summary>
+    /// Código del sobre de error con el que el servidor terminó la última sesión.
+    /// Lo lee el login para decir por qué se volvió ahí.
+    /// </summary>
+    public string? SessionEndedCode { get; private set; }
+
+    /// <summary>
+    /// A dónde volver cuando la sesión quede establecida. Lo fija el login desde
+    /// <c>?returnUrl=</c> (que ponen <c>RedirectToLogin</c> y el aviso de
+    /// vencimiento) y lo consume la pantalla que termine el flujo —login directo,
+    /// desafío MFA o selección de cooperativa—, que es la que sabe que ya se entró.
+    /// Sólo se aceptan rutas locales: un destino absoluto en la URL sería un salto
+    /// a otro sitio con la sesión recién puesta.
+    /// </summary>
+    public string? ReturnUrl { get; set; }
+
+    /// <summary>La ruta a la que ir tras entrar, y se olvida al leerla.</summary>
+    public string DestinoTrasEntrar()
+    {
+        var destino = ReturnUrl;
+        ReturnUrl = null;
+        return EsRutaLocal(destino) ? destino! : "/";
+    }
+
+    private static bool EsRutaLocal(string? ruta) =>
+        !string.IsNullOrWhiteSpace(ruta)
+        && ruta.StartsWith('/')
+        && !ruta.StartsWith("//", StringComparison.Ordinal)
+        && !ruta.StartsWith("/\\", StringComparison.Ordinal)
+        && !ruta.StartsWith("/login", StringComparison.OrdinalIgnoreCase);
+
+    private void OlvidarSesionLocal()
+    {
         _challengeToken = null;
         _me = null;
-
-        _storage.Remove(AuthBearerHandler.TokenKey);
-        _storage.Remove(RefreshTokenKey);
         (_authState as CustomAuthStateProvider)?.NotifyUserLogout();
         SignedOut?.Invoke(this, EventArgs.Empty);
     }
+
+    public void Dispose() => _sesion.SesionTerminada -= OnSesionTerminada;
 
     // ---------- Adopción de sesión (cutover T077) ----------
 
@@ -429,18 +438,19 @@ public sealed class CentralAuthClient
     /// (<c>auth_token</c>/<c>refresh_token</c>) y notifica el cambio de estado
     /// para que <c>AuthorizeRouteView</c> re-evalúe sin re-login.
     /// </summary>
+    /// <param name="refreshTokenExpiresAt">
+    /// Tope absoluto de la sesión, tal como lo dice el servidor. Es lo que el aviso
+    /// de vencimiento cuenta hacia atrás: pasarlo siempre que la respuesta lo traiga.
+    /// </param>
     public async Task AdoptSessionAsync(
-        string accessToken, DateTime? accessTokenExpiresAt, string? refreshToken)
+        string accessToken, DateTime? accessTokenExpiresAt, string? refreshToken,
+        DateTime? refreshTokenExpiresAt = null)
     {
-        _accessToken = accessToken;
-        _accessTokenExpiresAt = accessTokenExpiresAt ?? DateTime.UtcNow.AddMinutes(15);
-        _refreshToken = refreshToken;
         _challengeToken = null;
         _me = null; // la identidad cacheada cambia con cada sesión adoptada
+        SessionEndedCode = null;
 
-        await _storage.SetAsync(AuthBearerHandler.TokenKey, accessToken);
-        if (!string.IsNullOrWhiteSpace(refreshToken))
-            await _storage.SetAsync(RefreshTokenKey, refreshToken);
+        await _sesion.AdoptarAsync(accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt);
 
         (_authState as CustomAuthStateProvider)?.NotifyUserAuthentication(accessToken);
         Authenticated?.Invoke(this, EventArgs.Empty);
@@ -469,7 +479,8 @@ public sealed class CentralAuthClient
             && !string.IsNullOrWhiteSpace(body.AccessToken)
             && !string.IsNullOrWhiteSpace(body.RefreshToken))
         {
-            await AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
+            await AdoptSessionAsync(
+                body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken, body.RefreshTokenExpiresAt);
         }
         else if (!string.IsNullOrWhiteSpace(body.ChallengeToken))
         {

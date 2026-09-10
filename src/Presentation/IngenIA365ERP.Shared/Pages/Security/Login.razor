@@ -115,8 +115,29 @@
     private IReadOnlyList<PromoPublica> _promos = [];
     private int _indice;
 
+    /// <summary>
+    /// Ruta a la que volver después de entrar. La ponen <c>RedirectToLogin</c> y el
+    /// aviso de vencimiento de sesión; así quien vuelve tras las doce horas aterriza
+    /// en la pantalla donde estaba, no en el tablero.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            // La query trae la URL absoluta escapada; se guarda sólo la parte local.
+            // Se mira el "/" inicial antes de intentar parsear: en el runtime del
+            // navegador (Unix) Uri.TryCreate("/x", Absolute) da true con file:///x,
+            // y ya costó un defecto fiarse de ese parseo.
+            AuthClient.ReturnUrl = ReturnUrl.StartsWith('/')
+                ? ReturnUrl
+                : Uri.TryCreate(ReturnUrl, UriKind.Absolute, out var abs) && abs.Scheme is "http" or "https"
+                    ? abs.PathAndQuery
+                    : null;
+        }
+
         // El fallo al traer promociones NO puede impedir iniciar sesion. Es
         // contenido accesorio servido por un endpoint anonimo: si la consulta
         // cae, el login tiene que seguir funcionando igual.
@@ -147,7 +168,7 @@
             {
                 case "None":
                     // autoSelected — el AuthClient ya almacenó access+refresh.
-                    Nav.NavigateTo("/");
+                    Nav.NavigateTo(AuthClient.DestinoTrasEntrar());
                     break;
                 case "MfaRequired":
                     Nav.NavigateTo("/security/mfa-challenge");

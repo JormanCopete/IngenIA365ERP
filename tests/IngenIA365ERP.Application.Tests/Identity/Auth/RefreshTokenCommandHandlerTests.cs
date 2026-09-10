@@ -54,7 +54,8 @@ public class RefreshTokenCommandHandlerTests
     private static CentralRefreshSession Session(
         string? securityStamp,
         string? replacedBy = null,
-        Guid? tenantId = null) => new(
+        Guid? tenantId = null,
+        DateTime? sessionExpiresAt = null) => new(
             CentralUserId: UserId,
             ActiveTenantPublicId: tenantId,
             FamilyId: FamilyId,
@@ -62,7 +63,8 @@ public class RefreshTokenCommandHandlerTests
             IpAddress: null,
             UserAgent: null,
             ReplacedByTokenHashHex: replacedBy,
-            SecurityStamp: securityStamp);
+            SecurityStamp: securityStamp,
+            SessionExpiresAt: sessionExpiresAt);
 
     [Fact]
     public async Task Stamp_coincidente_rota_y_emite_tokens()
@@ -155,5 +157,68 @@ public class RefreshTokenCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Membership.NotActive");
         await _store.Received(1).InvalidateFamilyAsync(FamilyId, Arg.Any<CancellationToken>());
+    }
+
+    // ---------- Tope absoluto de doce horas ----------
+    //
+    // Antes cada rotación daba otras doce horas: con renovación silenciosa en el
+    // cliente, la sesión no vencía nunca. Estas pruebas fijan que el tope viaja con
+    // la sesión, que el TTL del refresh nuevo es lo que queda, y que pasado el tope
+    // no hay rotación.
+
+    [Fact]
+    public async Task El_tope_de_la_sesion_se_arrastra_y_no_se_desliza()
+    {
+        var tope = FixedNow.AddHours(2);
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Session(CurrentStamp, sessionExpiresAt: tope));
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.IsSuccess.Should().BeTrue(result.Error?.Message);
+        result.Value.RefreshTokenExpiresAt.Should().Be(tope, "el cliente cuenta desde ahí, no desde el token nuevo");
+        await _store.Received(1).StoreAsync(
+            "new-hash",
+            Arg.Is<CentralRefreshSession>(s => s.SessionExpiresAt == tope && s.IssuedAt == FixedNow),
+            TimeSpan.FromHours(2),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Una_sesion_sin_tope_lo_toma_de_su_emision_y_lo_deja_explicito()
+    {
+        // Sesiones vivas en Redis antes de este campo, y las siete puertas de emisión,
+        // que no lo fijan: IssuedAt + 12 h es exactamente el tope de su emisión.
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Session(CurrentStamp));
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        var esperado = FixedNow.AddMinutes(-5).Add(RefreshTokenCommandHandler.DuracionMaximaDeSesion);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.RefreshTokenExpiresAt.Should().Be(esperado);
+        await _store.Received(1).StoreAsync(
+            "new-hash",
+            Arg.Is<CentralRefreshSession>(s => s.SessionExpiresAt == esperado),
+            esperado - FixedNow,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Pasado_el_tope_no_hay_rotacion_y_el_codigo_lo_dice()
+    {
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Session(CurrentStamp, sessionExpiresAt: FixedNow.AddSeconds(-1)));
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Identity.RefreshToken.SessionExpired", "empieza por Identity.RefreshToken. y por eso responde 401");
+        await _store.DidNotReceive().StoreAsync(
+            Arg.Any<string>(), Arg.Any<CentralRefreshSession>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().InvalidateFamilyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

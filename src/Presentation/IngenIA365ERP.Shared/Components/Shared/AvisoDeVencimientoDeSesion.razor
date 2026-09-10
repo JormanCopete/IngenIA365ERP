@@ -1,0 +1,164 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject RenovadorDeSesion Sesion
+@inject CentralAuthClient CentralAuth
+@inject NavigationManager Nav
+@implements IDisposable
+
+@*
+    Aviso de que la sesión está por alcanzar su duración máxima (doce horas desde
+    el ingreso). NO es modal y no navega solo: quien esté a mitad de un asiento o
+    de una liquidación sigue donde está, ve cuánto le queda, y decide si termina
+    o cierra ya. Cuando el reloj llega a cero la sesión ya no se puede renovar; el
+    aviso cambia de tono y ofrece volver a entrar, y la app sólo va al login por
+    sí misma cuando una petición falle de verdad.
+
+    El vencimiento lo dice el servidor (refreshTokenExpiresAt) y lo guarda
+    RenovadorDeSesion; aquí sólo se cuenta hacia atrás. Se muestra a partir de
+    VentanaDeAviso (cinco minutos): ese es el mínimo que pidió el usuario para
+    tomar la decisión.
+*@
+
+@if (_visible)
+{
+    <div class="@ClaseDelAviso" role="status" aria-live="polite">
+        <span class="aviso-sesion-icono e-icons @(_vencida ? "e-close" : "e-clock")" aria-hidden="true"></span>
+        @if (_vencida)
+        {
+            <span class="aviso-sesion-texto">
+                <strong>Tu sesión terminó.</strong> Alcanzó las @Horas horas máximas.
+                Lo que no hayas guardado se perderá al salir; para seguir trabajando, volvé a iniciar sesión.
+            </span>
+            <span class="aviso-sesion-acciones">
+                <button type="button" class="boton-principal" @onclick="VolverAEntrar">Iniciar sesión de nuevo</button>
+            </span>
+        }
+        else if (_plegado)
+        {
+            <span class="aviso-sesion-texto">
+                Tu sesión termina en <strong class="aviso-sesion-contador">@Restante</strong>
+            </span>
+            <span class="aviso-sesion-acciones">
+                <button type="button" class="boton-secundario" @onclick="() => _plegado = false">Ver</button>
+            </span>
+        }
+        else
+        {
+            <span class="aviso-sesion-texto">
+                <strong>Tu sesión termina en <span class="aviso-sesion-contador">@Restante</span>.</strong>
+                Alcanza las @Horas horas máximas. Podés terminar lo que estés haciendo; después
+                tendrás que iniciar sesión de nuevo para continuar.
+            </span>
+            <span class="aviso-sesion-acciones">
+                <button type="button" class="boton-secundario" @onclick="() => _plegado = true">Ocultar</button>
+                <button type="button" class="boton-principal" @onclick="CerrarYVolverAEntrar">Cerrar sesión ahora</button>
+            </span>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Desde cuánto antes del vencimiento se muestra. Mínimo acordado: cinco minutos.</summary>
+    public static readonly TimeSpan VentanaDeAviso = TimeSpan.FromMinutes(5);
+
+    private static readonly TimeSpan Tic = TimeSpan.FromSeconds(1);
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    private bool _visible;
+    private bool _vencida;
+    private bool _plegado;
+    private TimeSpan _restante;
+    private DateTime? _venceEn;
+
+    private string Restante => $"{(int)_restante.TotalMinutes:00}:{_restante.Seconds:00}";
+
+    private static string Horas =>
+        RenovadorDeSesion.DuracionMaximaDeSesion.TotalHours.ToString("0");
+
+    private string ClaseDelAviso =>
+        "aviso aviso-sesion " + (_vencida ? "aviso-error" : "aviso-alerta") + (_plegado && !_vencida ? " aviso-sesion-plegado" : "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Sesion.RestaurarAsync();
+        Sesion.SesionRenovada += OnSesionCambiada;
+        Sesion.SesionTerminada += OnSesionTerminada;
+        Recalcular();
+        _cts = new CancellationTokenSource();
+        _ = ContarAsync(_cts.Token);
+    }
+
+    private void OnSesionCambiada()
+    {
+        // Un login nuevo o un cambio de cooperativa traen otro tope: se vuelve a leer.
+        // Una renovación normal no lo mueve, y el aviso sigue igual.
+        InvokeAsync(() => { Recalcular(); StateHasChanged(); });
+    }
+
+    private void OnSesionTerminada(string _)
+    {
+        InvokeAsync(() => { _visible = false; StateHasChanged(); });
+    }
+
+    private void Recalcular()
+    {
+        _venceEn = Sesion.VencimientoDeSesion;
+        if (_venceEn is null)
+        {
+            _visible = false;
+            return;
+        }
+
+        _restante = _venceEn.Value - DateTime.UtcNow;
+        if (_restante < TimeSpan.Zero) _restante = TimeSpan.Zero;
+        var vencidaAhora = _restante == TimeSpan.Zero;
+        var visibleAhora = _restante <= VentanaDeAviso;
+
+        // Si acaba de entrar en la ventana se muestra desplegado aunque antes se hubiera ocultado.
+        if (visibleAhora && !_visible) _plegado = false;
+        _visible = visibleAhora && Sesion.TieneSesion;
+        _vencida = vencidaAhora;
+    }
+
+    private async Task ContarAsync(CancellationToken ct)
+    {
+        _timer = new PeriodicTimer(Tic);
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(ct))
+            {
+                var antes = (_visible, _vencida, _restante.Seconds);
+                Recalcular();
+                if (antes != (_visible, _vencida, _restante.Seconds))
+                    await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Salida normal al desmontar el componente.
+        }
+    }
+
+    private async Task CerrarYVolverAEntrar()
+    {
+        var retorno = Uri.EscapeDataString(Nav.Uri);
+        await CentralAuth.LogoutAsync();
+        Nav.NavigateTo($"/login?returnUrl={retorno}");
+    }
+
+    private async Task VolverAEntrar()
+    {
+        // La sesión ya no vale en el servidor; el logout es sólo limpieza local, y
+        // si el servidor responde 401 al cerrar, da igual: ya estaba cerrada.
+        await CerrarYVolverAEntrar();
+    }
+
+    public void Dispose()
+    {
+        Sesion.SesionRenovada -= OnSesionCambiada;
+        Sesion.SesionTerminada -= OnSesionTerminada;
+        _cts?.Cancel();
+        _timer?.Dispose();
+        _cts?.Dispose();
+    }
+}
