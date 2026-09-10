@@ -220,7 +220,9 @@ lo ignora (comprobado). Con `HookSucceeded` el Job se borra al terminar bien y
 nunca queda uno viejo que borrar; probado con dos sincronizaciones seguidas, las
 dos ejecutaron el migrador. Contrapartida documentada en el propio manifiesto:
 si el Job **falla**, se queda con sus logs y hay que borrarlo a mano antes de
-reintentar (`k3s kubectl -n erp-pdn delete job erp-db-migrate`).
+reintentar (`k3s kubectl -n erp-pdn delete job erp-db-migrate`); en cualquier
+otro momento ese `delete` responde `NotFound`, y eso es lo normal: no hay
+ninguna migración fallida esperando.
 
 #### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
 
