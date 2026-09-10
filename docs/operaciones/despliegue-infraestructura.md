@@ -132,24 +132,27 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 
 ### Flujo de ramas y ambientes
 
-| Rama | Etiqueta de imagen | Ambiente | Cómo llega |
+| Rama | Etiqueta de imagen | Overlay que el CI actualiza | Cómo llega |
 |---|---|---|---|
-| `develop` (por defecto) | `:develop` | DEV y QA | Argo CD sincroniza solo |
-| `release` | `:release` + `:latest` | **PRODUCCIÓN** | Argo CD **requiere aprobación manual** |
+| `develop` (por defecto) | `:develop` | `dev` y `qa` | Argo CD sincroniza solo |
+| `release` | `:release` + `:latest` | `pdn` | Argo CD **requiere aprobación manual** |
 
 Producción se despliega **desde `release`**, no desde `main`. Se promociona con un
-merge `develop → release`: eso publica las imágenes `:release`, y recién entonces
-alguien aprueba la sincronización en Argo CD. Son dos actos deliberados y
-separados — publicar una imagen no despliega nada por sí solo.
+merge `develop → release`: eso publica las imágenes `:release` y **escribe su
+digest en el overlay de producción del repo GitOps** (job `gitops` del CI), y
+recién entonces alguien aprueba en Argo CD ese commit. Son dos actos deliberados
+y separados — publicar una imagen no despliega nada por sí solo.
 
 `main` queda sin uso en este flujo; el CI la sigue construyendo por si se
 conserva como rama histórica.
 
-> ⚠️ **Publicar una imagen no basta para desplegarla.** Las etiquetas son
-> móviles: republicar `:release` no cambia el manifiesto, así que Kubernetes no
-> ve diferencia y no rota los pods. Por eso los Deployments usan
-> `imagePullPolicy: Always`. Queda pendiente fijar el **digest** (P3), que es lo
-> único que deja registro de qué artefacto está en producción.
+> **Se despliega por digest desde el 2026-09-10** (P3 cerrado). Antes las
+> etiquetas móviles hacían que republicar `:release` no cambiara el manifiesto:
+> Argo decía `Synced` y los pods seguían con la imagen anterior hasta un
+> `rollout restart` a mano. Ahora el CI escribe el digest en el overlay, el commit
+> es el registro de qué artefacto corre, y Kubernetes rota solo. Hace falta el
+> secreto `GITOPS_TOKEN` en el repo de la aplicación; ver P3 en
+> [estado-y-pendientes.md](estado-y-pendientes.md).
 >
 > La primera promoción se hizo el 2026-08-14, con los respaldos de ambos motores
 > ya verificados —incluida la restauración— y las alertas funcionando.

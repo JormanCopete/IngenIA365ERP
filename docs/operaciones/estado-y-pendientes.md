@@ -175,24 +175,34 @@ PostgreSQL no tiene este problema: archiva WAL de forma continua (RPO ≤ 5 min)
 Opciones: almacenamiento replicado (Longhorn u otro), un segundo nodo, o llevar
 MongoDB a un servicio gestionado.
 
-#### P3 — Producción despliega por etiqueta móvil
+#### P3 — Producción despliega por etiqueta móvil — ✅ cerrado el 2026-09-10
 
-Los overlays usan `:release`, una etiqueta que puede reapuntarse. Con
-`imagePullPolicy: Always` la imagen coincide con la etiqueta, pero **no queda
-registro de qué artefacto está corriendo**.
+Los overlays usaban `:release` y `:develop`, etiquetas que se reapuntan.
+Republicarlas no cambiaba el manifiesto, Argo decía `Synced` y los pods seguían
+con la imagen anterior hasta un `rollout restart` a mano. Pasó tres veces en
+producción (2026-08, 2026-09-07 y 2026-09-10) y no dejaba registro de qué
+artefacto corría.
 
-Para un producto financiero auditable hace falta fijar el **digest** en
-`workloads/erp/overlays/pdn/kustomization.yaml`. El propio `docs/backups.md` ya
-lo especificaba; nunca se implementó.
+**Solución.** Los tres overlays fijan el **digest** de cada imagen (GitOps
+`7c0faa6`, con los digests que corrían ese día para no desplegar nada), y el CI
+de la aplicación los escribe en cada publicación: el job `gitops` de
+`.github/workflows/ci.yml` toma el digest que devuelve `docker/build-push-action`,
+lo pone en el overlay del ambiente (`develop` → `dev` y `qa`; `release` → `pdn`),
+retira `newTag` y empuja el commit al repo GitOps. En DEV y QA Argo sincroniza
+solo y rota los pods; en producción el commit queda esperando la aprobación
+manual, y **lo que se aprueba es un digest**, no una etiqueta. Volver atrás es
+revertir ese commit.
 
-> Costó dos despliegues fallidos descubrirlo: Argo reportaba `Synced` y los pods
-> seguían corriendo la imagen de 41 horas antes.
->
-> Volvió a pasar el 2026-09-10 con la entrega de sesión: el manifiesto no cambió
-> (misma etiqueta, sin variables nuevas), la sincronización terminó `Succeeded` y
-> los pods siguieron con la imagen del 7. Mientras P3 no se resuelva, **toda
-> promoción a producción termina con `rollout restart` de `erp-api` y `erp-web`**
-> después del sync, y se verifica por el digest del pod, no por Argo.
+**Requiere un secreto que sólo puede crear el dueño del repo:** `GITOPS_TOKEN`
+en `JormanCopete/IngenIA365ERP` (Settings → Secrets and variables → Actions), un
+token de acceso de grano fino con permiso *Contents: Read and write* sobre
+`JormanCopete/ingenia365-gitops` y nada más. Sin él, el job `gitops` **falla a
+propósito** con un mensaje que lo dice: las imágenes se publican, pero ningún
+ambiente las despliega. Un despliegue que no llegó y nadie notó es peor que un CI
+rojo.
+
+Ya no hace falta `rollout restart` después de promover. `imagePullPolicy: Always`
+se conserva como red por si algún overlay volviera a una etiqueta.
 
 #### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
 
