@@ -40,7 +40,11 @@ public sealed class RenovadorDeSesion
     public const string ClaveAccessToken = AuthBearerHandler.TokenKey;
     public const string ClaveRefreshToken = "refresh_token";
     public const string ClaveVencimientoDeSesion = "session_expires_at";
+    public const string ClaveUltimaRotacion = "session_rotated_at";
     public const string NombreDelClienteHttp = "api";
+
+    /// <summary>Código con el que esta pestaña termina su propia sesión por inactividad.</summary>
+    public const string CodigoInactividad = "Identity.Session.Inactivity";
 
     /// <summary>
     /// Marca de petición que los handlers dejan pasar sin tocar: es la que canjea el
@@ -57,11 +61,12 @@ public sealed class RenovadorDeSesion
     public static readonly TimeSpan MargenDeRenovacion = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// Lo que el servidor impone como duración máxima de una sesión
-    /// (<c>RefreshTokenCommandHandler.DuracionMaximaDeSesion</c>). Aquí sólo se usa
-    /// para el texto del aviso; el valor que manda es el que llega en cada respuesta.
+    /// Los límites que el servidor hace cumplir en el refresh, leídos de
+    /// <c>GET /api/auth/session-policy</c> para que el número viva en un solo sitio.
+    /// Hasta que se leen —o si no se pueden leer— valen los mismos valores por
+    /// defecto que trae el servidor.
     /// </summary>
-    public static readonly TimeSpan DuracionMaximaDeSesion = TimeSpan.FromHours(12);
+    public PoliticaDeSesion Politica { get; private set; } = PoliticaDeSesion.PorDefecto;
 
     private readonly ISecureStorage _storage;
     private readonly IHttpClientFactory _http;
@@ -72,7 +77,10 @@ public sealed class RenovadorDeSesion
     private DateTime _accessTokenExpiresAt;
     private string? _refreshToken;
     private DateTime? _vencimientoDeSesion;
+    private DateTime _ultimaRotacion;
+    private DateTime _ultimaActividad;
     private bool _restaurado;
+    private bool _politicaLeida;
 
     public RenovadorDeSesion(ISecureStorage storage, IHttpClientFactory http, TimeProvider? reloj = null)
     {
@@ -96,6 +104,27 @@ public sealed class RenovadorDeSesion
     public bool TieneSesion => !string.IsNullOrWhiteSpace(_accessToken);
 
     public bool AccessTokenVigente => TieneSesion && _accessTokenExpiresAt > Ahora;
+
+    /// <summary>
+    /// Última petición con sesión que salió de esta pestaña (o el ingreso, o la
+    /// recarga de la página). Es lo que cuenta como «actividad»: mover el ratón o
+    /// escribir en un formulario sin guardar no lo es, y el aviso avisa antes.
+    /// </summary>
+    public DateTime UltimaActividad => _ultimaActividad;
+
+    /// <summary>Cuánto falta para que esta pestaña cierre su sesión por inactividad. Nunca negativo.</summary>
+    public TimeSpan InactividadRestante
+    {
+        get
+        {
+            if (!TieneSesion) return TimeSpan.Zero;
+            var restante = Politica.Inactividad - (Ahora - _ultimaActividad);
+            return restante < TimeSpan.Zero ? TimeSpan.Zero : restante;
+        }
+    }
+
+    /// <summary>Una petición con sesión acaba de salir: la pestaña está viva.</summary>
+    public void RegistrarActividad() => _ultimaActividad = Ahora;
 
     /// <summary>Renovada o adoptada: los tokens cambiaron y quien los cachee debe releer.</summary>
     public event Action? SesionRenovada;
@@ -128,7 +157,39 @@ public sealed class RenovadorDeSesion
         _accessTokenExpiresAt = LeerVencimientoDelJwt(access) ?? Ahora.AddMinutes(5);
         _refreshToken = await _storage.GetAsync(ClaveRefreshToken);
         _vencimientoDeSesion = LeerFecha(await _storage.GetAsync(ClaveVencimientoDeSesion));
+        // Recargar la página es actividad de la persona; la rotación, en cambio, se
+        // conserva: si no consta, se asume ahora y el mantenimiento se adelanta un
+        // ciclo, que es el lado seguro.
+        _ultimaRotacion = LeerFecha(await _storage.GetAsync(ClaveUltimaRotacion)) ?? Ahora;
+        _ultimaActividad = Ahora;
         return true;
+    }
+
+    /// <summary>
+    /// Lee los límites de sesión del servidor. Una vez por proceso; si falla, quedan
+    /// los valores por defecto y se vuelve a intentar la próxima vez.
+    /// </summary>
+    public async Task CargarPoliticaAsync(CancellationToken ct = default)
+    {
+        if (_politicaLeida) return;
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/auth/session-policy");
+            req.Options.Set(SinSesion, true);
+            using var resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return;
+            var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePolitica>(cancellationToken: ct);
+            if (cuerpo is null || cuerpo.InactivityMinutes < 1 || cuerpo.MaxDurationHours < 1) return;
+            Politica = new PoliticaDeSesion(
+                TimeSpan.FromMinutes(cuerpo.InactivityMinutes),
+                TimeSpan.FromHours(cuerpo.MaxDurationHours));
+            _politicaLeida = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            // Sin política del servidor valen los defectos, que son los mismos que él
+            // trae de fábrica. No es un error de la persona y no hay nada que mostrarle.
+        }
     }
 
     /// <summary>
@@ -137,20 +198,30 @@ public sealed class RenovadorDeSesion
     /// puerta no lo trae, se conserva el que ya había (una elevación tras inscribir
     /// no reinicia el reloj) y si no había ninguno, no se inventa.
     /// </summary>
+    /// <param name="esActividad">
+    /// Entrar o cambiar de cooperativa es actividad de la persona. Una renovación en
+    /// silencio —incluida la de mantenimiento de una pestaña abierta— NO lo es: si
+    /// contara, la pestaña abandonada se mantendría viva a sí misma para siempre.
+    /// </param>
     public async Task AdoptarAsync(
-        string accessToken, DateTime? accessTokenExpiresAt, string? refreshToken, DateTime? refreshTokenExpiresAt)
+        string accessToken, DateTime? accessTokenExpiresAt, string? refreshToken, DateTime? refreshTokenExpiresAt,
+        bool esActividad = true)
     {
         _restaurado = true;
         _accessToken = accessToken;
         _accessTokenExpiresAt = accessTokenExpiresAt ?? LeerVencimientoDelJwt(accessToken) ?? Ahora.AddMinutes(15);
         if (!string.IsNullOrWhiteSpace(refreshToken)) _refreshToken = refreshToken;
         if (refreshTokenExpiresAt is not null) _vencimientoDeSesion = refreshTokenExpiresAt;
+        // Tokens nuevos = rotación en el servidor.
+        _ultimaRotacion = Ahora;
+        if (esActividad) _ultimaActividad = Ahora;
 
         await _storage.SetAsync(ClaveAccessToken, accessToken);
         if (!string.IsNullOrWhiteSpace(refreshToken))
             await _storage.SetAsync(ClaveRefreshToken, refreshToken);
         if (_vencimientoDeSesion is { } vence)
             await _storage.SetAsync(ClaveVencimientoDeSesion, vence.ToString("o", CultureInfo.InvariantCulture));
+        await _storage.SetAsync(ClaveUltimaRotacion, _ultimaRotacion.ToString("o", CultureInfo.InvariantCulture));
 
         SesionRenovada?.Invoke();
     }
@@ -166,6 +237,63 @@ public sealed class RenovadorDeSesion
         _storage.Remove(ClaveAccessToken);
         _storage.Remove(ClaveRefreshToken);
         _storage.Remove(ClaveVencimientoDeSesion);
+        _storage.Remove(ClaveUltimaRotacion);
+    }
+
+    // ---------- Inactividad ----------
+
+    /// <summary>
+    /// Un latido por segundo desde el layout. Hace dos cosas: si esta pestaña lleva
+    /// <see cref="PoliticaDeSesion.Inactividad"/> sin actividad, la cierra; y si sigue
+    /// activa pero la última rotación se acerca a ese mismo límite, rota sola —el
+    /// servidor mide la inactividad entre rotaciones, porque no ve cada petición, y
+    /// sin esto expulsaría a alguien que lleva veinte minutos leyendo un informe.
+    /// </summary>
+    public async Task VigilarAsync(CancellationToken ct = default)
+    {
+        if (!await RestaurarAsync()) return;
+
+        if (InactividadRestante == TimeSpan.Zero)
+        {
+            await CortarPorInactividadAsync(ct);
+            return;
+        }
+
+        if (Ahora - _ultimaRotacion >= Politica.Inactividad - Politica.MargenDeMantenimiento)
+            await RenovarAsync(motivo: MotivoDeRenovacion.MantenerViva, ct: ct);
+    }
+
+    /// <summary>
+    /// La persona pulsó «seguir trabajando» en el aviso: cuenta como actividad y se
+    /// rota ya, para que el servidor también lo sepa. <c>true</c> si la sesión sigue.
+    /// </summary>
+    public async Task<bool> SeguirTrabajandoAsync(CancellationToken ct = default)
+    {
+        if (!await RestaurarAsync()) return false;
+        RegistrarActividad();
+        return await RenovarAsync(motivo: MotivoDeRenovacion.Explicita, ct: ct);
+    }
+
+    private async Task CortarPorInactividadAsync(CancellationToken ct)
+    {
+        // Avisar al servidor es cortesía, no requisito: el refresh ya no le serviría a
+        // nadie pasado el límite. Si la red falla, se corta igual.
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout")
+            {
+                Content = JsonContent.Create(new { refreshToken = _refreshToken }),
+            };
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+            req.Options.Set(SinSesion, true);
+            using var _ = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            // Sin red no hay a quién avisar; la sesión local se cierra igual.
+        }
+
+        await TerminarAsync(CodigoInactividad);
     }
 
     // ---------- Renovación ----------
@@ -183,8 +311,20 @@ public sealed class RenovadorDeSesion
         if (!EstaPorVencer()) return _accessToken;
         if (string.IsNullOrWhiteSpace(_refreshToken)) return _accessToken;
 
-        await RenovarAsync(tokenRechazado: null, ct);
+        await RenovarAsync(motivo: MotivoDeRenovacion.PorVencer, ct: ct);
         return _accessToken;
+    }
+
+    public enum MotivoDeRenovacion
+    {
+        /// <summary>Al access le queda menos del margen. Si otra petición ya renovó, no se repite.</summary>
+        PorVencer,
+        /// <summary>El servidor rechazó el access con 401. Se renueva salvo que ya lo hayan reemplazado.</summary>
+        Rechazado,
+        /// <summary>Mantener fresca la rotación de una pestaña activa. Si ya rotó hace poco, no se repite.</summary>
+        MantenerViva,
+        /// <summary>La persona lo pidió («seguir trabajando»): se rota sí o sí, para que el servidor lo vea.</summary>
+        Explicita,
     }
 
     /// <summary>
@@ -193,13 +333,12 @@ public sealed class RenovadorDeSesion
     /// actual ya sirve. <c>false</c> si la red falló (la sesión sigue) o si el
     /// servidor la rechazó (la sesión se terminó y se avisó).
     /// </summary>
-    /// <param name="tokenRechazado">
-    /// El access que el servidor acaba de rechazar con 401, si es el caso. Con él, se
-    /// renueva aunque al token le quede vida —el servidor ya dijo que no vale— salvo
-    /// que otra petición lo haya reemplazado mientras tanto. Sin él es la renovación
-    /// preventiva: sólo si está por vencer.
-    /// </param>
-    public async Task<bool> RenovarAsync(string? tokenRechazado = null, CancellationToken ct = default)
+    /// <param name="motivo">Por qué se renueva; decide cuándo una renovación ya hecha por otro basta.</param>
+    /// <param name="tokenRechazado">Con <see cref="MotivoDeRenovacion.Rechazado"/>, el access que el servidor no aceptó.</param>
+    public async Task<bool> RenovarAsync(
+        MotivoDeRenovacion motivo = MotivoDeRenovacion.PorVencer,
+        string? tokenRechazado = null,
+        CancellationToken ct = default)
     {
         if (!await RestaurarAsync()) return false;
 
@@ -207,9 +346,13 @@ public sealed class RenovadorDeSesion
         try
         {
             // Otra petición pudo renovar mientras esperábamos el semáforo.
-            var yaSirve = tokenRechazado is null
-                ? !EstaPorVencer()
-                : !string.Equals(_accessToken, tokenRechazado, StringComparison.Ordinal);
+            var yaSirve = motivo switch
+            {
+                MotivoDeRenovacion.Rechazado => !string.Equals(_accessToken, tokenRechazado, StringComparison.Ordinal),
+                MotivoDeRenovacion.MantenerViva => Ahora - _ultimaRotacion < Politica.Inactividad - Politica.MargenDeMantenimiento,
+                MotivoDeRenovacion.Explicita => false,
+                _ => !EstaPorVencer(),
+            };
             if (yaSirve) return true;
             if (string.IsNullOrWhiteSpace(_refreshToken)) return false;
 
@@ -236,7 +379,17 @@ public sealed class RenovadorDeSesion
             {
                 if (resp.IsSuccessStatusCode)
                 {
-                    var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDeRefresh>(cancellationToken: ct);
+                    RespuestaDeRefresh? cuerpo;
+                    try
+                    {
+                        cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDeRefresh>(cancellationToken: ct);
+                    }
+                    catch (JsonException)
+                    {
+                        // Un 200 que no es JSON no es la API: un portal cautivo, un proxy
+                        // caído. Transitorio, como sin red; la sesión sigue.
+                        return false;
+                    }
                     if (cuerpo is null || string.IsNullOrWhiteSpace(cuerpo.AccessToken))
                     {
                         await TerminarAsync("Identity.RefreshToken.RespuestaVacia");
@@ -245,7 +398,8 @@ public sealed class RenovadorDeSesion
 
                     await AdoptarAsync(
                         cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt,
-                        cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt);
+                        cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt,
+                        esActividad: false);
                     return true;
                 }
 
@@ -330,4 +484,19 @@ public sealed class RenovadorDeSesion
         DateTime? RefreshTokenExpiresAt);
 
     private sealed record SobreDeError(string? Code, string? Message, string? TraceId);
+
+    private sealed record RespuestaDePolitica(int InactivityMinutes, int MaxDurationHours);
+}
+
+/// <summary>Los dos límites de una sesión, tal como los hace cumplir el servidor.</summary>
+public sealed record PoliticaDeSesion(TimeSpan Inactividad, TimeSpan DuracionMaxima)
+{
+    public static readonly PoliticaDeSesion PorDefecto = new(TimeSpan.FromMinutes(30), TimeSpan.FromHours(12));
+
+    /// <summary>
+    /// Cuánto antes del límite de inactividad rota sola una pestaña activa: dos
+    /// minutos, o un cuarto del límite si éste es muy corto.
+    /// </summary>
+    public TimeSpan MargenDeMantenimiento =>
+        TimeSpan.FromTicks(Math.Min(TimeSpan.FromMinutes(2).Ticks, Inactividad.Ticks / 4));
 }

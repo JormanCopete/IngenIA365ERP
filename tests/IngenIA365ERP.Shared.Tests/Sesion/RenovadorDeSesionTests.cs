@@ -187,6 +187,131 @@ public class RenovadorDeSesionTests
         _servidor.Peticiones.Should().BeEmpty();
     }
 
+    // ---------- Inactividad ----------
+
+    [Fact]
+    public async Task Una_pestana_activa_rota_sola_antes_del_limite_y_eso_no_cuenta_como_actividad()
+    {
+        // Entró en T. A los 28 min no ha vuelto a pedir nada, pero sigue dentro de
+        // los 30: el servidor mide la inactividad entre rotaciones, así que se rota
+        // para no ser expulsada por un servidor que no ve cada petición. La rotación
+        // NO reinicia el reloj de actividad: eso lo hace sólo la persona.
+        var r = await ConSesionAsync(TimeSpan.FromMinutes(15));
+        ElServidorRenueva();
+        _reloj.Avanzar(TimeSpan.FromMinutes(28));
+
+        await r.VigilarAsync();
+
+        _servidor.A("/api/auth/refresh").Should().HaveCount(1);
+        r.AccessToken.Should().Be("access-2");
+        r.InactividadRestante.Should().Be(TimeSpan.FromMinutes(2), "la última actividad sigue siendo el ingreso");
+        r.TieneSesion.Should().BeTrue();
+
+        // Un segundo latido no vuelve a rotar: acaba de hacerlo.
+        await r.VigilarAsync();
+        _servidor.A("/api/auth/refresh").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Sin_actividad_durante_el_limite_la_pestana_cierra_su_sesion()
+    {
+        var r = await ConSesionAsync(TimeSpan.FromMinutes(15));
+        ElServidorRenueva();
+        string? codigo = null;
+        r.SesionTerminada += c => codigo = c;
+        _reloj.Avanzar(TimeSpan.FromMinutes(30));
+
+        await r.VigilarAsync();
+
+        codigo.Should().Be(RenovadorDeSesion.CodigoInactividad);
+        r.TieneSesion.Should().BeFalse();
+        _almacen.Datos.Should().NotContainKeys(RenovadorDeSesion.ClaveAccessToken, RenovadorDeSesion.ClaveRefreshToken);
+        var despedida = _servidor.A("/api/auth/logout").Should().ContainSingle("avisa al servidor para que revoque el refresh").Subject;
+        despedida.SinSesion.Should().BeTrue();
+        despedida.Bearer.Should().NotBeNull();
+        despedida.Cuerpo.Should().Contain("refresh-1");
+    }
+
+    [Fact]
+    public async Task La_actividad_pospone_el_corte()
+    {
+        var r = await ConSesionAsync(TimeSpan.FromMinutes(15));
+        ElServidorRenueva();
+        var terminada = false;
+        r.SesionTerminada += _ => terminada = true;
+
+        _reloj.Avanzar(TimeSpan.FromMinutes(29));
+        await r.VigilarAsync();           // rota (28 ≥ 30 − 2), no corta
+        r.RegistrarActividad();           // la persona pidió algo
+        _reloj.Avanzar(TimeSpan.FromMinutes(29));
+        await r.VigilarAsync();
+
+        terminada.Should().BeFalse();
+        r.TieneSesion.Should().BeTrue();
+        r.InactividadRestante.Should().Be(TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task Seguir_trabajando_rota_y_reinicia_el_reloj_de_inactividad()
+    {
+        var r = await ConSesionAsync(TimeSpan.FromMinutes(15));
+        ElServidorRenueva();
+        _reloj.Avanzar(TimeSpan.FromMinutes(27));
+
+        var sigue = await r.SeguirTrabajandoAsync();
+
+        sigue.Should().BeTrue();
+        r.InactividadRestante.Should().Be(TimeSpan.FromMinutes(30));
+        _servidor.A("/api/auth/refresh").Should().HaveCount(1, "es actividad que el servidor tiene que ver");
+    }
+
+    [Fact]
+    public async Task La_politica_se_lee_del_servidor_y_sin_el_valen_los_defectos()
+    {
+        var r = Nuevo();
+        r.Politica.Should().Be(PoliticaDeSesion.PorDefecto);
+
+        _servidor.Responder = (_, _) => new HttpResponseMessage(HttpStatusCode.BadGateway);
+        await r.CargarPoliticaAsync();
+        r.Politica.Should().Be(PoliticaDeSesion.PorDefecto, "sin respuesta valen los defectos, que son los del servidor");
+
+        _servidor.Responder = (_, _) => ServidorFalso.Json(HttpStatusCode.OK, new { inactivityMinutes = 10, maxDurationHours = 8 });
+        await r.CargarPoliticaAsync();
+        r.Politica.Inactividad.Should().Be(TimeSpan.FromMinutes(10));
+        r.Politica.DuracionMaxima.Should().Be(TimeSpan.FromHours(8));
+        var vista = _servidor.A("/api/auth/session-policy").Last();
+        vista.SinSesion.Should().BeTrue();
+        vista.Bearer.Should().BeNull();
+
+        // Con 10 minutos, el mantenimiento se adelanta a los 8 y el corte llega a los 10.
+        await r.AdoptarAsync(Jwt.ConVencimiento(Ahora.AddMinutes(15)), Ahora.AddMinutes(15), "refresh-1", Ahora.AddHours(8));
+        ElServidorRenueva();
+        _reloj.Avanzar(TimeSpan.FromMinutes(8));
+        await r.VigilarAsync();
+        _servidor.A("/api/auth/refresh").Should().HaveCount(1);
+        _reloj.Avanzar(TimeSpan.FromMinutes(2));
+        await r.VigilarAsync();
+        r.TieneSesion.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Un_200_que_no_es_json_es_transitorio_y_no_termina_la_sesion()
+    {
+        // Un portal cautivo o un proxy caído responden 200 con HTML.
+        var r = await ConSesionAsync(TimeSpan.FromSeconds(30));
+        _servidor.Responder = (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>portal</html>", System.Text.Encoding.UTF8, "text/html"),
+        };
+        var terminada = false;
+        r.SesionTerminada += _ => terminada = true;
+
+        (await r.RenovarAsync()).Should().BeFalse();
+
+        terminada.Should().BeFalse();
+        r.TieneSesion.Should().BeTrue();
+    }
+
     [Fact]
     public void Lee_el_exp_del_jwt_y_no_se_cae_con_basura()
     {

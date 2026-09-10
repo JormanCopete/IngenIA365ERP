@@ -138,6 +138,21 @@ public class RenovacionDeSesionHandlerTests
     }
 
     [Fact]
+    public async Task Cada_peticion_con_sesion_cuenta_como_actividad()
+    {
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        _servidor.Responder = (req, _) => req.RequestUri!.AbsolutePath == "/api/auth/refresh"
+            ? Renovacion("access-2", "refresh-2")
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        _reloj.Avanzar(TimeSpan.FromMinutes(20));
+        _sesion.InactividadRestante.Should().Be(TimeSpan.FromMinutes(10));
+
+        await _http.GetAsync("/api/payroll/pay-periods");
+
+        _sesion.InactividadRestante.Should().Be(TimeSpan.FromMinutes(30));
+    }
+
+    [Fact]
     public async Task Sin_sesion_la_peticion_sale_anonima()
     {
         _servidor.Responder = (_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized);

@@ -51,6 +51,10 @@
             {
                 <p class="error" role="alert">@_error</p>
             }
+            else if (_motivoDeVuelta is not null)
+            {
+                <p class="aviso aviso-info" role="status">@_motivoDeVuelta</p>
+            }
 
     <p class="login-olvide">
                 <NavLink href="/auth/forgot-password">¿Olvidaste tu contraseña?</NavLink>
@@ -123,8 +127,25 @@
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>Por qué se volvió al login, cuando fue el sistema y no la persona.</summary>
+    private string? _motivoDeVuelta;
+
     protected override async Task OnInitializedAsync()
     {
+        _motivoDeVuelta = AuthClient.SessionEndedCode switch
+        {
+            RenovadorDeSesion.CodigoInactividad =>
+                "Tu sesión se cerró por inactividad. Volvé a entrar para continuar donde estabas.",
+            "Identity.RefreshToken.InactivityExpired" =>
+                "Tu sesión se cerró por inactividad. Volvé a entrar para continuar donde estabas.",
+            "Identity.RefreshToken.SessionExpired" =>
+                "Tu sesión alcanzó su duración máxima. Volvé a entrar para continuar donde estabas.",
+            "Tenant.MfaMethodNotAccepted" =>
+                "Tu cooperativa cambió los métodos de segundo factor que acepta. Volvé a entrar para inscribir uno válido.",
+            null => null,
+            _ => "Tu sesión terminó. Volvé a entrar para continuar.",
+        };
+
         if (!string.IsNullOrWhiteSpace(ReturnUrl))
         {
             // La query trae la URL absoluta escapada; se guarda sólo la parte local.

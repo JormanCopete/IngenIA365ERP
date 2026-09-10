@@ -44,6 +44,7 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
             return await base.SendAsync(request, cancellationToken);
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        sesion.RegistrarActividad();
 
         var cuerpo = await CapturarCuerpoAsync(request, cancellationToken);
         var respuesta = await base.SendAsync(request, cancellationToken);
@@ -54,7 +55,7 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
         // El servidor no aceptó el token que teníamos por vigente: reloj desfasado,
         // o revocación. Se canjea una vez; si el servidor dice que la sesión ya no
         // vale, RenovadorDeSesion la termina y avisa, y esta 401 vuelve tal cual.
-        if (!await sesion.RenovarAsync(tokenRechazado: token, ct: cancellationToken)) return respuesta;
+        if (!await sesion.RenovarAsync(RenovadorDeSesion.MotivoDeRenovacion.Rechazado, token, cancellationToken)) return respuesta;
 
         var nuevo = sesion.AccessToken;
         if (string.IsNullOrEmpty(nuevo) || nuevo == token) return respuesta;

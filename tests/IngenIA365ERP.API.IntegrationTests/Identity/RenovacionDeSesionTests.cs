@@ -57,6 +57,19 @@ public class RenovacionDeSesionTests(CentralIdentityApiFixture fx)
     }
 
     [Fact]
+    public async Task La_politica_de_sesion_es_publica_y_trae_los_dos_limites()
+    {
+        using var http = fx.CreateClient();
+
+        var resp = await http.GetAsync("/api/auth/session-policy");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, "es anónima: dos enteros de configuración");
+        var cuerpo = await LeerAsync(resp);
+        cuerpo.GetProperty("inactivityMinutes").GetInt32().Should().Be(30, "el valor por defecto de la sección Sesion");
+        cuerpo.GetProperty("maxDurationHours").GetInt32().Should().Be(12);
+    }
+
+    [Fact]
     public async Task Un_refresh_inventado_responde_401_con_sobre_de_error()
     {
         using var http = fx.CreateClient();

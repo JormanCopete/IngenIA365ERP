@@ -1,6 +1,8 @@
+using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using Microsoft.Extensions.Options;
 using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -31,15 +33,10 @@ public sealed class RefreshTokenCommandHandler(
     ITenantMembershipReader memberships,
     ICentralJwtIssuer jwtIssuer,
     IDateTimeService clock,
+    IOptions<PoliticaDeSesionOptions> politica,
     ILogger<RefreshTokenCommandHandler> logger)
     : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResult>>
 {
-    /// <summary>
-    /// Duración máxima de una sesión desde el ingreso. Es lo que el cliente muestra
-    /// como «tu sesión termina en…» y lo que este handler hace cumplir: pasado el
-    /// tope no hay rotación posible y hay que volver por el login.
-    /// </summary>
-    public static readonly TimeSpan DuracionMaximaDeSesion = TimeSpan.FromHours(12);
 
     public async Task<Result<RefreshTokenResult>> Handle(
         RefreshTokenCommand request, CancellationToken ct)
@@ -72,17 +69,31 @@ public sealed class RefreshTokenCommandHandler(
                 "Token reutilizado detectado; toda la sesión fue invalidada por seguridad.");
         }
 
-        // El tope absoluto de la sesión. Se comprueba ANTES de mirar al usuario o la
-        // membresía: una sesión vencida no tiene nada que renovar, sea quien sea.
-        // No se invalida la familia —no es un ataque, es el reloj— pero el token
+        // Los dos relojes de la sesión, ANTES de mirar al usuario o la membresía: una
+        // sesión vencida no tiene nada que renovar, sea quien sea. En ninguno de los
+        // dos se invalida la familia —no es un ataque, es el reloj— pero el token
         // tampoco sirve más: la key expira sola en Redis a la misma hora.
+        var limites = politica.Value;
         var ahora = clock.UtcNow;
-        var vence = session.SessionExpiresAt ?? session.IssuedAt.Add(DuracionMaximaDeSesion);
+
+        // 1) Tope absoluto desde el ingreso.
+        var vence = session.SessionExpiresAt ?? session.IssuedAt.Add(limites.DuracionMaxima);
         if (ahora >= vence)
         {
             return Result.Failure<RefreshTokenResult>(
                 "Identity.RefreshToken.SessionExpired",
-                $"La sesión alcanzó su duración máxima de {DuracionMaximaDeSesion.TotalHours:0} horas. " +
+                $"La sesión alcanzó su duración máxima de {limites.DuracionMaxima.TotalHours:0} horas. " +
+                "Iniciá sesión de nuevo para continuar.");
+        }
+
+        // 2) Inactividad: tiempo desde la última rotación. El servidor no ve cada
+        //    petición, ve rotaciones; por eso el cliente rota sola la sesión de una
+        //    pestaña activa antes de llegar aquí, y ésta es la red para la que no.
+        if (ahora - session.IssuedAt > limites.Inactividad)
+        {
+            return Result.Failure<RefreshTokenResult>(
+                "Identity.RefreshToken.InactivityExpired",
+                $"La sesión se cerró tras {limites.Inactividad.TotalMinutes:0} minutos sin actividad. " +
                 "Iniciá sesión de nuevo para continuar.");
         }
 

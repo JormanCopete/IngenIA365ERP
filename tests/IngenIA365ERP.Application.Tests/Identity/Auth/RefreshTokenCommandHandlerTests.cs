@@ -1,9 +1,11 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Identity.Auth.RefreshToken;
 using IngenIA365ERP.Domain.Entities.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -40,8 +42,11 @@ public class RefreshTokenCommandHandlerTests
             .Returns(new CentralRefreshTokenResult("new-refresh", "new-hash", FixedNow.AddHours(12)));
     }
 
+    private readonly PoliticaDeSesionOptions _politica = new();
+
     private RefreshTokenCommandHandler NewHandler() => new(
         _store, _identity, _memberships, _jwt, _clock,
+        Options.Create(_politica),
         NullLogger<RefreshTokenCommandHandler>.Instance);
 
     private static CentralUser CreateUser(string stamp = CurrentStamp) => new()
@@ -196,7 +201,7 @@ public class RefreshTokenCommandHandlerTests
 
         var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
 
-        var esperado = FixedNow.AddMinutes(-5).Add(RefreshTokenCommandHandler.DuracionMaximaDeSesion);
+        var esperado = FixedNow.AddMinutes(-5).Add(_politica.DuracionMaxima);
         result.IsSuccess.Should().BeTrue();
         result.Value.RefreshTokenExpiresAt.Should().Be(esperado);
         await _store.Received(1).StoreAsync(
@@ -220,5 +225,63 @@ public class RefreshTokenCommandHandlerTests
         await _store.DidNotReceive().StoreAsync(
             Arg.Any<string>(), Arg.Any<CentralRefreshSession>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
         await _store.DidNotReceive().InvalidateFamilyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    // ---------- Inactividad ----------
+    //
+    // El servidor no ve cada petición, ve rotaciones: la inactividad se mide desde la
+    // última. El cliente rota sola la sesión de una pestaña activa antes de llegar
+    // aquí; esto es la red para la que no lo hizo.
+
+    [Fact]
+    public async Task Mas_de_la_inactividad_configurada_sin_rotar_se_rechaza_sin_invalidar_la_familia()
+    {
+        _politica.InactividadMinutos = 30;
+        var sesion = Session(CurrentStamp) with { IssuedAt = FixedNow.AddMinutes(-31) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
+        await _store.DidNotReceive().StoreAsync(
+            Arg.Any<string>(), Arg.Any<CentralRefreshSession>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().InvalidateFamilyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Dentro_de_la_inactividad_configurada_rota_con_normalidad()
+    {
+        _politica.InactividadMinutos = 30;
+        var sesion = Session(CurrentStamp) with { IssuedAt = FixedNow.AddMinutes(-29) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.IsSuccess.Should().BeTrue(result.Error?.Message);
+    }
+
+    [Fact]
+    public async Task El_limite_de_inactividad_es_el_configurado_no_uno_fijo()
+    {
+        _politica.InactividadMinutos = 10;
+        var sesion = Session(CurrentStamp) with { IssuedAt = FixedNow.AddMinutes(-11) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
+    }
+
+    [Fact]
+    public void La_politica_rechaza_valores_que_dejarian_a_todos_fuera()
+    {
+        new PoliticaDeSesionOptions { InactividadMinutos = 1 }.EsValida(out var m1).Should().BeFalse(m1);
+        new PoliticaDeSesionOptions { DuracionMaximaHoras = 0 }.EsValida(out var m2).Should().BeFalse(m2);
+        new PoliticaDeSesionOptions { InactividadMinutos = 13 * 60, DuracionMaximaHoras = 12 }.EsValida(out var m3).Should().BeFalse(m3);
+        new PoliticaDeSesionOptions().EsValida(out _).Should().BeTrue("30 minutos y 12 horas son los valores por defecto");
     }
 }
