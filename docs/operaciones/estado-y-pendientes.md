@@ -187,6 +187,12 @@ lo especificaba; nunca se implementó.
 
 > Costó dos despliegues fallidos descubrirlo: Argo reportaba `Synced` y los pods
 > seguían corriendo la imagen de 41 horas antes.
+>
+> Volvió a pasar el 2026-09-10 con la entrega de sesión: el manifiesto no cambió
+> (misma etiqueta, sin variables nuevas), la sincronización terminó `Succeeded` y
+> los pods siguieron con la imagen del 7. Mientras P3 no se resuelva, **toda
+> promoción a producción termina con `rollout restart` de `erp-api` y `erp-web`**
+> después del sync, y se verifica por el digest del pod, no por Argo.
 
 #### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
 
