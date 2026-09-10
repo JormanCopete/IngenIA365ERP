@@ -208,9 +208,19 @@ Probado de punta a punta el mismo día: `develop cdb3ec6` → GitOps `0f11f18` �
 y QA rotaron solos en un minuto; `release 2c16a89` → GitOps `f1c8cd3` → Argo
 mostró `OutOfSync` en los dos Deployments, se aprobó, el Job PreSync corrió con
 el migrador por digest y los pods quedaron en `api@9a17c881`, `web@6c830f39`.
-Una rareza para no perder tiempo después: la primera sincronización manual
-tras el commit terminó `Succeeded` en 4 segundos sin cambiar nada y dejó
-`OutOfSync`; la segunda, idéntica, hizo el despliegue. Si pasa, repetir.
+**La «rareza» de la primera sincronización, explicada y corregida** (GitOps
+`cffb943`): el Job PreSync tenía `hook-delete-policy: BeforeHookCreation`, y
+Argo CD 3.5.0, al tener que borrar el Job de la sincronización anterior (lo
+conservábamos 24 h por TTL), pasaba a «waiting for deletion» y en el mismo
+segundo cerraba la operación como `Succeeded` sin ejecutar el hook ni aplicar
+nada. Por eso la primera sincronización tras otra reciente no desplegaba y la
+segunda sí, y por eso la primera del día funcionaba (el Job anterior ya había
+vencido). `generateName` no es salida: kustomize exige `name`, y con `name` Argo
+lo ignora (comprobado). Con `HookSucceeded` el Job se borra al terminar bien y
+nunca queda uno viejo que borrar; probado con dos sincronizaciones seguidas, las
+dos ejecutaron el migrador. Contrapartida documentada en el propio manifiesto:
+si el Job **falla**, se queda con sus logs y hay que borrarlo a mano antes de
+reintentar (`k3s kubectl -n erp-pdn delete job erp-db-migrate`).
 
 #### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
 

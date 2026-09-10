@@ -183,6 +183,11 @@ docker run --rm \
   <migrador> migrate --scope admin
 ```
 
+> **Si el Job PreSync falla**, se queda en el namespace con sus logs
+> (`hook-delete-policy: HookSucceeded`): leerlos, corregir, y **borrarlo a mano**
+> antes de volver a sincronizar, porque con el mismo nombre Argo no lo reemplaza:
+> `k3s kubectl -n erp-pdn delete job erp-db-migrate`.
+>
 > **`--scope` vale `all` si no se pasa**, y ese camino estaba mal: el bucle de
 > cooperativas del migrador quedó en el modelo anterior —un esquema por
 > cooperativa dentro de una base compartida— cuando el vivo es una base por
