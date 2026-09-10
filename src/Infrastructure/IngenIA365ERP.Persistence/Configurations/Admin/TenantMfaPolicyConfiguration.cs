@@ -33,9 +33,15 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
         // las filas que ya existen se rellenan con él al migrar, y si fuera 0
         // (Ninguno) toda cooperativa que hoy exige MFA quedaría en el estado
         // imposible que la entidad prohíbe.
+        // HasSentinel: el cero (Ninguno) ES un valor legítimo cuando la cooperativa
+        // no exige segundo factor, y sin sentinel EF lo confundía con «no asignado»,
+        // lo omitía del INSERT y la base ponía «todos». Lo avisaba Serilog en cada
+        // arranque de producción. El default de la COLUMNA sigue siendo «todos»:
+        // es lo que deja arrancar a la imagen anterior contra este esquema.
         builder.Property(e => e.AllowedMethodsMask)
             .HasConversion<int>()
-            .HasDefaultValue(ConversionDeMetodosMfa.Todos);
+            .HasDefaultValue(ConversionDeMetodosMfa.Todos)
+            .HasSentinel(ConversionDeMetodosMfa.SinAsignar);
 
         builder.Property(e => e.AllowEmailRecovery).HasDefaultValue(false);
 
