@@ -3,6 +3,18 @@ name: Load tests (nightly)
 # T133 — Ejecuta NBomber contra un stack dev efímero cada noche y
 # archiva los reportes HTML/JSON como artifacts del run.
 # Disparable manualmente desde la UI para verificar antes de un release.
+#
+# Lo que levanta: docker/dev.yml trae SOLO los servicios de datos (SQL Server,
+# Mongo, Redis, smtp4dev); la API no viene en ese compose —está pensado para
+# correrla desde el IDE—, así que este workflow la arranca aparte con `dotnet run`
+# en el puerto 5000. Desde el 2026-09-05 hasta el 2026-09-10 el paso "Wait for
+# services" fallaba todas las noches porque nadie arrancaba la API.
+#
+# Lo que NO hace todavía: los escenarios de tests/IngenIA365ERP.Load.Tests son
+# esqueletos (T131): el de cimientos no está cableado a ningún test y el de login
+# (RUN_LOAD_TESTS=1) necesita 50 usuarios load.userNN que ningún seeder crea. Este
+# run demuestra que el stack completo levanta en un runner limpio, migra y siembra
+# desde cero, y deja el esqueleto listo; no mide carga real.
 
 on:
   schedule:
@@ -10,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       duration_minutes:
-        description: 'Duración total (ramp + plateau) en minutos'
+        description: 'Duración total (ramp + plateau) en minutos (los escenarios aún no la leen)'
         required: false
         default: '40'
 
@@ -30,26 +42,71 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Start dev stack
-        run: docker compose -f docker/dev.yml up -d
+      # --wait espera los healthchecks del compose (el de SQL Server tarda ~30 s).
+      - name: Start dev stack (datos)
+        run: docker compose -f docker/dev.yml up -d --wait
+
+      - name: Build API
+        run: dotnet build src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release
+
+      # La API se configura como en Kubernetes: por variables, no por el catálogo
+      # de máquina de appsettings.Development.json (ERP_INFRAESTRUCTURA_PROPIA=1 lo
+      # apaga; sin eso resolvería SQL Server por Trusted_Connection y moriría).
+      #   - El compose expone SQL Server en 1433 con el sa del propio dev.yml.
+      #   - WebAuthn__* son obligatorias (ValidateOnStart, sin valor por defecto).
+      #   - MASTER_ADMIN_* las exige el sembrador sobre una base vacía; la clave
+      #     se genera aquí y muere con el runner: no es un secreto de nadie.
+      #   - AutoMigrate + semilla de prueba: el runner arranca con la base vacía.
+      - name: Start API
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://localhost:5000
+          ERP_INFRAESTRUCTURA_PROPIA: "1"
+          Database__Provider: SqlServer
+          Database__ConnectionStrings__SqlServer: "Server=localhost,1433;Database=IngenIA365ERP;User Id=sa;Password=IngenIA365_Dev2026!;TrustServerCertificate=true;"
+          Database__AdminConnectionStrings__SqlServer: "Server=localhost,1433;Database=IngenIA365ERP_Admin;User Id=sa;Password=IngenIA365_Dev2026!;TrustServerCertificate=true;"
+          Database__AutoMigrate: "true"
+          Database__Seed__RunParametricSeed: "true"
+          Database__Seed__RunTestSeed: "true"
+          Database__Startup__RetryWindowSeconds: "120"
+          ConnectionStrings__Redis: "localhost:6379,abortConnect=false"
+          Redis__ConnectionString: "localhost:6379,abortConnect=false"
+          MongoDb__ConnectionString: "mongodb://localhost:27017"
+          ConnectionStrings__MongoDB: "mongodb://localhost:27017"
+          WebAuthn__RelyingPartyId: localhost
+          WebAuthn__OrigenesPermitidos__0: http://localhost:5000
+          IdentityEmail__BaseUrl: http://localhost:5000
+          Smtp__Host: 127.0.0.1
+          Smtp__Port: "5025"
+          Smtp__FromAddress: noresponder@ingenia365.test
+          MASTER_ADMIN_EMAIL: master@ingenia365.test
+        run: |
+          export MASTER_ADMIN_PASSWORD="$(openssl rand -base64 24)"
+          nohup dotnet run --project src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj \
+            -c Release --no-build --no-launch-profile > api.log 2>&1 &
+          echo $! > api.pid
 
       - name: Wait for services
         run: |
           for i in {1..60}; do
-            if curl -fs http://localhost:5000/health/ready; then exit 0; fi
+            if curl -fs http://localhost:5000/health/ready; then echo; echo "API lista tras $((i*5)) s"; exit 0; fi
+            if ! kill -0 "$(cat api.pid)" 2>/dev/null; then echo "::error::La API murió al arrancar"; break; fi
             sleep 5
           done
-          echo "API never became ready"; exit 1
-
-      - name: Seed synthetic dataset
-        run: |
-          dotnet run --project tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj \
-            -- seed || true
+          echo "::error::La API nunca respondió /health/ready. Últimas líneas de api.log:"
+          tail -n 80 api.log
+          exit 1
 
       - name: Run NBomber scenario
         run: |
           dotnet test tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj \
             --configuration Release --logger "trx;LogFileName=load.trx"
+
+      - name: API log
+        if: always()
+        run: |
+          echo "::group::api.log (últimas 200 líneas)"; tail -n 200 api.log || true; echo "::endgroup::"
+          kill "$(cat api.pid)" 2>/dev/null || true
 
       - name: Archive reports
         if: always()
@@ -60,6 +117,7 @@ jobs:
             tests/IngenIA365ERP.Load.Tests/reports/**/*.html
             tests/IngenIA365ERP.Load.Tests/reports/**/*.json
             tests/IngenIA365ERP.Load.Tests/**/TestResults/**/*.trx
+            api.log
           retention-days: 30
 
       - name: Tear down dev stack
