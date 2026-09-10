@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-07**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-10**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -203,6 +203,14 @@ rojo.
 
 Ya no hace falta `rollout restart` después de promover. `imagePullPolicy: Always`
 se conserva como red por si algún overlay volviera a una etiqueta.
+
+Probado de punta a punta el mismo día: `develop cdb3ec6` → GitOps `0f11f18` → DEV
+y QA rotaron solos en un minuto; `release 2c16a89` → GitOps `f1c8cd3` → Argo
+mostró `OutOfSync` en los dos Deployments, se aprobó, el Job PreSync corrió con
+el migrador por digest y los pods quedaron en `api@9a17c881`, `web@6c830f39`.
+Una rareza para no perder tiempo después: la primera sincronización manual
+tras el commit terminó `Succeeded` en 4 segundos sin cambiar nada y dejó
+`OutOfSync`; la segunda, idéntica, hizo el despliegue. Si pasa, repetir.
 
 #### P13 — El rol de la API no puede crear bases: ninguna cooperativa se aprovisiona
 
