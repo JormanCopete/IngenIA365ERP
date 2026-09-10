@@ -599,6 +599,34 @@ input[type="checkbox"], input[type="radio"] {
     cursor: pointer;
 }
 
+/* Cuenta atrás de la sesión (AvisoDeVencimientoDeSesion). Es una franja fija
+   bajo la barra, no un modal: la pantalla de abajo sigue viva y quien esté a
+   mitad de algo decide si termina o cierra. Toma el color de .aviso-alerta y,
+   vencida, de .aviso-error. */
+.aviso-sesion {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+    margin: 0 var(--pad-md);
+    border-radius: 0 0 var(--radio) var(--radio);
+    box-shadow: var(--sombra-2);
+}
+
+.aviso-sesion-icono { font-size: var(--texto-lg); flex: none; }
+.aviso-sesion-texto { flex: 1 1 auto; line-height: var(--interlineado); }
+.aviso-sesion-contador { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; }
+.aviso-sesion-acciones { display: flex; gap: var(--gap-sm); flex: none; }
+
+.aviso-sesion-plegado {
+    width: max-content;
+    margin-left: auto;
+    padding: var(--pad-xs) var(--pad-md);
+    border-radius: 0 0 var(--radio) var(--radio);
+}
+
 /* --- 12. Utilidad --------------------------------------------------------- */
 
 /* Presente para lectores de pantalla, ausente en pantalla. Para encabezados de
@@ -618,6 +646,9 @@ input[type="checkbox"], input[type="radio"] {
 /* --- 13. Pantallas angostas ----------------------------------------------- */
 
 @media (max-width: 768px) {
+    .aviso-sesion { flex-wrap: wrap; }
+    .aviso-sesion-acciones { width: 100%; justify-content: flex-end; }
+
     .pagina,
     .admin-page {
         padding: var(--pad-md);

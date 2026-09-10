@@ -36,7 +36,8 @@ public sealed class TenantSessionClient
         // seguirían operando sobre el tenant anterior.
         if (parsed.IsSuccess && parsed.Value is { } body)
         {
-            await _auth.AdoptSessionAsync(body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken);
+            await _auth.AdoptSessionAsync(
+                body.AccessToken, body.AccessTokenExpiresAt, body.RefreshToken, body.RefreshTokenExpiresAt);
         }
         return parsed;
     }

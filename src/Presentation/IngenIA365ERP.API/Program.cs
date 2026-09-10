@@ -191,6 +191,15 @@ try
         builder.Configuration.GetSection(
             IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions.SectionName));
 
+    // Cuánto vive una sesión (inactividad y duración máxima). Se valida al arrancar:
+    // un cero aquí no se descubre con la primera persona expulsada.
+    builder.Services
+        .AddOptions<IngenIA365ERP.Application.Common.Configuration.PoliticaDeSesionOptions>()
+        .Bind(builder.Configuration.GetSection(
+            IngenIA365ERP.Application.Common.Configuration.PoliticaDeSesionOptions.SectionName))
+        .Validate(o => o.EsValida(out _), "La sección Sesion de la configuración no es válida; ver PoliticaDeSesionOptions.EsValida.")
+        .ValidateOnStart();
+
     // Infrastructure layer DI registrations
     builder.Services.AddPersistenceServices(builder.Configuration);
     // Feature 002 (US2+US3+US4+Phase 4b) — los handlers de identidad central

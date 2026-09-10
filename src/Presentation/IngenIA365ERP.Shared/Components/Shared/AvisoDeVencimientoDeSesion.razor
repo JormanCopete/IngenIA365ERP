@@ -1,0 +1,207 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject RenovadorDeSesion Sesion
+@inject CentralAuthClient CentralAuth
+@inject NavigationManager Nav
+@implements IDisposable
+
+@*
+    Los dos relojes de la sesión, contados hacia atrás desde el layout:
+
+      · Inactividad: la pestaña lleva un rato sin hablar con la API. Cinco minutos
+        antes del límite avisa; «Seguir trabajando» rota la sesión y el reloj vuelve
+        a empezar. Al llegar a cero, esta pestaña cierra su sesión y va al login.
+      · Duración máxima: doce horas desde el ingreso, sin prórroga posible. Cinco
+        minutos antes avisa para que la persona termine lo que hace; a cero no
+        navega sola —la pantalla sigue viva— y ofrece volver a entrar.
+
+    NO es modal y no interrumpe: quien esté a mitad de un asiento sigue donde
+    está. Si los dos avisos coinciden manda el de duración máxima, que es el que
+    no se puede extender.
+
+    El latido de un segundo también es el que hace el mantenimiento: una pestaña
+    activa rota su sesión antes de que el servidor la considere inactiva
+    (RenovadorDeSesion.VigilarAsync). Los límites los dice el servidor
+    (GET /api/auth/session-policy); aquí sólo se cuenta.
+*@
+
+@if (_modo != Modo.Nada)
+{
+    <div class="@ClaseDelAviso" role="status" aria-live="polite">
+        <span class="aviso-sesion-icono e-icons @(_modo == Modo.FinalVencida ? "e-close" : "e-clock")" aria-hidden="true"></span>
+        @switch (_modo)
+        {
+            case Modo.Inactividad:
+                <span class="aviso-sesion-texto">
+                    <strong>Tu sesión se cerrará por inactividad en <span class="aviso-sesion-contador">@Contador(_restanteInactividad)</span>.</strong>
+                    Llevás un rato sin actividad. Si seguís acá, decilo; si no, lo que no hayas guardado se perderá.
+                </span>
+                <span class="aviso-sesion-acciones">
+                    <button type="button" class="boton-secundario" @onclick="CerrarYVolverAEntrar">Cerrar sesión ahora</button>
+                    <button type="button" class="boton-principal" @onclick="SeguirTrabajando" disabled="@_ocupado">Seguir trabajando</button>
+                </span>
+                break;
+
+            case Modo.FinalPlegado:
+                <span class="aviso-sesion-texto">
+                    Tu sesión termina en <strong class="aviso-sesion-contador">@Contador(_restanteFinal)</strong>
+                </span>
+                <span class="aviso-sesion-acciones">
+                    <button type="button" class="boton-secundario" @onclick="() => _plegado = false">Ver</button>
+                </span>
+                break;
+
+            case Modo.Final:
+                <span class="aviso-sesion-texto">
+                    <strong>Tu sesión termina en <span class="aviso-sesion-contador">@Contador(_restanteFinal)</span>.</strong>
+                    Alcanza las @Horas horas máximas. Podés terminar lo que estés haciendo; después
+                    tendrás que iniciar sesión de nuevo para continuar.
+                </span>
+                <span class="aviso-sesion-acciones">
+                    <button type="button" class="boton-secundario" @onclick="() => _plegado = true">Ocultar</button>
+                    <button type="button" class="boton-principal" @onclick="CerrarYVolverAEntrar">Cerrar sesión ahora</button>
+                </span>
+                break;
+
+            case Modo.FinalVencida:
+                <span class="aviso-sesion-texto">
+                    <strong>Tu sesión terminó.</strong> Alcanzó las @Horas horas máximas.
+                    Lo que no hayas guardado se perderá al salir; para seguir trabajando, volvé a iniciar sesión.
+                </span>
+                <span class="aviso-sesion-acciones">
+                    <button type="button" class="boton-principal" @onclick="CerrarYVolverAEntrar">Iniciar sesión de nuevo</button>
+                </span>
+                break;
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Desde cuánto antes de cada límite se muestra. Mínimo acordado: cinco minutos.</summary>
+    public static readonly TimeSpan VentanaDeAviso = TimeSpan.FromMinutes(5);
+
+    private static readonly TimeSpan Tic = TimeSpan.FromSeconds(1);
+
+    private enum Modo { Nada, Inactividad, Final, FinalPlegado, FinalVencida }
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    private Modo _modo;
+    private bool _plegado;
+    private bool _ocupado;
+    private TimeSpan _restanteFinal;
+    private TimeSpan _restanteInactividad;
+
+    private static string Contador(TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
+
+    private string Horas => Sesion.Politica.DuracionMaxima.TotalHours.ToString("0");
+
+    private string ClaseDelAviso =>
+        "aviso aviso-sesion "
+        + (_modo == Modo.FinalVencida ? "aviso-error" : "aviso-alerta")
+        + (_modo == Modo.FinalPlegado ? " aviso-sesion-plegado" : "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Sesion.RestaurarAsync();
+        await Sesion.CargarPoliticaAsync();
+        Sesion.SesionRenovada += OnSesionCambiada;
+        Sesion.SesionTerminada += OnSesionTerminada;
+        Recalcular();
+        _cts = new CancellationTokenSource();
+        _ = ContarAsync(_cts.Token);
+    }
+
+    private void OnSesionCambiada() =>
+        InvokeAsync(() => { Recalcular(); StateHasChanged(); });
+
+    private void OnSesionTerminada(string _) =>
+        InvokeAsync(() => { _modo = Modo.Nada; StateHasChanged(); });
+
+    private void Recalcular()
+    {
+        if (!Sesion.TieneSesion)
+        {
+            _modo = Modo.Nada;
+            return;
+        }
+
+        _restanteInactividad = Sesion.InactividadRestante;
+        _restanteFinal = Sesion.VencimientoDeSesion is { } vence
+            ? Clamp(vence - DateTime.UtcNow)
+            : TimeSpan.MaxValue;
+
+        var modoAntes = _modo;
+        if (_restanteFinal == TimeSpan.Zero)
+            _modo = Modo.FinalVencida;
+        else if (_restanteFinal <= VentanaDeAviso)
+            _modo = _plegado ? Modo.FinalPlegado : Modo.Final;
+        else if (_restanteInactividad <= VentanaDeAviso)
+            _modo = Modo.Inactividad;
+        else
+            _modo = Modo.Nada;
+
+        // Al entrar en la ventana final se muestra desplegado aunque antes se hubiera ocultado.
+        if (modoAntes is Modo.Nada or Modo.Inactividad && _modo is Modo.FinalPlegado)
+        {
+            _plegado = false;
+            _modo = Modo.Final;
+        }
+    }
+
+    private static TimeSpan Clamp(TimeSpan t) => t < TimeSpan.Zero ? TimeSpan.Zero : t;
+
+    private async Task ContarAsync(CancellationToken ct)
+    {
+        _timer = new PeriodicTimer(Tic);
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(ct))
+            {
+                // Mantenimiento y corte por inactividad viven en el renovador; este
+                // latido sólo los dispara y pinta lo que quede.
+                await Sesion.VigilarAsync(ct);
+
+                var antes = (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds);
+                Recalcular();
+                if (antes != (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds))
+                    await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Salida normal al desmontar el componente.
+        }
+    }
+
+    private async Task SeguirTrabajando()
+    {
+        _ocupado = true;
+        try
+        {
+            await Sesion.SeguirTrabajandoAsync();
+            Recalcular();
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private async Task CerrarYVolverAEntrar()
+    {
+        // Si la sesión ya venció en el servidor, el logout es sólo limpieza local y
+        // un 401 al cerrar da igual: ya estaba cerrada.
+        var retorno = Uri.EscapeDataString(Nav.Uri);
+        await CentralAuth.LogoutAsync();
+        Nav.NavigateTo($"/login?returnUrl={retorno}");
+    }
+
+    public void Dispose()
+    {
+        Sesion.SesionRenovada -= OnSesionCambiada;
+        Sesion.SesionTerminada -= OnSesionTerminada;
+        _cts?.Cancel();
+        _timer?.Dispose();
+        _cts?.Dispose();
+    }
+}

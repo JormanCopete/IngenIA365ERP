@@ -37,6 +37,7 @@
     <Project Path="tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj" />
     <Project Path="tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj" />
     <Project Path="tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj" />
+    <Project Path="tests/IngenIA365ERP.Shared.Tests/IngenIA365ERP.Shared.Tests.csproj" />
     <Project Path="tests/IngenIA365ERP.Load.Tests/IngenIA365ERP.Load.Tests.csproj" />
   </Folder>
 

@@ -85,6 +85,12 @@ public sealed class CentralAuthModule : ICarterModule
             .RequireAuthorization()
             .WithName("CentralAuth_Logout");
 
+        // Los límites de sesión (inactividad, duración máxima), para que el cliente
+        // cuente con los mismos números que el servidor hace cumplir en /refresh.
+        anon.MapGet("/session-policy", SessionPolicyAsync)
+            .AllowAnonymous()
+            .WithName("CentralAuth_SessionPolicy");
+
         anon.MapGet("/me", MeAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_Me");
@@ -213,6 +219,11 @@ public sealed class CentralAuthModule : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new GetMeQuery(), ct);
+
+    private static async Task<object?> SessionPolicyAsync(
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.SessionPolicy.GetSessionPolicyQuery(), ct);
 
     // -------- Helpers --------
 

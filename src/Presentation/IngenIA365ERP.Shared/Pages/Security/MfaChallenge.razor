@@ -282,7 +282,7 @@
             case "None":
                 // Sin forceLoad: el storage es in-memory y un full reload
                 // reinicia el runtime WASM descartando la sesión adoptada.
-                Nav.NavigateTo("/");
+                Nav.NavigateTo(AuthClient.DestinoTrasEntrar());
                 break;
             case "TenantSelection":
                 Nav.NavigateTo("/security/select-tenant");

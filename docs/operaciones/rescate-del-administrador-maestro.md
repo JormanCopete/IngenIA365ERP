@@ -180,6 +180,80 @@ de respaldo nuevos se entregan ahí: guardarlos esta vez.**
 
 ---
 
+## Caso 3 — perdió la contraseña (no el segundo factor)
+
+Síntoma: `POST /api/auth/login` responde 401 y en `ADM_CentralUserLoginAttempts`
+el intento del maestro queda con `Result = InvalidPassword`. No hay bloqueo
+(`LockoutEnd` nulo) ni segundo factor de por medio: es la contraseña.
+
+Tampoco aquí hay salida por la aplicación. El restablecimiento por correo exige
+SMTP, que producción no tiene, y `MasterAdminSeeder` es idempotente: **si existe
+un maestro vivo no hace nada**, aunque el Secret `erp-master-admin` cambie. La
+única forma de que vuelva a sembrar es que no encuentre ninguno vivo.
+
+Ocurrió el 2026-09-09: el maestro se había sembrado el 2026-08-12 con la
+contraseña que tenía el Secret ese día, y nadie la recordaba.
+
+Requisitos, los mismos del Caso 2: **backup** de `IngenIA365ERP_Admin`, **segundo
+par de ojos**, y **anotar quién, cuándo y por qué** —esta operación no pasa por la
+aplicación y no deja rastro en la auditoría.
+
+El orden importa:
+
+1. **Primero el Secret, después la baja.** Poner la contraseña nueva con
+   `tools/scripts/crear-secreto-maestro.ps1 -Ambiente pdn` (la pide por teclado y
+   viaja por STDIN del SSH; no pasa por ningún argumento ni archivo). Si se
+   invierte el orden y algo reinicia los pods en medio, el sembrador crea al
+   maestro con la contraseña vieja del Secret.
+2. **Baja lógica con renombre.** `UserNameIndex` es único sobre
+   `NormalizedUserName` y **no filtra por `IsDeleted`**: retirar la fila dejándole
+   el mismo nombre hace que el sembrador choque al insertar la nueva, la API nueva
+   no arranca y, con el maestro ya retirado, nadie puede entrar. Por eso se
+   renombran las cuatro columnas de identidad, no sólo la bandera:
+
+   ```sql
+   -- 1) Confirmar que es la cuenta correcta y la única viva.
+   SELECT "Id", "Email", "IsGlobalMasterAdmin", "IsDeleted"
+   FROM dbo."ADM_CentralUsers" WHERE "IsGlobalMasterAdmin";
+
+   -- 2) Retirarla. Baja LOGICA con renombre; el Id y el historial quedan.
+   UPDATE dbo."ADM_CentralUsers"
+   SET "IsDeleted" = true,
+       "DeletedAt" = now() AT TIME ZONE 'utc',
+       "DeletedBy" = 'rescate-manual:contrasena-perdida',
+       "UserName"           = "UserName"           || '.retirado-AAAAMMDD',
+       "NormalizedUserName" = "NormalizedUserName" || '.RETIRADO-AAAAMMDD',
+       "Email"              = "Email"              || '.retirado-AAAAMMDD',
+       "NormalizedEmail"    = "NormalizedEmail"    || '.RETIRADO-AAAAMMDD'
+   WHERE "Id" = :id_del_maestro AND "IsGlobalMasterAdmin" AND NOT "IsDeleted";
+   ```
+
+   Los códigos de respaldo (`ADM_CentralUserTokens`) y las credenciales MFA
+   (`ADM_MfaCredentials`) de la fila retirada se quedan con ella; el maestro nuevo
+   nace sin nada y el primer login le exige inscribir.
+3. **Relevar UN pod de la API** (`kubectl delete pod`, no `rollout restart`: la
+   anotación de reinicio deja la aplicación `OutOfSync` en Argo y en producción
+   esa señal es la que aprueba despliegues). Con uno basta: el sembrador sólo
+   corre al arrancar, y el otro pod lee al maestro de la base en cada petición,
+   así que sigue sirviendo y no necesita reinicio. El pod nuevo tarda ~2 min en
+   quedar listo y registra `Master admin sembrado: <correo> (Id <guid>)`. Si en
+   vez de eso muere con «No existe ningun administrador maestro y no hay
+   credenciales para sembrarlo», el Secret no está montado: el pod viejo sigue
+   sirviendo, revertir la baja (`IsDeleted = false` y quitar los sufijos) y volver
+   al paso 1.
+4. **Entrar**: `MfaEnrollmentRequired`, inscribir, dos logins, guardar los códigos.
+
+### Registro de la intervención del 2026-09-09
+
+| | |
+|---|---|
+| Motivo | Contraseña del maestro desconocida; 2 intentos `InvalidPassword` ese día, ningún bloqueo |
+| Respaldo | CNPG `erp-db-pre-resiembra-maestro-20260909` (`20260909T100812`, S3) y `pg_dump -Fc` en `/root/respaldos/ingenia365erp_admin-20260909-pre-resiembra-maestro.dump` |
+| Quién | Jorman Copete (Secret nuevo y segundo par de ojos); el asistente ejecutó la baja y el relevo por SSH |
+| Fila retirada | `ff6d915d-fb9a-48d1-a4cf-4d447966698e`, sembrada el 2026-08-12, ahora `master@ingenia365.com.retirado-20260909`, `IsDeleted = true` |
+| Fila nueva | `7aba2f12-11dd-4698-a8a7-d92457d156dd`, sembrada a las 10:13:35 UTC por el pod `erp-api-69b566b49d-qmc8t`, sin segundo factor |
+| Sello de seguridad | No se tocó: no había sesiones vivas del maestro y no se sospecha compromiso |
+
 ## Cómo no volver aquí
 
 1. Los códigos de respaldo del maestro, fuera del sistema, verificados.

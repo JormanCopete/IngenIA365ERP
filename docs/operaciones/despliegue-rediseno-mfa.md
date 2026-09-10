@@ -1,15 +1,40 @@
 # Desplegar el rediseño del segundo factor
 
-> **Producción no tiene nada de este trabajo.** Verificado el 2026-08-29 contra
-> `https://app.ingenia365.com`: `/api/auth/mfa/webauthn/challenge`,
-> `/api/auth/mfa/recovery/request` y `/api/saas/mfa-policy` responden **404**,
-> mientras `/api/health` responde 200. La imagen desplegada es anterior a todo el
-> rediseño.
+> **Desplegado en producción el 2026-09-07** (promoción `develop → release`,
+> commit `50ba799`; GitOps `2983420`; sincronización manual de Argo a las 19:09 UTC,
+> Job PreSync terminado a las 19:11, pods relevados a las 19:15). Llegó junto con la
+> nómina (feature 005) y el aprovisionamiento por cooperativa: 13 migraciones
+> administrativas y 7 operativas en una sola ventana.
 >
-> No es «desplegar unas mejoras»: son ~30 commits y **9 migraciones
-> administrativas**, una de ellas de datos, y otra que **mueve el llavero de
-> cifrado**. Este documento es el orden en que hay que hacerlo y las tres cosas
-> que hay que decidir antes.
+> Las tres preguntas de abajo se respondieron **contra la base**, no por deducción:
+> 0 cooperativas y 0 adjuntos (llavero: **opción A**, aceptar la pérdida, nada que
+> rescatar); el maestro con `TwoFactorEnabled = false` y sin secreto (**cae en la
+> rama con salida**, `MfaEnrollmentRequired`; el Caso 0 no aplicaba); 0 personas con
+> segundo factor a las que avisar. Respaldo previo: CNPG `erp-db-pre-nomina-mfa-20260907`
+> a S3 más `pg_dump -Fc` de las dos bases en `/root/respaldos/` del nodo.
+>
+> Verificado tras el relevo: `ADM_DataProtectionKeys` = 1 (el llavero quedó
+> persistido); `/api/saas/mfa-policy` y `/api/payroll/*` responden 401 desde
+> `app.ingenia365.com` (antes 404); `/appsettings.json` de la Web ya trae el
+> `ApiBaseUrl` relativo; ningún `CryptographicException`, `MigrationsPending` ni
+> `LecturaHeredada` en los logs; los dos únicos 500 por pod son los sondeos de
+> `/health/live` durante el calentamiento. El cierre lo hizo el maestro el
+> 2026-09-09, tras resembrar su cuenta por contraseña perdida (Caso 3 de
+> [rescate-del-administrador-maestro.md](rescate-del-administrador-maestro.md)):
+> inscribió su autenticador, entró dos veces (10:19 y 10:22 UTC, ambas `Success`
+> en `ADM_CentralUserLoginAttempts`) y recibió sus diez códigos de respaldo; una
+> credencial TOTP en `ADM_MfaCredentials`, `TwoFactorEnabled = true`, y en las 48
+> horas siguientes al despliegue ningún `CryptographicException` ni
+> `[Mfa.LecturaHeredada]` en los dos pods. **Y la prueba del llavero compartido
+> salió sola**: según los logs, `POST /api/profile/mfa/enroll` (que cifra el
+> secreto) lo atendió el pod `qmc8t`, `POST /api/profile/mfa/confirm` (que lo
+> descifra) lo atendió `7k4h5`, y `POST /api/auth/mfa/verify` volvió a `qmc8t`. Con
+> el llavero efímero de antes, la confirmación habría fallado.
+>
+> Lo que sigue es el procedimiento tal como se pensó, y vale para repetirlo en otro
+> ambiente: son ~30 commits y **9 migraciones administrativas**, una de ellas de
+> datos, y otra que **mueve el llavero de cifrado**. Es el orden en que hay que
+> hacerlo y las tres cosas que hay que decidir antes.
 
 ---
 
