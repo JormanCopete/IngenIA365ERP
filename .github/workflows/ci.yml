@@ -2,10 +2,10 @@ name: CI/CD Pipeline
 
 on:
   # Flujo de ramas:
-  #   develop -> integracion (despliega DEV y QA con la etiqueta :develop)
-  #   release -> PRODUCCION  (despliega PDN con la etiqueta :release)
-  # El overlay de produccion apunta a :release, asi que sin esta rama en la
-  # lista no existiria ninguna imagen que producción pueda desplegar.
+  #   develop -> integracion (publica :develop y escribe su digest en los overlays dev y qa)
+  #   release -> PRODUCCION  (publica :release y escribe su digest en el overlay pdn)
+  # El despliegue va por DIGEST en el repo GitOps (job gitops, al final); las
+  # etiquetas quedan solo para que un humano las lea.
   push:
     branches: [main, develop, release]
   # Los PRs a estas ramas tambien deben pasar el CI. Sin esto, el codigo
@@ -76,11 +76,17 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     # Siempre se CONSTRUYE (un Dockerfile roto debe detectarse en el PR, no
-    # despues de mergear). Solo se PUBLICA desde main/develop.
+    # despues de mergear). Solo se PUBLICA desde main/develop/release.
     if: always() && needs.build-and-test.result == 'success'
     permissions:
       contents: read
       packages: write
+    # Los digests que publico: el job gitops los escribe en los overlays.
+    outputs:
+      push: ${{ steps.meta.outputs.push }}
+      api_digest: ${{ steps.build_api.outputs.digest }}
+      web_digest: ${{ steps.build_web.outputs.digest }}
+      migrator_digest: ${{ steps.build_migrator.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -135,6 +141,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and Push API
+        id: build_api
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -145,6 +152,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and Push Web
+        id: build_web
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -155,6 +163,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and Push Migrator
+        id: build_migrator
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -163,3 +172,108 @@ jobs:
           tags: ${{ steps.meta.outputs.tags_mig }}${{ steps.meta.outputs.latest_mig }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Escribe el DIGEST de las imagenes recien publicadas en el overlay del ambiente
+  # que alimenta esta rama, en el repositorio GitOps (P3, cerrado el 2026-09-10).
+  #
+  # Por que digest y no etiqueta: :develop y :release son etiquetas MOVILES.
+  # Republicarlas no cambia el manifiesto, Argo dice Synced y los pods siguen con
+  # la imagen anterior hasta que alguien hace rollout restart a mano. Un digest es
+  # inmutable: cambiarlo es un cambio real, Kubernetes rota solo, y el commit deja
+  # escrito que artefacto corre en cada ambiente.
+  #
+  #   develop -> overlays dev y qa (Argo sincroniza solo)
+  #   release -> overlay pdn       (Argo espera la aprobacion manual; lo que se
+  #                                 aprueba es este commit)
+  #
+  # Necesita el secreto GITOPS_TOKEN: un token con permiso de contenido (lectura y
+  # escritura) sobre JormanCopete/ingenia365-gitops. Sin el, este job FALLA a
+  # proposito: un despliegue que no llego y nadie noto es peor que un CI rojo.
+  gitops:
+    needs: docker-build
+    if: github.event_name == 'push' && needs.docker-build.outputs.push == 'true' && (github.ref_name == 'develop' || github.ref_name == 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Un solo escritor a la vez sobre el repo GitOps: dos pushes seguidos no se
+    # pisan el commit.
+    concurrency:
+      group: gitops-digests
+      cancel-in-progress: false
+    env:
+      GITOPS_REPO: JormanCopete/ingenia365-gitops
+      API_DIGEST: ${{ needs.docker-build.outputs.api_digest }}
+      WEB_DIGEST: ${{ needs.docker-build.outputs.web_digest }}
+      MIGRATOR_DIGEST: ${{ needs.docker-build.outputs.migrator_digest }}
+    steps:
+      - name: Comprobar credencial y digests
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          if [ -z "$GITOPS_TOKEN" ]; then
+            echo "::error::Falta el secreto GITOPS_TOKEN (token con permiso de contenido sobre $GITOPS_REPO). Las imagenes se publicaron, pero NINGUN ambiente las va a desplegar hasta que exista."
+            exit 1
+          fi
+          for v in API_DIGEST WEB_DIGEST MIGRATOR_DIGEST; do
+            case "${!v}" in sha256:*) ;; *) echo "::error::$v no trae un digest valido: '${!v}'"; exit 1;; esac
+          done
+
+      - name: Checkout GitOps
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          ref: main
+          path: gitops
+          fetch-depth: 0
+
+      - name: Fijar digests en los overlays
+        id: fijar
+        run: |
+          set -e
+          case "$GITHUB_REF_NAME" in
+            develop) OVERLAYS="dev qa" ;;
+            release) OVERLAYS="pdn" ;;
+            *) echo "rama sin ambiente: $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+          REG=ghcr.io/jormancopete/ingenia365erp
+          for o in $OVERLAYS; do
+            f="gitops/workloads/erp/overlays/$o/kustomization.yaml"
+            # Solo las imagenes que el overlay ya declara (dev y qa no llevan migrator).
+            # Se escribe digest y se retira newTag: kustomize no admite los dos.
+            for par in "api=$API_DIGEST" "web=$WEB_DIGEST" "migrator=$MIGRATOR_DIGEST"; do
+              nombre="$REG/${par%%=*}"; digest="${par#*=}"
+              N="$nombre" D="$digest" yq -i '(.images[] | select(.name == strenv(N))) |= (.digest = strenv(D) | del(.newTag))' "$f"
+            done
+            echo "::group::$f"; grep -A1 "name: $REG" "$f"; echo "::endgroup::"
+          done
+          echo "overlays=$OVERLAYS" >> "$GITHUB_OUTPUT"
+
+      - name: Commit y push
+        run: |
+          set -e
+          cd gitops
+          git config user.name "ci-ingenia365erp"
+          git config user.email "ci@ingenia365.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Los overlays ya tenian estos digests; nada que desplegar."
+            exit 0
+          fi
+          SHORT="${GITHUB_SHA::12}"
+          git commit -q -F - <<EOF
+          deploy(${{ steps.fijar.outputs.overlays }}): $GITHUB_REF_NAME $SHORT
+
+          Imagenes publicadas por $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          api      $API_DIGEST
+          web      $WEB_DIGEST
+          migrator $MIGRATOR_DIGEST
+          EOF
+          # Otro run pudo empujar entre el checkout y ahora: se rebasa y se reintenta.
+          for intento in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { echo "::error::Conflicto al rebasar sobre main del GitOps; resolver a mano."; exit 1; }
+          done
+          echo "::error::No se pudo empujar al repo GitOps tras tres intentos."
+          exit 1
