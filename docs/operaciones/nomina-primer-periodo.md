@@ -127,10 +127,9 @@ Todas pareadas por proveedor (`Persistence.Migrations.PostgreSql` y `.SqlServer`
 `Application/`. En DEV y QA las aplica `AutoMigrate` al arrancar la API, base por base
 (operativa y cada cooperativa; hecho el 2026-09-06, `coop_prueba` incluida). En producción
 `AutoMigrate` está apagado: las aplicó el Job PreSync de Argo (`erp-db-migrate`) sobre la
-base operativa el 2026-09-07, y **las bases de cooperativa de producción no las migra
-nadie todavía** —el Job neutraliza ese bucle a propósito y hoy hay cero cooperativas—;
-antes de registrar la primera hace falta el paso por cooperativa que el propio Job deja
-anotado como pendiente.
+base operativa el 2026-09-07, y desde el 2026-09-11 el mismo Job tiene un tercer paso,
+`migrate --scope cooperativas`, que lleva al día la base de cada cooperativa activa con
+el mismo aprovisionador que usa la API en DEV y QA (P14 cerrado).
 
 | Migración | Qué hace | Cuidado |
 |---|---|---|

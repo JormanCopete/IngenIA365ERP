@@ -153,6 +153,51 @@ public class RenovacionDeSesionHandlerTests
     }
 
     [Fact]
+    public async Task Un_fallo_de_red_vuelve_como_503_con_el_sobre_de_siempre_y_no_como_excepcion()
+    {
+        // ERR_CONNECTION_CLOSED en el navegador: ninguna pantalla captura la excepción
+        // y reventaba el render entero. Como 503 con sobre, cada pantalla lo trata
+        // por su camino normal de error y el formulario sigue ahí.
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        _servidor.Responder = (_, _) => throw new HttpRequestException("TypeError: Failed to fetch");
+
+        var resp = await _http.PostAsJsonAsync("/api/payroll/withholding-parameters", new { rate = 19 });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        var sobre = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        sobre.GetProperty("code").GetString().Should().Be(RenovacionDeSesionHandler.CodigoSinConexion);
+        sobre.GetProperty("message").GetString().Should().Contain("Comprobá la conexión")
+            .And.Contain("verificá si quedó guardado", "un POST puede haber llegado aunque la respuesta no volviera");
+        _sesion.TieneSesion.Should().BeTrue("un corte de red no es un veredicto sobre la sesión");
+    }
+
+    [Fact]
+    public async Task Un_GET_sin_red_avisa_sin_hablar_de_duplicados()
+    {
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        _servidor.Responder = (_, _) => throw new HttpRequestException("sin wifi");
+
+        var resp = await _http.GetAsync("/api/payroll/pay-periods");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        (await resp.Content.ReadAsStringAsync()).Should().NotContain("duplicar");
+    }
+
+    [Fact]
+    public async Task El_canje_del_refresh_si_recibe_la_excepcion_tal_cual()
+    {
+        // El renovador la usa para distinguir «sin red» de un veredicto del servidor.
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        _servidor.Responder = (_, _) => throw new HttpRequestException("sin wifi");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh");
+        req.Options.Set(RenovadorDeSesion.SinSesion, true);
+
+        var acto = async () => await _http.SendAsync(req);
+
+        await acto.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    [Fact]
     public async Task Sin_sesion_la_peticion_sale_anonima()
     {
         _servidor.Responder = (_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized);

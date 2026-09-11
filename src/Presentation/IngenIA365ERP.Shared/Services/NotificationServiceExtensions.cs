@@ -40,6 +40,13 @@ public static class NotificationServiceExtensions
 
             if (root.ValueKind == JsonValueKind.Object)
             {
+                // El sobre estándar de la API ({ code, message, traceId }), que es
+                // lo que devuelve ErrorEnvelopeFilter y también el 503 sintético de
+                // RenovacionDeSesionHandler cuando no hay red. Sin esta rama caía
+                // al JSON crudo truncado a 200 caracteres.
+                if (root.TryGetProperty("message", out var mensaje) && mensaje.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(mensaje.GetString()))
+                    return mensaje.GetString();
                 if (root.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
                     return err.GetString();
 
