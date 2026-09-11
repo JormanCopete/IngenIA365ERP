@@ -19,6 +19,9 @@ namespace IngenIA365ERP.Identity;
 
 public static class DependencyInjection
 {
+    /// <summary>Clave de <c>HttpContext.Items</c> donde queda la excepción con la que JwtBearer rechazó el token.</summary>
+    public const string ClaveDelFalloDeAutenticacion = "JwtBearer.Failure";
+
     public static IServiceCollection AddIdentityServices(this IServiceCollection services, IConfiguration configuration)
     {
         var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
@@ -92,6 +95,22 @@ public static class DependencyInjection
                 ValidIssuer = jwtSettings.Issuer,
                 ValidAudience = jwtSettings.Audience,
                 ClockSkew = TimeSpan.FromMinutes(1)
+            };
+
+            // El middleware de autenticación sólo publica el resultado cuando
+            // TIENE ÉXITO (IAuthenticateResultFeature); si el token vence, la
+            // excepción se queda dentro del handler y aguas abajo nadie sabe por
+            // qué no hay identidad. Se deja en Items para que el portero de
+            // cooperativa distinga «token vencido» (el cliente lo renueva solo) de
+            // «sin token» y de «sin cooperativa», que hasta el 2026-09-11 recibían
+            // el mismo «seleccioná una empresa».
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = ctx =>
+                {
+                    ctx.HttpContext.Items[ClaveDelFalloDeAutenticacion] = ctx.Exception;
+                    return Task.CompletedTask;
+                },
             };
         });
 

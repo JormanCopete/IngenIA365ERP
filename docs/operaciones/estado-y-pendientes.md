@@ -279,7 +279,11 @@ sincronización y los pods viejos siguen sirviendo. El Job de producción tiene
 ahora tres pasos secuenciales —administrativa, operativa, cooperativas— con los
 dos primeros como `initContainers`. Probado en local contra `coop_alfa` y
 `coop_beta` (ambas «migrada hasta RetiroDeVoucherTypeIdSombraEnDocumentos», 0
-filas nuevas) y en producción con cero cooperativas («0 de 0 activas»).
+filas nuevas) y en producción el 2026-09-11 con el migrador de `release 430ee49`:
+los tres pasos en orden, «BD admin: sin migraciones pendientes», «BD operativa:
+sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)».
+Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
+copia del mismo manifiesto sin anotaciones de Argo y se borró después.
 
 ### 🟡 Prioridad media
 
