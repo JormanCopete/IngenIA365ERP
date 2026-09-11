@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using IngenIA365ERP.Shared.Services.Security;
 
 namespace IngenIA365ERP.Shared.Services;
@@ -19,6 +20,18 @@ namespace IngenIA365ERP.Shared.Services;
 /// </para>
 ///
 /// <para>
+/// <b>Y convierte un fallo de transporte en una respuesta 503 con el sobre de error
+/// de siempre.</b> En el navegador, un <c>ERR_CONNECTION_CLOSED</c> o un corte de
+/// red no es una respuesta: es una <see cref="HttpRequestException"/> que ninguna
+/// de las ~140 pantallas que llaman a <c>Http.PostAsJsonAsync</c> captura, así que
+/// reventaba el render entero («Ha ocurrido un error inesperado. Recargar») y la
+/// persona perdía el formulario. Visto en QA el 2026-09-10 guardando un parámetro
+/// de retención: la conexión reutilizada la había cerrado el borde de Cloudflare
+/// y Chrome no reintenta un POST. Como respuesta 503, cada pantalla lo trata por
+/// su camino normal de error (<c>ShowErrorAsync</c>) y el formulario sigue ahí.
+/// </para>
+///
+/// <para>
 /// El reintento necesita reenviar el cuerpo, y un cuerpo que ya se leyó no vuelve.
 /// Por eso se lee a memoria antes de enviar, con un tope: por encima de
 /// <see cref="MaximoReintentable"/> (importaciones y adjuntos grandes) la petición
@@ -30,12 +43,30 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
 {
     public const long MaximoReintentable = 8 * 1024 * 1024;
 
+    /// <summary>Código del sobre con el que se responde un fallo de transporte.</summary>
+    public const string CodigoSinConexion = "Red.SinConexion";
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        // El canje del refresh sale por aquí con SinSesion y ESPERA la excepción:
+        // el renovador la distingue de un veredicto del servidor. No se traduce.
         if (request.Options.TryGetValue(RenovadorDeSesion.SinSesion, out var sinSesion) && sinSesion)
             return await base.SendAsync(request, cancellationToken);
 
+        try
+        {
+            return await EnviarConSesionAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            return SinConexion(request, ex);
+        }
+    }
+
+    private async Task<HttpResponseMessage> EnviarConSesionAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
         if (request.Headers.Authorization is not null)
             return await base.SendAsync(request, cancellationToken);
 
@@ -63,6 +94,19 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
         respuesta.Dispose();
         using var reintento = Clonar(request, nuevo, cuerpo);
         return await base.SendAsync(reintento, cancellationToken);
+    }
+
+    private static HttpResponseMessage SinConexion(HttpRequestMessage request, HttpRequestException ex)
+    {
+        var esEscritura = request.Method != HttpMethod.Get && request.Method != HttpMethod.Head;
+        var mensaje = "No se pudo contactar al servidor. Comprobá la conexión y volvé a intentar."
+            + (esEscritura ? " Si estabas guardando, verificá si quedó guardado antes de repetir, para no duplicarlo." : "");
+        return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            RequestMessage = request,
+            ReasonPhrase = "Sin conexion",
+            Content = JsonContent.Create(new { code = CodigoSinConexion, message = mensaje, traceId = (string?)null, detalle = ex.Message }),
+        };
     }
 
     private static async Task<CuerpoCapturado> CapturarCuerpoAsync(HttpRequestMessage request, CancellationToken ct)

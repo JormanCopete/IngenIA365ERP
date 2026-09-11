@@ -126,6 +126,12 @@ class Program
         using var scope = services.CreateScope();
         var sp = scope.ServiceProvider;
 
+        // P14: las bases de cada cooperativa. Es un alcance aparte y NO entra en
+        // "all" a propósito: presupone que la administrativa ya está al día (de ahí
+        // sale la lista) y es el único que toca bases que no son la plantilla.
+        if (scopeArg is "cooperativas")
+            return await MigrarCooperativasAsync(sp);
+
         if (scopeArg is "admin" or "all")
         {
             var adminDb = sp.GetRequiredService<AdminDbContext>();
@@ -175,6 +181,69 @@ class Program
         }
 
         Log.Information("migrate completado.");
+        return 0;
+    }
+
+    /// <summary>
+    /// Lleva la base de CADA cooperativa activa al nivel actual, con la misma pieza
+    /// que usa la API cuando <c>AutoMigrate</c> está encendido (el aprovisionador,
+    /// idempotente: crea la base si falta, migra y siembra lo paramétrico). En
+    /// producción <c>AutoMigrate</c> está apagado, así que sin esto la primera
+    /// cooperativa habría nacido con el esquema del día del alta y nadie le habría
+    /// aplicado las migraciones siguientes (P14).
+    ///
+    /// <para>
+    /// Si UNA cooperativa falla, se intenta con las demás y al final se sale con
+    /// código 3: como Job PreSync eso aborta la sincronización y los pods viejos
+    /// siguen sirviendo, que es mejor que una API nueva sobre una base vieja.
+    /// </para>
+    /// </summary>
+    static async Task<int> MigrarCooperativasAsync(IServiceProvider sp)
+    {
+        var adminDb = sp.GetRequiredService<AdminDbContext>();
+        var aprovisionador = sp.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDatabaseProvisioner>();
+
+        var activas = await adminDb.Tenants
+            .Where(t => t.IsActive)
+            .Select(t => new { t.Name, t.DatabaseName, t.SchemaName, t.ConnectionString, t.Subdomain })
+            .ToListAsync();
+
+        // Mismo filtro que el arranque de la API: base propia, y nunca "dbo", que
+        // era el esquema compartido del modelo anterior.
+        var conBase = activas
+            .Select(c => new { c.Name, c.ConnectionString, c.Subdomain, Base = c.DatabaseName ?? c.SchemaName })
+            .Where(c => !string.IsNullOrWhiteSpace(c.Base) &&
+                        !c.Base!.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Log.Information("Cooperativas con base propia: {ConBase} de {Activas} activa(s).", conBase.Count, activas.Count);
+
+        var fallidas = new List<string>();
+        foreach (var c in conBase)
+        {
+            try
+            {
+                // El aprovisionador ya registra base, estado, última migración y filas.
+                await aprovisionador.AprovisionarAsync(
+                    c.Base!, c.Subdomain ?? c.Base!, c.ConnectionString, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                fallidas.Add(c.Name);
+                Log.Error(ex, "  {Cooperativa}: NO se pudo migrar la base {Base}. Se sigue con las demás.", c.Name, c.Base);
+            }
+        }
+
+        if (fallidas.Count > 0)
+        {
+            Log.Error(
+                "[Migrator.CooperativasPendientes] {Cuenta} cooperativa(s) quedaron sin migrar: {Lista}. " +
+                "La sincronización debe abortar: una API nueva sobre una base vieja rompe justo a esa cooperativa.",
+                fallidas.Count, string.Join(", ", fallidas));
+            return 3;
+        }
+
+        Log.Information("migrate --scope cooperativas completado.");
         return 0;
     }
 
@@ -375,7 +444,8 @@ class Program
         Console.WriteLine("--connection <conn> y --settings-dir <ruta>.");
         Console.WriteLine();
         Console.WriteLine("Migraciones y seeds:");
-        Console.WriteLine("  dotnet run -- migrate [--scope admin|tenants|all] [--tenant <id>]");
+        Console.WriteLine("  dotnet run -- migrate [--scope admin|tenants|cooperativas|all] [--tenant <id>]");
+        Console.WriteLine("      cooperativas: la base de cada cooperativa activa (P14); en produccion, tercer paso del Job PreSync");
         Console.WriteLine("  dotnet run -- seed --category parametric|test [--scope admin|tenant|all] [--tenant <id>] [--confirm-test-seed]");
         Console.WriteLine("  dotnet run -- script [--from <migración>] [--output <dir>]");
         Console.WriteLine();

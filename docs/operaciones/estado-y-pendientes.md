@@ -261,22 +261,25 @@ Comprobar: `select rolcreatedb from pg_roles where rolname = 'ingenia'` debe dar
 > Reintentó a los 15 s y no volvió a fallar. **Arreglado en `e7c96a2`** (2026-09-04):
 > `ListActiveAsync` exige `ProvisioningState = Ready`, con prueba unitaria.
 
-#### P14 — Las bases de cooperativa de producción no las migra nadie
+#### P14 — Las bases de cooperativa de producción no las migra nadie — ✅ cerrado el 2026-09-11
 
-En producción `Database__AutoMigrate=false` a propósito, y el Job PreSync
-(`workloads/erp/overlays/pdn/migracion-job.yaml`) migra la base administrativa y
-la operativa, pero **neutraliza el bucle de cooperativas** (`--tenant __ninguna__`)
-porque ese bucle es del modelo anterior —un esquema por cooperativa— y el vivo es
-una base por cooperativa. En DEV y QA no se nota: la API migra base por base al
-arrancar. En PDN, la primera cooperativa que se registre nacerá con el esquema del
-día del alta y **nadie le aplicará las migraciones siguientes**: la API le
-responderá `[Database.MigrationsPending]` al abrirla.
+En producción `Database__AutoMigrate=false` a propósito, y el Job PreSync migraba
+la base administrativa y la operativa, pero **neutralizaba el bucle de
+cooperativas** (`--tenant __ninguna__`) porque ese bucle era del modelo anterior
+—un esquema por cooperativa—. La primera cooperativa que se registrara habría
+nacido con el esquema del día del alta y nadie le habría aplicado las migraciones
+siguientes.
 
-Hace falta un paso por cooperativa que apunte `Database__ConnectionStrings__PostgreSQL`
-a cada base listada en `ADM_Tenants.DatabaseName` y corra `migrate --scope tenants
---tenant __ninguna__`. El migrador ya sabe hacerlo; lo que no existe es quién lo
-invoque por cada base. Hoy no urge (0 cooperativas, verificado el 2026-09-07); con la
-primera, sí, y va de la mano de P13.
+**Solución.** El migrador tiene un alcance nuevo, `migrate --scope cooperativas`,
+que lee de la administrativa las cooperativas activas con base propia y llama por
+cada una al **mismo aprovisionador idempotente** que usa la API con
+`AutoMigrate=true` (crea la base si falta, migra, siembra lo paramétrico). Si una
+falla, sigue con las demás y sale con código 3: como Job PreSync eso aborta la
+sincronización y los pods viejos siguen sirviendo. El Job de producción tiene
+ahora tres pasos secuenciales —administrativa, operativa, cooperativas— con los
+dos primeros como `initContainers`. Probado en local contra `coop_alfa` y
+`coop_beta` (ambas «migrada hasta RetiroDeVoucherTypeIdSombraEnDocumentos», 0
+filas nuevas) y en producción con cero cooperativas («0 de 0 activas»).
 
 ### 🟡 Prioridad media
 
