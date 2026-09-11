@@ -37,7 +37,7 @@ public class TenantResolutionExencionTests
     public void RutasQueDebenFuncionarSinEmpresaSeleccionada(string ruta)
     {
         TenantResolutionMiddleware.IsExempt(ruta).Should().BeTrue(
-            "sin exención responde 401 Session.TenantNotSelected aunque el endpoint sea anónimo");
+            "sin exención responde 401 (Identity.Unauthenticated sin token, Session.TenantNotSelected con sesión) aunque el endpoint sea anónimo");
     }
 
     [Theory]

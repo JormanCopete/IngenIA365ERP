@@ -133,6 +133,19 @@ public class TenantResolutionMiddleware
                 return;
             }
 
+            // Dos motivos distintos para no tener cooperativa, y hasta el 2026-09-11
+            // los dos recibian el mismo texto: «seleccionar una empresa». Un token
+            // VENCIDO no tiene claims —la autenticacion fallo antes— y aqui parecia
+            // alguien sin cooperativa. En QA se vio exactamente eso: una pestana con
+            // la sesion caducada mostraba «Se requiere seleccionar una empresa» en
+            // vez de decir que la sesion habia expirado. Se distinguen por si hay
+            // identidad autenticada o no.
+            if (context.User?.Identity?.IsAuthenticated != true)
+            {
+                await WriteUnauthenticatedAsync(context);
+                return;
+            }
+
             await WriteTenantNotSelectedAsync(context);
             return;
         }
@@ -200,8 +213,9 @@ public class TenantResolutionMiddleware
     /// <summary>
     /// internal en vez de private para poder probar la lista de exencion sin
     /// levantar el servidor completo. Un endpoint anonimo que no figure aca
-    /// responde 401 Session.TenantNotSelected aunque este marcado
-    /// AllowAnonymous: el middleware corta antes de llegar al endpoint.
+    /// responde 401 (Identity.Unauthenticated sin token, Session.TenantNotSelected
+    /// con sesion pero sin cooperativa) aunque este marcado AllowAnonymous: el
+    /// middleware corta antes de llegar al endpoint.
     /// </summary>
     internal static bool IsExempt(string path)
     {
@@ -212,12 +226,46 @@ public class TenantResolutionMiddleware
         return false;
     }
 
+    /// <summary>
+    /// Sin identidad autenticada: no hay token, no valida, o vencio. Se dice cual
+    /// cuando se sabe (el fallo de JwtBearer viaja en la feature de autenticacion),
+    /// porque «token vencido» es lo que el cliente renueva y reintenta solo, y
+    /// «sin token» es un defecto de la pantalla que hay que ver.
+    /// </summary>
+    private static async Task WriteUnauthenticatedAsync(HttpContext context)
+    {
+        // AuthenticationMiddleware sólo publica IAuthenticateResultFeature cuando la
+        // autenticación tuvo éxito; el fallo lo deja el evento OnAuthenticationFailed
+        // de JwtBearer en Items (ver Identity/DependencyInjection).
+        var fallo = context.Items[IngenIA365ERP.Identity.DependencyInjection.ClaveDelFalloDeAutenticacion] as Exception;
+        var (code, message) = fallo switch
+        {
+            Microsoft.IdentityModel.Tokens.SecurityTokenExpiredException =>
+                ("Identity.TokenExpired", "La sesión expiró. Volvé a iniciar sesión."),
+            not null =>
+                ("Identity.TokenInvalid", "El token de sesión no es válido. Volvé a iniciar sesión."),
+            _ =>
+                ("Identity.Unauthenticated", "Se requiere iniciar sesión para consumir este recurso."),
+        };
+
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            code,
+            errorCode = code,   // compatibilidad con quien leia errorCode
+            message,
+            traceId = context.TraceIdentifier,
+        });
+    }
+
     private static async Task WriteTenantNotSelectedAsync(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.ContentType = "application/json; charset=utf-8";
         await context.Response.WriteAsJsonAsync(new
         {
+            code = "Session.TenantNotSelected",
             errorCode = "Session.TenantNotSelected",
             message = "Se requiere seleccionar una empresa antes de consumir este recurso.",
             traceId = context.TraceIdentifier,
@@ -230,6 +278,7 @@ public class TenantResolutionMiddleware
         context.Response.ContentType = "application/json; charset=utf-8";
         await context.Response.WriteAsJsonAsync(new
         {
+            code = "Tenant.NotFound",
             errorCode = "Tenant.NotFound",
             message = $"La empresa indicada (Id={tenantId}) no existe o está inactiva.",
             traceId = context.TraceIdentifier,
