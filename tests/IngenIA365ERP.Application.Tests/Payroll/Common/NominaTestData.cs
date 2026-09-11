@@ -71,6 +71,10 @@ public sealed class NominaTestData
         Db.PayrollPlans.Add(Plan);
         Db.PayrollConceptDefinitions.AddRange(PayrollConceptDefinitionsSeeder.Catalogo());
         Db.PayrollLegalParameters.AddRange(PayrollLegalParametersSeeder.Catalogo());
+        // Las cinco clases ARL con Ids que NO coinciden con la clase (una fila de relleno
+        // antes): la ficha guarda la fila y la clase es su Code, no su Id.
+        Db.WorkRiskRates.Add(new WorkRiskRate { Code = 9, Name = "Relleno", ShortName = "X", Rate = 0m, CreatedBy = "test", IsDeleted = true });
+        Db.WorkRiskRates.AddRange(WorkRiskClassesSeeder.Catalogo());
         Db.SaveChanges();
 
         Marzo = Periodo(new DateTime(2026, 3, 1), new DateTime(2026, 3, 31), PayPeriodStatus.Open);
@@ -109,8 +113,12 @@ public sealed class NominaTestData
         return p;
     }
 
+    /// <summary>Fila de <c>PAY_WorkRiskRates</c> de una clase (1..5), o 0 si no se quiere clase.</summary>
+    public int TarifaArl(int claseArl) =>
+        claseArl == 0 ? 0 : Db.WorkRiskRates.Single(r => r.Code == claseArl).Id;
+
     public Employee Empleado(string nombre, decimal salario, DateTime ingreso, EmployeeClass clase = EmployeeClass.Standard,
-        DateTime? retiro = null, byte procedimientoRetencion = 1)
+        DateTime? retiro = null, byte procedimientoRetencion = 1, int claseArl = 1)
     {
         var n = Db.Employees.Count() + 1;
         var persona = new Person
@@ -136,7 +144,7 @@ public sealed class NominaTestData
             EmployeeClass = clase,
             HealthInsuranceId = 1,
             PensionFundId = 1,
-            WorkRiskRateId = 1,
+            WorkRiskRateId = TarifaArl(claseArl),
             FamilySubsidyId = 1,
             WithholdingProcedure = procedimientoRetencion,
             CostCenterId = "01",

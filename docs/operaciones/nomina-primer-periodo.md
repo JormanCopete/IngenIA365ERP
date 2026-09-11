@@ -23,6 +23,7 @@ cooperativa recibe, de forma idempotente:
 | Plan de nómina por defecto `DEFAULT` («Nómina general», mensual) | `PAY_PayrollPlans` | 1 fila, `IsDefault = 1` | la migración `NominaNovedadesYLiquidacion` lo inserta antes de las FK; `PayrollPlansSeeder` lo completa |
 | Definiciones de conceptos (salario, auxilio, horas y recargos, incapacidades y licencias, salud, pensión, FSP, retención, aportes del empleador, parafiscales, provisiones, descuentos, cartera) | `PAY_PayrollConceptDefinitions` | 40, `Origin = Seed`, `ValidFrom = 2026-01-01` | `PayrollConceptDefinitionsSeeder` |
 | Parámetros legales con vigencia 2026 (SMMLV, auxilio, UVT, porcentajes, tabla de retención en UVT, tabla FSP) | `PAY_PayrollLegalParameters` + `PAY_PayrollLegalParameterRanges` | 33 códigos | `PayrollLegalParametersSeeder` |
+| Las cinco **clases de riesgo ARL** (I a V) | `PAY_WorkRiskRates` | 5 filas, `Code` 1..5 | `WorkRiskClassesSeeder` (desde el 2026-09-11) |
 | Tipo de comprobante `NM` («Nómina», módulo `NOM`) | `ACC_VoucherTypes` | 1 | `PayrollVoucherTypeSeeder` |
 | Permisos `Payroll.Plans.*`, `Payroll.Novelties.*`, `Payroll.Runs.*`, `Payroll.Payments.*`, `Payroll.Payslips.*`, `Payroll.Concepts.*`, `Payroll.LegalParameters.*` | catálogo de permisos de la cooperativa | — | `PayrollPermissionCatalogSeeder` (Identity) |
 | Políticas `Payroll.Rounding`, `Payroll.VariationThresholdPercent`, `Payroll.AllowSameUserApproval`, `Payroll.ApplyEmployerExemption` | `SystemSettings` | 4 claves | `CatalogSeeders` |
@@ -39,6 +40,17 @@ Lo que la semilla **no** deja, porque es decisión de cada cooperativa:
 - Empleados con **persona**, **plan**, **salario**, **fecha de ingreso** y **afiliaciones**
   (salud, pensión, ARL con clase 1..5, caja). Cada afiliación faltante es un bloqueo
   visible en el borrador, no un error silencioso.
+
+  **La clase de riesgo ARL se elige en la ficha** (Nómina › Empleados › pestaña de
+  seguridad social › «Clase de riesgo ARL»), y la lista sale de `PAY_WorkRiskRates`
+  (Nómina › Clases de riesgo ARL). La ficha guarda la **fila** (`WorkRiskRateId`), no el
+  número; la clase es el `Code` de esa fila y es lo que el motor traduce al parámetro
+  `ARL_CLASE_{I..V}_PCT`. La tarifa que muestra esa tabla es informativa: el porcentaje
+  que se liquida es el del parámetro legal vigente. Hasta el 2026-09-11 esto fallaba
+  de dos maneras a la vez —la tabla nacía vacía y la ficha no tenía dónde elegirla—,
+  así que **toda** liquidación salía con «Sin clase de riesgo ARL registrada en la
+  ficha». En una cooperativa creada antes de esa fecha: reaplicar la semilla (§5) y
+  luego abrir cada empleado y elegir su clase.
 
 ## 2. Cómo comprobarlo contra la base del ambiente
 
@@ -112,8 +124,8 @@ hay que recalcularlos antes de aprobar.
 
 ## 5. Reaplicar la semilla
 
-Tras una actualización que traiga conceptos o parámetros nuevos, o si alguien borró por
-error algo de la semilla:
+Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien
+borró por error algo de la semilla:
 
 - **Pantalla**: Nómina › Conceptos › «Reaplicar semilla».
 - **API**: `POST /api/payroll/concept-definitions/seed` (permiso `Payroll.Concepts.Manage`).

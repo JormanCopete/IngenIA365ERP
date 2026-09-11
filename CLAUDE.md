@@ -128,9 +128,12 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `Entities/Payroll/Transactions`) son **inmutables** (Principio XI): recalcular crea
   una versión y deja la anterior `Superseded`; aprobar genera el comprobante `NM` en la
   misma transacción; reversar deja un asiento espejo y reabre el período. La semilla
-  deja plan por defecto, 40 conceptos, 33 parámetros con vigencia 2026 y el `NM`; lo
-  que no deja (cuentas por concepto, período contable) está en
-  `docs/operaciones/nomina-primer-periodo.md`. El **cálculo preliminar** anterior
+  deja plan por defecto, 40 conceptos, 33 parámetros con vigencia 2026, las cinco clases
+  de riesgo ARL y el `NM`; lo que no deja (cuentas por concepto, período contable, la
+  clase ARL de cada ficha) está en `docs/operaciones/nomina-primer-periodo.md`. La ficha
+  guarda la **fila** de `PAY_WorkRiskRates`, no la clase: la clase es su `Code`, y hasta
+  el 2026-09-11 el cargador tomaba el Id como clase y nadie sembraba la tabla ni la
+  pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». El **cálculo preliminar** anterior
   (`POST /api/payroll/process`, salud y pensión fijas al 4 %) se retiró sin alias.
 
 ## Arquitectura

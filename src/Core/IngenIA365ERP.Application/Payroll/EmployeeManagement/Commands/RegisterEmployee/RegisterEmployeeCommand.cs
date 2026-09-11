@@ -36,6 +36,13 @@ public record RegisterEmployeeCommand : IRequest<Result<Guid>>
     public Guid? PensionProviderPublicId { get; init; }
     public Guid? WorkRiskProviderPublicId { get; init; }
 
+    /// <summary>
+    /// Clase de riesgo ARL (fila de <c>PAY_WorkRiskRates</c>). Sin ella el motor no
+    /// puede calcular el aporte a riesgos laborales y la liquidación queda bloqueada
+    /// con «Sin clase de riesgo ARL registrada en la ficha».
+    /// </summary>
+    public Guid? WorkRiskRatePublicId { get; init; }
+
     // Banca nomina
     public Guid? PayrollBankPublicId { get; init; }
     public string? PayrollBankAccountNumber { get; init; }
@@ -89,6 +96,14 @@ public class RegisterEmployeeCommandHandler(
             if (wrl is not null) workRiskId = wrl.Id;
         }
 
+        int workRiskRateId = 0;
+        if (request.WorkRiskRatePublicId.HasValue)
+        {
+            var clase = await context.WorkRiskRates.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.PublicId == request.WorkRiskRatePublicId.Value && !r.IsDeleted, ct);
+            if (clase is not null) workRiskRateId = clase.Id;
+        }
+
         string payrollBankId = "";
         if (request.PayrollBankPublicId.HasValue)
         {
@@ -133,6 +148,7 @@ public class RegisterEmployeeCommandHandler(
             HealthInsuranceId = healthInsuranceId,
             PensionFundId = pensionId,
             WorkRiskId = workRiskId,
+            WorkRiskRateId = workRiskRateId,
             // Banca nomina
             PayrollBankId = payrollBankId,
             PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "",

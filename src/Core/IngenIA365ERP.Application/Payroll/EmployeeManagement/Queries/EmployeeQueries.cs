@@ -54,6 +54,9 @@ public record EmployeeDetailDto(
     Guid? WorkRiskProviderPublicId,
     Guid? PayrollBankPublicId,
     string? PayrollBankName,
+    // Clase de riesgo ARL (fila de PAY_WorkRiskRates): sin ella no se calcula el aporte.
+    Guid? WorkRiskRatePublicId,
+    string WorkRiskRateName,
     List<SalaryHistoryDto> SalaryHistory,
     List<RecentPayrollEntryDto> RecentEntries);
 
@@ -159,8 +162,8 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
         var person = employee.Person;
 
         // Resolve provider names + PublicIds
-        string epsName = "", pensionName = "", arlName = "", bankName = "";
-        Guid? epsPublicId = null, pensionPublicId = null, arlPublicId = null, bankPublicId = null;
+        string epsName = "", pensionName = "", arlName = "", bankName = "", claseArlName = "";
+        Guid? epsPublicId = null, pensionPublicId = null, arlPublicId = null, bankPublicId = null, claseArlPublicId = null;
 
         if (employee.HealthInsuranceId > 0)
         {
@@ -179,6 +182,12 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             var arl = await context.WorkRiskProviders.AsNoTracking()
                 .FirstOrDefaultAsync(w => w.Id == employee.WorkRiskId, ct);
             if (arl is not null) { arlName = arl.Name; arlPublicId = arl.PublicId; }
+        }
+        if (employee.WorkRiskRateId > 0)
+        {
+            var clase = await context.WorkRiskRates.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == employee.WorkRiskRateId, ct);
+            if (clase is not null) { claseArlName = clase.Name; claseArlPublicId = clase.PublicId; }
         }
         if (!string.IsNullOrWhiteSpace(employee.PayrollBankId)
             && int.TryParse(employee.PayrollBankId, out var bankIntId) && bankIntId > 0)
@@ -231,6 +240,8 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             arlPublicId,
             bankPublicId,
             bankName,
+            claseArlPublicId,
+            claseArlName,
             salaryHistory,
             recentEntries));
     }
