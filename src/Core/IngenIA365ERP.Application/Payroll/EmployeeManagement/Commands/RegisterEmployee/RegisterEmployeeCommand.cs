@@ -42,6 +42,10 @@ public record RegisterEmployeeCommand : IRequest<Result<Guid>>
     /// con «Sin clase de riesgo ARL registrada en la ficha».
     /// </summary>
     public Guid? WorkRiskRatePublicId { get; init; }
+    /// <summary>Fondo de cesantías (fila de <c>PAY_SeveranceProviders</c>). No afecta la liquidación mensual; importa para la consignación anual y los reportes.</summary>
+    public Guid? SeveranceProviderPublicId { get; init; }
+    /// <summary>Caja de compensación familiar (fila de <c>PAY_FamilyCompensationFunds</c>).</summary>
+    public Guid? FamilyCompensationFundPublicId { get; init; }
 
     // Banca nomina
     public Guid? PayrollBankPublicId { get; init; }
@@ -104,6 +108,22 @@ public class RegisterEmployeeCommandHandler(
             if (clase is not null) workRiskRateId = clase.Id;
         }
 
+        int severanceFundId = 0;
+        if (request.SeveranceProviderPublicId.HasValue)
+        {
+            var fondo = await context.SeveranceProviders.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.PublicId == request.SeveranceProviderPublicId.Value && !f.IsDeleted, ct);
+            if (fondo is not null) severanceFundId = fondo.Id;
+        }
+
+        int familySubsidyId = 0;
+        if (request.FamilyCompensationFundPublicId.HasValue)
+        {
+            var caja = await context.FamilyCompensationFunds.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.PublicId == request.FamilyCompensationFundPublicId.Value && !c.IsDeleted, ct);
+            if (caja is not null) familySubsidyId = caja.Id;
+        }
+
         string payrollBankId = "";
         if (request.PayrollBankPublicId.HasValue)
         {
@@ -149,6 +169,8 @@ public class RegisterEmployeeCommandHandler(
             PensionFundId = pensionId,
             WorkRiskId = workRiskId,
             WorkRiskRateId = workRiskRateId,
+            SeveranceFundId = severanceFundId,
+            FamilySubsidyId = familySubsidyId,
             // Banca nomina
             PayrollBankId = payrollBankId,
             PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "",

@@ -36,7 +36,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.RepresentationExpense).HasPrecision(18, 2);
         builder.Property(e => e.TechnicalBonus).HasPrecision(18, 2);
         builder.Property(e => e.OtherBonus).HasPrecision(18, 2);
-        builder.Property(e => e.SeveranceFundId).HasPrecision(6, 0);
         builder.Property(e => e.BonusDays).HasPrecision(10, 0);
         builder.Property(e => e.VacationDays).HasPrecision(10, 0);
         builder.Property(e => e.IndemnityDays).HasPrecision(10, 0);

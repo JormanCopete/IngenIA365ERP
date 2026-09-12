@@ -57,6 +57,10 @@ public record EmployeeDetailDto(
     // Clase de riesgo ARL (fila de PAY_WorkRiskRates): sin ella no se calcula el aporte.
     Guid? WorkRiskRatePublicId,
     string WorkRiskRateName,
+    Guid? SeveranceProviderPublicId,
+    string SeveranceProviderName,
+    Guid? FamilyCompensationFundPublicId,
+    string FamilyCompensationFundName,
     List<SalaryHistoryDto> SalaryHistory,
     List<RecentPayrollEntryDto> RecentEntries);
 
@@ -162,8 +166,8 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
         var person = employee.Person;
 
         // Resolve provider names + PublicIds
-        string epsName = "", pensionName = "", arlName = "", bankName = "", claseArlName = "";
-        Guid? epsPublicId = null, pensionPublicId = null, arlPublicId = null, bankPublicId = null, claseArlPublicId = null;
+        string epsName = "", pensionName = "", arlName = "", bankName = "", claseArlName = "", cesantiasName = "", cajaName = "";
+        Guid? epsPublicId = null, pensionPublicId = null, arlPublicId = null, bankPublicId = null, claseArlPublicId = null, cesantiasPublicId = null, cajaPublicId = null;
 
         if (employee.HealthInsuranceId > 0)
         {
@@ -188,6 +192,18 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             var clase = await context.WorkRiskRates.AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Id == employee.WorkRiskRateId, ct);
             if (clase is not null) { claseArlName = clase.Name; claseArlPublicId = clase.PublicId; }
+        }
+        if (employee.SeveranceFundId > 0)
+        {
+            var fondo = await context.SeveranceProviders.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.Id == employee.SeveranceFundId, ct);
+            if (fondo is not null) { cesantiasName = fondo.Name; cesantiasPublicId = fondo.PublicId; }
+        }
+        if (employee.FamilySubsidyId > 0)
+        {
+            var caja = await context.FamilyCompensationFunds.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == employee.FamilySubsidyId, ct);
+            if (caja is not null) { cajaName = caja.Name; cajaPublicId = caja.PublicId; }
         }
         if (!string.IsNullOrWhiteSpace(employee.PayrollBankId)
             && int.TryParse(employee.PayrollBankId, out var bankIntId) && bankIntId > 0)
@@ -242,6 +258,10 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             bankName,
             claseArlPublicId,
             claseArlName,
+            cesantiasPublicId,
+            cesantiasName,
+            cajaPublicId,
+            cajaName,
             salaryHistory,
             recentEntries));
     }

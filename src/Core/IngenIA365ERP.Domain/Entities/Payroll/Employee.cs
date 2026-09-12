@@ -91,7 +91,8 @@ public class Employee : AuditableEntity
     public int PensionFundId { get; set; }
     public int WorkRiskId { get; set; }
     public int WorkRiskRateId { get; set; }
-    public decimal SeveranceFundId { get; set; }
+    /// <summary>Fila de <c>PAY_SeveranceProviders</c>. Era decimal(6,0) heredado del SOLIDO; entero desde el 2026-09-12.</summary>
+    public int SeveranceFundId { get; set; }
     public int SenaId { get; set; }
     public int IcbfId { get; set; }
     public int FamilySubsidyId { get; set; }

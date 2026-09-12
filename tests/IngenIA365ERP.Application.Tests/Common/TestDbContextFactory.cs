@@ -164,6 +164,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
     DbSet<PensionProvider> IApplicationDbContext.PensionProviders => throw new NotImplementedException();
     DbSet<SeveranceProvider> IApplicationDbContext.SeveranceProviders => throw new NotImplementedException();
+    DbSet<FamilyCompensationFund> IApplicationDbContext.FamilyCompensationFunds => throw new NotImplementedException();
     DbSet<ConceptAccount> IApplicationDbContext.ConceptAccounts => throw new NotImplementedException();
     DbSet<WithholdingParameter> IApplicationDbContext.WithholdingParameters => throw new NotImplementedException();
     DbSet<WithholdingCause> IApplicationDbContext.WithholdingCauses => throw new NotImplementedException();

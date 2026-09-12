@@ -128,6 +128,7 @@ public interface IApplicationDbContext
     DbSet<WorkRiskRate> WorkRiskRates { get; }
     DbSet<PensionProvider> PensionProviders { get; }
     DbSet<SeveranceProvider> SeveranceProviders { get; }
+    DbSet<FamilyCompensationFund> FamilyCompensationFunds { get; }
     DbSet<ConceptAccount> ConceptAccounts { get; }
     DbSet<WithholdingParameter> WithholdingParameters { get; }
     DbSet<WithholdingCause> WithholdingCauses { get; }
