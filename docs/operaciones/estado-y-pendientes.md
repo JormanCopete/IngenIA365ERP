@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-10**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-11**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -36,6 +36,18 @@ de [rescate-del-administrador-maestro.md](rescate-del-administrador-maestro.md))
 mismo día inscribió su autenticador, entró dos veces y recibió sus diez códigos de
 respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo único
 que separa a producción de su primera cooperativa es P14.
+
+Desde entonces producción se promueve commit a commit con un merge `Promover develop
+a release: …` y sincronización manual de Argo. La última es **`release 47185e6`
+(2026-09-11)**: clase de riesgo ARL en la ficha del empleado, semilla de las cinco
+clases (`WorkRiskClassesSeeder`, corrió sola en la operativa de PDN: «5 fila(s)
+insertadas») y cargador por `Code`; en QA se había visto que toda liquidación salía
+«sin clase de riesgo ARL» (ver
+[nomina-primer-periodo.md](nomina-primer-periodo.md) §1). Pods de API y Web en
+los digests del commit GitOps `7ad9703`, `/api/health` 200 por el borde. En el
+arranque de la API en PDN aparece dos veces «Cannot load library
+libgssapi_krb5.so.2»: es Npgsql probando Kerberos en una imagen sin la librería,
+sigue con contraseña y no es de esta entrega.
 
 ### Respaldos
 
