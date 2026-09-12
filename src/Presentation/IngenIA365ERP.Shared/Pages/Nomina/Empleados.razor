@@ -530,7 +530,7 @@
             _cesantias = (await cesantiasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cajas = (await cajasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _planes = await planesTask;
-            _planesLookup = _planes.Select(p => new LookupOption(p.PublicId, $"{p.Name} ({(p.Periodicity == "Biweekly" ? "quincenal" : "mensual")})")).ToList();
+            _planesLookup = _planes.Select(p => new LookupOption(p.PublicId, $"{p.Name} ({(p.Periodicity switch { "Biweekly" => "quincenal", "TenDay" => "decadal", "Weekly" => "semanal", _ => "mensual" })})")).ToList();
             _banks = (await banksTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cities = (await citiesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
         }

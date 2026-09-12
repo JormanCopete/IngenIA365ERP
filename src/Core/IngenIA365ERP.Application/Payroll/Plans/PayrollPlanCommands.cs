@@ -22,7 +22,7 @@ public sealed class CreatePayrollPlanCommandValidator : AbstractValidator<Create
             .Matches("^[A-Z0-9_]+$").WithMessage("El código sólo admite mayúsculas, dígitos y guion bajo.");
         RuleFor(x => x.Name).NotEmpty().WithMessage("El nombre es obligatorio.")
             .MaximumLength(100).WithMessage("El nombre no puede pasar de 100 caracteres.");
-        RuleFor(x => x.Periodicity).IsInEnum().WithMessage("La periodicidad debe ser Monthly o Biweekly.");
+        RuleFor(x => x.Periodicity).IsInEnum().WithMessage("La periodicidad debe ser Monthly, Biweekly, TenDay o Weekly.");
     }
 }
 
@@ -70,7 +70,7 @@ public sealed class UpdatePayrollPlanCommandValidator : AbstractValidator<Update
         RuleFor(x => x.Name).NotEmpty().WithMessage("El nombre es obligatorio.")
             .MaximumLength(100).WithMessage("El nombre no puede pasar de 100 caracteres.");
         RuleFor(x => x.Periodicity).IsInEnum().When(x => x.Periodicity is not null)
-            .WithMessage("La periodicidad debe ser Monthly o Biweekly.");
+            .WithMessage("La periodicidad debe ser Monthly, Biweekly, TenDay o Weekly.");
     }
 }
 

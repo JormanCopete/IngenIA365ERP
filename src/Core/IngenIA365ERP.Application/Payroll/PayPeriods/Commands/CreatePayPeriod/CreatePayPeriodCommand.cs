@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,6 +33,14 @@ public record CreatePayPeriodCommand : IRequest<Result<Guid>>
     public int? Periodicity { get; init; }
     public string StatusMessage { get; init; } = string.Empty;
     public int PeriodId { get; init; }
+
+    /// <summary>
+    /// Número del período dentro del mes y mes de imputación (feature 006). Nulos = los
+    /// propone <c>PeriodCalendar</c> desde la fecha de inicio y la periodicidad del plan.
+    /// </summary>
+    public byte? SubPeriodNumber { get; init; }
+    public short? ImputationYear { get; init; }
+    public byte? ImputationMonth { get; init; }
 }
 
 public class CreatePayPeriodCommandHandler(
@@ -70,6 +79,20 @@ public class CreatePayPeriodCommandHandler(
                 $"Ya existe un período del plan «{plan.Name}» que se superpone con {start:dd/MM/yyyy}–{end:dd/MM/yyyy}."));
         }
 
+        // Feature 006: la duración tiene que ser la del plan (con las excepciones del calendario).
+        if (!PeriodCalendar.DuracionValida(plan.Periodicity, start, end))
+            return Result.Failure<Guid>(new Error("Payroll.PeriodLengthMismatch",
+                $"Un período del plan «{plan.Name}» ({PeriodCalendar.Nombre(plan.Periodicity)}) dura {(int)plan.Periodicity} días; {start:dd/MM/yyyy}–{end:dd/MM/yyyy} son {(end - start).Days + 1}. Sólo el último período del mes admite lo que el calendario le quite o le sume."));
+
+        var calendario = PeriodCalendar.Proponer(plan.Periodicity, start);
+        var subPeriodo = request.SubPeriodNumber ?? calendario.SubPeriodNumber;
+        if (subPeriodo < 1 || subPeriodo > PeriodCalendar.PeriodosPorMes(plan.Periodicity))
+            return Result.Failure<Guid>(new Error("Payroll.SubPeriodOutOfRange",
+                $"El número de período va de 1 a {PeriodCalendar.PeriodosPorMes(plan.Periodicity)} para un plan {PeriodCalendar.Nombre(plan.Periodicity).ToLowerInvariant()}."));
+        var mesImputacion = request.ImputationMonth ?? calendario.Month;
+        if (mesImputacion < 1 || mesImputacion > 12)
+            return Result.Failure<Guid>(new Error("Payroll.ImputationMonthInvalid", "El mes de imputación va de 1 a 12."));
+
         var planillaNumber = request.PlanId;
         if (planillaNumber <= 0)
         {
@@ -92,6 +115,9 @@ public class CreatePayPeriodCommandHandler(
             StartDate = start,
             EndDate = end,
             Periodicity = request.Periodicity ?? (int)plan.Periodicity,
+            SubPeriodNumber = subPeriodo,
+            ImputationYear = request.ImputationYear ?? calendario.Year,
+            ImputationMonth = mesImputacion,
             Status = PayPeriodStatus.Open,
             StatusMessage = request.StatusMessage,
             PeriodId = request.PeriodId,

@@ -1,0 +1,23 @@
+{
+  "nombre": "Período semanal (2 al 8 de marzo) con salario de 2.100.000",
+  "descripcion": "Feature 006. Plan semanal: 7 días comerciales. Salario 2.100.000 × 7/30 = 490.000; auxilio 249.095 × 7/30 = 58.122,17 → 58.122 (salario ≤ 2 SMMLV). Salud y pensión 4 % de 490.000 = 19.600. Empleador: salud 8,5 % = 41.650; pensión 12 % = 58.800; ARL clase I 0,522 % = 2.557,80 → 2.558; SENA 2 % = 9.800; ICBF 3 % = 14.700; caja 4 % = 19.600. Provisiones sobre la base prestacional de la semana (548.122): cesantías 8,33 % = 45.658,56 → 45.659; intereses 1 % = 5.481,22 → 5.481; prima 45.659; vacaciones 4,17 % del salario = 20.433. Sin FSP ni retención.",
+  "periodo": { "inicio": "2026-03-02", "fin": "2026-03-08", "periodicidad": "Weekly" },
+  "empleado": {
+    "nombre": "Sofía Restrepo", "clase": "Standard", "ingreso": "2022-02-01",
+    "salarios": [ { "desde": "2022-02-01", "mensual": 2100000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 490000, "AUX_TRANSPORTE": 58122,
+      "SALUD_EMP": 19600, "PENSION_EMP": 19600, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 41650, "PENSION_EMPLEADOR": 58800, "ARL": 2558, "SENA": 9800, "ICBF": 14700, "CAJA": 19600,
+      "PROV_CESANTIAS": 45659, "PROV_INT_CESANTIAS": 5481, "PROV_PRIMA": 45659, "PROV_VACACIONES": 20433
+    },
+    "totales": { "devengos": 548122, "deducciones": 39200, "aportesEmpleador": 147108, "provisiones": 117232, "neto": 508922, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 7
+  }
+}

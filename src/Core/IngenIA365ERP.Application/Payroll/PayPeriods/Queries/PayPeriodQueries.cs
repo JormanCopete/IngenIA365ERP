@@ -1,6 +1,8 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,6 +32,13 @@ public record PayPeriodDto
     public string? ApprovedBy { get; init; }
     public Guid? CurrentRunPublicId { get; init; }
     public int PeriodId { get; init; }
+    public byte SubPeriodNumber { get; init; }
+    public short ImputationYear { get; init; }
+    public byte ImputationMonth { get; init; }
+    /// <summary>«Quincena 2», «Semana 3», «Mes»…</summary>
+    public string SubPeriodLabel => Enum.TryParse<PayrollPeriodicity>(PlanPeriodicity, out var p)
+        ? PeriodCalendar.Etiqueta(p, SubPeriodNumber)
+        : SubPeriodNumber.ToString();
 }
 
 public record ListPayPeriodsQuery : IRequest<Result<PagedList<PayPeriodDto>>>
@@ -111,6 +120,9 @@ public class ListPayPeriodsQueryHandler(IApplicationDbContext context)
             StartDate = e.StartDate,
             EndDate = e.EndDate,
             Periodicity = e.Periodicity,
+            SubPeriodNumber = e.SubPeriodNumber,
+            ImputationYear = e.ImputationYear,
+            ImputationMonth = e.ImputationMonth,
             Status = e.Status.ToString(),
             StatusMessage = e.StatusMessage,
             ApprovedAt = e.ApprovedAt,

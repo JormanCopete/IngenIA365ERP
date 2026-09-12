@@ -71,6 +71,8 @@
                         <select class="e-input" @bind="_modelo.Periodicity">
                             <option value="Monthly">Mensual (30 días)</option>
                             <option value="Biweekly">Quincenal (15 días)</option>
+                            <option value="TenDay">Decadal (10 días: 1–10, 11–20, 21–fin de mes)</option>
+                            <option value="Weekly">Semanal (7 días; cada período dice a qué semana y mes se imputa)</option>
                         </select>
                     </label>
                     @if (_editando is not null)
