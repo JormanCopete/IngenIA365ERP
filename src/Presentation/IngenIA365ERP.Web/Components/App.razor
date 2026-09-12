@@ -36,8 +36,8 @@
     @* Los dos temas de SyncFusion se cargan juntos y se habilita uno solo. Es
        lo que permite cambiar de tema sin recargar la página ni esperar una
        descarga: alternar `disabled` es instantáneo. *@
-    <link id="sf-tema-claro" href="_content/Syncfusion.Blazor.Themes/fluent2.css" rel="stylesheet" />
-    <link id="sf-tema-oscuro" href="_content/Syncfusion.Blazor.Themes/fluent2-dark.css" rel="stylesheet" disabled />
+    <link id="sf-tema-claro" href="@Assets["_content/Syncfusion.Blazor.Themes/fluent2.css"]" rel="stylesheet" />
+    <link id="sf-tema-oscuro" href="@Assets["_content/Syncfusion.Blazor.Themes/fluent2-dark.css"]" rel="stylesheet" disabled />
     <script>
         (function () {
             var oscuro = document.documentElement.getAttribute('data-tema') === 'oscuro';
@@ -47,11 +47,18 @@
     </script>
 
     @* tokens.css DESPUÉS del tema de SyncFusion: define las variables
-       --color-sf-* que sus componentes leen, y debe ganar. *@
-    <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/tokens.css" />
-    <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/app.css" />
-    <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/componentes.css" />
-    <link rel="stylesheet" href="IngenIA365ERP.Web.styles.css" />
+       --color-sf-* que sus componentes leen, y debe ganar.
+
+       Todo con @Assets[...]: la URL lleva la huella del contenido y el servidor la
+       entrega con Cache-Control immutable de un año. Hasta el 2026-09-13 estos
+       enlaces iban sin huella, Cloudflare les ponía max-age=14400 y tras cada
+       despliegue el usuario veía los estilos viejos hasta cuatro horas (el bundle
+       de estilos es un @import al archivo con huella anterior). Así se vio el
+       rediseño del menú «en ningún ambiente» el día que salió. *@
+    <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/componentes.css"]" />
+    <link rel="stylesheet" href="@Assets["IngenIA365ERP.Web.styles.css"]" />
     <ImportMap />
     @* Icono y acceso directo. Los archivos viven en wwwroot del proyecto Web (no en
        Shared): la ruta _content/IngenIA365ERP.Shared/img/favicon.png que había aquí
@@ -74,9 +81,11 @@
 
 <body>
     <Routes @rendermode="InteractiveWebAssembly" />
-    <script src="_content/Syncfusion.Blazor/scripts/syncfusion-blazor.min.js" type="text/javascript"></script>
+    @* El script de Syncfusion vive en Syncfusion.Blazor.Core desde que no se usa el
+       meta-paquete (la ruta _content/Syncfusion.Blazor/... ya no existe). *@
+    <script src="@Assets["_content/Syncfusion.Blazor.Core/scripts/syncfusion-blazor.min.js"]" type="text/javascript"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
-    <script src="_content/IngenIA365ERP.Shared/js/preferencias.js"></script>
+    <script src="@Assets["_content/IngenIA365ERP.Shared/js/preferencias.js"]"></script>
 </body>
 
 </html>

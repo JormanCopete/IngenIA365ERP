@@ -5,7 +5,24 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Syncfusion.Blazor" Version="33.2.8" />
+    <!-- Paquetes por componente, NO el meta-paquete Syncfusion.Blazor: ese es UNA sola
+         Syncfusion.Blazor.dll de 27 MB con toda la suite, que el cliente WebAssembly descargaba
+         entera (TrimMode=partial no la recorta) y que ILLink y Brotli tardaban ~8 min en procesar
+         en cada despliegue. Los namespaces son los mismos; al agregar un componente nuevo se
+         agrega su paquete aqui (mismo numero de version en todos). 2026-09-13. -->
+    <PackageReference Include="Syncfusion.Blazor.Core" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Buttons" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Inputs" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Calendars" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.DropDowns" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Grid" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Data" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Popups" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Navigations" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Notifications" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Spinner" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.ProgressBar" Version="33.2.8" />
+    <PackageReference Include="Syncfusion.Blazor.Charts" Version="33.2.8" />
     <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.2.8" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" />
