@@ -82,6 +82,18 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
         var ids = empleados.Select(x => x.Employee.Id).ToList();
         var documentos = empleados.Select(x => x.TaxId).ToList();
 
+        // --- clase de riesgo ARL de cada empleado ---
+        // La ficha guarda la FILA de PAY_WorkRiskRates (WorkRiskRateId), no la clase; la
+        // clase (1..5) es el Code de esa fila, y es lo que el motor traduce a
+        // ARL_CLASE_{I..V}_PCT. Hasta el 2026-09-11 se tomaba el Id como si fuera la
+        // clase: sólo acertaba si las cinco filas tenían por casualidad Id 1..5.
+        var tarifas = empleados.Select(x => x.Employee.WorkRiskRateId).Where(id => id > 0).Distinct().ToList();
+        var clasePorTarifa = tarifas.Count == 0
+            ? new Dictionary<int, int>()
+            : await db.WorkRiskRates.AsNoTracking()
+                .Where(r => tarifas.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.Code, ct);
+
         // --- historial de salario hasta el fin del período ---
         var cambios = await db.SalaryChanges.AsNoTracking()
             .Where(s => ids.Contains(s.EmployeeId) && s.EffectiveDate <= end)
@@ -181,7 +193,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                 {
                     Health = e.HealthInsuranceId > 0,
                     Pension = e.PensionFundId > 0,
-                    WorkRiskClass = e.WorkRiskRateId is >= 1 and <= 5 ? e.WorkRiskRateId : null,
+                    WorkRiskClass = clasePorTarifa.TryGetValue(e.WorkRiskRateId, out var clase) && clase is >= 1 and <= 5 ? clase : null,
                     FamilyCompensation = e.FamilySubsidyId > 0,
                 },
                 WithholdingProcedure = e.WithholdingProcedure is 1 or 2 ? e.WithholdingProcedure : (byte)1,

@@ -50,6 +50,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<WorkRiskRate> WorkRiskRates => Set<WorkRiskRate>();
     public DbSet<PayPeriod> PayPeriods => Set<PayPeriod>();
     public DbSet<SalaryChange> SalaryChanges => Set<SalaryChange>();
     public DbSet<PayrollPlan> PayrollPlans => Set<PayrollPlan>();
@@ -161,7 +162,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<PayrollConcept> IApplicationDbContext.PayrollConcepts => throw new NotImplementedException();
     DbSet<HealthInsuranceProvider> IApplicationDbContext.HealthInsuranceProviders => throw new NotImplementedException();
     DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
-    DbSet<WorkRiskRate> IApplicationDbContext.WorkRiskRates => throw new NotImplementedException();
     DbSet<PensionProvider> IApplicationDbContext.PensionProviders => throw new NotImplementedException();
     DbSet<SeveranceProvider> IApplicationDbContext.SeveranceProviders => throw new NotImplementedException();
     DbSet<ConceptAccount> IApplicationDbContext.ConceptAccounts => throw new NotImplementedException();

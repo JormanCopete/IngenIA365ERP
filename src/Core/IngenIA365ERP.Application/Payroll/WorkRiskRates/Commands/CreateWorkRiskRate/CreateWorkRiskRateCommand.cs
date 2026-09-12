@@ -45,6 +45,11 @@ public class CreateWorkRiskRateCommandValidator : AbstractValidator<CreateWorkRi
 {
     public CreateWorkRiskRateCommandValidator()
     {
+        // La clase es lo que el motor traduce a ARL_CLASE_{I..V}_PCT: fuera de 1..5 no
+        // existe porcentaje y el aporte no se calcularía.
+        RuleFor(x => x.Code)
+            .InclusiveBetween(1, 5).WithMessage("La clase de riesgo ARL va de 1 (I) a 5 (V).");
+
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Name is required.")
             .MaximumLength(100).WithMessage("Name must not exceed 100 characters.");

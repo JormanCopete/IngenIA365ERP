@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -40,5 +41,23 @@ public class UpdateWorkRiskRateCommandHandler(
         await context.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
+    }
+}
+
+public class UpdateWorkRiskRateCommandValidator : AbstractValidator<UpdateWorkRiskRateCommand>
+{
+    public UpdateWorkRiskRateCommandValidator()
+    {
+        // La clase es lo que el motor traduce a ARL_CLASE_{I..V}_PCT: fuera de 1..5 no
+        // existe porcentaje y el aporte no se calcularía.
+        RuleFor(x => x.Code)
+            .InclusiveBetween(1, 5).WithMessage("La clase de riesgo ARL va de 1 (I) a 5 (V).");
+
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("Name is required.")
+            .MaximumLength(100).WithMessage("Name must not exceed 100 characters.");
+
+        RuleFor(x => x.ShortName)
+            .MaximumLength(50).WithMessage("Short name must not exceed 50 characters.");
     }
 }

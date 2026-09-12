@@ -100,6 +100,47 @@ public class PayrollRunsEndpointsTests(CentralIdentityApiFixture fx)
         (await exportacion.Content.ReadAsStringAsync()).Should().Contain("HEX_NOCTURNA");
     }
 
+    /// <summary>
+    /// QA, 2026-09-11: toda liquidación salía con «Sin clase de riesgo ARL registrada en la
+    /// ficha». Dos causas a la vez: la cooperativa no tenía las clases (nadie las sembraba) y
+    /// la ficha no tenía dónde elegirla (el comando no la recibía). Con la clase en la ficha,
+    /// el aporte ARL sale con el porcentaje de esa clase y el empleado no queda bloqueado por
+    /// ARL.
+    /// </summary>
+    [Fact]
+    public async Task Con_clase_de_riesgo_en_la_ficha_se_liquida_el_aporte_ARL()
+    {
+        var ctx = await NominaE2E.PrepararAsync(fx);
+        using var http = fx.CreateClient();
+        var admin = ctx.TokenAdmin;
+
+        // La semilla deja las cinco clases en toda cooperativa; la ficha guarda la fila, no el número.
+        var clases = (await NominaE2E.GetAsync(http, admin, "/api/payroll/work-risk-rates?pageSize=50")).GetProperty("items").EnumerateArray().ToList();
+        clases.Select(c => c.GetProperty("code").GetInt32()).Should().BeEquivalentTo([1, 2, 3, 4, 5]);
+        var claseIII = clases.Single(c => c.GetProperty("code").GetInt32() == 3).GetProperty("publicId").GetGuid();
+
+        var (empleadoId, _) = await NominaE2E.CrearEmpleadoAsync(http, admin, "Fabio", 3_000_000m, new DateTime(2024, 2, 1));
+        var actualizar = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/payroll/employees/{empleadoId}", new
+        {
+            baseSalary = 3_000_000m, contractType = 1, workRiskRatePublicId = claseIII, payrollBankAccountType = 1,
+        });
+        actualizar.IsSuccessStatusCode.Should().BeTrue(await actualizar.Content.ReadAsStringAsync());
+        var ficha = await NominaE2E.GetAsync(http, admin, $"/api/payroll/employees/{empleadoId}");
+        ficha.GetProperty("workRiskRatePublicId").GetGuid().Should().Be(claseIII);
+        ficha.GetProperty("workRiskRateName").GetString().Should().StartWith("Clase III");
+
+        var periodoId = await NominaE2E.CrearPeriodoAsync(http, admin, new DateTime(2026, 7, 1), new DateTime(2026, 7, 31));
+        var corrida = await NominaE2E.CalcularAsync(http, admin, periodoId);
+        var runId = corrida.GetProperty("runPublicId").GetGuid();
+
+        var detalle = await NominaE2E.GetAsync(http, admin, $"/api/payroll/runs/{runId}/employees/{empleadoId}");
+        var arl = detalle.GetProperty("lines").EnumerateArray().SingleOrDefault(l => l.GetProperty("conceptCode").GetString() == "ARL");
+        arl.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Object, "con clase en la ficha el aporte ARL se calcula");
+        // Clase III = 2,436 % del IBC (3.000.000 × 30/30), el porcentaje vigente del parámetro legal.
+        arl.GetProperty("amount").GetDecimal().Should().Be(73_080m);
+        detalle.GetProperty("refusals").EnumerateArray().Select(r => r.GetString()).Should().NotContain(r => r!.Contains("ARL"));
+    }
+
     [Fact]
     public async Task Sin_permiso_de_calcular_la_ruta_no_existe()
     {
