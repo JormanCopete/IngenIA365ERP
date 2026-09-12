@@ -298,6 +298,26 @@
                                     Sin clase de riesgo la liquidación no calcula el aporte a ARL y queda bloqueada
                                     para aprobar. Las clases se administran en Nómina › Clases de riesgo ARL.
                                 </p>
+                                <div>
+                                    <label>Fondo de cesantías</label>
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                                    @bind-Value="_employeeModel.SeveranceProviderPublicId"
+                                                    DataSource="@_cesantias"
+                                                    AllowFiltering="true"
+                                                    Placeholder="Seleccione fondo">
+                                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                    </SfDropDownList>
+                                </div>
+                                <div>
+                                    <label>Caja de compensación</label>
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                                    @bind-Value="_employeeModel.FamilyCompensationFundPublicId"
+                                                    DataSource="@_cajas"
+                                                    AllowFiltering="true"
+                                                    Placeholder="Seleccione caja">
+                                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                    </SfDropDownList>
+                                </div>
                             </div>
                         </ContentTemplate>
                     </TabItem>
@@ -405,6 +425,8 @@
     private List<LookupOption> _pensions = new();
     private List<LookupOption> _arl = new();
     private List<LookupOption> _arlClases = new();
+    private List<LookupOption> _cesantias = new();
+    private List<LookupOption> _cajas = new();
     private List<LookupOption> _banks = new();
     private List<LookupOption> _cities = new();
 
@@ -465,15 +487,19 @@
             var pensionsTask = Http.GetListAsync<LookupRaw>("/api/payroll/pension-providers?PageNumber=1&PageSize=500");
             var arlTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk?PageNumber=1&PageSize=500");
             var arlClasesTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk-rates?PageNumber=1&PageSize=50");
+            var cesantiasTask = Http.GetListAsync<LookupRaw>("/api/payroll/severance-providers?PageNumber=1&PageSize=500");
+            var cajasTask = Http.GetListAsync<LookupRaw>("/api/payroll/family-compensation-funds?PageNumber=1&PageSize=500");
             var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
             var citiesTask = Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000");
 
-            await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, banksTask, citiesTask);
+            await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, banksTask, citiesTask);
 
             _eps = (await epsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _pensions = (await pensionsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _arl = (await arlTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _arlClases = (await arlClasesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+            _cesantias = (await cesantiasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+            _cajas = (await cajasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _banks = (await banksTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cities = (await citiesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
         }
@@ -692,6 +718,8 @@
                     PensionProviderPublicId = _employeeModel.PensionProviderPublicId,
                     WorkRiskProviderPublicId = _employeeModel.WorkRiskProviderPublicId,
                     WorkRiskRatePublicId = _employeeModel.WorkRiskRatePublicId,
+                    SeveranceProviderPublicId = _employeeModel.SeveranceProviderPublicId,
+                    FamilyCompensationFundPublicId = _employeeModel.FamilyCompensationFundPublicId,
                     PayrollBankPublicId = _employeeModel.PayrollBankPublicId,
                     PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_employeeModel.PayrollBankAccountNumber)
                         ? null : _employeeModel.PayrollBankAccountNumber,
@@ -709,6 +737,8 @@
                     PensionProviderPublicId = _employeeModel.PensionProviderPublicId,
                     WorkRiskProviderPublicId = _employeeModel.WorkRiskProviderPublicId,
                     WorkRiskRatePublicId = _employeeModel.WorkRiskRatePublicId,
+                    SeveranceProviderPublicId = _employeeModel.SeveranceProviderPublicId,
+                    FamilyCompensationFundPublicId = _employeeModel.FamilyCompensationFundPublicId,
                     PayrollBankPublicId = _employeeModel.PayrollBankPublicId,
                     PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_employeeModel.PayrollBankAccountNumber)
                         ? null : _employeeModel.PayrollBankAccountNumber,
@@ -805,6 +835,8 @@
         PensionProviderPublicId = e.PensionProviderPublicId,
         WorkRiskProviderPublicId = e.WorkRiskProviderPublicId,
         WorkRiskRatePublicId = e.WorkRiskRatePublicId,
+        SeveranceProviderPublicId = e.SeveranceProviderPublicId,
+        FamilyCompensationFundPublicId = e.FamilyCompensationFundPublicId,
         PayrollBankPublicId = e.PayrollBankPublicId,
         PayrollBankAccountNumber = e.PayrollBankAccountNumber ?? "",
         PayrollBankAccountType = e.PayrollBankAccountType
@@ -841,6 +873,8 @@
         public Guid? PensionProviderPublicId { get; set; }
         public Guid? WorkRiskProviderPublicId { get; set; }
         public Guid? WorkRiskRatePublicId { get; set; }
+        public Guid? SeveranceProviderPublicId { get; set; }
+        public Guid? FamilyCompensationFundPublicId { get; set; }
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; }
@@ -905,6 +939,8 @@
         public Guid? PensionProviderPublicId { get; set; }
         public Guid? WorkRiskProviderPublicId { get; set; }
         public Guid? WorkRiskRatePublicId { get; set; }
+        public Guid? SeveranceProviderPublicId { get; set; }
+        public Guid? FamilyCompensationFundPublicId { get; set; }
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; } = 1;

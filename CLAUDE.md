@@ -133,7 +133,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   clase ARL de cada ficha) está en `docs/operaciones/nomina-primer-periodo.md`. La ficha
   guarda la **fila** de `PAY_WorkRiskRates`, no la clase: la clase es su `Code`, y hasta
   el 2026-09-11 el cargador tomaba el Id como clase y nadie sembraba la tabla ni la
-  pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». El **cálculo preliminar** anterior
+  pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». La
+  ficha también guarda fondo de cesantías (`SeveranceFundId`, entero desde el 2026-09-12)
+  y caja de compensación (`FamilySubsidyId` → catálogo `PAY_FamilyCompensationFunds`,
+  sin semilla). El **cálculo preliminar** anterior
   (`POST /api/payroll/process`, salud y pensión fijas al 4 %) se retiró sin alias.
 
 ## Arquitectura

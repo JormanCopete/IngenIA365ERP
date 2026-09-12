@@ -38,8 +38,9 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. `release e620507` (2026-09-12, GitOps
-`158da4b`) llevó el reenvío de invitaciones fail-soft. Antes, **`release 47185e6`
+a release: …` y sincronización manual de Argo. `release 407c85e` (2026-09-12, GitOps
+`78da720`) llevó la cuenta de correo de respaldo; `release e620507` (2026-09-12, GitOps
+`158da4b`) el reenvío de invitaciones fail-soft. Antes, **`release 47185e6`
 (2026-09-11)**: clase de riesgo ARL en la ficha del empleado, semilla de las cinco
 clases (`WorkRiskClassesSeeder`, corrió sola en la operativa de PDN: «5 fila(s)
 insertadas») y cargador por `Code`; en QA se había visto que toda liquidación salía

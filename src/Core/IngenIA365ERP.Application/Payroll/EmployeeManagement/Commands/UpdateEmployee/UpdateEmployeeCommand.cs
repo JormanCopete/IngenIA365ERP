@@ -24,6 +24,10 @@ public record UpdateEmployeeCommand : IRequest<Result>
     public Guid? WorkRiskProviderPublicId { get; init; }
     /// <summary>Clase de riesgo ARL (fila de <c>PAY_WorkRiskRates</c>); ver <c>RegisterEmployeeCommand</c>.</summary>
     public Guid? WorkRiskRatePublicId { get; init; }
+    /// <summary>Fondo de cesantías (fila de <c>PAY_SeveranceProviders</c>). No afecta la liquidación mensual; importa para la consignación anual y los reportes.</summary>
+    public Guid? SeveranceProviderPublicId { get; init; }
+    /// <summary>Caja de compensación familiar (fila de <c>PAY_FamilyCompensationFunds</c>).</summary>
+    public Guid? FamilyCompensationFundPublicId { get; init; }
 
     public Guid? PayrollBankPublicId { get; init; }
     public string? PayrollBankAccountNumber { get; init; }
@@ -79,6 +83,22 @@ public class UpdateEmployeeCommandHandler(
             if (clase is not null) workRiskRateId = clase.Id;
         }
 
+        int severanceFundId = 0;
+        if (request.SeveranceProviderPublicId.HasValue)
+        {
+            var fondo = await context.SeveranceProviders.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.PublicId == request.SeveranceProviderPublicId.Value && !f.IsDeleted, ct);
+            if (fondo is not null) severanceFundId = fondo.Id;
+        }
+
+        int familySubsidyId = 0;
+        if (request.FamilyCompensationFundPublicId.HasValue)
+        {
+            var caja = await context.FamilyCompensationFunds.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.PublicId == request.FamilyCompensationFundPublicId.Value && !c.IsDeleted, ct);
+            if (caja is not null) familySubsidyId = caja.Id;
+        }
+
         string payrollBankId = "";
         if (request.PayrollBankPublicId.HasValue)
         {
@@ -96,6 +116,8 @@ public class UpdateEmployeeCommandHandler(
         employee.PensionFundId = pensionId;
         employee.WorkRiskId = workRiskId;
         employee.WorkRiskRateId = workRiskRateId;
+        employee.SeveranceFundId = severanceFundId;
+        employee.FamilySubsidyId = familySubsidyId;
         employee.PayrollBankId = payrollBankId;
         employee.PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "";
         employee.PayrollBankAccountType = request.PayrollBankAccountType;

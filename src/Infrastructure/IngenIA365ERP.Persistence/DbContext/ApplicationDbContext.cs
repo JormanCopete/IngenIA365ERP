@@ -230,6 +230,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Absence> Absences => Set<Absence>();
     public DbSet<DirectDebit> DirectDebits => Set<DirectDebit>();
     public DbSet<SeveranceProvider> SeveranceProviders => Set<SeveranceProvider>();
+    public DbSet<FamilyCompensationFund> FamilyCompensationFunds => Set<FamilyCompensationFund>();
     public DbSet<SeveranceHistory> SeveranceHistories => Set<SeveranceHistory>();
     public DbSet<VacationLiquidation> VacationLiquidations => Set<VacationLiquidation>();
     public DbSet<PreLiquidation> PreLiquidations => Set<PreLiquidation>();

@@ -141,6 +141,44 @@ public class PayrollRunsEndpointsTests(CentralIdentityApiFixture fx)
         detalle.GetProperty("refusals").EnumerateArray().Select(r => r.GetString()).Should().NotContain(r => r!.Contains("ARL"));
     }
 
+    /// <summary>
+    /// La ficha guarda fondo de cesantías y caja de compensación (2026-09-12): hasta entonces
+    /// no había dónde elegirlos, y el fondo estaba en una columna decimal que nadie leía. Los
+    /// dos son catálogos nuevos o sin uso, así que la prueba los crea por la API.
+    /// </summary>
+    [Fact]
+    public async Task La_ficha_guarda_fondo_de_cesantias_y_caja_de_compensacion()
+    {
+        var ctx = await NominaE2E.PrepararAsync(fx);
+        using var http = fx.CreateClient();
+        var admin = ctx.TokenAdmin;
+
+        var fondo = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/severance-providers",
+            new { code = 901, name = "Fondo Nacional del Ahorro", shortName = "FNA", taxId = "899999284", checkDigit = 1 });
+        fondo.StatusCode.Should().BeOneOf([HttpStatusCode.Created, HttpStatusCode.BadRequest], "otra corrida pudo crearlo ya");
+        var caja = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/family-compensation-funds",
+            new { code = 901, name = "Comfandi", shortName = "COMFANDI", taxId = "890303093", checkDigit = 5 });
+        caja.StatusCode.Should().BeOneOf([HttpStatusCode.Created, HttpStatusCode.BadRequest], "otra corrida pudo crearlo ya");
+
+        var fondoId = (await NominaE2E.GetAsync(http, admin, "/api/payroll/severance-providers?pageSize=500")).GetProperty("items")
+            .EnumerateArray().Single(f => f.GetProperty("code").GetInt32() == 901).GetProperty("publicId").GetGuid();
+        var cajaId = (await NominaE2E.GetAsync(http, admin, "/api/payroll/family-compensation-funds?pageSize=500")).GetProperty("items")
+            .EnumerateArray().Single(c => c.GetProperty("code").GetInt32() == 901).GetProperty("publicId").GetGuid();
+
+        var (empleadoId, _) = await NominaE2E.CrearEmpleadoAsync(http, admin, "Gloria", 2_500_000m, new DateTime(2024, 2, 1));
+        var actualizar = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/payroll/employees/{empleadoId}", new
+        {
+            baseSalary = 2_500_000m, contractType = 1, severanceProviderPublicId = fondoId, familyCompensationFundPublicId = cajaId, payrollBankAccountType = 1,
+        });
+        actualizar.IsSuccessStatusCode.Should().BeTrue(await actualizar.Content.ReadAsStringAsync());
+
+        var ficha = await NominaE2E.GetAsync(http, admin, $"/api/payroll/employees/{empleadoId}");
+        ficha.GetProperty("severanceProviderPublicId").GetGuid().Should().Be(fondoId);
+        ficha.GetProperty("severanceProviderName").GetString().Should().Be("Fondo Nacional del Ahorro");
+        ficha.GetProperty("familyCompensationFundPublicId").GetGuid().Should().Be(cajaId);
+        ficha.GetProperty("familyCompensationFundName").GetString().Should().Be("Comfandi");
+    }
+
     [Fact]
     public async Task Sin_permiso_de_calcular_la_ruta_no_existe()
     {

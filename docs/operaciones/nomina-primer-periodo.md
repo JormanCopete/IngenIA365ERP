@@ -52,6 +52,16 @@ Lo que la semilla **no** deja, porque es decisión de cada cooperativa:
   ficha». En una cooperativa creada antes de esa fecha: reaplicar la semilla (§5) y
   luego abrir cada empleado y elegir su clase.
 
+  **Fondo de cesantías y caja de compensación** (desde el 2026-09-12) también se
+  eligen en la ficha, de los catálogos Nómina › Cesantías y Nómina › Cajas de
+  compensación (este último nace vacío: la semilla no trae cajas, se cargan a mano).
+  Ninguno de los dos cambia la liquidación mensual —la provisión de cesantías y el
+  aporte a caja se calculan igual—; importan para la consignación anual, la planilla
+  y los reportes por entidad. La migración
+  `CajasDeCompensacionYFondoDeCesantiasEnLaFicha` estrecha `SeveranceFundId` de
+  `decimal(6,0)` a entero (sin pérdida: siempre valió 0) y crea
+  `PAY_FamilyCompensationFunds`.
+
 ## 2. Cómo comprobarlo contra la base del ambiente
 
 Con un token de administrador de la cooperativa (segundo factor incluido). Se mira la
