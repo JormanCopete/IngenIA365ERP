@@ -33,4 +33,20 @@ public sealed class SmtpSettings
     /// certificado válido. Mientras tanto, esto es lo menos malo.
     /// </remarks>
     public string? HuellaCertificadoAceptada { get; set; }
+
+    /// <summary>
+    /// Segunda cuenta (o segundo relay) por la que sale el correo cuando la principal
+    /// agotó sus reintentos. Sección <c>Smtp:Respaldo</c>, misma forma que ésta; se
+    /// considera configurada si declara <see cref="Host"/>. Lleva su PROPIO remitente:
+    /// el servidor exige que el «De:» sea la cuenta autenticada, así que un remitente
+    /// compartido volvería a fallar por lo mismo que se está cubriendo.
+    /// </summary>
+    /// <remarks>
+    /// Cubre una cuenta bloqueada o una contraseña vencida. Si las dos apuntan al mismo
+    /// servidor, NO cubre que ese servidor se caiga: para eso el respaldo tiene que ser
+    /// otro relay. Un <c>Respaldo</c> dentro del respaldo se ignora.
+    /// </remarks>
+    public SmtpSettings? Respaldo { get; set; }
+
+    public bool EstaConfigurado => !string.IsNullOrWhiteSpace(Host) && Port > 0;
 }

@@ -14,16 +14,32 @@
 #   .\tools\scripts\crear-secreto-smtp.ps1 -Ambiente qa
 #   .\tools\scripts\crear-secreto-smtp.ps1 -Ambiente dev
 #   .\tools\scripts\crear-secreto-smtp.ps1 -Ambiente pdn
+#   .\tools\scripts\crear-secreto-smtp.ps1 -Ambiente pdn -Respaldo   (segunda cuenta)
+#
+# -Respaldo instala el Secret erp-smtp-respaldo: las credenciales de la cuenta
+# por la que sale el correo cuando la principal agota sus reintentos
+# (Smtp:Respaldo). El overlay del ambiente decide host y remitente de esa
+# cuenta; aqui solo van usuario y contrasena.
+#
+# OJO: el usuario tiene que ser el mismo buzon que el remitente configurado
+# (Smtp__FromAddress o Smtp__Respaldo__FromAddress): el servidor rechaza enviar
+# «como» otra direccion («You are not allowed to send emails as X while logged
+# as Y»). Es lo que paso en produccion el 2026-09-11.
 # =============================================================================
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('dev', 'qa', 'pdn')]
     [string]$Ambiente,
 
+    [switch]$Respaldo,
+
     [string]$KeyPath = "$env:USERPROFILE\.ssh\ingenia365_deploy"
 )
 
 $ErrorActionPreference = 'Stop'
+
+$nombreSecreto = if ($Respaldo) { 'erp-smtp-respaldo' } else { 'erp-smtp' }
+$rol = if ($Respaldo) { 'de RESPALDO' } else { 'principal' }
 
 $destino = switch ($Ambiente) {
     'dev' { @{ Host = '100.94.218.42';  Namespace = 'erp-dev'; Nombre = 'DEV' } }
@@ -32,7 +48,7 @@ $destino = switch ($Ambiente) {
 }
 
 Write-Host ""
-Write-Host ("  Credenciales del relay de correo para {0}" -f $destino.Nombre) -ForegroundColor Cyan
+Write-Host ("  Credenciales de la cuenta de correo {0} para {1} (Secret {2})" -f $rol, $destino.Nombre, $nombreSecreto) -ForegroundColor Cyan
 Write-Host "  (las del servidor SMTP, p. ej. mail.notifica365.com)" -ForegroundColor DarkGray
 Write-Host ""
 
@@ -58,7 +74,7 @@ $yaml = @"
 apiVersion: v1
 kind: Secret
 metadata:
-  name: erp-smtp
+  name: $nombreSecreto
   namespace: $($destino.Namespace)
 type: Opaque
 data:
@@ -83,7 +99,7 @@ $clave = $null
 Write-Host ""
 Write-Host "  Verificacion:" -ForegroundColor Cyan
 ssh -i $KeyPath -o BatchMode=yes "root@$($destino.Host)" `
-    "k3s kubectl get secret erp-smtp -n $($destino.Namespace) -o jsonpath='    secreto {.metadata.name} con claves: {range .data}{@}{end}'; echo" 2>&1
+    "k3s kubectl get secret $nombreSecreto -n $($destino.Namespace) -o jsonpath='    secreto {.metadata.name} con claves: {range .data}{@}{end}'; echo" 2>&1
 
 Write-Host ""
 Write-Host "  La API lee el Secret al ARRANCAR: hay que reiniciarla para que lo tome." -ForegroundColor Yellow
