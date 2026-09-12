@@ -1,50 +1,36 @@
-# ── Etapa 0: manifiestos de proyecto ──
-# Enumerar los .csproj a mano era una fuente constante de fallos: cada proyecto
-# nuevo, o cada referencia transitiva que nadie recordo agregar, rompia el
-# restore DENTRO de la imagen aunque la solucion compilara bien fuera (asi se
-# perdieron corridas por Storage y por legacy/ERP.Core). Esta etapa copia el
-# contexto y se queda solo con los manifiestos, de modo que restore los vea
-# todos, hoy y cuando se agregue el proximo proyecto.
+# Imagen de ejecucion de la API.
 #
-# No sacrifica la cache: si solo cambia codigo .cs, el resultado de esta etapa es
-# identico byte a byte y BuildKit reutiliza la capa de restore.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS manifests
-WORKDIR /src
-COPY . .
-RUN find . -type f \
-      ! -name '*.csproj' ! -name '*.slnx' ! -name '*.sln' \
-      ! -name '*.props' ! -name '*.targets' \
-      ! -iname 'nuget.config' ! -name 'packages.lock.json' \
-      ! -name 'global.json' \
-      -delete \
- && find . -mindepth 1 -type d -empty -delete
-
-# ── Stage 1: Build ──
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
-WORKDIR /src
-
-COPY --from=manifests /src .
-RUN dotnet restore src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj
-
-# Codigo fuente. legacy/ no es opcional: IngenIA365ERP.Legacy referencia
-# ERP.Core, que vive ahi.
-COPY src/ src/
-COPY tools/ tools/
-COPY legacy/ legacy/
-
-# Publicar
-WORKDIR /src/src/Presentation/IngenIA365ERP.API
-RUN dotnet publish -c Release -o /app/publish --no-restore
-
-# ── Stage 2: Runtime ──
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# El binario NO se compila aqui: llega ya publicado. El CONTEXTO de construccion
+# es la carpeta de publicacion (la salida de `dotnet publish -c Release`), no la
+# raiz del repositorio:
+#
+#   dotnet publish src/Presentation/IngenIA365ERP.API -c Release -o artifacts/api
+#   docker build -f src/Presentation/IngenIA365ERP.API/Dockerfile -t api artifacts/api
+#
+# (tools/scripts/construir-imagenes.ps1 hace las tres imagenes de una vez.)
+#
+# Hasta el 2026-09-13 este Dockerfile traia el SDK y compilaba el grafo entero
+# dentro de la imagen, y el pipeline lo hacia tres veces en serie (API, Web,
+# Migrator) despues de haber compilado lo mismo para las pruebas: 24 minutos de
+# docker-build aun para un commit que solo tocaba documentacion. Compilar una sola
+# vez en el runner y empaquetar el resultado baja la construccion de cada imagen a
+# segundos, y elimina la clase entera de fallos "compila fuera pero no dentro"
+# (la lista de .csproj desactualizada, el restore del publish que no bajaba
+# blazor.web.js, el SDK del contenedor distinto del de desarrollo).
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
 # Usuario sin privilegios: si alguien logra ejecucion remota, no es root.
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin appuser \
  && mkdir -p /app/storage/attachments /app/logs \
  && chown -R 10001:10001 /app
-COPY --from=build --chown=10001:10001 /app/publish .
+COPY --chown=10001:10001 . .
+
+# COPY de un contexto vacio o equivocado NO falla: la imagen se construiria sin la
+# aplicacion y moriria al arrancar, ya desplegada. Se comprueba aqui.
+RUN test -f /app/IngenIA365ERP.API.dll \
+ || { echo "ERROR: el contexto no es la carpeta de publicacion de la API (falta IngenIA365ERP.API.dll)."; exit 1; }
+
 USER 10001
 
 EXPOSE 8080
