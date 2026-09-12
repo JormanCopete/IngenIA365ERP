@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.WithdrawalReasons.Queries;
 public record WithdrawalReasonDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
 }
@@ -52,6 +53,7 @@ public class ListWithdrawalReasonsQueryHandler(IApplicationDbContext context)
             .Select(e => new WithdrawalReasonDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })
@@ -77,6 +79,7 @@ public class GetWithdrawalReasonByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new WithdrawalReasonDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })

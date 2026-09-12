@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Positions.Queries;
 public record PositionDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
 }
@@ -52,6 +53,7 @@ public class ListPositionsQueryHandler(IApplicationDbContext context)
             .Select(e => new PositionDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })
@@ -77,6 +79,7 @@ public class GetPositionByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new PositionDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })

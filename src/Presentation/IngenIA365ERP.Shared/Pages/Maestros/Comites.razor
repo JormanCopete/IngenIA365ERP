@@ -20,6 +20,7 @@
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
+        <GridColumn Field="@nameof(CommitteeRow.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(CommitteeRow.Name)" HeaderText="Nombre" Width="320" />
         <GridColumn Field="@nameof(CommitteeRow.ShortName)" HeaderText="Nombre Corto" Width="200" />
         <GridColumn HeaderText="Tipo" Width="160">
@@ -52,14 +53,18 @@
                 <DataAnnotationsValidator />
                 <div class="pagina">
                     <div>
-                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del comite"
+                        <CampoCodigo Catalogo="comites" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre del comite"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
                     <div>
                         <label>Nombre Corto</label>
-                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                        <SfTextBox @bind-Value="_model.ShortName" MaxLength="60" Placeholder="Nombre corto"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "60" } })" />
                     </div>
                     <div>
@@ -95,6 +100,7 @@
     private string _dialogTitle = "";
     private CommitteeModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private Guid _deleteId;
 
     private List<CodeOption> _committeeTypes = new()
@@ -152,10 +158,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(CommitteeRow row)
     {
         _model = new CommitteeModel
         {
+            Code = row.Code,
             Name = row.Name,
             ShortName = row.ShortName,
             CommitteeType = row.CommitteeType
@@ -180,6 +193,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         if (string.IsNullOrWhiteSpace(_model.Name))
@@ -252,6 +270,7 @@
 
     private class CommitteeRow
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
@@ -260,6 +279,7 @@
 
     private class CommitteeModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "Nombre obligatorio.")]
         [MaxLength(80, ErrorMessage = "Nombre no puede superar 80 caracteres.")]
         public string Name { get; set; } = "";

@@ -215,7 +215,7 @@
                         @if (_concepto.MaxAmount is { } ma) { <p class="texto-tenue">Máximo @ma.ToString("N0").</p> }
                     }
 
-                    <SfTextBox @bind-Value="_form.Notes" Placeholder="Observación" FloatLabelType="FloatLabelType.Always" Multiline="true" />
+                    <SfTextBox @bind-Value="_form.Notes" MaxLength="500" Placeholder="Observación" FloatLabelType="FloatLabelType.Always" Multiline="true" />
                     <ValidationMessage For="() => _form.Notes" />
 
                     @if (_corrigiendo is not null)

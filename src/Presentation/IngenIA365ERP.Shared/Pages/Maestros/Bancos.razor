@@ -14,6 +14,7 @@
 <SfGrid @ref="_grid" TValue="BankItem" DataSource="@_items"
     AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
+        <GridColumn Field="@nameof(BankItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
         <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="150" />
@@ -37,20 +38,24 @@
         <Content>
             <div class="pagina">
                 <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del banco" />
+                    <CampoCodigo Catalogo="bancos" @bind-Value="_model.Code" Largo="10"
+                                 EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                </div>
+                <div>
+                    <label>Nombre <span class="obligatorio">*</span></label>
+                    <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre del banco" />
                 </div>
                 <div>
                     <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                    <SfTextBox @bind-Value="_model.ShortName" MaxLength="30" Placeholder="Nombre corto" />
                 </div>
                 <div>
                     <label>Cuenta Contable</label>
-                    <SfTextBox @bind-Value="_model.AccountCode" Placeholder="Codigo cuenta contable" />
+                    <SfTextBox @bind-Value="_model.AccountCode" MaxLength="20" Placeholder="Codigo cuenta contable" />
                 </div>
                 <div>
                     <label>Tipo Comprobante</label>
-                    <SfTextBox @bind-Value="_model.VoucherTypeCode" Placeholder="Codigo tipo comprobante" />
+                    <SfTextBox @bind-Value="_model.VoucherTypeCode" MaxLength="10" Placeholder="Codigo tipo comprobante" />
                 </div>
                 <div>
                     <SfCheckBox @bind-Checked="_model.CheckDigitRequired" Label="Requiere Digito de Chequeo" />
@@ -77,6 +82,7 @@
     private List<BankItem> _items = [];
     private BankModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -91,10 +97,17 @@
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Banco"; _showDialog = true; }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(BankItem item)
     {
         _model = new()
         {
+            Code = item.Code,
             Name = item.Name,
             ShortName = item.ShortName,
             AccountCode = item.AccountCode,
@@ -111,6 +124,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         HttpResponseMessage res;
         if (_editId.HasValue)
             res = await Http.PutAsJsonAsync($"/api/core/banks/{_editId}", _model);
@@ -141,6 +159,7 @@
 
     private class BankItem
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
@@ -152,6 +171,7 @@
 
     private class BankModel
     {
+        public string? Code { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
         public string? AccountCode { get; set; }

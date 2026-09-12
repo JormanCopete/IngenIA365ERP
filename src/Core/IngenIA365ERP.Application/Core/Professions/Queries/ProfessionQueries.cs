@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Professions.Queries;
 public record ProfessionDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
 }
@@ -52,6 +53,7 @@ public class ListProfessionsQueryHandler(IApplicationDbContext context)
             .Select(e => new ProfessionDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })
@@ -77,6 +79,7 @@ public class GetProfessionByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new ProfessionDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })

@@ -16,6 +16,8 @@ public class AgreementConfiguration : IEntityTypeConfiguration<Agreement>
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_Agreements_PublicId");
 
         builder.Property(e => e.LegacyCode).HasMaxLength(10);
+        // Único cuando existe: los registros migrados del SOLIDO pueden venir sin código.
+        builder.HasIndex(e => e.LegacyCode).IsUnique().HasFilter("[LegacyCode] IS NOT NULL");
         builder.Property(e => e.Name).HasMaxLength(80).IsRequired();
         builder.Property(e => e.AccountNumber).HasMaxLength(60);
         builder.Property(e => e.EntityCode).HasMaxLength(10);

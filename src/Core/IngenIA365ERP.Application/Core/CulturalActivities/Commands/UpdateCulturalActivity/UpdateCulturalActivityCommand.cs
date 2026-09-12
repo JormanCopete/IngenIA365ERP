@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -9,6 +10,7 @@ namespace IngenIA365ERP.Application.Core.CulturalActivities.Commands.UpdateCultu
 public record UpdateCulturalActivityCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public Guid? CommitteePublicId { get; init; }
@@ -42,6 +44,16 @@ public class UpdateCulturalActivityCommandHandler(
 
             committeeId = committee.Id;
         }
+
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.CulturalActivities.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, cancellationToken);
+            if (repetido is not null)
+                return Result.Failure(CodigoDeCatalogo.Duplicado("una actividad cultural", codigo, repetido.Name));
+        }
+        entity.LegacyCode = codigo;
 
         entity.Name = request.Name;
         entity.ShortName = request.ShortName;

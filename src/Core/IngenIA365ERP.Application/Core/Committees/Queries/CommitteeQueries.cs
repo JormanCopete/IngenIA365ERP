@@ -8,6 +8,7 @@ namespace IngenIA365ERP.Application.Core.Committees.Queries;
 public record CommitteeDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string? CommitteeType { get; init; }
@@ -46,6 +47,7 @@ public class ListCommitteesQueryHandler(IApplicationDbContext context)
             .Select(c => new CommitteeDto
             {
                 PublicId = c.PublicId,
+                Code = c.LegacyCode,
                 Name = c.Name,
                 ShortName = c.ShortName,
                 CommitteeType = c.CommitteeType
@@ -70,6 +72,7 @@ public class GetCommitteeByIdQueryHandler(IApplicationDbContext context)
             .Select(c => new CommitteeDto
             {
                 PublicId = c.PublicId,
+                Code = c.LegacyCode,
                 Name = c.Name,
                 ShortName = c.ShortName,
                 CommitteeType = c.CommitteeType

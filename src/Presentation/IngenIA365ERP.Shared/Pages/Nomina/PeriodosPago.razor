@@ -95,18 +95,18 @@
                             </select>
                         </label>
                     }
-                    <SfTextBox @bind-Value="_modelo.Description" Placeholder="Descripción (p. ej. Marzo 2026)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_modelo.Description" MaxLength="100" Placeholder="Descripción (p. ej. Marzo 2026)" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.Description" />
                     <SfDatePicker TValue="DateTime" @bind-Value="_modelo.StartDate" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" />
                     <SfDatePicker TValue="DateTime" @bind-Value="_modelo.EndDate" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.EndDate" />
-                    <SfTextBox @bind-Value="_modelo.PayDate" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_modelo.PayDate" MaxLength="40" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
                     @if (_editId is null)
                     {
                         <SfNumericTextBox TValue="int" @bind-Value="_modelo.PayrollCompanyId" Placeholder="Empresa de nómina" FloatLabelType="FloatLabelType.Always" />
                         <SfNumericTextBox TValue="int" @bind-Value="_modelo.PlanId" Placeholder="Número de planilla (0 = siguiente)" FloatLabelType="FloatLabelType.Always" />
                     }
-                    <SfTextBox @bind-Value="_modelo.StatusMessage" Placeholder="Nota" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_modelo.StatusMessage" MaxLength="100" Placeholder="Nota" FloatLabelType="FloatLabelType.Always" />
                     <p class="texto-tenue">El estado lo mueven calcular, aprobar y reversar en Liquidación; aquí no se edita.</p>
                 </div>
                 <div class="toolbar">

@@ -801,3 +801,17 @@ input[type="checkbox"], input[type="radio"] {
 
 .manual-pie { margin-top: var(--gap-lg, 1.5rem); }
 .manual-pie code { font-size: var(--texto-sm); }
+
+/* --- Campo «Código» de los catálogos (CampoCodigo.razor) ------------------- */
+/* El código es una clave, no un nombre: se escribe en mayúsculas y el aviso de
+   duplicado aparece bajo el campo, no como toast, porque tiene que quedarse ahí
+   mientras la persona decide qué hacer. */
+.campo-codigo-entrada input { text-transform: uppercase; }
+.campo-codigo-aviso { margin-top: var(--pad-xs); padding: var(--pad-sm) var(--pad-md); font-size: var(--texto-sm); }
+.campo-codigo .hint { margin-top: var(--pad-xs); }
+.enlace {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: inherit; font: inherit; text-decoration: underline;
+}
+/* Asterisco de campo obligatorio: un solo color y un solo sitio para cambiarlo. */
+.obligatorio { color: var(--peligro-texto); margin-left: 2px; }

@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Application.Payroll.WithholdingCauses.Queries;
 public record WithholdingCauseDto
 {
     public Guid PublicId { get; init; }
-    public int Code { get; init; }
+    public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public int IndemnityType { get; init; }

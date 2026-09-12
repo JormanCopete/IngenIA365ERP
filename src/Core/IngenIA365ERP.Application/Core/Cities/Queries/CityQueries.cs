@@ -8,6 +8,7 @@ namespace IngenIA365ERP.Application.Core.Cities.Queries;
 public record CityDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public Guid DepartmentPublicId { get; init; }
     public string DepartmentName { get; init; } = string.Empty;
@@ -62,6 +63,7 @@ public class ListCitiesQueryHandler(IApplicationDbContext context)
             .Select(e => new CityDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 DepartmentPublicId = e.Department.PublicId,
                 DepartmentName = e.Department.Name
@@ -89,6 +91,7 @@ public class GetCityByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new CityDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 DepartmentPublicId = e.Department.PublicId,
                 DepartmentName = e.Department.Name

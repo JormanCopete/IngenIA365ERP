@@ -14,6 +14,7 @@
 <SfGrid @ref="_grid" TValue="DiseaseItem" DataSource="@_items"
     AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
+        <GridColumn Field="@nameof(DiseaseItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="400" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
             <Template>
@@ -32,8 +33,12 @@
         <Content>
             <div class="pagina">
                 <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la enfermedad" />
+                    <CampoCodigo Catalogo="enfermedades" @bind-Value="_model.Code" Largo="10"
+                                 EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                </div>
+                <div>
+                    <label>Nombre <span class="obligatorio">*</span></label>
+                    <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nombre de la enfermedad" />
                 </div>
             </div>
         </Content>
@@ -52,6 +57,7 @@
     private List<DiseaseItem> _items = [];
     private DiseaseItem _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -65,11 +71,22 @@
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Enfermedad"; _showDialog = true; }
-    private void OpenEdit(DiseaseItem item) { _model = new() { Name = item.Name }; _editId = item.PublicId; _dialogTitle = "Editar Enfermedad"; _showDialog = true; }
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
+    private void OpenEdit(DiseaseItem item) { _model = new() { Code = item.Code, Name = item.Name }; _editId = item.PublicId; _dialogTitle = "Editar Enfermedad"; _showDialog = true; }
     private void OpenDelete(DiseaseItem item) { _deleteId = item.PublicId; _showConfirm = true; }
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         HttpResponseMessage res;
         if (_editId.HasValue)
             res = await Http.PutAsJsonAsync($"/api/core/diseases/{_editId}", _model);
@@ -100,6 +117,7 @@
 
     private class DiseaseItem
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
     }

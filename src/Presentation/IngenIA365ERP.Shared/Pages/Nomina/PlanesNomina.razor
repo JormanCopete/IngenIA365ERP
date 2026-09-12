@@ -61,10 +61,10 @@
                 <div class="pagina">
                     @if (_editando is null)
                     {
-                        <SfTextBox @bind-Value="_modelo.Code" Placeholder="Código (mayúsculas, sin espacios)" FloatLabelType="FloatLabelType.Always" />
+                        <SfTextBox @bind-Value="_modelo.Code" MaxLength="20" Placeholder="Código (mayúsculas, sin espacios) *" FloatLabelType="FloatLabelType.Always" />
                         <ValidationMessage For="() => _modelo.Code" />
                     }
-                    <SfTextBox @bind-Value="_modelo.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_modelo.Name" MaxLength="100" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.Name" />
                     @if (_editando is null)
                     {

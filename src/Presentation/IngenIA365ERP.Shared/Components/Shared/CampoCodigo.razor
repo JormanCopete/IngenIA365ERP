@@ -1,0 +1,98 @@
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+@*
+    El campo «Código» de un catálogo: alfanumérico, en mayúsculas, con el largo que
+    admite la base, y que al perder el foco pregunta a la API si ese código ya existe.
+    Si existe, lo dice ahí mismo —antes de que la persona escriba el resto— y ofrece
+    abrir el registro existente. La comprobación es de cortesía: el servidor vuelve a
+    verificar al guardar y responde Catalogo.CodigoDuplicado si igual llega repetido.
+*@
+
+<div class="campo-codigo">
+    <SfTextBox Value="@Value"
+               ValueChanged="@AlCambiar"
+               Placeholder="@(Obligatorio ? Etiqueta + " *" : Etiqueta)"
+               FloatLabelType="FloatLabelType.Always"
+               MaxLength="@Largo"
+               CssClass="campo-codigo-entrada"
+               Readonly="@Readonly"
+               Blur="@(async (Syncfusion.Blazor.Inputs.FocusOutEventArgs _) => await VerificarAsync())" />
+    @if (_existente is not null)
+    {
+        <div class="aviso aviso-alerta campo-codigo-aviso" role="status">
+            Ya existe con el código <b>@_existente.Codigo</b>: <b>@_existente.Nombre</b>.
+            <button type="button" class="enlace" @onclick="@(() => OnEditarExistente.InvokeAsync(_existente.PublicId))">Editar ese registro</button>
+            o usá otro código.
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_ayuda))
+    {
+        <div class="hint">@_ayuda</div>
+    }
+</div>
+
+@code {
+    /// <summary>Nombre del catálogo en la URL de la API: <c>eps</c>, <c>bancos</c>, <c>centros-costo</c>…</summary>
+    [Parameter, EditorRequired] public string Catalogo { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Etiqueta { get; set; } = "Código";
+    [Parameter] public int Largo { get; set; } = 10;
+    [Parameter] public bool Obligatorio { get; set; }
+    [Parameter] public bool Readonly { get; set; }
+    /// <summary>Al editar: el registro que se está editando no cuenta como duplicado de sí mismo.</summary>
+    [Parameter] public Guid? EditandoPublicId { get; set; }
+    /// <summary>La pantalla abre el registro existente en modo edición.</summary>
+    [Parameter] public EventCallback<Guid> OnEditarExistente { get; set; }
+    /// <summary>Para que la pantalla no deje guardar mientras el código esté repetido.</summary>
+    [Parameter] public EventCallback<bool> DuplicadoChanged { get; set; }
+
+    private Existente? _existente;
+    private string? _ayuda;
+    private string? _ultimoVerificado;
+
+    private sealed record Existente(string Codigo, Guid PublicId, string Nombre);
+    private sealed record Respuesta(bool Existe, Guid? PublicId, string? Nombre);
+
+    protected override void OnParametersSet()
+    {
+        _ayuda = $"Hasta {Largo} caracteres: letras, dígitos, punto, guion o guion bajo.";
+    }
+
+    private async Task AlCambiar(string? nuevo)
+    {
+        var normalizado = string.IsNullOrWhiteSpace(nuevo) ? null : nuevo.Trim().ToUpperInvariant();
+        Value = normalizado;
+        await ValueChanged.InvokeAsync(normalizado);
+        if (normalizado != _ultimoVerificado) await LimpiarAsync();
+    }
+
+    private async Task VerificarAsync()
+    {
+        var codigo = Value;
+        if (string.IsNullOrWhiteSpace(codigo)) { await LimpiarAsync(); return; }
+        if (codigo == _ultimoVerificado) return;
+        _ultimoVerificado = codigo;
+
+        try
+        {
+            var r = await Http.GetFromJsonAsync<Respuesta>($"/api/catalogos/{Catalogo}/codigo/{Uri.EscapeDataString(codigo)}");
+            var esOtro = r is { Existe: true, PublicId: { } id } && id != EditandoPublicId;
+            _existente = esOtro ? new Existente(codigo, r!.PublicId!.Value, r.Nombre ?? "") : null;
+        }
+        catch
+        {
+            // Sin red o sin permiso: el servidor decide al guardar. No se bloquea a nadie por esto.
+            _existente = null;
+        }
+        await DuplicadoChanged.InvokeAsync(_existente is not null);
+    }
+
+    private async Task LimpiarAsync()
+    {
+        if (_existente is null) return;
+        _existente = null;
+        await DuplicadoChanged.InvokeAsync(false);
+    }
+}

@@ -6338,6 +6338,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Agreements_PublicId");
@@ -7100,6 +7104,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Banks_PublicId");
@@ -7305,6 +7313,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Branches_PublicId");
@@ -7372,6 +7384,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("DepartmentId")
                         .HasDatabaseName("IX_COR_Cities_DepartmentId");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -7442,6 +7458,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -8397,6 +8417,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Companies_PublicId");
@@ -8485,6 +8509,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -8718,6 +8746,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("CommitteeId");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_CulturalActivities_PublicId");
@@ -8852,6 +8884,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -9341,6 +9377,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -10727,6 +10767,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Positions_PublicId");
@@ -10792,6 +10836,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -11067,6 +11115,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Relationships_PublicId");
@@ -11132,6 +11184,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -11283,6 +11339,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("CommitteeId");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -11539,6 +11599,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("[LegacyCode] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -28667,8 +28731,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -28738,8 +28804,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -30408,8 +30476,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -31106,8 +31176,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -31788,8 +31860,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("AutoDeductions")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -31923,8 +31997,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("int");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");

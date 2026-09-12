@@ -40,8 +40,8 @@
         <Content>
             <div class="pagina">
                 <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Clase (1 a 5)" Min="1" Max="5" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.Name" Placeholder="Nivel de Riesgo" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nivel de Riesgo *" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.ShortName" MaxLength="50" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tarifa (%)" Format="N3" FloatLabelType="FloatLabelType.Always" />
             </div>
         </Content>

@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -9,6 +10,8 @@ namespace IngenIA365ERP.Application.Core.Companies.Commands.CreateCompany;
 
 public record CreateCompanyCommand : IRequest<Result<Guid>>
 {
+    /// <summary>Código alfanumérico de la cooperativa (hasta 10); se guarda en LegacyCode.</summary>
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
@@ -34,8 +37,18 @@ public class CreateCompanyCommandHandler(
             return Result.Failure<Guid>(new Error("Company.TaxIdDuplicate",
                 $"Ya existe una empresa con NIT '{request.TaxId}'."));
 
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.Companies.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && !e.IsDeleted, ct);
+            if (repetido is not null)
+                return Result.Failure<Guid>(CodigoDeCatalogo.Duplicado("una empresa", codigo, repetido.Name));
+        }
+
         var entity = new Company
         {
+            LegacyCode = codigo,
             Name = request.Name,
             ShortName = request.ShortName,
             TaxId = request.TaxId,
@@ -58,6 +71,11 @@ public class CreateCompanyCommandValidator : AbstractValidator<CreateCompanyComm
 {
     public CreateCompanyCommandValidator()
     {
+        RuleFor(x => x.Code)
+            .MaximumLength(CodigoDeCatalogo.LargoCorto).WithMessage($"El código no puede superar {CodigoDeCatalogo.LargoCorto} caracteres.")
+            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron)
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
+
         RuleFor(x => x.Name).NotEmpty().WithMessage("Nombre obligatorio.").MaximumLength(120);
         RuleFor(x => x.ShortName).MaximumLength(60);
         RuleFor(x => x.TaxId).NotEmpty().WithMessage("NIT/Documento obligatorio.").MaximumLength(20);

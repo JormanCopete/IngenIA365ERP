@@ -154,16 +154,26 @@ public class PayrollRunsEndpointsTests(CentralIdentityApiFixture fx)
         var admin = ctx.TokenAdmin;
 
         var fondo = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/severance-providers",
-            new { code = 901, name = "Fondo Nacional del Ahorro", shortName = "FNA", taxId = "899999284", checkDigit = 1 });
+            new { code = "FNA", name = "Fondo Nacional del Ahorro", shortName = "FNA", taxId = "899999284", checkDigit = 1 });
         fondo.StatusCode.Should().BeOneOf([HttpStatusCode.Created, HttpStatusCode.BadRequest], "otra corrida pudo crearlo ya");
         var caja = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/family-compensation-funds",
-            new { code = 901, name = "Comfandi", shortName = "COMFANDI", taxId = "890303093", checkDigit = 5 });
+            new { code = "comfandi", name = "Comfandi", shortName = "COMFANDI", taxId = "890303093", checkDigit = 5 });
         caja.StatusCode.Should().BeOneOf([HttpStatusCode.Created, HttpStatusCode.BadRequest], "otra corrida pudo crearlo ya");
 
+        // El código es alfanumérico, se guarda en mayúsculas y se puede consultar antes de escribir el resto.
+        var existe = await NominaE2E.GetAsync(http, admin, "/api/catalogos/cesantias/codigo/fna");
+        existe.GetProperty("existe").GetBoolean().Should().BeTrue();
+        existe.GetProperty("nombre").GetString().Should().Be("Fondo Nacional del Ahorro");
+        (await NominaE2E.GetAsync(http, admin, "/api/catalogos/cesantias/codigo/NO-EXISTE")).GetProperty("existe").GetBoolean().Should().BeFalse();
+        var repetido = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/severance-providers",
+            new { code = "fna", name = "Otro con el mismo código", taxId = "1", checkDigit = 0 });
+        repetido.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await repetido.Content.ReadAsStringAsync()).Should().Contain("Catalogo.CodigoDuplicado").And.Contain("Fondo Nacional del Ahorro");
+
         var fondoId = (await NominaE2E.GetAsync(http, admin, "/api/payroll/severance-providers?pageSize=500")).GetProperty("items")
-            .EnumerateArray().Single(f => f.GetProperty("code").GetInt32() == 901).GetProperty("publicId").GetGuid();
+            .EnumerateArray().Single(f => f.GetProperty("code").GetString() == "FNA").GetProperty("publicId").GetGuid();
         var cajaId = (await NominaE2E.GetAsync(http, admin, "/api/payroll/family-compensation-funds?pageSize=500")).GetProperty("items")
-            .EnumerateArray().Single(c => c.GetProperty("code").GetInt32() == 901).GetProperty("publicId").GetGuid();
+            .EnumerateArray().Single(c => c.GetProperty("code").GetString() == "COMFANDI" /* se guarda en mayúsculas */).GetProperty("publicId").GetGuid();
 
         var (empleadoId, _) = await NominaE2E.CrearEmpleadoAsync(http, admin, "Gloria", 2_500_000m, new DateTime(2024, 2, 1));
         var actualizar = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/payroll/employees/{empleadoId}", new

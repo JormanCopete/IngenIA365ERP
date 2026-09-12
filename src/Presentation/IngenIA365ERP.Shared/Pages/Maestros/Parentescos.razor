@@ -14,6 +14,7 @@
 <SfGrid @ref="_grid" TValue="RelationshipItem" DataSource="@_items"
     AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
+        <GridColumn Field="@nameof(RelationshipItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="200" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
@@ -33,12 +34,16 @@
         <Content>
             <div class="pagina">
                 <div>
-                    <label>Nombre *</label>
-                    <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" />
+                    <CampoCodigo Catalogo="parentescos" @bind-Value="_model.Code" Largo="10"
+                                 EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                </div>
+                <div>
+                    <label>Nombre <span class="obligatorio">*</span></label>
+                    <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre" />
                 </div>
                 <div>
                     <label>Nombre Corto</label>
-                    <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" />
+                    <SfTextBox @bind-Value="_model.ShortName" MaxLength="40" Placeholder="Nombre corto" />
                 </div>
             </div>
         </Content>
@@ -57,6 +62,7 @@
     private List<RelationshipItem> _items = [];
     private RelationshipItem _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -70,11 +76,22 @@
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parentesco"; _showDialog = true; }
-    private void OpenEdit(RelationshipItem item) { _model = new() { Name = item.Name, ShortName = item.ShortName }; _editId = item.PublicId; _dialogTitle = "Editar Parentesco"; _showDialog = true; }
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
+    private void OpenEdit(RelationshipItem item) { _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName }; _editId = item.PublicId; _dialogTitle = "Editar Parentesco"; _showDialog = true; }
     private void OpenDelete(RelationshipItem item) { _deleteId = item.PublicId; _showConfirm = true; }
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         HttpResponseMessage res;
         if (_editId.HasValue)
             res = await Http.PutAsJsonAsync($"/api/core/relationships/{_editId}", _model);
@@ -105,6 +122,7 @@
 
     private class RelationshipItem
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }

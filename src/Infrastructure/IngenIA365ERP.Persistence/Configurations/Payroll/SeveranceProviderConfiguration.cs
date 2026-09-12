@@ -14,6 +14,7 @@ public class SeveranceProviderConfiguration : IEntityTypeConfiguration<Severance
 
         builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
+        builder.Property(e => e.Code).HasMaxLength(10).IsRequired();
         builder.HasIndex(e => e.Code).IsUnique();
 
         builder.Property(e => e.Name).HasMaxLength(100).IsRequired();

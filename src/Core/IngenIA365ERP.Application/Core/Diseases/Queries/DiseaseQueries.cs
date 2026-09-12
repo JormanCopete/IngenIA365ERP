@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Diseases.Queries;
 public record DiseaseDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
 }
 
@@ -51,6 +52,7 @@ public class ListDiseasesQueryHandler(IApplicationDbContext context)
             .Select(e => new DiseaseDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name
             })
             .ToListAsync(cancellationToken);
@@ -75,6 +77,7 @@ public class GetDiseaseByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new DiseaseDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name
             })
             .FirstOrDefaultAsync(cancellationToken);

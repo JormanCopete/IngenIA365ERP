@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -9,6 +10,7 @@ namespace IngenIA365ERP.Application.Core.Committees.Commands.UpdateCommittee;
 public record UpdateCommitteeCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string? CommitteeType { get; init; }
@@ -27,6 +29,16 @@ public class UpdateCommitteeCommandHandler(
         if (entity is null)
             return Result.Failure(new Error("Committee.NotFound", "Comite no encontrado."));
 
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.Committees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, ct);
+            if (repetido is not null)
+                return Result.Failure(CodigoDeCatalogo.Duplicado("un comité", codigo, repetido.Name));
+        }
+        entity.LegacyCode = codigo;
+
         entity.Name = request.Name;
         entity.ShortName = request.ShortName;
         entity.CommitteeType = request.CommitteeType;
@@ -42,6 +54,11 @@ public class UpdateCommitteeCommandValidator : AbstractValidator<UpdateCommittee
 {
     public UpdateCommitteeCommandValidator()
     {
+        RuleFor(x => x.Code)
+            .MaximumLength(CodigoDeCatalogo.LargoCorto).WithMessage($"El código no puede superar {CodigoDeCatalogo.LargoCorto} caracteres.")
+            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron)
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
+
         RuleFor(x => x.PublicId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(80);
         RuleFor(x => x.ShortName).MaximumLength(60);

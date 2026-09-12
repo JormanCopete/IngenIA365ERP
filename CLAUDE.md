@@ -112,6 +112,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
   vive fuera de toda base de cooperativa.
+- **Códigos de catálogo** (desde el 2026-09-12): en todo catálogo el código es la
+  nomenclatura de la cooperativa —alfanumérico, en mayúsculas, sin espacios, único en su
+  tabla— y nunca un identificador del sistema (para eso están `Id` y `PublicId`). Lo
+  fija `CodigoDeCatalogo` (Application/Common/Catalogos): 10 caracteres, 20 en centros
+  de costo. En nómina (EPS, ARL, pensiones, cesantías, cajas, causas de retención) es
+  `Code`, obligatorio; en Core es `LegacyCode`, opcional (índice único filtrado). Las
+  clases ARL siguen numéricas 1..5 porque el motor las traduce. Un duplicado responde
+  `Catalogo.CodigoDuplicado` con el nombre del existente, y la pantalla lo consulta
+  antes (`GET /api/catalogos/{catalogo}/codigo/{codigo}`, componente `CampoCodigo`).
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro

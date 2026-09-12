@@ -6,7 +6,9 @@ namespace IngenIA365ERP.Domain.Entities.Payroll;
 /// <summary>Maps to [dbo].[PAY_WorkRiskProviders] (nom_arp).</summary>
 public class WorkRiskProvider : AuditableEntity
 {
-    public int Code { get; set; }
+    /// <summary>Código alfanumérico (hasta 10) que elige la cooperativa; único en la tabla. Numérico hasta el 2026-09-12.</summary>
+    [MaxLength(10)]
+    public string Code { get; set; } = string.Empty;
 
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;

@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -8,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.CostCenters.Commands.UpdateCostCenter;
 public record UpdateCostCenterCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? CompanyName { get; init; }
     public string? CompanyTaxId { get; init; }
@@ -32,6 +34,16 @@ public class UpdateCostCenterCommandHandler(
 
         if (entity is null)
             return Result.Failure(Error.NotFound);
+
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.CostCenters.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, cancellationToken);
+            if (repetido is not null)
+                return Result.Failure(CodigoDeCatalogo.Duplicado("un centro de costo", codigo, repetido.Name));
+        }
+        entity.LegacyCode = codigo;
 
         entity.Name = request.Name;
         entity.CompanyName = request.CompanyName;

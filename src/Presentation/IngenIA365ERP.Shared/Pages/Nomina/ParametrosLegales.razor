@@ -92,9 +92,9 @@ else if (_resumen is not null)
                 <div class="pagina">
                     @if (_base is null)
                     {
-                        <SfTextBox @bind-Value="_nueva.Code" Placeholder="Código (MAYUSCULAS_CON_GUION_BAJO)" FloatLabelType="FloatLabelType.Always" />
+                        <SfTextBox @bind-Value="_nueva.Code" MaxLength="40" Placeholder="Código (MAYUSCULAS_CON_GUION_BAJO) *" FloatLabelType="FloatLabelType.Always" />
                         <ValidationMessage For="() => _nueva.Code" />
-                        <SfTextBox @bind-Value="_nueva.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                        <SfTextBox @bind-Value="_nueva.Name" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
                         <ValidationMessage For="() => _nueva.Name" />
                         <label class="campo">
                             Tipo
@@ -122,12 +122,12 @@ else if (_resumen is not null)
                     {
                         @if (_base is null)
                         {
-                            <SfTextBox @bind-Value="_nueva.RangeUnitParameterCode" Placeholder="Unidad de los tramos (código de parámetro: UVT, SMMLV; vacío = pesos)" FloatLabelType="FloatLabelType.Always" />
+                            <SfTextBox @bind-Value="_nueva.RangeUnitParameterCode" MaxLength="40" Placeholder="Unidad de los tramos (código de parámetro: UVT, SMMLV; vacío = pesos)" FloatLabelType="FloatLabelType.Always" />
                             <label class="campo-check"><input type="checkbox" @bind="_nueva.RangeIsMarginal" /> Tarifa marginal sobre el exceso del tramo (retención); sin marcar, la tarifa aplica a toda la base (fondo de solidaridad)</label>
                         }
                         <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" />
                     }
-                    <SfTextBox @bind-Value="_nueva.Source" Placeholder="Norma que lo fija (decreto, resolución, ley)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_nueva.Source" MaxLength="200" Placeholder="Norma que lo fija (decreto, resolución, ley)" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _nueva.Source" />
                 </div>
                 <div class="toolbar">

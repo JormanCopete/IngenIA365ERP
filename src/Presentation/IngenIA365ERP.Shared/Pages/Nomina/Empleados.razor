@@ -104,12 +104,12 @@
                                 </div>
                                 <div>
                                     <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.TaxId"
+                                    <SfTextBox @bind-Value="_personModel.TaxId" MaxLength="20"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                                 </div>
                                 <div>
                                     <label>Digito Verificacion (NIT)</label>
-                                    <SfTextBox @bind-Value="_personModel.TaxIdCheckDigit"
+                                    <SfTextBox @bind-Value="_personModel.TaxIdCheckDigit" MaxLength="2"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
                                 </div>
                                 <div>
@@ -123,22 +123,22 @@
                                 </div>
                                 <div>
                                     <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.FirstName"
+                                    <SfTextBox @bind-Value="_personModel.FirstName" MaxLength="150"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
                                 <div>
                                     <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.LastName"
+                                    <SfTextBox @bind-Value="_personModel.LastName" MaxLength="150"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
                                 <div class="campo-ancho">
                                     <label>Razon Social (juridica)</label>
-                                    <SfTextBox @bind-Value="_personModel.BusinessName"
+                                    <SfTextBox @bind-Value="_personModel.BusinessName" MaxLength="150"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                 </div>
                                 <div>
                                     <label>Lugar de Expedicion</label>
-                                    <SfTextBox @bind-Value="_personModel.IdIssuedAt"
+                                    <SfTextBox @bind-Value="_personModel.IdIssuedAt" MaxLength="40"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                 </div>
                                 <div>
@@ -156,7 +156,7 @@
                             <div class="rejilla-campos panel-pestana">
                                 <div class="campo-ancho">
                                     <label>Direccion</label>
-                                    <SfTextBox @bind-Value="_personModel.Address"
+                                    <SfTextBox @bind-Value="_personModel.Address" MaxLength="120"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                                 </div>
                                 <div>
@@ -171,22 +171,22 @@
                                 </div>
                                 <div>
                                     <label>Correo Electronico</label>
-                                    <SfTextBox @bind-Value="_personModel.Email"
+                                    <SfTextBox @bind-Value="_personModel.Email" MaxLength="120"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                                 </div>
                                 <div>
                                     <label>Telefono Principal</label>
-                                    <SfTextBox @bind-Value="_personModel.Phone1"
+                                    <SfTextBox @bind-Value="_personModel.Phone1" MaxLength="40"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                 </div>
                                 <div>
                                     <label>Telefono Secundario</label>
-                                    <SfTextBox @bind-Value="_personModel.Phone2"
+                                    <SfTextBox @bind-Value="_personModel.Phone2" MaxLength="40"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                 </div>
                                 <div>
                                     <label>Movil</label>
-                                    <SfTextBox @bind-Value="_personModel.Mobile"
+                                    <SfTextBox @bind-Value="_personModel.Mobile" MaxLength="30"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "30" } })" />
                                 </div>
                             </div>
@@ -350,7 +350,7 @@
                                 </div>
                                 <div class="campo-ancho">
                                     <label>Numero de Cuenta</label>
-                                    <SfTextBox @bind-Value="_employeeModel.PayrollBankAccountNumber"
+                                    <SfTextBox @bind-Value="_employeeModel.PayrollBankAccountNumber" MaxLength="25"
                                                HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "25" } })" />
                                 </div>
                             </div>

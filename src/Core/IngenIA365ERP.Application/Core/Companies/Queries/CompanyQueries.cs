@@ -13,6 +13,7 @@ namespace IngenIA365ERP.Application.Core.Companies.Queries;
 public record CompanyDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
@@ -57,6 +58,7 @@ public class ListCompaniesQueryHandler(IApplicationDbContext context)
             .Select(c => new CompanyDto
             {
                 PublicId = c.PublicId,
+                Code = c.LegacyCode,
                 Name = c.Name,
                 ShortName = c.ShortName,
                 TaxId = c.TaxId,
@@ -86,6 +88,7 @@ public class GetCompanyByIdQueryHandler(IApplicationDbContext context)
             .Select(c => new CompanyDto
             {
                 PublicId = c.PublicId,
+                Code = c.LegacyCode,
                 Name = c.Name,
                 ShortName = c.ShortName,
                 TaxId = c.TaxId,

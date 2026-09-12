@@ -8,6 +8,7 @@ namespace IngenIA365ERP.Application.Core.Banks.Queries;
 public record BankDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string? AccountCode { get; init; }
@@ -70,6 +71,7 @@ public class ListBanksQueryHandler(IApplicationDbContext context)
             .Select(e => new BankDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
                 AccountCode = e.AccountCode,
@@ -112,6 +114,7 @@ public class GetBankByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new BankDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
                 AccountCode = e.AccountCode,

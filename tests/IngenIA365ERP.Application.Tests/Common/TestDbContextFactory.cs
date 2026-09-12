@@ -76,6 +76,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     DbSet<City> IApplicationDbContext.Cities => throw new NotImplementedException();
     public DbSet<Bank> Banks => Set<Bank>();
+    public DbSet<HealthInsuranceProvider> HealthInsuranceProviders => Set<HealthInsuranceProvider>();
     DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
     DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
@@ -160,7 +161,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<AssociateWithdrawal> IApplicationDbContext.AssociateWithdrawals => throw new NotImplementedException();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
     DbSet<PayrollConcept> IApplicationDbContext.PayrollConcepts => throw new NotImplementedException();
-    DbSet<HealthInsuranceProvider> IApplicationDbContext.HealthInsuranceProviders => throw new NotImplementedException();
     DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
     DbSet<PensionProvider> IApplicationDbContext.PensionProviders => throw new NotImplementedException();
     DbSet<SeveranceProvider> IApplicationDbContext.SeveranceProviders => throw new NotImplementedException();

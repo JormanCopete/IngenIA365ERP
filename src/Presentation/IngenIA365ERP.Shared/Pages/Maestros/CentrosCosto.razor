@@ -16,6 +16,7 @@
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
+        <GridColumn Field="@nameof(CostCenterRow.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(CostCenterRow.Name)" HeaderText="Nombre" Width="260" />
         <GridColumn Field="@nameof(CostCenterRow.CompanyName)" HeaderText="Empresa" Width="220" />
         <GridColumn Field="@nameof(CostCenterRow.CompanyTaxId)" HeaderText="NIT Empresa" Width="140" />
@@ -40,9 +41,13 @@
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
                 <div class="rejilla-campos" style="padding:var(--pad-md);">
+                    <div>
+                        <CampoCodigo Catalogo="centros-costo" @bind-Value="_model.Code" Largo="20"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
                     <div class="campo-ancho">
-                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del centro de costo"
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre del centro de costo"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
@@ -111,6 +116,7 @@
     private string _dialogTitle = "";
     private CostCenterModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private Guid _deleteId;
 
     private List<CodeOption> _payrollStatuses = new()
@@ -190,10 +196,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(CostCenterRow row)
     {
         _model = new CostCenterModel
         {
+            Code = row.Code,
             Name = row.Name,
             CompanyName = row.CompanyName,
             CompanyTaxId = row.CompanyTaxId,
@@ -228,6 +241,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         if (string.IsNullOrWhiteSpace(_model.Name))
@@ -308,6 +326,7 @@
     /// <summary>Coincide con el DTO devuelto por /api/core/cost-centers.</summary>
     private class CostCenterRow
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? CompanyName { get; set; }
@@ -321,6 +340,7 @@
     /// <summary>Modelo del formulario (envia CompanyName y CompanyTaxId).</summary>
     private class CostCenterModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "Nombre obligatorio.")]
         [MaxLength(80)]
         public string Name { get; set; } = "";
