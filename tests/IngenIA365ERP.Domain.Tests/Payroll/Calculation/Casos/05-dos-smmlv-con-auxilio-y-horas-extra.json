@@ -1,6 +1,6 @@
 {
   "nombre": "Exactamente dos salarios mínimos, con auxilio y 6 horas extra nocturnas",
-  "descripcion": "Salario igual al tope (2 SMMLV): conserva el auxilio de transporte. Seis horas extra nocturnas: hora = salario / 240 × 1,75. Clase de riesgo II. La suma de líneas redondeadas difiere en un peso del neto redondeado y aparece el ajuste por redondeo.",
+  "descripcion": "Salario igual al tope (2 SMMLV): conserva el auxilio de transporte. Seis horas extra nocturnas: hora = salario / 240 × 1,75 (el caso fija HORAS_MES en 240; la semilla 2026 trae 220 y 210 desde julio). Clase de riesgo II. La suma de líneas redondeadas difiere en un peso del neto redondeado y aparece el ajuste por redondeo.",
   "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
   "empleado": {
     "nombre": "Elena Gómez", "clase": "Standard", "ingreso": "2022-09-01",
@@ -11,6 +11,7 @@
   "novedades": [
     { "concepto": "HEX_NOCTURNA", "cantidad": 6, "descripcion": "Inventario nocturno" }
   ],
+  "parametros": { "HORAS_MES": 240 },
   "politicas": { "redondeo": "Peso", "exoneracion": false },
   "esperado": {
     "lineas": {

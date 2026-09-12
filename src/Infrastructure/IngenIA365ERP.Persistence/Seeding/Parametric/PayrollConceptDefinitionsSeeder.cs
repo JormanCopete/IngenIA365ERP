@@ -56,10 +56,13 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         {
             ("HEX_DIURNA", "Hora extra diurna", 1.25m),
             ("HEX_NOCTURNA", "Hora extra nocturna", 1.75m),
-            ("HEX_DOM_DIURNA", "Hora extra dominical o festiva diurna", 2.00m),
-            ("HEX_DOM_NOCTURNA", "Hora extra dominical o festiva nocturna", 2.50m),
+            // Ley 2466 de 2025 (reforma laboral): el recargo dominical/festivo sube de 75 % a 80 % desde el
+            // 01/07/2025, 90 % desde el 01/07/2026 y 100 % desde el 01/07/2027 (ver Revisiones()). La extra
+            // dominical es la extra ordinaria (1,25 / 1,75) más ese recargo.
+            ("HEX_DOM_DIURNA", "Hora extra dominical o festiva diurna", 2.05m),
+            ("HEX_DOM_NOCTURNA", "Hora extra dominical o festiva nocturna", 2.55m),
             ("RECARGO_NOCTURNO", "Recargo nocturno", 0.35m),
-            ("RECARGO_DOMINICAL", "Recargo dominical o festivo", 0.75m),
+            ("RECARGO_DOMINICAL", "Recargo dominical o festivo", 0.80m),
         })
         {
             lista.Add(Def(code, name, ConceptNature.Earning, CalculationKind.QuantityTimesUnit, d =>
@@ -254,6 +257,19 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         return d;
     }
 
+    /// <summary>
+    /// Versiones que arrancan a mitad de año por cambio de ley. Misma regla que en los parámetros
+    /// legales: se inserta la versión y se cierra la anterior el día antes, sólo si la anterior es
+    /// de la semilla y sigue abierta; una versión propia de la cooperativa no se pisa.
+    /// </summary>
+    public static IReadOnlyList<(string Code, DateTime ValidFrom, decimal UnitFactor)> Revisiones() =>
+    [
+        // Ley 2466 de 2025: recargo dominical/festivo 90 % desde el 1 de julio de 2026.
+        ("RECARGO_DOMINICAL", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 0.90m),
+        ("HEX_DOM_DIURNA", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 2.15m),
+        ("HEX_DOM_NOCTURNA", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 2.65m),
+    ];
+
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
     {
         var db = context.TenantDb!;
@@ -269,6 +285,30 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
             db.PayrollConceptDefinitions.Add(def);
             inserted++;
         }
+        // La base tiene que estar en la base antes de mirar qué versión cerrar: en una cooperativa
+        // nueva se insertan ambas en la misma pasada.
+        if (inserted > 0) await db.SaveChangesAsync(ct);
+        var base_ = Catalogo().ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
+        foreach (var (code, validFrom, factor) in Revisiones())
+        {
+            if (claves.Contains($"{code}|{validFrom:yyyy-MM-dd}")) continue;
+            var versiones = await db.PayrollConceptDefinitions.IgnoreQueryFilters()
+                .Where(c => c.Code == code).OrderByDescending(c => c.ValidFrom).ToListAsync(ct);
+            var ultima = versiones.FirstOrDefault();
+            if (ultima is not null && (ultima.ValidFrom >= validFrom || ultima.Origin != ConceptOrigin.Seed)) continue;
+            if (ultima is not null && ultima.ValidTo is null)
+            {
+                ultima.ValidTo = validFrom.AddDays(-1);
+                ultima.UpdatedBy = SeedContext.ParametricCreatedBy;
+                ultima.UpdatedAt = DateTime.UtcNow;
+            }
+            var nueva = base_[code];
+            nueva.ValidFrom = validFrom;
+            nueva.UnitFactor = factor;
+            db.PayrollConceptDefinitions.Add(nueva);
+            inserted++;
+        }
+
         if (inserted > 0) await db.SaveChangesAsync(ct);
         return inserted;
     }

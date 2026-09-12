@@ -151,6 +151,26 @@ hay que recalcularlos antes de aprobar.
   Word con los mismos totales. Reemplaza a «Comprobante Nómina», que llamaba a una ruta
   inexistente.
 
+## 4c. Jornada laboral y recargos (Ley 2101 de 2021 y Ley 2466 de 2025)
+
+La semilla lleva la ley **por vigencias**, y las revisiones de mitad de año se aplican también a
+cooperativas que ya tenían la semilla (al arrancar la API o con «Reaplicar semilla»): se
+inserta la versión nueva y se cierra la anterior el día antes, **sólo si la anterior es de la
+semilla y sigue abierta** —una vigencia o versión propia de la cooperativa no se pisa.
+
+| Qué | Hasta | Desde | Norma |
+|---|---|---|---|
+| `HORAS_MES` (valor hora = salario / horas) | 220 (44 h/semana) hasta el 14/07/2026 | **210** (42 h) desde el 15/07/2026 | Ley 2101 de 2021 |
+| `RECARGO_DOMINICAL` | 0,80 hasta el 30/06/2026 | **0,90** desde el 01/07/2026 (1,00 desde el 01/07/2027: falta cargar) | Ley 2466 de 2025 |
+| `HEX_DOM_DIURNA` / `HEX_DOM_NOCTURNA` | 2,05 / 2,55 | **2,15 / 2,65** desde el 01/07/2026 | extra ordinaria (1,25 / 1,75) + recargo dominical |
+
+Lo que la ley cambia y **el módulo no decide**: la jornada nocturna empieza a las **19:00**
+(desde el 25/12/2025) —quien registra la novedad cuenta las horas nocturnas con esa
+frontera; el sistema sólo multiplica—, y el máximo de horas extra sigue siendo cosa de quien
+autoriza. Estos valores están cargados con la lectura de la norma a septiembre de 2026 y
+**deben confirmarse con la contadora** antes de la primera nómina que los use; si difieren,
+se corrigen con «Nueva vigencia» / «Nueva versión», nunca en el código.
+
 ## 5. Reaplicar la semilla
 
 Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien

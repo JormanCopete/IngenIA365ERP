@@ -77,7 +77,10 @@ public class ApprovePayrollRunCommandHandlerTests
         (await d.Db.VoucherTypes.SingleAsync(v => v.Code == "NM")).NextSequenceNumber.Should().Be(1);
 
         // Devengos y deducciones menos las líneas sin asiento tienen que estar en el comprobante.
-        var lineasContables = await d.Db.PayrollRunLines.Where(l => l.AffectsAccounting).SumAsync(l => l.Amount);
+        // El asiento va por concepto y en valor absoluto: una línea negativa (el ajuste por
+        // redondeo, que con horas a 220/mes aparece casi siempre) gira las cuentas en vez de
+        // restar del débito, así que se compara contra la suma de |total por concepto|.
+        var lineasContables = (await d.Db.PayrollRunLines.Where(l => l.AffectsAccounting).GroupBy(l => l.ConceptCode).Select(g => g.Sum(l => l.Amount)).ToListAsync()).Sum(Math.Abs);
         doc.TotalDebit.Should().Be(lineasContables);
 
         await d.Audit.Received(1).AppendAsync(Arg.Is<AuditEventDocument>(a => a.Action == AuditEventTypes.PayrollRunApproved), Arg.Any<CancellationToken>());

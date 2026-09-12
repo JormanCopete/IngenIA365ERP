@@ -15,7 +15,7 @@
     </div>
 </div>
 
-<SfTab>
+<SfTab @ref="_tabs">
     <TabItems>
         <TabItem>
             <ChildContent><TabHeader Text="Definiciones" /></ChildContent>
@@ -74,7 +74,7 @@
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Nueva versión" OnClick="@(() => AbrirRevisar(c))" />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-table" Title="Cuentas contables" OnClick="@(() => AbrirCuentas(c))" />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-play" Title="Probar en seco" OnClick="@(() => AbrirPruebaEnSeco(c))" />
-                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Versiones" OnClick="@(() => VerVersiones(c.Code))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Versiones" OnClick="@(() => AbrirVersiones(c.Code))" />
                                     @if (c.IsActive && c.ValidTo is null)
                                     {
                                         <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-close" Title="Desactivar (cerrar vigencia)" OnClick="@(() => AbrirDesactivar(c))" />
@@ -428,6 +428,18 @@
     {
         var res = await Nomina.ListarConceptosHeredadosAsync(string.IsNullOrWhiteSpace(_buscarHeredado) ? null : _buscarHeredado);
         if (res.IsSuccess) _heredados = res.Value!.ToList();
+    }
+
+    private Syncfusion.Blazor.Navigations.SfTab? _tabs;
+
+    /// <summary>
+    /// El botón «Versiones» de la fila cargaba el historial en la pestaña Versiones pero no la
+    /// abría: para la persona «no hacía nada» (QA, 2026-09-12). Ahora carga y cambia de pestaña.
+    /// </summary>
+    private async Task AbrirVersiones(string code)
+    {
+        await VerVersiones(code);
+        if (_tabs is not null) await _tabs.SelectAsync(1);
     }
 
     private async Task VerVersiones(string code)
