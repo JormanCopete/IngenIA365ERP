@@ -232,11 +232,22 @@
         try
         {
             var r = await Clientes.ReenviarInvitacionAsync(TenantPublicId, i.PublicId);
-            _error = !r.IsSuccess;
-            _mensaje = r.IsSuccess && r.Value is { } res
-                ? $"Enviado de nuevo a {res.Email}. El enlace vence el {res.ExpiraEn.ToLocalTime():dd/MM/yyyy}."
-                : r.ErrorMessage;
-            if (r.IsSuccess) await CargarAsync();
+            if (r.IsSuccess && r.Value is { } res)
+            {
+                // Correo no enviado NO es éxito para quien pulsó el botón, aunque la
+                // invitación nueva haya quedado: se muestra en rojo y con el motivo.
+                _error = !res.CorreoEnviado;
+                _mensaje = res.CorreoEnviado
+                    ? $"Enviado de nuevo a {res.Email}. El enlace vence el {res.ExpiraEn.ToLocalTime():dd/MM/yyyy}."
+                    : $"La invitación se generó de nuevo para {res.Email}, pero el correo no salió: {res.MotivoCorreoNoEnviado} " +
+                      "El enlace anterior ya no sirve. Cuando el servidor de correo esté disponible, volvé a pulsar «Reenviar».";
+                await CargarAsync();
+            }
+            else
+            {
+                _error = true;
+                _mensaje = r.ErrorMessage;
+            }
         }
         finally { _ocupada = null; }
     }

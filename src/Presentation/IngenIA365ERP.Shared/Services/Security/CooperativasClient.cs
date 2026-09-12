@@ -139,7 +139,7 @@ public sealed record InvitacionResumen(
     bool Expirada,
     DateTime? AceptadaEn);
 
-public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email, DateTime ExpiraEn);
+public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email, DateTime ExpiraEn, bool CorreoEnviado, string? MotivoCorreoNoEnviado);
 
 /// <summary>
 /// Lo que devuelven los dos endpoints de emisión. El del maestro trae además

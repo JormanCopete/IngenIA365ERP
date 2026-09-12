@@ -108,6 +108,16 @@ entre sí y solo se notaría al intentar restaurar.
 - **Sólo QA envía correo real** (desde el 2026-09-04): `Smtp__*` en su overlay y
   Secret `erp-smtp` en `erp-qa`. **DEV y PDN no envían**: sin `Smtp__Host` ni
   Secret, y **no hay ningún capturador** (smtp4dev/MailHog) desplegado en el
+  clúster. **Esto mordió el 2026-09-11 en producción**: al registrar la primera
+  cooperativa real (COOFLOPAL) la invitación de su administradora no salió
+  (`SocketException 111` contra `localhost:25`, cuatro intentos, ~22 s) y el botón
+  «Reenviar» respondía 500. Pendiente de cerrar en dos pasos, en este orden:
+  (1) crear el Secret con `tools/scripts/crear-secreto-smtp.ps1 -Ambiente pdn`
+  —la contraseña se teclea oculta, no pasa por el repositorio ni por el chat—;
+  (2) subir a GitOps el overlay `pdn` con las claves `Smtp__*` (commit local
+  `808c027` en la rama `smtp-pdn` del clon) y sincronizar `erp-pdn`. El reenvío ya
+  no responde 500: devuelve `correoEnviado=false` con el motivo (develop
+  2026-09-11) y la invitación nueva queda para reintentar.
   clúster —una versión anterior de esta nota decía lo contrario, sobre un commit
   de GitOps que nunca se subió—. Cuando en DEV o PDN falla el envío, el ERP lo
   dice (`CorreoEnviado=false` con el motivo) y la invitación queda para reenviar.
