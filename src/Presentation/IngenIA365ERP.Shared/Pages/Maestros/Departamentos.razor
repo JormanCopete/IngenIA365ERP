@@ -64,13 +64,13 @@
                     </div>
                     <div>
                         <label>Codigo <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Code" Placeholder="Ej: VAC, ANT, CUN..."
+                        <SfTextBox @bind-Value="_model.Code" MaxLength="10" Placeholder="Ej: VAC, ANT, CUN... *"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "10" } })" />
                         <ValidationMessage For="@(() => _model.Code)" />
                     </div>
                     <div>
                         <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del departamento"
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nombre del departamento *"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>

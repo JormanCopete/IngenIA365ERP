@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Sports.Queries;
 public record SportDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public Guid? CommitteePublicId { get; init; }
@@ -55,6 +56,7 @@ public class ListSportsQueryHandler(IApplicationDbContext context)
             .Select(e => new SportDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
                 CommitteePublicId = e.Committee != null ? e.Committee.PublicId : null,
@@ -83,6 +85,7 @@ public class GetSportByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new SportDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
                 CommitteePublicId = e.Committee != null ? e.Committee.PublicId : null,

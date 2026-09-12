@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -9,6 +10,7 @@ namespace IngenIA365ERP.Application.Core.Agreements.Commands.UpdateAgreement;
 public record UpdateAgreementCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? AccountNumber { get; init; }
     public string? EntityCode { get; init; }
@@ -68,6 +70,16 @@ public class UpdateAgreementCommandHandler(
 
         if (entity is null)
             return Result.Failure(Error.NotFound);
+
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.Agreements.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, cancellationToken);
+            if (repetido is not null)
+                return Result.Failure(CodigoDeCatalogo.Duplicado("un convenio", codigo, repetido.Name));
+        }
+        entity.LegacyCode = codigo;
 
         entity.Name = request.Name;
         entity.AccountNumber = request.AccountNumber;

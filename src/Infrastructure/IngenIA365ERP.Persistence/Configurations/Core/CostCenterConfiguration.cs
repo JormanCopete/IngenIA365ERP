@@ -16,6 +16,8 @@ public class CostCenterConfiguration : IEntityTypeConfiguration<CostCenter>
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_CostCenters_PublicId");
 
         builder.Property(e => e.LegacyCode).HasMaxLength(20);
+        // Único cuando existe: los registros migrados del SOLIDO pueden venir sin código.
+        builder.HasIndex(e => e.LegacyCode).IsUnique().HasFilter("[LegacyCode] IS NOT NULL");
         builder.Property(e => e.Name).HasMaxLength(80).IsRequired();
         builder.Property(e => e.CompanyName).HasMaxLength(100);
         builder.Property(e => e.CompanyTaxId).HasMaxLength(20);

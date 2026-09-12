@@ -21,6 +21,7 @@
     <GridPageSettings PageSize="20" />
     <GridColumns>
         <GridColumn Field="@nameof(CompanyRow.TaxId)" HeaderText="NIT" Width="140" />
+        <GridColumn Field="@nameof(CompanyRow.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(CompanyRow.Name)" HeaderText="Nombre" Width="280" />
         <GridColumn Field="@nameof(CompanyRow.ShortName)" HeaderText="Nombre Corto" Width="180" />
         <GridColumn Field="@nameof(CompanyRow.Phone)" HeaderText="Telefono" Width="140" />
@@ -46,45 +47,49 @@
                 <DataAnnotationsValidator />
                 <div class="rejilla-campos" style="padding:var(--pad-md);">
                     <div>
-                        <label>NIT / Documento <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT"
+                        <label>NIT / Documento <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.TaxId" MaxLength="20" Placeholder="NIT"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                         <ValidationMessage For="@(() => _model.TaxId)" />
                     </div>
                     <div>
                         <label>DV</label>
-                        <SfTextBox @bind-Value="_model.TaxIdCheckDigit" Placeholder="Digito"
+                        <SfTextBox @bind-Value="_model.TaxIdCheckDigit" MaxLength="2" Placeholder="Digito"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
                     </div>
+                    <div>
+                        <CampoCodigo Catalogo="empresas" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
                     <div class="campo-ancho">
-                        <label>Nombre / Razon Social <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre completo de la empresa"
+                        <label>Nombre / Razon Social <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="120" Placeholder="Nombre completo de la empresa"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
                     <div class="campo-ancho">
                         <label>Nombre Corto</label>
-                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre comercial"
+                        <SfTextBox @bind-Value="_model.ShortName" MaxLength="60" Placeholder="Nombre comercial"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "60" } })" />
                     </div>
                     <div class="campo-ancho">
                         <label>Direccion</label>
-                        <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion"
+                        <SfTextBox @bind-Value="_model.Address" MaxLength="80" Placeholder="Direccion"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                     </div>
                     <div>
                         <label>Telefono</label>
-                        <SfTextBox @bind-Value="_model.Phone" Placeholder="Telefono"
+                        <SfTextBox @bind-Value="_model.Phone" MaxLength="40" Placeholder="Telefono"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                     </div>
                     <div>
                         <label>Ciudad</label>
-                        <SfTextBox @bind-Value="_model.City" Placeholder="Ciudad"
+                        <SfTextBox @bind-Value="_model.City" MaxLength="40" Placeholder="Ciudad"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                     </div>
                     <div class="campo-ancho">
                         <label>Departamento</label>
-                        <SfTextBox @bind-Value="_model.Department" Placeholder="Departamento"
+                        <SfTextBox @bind-Value="_model.Department" MaxLength="40" Placeholder="Departamento"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                     </div>
                 </div>
@@ -111,6 +116,7 @@
     private string _dialogTitle = "";
     private CompanyModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync() => await LoadData();
@@ -158,10 +164,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(CompanyRow row)
     {
         _model = new CompanyModel
         {
+            Code = row.Code,
             Name = row.Name,
             ShortName = row.ShortName,
             TaxId = row.TaxId,
@@ -191,6 +204,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         if (string.IsNullOrWhiteSpace(_model.TaxId))
@@ -273,6 +291,7 @@
 
     private class CompanyRow
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
@@ -286,6 +305,7 @@
 
     private class CompanyModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "Nombre obligatorio.")]
         [MaxLength(120)]
         public string Name { get; set; } = "";

@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Branches.Queries;
 public record BranchDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
 }
@@ -53,6 +54,7 @@ public class ListBranchesQueryHandler(IApplicationDbContext context)
             .Select(e => new BranchDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })
@@ -79,6 +81,7 @@ public class GetBranchByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new BranchDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName
             })

@@ -13,7 +13,7 @@
 
 <SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
-        <GridColumn Field="Code" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
+        <GridColumn Field="Code" HeaderText="Código" Width="120" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="250" />
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="180" />
         <GridColumn Field="IndemnityType" HeaderText="Tipo Indemnizacion" Width="150" TextAlign="TextAlign.Center" />
@@ -34,9 +34,10 @@
     <DialogTemplates>
         <Content>
             <div class="pagina">
-                <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Codigo" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
+                <CampoCodigo Catalogo="causas-retencion" @bind-Value="_model.Code" Largo="10" Obligatorio="true"
+                             EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre *" MaxLength="100" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" MaxLength="50" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.IndemnityType" Placeholder="Tipo Indemnizacion" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.AutoDeductions" Placeholder="Deducciones Automaticas" FloatLabelType="FloatLabelType.Always" />
             </div>
@@ -55,6 +56,7 @@
     private List<ItemModel> _items = [];
     private FormModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -68,6 +70,12 @@
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Causa de Retencion"; _showDialog = true; }
+
+    private void EditarExistente(Guid publicId)
+    {
+        var item = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (item is not null) { _codigoRepetido = false; OpenEdit(item); }
+    }
 
     private void OpenEdit(ItemModel item)
     {
@@ -83,6 +91,16 @@
 
     private async Task Save()
     {
+        if (string.IsNullOrWhiteSpace(_model.Code) || string.IsNullOrWhiteSpace(_model.Name))
+        {
+            await Notification.WarningAsync("El código y el nombre son obligatorios.");
+            return;
+        }
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/withholding-causes/{_editId}", _model)
             : await Http.PostAsJsonAsync("/api/payroll/withholding-causes", _model);
@@ -101,7 +119,7 @@
     private class ItemModel
     {
         public Guid PublicId { get; set; }
-        public int Code { get; set; }
+        public string Code { get; set; } = "";
         public string Name { get; set; } = "";
         public string ShortName { get; set; } = "";
         public int IndemnityType { get; set; }
@@ -109,7 +127,7 @@
     }
     private class FormModel
     {
-        public int Code { get; set; }
+        public string Code { get; set; } = "";
         public string Name { get; set; } = "";
         public string ShortName { get; set; } = "";
         public int IndemnityType { get; set; }

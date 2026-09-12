@@ -1,14 +1,16 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.SeveranceProviders.Commands.CreateSeveranceProvider;
 
 public record CreateSeveranceProviderCommand : IRequest<Result<Guid>>
 {
-    public int Code { get; init; }
+    public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
@@ -25,9 +27,15 @@ public class CreateSeveranceProviderCommandHandler(
         CreateSeveranceProviderCommand request,
         CancellationToken cancellationToken)
     {
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
+        var repetido = await context.SeveranceProviders.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Code == codigo, cancellationToken);
+        if (repetido is not null)
+            return Result.Failure<Guid>(CodigoDeCatalogo.Duplicado("un fondo de cesantías", codigo, repetido.Name));
+
         var entity = new SeveranceProvider
         {
-            Code = request.Code,
+            Code = CodigoDeCatalogo.Normalizar(request.Code)!,
             Name = request.Name,
             ShortName = request.ShortName ?? string.Empty,
             TaxId = request.TaxId,
@@ -47,6 +55,11 @@ public class CreateSeveranceProviderCommandValidator : AbstractValidator<CreateS
 {
     public CreateSeveranceProviderCommandValidator()
     {
+        RuleFor(x => x.Code)
+            .NotEmpty().WithMessage("El código es obligatorio.")
+            .MaximumLength(CodigoDeCatalogo.LargoCorto).WithMessage($"El código no puede superar {CodigoDeCatalogo.LargoCorto} caracteres.")
+            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);
+
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Name is required.")
             .MaximumLength(100).WithMessage("Name must not exceed 100 characters.");

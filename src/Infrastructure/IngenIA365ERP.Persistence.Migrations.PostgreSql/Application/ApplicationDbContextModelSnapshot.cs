@@ -6279,6 +6279,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Agreements_PublicId");
@@ -7037,6 +7041,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Banks_PublicId");
@@ -7240,6 +7248,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Branches_PublicId");
@@ -7306,6 +7318,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("DepartmentId")
                         .HasDatabaseName("IX_COR_Cities_DepartmentId");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -7375,6 +7391,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -8328,6 +8348,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Companies_PublicId");
@@ -8415,6 +8439,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -8645,6 +8673,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("CommitteeId");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_CulturalActivities_PublicId");
@@ -8777,6 +8809,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -9264,6 +9300,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -10638,6 +10678,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Positions_PublicId");
@@ -10702,6 +10746,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -10974,6 +11022,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_Relationships_PublicId");
@@ -11038,6 +11090,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -11187,6 +11243,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("CommitteeId");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -11440,6 +11500,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LegacyCode")
+                        .IsUnique()
+                        .HasFilter("\"LegacyCode\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -28434,8 +28498,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -28504,8 +28570,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -30158,8 +30226,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -30851,8 +30921,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -31527,8 +31599,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("AutoDeductions")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -31660,8 +31734,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CheckDigit")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Code")
-                        .HasColumnType("integer");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

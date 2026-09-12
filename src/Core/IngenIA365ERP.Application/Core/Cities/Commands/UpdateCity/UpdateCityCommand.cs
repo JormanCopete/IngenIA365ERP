@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -9,6 +10,7 @@ namespace IngenIA365ERP.Application.Core.Cities.Commands.UpdateCity;
 public record UpdateCityCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public Guid DepartmentPublicId { get; init; }
 }
@@ -35,6 +37,16 @@ public class UpdateCityCommandHandler(
 
         if (department is null)
             return Result.Failure(new Error("City.DepartmentNotFound", "Department not found."));
+
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.Cities.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, cancellationToken);
+            if (repetido is not null)
+                return Result.Failure(CodigoDeCatalogo.Duplicado("una ciudad", codigo, repetido.Name));
+        }
+        entity.LegacyCode = codigo;
 
         entity.Name = request.Name;
         entity.DepartmentId = department.Id;

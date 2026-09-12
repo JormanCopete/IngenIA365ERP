@@ -43,7 +43,7 @@
                 <div class="pagina">
                     <div>
                         <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del pais"
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nombre del pais *"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>

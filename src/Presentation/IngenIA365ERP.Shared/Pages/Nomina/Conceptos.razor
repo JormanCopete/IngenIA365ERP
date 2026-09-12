@@ -160,8 +160,8 @@
                 <DataAnnotationsValidator />
                 <div class="pagina">
                     <div class="form-grid">
-                        <SfTextBox @bind-Value="_f.Code" Placeholder="Código (MAYUSCULAS_GUION_BAJO)" FloatLabelType="FloatLabelType.Always" Readonly="@(_revisando is not null)" />
-                        <SfTextBox @bind-Value="_f.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                        <SfTextBox @bind-Value="_f.Code" MaxLength="30" Placeholder="Código (MAYUSCULAS_GUION_BAJO) *" FloatLabelType="FloatLabelType.Always" Readonly="@(_revisando is not null)" />
+                        <SfTextBox @bind-Value="_f.Name" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
                         <label class="campo">Tipo
                             <select class="e-input" @bind="_f.Nature">
                                 <option value="Earning">Devengo</option><option value="Deduction">Deducción</option>
@@ -184,7 +184,7 @@
                         {
                             case "FixedAmount":
                                 <SfNumericTextBox TValue="decimal?" @bind-Value="_f.FixedAmount" Placeholder="Valor fijo (o dejalo vacío si lo trae la novedad o un parámetro)" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
-                                <SfTextBox @bind-Value="_f.AmountParameterCode" Placeholder="Parámetro legal que aporta el valor (p. ej. AUX_TRANSPORTE)" FloatLabelType="FloatLabelType.Always" />
+                                <SfTextBox @bind-Value="_f.AmountParameterCode" MaxLength="40" Placeholder="Parámetro legal que aporta el valor (p. ej. AUX_TRANSPORTE)" FloatLabelType="FloatLabelType.Always" />
                                 <label class="campo-check"><input type="checkbox" @bind="_f.ProrateByDays" /> Proporcional a los días pagados</label>
                                 break;
                             case "PercentOfBase":
@@ -200,11 +200,11 @@
                                 @if (_f.CalculationKind == "PercentOfBase")
                                 {
                                     <SfNumericTextBox TValue="decimal?" @bind-Value="_f.Percent" Placeholder="Porcentaje fijo (%)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" Max="100" />
-                                    <SfTextBox @bind-Value="_f.PercentParameterCode" Placeholder="…o parámetro legal que lo aporta (p. ej. SALUD_EMPLEADO_PCT; {CLASE} = clase ARL)" FloatLabelType="FloatLabelType.Always" />
+                                    <SfTextBox @bind-Value="_f.PercentParameterCode" MaxLength="40" Placeholder="…o parámetro legal que lo aporta (p. ej. SALUD_EMPLEADO_PCT; {CLASE} = clase ARL)" FloatLabelType="FloatLabelType.Always" />
                                 }
                                 else
                                 {
-                                    <SfTextBox @bind-Value="_f.TableParameterCode" Placeholder="Parámetro legal de tipo tabla (p. ej. RETEFTE_TABLA_UVT)" FloatLabelType="FloatLabelType.Always" />
+                                    <SfTextBox @bind-Value="_f.TableParameterCode" MaxLength="40" Placeholder="Parámetro legal de tipo tabla (p. ej. RETEFTE_TABLA_UVT)" FloatLabelType="FloatLabelType.Always" />
                                 }
                                 break;
                             case "QuantityTimesUnit":
@@ -217,10 +217,10 @@
                                     </select>
                                 </label>
                                 <SfNumericTextBox TValue="decimal?" @bind-Value="_f.UnitFactor" Placeholder="Factor de recargo (1,25; 1,75; 2…)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
-                                <SfTextBox @bind-Value="_f.PercentParameterCode" Placeholder="Porcentaje por parámetro legal (opcional, p. ej. INCAPACIDAD_EMPLEADOR_PCT)" FloatLabelType="FloatLabelType.Always" />
+                                <SfTextBox @bind-Value="_f.PercentParameterCode" MaxLength="40" Placeholder="Porcentaje por parámetro legal (opcional, p. ej. INCAPACIDAD_EMPLEADOR_PCT)" FloatLabelType="FloatLabelType.Always" />
                                 break;
                             case "CompositeOfConcepts":
-                                <SfTextBox @bind-Value="_f.ComponentConceptCodes" Placeholder="Componentes: +HEX_DIURNA*1;+COMISION*1;-OTROS_DESC*0.5" FloatLabelType="FloatLabelType.Always" />
+                                <SfTextBox @bind-Value="_f.ComponentConceptCodes" MaxLength="400" Placeholder="Componentes: +HEX_DIURNA*1;+COMISION*1;-OTROS_DESC*0.5" FloatLabelType="FloatLabelType.Always" />
                                 <SfNumericTextBox TValue="decimal?" @bind-Value="_f.Percent" Placeholder="Porcentaje sobre la suma (opcional)" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" Max="100" />
                                 break;
                         }

@@ -9,6 +9,7 @@ namespace IngenIA365ERP.Application.Core.Agreements.Queries;
 public record AgreementDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? AccountNumber { get; init; }
     public string? EntityCode { get; init; }
@@ -94,6 +95,7 @@ public class ListAgreementsQueryHandler(IApplicationDbContext context)
             .Select(e => new AgreementDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 AccountNumber = e.AccountNumber,
                 EntityCode = e.EntityCode,
@@ -147,6 +149,7 @@ public class GetAgreementByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new AgreementDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 AccountNumber = e.AccountNumber,
                 EntityCode = e.EntityCode,

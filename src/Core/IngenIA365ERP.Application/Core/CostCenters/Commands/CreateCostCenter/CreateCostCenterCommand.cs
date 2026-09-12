@@ -1,13 +1,17 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Core.CostCenters.Commands.CreateCostCenter;
 
 public record CreateCostCenterCommand : IRequest<Result<Guid>>
 {
+    /// <summary>Código alfanumérico de la cooperativa (hasta 20); se guarda en LegacyCode.</summary>
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? CompanyName { get; init; }
     public string? CompanyTaxId { get; init; }
@@ -27,8 +31,18 @@ public class CreateCostCenterCommandHandler(
         CreateCostCenterCommand request,
         CancellationToken cancellationToken)
     {
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null)
+        {
+            var repetido = await context.CostCenters.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.LegacyCode == codigo && !e.IsDeleted, cancellationToken);
+            if (repetido is not null)
+                return Result.Failure<Guid>(CodigoDeCatalogo.Duplicado("un centro de costo", codigo, repetido.Name));
+        }
+
         var entity = new CostCenter
         {
+            LegacyCode = codigo,
             Name = request.Name,
             CompanyName = request.CompanyName,
             CompanyTaxId = request.CompanyTaxId,
@@ -51,6 +65,11 @@ public class CreateCostCenterCommandValidator : AbstractValidator<CreateCostCent
 {
     public CreateCostCenterCommandValidator()
     {
+        RuleFor(x => x.Code)
+            .MaximumLength(CodigoDeCatalogo.LargoLargo).WithMessage($"El código no puede superar {CodigoDeCatalogo.LargoLargo} caracteres.")
+            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron)
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
+
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Name is required.")
             .MaximumLength(80).WithMessage("Name must not exceed 80 characters.");

@@ -16,6 +16,7 @@
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
+        <GridColumn Field="@nameof(BranchItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(BranchItem.Name)" HeaderText="Nombre" Width="320" />
         <GridColumn Field="@nameof(BranchItem.ShortName)" HeaderText="Nombre Corto" Width="200" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
@@ -39,14 +40,18 @@
                 <DataAnnotationsValidator />
                 <div class="pagina">
                     <div>
-                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre"
+                        <CampoCodigo Catalogo="agencias" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
                     <div>
                         <label>Nombre Corto</label>
-                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                        <SfTextBox @bind-Value="_model.ShortName" MaxLength="40" Placeholder="Nombre corto"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                         <ValidationMessage For="@(() => _model.ShortName)" />
                     </div>
@@ -70,6 +75,7 @@
     private List<BranchItem> _items = new();
     private BranchModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm, _saving;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -107,10 +113,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(BranchItem item)
     {
         _model = new BranchModel
         {
+            Code = item.Code,
             Name = item.Name,
             ShortName = item.ShortName
         };
@@ -134,6 +147,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         // Validacion cliente minima (alineada al CreateBranchCommandValidator del backend).
@@ -219,6 +237,7 @@
     /// </summary>
     private class BranchModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "El nombre es obligatorio.")]
         [MaxLength(80, ErrorMessage = "El nombre no puede superar 80 caracteres.")]
         public string Name { get; set; } = string.Empty;
@@ -232,6 +251,7 @@
     /// </summary>
     private class BranchItem
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? ShortName { get; set; }

@@ -8,6 +8,7 @@ namespace IngenIA365ERP.Application.Core.CostCenters.Queries;
 public record CostCenterDto
 {
     public Guid PublicId { get; init; }
+    public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? CompanyName { get; init; }
     public string? CompanyTaxId { get; init; }
@@ -61,6 +62,7 @@ public class ListCostCentersQueryHandler(IApplicationDbContext context)
             .Select(e => new CostCenterDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 CompanyName = e.CompanyName,
                 CompanyTaxId = e.CompanyTaxId,
@@ -91,6 +93,7 @@ public class GetCostCenterByIdQueryHandler(IApplicationDbContext context)
             .Select(e => new CostCenterDto
             {
                 PublicId = e.PublicId,
+                Code = e.LegacyCode,
                 Name = e.Name,
                 CompanyName = e.CompanyName,
                 CompanyTaxId = e.CompanyTaxId,

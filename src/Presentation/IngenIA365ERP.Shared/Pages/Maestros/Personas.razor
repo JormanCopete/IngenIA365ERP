@@ -87,13 +87,13 @@
                                     </div>
                                     <div>
                                         <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
-                                        <SfTextBox @bind-Value="_model.TaxId" Placeholder="Numero de identificacion"
+                                        <SfTextBox @bind-Value="_model.TaxId" MaxLength="20" Placeholder="Numero de identificacion *"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "20" } })" />
                                         <ValidationMessage For="@(() => _model.TaxId)" />
                                     </div>
                                     <div>
                                         <label>Digito Verificacion (NIT)</label>
-                                        <SfTextBox @bind-Value="_model.TaxIdCheckDigit" Placeholder="DV"
+                                        <SfTextBox @bind-Value="_model.TaxIdCheckDigit" MaxLength="2" Placeholder="DV"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "2" } })" />
                                     </div>
                                     <div>
@@ -107,24 +107,24 @@
                                     </div>
                                     <div>
                                         <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
-                                        <SfTextBox @bind-Value="_model.FirstName" Placeholder="Nombres"
+                                        <SfTextBox @bind-Value="_model.FirstName" MaxLength="150" Placeholder="Nombres *"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.FirstName)" />
                                     </div>
                                     <div>
                                         <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
-                                        <SfTextBox @bind-Value="_model.LastName" Placeholder="Apellidos"
+                                        <SfTextBox @bind-Value="_model.LastName" MaxLength="150" Placeholder="Apellidos *"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                         <ValidationMessage For="@(() => _model.LastName)" />
                                     </div>
                                     <div class="campo-ancho">
                                         <label>Razon Social (si aplica)</label>
-                                        <SfTextBox @bind-Value="_model.BusinessName" Placeholder="Razon social comercial"
+                                        <SfTextBox @bind-Value="_model.BusinessName" MaxLength="150" Placeholder="Razon social comercial"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "150" } })" />
                                     </div>
                                     <div>
                                         <label>Lugar de Expedicion</label>
-                                        <SfTextBox @bind-Value="_model.IdIssuedAt" Placeholder="Ej: Cali"
+                                        <SfTextBox @bind-Value="_model.IdIssuedAt" MaxLength="40" Placeholder="Ej: Cali"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                     </div>
                                     <div>
@@ -143,7 +143,7 @@
                                 <div class="rejilla-campos panel-pestana">
                                     <div class="campo-ancho">
                                         <label>Direccion</label>
-                                        <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion residencial / comercial"
+                                        <SfTextBox @bind-Value="_model.Address" MaxLength="120" Placeholder="Direccion residencial / comercial"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                                     </div>
                                     <div>
@@ -158,23 +158,23 @@
                                     </div>
                                     <div>
                                         <label>Correo Electronico</label>
-                                        <SfTextBox @bind-Value="_model.Email" Placeholder="usuario@dominio.com"
+                                        <SfTextBox @bind-Value="_model.Email" MaxLength="120" Placeholder="usuario@dominio.com"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                                         <ValidationMessage For="@(() => _model.Email)" />
                                     </div>
                                     <div>
                                         <label>Telefono Principal</label>
-                                        <SfTextBox @bind-Value="_model.Phone1" Placeholder="Telefono fijo"
+                                        <SfTextBox @bind-Value="_model.Phone1" MaxLength="40" Placeholder="Telefono fijo"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                     </div>
                                     <div>
                                         <label>Telefono Secundario</label>
-                                        <SfTextBox @bind-Value="_model.Phone2" Placeholder="Telefono alterno"
+                                        <SfTextBox @bind-Value="_model.Phone2" MaxLength="40" Placeholder="Telefono alterno"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                                     </div>
                                     <div>
                                         <label>Movil</label>
-                                        <SfTextBox @bind-Value="_model.Mobile" Placeholder="Celular"
+                                        <SfTextBox @bind-Value="_model.Mobile" MaxLength="30" Placeholder="Celular"
                                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "30" } })" />
                                     </div>
                                 </div>

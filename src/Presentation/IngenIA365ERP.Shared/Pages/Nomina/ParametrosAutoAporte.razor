@@ -43,11 +43,11 @@
                     <SfNumericTextBox TValue="int" @bind-Value="_model.IdNumber" Placeholder="Numero Identificacion" FloatLabelType="FloatLabelType.Always" />
                     <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="DV" FloatLabelType="FloatLabelType.Always" />
                 </div>
-                <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
-                <SfTextBox @bind-Value="_model.Address" Placeholder="Direccion" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.Address" MaxLength="100" Placeholder="Direccion" FloatLabelType="FloatLabelType.Always" />
                 <div class="rejilla-campos">
-                    <SfTextBox @bind-Value="_model.Phone" Placeholder="Telefono" FloatLabelType="FloatLabelType.Always" />
-                    <SfTextBox @bind-Value="_model.CityName" Placeholder="Ciudad" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_model.Phone" MaxLength="30" Placeholder="Telefono" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_model.CityName" MaxLength="50" Placeholder="Ciudad" FloatLabelType="FloatLabelType.Always" />
                 </div>
                 <div class="rejilla-campos rejilla-tres">
                     <SfNumericTextBox TValue="decimal" @bind-Value="_model.HealthRate" Placeholder="% Salud" Format="N3" FloatLabelType="FloatLabelType.Always" />

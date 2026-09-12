@@ -14,6 +14,7 @@
 <SfGrid @ref="_grid" TValue="AgreementItem" DataSource="@_items"
     AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
+        <GridColumn Field="@nameof(AgreementItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="220" />
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="120" />
         <GridColumn Field="EntityCode" HeaderText="Codigo Entidad" Width="130" />
@@ -38,8 +39,12 @@
             <div class="pagina">
                 <div class="rejilla-campos">
                     <div>
-                        <label>Nombre *</label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del convenio" />
+                        <CampoCodigo Catalogo="convenios" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre del convenio" />
                     </div>
                     <div>
                         <label>Nombre Corto</label>
@@ -49,11 +54,11 @@
                 <div class="rejilla-campos">
                     <div>
                         <label>Codigo Entidad</label>
-                        <SfTextBox @bind-Value="_model.EntityCode" Placeholder="Codigo de la entidad" />
+                        <SfTextBox @bind-Value="_model.EntityCode" MaxLength="10" Placeholder="Codigo de la entidad" />
                     </div>
                     <div>
                         <label>Numero de Cuenta</label>
-                        <SfTextBox @bind-Value="_model.AccountNumber" Placeholder="Numero de cuenta" />
+                        <SfTextBox @bind-Value="_model.AccountNumber" MaxLength="60" Placeholder="Numero de cuenta" />
                     </div>
                 </div>
                 <div class="rejilla-campos">
@@ -111,6 +116,7 @@
     private List<AgreementItem> _items = [];
     private AgreementModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
@@ -125,10 +131,17 @@
 
     private void OpenCreate() { _model = new() { IsActive = true }; _editId = null; _dialogTitle = "Nuevo Convenio"; _showDialog = true; }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(AgreementItem item)
     {
         _model = new()
         {
+            Code = item.Code,
             Name = item.Name,
             ShortName = item.ShortName,
             EntityCode = item.EntityCode,
@@ -151,6 +164,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         HttpResponseMessage res;
         if (_editId.HasValue)
             res = await Http.PutAsJsonAsync($"/api/core/agreements/{_editId}", _model);
@@ -181,6 +199,7 @@
 
     private class AgreementItem
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
@@ -198,6 +217,7 @@
 
     private class AgreementModel
     {
+        public string? Code { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
         public string? EntityCode { get; set; }

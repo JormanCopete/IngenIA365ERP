@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -8,7 +9,7 @@ namespace IngenIA365ERP.Application.Payroll.SeveranceProviders.Commands.UpdateSe
 public record UpdateSeveranceProviderCommand : IRequest<Result>
 {
     public Guid PublicId { get; init; }
-    public int Code { get; init; }
+    public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
@@ -31,7 +32,13 @@ public class UpdateSeveranceProviderCommandHandler(
         if (entity is null)
             return Result.Failure(Error.NotFound);
 
-        entity.Code = request.Code;
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
+        var repetido = await context.SeveranceProviders.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Code == codigo && e.Id != entity.Id, cancellationToken);
+        if (repetido is not null)
+            return Result.Failure(CodigoDeCatalogo.Duplicado("un fondo de cesantías", codigo, repetido.Name));
+
+        entity.Code = codigo;
         entity.Name = request.Name;
         entity.ShortName = request.ShortName ?? string.Empty;
         entity.TaxId = request.TaxId;

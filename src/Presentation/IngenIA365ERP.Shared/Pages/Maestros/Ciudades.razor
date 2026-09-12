@@ -31,6 +31,7 @@
     <GridPageSettings PageSize="20" />
     <GridColumns>
         <GridColumn Field="@nameof(CityRow.DepartmentName)" HeaderText="Departamento" Width="220" />
+        <GridColumn Field="@nameof(CityRow.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(CityRow.Name)" HeaderText="Nombre" Width="280" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
@@ -53,7 +54,7 @@
                 <DataAnnotationsValidator />
                 <div class="pagina">
                     <div>
-                        <label>Departamento <span style="color:var(--peligro-texto)">*</span></label>
+                        <label>Departamento <span class="obligatorio">*</span></label>
                         <SfDropDownList TValue="Guid?" TItem="LookupOption"
                                         @bind-Value="_model.DepartmentPublicId"
                                         DataSource="@_departments"
@@ -64,8 +65,12 @@
                         <ValidationMessage For="@(() => _model.DepartmentPublicId)" />
                     </div>
                     <div>
-                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre de la ciudad"
+                        <CampoCodigo Catalogo="ciudades" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nombre de la ciudad"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "100" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
@@ -95,6 +100,7 @@
     private string _dialogTitle = "";
     private CityModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync()
@@ -163,10 +169,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(CityRow row)
     {
         _model = new CityModel
         {
+            Code = row.Code,
             Name = row.Name,
             DepartmentPublicId = row.DepartmentPublicId
         };
@@ -190,6 +203,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         // Validaciones cliente alineadas al CreateCityCommandValidator del backend.
@@ -271,6 +289,7 @@
     /// <summary>Coincide con CityDto del backend.</summary>
     private class CityRow
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public Guid DepartmentPublicId { get; set; }
@@ -283,6 +302,7 @@
     /// </summary>
     private class CityModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "Debe seleccionar un departamento.")]
         public Guid? DepartmentPublicId { get; set; }
 

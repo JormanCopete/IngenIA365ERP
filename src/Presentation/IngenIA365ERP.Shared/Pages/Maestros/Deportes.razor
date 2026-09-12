@@ -16,6 +16,7 @@
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
+        <GridColumn Field="@nameof(SportRow.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(SportRow.Name)" HeaderText="Nombre" Width="280" />
         <GridColumn Field="@nameof(SportRow.ShortName)" HeaderText="Nombre Corto" Width="180" />
         <GridColumn Field="@nameof(SportRow.CommitteeName)" HeaderText="Comite" Width="200" />
@@ -40,14 +41,18 @@
                 <DataAnnotationsValidator />
                 <div class="pagina">
                     <div>
-                        <label>Nombre <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre del deporte"
+                        <CampoCodigo Catalogo="deportes" @bind-Value="_model.Code" Largo="10"
+                                     EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    </div>
+                    <div>
+                        <label>Nombre <span class="obligatorio">*</span></label>
+                        <SfTextBox @bind-Value="_model.Name" MaxLength="80" Placeholder="Nombre del deporte"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "80" } })" />
                         <ValidationMessage For="@(() => _model.Name)" />
                     </div>
                     <div>
                         <label>Nombre Corto</label>
-                        <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto"
+                        <SfTextBox @bind-Value="_model.ShortName" MaxLength="40" Placeholder="Nombre corto"
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                     </div>
                     <div>
@@ -88,6 +93,7 @@
     private string _dialogTitle = "";
     private SportModel _model = new();
     private Guid? _editId;
+    private bool _codigoRepetido;
     private Guid _deleteId;
 
     protected override async Task OnInitializedAsync()
@@ -131,10 +137,17 @@
         _showDialog = true;
     }
 
+    private void EditarExistente(Guid publicId)
+    {
+        var existente = _items.FirstOrDefault(i => i.PublicId == publicId);
+        if (existente is not null) { _codigoRepetido = false; OpenEdit(existente); }
+    }
+
     private void OpenEdit(SportRow row)
     {
         _model = new SportModel
         {
+            Code = row.Code,
             Name = row.Name,
             ShortName = row.ShortName,
             CommitteePublicId = row.CommitteePublicId
@@ -159,6 +172,11 @@
 
     private async Task Save()
     {
+        if (_codigoRepetido)
+        {
+            await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
+            return;
+        }
         if (_saving) return;
 
         if (string.IsNullOrWhiteSpace(_model.Name))
@@ -233,6 +251,7 @@
     /// <summary>Coincide con el DTO devuelto por /api/core/sports.</summary>
     private class SportRow
     {
+        public string? Code { get; set; }
         public Guid PublicId { get; set; }
         public string Name { get; set; } = "";
         public string? ShortName { get; set; }
@@ -242,6 +261,7 @@
 
     private class SportModel
     {
+        public string? Code { get; set; }
         [Required(ErrorMessage = "Nombre obligatorio.")]
         [MaxLength(80)]
         public string Name { get; set; } = "";
