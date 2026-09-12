@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
 
+using IngenIA365ERP.Domain.Enums.Payroll;
+
 namespace IngenIA365ERP.Domain.Entities.Payroll;
 
 /// <summary>
@@ -22,6 +24,9 @@ public class PayrollRecurringNovelty : AuditableEntity
     public int? TotalInstallments { get; set; }
     public int InstallmentsIssued { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>En qué períodos del mes se genera (feature 006). Por defecto, en todos.</summary>
+    public RecurringApplyRule ApplyOn { get; set; } = RecurringApplyRule.EveryPeriod;
 
     [MaxLength(500)]
     public string? Notes { get; set; }

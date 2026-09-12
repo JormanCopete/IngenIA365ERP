@@ -89,6 +89,14 @@ public sealed class PayrollRunsEndpoints : ICarterModule
             .WithName("Payroll_Runs_Reverse")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Runs.Reverse");
+
+        // Feature 006: descartar un borrador devuelve el período a Abierto sin contabilidad.
+        // Mismo permiso que calcular: quien puede crear el borrador puede desecharlo.
+        group.MapPost("/runs/{runId:guid}/discard", async (Guid runId, ReverseBody body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new Application.Payroll.Runs.DiscardPayrollRun.DiscardPayrollRunCommand(runId, body.Reason), ct))
+            .WithName("Payroll_Runs_Discard")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.Calculate");
     }
 
     public sealed record ReverseBody(string Reason);

@@ -36,6 +36,10 @@ public class PayPeriodConfiguration : IEntityTypeConfiguration<PayPeriod>
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(e => new { e.PayrollPlanId, e.StartDate }).HasDatabaseName("IX_PAY_PayPeriods_Plan_StartDate");
 
+        builder.Property(e => e.SubPeriodNumber).HasDefaultValue((byte)1);
+        builder.Property(e => e.ImputationYear).HasDefaultValue((short)0);
+        builder.Property(e => e.ImputationMonth).HasDefaultValue((byte)0);
+
         builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

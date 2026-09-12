@@ -35,6 +35,15 @@ public class PayrollRun : AuditableEntity
     [MaxLength(300)]
     public string? ReversalReason { get; set; }
 
+    /// <summary>
+    /// Borrador descartado (feature 006): la corrida queda <c>Superseded</c> sin que exista
+    /// una versión nueva, el período vuelve a Abierto y aquí queda quién, cuándo y por qué.
+    /// Nunca se borra (Principio XI).
+    /// </summary>
+    public DateTime? DiscardedAt { get; set; }
+    public string? DiscardedBy { get; set; }
+    public string? DiscardReason { get; set; }
+
     /// <summary>SHA-256 de los insumos normalizados: mismo hash, mismo resultado (FR-014).</summary>
     [MaxLength(64)]
     public string InputsHash { get; set; } = string.Empty;
