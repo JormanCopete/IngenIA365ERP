@@ -53,7 +53,22 @@
     <link rel="stylesheet" href="_content/IngenIA365ERP.Shared/css/componentes.css" />
     <link rel="stylesheet" href="IngenIA365ERP.Web.styles.css" />
     <ImportMap />
-    <link rel="icon" type="image/png" href="_content/IngenIA365ERP.Shared/img/favicon.png" />
+    @* Icono y acceso directo. Los archivos viven en wwwroot del proyecto Web (no en
+       Shared): la ruta _content/IngenIA365ERP.Shared/img/favicon.png que había aquí
+       nunca existió y daba 404 en cada carga. El SVG es el favicon de escritorio; los
+       PNG y el manifest son lo que iPhone (apple-touch-icon, sin transparencia) y
+       Android (manifest, icono «maskable») usan al añadir la app a la pantalla de
+       inicio. *@
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="iconos/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#3a1450" />
+    <meta name="application-name" content="IngenIA365" />
+    <meta name="apple-mobile-web-app-title" content="IngenIA365" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <HeadOutlet @rendermode="InteractiveWebAssembly" />
 </head>
 
