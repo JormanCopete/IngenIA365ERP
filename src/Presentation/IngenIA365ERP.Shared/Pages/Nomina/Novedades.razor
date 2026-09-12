@@ -401,6 +401,7 @@
                     <GridColumn Field="CantidadOValor" HeaderText="Cantidad / valor" Width="120" TextAlign="TextAlign.Right" />
                     <GridColumn Field="Vigencia" HeaderText="Vigencia" Width="170" />
                     <GridColumn Field="Cuotas" HeaderText="Cuotas" Width="110" />
+                    <GridColumn Field="AplicaEnTexto" HeaderText="Aplica en" Width="140" />
                     <GridColumn HeaderText="Estado" Width="100" TextAlign="TextAlign.Center">
                         <Template>
                             @{
@@ -463,6 +464,14 @@
                     <label>Desde <SfDatePicker TValue="DateTime" @bind-Value="_nuevaRecurrente.StartDate" Format="dd/MM/yyyy" /></label>
                     <label>Hasta (opcional) <SfDatePicker TValue="DateTime?" @bind-Value="_nuevaRecurrente.EndDate" Format="dd/MM/yyyy" /></label>
                     <label>Cuotas (opcional) <SfNumericTextBox TValue="int?" @bind-Value="_nuevaRecurrente.TotalInstallments" Min="1" Format="0" /></label>
+                    <label>Aplica en
+                        <select class="e-input" @bind="_nuevaRecurrente.ApplyOn">
+                            <option value="EveryPeriod">Cada período del plan</option>
+                            <option value="FirstOfMonth">Sólo el primer período del mes</option>
+                            <option value="LastOfMonth">Sólo el último período del mes</option>
+                        </select>
+                    </label>
+                    <p class="hint campo-ancho">En un plan mensual las tres opciones dan lo mismo. En quincenal, «último» es la segunda quincena; en semanal, la mayor semana creada del mes. El valor es <b>por período en que aplica</b>: un préstamo de $200.000 al mes que se cobra en la segunda quincena se registra por $200.000 con «último del mes».</p>
                     <label>Observación <SfTextBox @bind-Value="_nuevaRecurrente.Notes" MaxLength="500" /></label>
                 </div>
                 <ValidationSummary />
@@ -579,7 +588,7 @@
         try
         {
             var res = await Nomina.CrearRecurrenteAsync(new CrearRecurrenteRequest(_nuevaRecurrente.Empleado.PublicId, _nuevaRecurrente.ConceptCode,
-                _nuevaRecurrente.Quantity, _nuevaRecurrente.Amount, _nuevaRecurrente.StartDate, _nuevaRecurrente.EndDate, _nuevaRecurrente.TotalInstallments, _nuevaRecurrente.Notes));
+                _nuevaRecurrente.Quantity, _nuevaRecurrente.Amount, _nuevaRecurrente.StartDate, _nuevaRecurrente.EndDate, _nuevaRecurrente.TotalInstallments, _nuevaRecurrente.Notes, _nuevaRecurrente.ApplyOn));
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar la recurrente."); return; }
             _mostrarNuevaRecurrente = false;
             await Notification.SuccessAsync("Novedad recurrente registrada. Entrará en el próximo cálculo de cada período que cubra.");
@@ -614,6 +623,7 @@
         public DateTime StartDate { get; set; } = DateTime.Today;
         public DateTime? EndDate { get; set; }
         public int? TotalInstallments { get; set; }
+        public string ApplyOn { get; set; } = "EveryPeriod";
         [StringLength(500, ErrorMessage = "Máximo 500 caracteres.")]
         public string? Notes { get; set; }
     }

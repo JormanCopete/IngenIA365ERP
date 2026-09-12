@@ -22,6 +22,10 @@
             {
                 <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirAprobacion">Aprobar</SfButton>
             }
+            @if (_corrida is { Status: "Draft" } && _periodo.Status == "Calculated")
+            {
+                <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" Disabled="@_ocupado" OnClick="@(() => { _motivoDescarte = string.Empty; _mostrarDescartar = true; })" Title="Deja este borrador como descartado y devuelve el período a Abierto para corregir fechas o novedades. Sin contabilidad.">Descartar borrador</SfButton>
+            }
             @if (_corrida is { Status: "Approved" })
             {
                 <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@AbrirReversar" Title="Deshace la aprobación con un asiento reverso y reabre el período">Reversar</SfButton>
@@ -305,7 +309,8 @@
                                         <td>@h.EmployeeCount</td>
                                         <td>@h.Totals.Net.ToString("N0")</td>
                                         <td>@(h.ApprovedAt is { } ap ? $"{ap.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ApprovedBy}" : "—")</td>
-                                        <td>@(h.ReversedAt is { } rv ? $"{rv.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ReversedBy}: {h.ReversalReason}" : "—")</td>
+                                        <td>@(h.ReversedAt is { } rv ? $"{rv.ToLocalTime():dd/MM/yyyy HH:mm} · {h.ReversedBy}: {h.ReversalReason}"
+                                              : h.DiscardedAt is { } dc ? $"Descartado {dc.ToLocalTime():dd/MM/yyyy HH:mm} · {h.DiscardedBy}: {h.DiscardReason}" : "—")</td>
                                         <td>@(h.AccountingDocumentNumber ?? "—")</td>
                                     </tr>
                                 }
@@ -408,6 +413,22 @@
                    PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync" />
 
 @* ------------------------------------------------------------------ reversar --- *@
+<SfDialog @bind-Visible="_mostrarDescartar" Header="Descartar el borrador" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="info-card">
+                <span class="label">Qué pasa al descartar</span>
+                <p>La corrida v@(_corrida?.Version) queda marcada como descartada con tu nombre, la fecha y el motivo (no se borra). El período vuelve a <b>Abierto</b>: podés corregir fechas, plan o novedades y calcular de nuevo. Las novedades que generaron las recurrentes para este período se anulan y se vuelven a generar en el próximo cálculo; las manuales quedan como están. No hay contabilidad que tocar.</p>
+            </div>
+            <label>Motivo <SfTextBox @bind-Value="_motivoDescarte" Multiline="true" Placeholder="Por qué se descarta este borrador" MaxLength="300" /></label>
+        </Content>
+        <FooterTemplate>
+            <SfButton CssClass="e-flat" OnClick="@(() => _mostrarDescartar = false)">Cancelar</SfButton>
+            <SfButton CssClass="e-danger" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivoDescarte))" OnClick="@DescartarAsync">Descartar borrador</SfButton>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
 <SfDialog @bind-Visible="_mostrarReversar" Header="Reversar la liquidación aprobada" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -508,6 +529,28 @@
         var rel = await Nomina.RelacionDePagoAsync(_corrida.PublicId);
         if (rel.IsSuccess) _pagadosAntesDeReversar = rel.Value!.Rows.Where(r => r.Paid).Select(r => r.EmployeeName).ToList();
         _mostrarReversar = true;
+    }
+
+    private bool _mostrarDescartar;
+    private string _motivoDescarte = string.Empty;
+
+    private async Task DescartarAsync()
+    {
+        if (_corrida is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.DescartarBorradorAsync(_corrida.PublicId, _motivoDescarte.Trim());
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descartar el borrador."); return; }
+            _mostrarDescartar = false;
+            await Notification.SuccessAsync(res.Value!.RecurrentesAnuladas > 0
+                ? $"Borrador descartado. El período quedó abierto; {res.Value.RecurrentesAnuladas} novedad(es) recurrente(s) se regenerarán al calcular."
+                : "Borrador descartado. El período quedó abierto.");
+            if (_selector is not null) await _selector.RefrescarAsync();
+            _periodo = _selector?.Periodo ?? _periodo;
+            await CargarCorridaAsync();
+        }
+        finally { _ocupado = false; }
     }
 
     private async Task ReversarAsync()

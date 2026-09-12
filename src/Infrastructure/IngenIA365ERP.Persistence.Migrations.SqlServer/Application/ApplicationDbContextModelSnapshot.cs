@@ -28928,6 +28928,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<byte>("ImputationMonth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0);
+
+                    b.Property<short>("ImputationYear")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0);
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -28992,6 +29002,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte>("SubPeriodNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)1);
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -30215,6 +30230,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("ApplyOn")
+                        .HasColumnType("int");
+
                     b.Property<string>("ConceptCode")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -31413,6 +31431,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DiscardReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("DiscardedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DiscardedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("EmployeeCount")
                         .HasColumnType("int");

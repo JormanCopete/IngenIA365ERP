@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,9 @@ public record UpdatePayPeriodCommand : IRequest<Result>
     public int? Periodicity { get; init; }
     public string StatusMessage { get; init; } = string.Empty;
     public int PeriodId { get; init; }
+    public byte? SubPeriodNumber { get; init; }
+    public short? ImputationYear { get; init; }
+    public byte? ImputationMonth { get; init; }
 }
 
 public class UpdatePayPeriodCommandHandler(
@@ -61,6 +65,19 @@ public class UpdatePayPeriodCommandHandler(
             return Result.Failure(new Error("Payroll.PeriodOverlaps",
                 $"Otro período del mismo plan se superpone con {start:dd/MM/yyyy}–{end:dd/MM/yyyy}."));
         }
+
+        var plan = entity.PayrollPlan ?? await context.PayrollPlans.AsNoTracking().FirstAsync(p => p.Id == entity.PayrollPlanId, cancellationToken);
+        if (!PeriodCalendar.DuracionValida(plan.Periodicity, start, end))
+            return Result.Failure(new Error("Payroll.PeriodLengthMismatch",
+                $"Un período del plan «{plan.Name}» ({PeriodCalendar.Nombre(plan.Periodicity)}) dura {(int)plan.Periodicity} días; {start:dd/MM/yyyy}–{end:dd/MM/yyyy} son {(end - start).Days + 1}."));
+        var calendario = PeriodCalendar.Proponer(plan.Periodicity, start);
+        var subPeriodo = request.SubPeriodNumber ?? (entity.StartDate == start ? entity.SubPeriodNumber : calendario.SubPeriodNumber);
+        if (subPeriodo < 1 || subPeriodo > PeriodCalendar.PeriodosPorMes(plan.Periodicity))
+            return Result.Failure(new Error("Payroll.SubPeriodOutOfRange",
+                $"El número de período va de 1 a {PeriodCalendar.PeriodosPorMes(plan.Periodicity)}."));
+        entity.SubPeriodNumber = subPeriodo;
+        entity.ImputationYear = request.ImputationYear ?? (entity.ImputationYear == 0 ? calendario.Year : entity.ImputationYear);
+        entity.ImputationMonth = request.ImputationMonth ?? (entity.ImputationMonth == 0 ? calendario.Month : entity.ImputationMonth);
 
         entity.Description = request.Description;
         entity.PayDate = request.PayDate;

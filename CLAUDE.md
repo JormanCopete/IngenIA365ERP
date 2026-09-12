@@ -145,7 +145,13 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». La
   ficha también guarda fondo de cesantías (`SeveranceFundId`, entero desde el 2026-09-12)
   y caja de compensación (`FamilySubsidyId` → catálogo `PAY_FamilyCompensationFunds`,
-  sin semilla). El **cálculo preliminar** anterior
+  sin semilla). **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
+  base de proporción); cada período lleva `SubPeriodNumber` e `ImputationYear/Month`
+  (`PeriodCalendar` los propone y valida la duración); las recurrentes tienen `ApplyOn`
+  (cada período / primero / último del mes); «Descartar borrador» deja la corrida `Superseded`
+  con `DiscardedAt/By/Reason` y el período en `Open`; el centro de reportes
+  (`/api/reports/payroll/{vista}?format=`) produce `TablaExportable` y la exporta con
+  ClosedXML, OpenXML y QuestPDF desde `API/Reports/Exportadores`. El **cálculo preliminar** anterior
   (`POST /api/payroll/process`, salud y pensión fijas al 4 %) se retiró sin alias.
 
 ## Arquitectura

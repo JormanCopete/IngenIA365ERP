@@ -1,0 +1,220 @@
+@page "/reportes/nomina"
+@page "/reportes/comprobante-nomina"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
+
+<PageTitle>Reportes de nómina - IngenIA365ERP</PageTitle>
+
+@*
+    Feature 006 US5. Reemplaza a «Comprobante Nómina» (Fase 1), que llamaba a una ruta que no
+    existía. Cinco vistas sobre las mismas consultas de Liquidación, con Excel, PDF y Word.
+    La ruta vieja sigue llegando aquí.
+*@
+
+<div class="page-header">
+    <h3>Reportes de nómina</h3>
+    @if (_tabla is not null)
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+        </div>
+    }
+</div>
+
+<div class="toolbar">
+    <label class="campo">Vista
+        <select class="e-input" value="@_vista" @onchange="@(async e => { _vista = e.Value?.ToString() ?? "resumen"; _tabla = null; await CargarSiSePuedeAsync(); })">
+            <option value="comprobante">Comprobante por empleado</option>
+            <option value="resumen">Resumen de la corrida por concepto</option>
+            <option value="detalle">Detalle por empleado y concepto</option>
+            <option value="novedades">Novedades del período</option>
+            <option value="historico">Histórico por empleado entre fechas</option>
+        </select>
+    </label>
+</div>
+
+@if (_vista is "comprobante" or "resumen" or "detalle" or "novedades")
+{
+    <SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
+    @if (_periodo is not null && _vista != "novedades")
+    {
+        <p class="texto-tenue">
+            @if (_corrida is null) { <span>Este período no tiene corrida: calculá en Liquidación para ver estos reportes.</span> }
+            else { <span>Corrida v@(_corrida.Version) · @_corrida.EstadoTexto · @_corrida.EmployeeCount empleado(s).</span> }
+        </p>
+    }
+}
+
+@if (_vista is "comprobante" or "historico")
+{
+    <div class="toolbar">
+        <label class="campo">Empleado
+            <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs _) => await BuscarEmpleadosAsync())" Width="260px" />
+        </label>
+        @if (_empleado is null && _candidatos.Count > 0)
+        {
+            <ul class="lista-candidatos">
+                @foreach (var c in _candidatos)
+                {
+                    <li><button type="button" class="enlace" @onclick="@(async () => { _empleado = c; _candidatos.Clear(); await CargarSiSePuedeAsync(); })">@c.FullName · @c.IdentificationNumber</button></li>
+                }
+            </ul>
+        }
+        @if (_empleado is not null)
+        {
+            <span class="persona-chip"><strong>@_empleado.FullName</strong> · @_empleado.IdentificationNumber
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => { _empleado = null; _tabla = null; })" Title="Cambiar" /></span>
+        }
+        @if (_vista == "historico")
+        {
+            <SfDatePicker TValue="DateTime" @bind-Value="_desde" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" Width="160px" />
+            <SfDatePicker TValue="DateTime" @bind-Value="_hasta" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" Width="160px" />
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_ocupado || _empleado is null)" OnClick="@CargarSiSePuedeAsync">Ver</SfButton>
+        }
+    </div>
+}
+
+@if (_vista == "novedades" && _periodo is not null)
+{
+    <label class="campo-check"><input type="checkbox" @bind="_incluirAnuladas" @bind:after="CargarSiSePuedeAsync" /> Incluir corregidas y anuladas</label>
+}
+
+@if (_ocupado)
+{
+    <p class="texto-tenue">Cargando…</p>
+}
+else if (_tabla is not null)
+{
+    <div class="info-card">
+        <h4>@_tabla.Titulo</h4>
+        <p class="texto-tenue">@_tabla.Subtitulo</p>
+        @if (_tabla.Filas.Count == 0)
+        {
+            <p class="texto-tenue">Sin filas para estos parámetros.</p>
+        }
+        else
+        {
+            var conSeccion = _tabla.Filas.Any(f => f.Seccion is not null);
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            @if (conSeccion) { <th>Sección</th> }
+                            @foreach (var c in _tabla.Columnas) { <th class="@(c.EsNumerica ? "numero" : "")">@c.Nombre</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ string? seccionAnterior = null; }
+                        @foreach (var f in _tabla.Filas)
+                        {
+                            <tr class="@(f.Resaltada ? "resaltada" : "")">
+                                @if (conSeccion)
+                                {
+                                    <td class="texto-tenue">@(f.Seccion == seccionAnterior ? "" : f.Seccion)</td>
+                                    seccionAnterior = f.Seccion;
+                                }
+                                @for (var i = 0; i < _tabla.Columnas.Count; i++)
+                                {
+                                    var col = _tabla.Columnas[i];
+                                    <td class="@(col.EsNumerica ? "numero" : "")">@(i < f.Valores.Count ? TablaReporteDto.Texto(f.Valores[i], col.Tipo) : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    @if (_tabla.Totales is { } t)
+                    {
+                        <tfoot>
+                            <tr class="resaltada">
+                                @if (conSeccion) { <td></td> }
+                                @for (var i = 0; i < _tabla.Columnas.Count; i++)
+                                {
+                                    var col = _tabla.Columnas[i];
+                                    <td class="@(col.EsNumerica ? "numero" : "")">@(i < t.Valores.Count ? TablaReporteDto.Texto(t.Valores[i], col.Tipo) : "")</td>
+                                }
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+        }
+        @foreach (var nota in _tabla.Notas) { <p class="hint">@nota</p> }
+    </div>
+}
+
+@code {
+    private string _vista = "resumen";
+    private SelectorDePeriodo? _selector;
+    private PeriodoPagoDto? _periodo;
+    private ResumenCorridaDto? _corrida;
+    private TablaReporteDto? _tabla;
+    private bool _ocupado, _incluirAnuladas = true;
+    private string _buscarEmpleado = string.Empty;
+    private EmpleadoResumenDto? _empleado;
+    private readonly List<EmpleadoResumenDto> _candidatos = [];
+    private DateTime _desde = new(DateTime.Today.Year, 1, 1), _hasta = DateTime.Today;
+
+    private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
+    {
+        _periodo = periodo;
+        _corrida = null;
+        _tabla = null;
+        if (periodo is not null)
+        {
+            var r = await Nomina.CorridaActualAsync(periodo.PublicId);
+            _corrida = r.IsSuccess ? r.Value : null;
+        }
+        await CargarSiSePuedeAsync();
+    }
+
+    private async Task BuscarEmpleadosAsync()
+    {
+        _candidatos.Clear();
+        if (string.IsNullOrWhiteSpace(_buscarEmpleado) || _buscarEmpleado.Trim().Length < 2) return;
+        var r = await Nomina.BuscarEmpleadosAsync(_buscarEmpleado.Trim(), 10);
+        if (r.IsSuccess) _candidatos.AddRange(r.Value!.Items);
+    }
+
+    private string? Ruta() => _vista switch
+    {
+        "comprobante" when _corrida is not null && _empleado is not null => $"comprobante?runId={_corrida.PublicId}&employeeId={_empleado.PublicId}",
+        "resumen" when _corrida is not null => $"resumen?runId={_corrida.PublicId}",
+        "detalle" when _corrida is not null => $"detalle?runId={_corrida.PublicId}",
+        "novedades" when _periodo is not null => $"novedades?periodId={_periodo.PublicId}&incluirAnuladas={_incluirAnuladas}",
+        "historico" when _empleado is not null => $"historico?employeeId={_empleado.PublicId}&desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}",
+        _ => null,
+    };
+
+    private async Task CargarSiSePuedeAsync()
+    {
+        var ruta = Ruta();
+        if (ruta is null) { _tabla = null; return; }
+        _ocupado = true;
+        try
+        {
+            var r = await Nomina.ReporteAsync(ruta);
+            if (r.IsSuccess) _tabla = r.Value;
+            else { _tabla = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el reporte."); }
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        var ruta = Ruta();
+        if (ruta is null || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Nomina.DescargarReporteAsync(ruta, formato);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+}

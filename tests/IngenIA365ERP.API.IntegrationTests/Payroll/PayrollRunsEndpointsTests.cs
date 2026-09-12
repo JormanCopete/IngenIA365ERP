@@ -129,7 +129,7 @@ public class PayrollRunsEndpointsTests(CentralIdentityApiFixture fx)
         ficha.GetProperty("workRiskRatePublicId").GetGuid().Should().Be(claseIII);
         ficha.GetProperty("workRiskRateName").GetString().Should().StartWith("Clase III");
 
-        var periodoId = await NominaE2E.CrearPeriodoAsync(http, admin, new DateTime(2026, 7, 1), new DateTime(2026, 7, 31));
+        var periodoId = await NominaE2E.CrearPeriodoAsync(http, admin, new DateTime(2026, 11, 1), new DateTime(2026, 11, 30));
         var corrida = await NominaE2E.CalcularAsync(http, admin, periodoId);
         var runId = corrida.GetProperty("runPublicId").GetGuid();
 

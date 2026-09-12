@@ -66,11 +66,17 @@ public sealed record ResultadoImportacionDto(int Applied, Guid BatchId, IReadOnl
 public sealed record RecurrenteDto(
     Guid PublicId, Guid EmployeePublicId, string EmployeeName, string Document, string ConceptCode, string ConceptName, string Nature,
     decimal? Quantity, decimal? Amount, DateTime StartDate, DateTime? EndDate, int? TotalInstallments, int InstallmentsIssued,
-    bool IsActive, string? Notes, string? DeactivationReason, DateTime CreatedAt, string? CreatedBy)
+    bool IsActive, string? Notes, string? DeactivationReason, DateTime CreatedAt, string? CreatedBy, string ApplyOn = "EveryPeriod")
 {
+    public string AplicaEnTexto => ApplyOn switch
+    {
+        "FirstOfMonth" => "Primero del mes",
+        "LastOfMonth" => "Último del mes",
+        _ => "Cada período",
+    };
     public string CantidadOValor => Quantity is { } q ? q.ToString("0.##") : Amount is { } a ? a.ToString("N0") : string.Empty;
     public string Cuotas => TotalInstallments is { } t ? $"{InstallmentsIssued} de {t}" : $"{InstallmentsIssued} · sin límite";
     public string Vigencia => EndDate is { } e ? $"{StartDate:dd/MM/yyyy} – {e:dd/MM/yyyy}" : $"desde {StartDate:dd/MM/yyyy}";
 }
 
-public sealed record CrearRecurrenteRequest(Guid EmployeePublicId, string ConceptCode, decimal? Quantity, decimal? Amount, DateTime StartDate, DateTime? EndDate, int? TotalInstallments, string? Notes);
+public sealed record CrearRecurrenteRequest(Guid EmployeePublicId, string ConceptCode, decimal? Quantity, decimal? Amount, DateTime StartDate, DateTime? EndDate, int? TotalInstallments, string? Notes, string ApplyOn = "EveryPeriod");

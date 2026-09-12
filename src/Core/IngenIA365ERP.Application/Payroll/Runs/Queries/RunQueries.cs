@@ -64,7 +64,7 @@ public sealed class RunSummaryBuilder(IApplicationDbContext db)
             new RunTotalsDto(run.TotalEarnings, run.TotalDeductions, run.TotalEmployerContributions, run.TotalProvisions, run.TotalNet, run.RoundingAdjustment),
             porConcepto, bloqueos, cambiados, run.InputsHash,
             documento?.PublicId, documento is null ? null : $"{documento.VoucherTypeCode}-{documento.DocumentNumber}",
-            reverso, run.ApprovedWithoutSegregation, excepciones);
+            reverso, run.ApprovedWithoutSegregation, excepciones, run.DiscardedAt, run.DiscardedBy, run.DiscardReason);
     }
 
     public static RunEmployeeNotes Notas(string? json)

@@ -91,17 +91,22 @@ public sealed class NominaTestData
         return u;
     }
 
-    public PayPeriod Periodo(DateTime desde, DateTime hasta, PayPeriodStatus estado, int planilla = 0)
+    public PayPeriod Periodo(DateTime desde, DateTime hasta, PayPeriodStatus estado, int planilla = 0, PayrollPlan? plan = null)
     {
+        plan ??= Plan;
+        var calendario = IngenIA365ERP.Domain.Payroll.Calculation.PeriodCalendar.Proponer(plan.Periodicity, desde);
         var p = new PayPeriod
         {
             PlanId = planilla == 0 ? Db.PayPeriods.Count() + 1 : planilla,
             PayrollCompanyId = 1,
-            PayrollPlanId = Plan.Id,
+            PayrollPlanId = plan.Id,
             Description = $"{desde:MMMM yyyy}",
             StartDate = desde,
             EndDate = hasta,
-            Periodicity = 30,
+            Periodicity = (int)plan.Periodicity,
+            SubPeriodNumber = calendario.SubPeriodNumber,
+            ImputationYear = calendario.Year,
+            ImputationMonth = calendario.Month,
             Status = estado,
             StatusMessage = string.Empty,
             AdvanceLiquidation = "N",

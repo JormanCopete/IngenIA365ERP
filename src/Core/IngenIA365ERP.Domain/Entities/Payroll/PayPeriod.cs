@@ -38,6 +38,17 @@ public class PayPeriod : AuditableEntity
     public int? CycleHours { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
+
+    /// <summary>
+    /// Número del período dentro de su mes: 1 mensual; 1–2 quincenal; 1–3 decadal; 1–5
+    /// semanal. Lo propone <c>PeriodCalendar</c> desde las fechas y lo puede ajustar la
+    /// persona. Decide la regla «primero/último del mes» de las recurrentes.
+    /// </summary>
+    public byte SubPeriodNumber { get; set; } = 1;
+
+    /// <summary>Mes al que se imputa el período (una semana puede cruzar de mes: la persona decide).</summary>
+    public short ImputationYear { get; set; }
+    public byte ImputationMonth { get; set; }
     public int? Periodicity { get; set; }
     public int? AdditionalConcept1 { get; set; }
     public int? AdditionalConcept2 { get; set; }

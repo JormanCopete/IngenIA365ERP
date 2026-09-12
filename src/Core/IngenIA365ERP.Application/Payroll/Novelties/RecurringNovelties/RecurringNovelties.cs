@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +15,8 @@ namespace IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
 public sealed record RecurringNoveltyDto(
     Guid PublicId, Guid EmployeePublicId, string EmployeeName, string Document, string ConceptCode, string ConceptName, string Nature,
     decimal? Quantity, decimal? Amount, DateTime StartDate, DateTime? EndDate, int? TotalInstallments, int InstallmentsIssued,
-    bool IsActive, string? Notes, string? DeactivationReason, DateTime CreatedAt, string? CreatedBy);
+    bool IsActive, string? Notes, string? DeactivationReason, DateTime CreatedAt, string? CreatedBy,
+    string ApplyOn = "EveryPeriod");
 
 // ---------------------------------------------------------------------- crear --
 
@@ -27,7 +29,9 @@ public sealed record CreateRecurringNoveltyCommand(
     DateTime StartDate,
     DateTime? EndDate,
     int? TotalInstallments,
-    string? Notes) : IRequest<Result<Guid>>;
+    string? Notes,
+    /// <summary>Feature 006: en qué períodos del mes se genera. Nulo = cada período.</summary>
+    RecurringApplyRule? ApplyOn = null) : IRequest<Result<Guid>>;
 
 public sealed class CreateRecurringNoveltyCommandValidator : AbstractValidator<CreateRecurringNoveltyCommand>
 {
@@ -85,6 +89,7 @@ public sealed class CreateRecurringNoveltyCommandHandler(IApplicationDbContext d
             TotalInstallments = request.TotalInstallments,
             InstallmentsIssued = 0,
             IsActive = true,
+            ApplyOn = request.ApplyOn ?? RecurringApplyRule.EveryPeriod,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             CreatedAt = ahora,
             CreatedBy = user.UserName,
@@ -188,7 +193,8 @@ public sealed class ListRecurringNoveltiesQueryHandler(IApplicationDbContext db)
         {
             conceptos.TryGetValue(f.r.ConceptCode, out var c);
             return new RecurringNoveltyDto(f.r.PublicId, f.PublicId, f.Nombre, f.TaxId, f.r.ConceptCode, c?.Name ?? f.r.ConceptCode, (c?.Nature ?? ConceptNature.Earning).ToString(),
-                f.r.Quantity, f.r.Amount, f.r.StartDate, f.r.EndDate, f.r.TotalInstallments, f.r.InstallmentsIssued, f.r.IsActive, f.r.Notes, f.r.DeactivationReason, f.r.CreatedAt, f.r.CreatedBy);
+                f.r.Quantity, f.r.Amount, f.r.StartDate, f.r.EndDate, f.r.TotalInstallments, f.r.InstallmentsIssued, f.r.IsActive, f.r.Notes, f.r.DeactivationReason, f.r.CreatedAt, f.r.CreatedBy,
+                f.r.ApplyOn.ToString());
         }).ToList());
     }
 }
@@ -224,9 +230,29 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
         var avisos = new List<string>();
         var creadas = 0;
         var ahora = clock.UtcNow;
+
+        // Feature 006: «primero/último del mes» se decide con el sub-período del período que se
+        // calcula. En semanal el último del mes es la mayor semana creada para ese mes.
+        var periodicidad = period.PayrollPlan?.Periodicity
+            ?? await db.PayrollPlans.AsNoTracking().Where(p => p.Id == period.PayrollPlanId).Select(p => p.Periodicity).FirstAsync(ct);
+        byte? mayorSemana = periodicidad == PayrollPeriodicity.Weekly
+            ? await db.PayPeriods.AsNoTracking()
+                .Where(p => p.PayrollPlanId == period.PayrollPlanId && p.ImputationYear == period.ImputationYear && p.ImputationMonth == period.ImputationMonth)
+                .MaxAsync(p => (byte?)p.SubPeriodNumber, ct)
+            : null;
+        var esPrimero = period.SubPeriodNumber == 1;
+        var esUltimo = PeriodCalendar.EsUltimoDelMes(periodicidad, period.SubPeriodNumber, mayorSemana);
+
         foreach (var c in candidatas.Where(c => !ya.Contains(c.r.Id)))
         {
             if (NoveltyRules.EnsureEmployeeInPeriod(c.e, period).IsFailure) continue;
+            var aplica = c.r.ApplyOn switch
+            {
+                RecurringApplyRule.FirstOfMonth => esPrimero,
+                RecurringApplyRule.LastOfMonth => esUltimo,
+                _ => true,
+            };
+            if (!aplica) continue;
             var concepto = await NoveltyRules.ResolveConceptAsync(db, c.r.ConceptCode, period.EndDate, c.e.EmployeeClass, ct);
             if (concepto.IsFailure)
             {
