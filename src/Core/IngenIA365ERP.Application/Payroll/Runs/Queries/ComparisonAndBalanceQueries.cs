@@ -144,7 +144,16 @@ public sealed class GetRunBalanceCheckQueryHandler(IApplicationDbContext db)
             var doc = await db.AccountingDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == docId, ct);
             if (doc is not null)
             {
-                var contable = await db.PayrollRunLines.AsNoTracking().Where(l => ids.Contains(l.PayrollRunEmployeeId) && l.AffectsAccounting).SumAsync(l => l.Amount, ct);
+                // El asiento va por concepto y en valor absoluto (una línea negativa —el ajuste por
+                // redondeo, un descuento en reverso— gira las cuentas, no resta del débito). Por eso
+                // se compara contra la suma de |total por concepto|, no contra la suma con signo:
+                // con horas a 220/mes el ajuste por redondeo aparece casi siempre y con signo.
+                var porConcepto = await db.PayrollRunLines.AsNoTracking()
+                    .Where(l => ids.Contains(l.PayrollRunEmployeeId) && l.AffectsAccounting)
+                    .GroupBy(l => l.ConceptCode)
+                    .Select(g => g.Sum(l => l.Amount))
+                    .ToListAsync(ct);
+                var contable = porConcepto.Sum(Math.Abs);
                 documentoCuadrado = doc.TotalDebit == doc.TotalCredit && doc.TotalDebit == contable;
                 detalles.Add($"Comprobante {doc.VoucherTypeCode}-{doc.DocumentNumber}: débitos {doc.TotalDebit:N0}, créditos {doc.TotalCredit:N0}; líneas con asiento {contable:N0}.");
             }

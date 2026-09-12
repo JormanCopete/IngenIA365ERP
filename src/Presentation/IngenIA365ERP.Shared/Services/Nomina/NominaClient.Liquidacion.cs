@@ -85,13 +85,16 @@ public sealed record ResumenCorridaDto(
     string? AccountingDocumentNumber,
     Guid? ReversalAccountingDocumentPublicId,
     bool ApprovedWithoutSegregation,
-    IReadOnlyList<ExcepcionAprobacionDto> Exceptions)
+    IReadOnlyList<ExcepcionAprobacionDto> Exceptions,
+    DateTime? DiscardedAt = null,
+    string? DiscardedBy = null,
+    string? DiscardReason = null)
 {
     public string EstadoTexto => Status switch
     {
         "Draft" => "Borrador",
         "Stale" => "Desactualizado",
-        "Superseded" => "Reemplazado",
+        "Superseded" => DiscardedAt is null ? "Reemplazado" : "Descartado",
         "Approved" => "Aprobado",
         "Reversed" => "Reversado",
         _ => Status,

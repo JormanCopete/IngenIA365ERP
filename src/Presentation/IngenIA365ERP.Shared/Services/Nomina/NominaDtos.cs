@@ -23,12 +23,14 @@ public sealed record PlanNominaDto(
     {
         "Monthly" => "Mensual",
         "Biweekly" => "Quincenal",
+        "TenDay" => "Decadal",
+        "Weekly" => "Semanal",
         _ => Periodicity,
     };
 }
 
 public sealed record CrearPlanNominaRequest(string Code, string Name, string Periodicity);
-public sealed record ActualizarPlanNominaRequest(string Name, bool IsActive);
+public sealed record ActualizarPlanNominaRequest(string Name, bool IsActive, string? Periodicity = null);
 public sealed record CambiarPlanEmpleadoRequest(Guid PlanPublicId, DateTime EffectiveFrom);
 
 // ----------------------------------------------------------------- períodos --
@@ -51,8 +53,18 @@ public sealed record PeriodoPagoDto(
     DateTime? ApprovedAt,
     string? ApprovedBy,
     Guid? CurrentRunPublicId,
-    int PeriodId)
+    int PeriodId,
+    byte SubPeriodNumber = 1,
+    short ImputationYear = 0,
+    byte ImputationMonth = 0,
+    string SubPeriodLabel = "")
 {
+    /// <summary>«Quincena 2 · Marzo 2026»; en mensual sólo el mes.</summary>
+    public string SubPeriodoTexto =>
+        ImputationMonth is >= 1 and <= 12
+            ? (PlanPeriodicity == "Monthly" ? "" : SubPeriodLabel + " · ") + new DateTime(ImputationYear == 0 ? StartDate.Year : ImputationYear, ImputationMonth, 1).ToString("MMMM yyyy")
+            : SubPeriodLabel;
+
     public string EstadoTexto => Status switch
     {
         "Open" => "Abierto",
@@ -80,7 +92,10 @@ public sealed record CrearPeriodoPagoRequest(
     DateTime EndDate,
     int? Periodicity,
     string StatusMessage,
-    int PeriodId);
+    int PeriodId,
+    byte? SubPeriodNumber = null,
+    short? ImputationYear = null,
+    byte? ImputationMonth = null);
 
 public sealed record ActualizarPeriodoPagoRequest(
     Guid PublicId,
@@ -88,4 +103,7 @@ public sealed record ActualizarPeriodoPagoRequest(
     string? PayDate,
     DateTime StartDate,
     DateTime EndDate,
-    string StatusMessage);
+    string StatusMessage,
+    byte? SubPeriodNumber = null,
+    short? ImputationYear = null,
+    byte? ImputationMonth = null);

@@ -38,7 +38,10 @@ public sealed record RunSummaryDto(
     string? AccountingDocumentNumber,
     Guid? ReversalAccountingDocumentPublicId,
     bool ApprovedWithoutSegregation,
-    IReadOnlyList<ApprovalExceptionDto> Exceptions);
+    IReadOnlyList<ApprovalExceptionDto> Exceptions,
+    DateTime? DiscardedAt = null,
+    string? DiscardedBy = null,
+    string? DiscardReason = null);
 
 public sealed record RunEmployeeRowDto(
     Guid EmployeePublicId,

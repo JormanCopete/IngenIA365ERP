@@ -77,7 +77,8 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
             Cantidad(LegalParameterCodes.ContributionBaseCapSmmlv, "Tope del IBC (en SMMLV)", 25m, FuenteSeguridadSocial),
             Cantidad(LegalParameterCodes.SickLeaveEmployerDays, "Días de incapacidad a cargo del empleador", 2m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.SickLeaveEmployerPct, "Porcentaje pagado en incapacidad general", 66.67m, FuenteSeguridadSocial),
-            Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 240m, FuenteLaboral),
+            // Ley 2101 de 2021: 44 h/semana desde el 15/07/2025 → 220 h/mes; 42 h desde el 15/07/2026 → 210 (ver Revisiones()).
+            Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 220m, "Ley 2101 de 2021 (jornada de 44 h desde el 15/07/2025)"),
 
             // Depuracion de la base de retencion (solo si el empleado declara la deduccion).
             Cantidad(LegalParameterCodes.WithholdingHousingInterestCapUvt, "Tope mensual de intereses de vivienda (UVT)", 100m, FuenteRetencion),
@@ -161,6 +162,20 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
         return p;
     }
 
+    /// <summary>
+    /// Vigencias posteriores a la base del año, para lo que la ley cambia a mitad de año. Se
+    /// aplican también sobre cooperativas que ya tenían la semilla: se inserta la versión nueva
+    /// y se cierra la anterior el día antes, sólo si esa anterior sigue abierta y nadie la
+    /// tocó (una vigencia registrada a mano después de la base se respeta y no se pisa).
+    /// </summary>
+    public static IReadOnlyList<PayrollLegalParameter> Revisiones() =>
+    [
+        // Ley 2101 de 2021, último escalón: 42 h/semana desde el 15 de julio de 2026 → 210 h/mes (7 h × 30).
+        Vigente(Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 210m, "Ley 2101 de 2021 (jornada de 42 h desde el 15/07/2026)"), new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc)),
+    ];
+
+    private static PayrollLegalParameter Vigente(PayrollLegalParameter p, DateTime desde) { p.ValidFrom = desde; return p; }
+
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
     {
         var db = context.TenantDb!;
@@ -176,6 +191,27 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
             db.PayrollLegalParameters.Add(parametro);
             inserted++;
         }
+        // La base tiene que estar en la base antes de mirar qué versión cerrar: en una cooperativa
+        // nueva se insertan ambas en la misma pasada.
+        if (inserted > 0) await db.SaveChangesAsync(ct);
+        foreach (var revision in Revisiones())
+        {
+            if (claves.Contains($"{revision.Code}|{revision.ValidFrom:yyyy-MM-dd}")) continue;
+            var versiones = await db.PayrollLegalParameters.IgnoreQueryFilters()
+                .Where(p => p.Code == revision.Code).OrderByDescending(p => p.ValidFrom).ToListAsync(ct);
+            var ultima = versiones.FirstOrDefault();
+            // Alguien registró a mano una vigencia igual o posterior: la ley ya está reflejada, no se pisa.
+            if (ultima is not null && ultima.ValidFrom >= revision.ValidFrom) continue;
+            if (ultima is not null && ultima.ValidTo is null)
+            {
+                ultima.ValidTo = revision.ValidFrom.AddDays(-1);
+                ultima.UpdatedBy = SeedContext.ParametricCreatedBy;
+                ultima.UpdatedAt = DateTime.UtcNow;
+            }
+            db.PayrollLegalParameters.Add(revision);
+            inserted++;
+        }
+
         if (inserted > 0) await db.SaveChangesAsync(ct);
         return inserted;
     }

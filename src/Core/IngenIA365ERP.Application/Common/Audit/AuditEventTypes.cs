@@ -102,6 +102,7 @@ public static class AuditEventTypes
     public const string PayrollSalaryChanged = "Payroll.SalaryChanged";
     public const string PayrollRunApproved = "Payroll.Run.Approved";
     public const string PayrollRunReversed = "Payroll.Run.Reversed";
+    public const string PayrollRunDiscarded = "Payroll.Run.Discarded";
     public const string PayrollPaymentsMarked = "Payroll.Payments.Marked";
     public const string PayrollPaymentMarkReverted = "Payroll.Payments.MarkReverted";
     public const string PayrollPayslipsSent = "Payroll.Payslips.Sent";

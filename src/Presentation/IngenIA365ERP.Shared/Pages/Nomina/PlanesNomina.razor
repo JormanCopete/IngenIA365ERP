@@ -66,18 +66,18 @@
                     }
                     <SfTextBox @bind-Value="_modelo.Name" MaxLength="100" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.Name" />
-                    @if (_editando is null)
+                    <label class="campo">
+                        Periodicidad
+                        <select class="e-input" @bind="_modelo.Periodicity">
+                            <option value="Monthly">Mensual (30 días)</option>
+                            <option value="Biweekly">Quincenal (15 días)</option>
+                            <option value="TenDay">Decadal (10 días: 1–10, 11–20, 21–fin de mes)</option>
+                            <option value="Weekly">Semanal (7 días; cada período dice a qué semana y mes se imputa)</option>
+                        </select>
+                    </label>
+                    @if (_editando is not null)
                     {
-                        <label class="campo">
-                            Periodicidad
-                            <select class="e-input" @bind="_modelo.Periodicity">
-                                <option value="Monthly">Mensual (30 días)</option>
-                                <option value="Biweekly">Quincenal (15 días)</option>
-                            </select>
-                        </label>
-                    }
-                    else
-                    {
+                        <p class="texto-tenue">La periodicidad se puede cambiar mientras el plan no tenga períodos creados ni liquidaciones. Después, creá otro plan y trasladá a los empleados con fecha de efecto.</p>
                         <label class="campo-check">
                             <input type="checkbox" @bind="_modelo.IsActive" disabled="@_editando.IsDefault" />
                             Activo
@@ -143,7 +143,7 @@
             }
             else
             {
-                var res = await Nomina.ActualizarPlanAsync(_editando.PublicId, new ActualizarPlanNominaRequest(_modelo.Name.Trim(), _modelo.IsActive));
+                var res = await Nomina.ActualizarPlanAsync(_editando.PublicId, new ActualizarPlanNominaRequest(_modelo.Name.Trim(), _modelo.IsActive, _modelo.Periodicity));
                 if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo actualizar el plan."); return; }
                 await Notification.SuccessAsync("Plan actualizado.");
             }

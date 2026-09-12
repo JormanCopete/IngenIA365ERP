@@ -44,7 +44,7 @@
         {
             <GridColumn Field="PlanName" HeaderText="Plan" Width="150" />
         }
-        <GridColumn Field="PlanId" HeaderText="Planilla" Width="90" TextAlign="TextAlign.Center" />
+        <GridColumn Field="SubPeriodoTexto" HeaderText="Período del mes" Width="170" />
         <GridColumn Field="Description" HeaderText="Descripción" Width="200" />
         <GridColumn Field="StartDate" HeaderText="Desde" Width="120" Format="d" TextAlign="TextAlign.Center" />
         <GridColumn Field="EndDate" HeaderText="Hasta" Width="120" Format="d" TextAlign="TextAlign.Center" />
@@ -97,14 +97,45 @@
                     }
                     <SfTextBox @bind-Value="_modelo.Description" MaxLength="100" Placeholder="Descripción (p. ej. Marzo 2026)" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.Description" />
-                    <SfDatePicker TValue="DateTime" @bind-Value="_modelo.StartDate" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" />
+                    <SfDatePicker TValue="DateTime" @bind-Value="_modelo.StartDate" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" ValueChange="@((Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime> _) => ProponerSubPeriodo())" />
                     <SfDatePicker TValue="DateTime" @bind-Value="_modelo.EndDate" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
+                    @{
+                        var periodicidadPlan = PeriodicidadDelPlanSeleccionado();
+                    }
+                    @if (periodicidadPlan != "Monthly")
+                    {
+                        <div class="rejilla-campos">
+                            <label class="campo">@EtiquetaSubPeriodo(periodicidadPlan)
+                                <select class="e-input" @bind="_modelo.SubPeriodNumber">
+                                    @for (var i = 1; i <= PeriodosPorMes(periodicidadPlan); i++)
+                                    {
+                                        <option value="@i">@i</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="campo">Mes de imputación
+                                <select class="e-input" @bind="_modelo.ImputationMonth">
+                                    @for (var m = 1; m <= 12; m++)
+                                    {
+                                        <option value="@m">@(new DateTime(2000, m, 1).ToString("MMMM"))</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="campo">Año
+                                <SfNumericTextBox TValue="int" @bind-Value="_modelo.ImputationYear" Min="2000" Max="2099" Format="####" ShowSpinButton="false" />
+                            </label>
+                        </div>
+                        <p class="hint">Se proponen desde la fecha de inicio; ajustalos si una semana cruza de mes. Deciden qué recurrentes «primero/último del mes» entran y cómo se agrupan los reportes.</p>
+                    }
                     <ValidationMessage For="() => _modelo.EndDate" />
                     <SfTextBox @bind-Value="_modelo.PayDate" MaxLength="40" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
-                    @if (_editId is null)
+                    @* «Empresa de nómina» y «Número de planilla» eran campos heredados del
+                       SOLIDO sin efecto en el cálculo (2026-09-12): el período pertenece a un
+                       plan de nómina, y eso es lo que se elige arriba. La API sigue recibiendo
+                       empresa 1 y planilla «siguiente» por compatibilidad. *@
+                    @if (_editId is null && _planes.Count == 1)
                     {
-                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PayrollCompanyId" Placeholder="Empresa de nómina" FloatLabelType="FloatLabelType.Always" />
-                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PlanId" Placeholder="Número de planilla (0 = siguiente)" FloatLabelType="FloatLabelType.Always" />
+                        <p class="texto-tenue">Plan de nómina: <b>@_planes[0].Name</b> (@_planes[0].PeriodicidadTexto). Si liquidás grupos con otra periodicidad, creá otro plan en Nómina › Planes de nómina.</p>
                     }
                     <SfTextBox @bind-Value="_modelo.StatusMessage" MaxLength="100" Placeholder="Nota" FloatLabelType="FloatLabelType.Always" />
                     <p class="texto-tenue">El estado lo mueven calcular, aprobar y reversar en Liquidación; aquí no se edita.</p>
@@ -178,6 +209,9 @@
             StartDate = item.StartDate,
             EndDate = item.EndDate,
             StatusMessage = item.StatusMessage,
+            SubPeriodNumber = item.SubPeriodNumber,
+            ImputationYear = item.ImputationYear == 0 ? item.StartDate.Year : item.ImputationYear,
+            ImputationMonth = item.ImputationMonth == 0 ? item.StartDate.Month : item.ImputationMonth,
         };
         _editId = item.PublicId;
         _titulo = "Editar período de pago";
@@ -197,14 +231,16 @@
                 Guid? plan = Guid.TryParse(_modelo.PlanPublicId, out var g) ? g : null;
                 var res = await Nomina.CrearPeriodoAsync(new CrearPeriodoPagoRequest(
                     plan, _modelo.PlanId, _modelo.PayrollCompanyId, _modelo.Description, _modelo.PayDate,
-                    _modelo.StartDate, _modelo.EndDate, null, _modelo.StatusMessage, 0));
+                    _modelo.StartDate, _modelo.EndDate, null, _modelo.StatusMessage, 0,
+                    (byte)_modelo.SubPeriodNumber, (short)_modelo.ImputationYear, (byte)_modelo.ImputationMonth));
                 if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo crear el período."); return; }
                 await Notification.SuccessAsync("Período creado.");
             }
             else
             {
                 var res = await Nomina.ActualizarPeriodoAsync(new ActualizarPeriodoPagoRequest(
-                    _editId.Value, _modelo.Description, _modelo.PayDate, _modelo.StartDate, _modelo.EndDate, _modelo.StatusMessage));
+                    _editId.Value, _modelo.Description, _modelo.PayDate, _modelo.StartDate, _modelo.EndDate, _modelo.StatusMessage,
+                    (byte)_modelo.SubPeriodNumber, (short)_modelo.ImputationYear, (byte)_modelo.ImputationMonth));
                 if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo actualizar el período."); return; }
                 await Notification.SuccessAsync("Período actualizado.");
             }
@@ -221,6 +257,32 @@
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo eliminar el período.");
     }
 
+    private string PeriodicidadDelPlanSeleccionado()
+    {
+        if (_editId is not null)
+            return _items.FirstOrDefault(i => i.PublicId == _editId)?.PlanPeriodicity ?? "Monthly";
+        var plan = Guid.TryParse(_modelo.PlanPublicId, out var g) ? _planes.FirstOrDefault(p => p.PublicId == g) : null;
+        plan ??= _planes.FirstOrDefault(p => p.IsDefault) ?? _planes.FirstOrDefault();
+        return plan?.Periodicity ?? "Monthly";
+    }
+
+    private static int PeriodosPorMes(string periodicidad) => periodicidad switch { "Biweekly" => 2, "TenDay" => 3, "Weekly" => 5, _ => 1 };
+    private static int DiasDe(string periodicidad) => periodicidad switch { "Biweekly" => 15, "TenDay" => 10, "Weekly" => 7, _ => 30 };
+    private static string EtiquetaSubPeriodo(string periodicidad) => periodicidad switch { "Biweekly" => "Quincena", "TenDay" => "Década", "Weekly" => "Semana del mes", _ => "Período" };
+
+    /// <summary>Misma regla que PeriodCalendar.Proponer en el servidor: por la fecha de inicio.</summary>
+    private void ProponerSubPeriodo()
+    {
+        var p = PeriodicidadDelPlanSeleccionado();
+        var dias = DiasDe(p);
+        var dia = _modelo.StartDate.Day;
+        _modelo.SubPeriodNumber = p == "Monthly" ? 1 : Math.Min(PeriodosPorMes(p), (dia + dias - 1) / dias);
+        _modelo.ImputationYear = _modelo.StartDate.Year;
+        _modelo.ImputationMonth = _modelo.StartDate.Month;
+        if (p != "Monthly" && (_modelo.EndDate - _modelo.StartDate).Days + 1 != dias)
+            _modelo.EndDate = _modelo.StartDate.AddDays(dias - 1);
+    }
+
     private static string ClaseEstado(string status) => status switch
     {
         "Open" => "e-badge-info",
@@ -233,8 +295,12 @@
     private sealed class Modelo
     {
         public string PlanPublicId { get; set; } = string.Empty;
+        /// <summary>Heredados del SOLIDO; ya no se piden: planilla «siguiente» (0) y empresa 1.</summary>
         public int PlanId { get; set; }
-        public int PayrollCompanyId { get; set; }
+        public int PayrollCompanyId { get; set; } = 1;
+        public int SubPeriodNumber { get; set; } = 1;
+        public int ImputationYear { get; set; } = DateTime.Today.Year;
+        public int ImputationMonth { get; set; } = DateTime.Today.Month;
 
         [StringLength(100, ErrorMessage = "Máximo 100 caracteres.")]
         public string Description { get; set; } = string.Empty;

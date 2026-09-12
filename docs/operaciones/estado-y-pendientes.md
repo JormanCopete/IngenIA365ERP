@@ -38,7 +38,11 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. `release 08c664e` (2026-09-12, GitOps
+a release: …` y sincronización manual de Argo. `release ccef705` (2026-09-12, GitOps
+`777f930`) llevó los códigos alfanuméricos de catálogo (migración
+`CodigosAlfanumericosEnCatalogos`, respaldos `*-pre-codigos-20260912-2002.dump`), largos y
+obligatorios en los formularios, el aviso de código duplicado, el menú y los avisos abajo a la
+derecha, y el icono/manifest de la app (`release 1c774ce`); `release 08c664e` (GitOps
 `13cc30b`) llevó fondo de cesantías y caja de compensación en la ficha con la migración
 `CajasDeCompensacionYFondoDeCesantiasEnLaFicha` (respaldos previos `pg_dump` en
 `/root/respaldos/*-pre-cajas-20260912-1117.dump`; aplicada por el Job PreSync en
