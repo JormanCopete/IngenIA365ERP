@@ -100,7 +100,18 @@ public sealed class ListarInvitacionesQueryHandler(
 public sealed record ReenviarInvitacionCommand(Guid InvitacionPublicId)
     : IRequest<Result<ReenvioResultado>>;
 
-public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email, DateTime ExpiraEn);
+/// <summary>
+/// <paramref name="CorreoEnviado"/> existe por lo mismo que en el registro de
+/// cooperativa: el envío es fail-soft. La invitación nueva queda persistida aunque
+/// el servidor de correo no responda, y <paramref name="MotivoCorreoNoEnviado"/>
+/// dice por qué no salió, para que la pantalla lo cuente en vez de responder 500.
+/// </summary>
+public sealed record ReenvioResultado(
+    Guid NuevaInvitacionPublicId,
+    string Email,
+    DateTime ExpiraEn,
+    bool CorreoEnviado,
+    string? MotivoCorreoNoEnviado);
 
 public sealed class ReenviarInvitacionCommandHandler(
     ICurrentCentralUserContext currentUser,
@@ -172,20 +183,38 @@ public sealed class ReenviarInvitacionCommandHandler(
         db.Invitations.Add(nueva);
         await db.SaveChangesAsync(ct);
 
-        // El envío va DESPUÉS de persistir y sin try/catch: si el correo falla,
-        // que el error llegue a quien pulsó el botón. Tragárselo fue justamente
-        // lo que dejó al registro de cooperativa sin avisar de nada.
-        await emailDispatcher.DispatchAsync(new InvitationEmailRequest(
-            Invitation: nueva,
-            Tenant: tenant,
-            InviterDisplayName: currentUser.Email ?? "Administrador",
-            PlainTokenBase64Url: tokenPlano), ct);
+        // El envío va DESPUÉS de persistir: el enlace sólo sirve si su hash ya está
+        // en la base. Y es fail-soft, igual que en el registro de cooperativa: si el
+        // servidor de correo no responde, la invitación nueva queda (la anterior ya
+        // se anuló) y el resultado lo dice con el motivo. Hasta el 2026-09-11 la
+        // excepción subía tal cual y la pantalla mostraba «Ocurrió un error
+        // inesperado» tras veinte segundos de reintentos —visto en producción, que
+        // no tenía servidor de correo configurado—. Lo que NO se hace es callarlo.
+        try
+        {
+            await emailDispatcher.DispatchAsync(new InvitationEmailRequest(
+                Invitation: nueva,
+                Tenant: tenant,
+                InviterDisplayName: currentUser.Email ?? "Administrador",
+                PlainTokenBase64Url: tokenPlano), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "Invitación {Anterior} reenviada como {Nueva} para {Email} → tenant {Tenant}, pero el correo no salió.",
+                original.PublicId, nueva.PublicId, nueva.Email, tenant.Name);
+
+            return Result.Success(new ReenvioResultado(
+                nueva.PublicId, nueva.Email, expira,
+                CorreoEnviado: false,
+                MotivoCorreoNoEnviado: $"El servidor de correo no respondió ({ex.GetBaseException().Message})."));
+        }
 
         logger.LogInformation(
             "Invitación {Anterior} reenviada como {Nueva} para {Email} → tenant {Tenant} (expira {Expira}).",
             original.PublicId, nueva.PublicId, nueva.Email, tenant.Name, expira);
 
-        return Result.Success(new ReenvioResultado(nueva.PublicId, nueva.Email, expira));
+        return Result.Success(new ReenvioResultado(nueva.PublicId, nueva.Email, expira, CorreoEnviado: true, MotivoCorreoNoEnviado: null));
     }
 }
 

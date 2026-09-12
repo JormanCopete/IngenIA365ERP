@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-10**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-11**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -36,6 +36,18 @@ de [rescate-del-administrador-maestro.md](rescate-del-administrador-maestro.md))
 mismo día inscribió su autenticador, entró dos veces y recibió sus diez códigos de
 respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo único
 que separa a producción de su primera cooperativa es P14.
+
+Desde entonces producción se promueve commit a commit con un merge `Promover develop
+a release: …` y sincronización manual de Argo. La última es **`release 47185e6`
+(2026-09-11)**: clase de riesgo ARL en la ficha del empleado, semilla de las cinco
+clases (`WorkRiskClassesSeeder`, corrió sola en la operativa de PDN: «5 fila(s)
+insertadas») y cargador por `Code`; en QA se había visto que toda liquidación salía
+«sin clase de riesgo ARL» (ver
+[nomina-primer-periodo.md](nomina-primer-periodo.md) §1). Pods de API y Web en
+los digests del commit GitOps `7ad9703`, `/api/health` 200 por el borde. En el
+arranque de la API en PDN aparece dos veces «Cannot load library
+libgssapi_krb5.so.2»: es Npgsql probando Kerberos en una imagen sin la librería,
+sigue con contraseña y no es de esta entrega.
 
 ### Respaldos
 
@@ -93,9 +105,22 @@ entre sí y solo se notaría al intentar restaurar.
   reputación de esa IP, no de la de Microsoft.
 - **Credenciales por variable de entorno** (`Smtp__Username`, `Smtp__Password`),
   nunca en el repositorio. En Kubernetes vienen del Secret `erp-smtp`.
-- **Sólo QA envía correo real** (desde el 2026-09-04): `Smtp__*` en su overlay y
-  Secret `erp-smtp` en `erp-qa`. **DEV y PDN no envían**: sin `Smtp__Host` ni
-  Secret, y **no hay ningún capturador** (smtp4dev/MailHog) desplegado en el
+- **QA y PRODUCCIÓN envían correo real** (QA desde el 2026-09-04, PDN desde el
+  2026-09-12): `Smtp__*` en su overlay y Secret `erp-smtp` en su namespace. **DEV no
+  envía**: sin `Smtp__Host` ni Secret, y **no hay ningún capturador**
+  (smtp4dev/MailHog) desplegado en el clúster. **En producción faltó hasta el
+  2026-09-11 y mordió**: al registrar la primera
+  cooperativa real (COOFLOPAL) la invitación de su administradora no salió
+  (`SocketException 111` contra `localhost:25`, cuatro intentos, ~22 s) y el botón
+  «Reenviar» respondía 500. Se cerró en dos pasos, en este orden: (1) el usuario
+  creó el Secret con `tools/scripts/crear-secreto-smtp.ps1 -Ambiente pdn` —la
+  contraseña se teclea oculta, no pasa por el repositorio ni por el chat—; (2) el
+  overlay `pdn` recibió las claves `Smtp__*` (GitOps `5df005c`) y `erp-pdn` se
+  sincronizó a mano: los pods de la API arrancaron con `Smtp__Host`, la huella y
+  las credenciales del Secret. El orden importa: el Secret se lee al crear el pod
+  (`optional: true`), así que crearlo después obliga a rotar los pods. El reenvío
+  ya no responde 500: devuelve `correoEnviado=false` con el motivo (develop
+  `d8f4c21`) y la invitación nueva queda para reintentar.
   clúster —una versión anterior de esta nota decía lo contrario, sobre un commit
   de GitOps que nunca se subió—. Cuando en DEV o PDN falla el envío, el ERP lo
   dice (`CorreoEnviado=false` con el motivo) y la invitación queda para reenviar.
