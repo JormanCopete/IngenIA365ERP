@@ -55,8 +55,12 @@ public sealed class CreatePayrollPlanCommandHandler(IApplicationDbContext db, ID
 
 // -------------------------------------------------------------- actualizar plan --
 
-/// <summary>Cambia nombre y estado. Un plan con empleados no se desactiva; el código no cambia.</summary>
-public sealed record UpdatePayrollPlanCommand(Guid PublicId, string Name, bool IsActive) : IRequest<Result>;
+/// <summary>
+/// Cambia nombre, estado y —mientras el plan no tenga ninguna liquidación calculada o
+/// aprobada— la periodicidad. Un plan con empleados no se desactiva; el código no cambia.
+/// <paramref name="Periodicity"/> nulo deja la que tiene: los clientes viejos no la mandan.
+/// </summary>
+public sealed record UpdatePayrollPlanCommand(Guid PublicId, string Name, bool IsActive, PayrollPeriodicity? Periodicity = null) : IRequest<Result>;
 
 public sealed class UpdatePayrollPlanCommandValidator : AbstractValidator<UpdatePayrollPlanCommand>
 {
@@ -65,6 +69,8 @@ public sealed class UpdatePayrollPlanCommandValidator : AbstractValidator<Update
         RuleFor(x => x.PublicId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().WithMessage("El nombre es obligatorio.")
             .MaximumLength(100).WithMessage("El nombre no puede pasar de 100 caracteres.");
+        RuleFor(x => x.Periodicity).IsInEnum().When(x => x.Periodicity is not null)
+            .WithMessage("La periodicidad debe ser Monthly o Biweekly.");
     }
 }
 
@@ -85,6 +91,23 @@ public sealed class UpdatePayrollPlanCommandHandler(IApplicationDbContext db, ID
             if (conEmpleados)
                 return Result.Failure(new Error("Payroll.PlanHasEmployees",
                     $"El plan «{plan.Name}» tiene empleados vigentes: cámbielos de plan antes de desactivarlo."));
+        }
+
+        if (request.Periodicity is { } periodicidad && periodicidad != plan.Periodicity)
+        {
+            // La periodicidad decide la base de proporción (30/15). Con corridas ya
+            // hechas, cambiarla haría que los períodos viejos y los nuevos no fueran
+            // comparables; sin corridas, es sólo una decisión que se corrige.
+            var conLiquidaciones = await db.PayPeriods.AnyAsync(
+                p => p.PayrollPlanId == plan.Id && p.Status != PayPeriodStatus.Open, ct);
+            if (conLiquidaciones)
+                return Result.Failure(new Error("Payroll.PlanPeriodicityLocked",
+                    $"El plan «{plan.Name}» ya tiene liquidaciones calculadas o aprobadas: su periodicidad no se cambia. Cree otro plan y traslade a los empleados con fecha de efecto."));
+            var periodosAbiertos = await db.PayPeriods.CountAsync(p => p.PayrollPlanId == plan.Id, ct);
+            if (periodosAbiertos > 0)
+                return Result.Failure(new Error("Payroll.PlanPeriodicityLocked",
+                    $"El plan «{plan.Name}» tiene {periodosAbiertos} período(s) abierto(s) con fechas de la periodicidad anterior: elimínelos antes de cambiarla."));
+            plan.Periodicity = periodicidad;
         }
 
         plan.Name = request.Name.Trim();

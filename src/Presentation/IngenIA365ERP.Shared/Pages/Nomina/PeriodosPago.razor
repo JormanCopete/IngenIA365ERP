@@ -44,7 +44,6 @@
         {
             <GridColumn Field="PlanName" HeaderText="Plan" Width="150" />
         }
-        <GridColumn Field="PlanId" HeaderText="Planilla" Width="90" TextAlign="TextAlign.Center" />
         <GridColumn Field="Description" HeaderText="Descripción" Width="200" />
         <GridColumn Field="StartDate" HeaderText="Desde" Width="120" Format="d" TextAlign="TextAlign.Center" />
         <GridColumn Field="EndDate" HeaderText="Hasta" Width="120" Format="d" TextAlign="TextAlign.Center" />
@@ -101,10 +100,13 @@
                     <SfDatePicker TValue="DateTime" @bind-Value="_modelo.EndDate" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _modelo.EndDate" />
                     <SfTextBox @bind-Value="_modelo.PayDate" MaxLength="40" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
-                    @if (_editId is null)
+                    @* «Empresa de nómina» y «Número de planilla» eran campos heredados del
+                       SOLIDO sin efecto en el cálculo (2026-09-12): el período pertenece a un
+                       plan de nómina, y eso es lo que se elige arriba. La API sigue recibiendo
+                       empresa 1 y planilla «siguiente» por compatibilidad. *@
+                    @if (_editId is null && _planes.Count == 1)
                     {
-                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PayrollCompanyId" Placeholder="Empresa de nómina" FloatLabelType="FloatLabelType.Always" />
-                        <SfNumericTextBox TValue="int" @bind-Value="_modelo.PlanId" Placeholder="Número de planilla (0 = siguiente)" FloatLabelType="FloatLabelType.Always" />
+                        <p class="texto-tenue">Plan de nómina: <b>@_planes[0].Name</b> (@_planes[0].PeriodicidadTexto). Si liquidás grupos con otra periodicidad, creá otro plan en Nómina › Planes de nómina.</p>
                     }
                     <SfTextBox @bind-Value="_modelo.StatusMessage" MaxLength="100" Placeholder="Nota" FloatLabelType="FloatLabelType.Always" />
                     <p class="texto-tenue">El estado lo mueven calcular, aprobar y reversar en Liquidación; aquí no se edita.</p>
@@ -233,8 +235,9 @@
     private sealed class Modelo
     {
         public string PlanPublicId { get; set; } = string.Empty;
+        /// <summary>Heredados del SOLIDO; ya no se piden: planilla «siguiente» (0) y empresa 1.</summary>
         public int PlanId { get; set; }
-        public int PayrollCompanyId { get; set; }
+        public int PayrollCompanyId { get; set; } = 1;
 
         [StringLength(100, ErrorMessage = "Máximo 100 caracteres.")]
         public string Description { get; set; } = string.Empty;

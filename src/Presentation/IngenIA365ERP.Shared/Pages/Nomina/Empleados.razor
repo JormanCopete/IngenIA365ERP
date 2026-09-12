@@ -48,6 +48,8 @@
             <Template>
                 @{
                     var emp = context as EmployeeRow;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye"
+                              OnClick="@(() => Nav.NavigateTo($"/nomina/empleados/{emp!.PublicId}"))" Title="Detalle: historial salarial, movimientos, retención y plan" />
                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
                               OnClick="@(() => OpenEditFromRow(emp!))" Title="Editar" />
                     @if (emp?.StatusText == "Activo")
@@ -251,10 +253,32 @@
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Fecha de Ingreso <span style="color:var(--peligro-texto)">*</span></label>
+                                    <label>Fecha de Ingreso <span class="obligatorio">*</span></label>
                                     <SfDatePicker TValue="DateTime" @bind-Value="_employeeModel.HireDate" Format="dd/MM/yyyy" />
                                 </div>
-                                <div></div>
+                                <div>
+                                    <label>Plan de nómina <span class="obligatorio">*</span></label>
+                                    @if (_planes.Count <= 1)
+                                    {
+                                        <p class="texto-tenue">@(_planes.FirstOrDefault()?.Name ?? "Plan por defecto") — único plan de la cooperativa. Para quincenales u otra periodicidad, creá otro en Nómina › Planes de nómina.</p>
+                                    }
+                                    else
+                                    {
+                                        <SfDropDownList TValue="Guid?" TItem="LookupOption"
+                                                        @bind-Value="_employeeModel.PayrollPlanPublicId"
+                                                        DataSource="@_planesLookup"
+                                                        Placeholder="Seleccione plan">
+                                            <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                        </SfDropDownList>
+                                        @if (_employeePublicId is not null && _employeeModel.PayrollPlanPublicId != _planOriginal)
+                                        {
+                                            <label class="hint">Rige desde
+                                                <SfDatePicker TValue="DateTime" @bind-Value="_planDesde" Format="dd/MM/yyyy" Width="170px" />
+                                            </label>
+                                            <p class="hint">El cambio de plan lleva fecha de efecto: no puede caer dentro de un período abierto o calculado del plan actual.</p>
+                                        }
+                                    }
+                                </div>
                                 <div>
                                     <label>EPS</label>
                                     <SfDropDownList TValue="Guid?" TItem="LookupOption"
@@ -426,6 +450,10 @@
     private List<LookupOption> _arl = new();
     private List<LookupOption> _arlClases = new();
     private List<LookupOption> _cesantias = new();
+    private List<PlanLookup> _planes = new();
+    private List<LookupOption> _planesLookup = new();
+    private Guid? _planOriginal;
+    private DateTime _planDesde = DateTime.Today;
     private List<LookupOption> _cajas = new();
     private List<LookupOption> _banks = new();
     private List<LookupOption> _cities = new();
@@ -489,10 +517,11 @@
             var arlClasesTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk-rates?PageNumber=1&PageSize=50");
             var cesantiasTask = Http.GetListAsync<LookupRaw>("/api/payroll/severance-providers?PageNumber=1&PageSize=500");
             var cajasTask = Http.GetListAsync<LookupRaw>("/api/payroll/family-compensation-funds?PageNumber=1&PageSize=500");
+            var planesTask = Http.GetListAsync<PlanLookup>("/api/payroll/plans?includeInactive=false");
             var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
             var citiesTask = Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000");
 
-            await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, banksTask, citiesTask);
+            await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, planesTask, banksTask, citiesTask);
 
             _eps = (await epsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _pensions = (await pensionsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
@@ -500,6 +529,8 @@
             _arlClases = (await arlClasesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cesantias = (await cesantiasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cajas = (await cajasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+            _planes = await planesTask;
+            _planesLookup = _planes.Select(p => new LookupOption(p.PublicId, $"{p.Name} ({(p.Periodicity == "Biweekly" ? "quincenal" : "mensual")})")).ToList();
             _banks = (await banksTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
             _cities = (await citiesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
         }
@@ -578,6 +609,7 @@
                     _isNewEmployee = false;
                     _dialogTitle = $"Editar Empleado: {person.FullName}";
                     _employeeModel = MapEmployeeDto(existing);
+                    _planOriginal = existing.PayrollPlanPublicId; _planDesde = DateTime.Today;
                     _showEditDialog = true;
                     return;
                 }
@@ -593,8 +625,11 @@
         {
             HireDate = DateTime.Today,
             ContractType = 1,
-            PayrollBankAccountType = 1
+            PayrollBankAccountType = 1,
+            // Con un solo plan no se pregunta; con varios se preselecciona el por defecto.
+            PayrollPlanPublicId = (_planes.FirstOrDefault(p => p.IsDefault) ?? _planes.FirstOrDefault())?.PublicId,
         };
+        _planOriginal = _employeeModel.PayrollPlanPublicId;
         _showEditDialog = true;
     }
 
@@ -634,6 +669,7 @@
             if (p is not null) _personModel = MapPersonDto(p);
 
             _employeeModel = MapEmployeeDto(existing);
+            _planOriginal = existing.PayrollPlanPublicId; _planDesde = DateTime.Today;
             _showEditDialog = true;
         }
         catch (Exception ex)
@@ -720,6 +756,7 @@
                     WorkRiskRatePublicId = _employeeModel.WorkRiskRatePublicId,
                     SeveranceProviderPublicId = _employeeModel.SeveranceProviderPublicId,
                     FamilyCompensationFundPublicId = _employeeModel.FamilyCompensationFundPublicId,
+                    PayrollPlanPublicId = _employeeModel.PayrollPlanPublicId,
                     PayrollBankPublicId = _employeeModel.PayrollBankPublicId,
                     PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_employeeModel.PayrollBankAccountNumber)
                         ? null : _employeeModel.PayrollBankAccountNumber,
@@ -745,6 +782,17 @@
                     PayrollBankAccountType = _employeeModel.PayrollBankAccountType
                 };
                 resEmp = await Http.PutAsJsonAsync($"/api/payroll/employees/{_employeePublicId}", updatePayload);
+                // El plan no va en el PUT: cambiarlo lleva fecha de efecto y sus propias reglas.
+                if (resEmp.IsSuccessStatusCode && _employeeModel.PayrollPlanPublicId is { } planNuevo && planNuevo != _planOriginal)
+                {
+                    var resPlan = await Http.PostAsJsonAsync($"/api/payroll/employees/{_employeePublicId}/plan",
+                        new { PlanPublicId = planNuevo, EffectiveFrom = _planDesde });
+                    if (!resPlan.IsSuccessStatusCode)
+                    {
+                        await Notification.ShowErrorAsync(resPlan, "Los datos se guardaron, pero el cambio de plan no");
+                        resEmp = resPlan;
+                    }
+                }
             }
 
             if (resEmp.IsSuccessStatusCode)
@@ -837,6 +885,7 @@
         WorkRiskRatePublicId = e.WorkRiskRatePublicId,
         SeveranceProviderPublicId = e.SeveranceProviderPublicId,
         FamilyCompensationFundPublicId = e.FamilyCompensationFundPublicId,
+        PayrollPlanPublicId = e.PayrollPlanPublicId,
         PayrollBankPublicId = e.PayrollBankPublicId,
         PayrollBankAccountNumber = e.PayrollBankAccountNumber ?? "",
         PayrollBankAccountType = e.PayrollBankAccountType
@@ -875,6 +924,7 @@
         public Guid? WorkRiskRatePublicId { get; set; }
         public Guid? SeveranceProviderPublicId { get; set; }
         public Guid? FamilyCompensationFundPublicId { get; set; }
+        public Guid? PayrollPlanPublicId { get; set; }
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; }
@@ -941,9 +991,18 @@
         public Guid? WorkRiskRatePublicId { get; set; }
         public Guid? SeveranceProviderPublicId { get; set; }
         public Guid? FamilyCompensationFundPublicId { get; set; }
+        public Guid? PayrollPlanPublicId { get; set; }
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; } = 1;
+    }
+
+    private class PlanLookup
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+        public string Periodicity { get; set; } = "";
+        public bool IsDefault { get; set; }
     }
 
     private class LookupRaw

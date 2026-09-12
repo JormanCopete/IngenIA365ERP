@@ -46,6 +46,8 @@ public record RegisterEmployeeCommand : IRequest<Result<Guid>>
     public Guid? SeveranceProviderPublicId { get; init; }
     /// <summary>Caja de compensación familiar (fila de <c>PAY_FamilyCompensationFunds</c>).</summary>
     public Guid? FamilyCompensationFundPublicId { get; init; }
+    /// <summary>Plan de nómina al que entra. Nulo = el plan por defecto de la cooperativa.</summary>
+    public Guid? PayrollPlanPublicId { get; init; }
 
     // Banca nomina
     public Guid? PayrollBankPublicId { get; init; }
@@ -136,10 +138,17 @@ public class RegisterEmployeeCommandHandler(
         // cooperativa. Sin esto queda con PayrollPlanId = 0, fuera de cualquier período:
         // no admite novedades ni entra en la liquidación. Cambiar de plan es
         // ChangeEmployeePlanCommand, con fecha de efecto.
-        var planPorDefecto = await context.PayrollPlans.AsNoTracking()
-            .Where(p => p.IsDefault && p.IsActive && !p.IsDeleted)
-            .Select(p => (int?)p.Id)
-            .FirstOrDefaultAsync(ct);
+        var planPorDefecto = request.PayrollPlanPublicId is { } planElegido
+            ? await context.PayrollPlans.AsNoTracking()
+                .Where(p => p.PublicId == planElegido && p.IsActive && !p.IsDeleted)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefaultAsync(ct)
+            : await context.PayrollPlans.AsNoTracking()
+                .Where(p => p.IsDefault && p.IsActive && !p.IsDeleted)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefaultAsync(ct);
+        if (request.PayrollPlanPublicId is not null && planPorDefecto is null)
+            return Result.Failure<Guid>(new Error("Payroll.PlanNotFound", "El plan de nómina elegido no existe o está inactivo."));
 
         // 4. Crear empleado.
         // IMPORTANTE: el DDL de PAY_Employees tiene varias columnas legacy NOT NULL

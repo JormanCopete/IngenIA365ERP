@@ -61,6 +61,9 @@ public record EmployeeDetailDto(
     string SeveranceProviderName,
     Guid? FamilyCompensationFundPublicId,
     string FamilyCompensationFundName,
+    Guid? PayrollPlanPublicId,
+    string PayrollPlanName,
+    DateTime? PayrollPlanEffectiveFrom,
     List<SalaryHistoryDto> SalaryHistory,
     List<RecentPayrollEntryDto> RecentEntries);
 
@@ -205,6 +208,12 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
                 .FirstOrDefaultAsync(c => c.Id == employee.FamilySubsidyId, ct);
             if (caja is not null) { cajaName = caja.Name; cajaPublicId = caja.PublicId; }
         }
+        Guid? planPublicId = null; var planName = "";
+        if (employee.PayrollPlanId > 0)
+        {
+            var plan = await context.PayrollPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Id == employee.PayrollPlanId, ct);
+            if (plan is not null) { planPublicId = plan.PublicId; planName = plan.Name; }
+        }
         if (!string.IsNullOrWhiteSpace(employee.PayrollBankId)
             && int.TryParse(employee.PayrollBankId, out var bankIntId) && bankIntId > 0)
         {
@@ -262,6 +271,9 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             cesantiasName,
             cajaPublicId,
             cajaName,
+            planPublicId,
+            planName,
+            employee.PayrollPlanEffectiveFrom,
             salaryHistory,
             recentEntries));
     }

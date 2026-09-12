@@ -28,7 +28,7 @@ public sealed record PlanNominaDto(
 }
 
 public sealed record CrearPlanNominaRequest(string Code, string Name, string Periodicity);
-public sealed record ActualizarPlanNominaRequest(string Name, bool IsActive);
+public sealed record ActualizarPlanNominaRequest(string Name, bool IsActive, string? Periodicity = null);
 public sealed record CambiarPlanEmpleadoRequest(Guid PlanPublicId, DateTime EffectiveFrom);
 
 // ----------------------------------------------------------------- períodos --
