@@ -132,6 +132,25 @@ se edita ni se borra: se agrega la siguiente.
 Los borradores ya calculados de períodos que cubran la fecha quedan **desactualizados** y
 hay que recalcularlos antes de aprobar.
 
+## 4b. Periodicidades, sub-períodos y recurrentes (feature 006, 2026-09-12)
+
+- El plan admite **Mensual (30)**, **Quincenal (15)**, **Decadal (10: 1–10, 11–20, 21–fin)** y
+  **Semanal (7)**. El motor prorratea todo por los días del plan; la periodicidad se puede
+  cambiar mientras el plan no tenga períodos ni liquidaciones.
+- Cada período lleva **número dentro del mes** (quincena 1/2, década 1–3, semana 1–5) y **mes
+  de imputación**; se proponen desde la fecha de inicio y se ajustan al crear (una semana que
+  cruza de mes se imputa al que decida la persona). La duración se valida contra el plan:
+  sólo el último período del mes admite lo que el calendario le quite o le sume.
+- Una recurrente tiene **«Aplica en»**: cada período, sólo el primero del mes o sólo el último
+  (en semanal, la mayor semana creada del mes). El valor es por período en que aplica.
+- Un período **Calculado** se devuelve a Abierto con **«Descartar borrador»** (Liquidación):
+  la corrida queda descartada con motivo, las recurrentes generadas se anulan y se regeneran al
+  recalcular; nada se borra ni toca contabilidad. Una aprobada sigue reversándose.
+- **Reportes de nómina** (`/reportes/nomina`): comprobante por empleado, resumen por concepto,
+  detalle empleado × concepto, novedades del período e histórico por empleado; Excel, PDF y
+  Word con los mismos totales. Reemplaza a «Comprobante Nómina», que llamaba a una ruta
+  inexistente.
+
 ## 5. Reaplicar la semilla
 
 Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien

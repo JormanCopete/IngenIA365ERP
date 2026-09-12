@@ -35,13 +35,13 @@
 
 ## Phase 5: US5 — Centro de reportes
 
-- [ ] T040 [US5] Modelo `TablaExportable` y cinco consultas en src/Core/IngenIA365ERP.Application/Payroll/Reports/
-- [ ] T041 [US5] Paquetes `ClosedXML` y `DocumentFormat.OpenXml` en la API; exportadores xlsx/docx/pdf en src/Presentation/IngenIA365ERP.API/Reports/Exportadores/
-- [ ] T042 [US5] Endpoints `GET /api/reports/payroll/{vista}` con `format=json|xlsx|pdf|docx` en src/Presentation/IngenIA365ERP.API/Endpoints/Reports/PayrollReportsEndpoints.cs
-- [ ] T043 [US5] Pantalla `ReportesNomina.razor` (`/reportes/nomina`) con las cinco vistas y botones de exportación; `ComprobanteNomina.razor` redirige; menú actualizado
-- [ ] T044 [US5] e2e tests/IngenIA365ERP.API.IntegrationTests/Payroll/ReportesNominaTests.cs: cada vista en json y los tres formatos descargan; totales iguales a la corrida
+- [x] T040 [US5] Modelo `TablaExportable` y cinco consultas en src/Core/IngenIA365ERP.Application/Payroll/Reports/
+- [x] T041 [US5] Paquetes `ClosedXML` y `DocumentFormat.OpenXml` en la API; exportadores xlsx/docx/pdf en src/Presentation/IngenIA365ERP.API/Reports/Exportadores/
+- [x] T042 [US5] Endpoints `GET /api/reports/payroll/{vista}` con `format=json|xlsx|pdf|docx` en src/Presentation/IngenIA365ERP.API/Endpoints/Reports/PayrollReportsEndpoints.cs
+- [x] T043 [US5] Pantalla `ReportesNomina.razor` (`/reportes/nomina`) con las cinco vistas y botones de exportación; `ComprobanteNomina.razor` redirige; menú actualizado
+- [x] T044 [US5] e2e tests/IngenIA365ERP.API.IntegrationTests/Payroll/ReportesNominaTests.cs: cada vista en json y los tres formatos descargan; totales iguales a la corrida
 
 ## Phase 6: Cierre
 
-- [ ] T050 Docs: `docs/operaciones/nomina-primer-periodo.md` (periodicidades, sub-períodos, descartar), `CLAUDE.md`, contratos en specs/006/contracts/api.md
+- [x] T050 Docs: `docs/operaciones/nomina-primer-periodo.md` (periodicidades, sub-períodos, descartar), `CLAUDE.md`, contratos en specs/006/contracts/api.md
 - [ ] T051 Suites en verde (Domain, Application, Architecture, Shared, e2e nómina); merge a `develop`

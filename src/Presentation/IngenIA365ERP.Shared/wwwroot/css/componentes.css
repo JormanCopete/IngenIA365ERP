@@ -815,3 +815,9 @@ input[type="checkbox"], input[type="radio"] {
 }
 /* Asterisco de campo obligatorio: un solo color y un solo sitio para cambiarlo. */
 .obligatorio { color: var(--peligro-texto); margin-left: 2px; }
+
+/* --- Reportes de nómina (ReportesNomina.razor) ----------------------------- */
+.tabla-desplazable { overflow-x: auto; max-width: 100%; }
+.data-grid td.numero, .data-grid th.numero { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-grid tr.resaltada td { font-weight: var(--peso-medio); border-top: 1px solid var(--borde); }
+.lista-candidatos { list-style: none; margin: 0; padding: var(--pad-xs) 0; display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
