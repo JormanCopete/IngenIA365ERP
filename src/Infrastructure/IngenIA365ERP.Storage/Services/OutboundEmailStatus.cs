@@ -17,5 +17,6 @@ public sealed class OutboundEmailStatus(IOptions<SmtpSettings> options) : IOutbo
 
     public string Description => IsConfigured
         ? $"{Settings.Host}:{Settings.Port}, remitente {Settings.FromAddress}"
+          + (Settings.Respaldo is { } r && r.EstaConfigurado ? $"; respaldo {r.Host}:{r.Port}, remitente {r.FromAddress}" : "")
         : "la sección Smtp no declara host, puerto o remitente";
 }

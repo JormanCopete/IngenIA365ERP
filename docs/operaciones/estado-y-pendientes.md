@@ -106,6 +106,20 @@ entre sí y solo se notaría al intentar restaurar.
   reputación de esa IP, no de la de Microsoft.
 - **Credenciales por variable de entorno** (`Smtp__Username`, `Smtp__Password`),
   nunca en el repositorio. En Kubernetes vienen del Secret `erp-smtp`.
+- **El usuario autenticado tiene que ser el buzón del remitente.** Poste.io rechaza
+  enviar «como» otra dirección: «You are not allowed to send emails as X while logged
+  as Y». Pasó en producción el 2026-09-12 con el Secret creado con `ingeniaerp@` y el
+  remitente `noresponder.ingenia365erp@`; se corrigió recreando el Secret con la
+  cuenta del remitente.
+- **Cuenta de respaldo** (desde el 2026-09-12): sección `Smtp:Respaldo` con host,
+  remitente y huella propios (`Smtp__Respaldo__*` en el overlay) y credenciales en el
+  Secret `erp-smtp-respaldo` (`crear-secreto-smtp.ps1 -Ambiente pdn -Respaldo`).
+  `SmtpEmailSender` agota los reintentos de la principal, lo registra como error y
+  manda el mismo correo por la segunda cuenta con **su** remitente; si las dos fallan,
+  el motivo trae ambos. En producción: principal `noresponder.ingenia365erp@`,
+  respaldo `ingeniaerp@`, las dos en `mail.notifica365.com`, o sea que cubre un buzón
+  bloqueado o una contraseña vencida, **no** una caída de ese servidor —para eso el
+  respaldo tendría que ser otro relay, y la configuración lo admite—.
 - **QA y PRODUCCIÓN envían correo real** (QA desde el 2026-09-04, PDN desde el
   2026-09-12): `Smtp__*` en su overlay y Secret `erp-smtp` en su namespace. **DEV no
   envía**: sin `Smtp__Host` ni Secret, y **no hay ningún capturador**
