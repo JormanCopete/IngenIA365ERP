@@ -113,8 +113,16 @@
    solo aplica al componente que lo declara: sin esto, el encabezado de cada
    grupo plegable de la barra lateral queda centrado en vez de alineado a la
    izquierda, y el chevron sin tamano. Se ve en todas las pantallas. */
+/* El título del módulo se distingue de sus opciones por tres señales: va en
+   blanco y semibold (las opciones en tenue y regular), lleva icono, y las
+   opciones cuelgan de una guía vertical que nace bajo el icono. Antes las
+   opciones quedaban a 48px y el texto del título a 56px: la opción sobresalía
+   a la izquierda del módulo al que pertenecía. */
 ::deep .nav-group-toggle, .nav-group-toggle {
     justify-content: flex-start;
+    color: var(--lateral-texto-activo);
+    font-weight: var(--peso-medio);
+    margin-top: var(--pad-xs);
 }
 
 ::deep .nav-group-title, .nav-group-title {
@@ -130,12 +138,16 @@
 }
 
 ::deep .nav-group-items {
-    padding-left: var(--pad-sm);
+    /* Guía bajo el centro del icono (pad-lg 16 + 28/2): las opciones se leen
+       como hijas del módulo, no como vecinas. */
+    margin-left: 30px;
+    padding: var(--pad-xs) 0 var(--pad-sm);
+    border-left: 1px solid var(--lateral-hover);
 }
 
 ::deep .nav-subitem {
     display: block;
-    padding: var(--pad-sm) var(--pad-lg) var(--pad-sm) 48px;
+    padding: var(--pad-sm) var(--pad-lg) var(--pad-sm) 26px;
     color: var(--lateral-texto-tenue);
     text-decoration: none;
     font-size: var(--texto-sm);
@@ -161,7 +173,7 @@
    antemano que algo era un reporte para encontrarlo. */
 ::deep .nav-subgroup-title {
     display: block;
-    padding: var(--pad-md) var(--pad-lg) var(--pad-xs) 48px;
+    padding: var(--pad-md) var(--pad-lg) var(--pad-xs) 26px;
     font-size: var(--texto-xs);
     font-weight: var(--peso-medio);
     color: var(--lateral-texto-tenue);

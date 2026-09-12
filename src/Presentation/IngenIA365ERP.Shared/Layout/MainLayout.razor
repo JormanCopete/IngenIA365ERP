@@ -80,8 +80,11 @@
             </div>
         }
 
+        @* Abajo a la derecha, no arriba: arriba a la derecha es donde toda
+           pantalla tiene su «+ Nuevo», y el aviso de «Guardado» lo tapaba justo
+           cuando la persona iba a pulsarlo para el siguiente registro. *@
         <SfToast @ref="_toast" ShowCloseButton="true" NewestOnTop="true">
-            <ToastPosition X="Right" Y="Top" />
+            <ToastPosition X="Right" Y="Bottom" />
         </SfToast>
     </Authorized>
     <NotAuthorized>
@@ -153,7 +156,7 @@
             Title = title,
             Content = message,
             CssClass = cssClass,
-            Timeout = type == NotificationType.Error ? 8000 : 4000
+            Timeout = type == NotificationType.Error ? 8000 : 3000
         });
     }
 
