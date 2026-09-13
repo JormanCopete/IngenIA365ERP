@@ -23,7 +23,7 @@ on:
 # Forma del pipeline (desde el 2026-09-13):
 #
 #   build-and-test ──┐
-#                    ├──> docker (matriz api|web|migrator) ──> gitops
+#   publish-api ─────┼──> docker (matriz api|web|migrator) ──> gitops
 #   publish-web ─────┘
 #
 # Se compila UNA vez en el runner y las imagenes solo empaquetan el resultado.
@@ -85,12 +85,29 @@ jobs:
       - name: Test Shared
         run: dotnet test tests/IngenIA365ERP.Shared.Tests -c Release --no-build --verbosity normal
 
-      # Lo que va dentro de las imagenes. ContainerPublish=true activa en los csproj
-      # RuntimeIdentifier linux-x64 + ReadyToRun (codigo nativo precompilado: el pod
-      # arranca y atiende la primera peticion sin pagar el JIT entero). Por eso NO
-      # lleva --no-build: la compilacion para linux-x64 es distinta de la que
-      # corrieron las pruebas (mismo codigo, otro RID); sigue dentro del tiempo del
-      # publish del Web, que es el techo del pipeline.
+  # Lo que va dentro de las imagenes de API y migrador. ContainerPublish=true activa
+  # en los csproj RuntimeIdentifier linux-x64 + ReadyToRun (codigo nativo
+  # precompilado: el pod arranca y atiende la primera peticion sin pagar el JIT
+  # entero). Es una compilacion distinta de la que corren las pruebas (otro RID) y
+  # tarda ~4 min con crossgen; por eso va en su propio job, en paralelo con las
+  # pruebas y con el publish del Web, y no alarga el reloj del pipeline.
+  publish-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Publish API y Migrator
         run: |
           set -e
@@ -161,7 +178,8 @@ jobs:
           if-no-files-found: error
 
   docker:
-    needs: [build-and-test, publish-web]
+    # Las tres publicaciones y las pruebas: una imagen no se construye si algo fallo.
+    needs: [build-and-test, publish-api, publish-web]
     runs-on: ubuntu-latest
     # Siempre se CONSTRUYE (un Dockerfile roto debe detectarse en el PR, no
     # despues de mergear). Solo se PUBLICA desde main/develop/release.

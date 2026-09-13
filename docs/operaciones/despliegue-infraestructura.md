@@ -118,9 +118,9 @@ línea de `docs/` tardó 36 minutos.
 Forma actual del pipeline:
 
 ```
-build-and-test (build del .slnf + pruebas + publish API/Migrator) ─┐
-                                                                    ├─> docker (matriz api|web|migrator, ~20 s cada una) ─> gitops
-publish-web (publish del Web: recorte + compresión del cliente WASM) ┘
+build-and-test (build del .slnf + las cuatro suites)                     ─┐
+publish-api (API y migrador para linux-x64 con ReadyToRun, ~4 min)        ─┼─> docker (matriz api|web|migrator, ~50 s cada una) ─> gitops
+publish-web (publish del Web: recorte + compresión del cliente WASM, ~8) ─┘
 ```
 
 - `IngenIA365ERP.CI.slnf` compila en **una** invocación todo lo desplegable menos
@@ -133,6 +133,13 @@ publish-web (publish del Web: recorte + compresión del cliente WASM) ┘
 - Sin `cache-from/cache-to`: no hay etapa de compilación que cachear.
 - `setup-dotnet` usa `global-json-file`: antes instalaba `10.0.401` y compilaba con
   la que trajera preinstalada la imagen del runner.
+- La API y el migrador se publican con `-p:ContainerPublish=true`: los csproj activan
+  `RuntimeIdentifier linux-x64` + `PublishReadyToRun` sólo con esa propiedad (en la
+  máquina de desarrollo nada cambia). El código llega precompilado a nativo y el pod
+  no paga el JIT entero al arrancar ni en la primera petición de cada endpoint; la
+  imagen crece (Application.dll pasa de 4 a 12 MB). Va en su propio job porque
+  crossgen tarda ~4 min: en la primera corrida iba dentro de `build-and-test` y el
+  reloj subió de 9:02 a 11:03.
 - Reproducir en local: `tools/scripts/construir-imagenes.ps1`.
 
 El techo lo pone ahora el `publish` del Web (~9 min en el runner: ILLink en modo
