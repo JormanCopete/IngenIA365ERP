@@ -23,8 +23,11 @@
     </script>
 
     <!-- La app de escritorio y móvil comparte las pantallas con la web, así que
-         comparte también el sistema de diseño. Inter va embebida en el paquete
-         para que funcione sin conexión. -->
+         comparte también el sistema de diseño. Inter la declara tokens.css con
+         @font-face y la sirve el propio paquete desde
+         _content/IngenIA365ERP.Shared/fonts/, así que funciona sin conexión.
+         Hasta el 2026-09-12 este comentario lo prometía pero no había ningún
+         archivo de fuente en el paquete: la app caía a Segoe UI sin avisar. -->
     <link id="sf-tema-claro" href="_content/Syncfusion.Blazor.Themes/fluent2.css" rel="stylesheet" />
     <link id="sf-tema-oscuro" href="_content/Syncfusion.Blazor.Themes/fluent2-dark.css" rel="stylesheet" disabled />
     <script>

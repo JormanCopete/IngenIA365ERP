@@ -17,17 +17,38 @@ public sealed class PromocionesClient(HttpClient http, CentralAuthClient auth)
     /// </summary>
     public const int MaximoBytesImagen = 400 * 1024;
 
+    /// <summary>
+    /// Cuánto espera el login por las promociones. Son contenido accesorio: si la
+    /// API tarda más que esto, el login sigue sin panel y no se entera nadie. El
+    /// timeout del HttpClient (100 s por defecto) es para las operaciones que sí
+    /// importan; aquí, tres segundos es lo máximo que vale la pena esperar por
+    /// publicidad en la pantalla de entrada.
+    /// </summary>
+    private static readonly TimeSpan EsperaMaximaPublica = TimeSpan.FromSeconds(3);
+
     public async Task<InvitationApiResult<IReadOnlyList<PromoPublica>>> ListarPublicasAsync(
         CancellationToken ct = default)
     {
+        using var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limite.CancelAfter(EsperaMaximaPublica);
         try
         {
-            var resp = await http.GetAsync("/api/publico/promociones", ct);
-            return await CentralAuthApi.ParseAsync<IReadOnlyList<PromoPublica>>(resp, ct);
+            var resp = await http.GetAsync("/api/publico/promociones", limite.Token);
+            return await CentralAuthApi.ParseAsync<IReadOnlyList<PromoPublica>>(resp, limite.Token);
         }
         catch (HttpRequestException ex)
         {
             return InvitationApiResult<IReadOnlyList<PromoPublica>>.NetworkError(ex.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            // Agotado el tope (o cancelado quien llamaba): se trata igual que la
+            // red caída. Hasta el 2026-09-12 sólo se capturaba HttpRequestException,
+            // y una API lenta hacía que la excepción de cancelación subiera hasta el
+            // límite de error de Blazor: el login entero mostraba «error inesperado»
+            // por culpa de un panel que ni siquiera hace falta para entrar.
+            return InvitationApiResult<IReadOnlyList<PromoPublica>>.NetworkError(
+                $"las novedades no respondieron en {EsperaMaximaPublica.TotalSeconds:0} s");
         }
     }
 

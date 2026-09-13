@@ -27,11 +27,23 @@
         })();
     </script>
 
-    @* Inter con display=swap: el texto se lee con la fuente del sistema mientras
-       Inter descarga, en vez de dejar la pantalla en blanco. *@
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+    @* Inter autoalojada (tokens.css la declara con @font-face y display=swap: el
+       texto se lee con la fuente del sistema mientras descarga). Hasta el
+       2026-09-12 venía de fonts.googleapis.com: una hoja externa que bloqueaba el
+       primer pintado, un tercero del que dependía arrancar, y la IP de cada
+       persona enviada a Google en cada carga.
+
+       El preload adelanta la descarga al primer byte del HTML, en paralelo con el
+       CSS, en vez de esperar a que el navegador descubra la fuente al maquetar.
+       `crossorigin` es obligatorio para fuentes aunque sea el mismo origen: sin él
+       el preload no coincide con la petición del CSS y se descarga dos veces.
+
+       La URL va LITERAL y no con @Assets[...] a propósito: la petición real la hace
+       el url() de tokens.css, que el SDK no reescribe con huella, y un preload a
+       otra URL es una segunda descarga más una advertencia en consola. La ruta
+       sin huella de un woff2 sale con `max-age=3600, must-revalidate` (medido en
+       el manifiesto de static web assets), no con `no-cache`. *@
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="_content/IngenIA365ERP.Shared/fonts/Inter-latin.woff2" />
 
     @* Los dos temas de SyncFusion se cargan juntos y se habilita uno solo. Es
        lo que permite cambiar de tema sin recargar la página ni esperar una
@@ -58,7 +70,13 @@
     <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/tokens.css"]" />
     <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/app.css"]" />
     <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/css/componentes.css"]" />
-    <link rel="stylesheet" href="@Assets["IngenIA365ERP.Web.styles.css"]" />
+    @* El bundle de CSS con ámbito (los .razor.css) se enlaza DIRECTO al de Shared.
+       IngenIA365ERP.Web.styles.css, que iba aquí, es un archivo de una sola línea
+       —un `import` al bundle de Shared— porque el proyecto Web no tiene ningún
+       .razor.css propio (comprobado el 2026-09-12): un viaje más en serie antes
+       del primer pintado, sin aportar una regla. Reversión: si Web incorpora un
+       .razor.css propio, volver a @Assets["IngenIA365ERP.Web.styles.css"]. *@
+    <link rel="stylesheet" href="@Assets["_content/IngenIA365ERP.Shared/IngenIA365ERP.Shared.bundle.scp.css"]" />
     <ImportMap />
     @* Icono y acceso directo. Los archivos viven en wwwroot del proyecto Web (no en
        Shared): la ruta _content/IngenIA365ERP.Shared/img/favicon.png que había aquí
