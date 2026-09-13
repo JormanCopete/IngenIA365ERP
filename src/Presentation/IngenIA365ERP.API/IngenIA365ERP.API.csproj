@@ -11,6 +11,12 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.4.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <!-- Envuelve consola y archivo en una cola con hilo de fondo: antes los dos
+         sinks escribian en el hilo de la peticion. Serilog.Settings.Configuration
+         (ReadFrom.Configuration) y los sinks Console/File ya llegan con
+         Serilog.AspNetCore; este es el unico que faltaba. 2.1.0 es la ultima
+         estable y pide Serilog >= 4.1.0 (aca resuelve 4.3.0). -->
+    <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageReference Include="AspNetCoreRateLimit" Version="5.*" />
     <!-- Feature 004: health checks del motor activo (tag "ready"). Se registra
          uno u otro segun Database:Provider. -->

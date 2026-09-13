@@ -63,7 +63,7 @@ public static class LoginThroughputScenario
                 // El API limita POST /api/auth/login a 10/min POR IP (defensa
                 // anti-fuerza-bruta — verificada: sin esto el limiter responde
                 // 429 al 100% de la carga). El middleware resuelve la IP real
-                // desde X-Real-IP, así que rotamos ~2000 IPs sintéticas para
+                // desde CF-Connecting-IP (la cabecera que pone Cloudflare; hasta el 2026-09-13 era X-Real-IP), así que rotamos ~2000 IPs sintéticas para
                 // simular clientes distribuidos: 100 rps / 2000 IPs = 3/min
                 // por IP, dentro del cupo — igual que producción real.
                 var n = ctx.InvocationNumber % 2000;
@@ -71,7 +71,7 @@ public static class LoginThroughputScenario
 
                 var req = Http.CreateRequest("POST", "/api/auth/login")
                     .WithHeader("Accept", "application/json")
-                    .WithHeader("X-Real-IP", syntheticIp)
+                    .WithHeader("CF-Connecting-IP", syntheticIp)
                     .WithBody(new StringContent(
                         System.Text.Json.JsonSerializer.Serialize(body),
                         System.Text.Encoding.UTF8, "application/json"));
