@@ -79,6 +79,17 @@ estilos ni colores propios** para esto.
    (`Cargando="@_guardando"`). Sólo se reemplaza por `EstadoDeCarga` cuando se vaya a
    reescribir el método.
 
+## Regla para pantallas nuevas o modificadas
+
+**Toda pantalla que se cree o se toque lleva el indicador donde espere datos**: la
+grilla o lista al abrir, el formulario mientras guarda, cualquier panel que pida algo al
+servidor. Es una compuerta más del *Constitution Check* del plan de cada feature
+(`.specify/templates/plan-template.md`, fila «UI») y la vigila la prueba de arquitectura
+`tests/IngenIA365ERP.Architecture.Tests/Principles/LasPantallasDicenQueEstanCargando.cs`:
+en los módulos ya migrados (`ModulosMigrados`), una pantalla con `<SfGrid` o
+`<DialogTemplates>` sin `<IndicadorDeCarga` rompe el CI. Al migrar otro módulo se agrega
+su carpeta a esa lista y la regla pasa a cubrirlo.
+
 ## Reglas
 
 - **Una zona por cosa que se carga aparte.** Una lista y su diálogo son dos zonas; dos

@@ -58,6 +58,7 @@ rechaza. Las compuertas derivan directamente de `.specify/memory/constitution.md
 | X    | Trazabilidad SIPLA/SARLAFT (auditoría MongoDB vía `AuditBehavior`)|        |      |
 | XI   | Inmutabilidad contable (sin edit/delete de movimientos asentados) |        |      |
 | XII  | Migraciones idempotentes y reversibles (DDL separado de seeds)    |        |      |
+| UI   | Toda zona que espera datos lleva `IndicadorDeCarga` + `EstadoDeCarga` («Cargando…», «Guardando…»); sin colores literales ni `<style>` (`docs/manual/indicador-de-carga.md`) |        |      |
 
 ## Project Structure
 

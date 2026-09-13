@@ -214,8 +214,11 @@ faltaba —un PDF con un byte cambiado tiene que dar `valid: false`—.
   - **Indicador de carga por zona** (desde el 2026-09-13): toda grilla, formulario o panel que
     espera datos va dentro de `<IndicadorDeCarga Cargando="@_carga.Activa">` con una
     `EstadoDeCarga` por zona (`using var carga = _carga.Iniciar();` en el método que carga;
-    se apaga sola). Está en todo Core y Nómina; el resto de módulos se migra con
-    `docs/manual/indicador-de-carga.md`. El velo global (`ILoadingService`) no se usa para esto.
+    se apaga sola). **Obligatorio en toda pantalla nueva o modificada** que cargue o guarde
+    datos; está en todo Core y Nómina, y la prueba de arquitectura
+    `LasPantallasDicenQueEstanCargando` lo exige en los módulos migrados (se amplía la lista
+    `ModulosMigrados` al migrar otro). Receta: `docs/manual/indicador-de-carga.md`. El velo
+    global (`ILoadingService`) no se usa para esto.
 
 ## Cómo Empezar
 Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md` para la documentación completa por fase.
