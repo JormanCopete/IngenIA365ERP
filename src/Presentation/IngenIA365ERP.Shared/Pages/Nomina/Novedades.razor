@@ -607,8 +607,9 @@
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo desactivar."); return; }
             _mostrarDesactivar = false;
             await Notification.SuccessAsync("Recurrente desactivada.");
-            await CargarRecurrentesAsync();
-            await CargarAsync();
+            // La lista de recurrentes y la de novedades del período no dependen entre sí: salen a
+            // la vez (eran dos viajes en serie). Cada una escribe su propia lista y avisa su error.
+            await Task.WhenAll(CargarRecurrentesAsync(), CargarAsync());
         }
         finally { _guardando = false; }
     }
@@ -728,8 +729,11 @@
                 await Notification.SuccessAsync("Novedad corregida: la versión anterior queda en el historial.");
             }
             _mostrarNovedad = false;
-            await CargarAsync();
+            // El refresco del selector reelige el período y dispara OnPeriodoCambiado, que ya
+            // recarga las novedades; hasta el 2026-09-12 se cargaban antes por separado y la misma
+            // lista viajaba dos veces. Sólo si todavía no hay selector se recarga a mano.
             if (_selector is not null) await _selector.RefrescarAsync();
+            else await CargarAsync();
         }
         finally { _guardando = false; }
     }

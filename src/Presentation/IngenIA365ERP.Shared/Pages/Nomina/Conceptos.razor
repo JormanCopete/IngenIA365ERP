@@ -413,8 +413,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await CargarAsync();
-        await CargarHeredadosAsync();
+        // Conceptos vigentes y heredados del SOLIDO son dos listas independientes: salen a la vez
+        // (eran dos viajes en serie de ~0,35 s cada uno). Cada rama escribe su propia lista.
+        await Task.WhenAll(CargarAsync(), CargarHeredadosAsync());
     }
 
     private async Task CargarAsync()

@@ -131,8 +131,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadReasons();
-        await LoadRecentWithdrawals();
+        // Causas de retiro y retiros recientes son catálogo y listado independientes: van a la vez
+        // (eran dos viajes en serie de ~0,35 s cada uno). Cada rama tiene su propio try/catch.
+        await Task.WhenAll(LoadReasons(), LoadRecentWithdrawals());
     }
 
     private async Task LoadReasons()

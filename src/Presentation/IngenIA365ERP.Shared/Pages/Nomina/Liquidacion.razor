@@ -519,6 +519,22 @@
         if (_periodo is null) return;
         var res = await Nomina.HistorialCorridasAsync(_periodo.PublicId);
         if (res.IsSuccess) _historial = res.Value!.ToList();
+        // Corre en paralelo con la corrida (ver CargarCorridaAsync): si falla en silencio, la
+        // pestaña Historial queda vacía sin que nadie sepa por qué (Principio IX).
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial de versiones.");
+    }
+
+    /// <summary>
+    /// Tras calcular, aprobar, reversar o descartar, el selector vuelve a leer los períodos y, al
+    /// reelegir el actual, dispara <see cref="OnPeriodoCambiado"/>, que ya recarga corrida,
+    /// empleados e historial. Hasta el 2026-09-12 cada uno de esos métodos volvía a llamar
+    /// <see cref="CargarCorridaAsync"/> después del refresco: la misma liquidación viajaba dos
+    /// veces por cada acción. Sólo si todavía no hay selector se recarga a mano.
+    /// </summary>
+    private async Task RefrescarTrasCambioAsync()
+    {
+        if (_selector is not null) await _selector.RefrescarAsync();
+        else await CargarCorridaAsync();
     }
 
     private async Task AbrirReversar()
@@ -546,9 +562,7 @@
             await Notification.SuccessAsync(res.Value!.RecurrentesAnuladas > 0
                 ? $"Borrador descartado. El período quedó abierto; {res.Value.RecurrentesAnuladas} novedad(es) recurrente(s) se regenerarán al calcular."
                 : "Borrador descartado. El período quedó abierto.");
-            if (_selector is not null) await _selector.RefrescarAsync();
-            _periodo = _selector?.Periodo ?? _periodo;
-            await CargarCorridaAsync();
+            await RefrescarTrasCambioAsync();
         }
         finally { _ocupado = false; }
     }
@@ -563,9 +577,7 @@
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo reversar."); return; }
             _mostrarReversar = false;
             await Notification.SuccessAsync($"Liquidación reversada con el comprobante {res.Value!.ReversalAccountingDocumentNumber}. El período quedó abierto.");
-            if (_selector is not null) await _selector.RefrescarAsync();
-            _periodo = _selector?.Periodo ?? _periodo;
-            await CargarCorridaAsync();
+            await RefrescarTrasCambioAsync();
         }
         finally { _ocupado = false; }
     }
@@ -591,10 +603,15 @@
     private async Task CargarRelacionAsync()
     {
         if (_corrida is null) return;
-        var res = await Nomina.RelacionDePagoAsync(_corrida.PublicId);
+        // Relación y envíos dependen sólo de la corrida: salen a la vez. Eran dos viajes en serie
+        // de ~0,35 s cada uno (Colombia → Cloudflare → origen). Cada rama avisa su propio error.
+        var relacion = Nomina.RelacionDePagoAsync(_corrida.PublicId);
+        var envios = Nomina.EnviosAsync(_corrida.PublicId);
+        await Task.WhenAll(relacion, envios);
+        var res = await relacion;
         if (res.IsSuccess) _relacion = res.Value; else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la relación de pago.");
-        var envios = await Nomina.EnviosAsync(_corrida.PublicId);
-        if (envios.IsSuccess) _envios = envios.Value!.ToList();
+        var env = await envios;
+        if (env.IsSuccess) _envios = env.Value!.ToList(); else await Notification.ErrorAsync(env.ErrorMessage ?? "No se pudieron cargar los envíos de comprobantes.");
     }
 
     private void AbrirMarcarPago()
@@ -683,13 +700,18 @@
 
     private async Task CargarCorridaAsync()
     {
-        _corrida = null; _empleados = []; _comparativo = null; _cuadre = null; _relacion = null; _envios = null;
+        _corrida = null; _empleados = []; _historial = []; _comparativo = null; _cuadre = null; _relacion = null; _envios = null;
         if (_periodo is null) { StateHasChanged(); return; }
+        // El historial depende sólo del período, así que sale a la vez que la corrida en vez de
+        // esperar corrida → empleados: eran tres viajes en serie (~0,35 s cada uno desde Colombia
+        // hasta el origen) y quedan dos. Los empleados sí esperan, porque necesitan el id de la
+        // corrida. Cada rama escribe su propia lista y avisa su propio error; ninguna tapa a la otra.
+        var historial = CargarHistorialAsync();
         var res = await Nomina.CorridaActualAsync(_periodo.PublicId);
         if (res.IsSuccess) { _corrida = res.Value; await CargarEmpleadosAsync(); }
         else if (res.ErrorCode != "Payroll.RunNotFound" && res.StatusCode != 404)
             await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar la liquidación.");
-        await CargarHistorialAsync();
+        await historial;
         StateHasChanged();
     }
 
@@ -714,13 +736,13 @@
             var res = await Nomina.CalcularAsync(_periodo.PublicId);
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo calcular."); return; }
             var r = res.Value!;
-            _avisos = r.Warnings.ToList();
             await Notification.SuccessAsync($"Borrador v{r.Version}: {r.EmployeeCount} empleado(s), neto {r.Totals.Net:N0}" +
                                             (r.Blockers.Count > 0 ? $", {r.Blockers.Count} bloqueo(s)" : string.Empty) +
                                             (r.ChangedEmployees > 0 ? $", {r.ChangedEmployees} cambiaron" : string.Empty) + ".");
-            if (_selector is not null) await _selector.RefrescarAsync();
-            _periodo = _selector?.Periodo ?? _periodo;
-            await CargarCorridaAsync();
+            await RefrescarTrasCambioAsync();
+            // Después del refresco, no antes: al reelegir el período, OnPeriodoCambiado vacía los
+            // avisos, y hasta el 2026-09-12 los del cálculo se asignaban primero y nunca se veían.
+            _avisos = r.Warnings.ToList();
         }
         finally { _ocupado = false; }
     }
@@ -788,9 +810,7 @@
             }
             _mostrarAprobacion = false;
             await Notification.SuccessAsync($"Período aprobado. Comprobante {res.Value!.AccountingDocumentNumber}; neto {res.Value.Totals.Net:N0}.");
-            if (_selector is not null) await _selector.RefrescarAsync();
-            _periodo = _selector?.Periodo ?? _periodo;
-            await CargarCorridaAsync();
+            await RefrescarTrasCambioAsync();
         }
         finally { _ocupado = false; }
     }

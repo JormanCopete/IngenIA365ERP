@@ -164,10 +164,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Los planes alimentan el filtro y el formulario; la lista inicial de períodos sale sin
+        // filtro de plan, así que no depende de ellos: van a la vez (eran dos viajes en serie de
+        // ~0,35 s cada uno). Cada rama escribe su propia lista y avisa su propio error.
+        await Task.WhenAll(CargarPlanesAsync(), CargarAsync());
+    }
+
+    private async Task CargarPlanesAsync()
+    {
         var planes = await Nomina.ListarPlanesAsync();
         if (planes.IsSuccess) _planes = planes.Value!.ToList();
         else await Notification.ErrorAsync(planes.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");
-        await CargarAsync();
     }
 
     private async Task CargarAsync()

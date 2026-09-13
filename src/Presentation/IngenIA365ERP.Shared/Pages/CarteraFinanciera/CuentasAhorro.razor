@@ -88,8 +88,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSavingsLines();
-        await LoadData();
+        // Las líneas de ahorro alimentan el diálogo de cuenta nueva; la lista de cuentas no las
+        // necesita: van a la vez (eran dos viajes en serie de ~0,35 s cada uno desde Colombia hasta
+        // el origen). Cada rama tiene su propio try/catch y escribe su propia lista.
+        await Task.WhenAll(LoadSavingsLines(), LoadData());
     }
 
     private async Task LoadData()

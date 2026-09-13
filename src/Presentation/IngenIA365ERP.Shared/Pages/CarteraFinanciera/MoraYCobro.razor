@@ -186,8 +186,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSummary();
-        await LoadData();
+        // El resumen (tarjetas) y el listado de mora son consultas independientes: van a la vez
+        // (eran dos viajes en serie de ~0,35 s cada uno). Cada rama tiene su propio try/catch.
+        await Task.WhenAll(LoadSummary(), LoadData());
     }
 
     private async Task LoadSummary()
@@ -238,8 +239,7 @@
                 _calcResult = await response.Content.ReadFromJsonAsync<CalcResultResponse>();
                 _showCalculate = false;
                 _showResult = true;
-                await LoadSummary();
-                await LoadData();
+                await Task.WhenAll(LoadSummary(), LoadData());
             }
             else
             {

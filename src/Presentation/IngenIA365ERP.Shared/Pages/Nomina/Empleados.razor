@@ -509,32 +509,53 @@
 
     private async Task LoadLookups()
     {
-        try
-        {
-            var epsTask = Http.GetListAsync<LookupRaw>("/api/payroll/health-insurance?PageNumber=1&PageSize=500");
-            var pensionsTask = Http.GetListAsync<LookupRaw>("/api/payroll/pension-providers?PageNumber=1&PageSize=500");
-            var arlTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk?PageNumber=1&PageSize=500");
-            var arlClasesTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk-rates?PageNumber=1&PageSize=50");
-            var cesantiasTask = Http.GetListAsync<LookupRaw>("/api/payroll/severance-providers?PageNumber=1&PageSize=500");
-            var cajasTask = Http.GetListAsync<LookupRaw>("/api/payroll/family-compensation-funds?PageNumber=1&PageSize=500");
-            var planesTask = Http.GetListAsync<PlanLookup>("/api/payroll/plans?includeInactive=false");
-            var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
-            var citiesTask = Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000");
+        // Los nueve catálogos ya salían a la vez, pero un solo try/catch envolvía el WhenAll: si
+        // fallaba uno (un 404, un corte de red), la excepción saltaba antes de asignar los otros
+        // ocho y el catch callaba, así que TODAS las listas del formulario quedaban vacías sin
+        // aviso. Ahora se espera a que terminen todos, se toma cada resultado por separado, se
+        // muestran los que sí llegaron y se avisa cuáles fallaron (Principio IX).
+        var epsTask = Http.GetListAsync<LookupRaw>("/api/payroll/health-insurance?PageNumber=1&PageSize=500");
+        var pensionsTask = Http.GetListAsync<LookupRaw>("/api/payroll/pension-providers?PageNumber=1&PageSize=500");
+        var arlTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk?PageNumber=1&PageSize=500");
+        var arlClasesTask = Http.GetListAsync<LookupRaw>("/api/payroll/work-risk-rates?PageNumber=1&PageSize=50");
+        var cesantiasTask = Http.GetListAsync<LookupRaw>("/api/payroll/severance-providers?PageNumber=1&PageSize=500");
+        var cajasTask = Http.GetListAsync<LookupRaw>("/api/payroll/family-compensation-funds?PageNumber=1&PageSize=500");
+        var planesTask = Http.GetListAsync<PlanLookup>("/api/payroll/plans?includeInactive=false");
+        var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
+        var citiesTask = Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000");
 
-            await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, planesTask, banksTask, citiesTask);
+        // WhenAll no termina hasta que terminan todas, incluso si alguna ya falló; la excepción
+        // agregada se ignora aquí porque cada tarea se revisa una por una justo debajo.
+        try { await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, planesTask, banksTask, citiesTask); }
+        catch { /* se revisa tarea por tarea */ }
 
-            _eps = (await epsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _pensions = (await pensionsTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _arl = (await arlTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _arlClases = (await arlClasesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _cesantias = (await cesantiasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _cajas = (await cajasTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _planes = await planesTask;
-            _planesLookup = _planes.Select(p => new LookupOption(p.PublicId, $"{p.Name} ({(p.Periodicity switch { "Biweekly" => "quincenal", "TenDay" => "decadal", "Weekly" => "semanal", _ => "mensual" })})")).ToList();
-            _banks = (await banksTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _cities = (await citiesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-        }
-        catch { /* silent */ }
+        var caidos = new List<string>();
+        _eps = Resultado(epsTask, "EPS", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _pensions = Resultado(pensionsTask, "fondos de pensión", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _arl = Resultado(arlTask, "ARL", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _arlClases = Resultado(arlClasesTask, "clases de riesgo ARL", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _cesantias = Resultado(cesantiasTask, "fondos de cesantías", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _cajas = Resultado(cajasTask, "cajas de compensación", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _planes = Resultado(planesTask, "planes de nómina", caidos);
+        _planesLookup = _planes.Select(p => new LookupOption(p.PublicId, $"{p.Name} ({(p.Periodicity switch { "Biweekly" => "quincenal", "TenDay" => "decadal", "Weekly" => "semanal", _ => "mensual" })})")).ToList();
+        _banks = Resultado(banksTask, "bancos", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _cities = Resultado(citiesTask, "ciudades", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+
+        if (caidos.Count > 0)
+            await Notification.ErrorAsync($"No se pudieron cargar estos catálogos: {string.Join("; ", caidos)}. " +
+                                          "Las listas del formulario quedan incompletas: recargá la página antes de editar un empleado.");
+    }
+
+    /// <summary>
+    /// Toma el resultado de un catálogo ya terminado; si falló, lo anota con el motivo y devuelve
+    /// una lista vacía para que los demás catálogos igual se muestren.
+    /// </summary>
+    private static List<T> Resultado<T>(Task<List<T>> tarea, string nombre, List<string> caidos)
+    {
+        if (tarea.IsCompletedSuccessfully) return tarea.Result;
+        var motivo = tarea.Exception?.GetBaseException().Message ?? "cancelado";
+        caidos.Add($"{nombre} ({motivo})");
+        return new List<T>();
     }
 
     private async Task LoadData()
