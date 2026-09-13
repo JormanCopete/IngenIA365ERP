@@ -17,7 +17,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
 
 ## Stack Tecnológico
 - **Backend**: .NET 10.0.5, Minimal APIs con Carter, CQRS con MediatR
-- **Frontend**: Blazor Hybrid MAUI + Web + WebAssembly, SyncFusion 33.1.44
+- **Frontend**: Blazor Hybrid MAUI + Web + WebAssembly, Syncfusion 33.2.8 **por paquetes
+  de componente** (`Syncfusion.Blazor.Grid`, `.Inputs`, `.Buttons`… en `Shared.csproj`;
+  Web y Web.Client sólo `Syncfusion.Blazor.Core`). El meta-paquete `Syncfusion.Blazor`
+  **no se referencia**: es una sola DLL de 27 MB con toda la suite que el cliente
+  WebAssembly descargaba entera y que hacía tardar ~8 min el publish (desde el
+  2026-09-13; hoy los ensamblados Syncfusion pesan 9 MB, 2,4 MB en Brotli). Al usar un
+  componente nuevo se agrega su paquete, misma versión en todos. En `App.razor` todo CSS
+  y JS va con `@Assets[...]` (URL con huella, `immutable`): sin huella, Cloudflare
+  cacheaba 4 h y tras cada despliegue se veían los estilos viejos.
 - **BD**: PostgreSQL / SQL Server (transaccional) + MongoDB (auditoría) + Redis (caché)
 - **Auth**: JWT RS256, 4 roles built-in, 40 permisos. El segundo factor es
   **obligatorio también para el administrador maestro**: su login devuelve un
