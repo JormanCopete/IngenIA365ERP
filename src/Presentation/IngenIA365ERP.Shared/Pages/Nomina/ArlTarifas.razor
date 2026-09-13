@@ -17,6 +17,7 @@
     (Nómina › Parámetros legales); la tarifa de esta tabla es informativa.
 </p>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
         <GridColumn Field="Code" HeaderText="Codigo" Width="100" TextAlign="TextAlign.Center" />
@@ -34,27 +35,32 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
                 <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Clase (1 a 5)" Min="1" Max="5" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.Name" MaxLength="100" Placeholder="Nivel de Riesgo *" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.ShortName" MaxLength="50" Placeholder="Nombre Corto" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tarifa (%)" Format="N3" FloatLabelType="FloatLabelType.Always" />
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<ItemModel>? _grid;
     private List<ItemModel> _items = [];
     private FormModel _model = new();
@@ -67,8 +73,9 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/work-risk-rates?pageSize=500"); _items = r?.Items ?? []; }
-        catch { _items = []; }
+        catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Tarifa ARL"; _showDialog = true; }
@@ -83,6 +90,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/work-risk-rates/{_editId}", _model)
             : await Http.PostAsJsonAsync("/api/payroll/work-risk-rates", _model);

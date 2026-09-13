@@ -37,6 +37,7 @@
     </label>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid TValue="PeriodoPagoDto" DataSource="@_items" AllowPaging="true" AllowSorting="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
@@ -76,10 +77,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_mostrarDialogo" Header="@_titulo" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_modelo" OnValidSubmit="Guardar">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -145,6 +148,7 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -152,6 +156,8 @@
 <ConfirmDialog @bind-Visible="_mostrarConfirmar" OnConfirm="ConfirmarEliminar" Message="¿Eliminar este período de pago? Sólo se puede si está abierto y sin novedades." />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new();
     private List<PeriodoPagoDto> _items = [];
     private List<PlanNominaDto> _planes = [];
     private Modelo _modelo = new();
@@ -179,6 +185,7 @@
 
     private async Task CargarAsync()
     {
+        using var carga = _carga.Iniciar();
         Guid? plan = Guid.TryParse(_filtroPlan, out var g) ? g : null;
         var res = await Nomina.ListarPeriodosAsync(plan, string.IsNullOrEmpty(_filtroEstado) ? null : _filtroEstado, 1, 500);
         if (res.IsSuccess) _items = res.Value!.Items.OrderByDescending(p => p.StartDate).ToList();

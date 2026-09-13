@@ -38,6 +38,7 @@ else if (_resumen is not null)
     </div>
 }
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid TValue="ParametroLegalDto" DataSource="@(_resumen?.Items ?? [])" AllowSorting="true" AllowPaging="true">
     <GridPageSettings PageSize="50" />
     <GridColumns>
@@ -60,6 +61,7 @@ else if (_resumen is not null)
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 @* --------------------------------------------------------------- versiones --- *@
 <SfDialog @bind-Visible="_mostrarVersiones" Header="@($"Vigencias de {_versionesDe?.Code}")" Width="760px" IsModal="true" ShowCloseIcon="true">
@@ -87,6 +89,7 @@ else if (_resumen is not null)
 <SfDialog @bind-Visible="_mostrarNueva" Header="@_tituloNueva" Width="720px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_nueva" OnValidSubmit="GuardarNuevaVigencia">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -135,11 +138,14 @@ else if (_resumen is not null)
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar vigencia</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new();
     private ResumenParametrosLegalesDto? _resumen;
     private DateTime _vigenteA = DateTime.Today;
     private bool _mostrarVersiones, _mostrarNueva, _guardando;
@@ -153,6 +159,7 @@ else if (_resumen is not null)
 
     private async Task CargarAsync()
     {
+        using var carga = _carga.Iniciar();
         var res = await Nomina.ListarParametrosLegalesAsync(_vigenteA);
         if (res.IsSuccess) _resumen = res.Value;
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los parámetros legales.");

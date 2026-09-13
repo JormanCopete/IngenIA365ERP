@@ -16,6 +16,7 @@
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="CompanyRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -39,10 +40,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="650px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
                 <div class="rejilla-campos" style="padding:var(--pad-md);">
@@ -95,11 +98,12 @@
                 </div>
                 <button type="submit" id="empresas-submit" style="display:none"></button>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
@@ -107,6 +111,8 @@
                Message="¿Esta seguro de eliminar esta empresa?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<CompanyRow>? _grid;
     private List<CompanyRow> _items = new();
     private string _search = "";
@@ -123,6 +129,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/core/companies?PageNumber=1&PageSize=500";
@@ -204,6 +211,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_codigoRepetido)
         {
             await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");

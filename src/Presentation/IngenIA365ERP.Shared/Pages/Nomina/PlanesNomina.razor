@@ -20,6 +20,7 @@
     </div>
 }
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid TValue="PlanNominaDto" DataSource="@_planes" AllowSorting="true">
     <GridColumns>
         <GridColumn Field="Code" HeaderText="Código" Width="120" />
@@ -52,10 +53,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_mostrarDialogo" Header="@_titulo" Width="480px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_modelo" OnValidSubmit="Guardar">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -93,11 +96,14 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new();
     private List<PlanNominaDto> _planes = [];
     private Modelo _modelo = new();
     private PlanNominaDto? _editando;
@@ -108,6 +114,7 @@
 
     private async Task CargarAsync()
     {
+        using var carga = _carga.Iniciar();
         var res = await Nomina.ListarPlanesAsync(incluirInactivos: true);
         if (res.IsSuccess) _planes = res.Value!.ToList();
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");

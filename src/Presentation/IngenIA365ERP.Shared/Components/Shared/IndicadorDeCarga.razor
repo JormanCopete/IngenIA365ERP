@@ -1,0 +1,48 @@
+@*
+    Indicador de carga por ZONA: envuelve la grilla, el formulario o el panel que está
+    esperando datos y, mientras Cargando sea verdadero, lo atenúa, bloquea los clics y pinta
+    un spinner con su texto encima. La persona ve que algo está pasando y dónde, y no puede
+    hacer doble clic en «Guardar» ni leer una tabla vacía creyendo que no hay registros.
+
+    No reemplaza al velo global de MainLayout (ILoadingService), que tapa toda la pantalla y
+    se reserva para operaciones que no admiten seguir trabajando (aprobar una nómina). Aquí
+    el resto de la pantalla sigue usable.
+
+    Uso típico (ver docs/manual/indicador-de-carga.md):
+
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <SfGrid ...> ... </SfGrid>
+        </IndicadorDeCarga>
+
+        private readonly EstadoDeCarga _carga = new();
+        private async Task CargarAsync()
+        {
+            using var carga = _carga.Iniciar();     // se apaga solo al salir, con o sin error
+            _items = await Http.GetListAsync<Item>("/api/...");
+        }
+
+    Compacto: spinner chico y sin texto, para zonas de poca altura (una tarjeta, un selector).
+*@
+
+<div class="zona-cargable @(Cargando ? "esta-cargando" : null) @(Compacto ? "compacta" : null)" aria-busy="@(Cargando ? "true" : "false")">
+    @ChildContent
+    @if (Cargando)
+    {
+        <div class="zona-cargable-velo" role="status" aria-live="polite">
+            <SfSpinner Visible="true" Type="SpinnerType.Bootstrap5" Size="@(Compacto ? "22" : "36")" Label="@(Compacto ? null : Texto)" />
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Mientras sea verdadero se muestra el velo con el spinner; normalmente <c>_carga.Activa</c>.</summary>
+    [Parameter] public bool Cargando { get; set; }
+
+    /// <summary>Lo que dice el spinner: «Cargando…» por defecto; «Guardando…» en un formulario, «Calculando…» en una corrida.</summary>
+    [Parameter] public string Texto { get; set; } = "Cargando…";
+
+    /// <summary>Spinner chico y sin texto, para zonas de poca altura.</summary>
+    [Parameter] public bool Compacto { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

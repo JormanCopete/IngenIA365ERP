@@ -11,6 +11,7 @@
     <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="SectionItem" DataSource="@_items"
     AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
@@ -28,10 +29,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
                 <div>
                     <CampoCodigo Catalogo="secciones" @bind-Value="_model.Code" Largo="10"
@@ -46,11 +49,12 @@
                     <SfTextBox @bind-Value="_model.ShortName" MaxLength="40" Placeholder="Nombre corto" />
                 </div>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
 
@@ -58,6 +62,8 @@
     Message="Esta seguro de eliminar este registro?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<SectionItem>? _grid;
     private List<SectionItem> _items = [];
     private SectionItem _model = new();
@@ -71,8 +77,9 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try { _items = await Http.GetListAsync<SectionItem>("/api/core/sections?pageSize=500") ?? []; }
-        catch { _items = []; }
+        catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva Seccion"; _showDialog = true; }
@@ -87,6 +94,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_codigoRepetido)
         {
             await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");

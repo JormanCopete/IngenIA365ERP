@@ -12,6 +12,9 @@
 @inject NominaClient Nomina
 @inject INotificationService Notification
 
+@* Velo compacto sobre la barra mientras llegan planes y períodos (la bandera _cargando ya
+   deshabilitaba los selectores; ahora también se ve que algo pasa). *@
+<IndicadorDeCarga Cargando="@_cargando" Compacto="true">
 <div class="toolbar selector-periodo">
     @if (_planes.Count > 1)
     {
@@ -45,6 +48,7 @@
         <span class="e-badge @ClaseEstado(Periodo.Status)">@Periodo.EstadoTexto</span>
     }
 </div>
+</IndicadorDeCarga>
 
 @code {
     /// <summary>Se dispara al elegir un período (o cuando no hay ninguno, con null).</summary>

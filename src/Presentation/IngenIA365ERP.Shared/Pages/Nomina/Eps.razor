@@ -11,6 +11,7 @@
     <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
         <GridColumn Field="Code" HeaderText="Código" Width="120" />
@@ -29,10 +30,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
                 <CampoCodigo Catalogo="eps" @bind-Value="_model.Code" Largo="10" Obligatorio="true"
                              EditandoPublicId="_editId" OnEditarExistente="EditarExistente" DuplicadoChanged="@(d => _codigoRepetido = d)" />
@@ -41,17 +44,20 @@
                 <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT" MaxLength="20" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<ItemModel>? _grid;
     private List<ItemModel> _items = [];
     private FormModel _model = new();
@@ -65,8 +71,9 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/health-insurance?pageSize=500"); _items = r?.Items ?? []; }
-        catch { _items = []; }
+        catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva EPS"; _showDialog = true; }
@@ -87,6 +94,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (string.IsNullOrWhiteSpace(_model.Code) || string.IsNullOrWhiteSpace(_model.Name))
         {
             await Notification.WarningAsync("El código y el nombre son obligatorios.");

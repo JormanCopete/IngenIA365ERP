@@ -12,6 +12,7 @@
     <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Centro de Costo</SfButton>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="CostCenterRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -34,10 +35,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
                 <div class="rejilla-campos" style="padding:var(--pad-md);">
@@ -95,11 +98,12 @@
                 </div>
                 <button type="submit" id="cc-submit" style="display:none"></button>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
@@ -107,6 +111,8 @@
                Message="¿Esta seguro de eliminar este centro de costo?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<CostCenterRow>? _grid;
     private List<CostCenterRow> _items = new();
     private List<CompanyOption> _companies = new();
@@ -155,6 +161,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             _items = await Http.GetListAsync<CostCenterRow>("/api/core/cost-centers?PageNumber=1&PageSize=500");
@@ -241,6 +248,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_codigoRepetido)
         {
             await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");

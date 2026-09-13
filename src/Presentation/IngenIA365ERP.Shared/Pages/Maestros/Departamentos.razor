@@ -24,6 +24,7 @@
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="DepartmentRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -44,10 +45,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -77,11 +80,12 @@
                 </div>
                 <button type="submit" id="dept-submit" style="display:none"></button>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
@@ -89,6 +93,8 @@
                Message="¿Esta seguro de eliminar este departamento?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<DepartmentRow>? _grid;
     private List<DepartmentRow> _items = new();
     private List<LookupOption> _countries = new();
@@ -117,6 +123,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/core/departments?PageNumber=1&PageSize=1000";
@@ -177,6 +184,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_saving) return;
 
         if (_model.CountryPublicId is null || _model.CountryPublicId == Guid.Empty)

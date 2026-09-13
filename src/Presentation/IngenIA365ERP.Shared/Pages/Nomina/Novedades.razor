@@ -78,6 +78,7 @@
     <span class="texto-tenue">@_visibles.Count() novedad(es)</span>
 </div>
 
+<IndicadorDeCarga Cargando="@(_carga.Activa || _guardando)">
 <SfGrid TValue="NovedadDto" DataSource="@_visibles" AllowPaging="true" AllowSorting="true" RowHeight="38">
     <GridPageSettings PageSize="25" />
     <GridColumns>
@@ -127,11 +128,13 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 @* ---------------------------------------------------------------- nueva / corregir --- *@
 <SfDialog @bind-Visible="_mostrarNovedad" Header="@_tituloNovedad" Width="620px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_form" OnValidSubmit="GuardarNovedad">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -233,6 +236,7 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -241,6 +245,7 @@
 <SfDialog @bind-Visible="_mostrarAnular" Header="Anular novedad" Width="480px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Anulando…">
             <div class="pagina">
                 <p>Se anula <strong>@_anulando?.ConceptName</strong> de <strong>@_anulando?.EmployeeName</strong>. La novedad queda visible como anulada.</p>
                 <SfTextBox @bind-Value="_motivoAnulacion" Placeholder="Motivo (obligatorio)" FloatLabelType="FloatLabelType.Always" />
@@ -249,6 +254,7 @@
                 <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAnular = false)">Cancelar</SfButton>
                 <SfButton CssClass="e-danger" type="button" Disabled="@(_guardando || string.IsNullOrWhiteSpace(_motivoAnulacion))" OnClick="@ConfirmarAnular">Anular</SfButton>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -257,6 +263,7 @@
 <SfDialog @bind-Visible="_mostrarHistorial" Header="Historial de la novedad" Width="760px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_cargaHistorial.Activa" Texto="Cargando…">
             <table class="data-grid">
                 <thead><tr><th>Versión</th><th>Cantidad / valor</th><th>Fechas</th><th>Estado</th><th>Motivo</th><th>Quién</th><th>Cuándo</th></tr></thead>
                 <tbody>
@@ -274,6 +281,7 @@
                     }
                 </tbody>
             </table>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -282,6 +290,7 @@
 <SfDialog @bind-Visible="_mostrarSalario" Header="Cambio de salario" Width="620px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_salario" OnValidSubmit="GuardarCambioSalario">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -339,6 +348,7 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_guardando">Guardar</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -347,6 +357,7 @@
 <SfDialog @bind-Visible="_mostrarImportar" Header="Importar novedades desde archivo" Width="760px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Importando…">
             <p class="texto-tenue">CSV separado por punto y coma con las columnas documento, concepto, cantidad, valor, desde, hasta y observación. Cada fila pasa las mismas reglas que el registro manual: si una falla, no entra ninguna. Máximo 5 MB.</p>
             <div class="toolbar">
                 <SfButton CssClass="e-outline" IconCss="e-icons e-download" type="button" Disabled="@_guardando" OnClick="@DescargarPlantilla">Descargar plantilla</SfButton>
@@ -380,6 +391,7 @@
                     <div class="info-card"><span class="label">Listo</span><p>@_importacion.Applied novedad(es) importadas en el lote @_importacion.BatchId.ToString()[..8].</p></div>
                 }
             }
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -393,6 +405,7 @@
                 <label class="campo-check"><input type="checkbox" @bind="_soloRecurrentesActivas" @bind:after="CargarRecurrentesAsync" /> Sólo activas</label>
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" type="button" OnClick="@(() => { _nuevaRecurrente = new FormRecurrente(); _mostrarNuevaRecurrente = true; })">Nueva recurrente</SfButton>
             </div>
+            <IndicadorDeCarga Cargando="@_cargaRecurrentes.Activa">
             <SfGrid TValue="RecurrenteDto" DataSource="@_recurrentes" AllowPaging="true" AllowSorting="true" RowHeight="38">
                 <GridPageSettings PageSize="15" />
                 <GridColumns>
@@ -423,6 +436,7 @@
                     </GridColumn>
                 </GridColumns>
             </SfGrid>
+            </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -430,6 +444,7 @@
 <SfDialog @bind-Visible="_mostrarNuevaRecurrente" Header="Nueva novedad recurrente" Width="620px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Guardando…">
             <EditForm Model="_nuevaRecurrente" OnValidSubmit="GuardarRecurrente">
                 <DataAnnotationsValidator />
                 <div class="formulario">
@@ -480,6 +495,7 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@(_guardando || _nuevaRecurrente.Empleado is null)">Guardar</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -487,6 +503,7 @@
 <SfDialog @bind-Visible="_mostrarDesactivar" Header="Desactivar novedad recurrente" Width="480px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardando" Texto="Desactivando…">
             @if (_desactivando is not null)
             {
                 <p>@_desactivando.EmployeeName · @_desactivando.ConceptName · @_desactivando.Cuotas</p>
@@ -497,11 +514,15 @@
                 <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDesactivar = false)">Cancelar</SfButton>
                 <SfButton CssClass="e-danger" type="button" Disabled="@(_guardando || string.IsNullOrWhiteSpace(_motivoDesactivacion))" OnClick="@ConfirmarDesactivar">Desactivar</SfButton>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md); _guardando sigue
+    // siendo la bandera de las escrituras.
+    private readonly EstadoDeCarga _carga = new(), _cargaRecurrentes = new(), _cargaHistorial = new();
     private SelectorDePeriodo? _selector;
     private PeriodoPagoDto? _periodo;
     private List<NovedadDto> _todas = [];
@@ -575,6 +596,7 @@
 
     private async Task CargarRecurrentesAsync()
     {
+        using var carga = _cargaRecurrentes.Iniciar();
         var res = await Nomina.ListarRecurrentesAsync(null, _soloRecurrentesActivas ? true : null);
         if (res.IsSuccess) _recurrentes = res.Value!.ToList();
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las recurrentes.");
@@ -649,6 +671,7 @@
 
     private async Task CargarAsync()
     {
+        using var carga = _carga.Iniciar();
         if (_periodo is null) { _todas = []; return; }
         var res = await Nomina.ListarNovedadesAsync(_periodo.PublicId, null, null,
             string.IsNullOrEmpty(_filtroEstado) ? null : _filtroEstado,
@@ -773,6 +796,7 @@
 
     private async Task AbrirHistorial(NovedadDto n)
     {
+        using var carga = _cargaHistorial.Iniciar();
         var res = await Nomina.HistorialNovedadAsync(n.PublicId);
         if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial."); return; }
         _historial = res.Value!.ToList();
