@@ -46,6 +46,9 @@ public class ReportesNominaTests(CentralIdentityApiFixture fx)
             var tabla = await NominaE2E.GetAsync(http, admin, $"/api/reports/payroll/{ruta}");
             tabla.GetProperty("titulo").GetString().Should().NotBeNullOrWhiteSpace(vista);
             tabla.GetProperty("columnas").GetArrayLength().Should().BeGreaterThan(0, vista);
+            // El tipo de columna viaja por nombre: la pantalla lo deserializa como string y con un
+            // número caía con DeserializeUnableToConvertValue en $.columnas[0].tipo.
+            tabla.GetProperty("columnas")[0].GetProperty("tipo").ValueKind.Should().Be(System.Text.Json.JsonValueKind.String, vista);
             tabla.GetProperty("filas").GetArrayLength().Should().BeGreaterThan(0, vista);
 
             foreach (var (formato, tipo, firma) in Formatos)

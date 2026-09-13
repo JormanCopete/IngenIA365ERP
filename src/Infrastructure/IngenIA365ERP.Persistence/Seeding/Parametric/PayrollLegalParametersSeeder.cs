@@ -77,8 +77,11 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
             Cantidad(LegalParameterCodes.ContributionBaseCapSmmlv, "Tope del IBC (en SMMLV)", 25m, FuenteSeguridadSocial),
             Cantidad(LegalParameterCodes.SickLeaveEmployerDays, "Días de incapacidad a cargo del empleador", 2m, FuenteSeguridadSocial),
             Porcentaje(LegalParameterCodes.SickLeaveEmployerPct, "Porcentaje pagado en incapacidad general", 66.67m, FuenteSeguridadSocial),
-            // Ley 2101 de 2021: 44 h/semana desde el 15/07/2025 → 220 h/mes; 42 h desde el 15/07/2026 → 210 (ver Revisiones()).
-            Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 220m, "Ley 2101 de 2021 (jornada de 44 h desde el 15/07/2025)"),
+            // Ley 2101 de 2021, último escalón: 42 h/semana desde el 15/07/2026 → 210 h/mes (7 h × 30).
+            // Decisión del 2026-09-13: la base 2026 lleva ya la norma de julio de 2026 (la plataforma
+            // está en pruebas y ninguna nómina real del primer semestre se liquida aquí); los 220 de
+            // la jornada de 44 h quedaron en la historia de la semilla, no en la base.
+            Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 210m, "Ley 2101 de 2021 (jornada de 42 h desde el 15/07/2026)"),
 
             // Depuracion de la base de retencion (solo si el empleado declara la deduccion).
             Cantidad(LegalParameterCodes.WithholdingHousingInterestCapUvt, "Tope mensual de intereses de vivienda (UVT)", 100m, FuenteRetencion),
@@ -170,8 +173,8 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
     /// </summary>
     public static IReadOnlyList<PayrollLegalParameter> Revisiones() =>
     [
-        // Ley 2101 de 2021, último escalón: 42 h/semana desde el 15 de julio de 2026 → 210 h/mes (7 h × 30).
-        Vigente(Cantidad(LegalParameterCodes.HoursPerMonth, "Horas del mes para el valor hora", 210m, "Ley 2101 de 2021 (jornada de 42 h desde el 15/07/2026)"), new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc)),
+        // Vacía desde el 2026-09-13: la base 2026 ya trae la jornada de 42 h. Queda el mecanismo para el
+        // próximo cambio de ley a mitad de año (ejemplo: Vigente(Cantidad(...), new DateTime(2027, 7, 1, ...))).
     ];
 
     private static PayrollLegalParameter Vigente(PayrollLegalParameter p, DateTime desde) { p.ValidFrom = desde; return p; }

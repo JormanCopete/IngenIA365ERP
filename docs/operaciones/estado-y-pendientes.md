@@ -38,7 +38,16 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. **`release e63bc38`** (2026-09-12 23:30,
+a release: …` y sincronización manual de Argo. **`release 8cf247a` y `0c7a555`** (2026-09-13,
+GitOps `6d947f0`/`bc49608`, respaldos `*-pre-rendimiento-20260913.dump`): la ronda 1 de
+rendimiento —ver [specs/007-rendimiento-percibido](../../specs/007-rendimiento-percibido/spec.md)—:
+pipeline de 9 min, Syncfusion por componente, estilos con huella, Serilog obediente, IP real
+por `CF-Connecting-IP`, `no-store` bajo `/api`, ReadyToRun, índices de lectura, arranque del
+cliente con indicador, y la base legal 2026 corregida por migración de datos
+(`BaseLegal2026Corregida`, `HorasMesBase2026`; y por decisión del usuario del 2026-09-13 la base 2026 pasa a llevar directamente la norma de julio de 2026 —210 h, 0,90, 2,15/2,65— con `NormaJulio2026ComoBase`, ver [nomina-primer-periodo.md §4c](nomina-primer-periodo.md)). En GitOps `b177479`: CPU explícita (API 2, Web 1),
+`LimitRange` sólo memoria, sondas sin retardo. Medido en PDN tras el despliegue: API
+Started→Ready **39 s** (eran 100–140), `cpu.max 200000/100000`, 0 `Executed DbCommand`.
+Antes, **`release e63bc38`** (2026-09-12 23:30,
 GitOps `8a59081`, sincronizado a `d0b88ca`) llevó la feature 006 completa —periodicidades
 decadal y semanal, sub-período y mes de imputación, «Aplica en» de las recurrentes,
 «Descartar borrador», el centro de Reportes de nómina con Excel/PDF/Word, plan de nómina

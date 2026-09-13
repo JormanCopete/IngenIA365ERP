@@ -59,10 +59,12 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
             // Ley 2466 de 2025 (reforma laboral): el recargo dominical/festivo sube de 75 % a 80 % desde el
             // 01/07/2025, 90 % desde el 01/07/2026 y 100 % desde el 01/07/2027 (ver Revisiones()). La extra
             // dominical es la extra ordinaria (1,25 / 1,75) más ese recargo.
-            ("HEX_DOM_DIURNA", "Hora extra dominical o festiva diurna", 2.05m),
-            ("HEX_DOM_NOCTURNA", "Hora extra dominical o festiva nocturna", 2.55m),
+            // Decisión del 2026-09-13: la base 2026 lleva ya el escalón de julio de 2026 (90 %); el
+            // siguiente (100 % desde el 01/07/2027) se cargará como revisión cuando la contadora lo confirme.
+            ("HEX_DOM_DIURNA", "Hora extra dominical o festiva diurna", 2.15m),
+            ("HEX_DOM_NOCTURNA", "Hora extra dominical o festiva nocturna", 2.65m),
             ("RECARGO_NOCTURNO", "Recargo nocturno", 0.35m),
-            ("RECARGO_DOMINICAL", "Recargo dominical o festivo", 0.80m),
+            ("RECARGO_DOMINICAL", "Recargo dominical o festivo", 0.90m),
         })
         {
             lista.Add(Def(code, name, ConceptNature.Earning, CalculationKind.QuantityTimesUnit, d =>
@@ -264,10 +266,9 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
     /// </summary>
     public static IReadOnlyList<(string Code, DateTime ValidFrom, decimal UnitFactor)> Revisiones() =>
     [
-        // Ley 2466 de 2025: recargo dominical/festivo 90 % desde el 1 de julio de 2026.
-        ("RECARGO_DOMINICAL", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 0.90m),
-        ("HEX_DOM_DIURNA", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 2.15m),
-        ("HEX_DOM_NOCTURNA", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 2.65m),
+        // Vacía desde el 2026-09-13: la base 2026 ya trae el 90 % de julio de 2026. Cuando la contadora
+        // confirme el 100 % del 01/07/2027 (Ley 2466 de 2025) se carga aquí:
+        // ("RECARGO_DOMINICAL", new DateTime(2027, 7, 1, 0, 0, 0, DateTimeKind.Utc), 1.00m), y las extras 2,25 / 2,75.
     ];
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

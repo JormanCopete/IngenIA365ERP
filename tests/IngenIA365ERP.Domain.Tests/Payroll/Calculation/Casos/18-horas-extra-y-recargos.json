@@ -1,6 +1,6 @@
 {
   "nombre": "Cuatro horas extra dominicales nocturnas y diez horas de recargo nocturno sobre 2.400.000",
-  "descripcion": "Hora ordinaria = 2.400.000 / 240 (el caso fija HORAS_MES en 240 para conservar la hora redonda; la semilla 2026 trae 220 y 210 desde julio). Extra dominical nocturna 4 × 10.000 × 2,55 (1,75 + recargo dominical 0,80, Ley 2466 de 2025) = 102.000; recargo nocturno 10 × 10.000 × 0,35 = 35.000. Ambas entran a todas las bases: IBC 2.537.000, base prestacional 2.786.095.",
+  "descripcion": "Hora ordinaria = 2.400.000 / 240 (el caso fija HORAS_MES en 240 para conservar la hora redonda; la semilla 2026 trae 210). Extra dominical nocturna 4 × 10.000 × 2,65 (1,75 + recargo dominical 0,90 desde julio de 2026, Ley 2466 de 2025; la semilla base 2026 lleva ya ese escalón) = 106.000; recargo nocturno 10 × 10.000 × 0,35 = 35.000. Ambas entran a todas las bases: IBC 2.541.000, base prestacional 2.790.095.",
   "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
   "empleado": {
     "nombre": "Sara Mejía", "clase": "Standard", "ingreso": "2020-01-20",
@@ -16,12 +16,12 @@
   "politicas": { "redondeo": "Peso", "exoneracion": false },
   "esperado": {
     "lineas": {
-      "SALARIO": 2400000, "AUX_TRANSPORTE": 249095, "HEX_DOM_NOCTURNA": 102000, "RECARGO_NOCTURNO": 35000,
-      "SALUD_EMP": 101480, "PENSION_EMP": 101480, "FSP": 0, "RETEFTE": 0,
-      "SALUD_EMPLEADOR": 215645, "PENSION_EMPLEADOR": 304440, "ARL": 13243, "SENA": 50740, "ICBF": 76110, "CAJA": 101480,
-      "PROV_CESANTIAS": 232082, "PROV_INT_CESANTIAS": 27861, "PROV_PRIMA": 232082, "PROV_VACACIONES": 105793
+      "SALARIO": 2400000, "AUX_TRANSPORTE": 249095, "HEX_DOM_NOCTURNA": 106000, "RECARGO_NOCTURNO": 35000,
+      "SALUD_EMP": 101640, "PENSION_EMP": 101640, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 215985, "PENSION_EMPLEADOR": 304920, "ARL": 13264, "SENA": 50820, "ICBF": 76230, "CAJA": 101640,
+      "PROV_CESANTIAS": 232415, "PROV_INT_CESANTIAS": 27901, "PROV_PRIMA": 232415, "PROV_VACACIONES": 105960
     },
-    "totales": { "devengos": 2786095, "deducciones": 202960, "aportesEmpleador": 761658, "provisiones": 597818, "neto": 2583135, "ajusteRedondeo": 0 },
+    "totales": { "devengos": 2790095, "deducciones": 203280, "aportesEmpleador": 762859, "provisiones": 598691, "neto": 2586815, "ajusteRedondeo": 0 },
     "banderas": "None", "diasPagados": 30
   }
 }

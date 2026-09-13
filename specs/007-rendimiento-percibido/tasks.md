@@ -38,10 +38,10 @@
 ## Phase 5: Despliegue y verificación de la ronda 1
 
 - [x] T040 Merge a `develop` (`bff13d5`, `3b9…` publish-api paralelo), CI verde, QA verificado por `curl` al pod: huellas, `/health` 200, `no-store`, 0 `Executed DbCommand`, login prerenderizado con `disabled`/`readonly`, fuente local, migración `IndicesDeLectura` aplicada en `ingenia365erp` y `coop_prueba`; Started→Ready de la API 44 s (sin sondas nuevas aún)
-- [ ] T041 Empujar GitOps `ab23242` (autorización del usuario) y verificar `cpu.max`, `nr_throttled`, Started→Ready en DEV/QA
-- [ ] T042 Promover a `release`; `pg_dump` previo; sincronizar PDN; verificar índices creados, logs, IP real en `ADM_CentralUserLoginAttempts`, estilos nuevos
+- [x] T041 GitOps `b177479` empujado con autorización del usuario (2026-09-13); QA: `cpu.max 200000/100000`, `nr_throttled` 10 de ~1.300 períodos, readiness cada 5 s, Web sondea `/health`
+- [x] T042 `release 8cf247a` + `0c7a555` en producción (GitOps `6d947f0` y `bc49608`; respaldos `*-pre-rendimiento-20260913.dump`): migraciones `IndicesDeLectura`, `BaseLegal2026Corregida`, `HorasMesBase2026` aplicadas en `ingenia365erp` y `cooflopal`; API con `limits.cpu=2`, Started→Ready **39 s** (eran 100–140), 0 `Executed DbCommand`, estilos con huella y `no-store` en el borde. Pendiente de observar: la IP real en `ADM_CentralUserLoginAttempts` con el próximo ingreso
 - [ ] T043 Webhook GitHub → Argo CD en nonprod (hoy Argo descubre el commit por sondeo: hubo que refrescar a mano) y Cache Rule de Cloudflare para `/_framework/` (panel; lo hace el propietario) y purga de `_content/Syncfusion.Blazor/scripts/syncfusion-blazor.min.js`
-- [ ] T044 Corregir en producción la vigencia base 2026 de nómina (HORAS_MES 220, recargo 0,80, extras 2,05/2,55) — decisión del usuario/contadora
+- [x] T044 Base 2026 corregida por migración de datos en PDN y QA (`BaseLegal2026Corregida` + `HorasMesBase2026`): HORAS_MES 220, recargo 0,80, extras 2,05/2,55; el runbook §4c queda como semilla base
 
 ## Phase 6: Ronda 2 (cada una con spec propia)
 
