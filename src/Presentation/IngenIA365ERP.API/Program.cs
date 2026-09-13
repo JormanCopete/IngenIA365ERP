@@ -21,11 +21,16 @@ using IngenIA365ERP.API.HealthChecks;
 using Microsoft.OpenApi;  // En OpenApi 2.x los tipos se movieron de Microsoft.OpenApi.Models a la raiz Microsoft.OpenApi
 using Serilog;
 using IngenIA365ERP.Persistence.Configuration;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
+// Logger de arranque: solo consola, y solo hasta que el host lea la configuracion.
+// CreateBootstrapLogger deja un logger intercambiable que UseSerilog reemplaza
+// abajo; lo que se escribe antes (el «Starting…», un fallo de configuracion)
+// no se pierde y no queda un segundo logger con sus propios sinks abiertos.
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
-    .WriteTo.File("logs/ingenia365erp-.log", rollingInterval: RollingInterval.Day)
-    .CreateLogger();
+    .CreateBootstrapLogger();
 
 try
 {
@@ -48,13 +53,41 @@ try
     }
     builder.Configuration.AddEnvironmentVariables();
 
-    // T123 — Serilog enrichers para central_user_id + active_tenant_id desde
-    // los claims del JWT. Se rehidrata desde DI para tener IHttpContextAccessor.
+    // Serilog: niveles desde la configuracion, sinks en codigo y asincronos.
+    //
+    // Hasta el 2026-09-12 esto construia el logger solo con WriteTo.Console +
+    // WriteTo.File + Enrich, sin ReadFrom.Configuration. La seccion Serilog de
+    // appsettings (Override Microsoft → Warning) era letra muerta, y la seccion
+    // «Logging» no filtra nada cuando manda Serilog, porque UseSerilog sustituye
+    // la ILoggerFactory entera. Resultado medido en produccion: cada peticion y
+    // cada DbCommand de EF Core —con el SQL— salian en Information, a consola y a
+    // archivo, por dos sinks sincronicos que escriben en el hilo de la peticion.
+    //
+    // Ahora los niveles los dice appsettings (y el del ambiente, y las variables
+    // Serilog__*), los sinks se quedan aca para no tener que declarar «Using» en
+    // JSON, y los envuelve WriteTo.Async: una cola y un hilo de fondo; con
+    // blockWhenFull el hilo de la peticion espera en vez de perder eventos.
+    // El archivo en logs/ solo tiene sentido fuera del contenedor: adentro es el
+    // disco efimero del pod, que nadie lee y muere con el; ahi la consola es el
+    // unico camino y la recoge la plataforma. DOTNET_RUNNING_IN_CONTAINER=true lo
+    // pone el Dockerfile.
+    //
+    // T123 — el enricher pone central_user_id + active_tenant_id desde los claims
+    // del JWT; se rehidrata desde DI para tener IHttpContextAccessor.
+    var enContenedor = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
     builder.Host.UseSerilog((context, services, configuration) => configuration
-        .WriteTo.Console()
-        .WriteTo.File("logs/ingenia365erp-.log", rollingInterval: RollingInterval.Day)
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
         .Enrich.With(new IngenIA365ERP.API.Logging.CentralIdentityLogEnricher(
-            services.GetRequiredService<IHttpContextAccessor>())));
+            services.GetRequiredService<IHttpContextAccessor>()))
+        .WriteTo.Async(sinks =>
+        {
+            sinks.Console();
+            if (!enContenedor)
+            {
+                sinks.File("logs/ingenia365erp-.log", rollingInterval: RollingInterval.Day);
+            }
+        }, blockWhenFull: true));
 
     // Add services to the container
     builder.Services.AddEndpointsApiExplorer();
@@ -143,6 +176,24 @@ try
     // AddCachingServices registra el RedisPermissionClaimsCache.
     builder.Services.AddSingleton<IPermissionClaimsCache, InMemoryPermissionClaimsCache>();
 
+    // === Proxies conocidos: quien es «el cliente» detras del tunel ===
+    // En produccion el trafico entra SOLO por el tunel de Cloudflare
+    // (cloudflared → Traefik → API), asi que el socket siempre ve un pod de la red
+    // 10.42.0.0/16 y X-Forwarded-For trae «visitante, cloudflared». Con esto,
+    // UseForwardedHeaders (primer middleware) deja en Connection.RemoteIpAddress
+    // la IP del visitante y en Request.Scheme el https original. ForwardLimit=2
+    // son exactamente los dos saltos; un tercero (un X-Forwarded-For que el
+    // cliente traiga puesto) no se consume, y solo se cree la cabecera si el
+    // socket es de la red conocida —en local, loopback, que viene por defecto—.
+    // KnownIPNetworks y no KnownNetworks: en .NET 10 la segunda esta obsoleta y
+    // ambas son la misma lista por dentro (DualIPNetworkList).
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        o.ForwardLimit = 2;
+        o.KnownIPNetworks.Add(new System.Net.IPNetwork(IPAddress.Parse("10.42.0.0"), 16));
+    });
+
     // === Rate Limiting ===
     builder.Services.AddMemoryCache();
     builder.Services.Configure<IpRateLimitOptions>(options =>
@@ -150,8 +201,21 @@ try
         options.EnableEndpointRateLimiting = true;
         options.StackBlockedRequests = false;
         options.HttpStatusCode = 429;
-        options.RealIpHeader = "X-Real-IP";
-        options.ClientIdHeader = "X-Tenant-Id";
+        // La IP que cuenta es la del visitante, y la trae Cloudflare en
+        // CF-Connecting-IP. Hecho medido: con X-Real-IP toda la tabla
+        // ADM_CentralUserLoginAttempts tenia IpAddress = 10.42.0.25 —el pod de
+        // cloudflared: la IP interna del ultimo salto, no la del visitante—, asi
+        // que los 10 logins por minuto y las 1000 peticiones por minuto se
+        // aplicaban a TODA la plataforma junta, no a cada quien. Un cliente no
+        // puede falsificar esta cabecera porque el origen solo es alcanzable por
+        // el tunel y Cloudflare la sobrescribe en el borde; si algun dia hubiera
+        // otra entrada directa, esa condicion deja de valer y hay que revisar
+        // esto. Sin la cabecera (en local) el paquete cae a
+        // Connection.RemoteIpAddress.
+        // Se quito ClientIdHeader = "X-Tenant-Id": el limitador por IP solo usa el
+        // ClientId para la lista blanca de clientes, que no existe, y la API dejo
+        // de leer esa cabecera en la Feature 002 (el tenant sale del JWT).
+        options.RealIpHeader = "CF-Connecting-IP";
         options.GeneralRules =
         [
             new RateLimitRule
@@ -264,6 +328,13 @@ try
     // instalaciones greenfield.
 
     // Configure the HTTP request pipeline
+
+    // PRIMERO: corrige RemoteIpAddress y Scheme con lo que dejaron los proxies
+    // conocidos (opciones arriba, «Proxies conocidos»). Todo lo que sigue —el
+    // limitador, la auditoria de ingresos, HSTS, la redireccion a https— lee
+    // esos dos campos y tiene que verlos ya corregidos.
+    app.UseForwardedHeaders();
+
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();

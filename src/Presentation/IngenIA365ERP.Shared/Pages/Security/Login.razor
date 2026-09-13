@@ -24,6 +24,21 @@
                 <span class="login-marca-bajada">Gestión financiera para cooperativas</span>
             </div>
             <h1>Iniciar sesión</h1>
+            @*
+                Esta pantalla se prerenderiza en el servidor y se hidrata en
+                WebAssembly, y entre lo uno y lo otro pasan de 3 a 10 s (descarga
+                del runtime, ~8 MB) con la página aparentemente lista. En ese hueco
+                el formulario es HTML plano: «Continuar» disparaba un POST clásico
+                —se perdía lo escrito y volvía el login vacío— y lo tecleado en los
+                campos lo pisaba la hidratación al reponer el modelo. Por eso, hasta
+                que RendererInfo.IsInteractive sea true, el botón va deshabilitado
+                y dice «Cargando…» y los campos son readonly. Un botón de envío
+                deshabilitado también anula el envío implícito con Enter (el HTML
+                Standard lo dice expreso: si el botón por defecto está deshabilitado,
+                el envío implícito no ocurre), así que no queda ninguna vía al POST.
+                En MAUI IsInteractive es true desde el primer render y nada de esto
+                se ve.
+            *@
             <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="login">
                 <DataAnnotationsValidator />
 
@@ -32,6 +47,7 @@
                     @bind-Value="_model.Email"
                     type="email"
                     autocomplete="username"
+                    readonly="@(!RendererInfo.IsInteractive)"
                     placeholder="tu.correo@cooperativa.co" />
                 <ValidationMessage For="@(() => _model.Email)" />
 
@@ -39,11 +55,12 @@
                 <InputText
                     @bind-Value="_model.Password"
                     type="password"
+                    readonly="@(!RendererInfo.IsInteractive)"
                     autocomplete="current-password" />
                 <ValidationMessage For="@(() => _model.Password)" />
 
-                <button type="submit" disabled="@_busy" style="margin-top: 16px;">
-                    @(_busy ? "Validando..." : "Continuar")
+                <button type="submit" disabled="@(_busy || !RendererInfo.IsInteractive)">
+                    @(!RendererInfo.IsInteractive ? "Cargando…" : _busy ? "Validando..." : "Continuar")
                 </button>
             </EditForm>
 
@@ -159,9 +176,18 @@
                     : null;
         }
 
+        // En el prerender del servidor NO se consultan las promociones: el HTML del
+        // login salía recién cuando la API respondía (o agotaba el tiempo), o sea
+        // que la pantalla de entrada esperaba a un servicio del que no depende para
+        // entrar. Se cargan en el primer render interactivo, que vuelve a pasar por
+        // aquí. Salir antes deja la promoción fuera del HTML prerenderizado: el
+        // formulario ocupa la misma columna con o sin panel, así que no se mueve.
+        if (!RendererInfo.IsInteractive) return;
+
         // El fallo al traer promociones NO puede impedir iniciar sesion. Es
         // contenido accesorio servido por un endpoint anonimo: si la consulta
-        // cae, el login tiene que seguir funcionando igual.
+        // cae o tarda más de lo que el cliente espera, el login tiene que seguir
+        // funcionando igual.
         var r = await Promociones.ListarPublicasAsync();
         if (r.IsSuccess && r.Value is { Count: > 0 } piezas)
         {

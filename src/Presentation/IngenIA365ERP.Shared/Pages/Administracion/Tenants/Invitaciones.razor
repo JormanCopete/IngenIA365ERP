@@ -159,8 +159,10 @@
             _esMaestro = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var m) && m;
         }
 
-        await CargarNombreAsync();
-        await CargarAsync();
+        // El nombre de la cooperativa (para el subtítulo) y la lista de invitaciones no dependen
+        // entre sí: van a la vez (eran dos viajes en serie de ~0,35 s cada uno). Cada rama escribe
+        // campos distintos; si el nombre no llega, el subtítulo cae a «Cooperativa» como antes.
+        await Task.WhenAll(CargarNombreAsync(), CargarAsync());
     }
 
     private async Task InvitarAsync()

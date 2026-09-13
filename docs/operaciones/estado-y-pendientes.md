@@ -38,8 +38,19 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. `release ccef705` (2026-09-12, GitOps
-`777f930`) llevó los códigos alfanuméricos de catálogo (migración
+a release: …` y sincronización manual de Argo. **`release e63bc38`** (2026-09-12 23:30,
+GitOps `8a59081`, sincronizado a `d0b88ca`) llevó la feature 006 completa —periodicidades
+decadal y semanal, sub-período y mes de imputación, «Aplica en» de las recurrentes,
+«Descartar borrador», el centro de Reportes de nómina con Excel/PDF/Word, plan de nómina
+en la ficha— más el arreglo del botón «Versiones» de Conceptos y las vigencias de ley
+(`HORAS_MES` 210 desde el 15/07/2026; recargo dominical 0,90 y extras dominicales 2,15/2,65
+desde el 01/07/2026). Migración `PeriodicidadesReglasYDescarte` aplicada por el Job PreSync
+en `ingenia365erp` y `cooflopal` (respaldos `*-pre-f006-20260912-2246.dump`). **Ojo con la
+base 2026 de producción**: la semilla no pisa vigencias existentes, así que `HORAS_MES`
+2026-01-01→2026-07-14 quedó en **240** (no 220), `RECARGO_DOMINICAL` en 0,75 (no 0,80) y las
+extras dominicales en 2,00/2,50 (no 2,05/2,55): corregirlas a mano en Parámetros legales y
+Conceptos, o con una migración de datos, antes de liquidar un período de ese semestre.
+`release ccef705` (2026-09-12, GitOps `777f930`) llevó los códigos alfanuméricos de catálogo (migración
 `CodigosAlfanumericosEnCatalogos`, respaldos `*-pre-codigos-20260912-2002.dump`), largos y
 obligatorios en los formularios, el aviso de código duplicado, el menú y los avisos abajo a la
 derecha, y el icono/manifest de la app (`release 1c774ce`); `release 08c664e` (GitOps
@@ -399,9 +410,16 @@ decisión explícita. Ver la sección correspondiente en
 #### P11 — Cuota de GitHub Actions
 
 Al pasar el repositorio a privado, las corridas consumen la cuota del plan Free
-(2.000 min/mes). Cada corrida completa son ~18 min → alcanza para ~110 mensuales.
-Si aprieta, un runner autoalojado en la VPS de nonprod resuelve y además cumple
-el objetivo original de no depender de los límites de Actions.
+(2.000 min/mes). Hasta el 2026-09-12 cada corrida sumaba **~30 min de job** (5 de
+pruebas + 24 de `docker-build` + gitops) y tardaba 28–36 min de reloj. Desde el
+2026-09-13 el pipeline compila una vez y las imágenes sólo empaquetan (ver
+[despliegue-infraestructura.md](despliegue-infraestructura.md), «Imágenes»): la
+primera corrida midió **9 min 2 s de reloj** (`build-and-test` 5:04 y `publish-web`
+7:38 en paralelo; tres `docker` de ~50 s en paralelo; `gitops` 10 s) y ~16 min de
+job. El techo es el `publish` del Web: 83 s de compilación y **341 s** de ILLink +
+Brotli/Gzip del cliente WebAssembly en el runner (eran 500 s con el meta-paquete de
+Syncfusion). Si aprieta la cuota, un runner autoalojado en la VPS de nonprod resuelve
+y además cumple el objetivo original de no depender de los límites de Actions.
 
 #### P12 — SDK anclado a 10.0.302
 

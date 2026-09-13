@@ -1,0 +1,36 @@
+{
+  "//": [
+    "Filtro de solucion para el CI y para construir las imagenes: todo lo que se",
+    "compila y se despliega, sin el proyecto MAUI (IngenIA365ERP.App exige un workload",
+    "que los runners no traen: ~5 min por corrida para algo que el CI no despliega) y",
+    "sin las pruebas que necesitan Docker (API.IntegrationTests) o una senal explicita",
+    "(Load.Tests). Compilar la solucion filtrada UNA vez sustituye al bucle de siete",
+    "'dotnet build' que reevaluaba el grafo entero en cada vuelta.",
+    "",
+    "  dotnet build IngenIA365ERP.CI.slnf -c Release"
+  ],
+  "solution": {
+    "path": "IngenIA365ERP.slnx",
+    "projects": [
+      "src/Core/IngenIA365ERP.Domain/IngenIA365ERP.Domain.csproj",
+      "src/Core/IngenIA365ERP.Application/IngenIA365ERP.Application.csproj",
+      "src/Infrastructure/IngenIA365ERP.Persistence/IngenIA365ERP.Persistence.csproj",
+      "src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj",
+      "src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj",
+      "src/Infrastructure/IngenIA365ERP.Identity/IngenIA365ERP.Identity.csproj",
+      "src/Infrastructure/IngenIA365ERP.Audit/IngenIA365ERP.Audit.csproj",
+      "src/Infrastructure/IngenIA365ERP.Caching/IngenIA365ERP.Caching.csproj",
+      "src/Infrastructure/IngenIA365ERP.Legacy/IngenIA365ERP.Legacy.csproj",
+      "src/Infrastructure/IngenIA365ERP.Storage/IngenIA365ERP.Storage.csproj",
+      "src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj",
+      "src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj",
+      "src/Presentation/IngenIA365ERP.Web.Client/IngenIA365ERP.Web.Client.csproj",
+      "src/Presentation/IngenIA365ERP.Shared/IngenIA365ERP.Shared.csproj",
+      "tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj",
+      "tests/IngenIA365ERP.Domain.Tests/IngenIA365ERP.Domain.Tests.csproj",
+      "tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj",
+      "tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj",
+      "tests/IngenIA365ERP.Shared.Tests/IngenIA365ERP.Shared.Tests.csproj"
+    ]
+  }
+}

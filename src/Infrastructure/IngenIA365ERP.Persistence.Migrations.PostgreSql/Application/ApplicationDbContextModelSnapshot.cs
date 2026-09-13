@@ -18,7 +18,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dbo")
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -92,6 +92,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("PeriodYear", "PeriodMonth", "AccountId")
+                        .HasDatabaseName("IX_ACC_AccountBalances_Period_Account");
 
                     b.HasIndex("AccountId", "PeriodYear", "PeriodMonth", "BranchId", "CostCenterId")
                         .IsUnique();
@@ -406,6 +409,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("VoucherTypeCode")
                         .HasDatabaseName("IX_ACC_Documents_VoucherTypeCode");
+
+                    b.HasIndex("DocumentDate", "DocumentNumber")
+                        .HasDatabaseName("IX_ACC_Documents_Date_Number");
 
                     b.HasIndex("VoucherTypeCode", "DocumentNumber")
                         .IsUnique()
@@ -2653,8 +2659,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
-
                     b.HasIndex("BranchId");
 
                     b.HasIndex("CostCenterId");
@@ -2665,6 +2669,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsUnique();
 
                     b.HasIndex("TransactionDate");
+
+                    b.HasIndex("AccountId", "TransactionDate")
+                        .HasDatabaseName("IX_ACC_JournalEntries_Account_Date");
 
                     b.HasIndex("VoucherTypeCode", "DocumentNumber");
 
@@ -20045,9 +20052,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PersonCode")
+                        .HasDatabaseName("IX_LND_DepositEntries_PersonCode");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_LND_DepositEntries_PublicId");
+
+                    b.HasIndex("AccountNumber", "EntryDate")
+                        .HasDatabaseName("IX_LND_DepositEntries_Account_Date");
 
                     b.ToTable("LND_DepositEntries", "dbo");
                 });

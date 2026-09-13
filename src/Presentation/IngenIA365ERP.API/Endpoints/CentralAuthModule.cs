@@ -227,8 +227,15 @@ public sealed class CentralAuthModule : ICarterModule
 
     // -------- Helpers --------
 
+    // Por IIpAddressAccessor y no por Connection.RemoteIpAddress: detras del tunel
+    // de Cloudflare el socket ve un pod interno, y asi toda la tabla de intentos
+    // de ingreso quedo con la misma IP (10.42.0.25). El accessor lee
+    // CF-Connecting-IP primero; ver IpAddressAccessor. Se resuelve del contenedor
+    // de la peticion para no cambiar la firma de los siete handlers que lo llaman.
     private static string? GetIp(HttpContext http) =>
-        http.Connection.RemoteIpAddress?.ToString();
+        http.RequestServices
+            .GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.IIpAddressAccessor>()
+            .IpAddress;
 
     private static string? GetUserAgent(HttpContext http) =>
         http.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;

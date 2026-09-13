@@ -14,6 +14,12 @@ public class DepositEntryConfiguration : IEntityTypeConfiguration<DepositEntry>
 
         builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_LND_DepositEntries_PublicId");
+        // Indices de lectura (2026-09-13): el extracto de una cuenta de ahorro filtra por
+        // AccountNumber y ordena por EntryDate desc (SavingsAccountQueries), y el saldo por
+        // lote agrupa por AccountNumber; sin indice ambos recorren la tabla entera de
+        // movimientos, la que mas crece en una cooperativa migrada.
+        builder.HasIndex(e => new { e.AccountNumber, e.EntryDate }).HasDatabaseName("IX_LND_DepositEntries_Account_Date");
+        builder.HasIndex(e => e.PersonCode).HasDatabaseName("IX_LND_DepositEntries_PersonCode");
 
         builder.Property(e => e.PersonCode).HasMaxLength(20).IsRequired();
         builder.Property(e => e.DeductionType).HasMaxLength(2).IsRequired();

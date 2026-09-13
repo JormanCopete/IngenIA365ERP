@@ -53,7 +53,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.70" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.*" />
-    <PackageReference Include="Syncfusion.Blazor" Version="33.2.8" />
+    <!-- Sin el meta-paquete Syncfusion.Blazor: convive mal con los paquetes por componente que
+         trae IngenIA365ERP.Shared (los mismos tipos en dos ensamblados). Core llega transitivo. -->
     <PackageReference Include="Syncfusion.Blazor.Themes" Version="33.2.8" />
   </ItemGroup>
 

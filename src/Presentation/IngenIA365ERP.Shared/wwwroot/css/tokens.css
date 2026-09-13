@@ -13,6 +13,7 @@
    siempre como acento, nunca como superficie.
 
    ORDEN DE LAS CAPAS — importa, y es el mismo de abajo hacia arriba:
+     0. Fuente ............. Inter autoalojada (@font-face), única regla no-token
      1. Rampas de marca .... valores literales, iguales en claro y oscuro
      2. Tokens semánticos .. lo que consumen las pantallas (superficie, texto…)
      3. Densidad ........... tamaños, remapeados por [data-densidad]
@@ -22,6 +23,36 @@
    Las pantallas SOLO deben usar la capa 2 en adelante. Si una pantalla
    referencia --morado-700 directamente, deja de responder al cambio de tema.
    ========================================================================== */
+
+/* --- 0. Fuente ------------------------------------------------------------ */
+
+/* Inter autoalojada. Hasta el 2026-09-12 la web la pedía a fonts.googleapis.com:
+   una hoja externa que bloquea el primer pintado, una dependencia de un tercero
+   para arrancar y la IP de cada persona enviada a Google en cada carga. MAUI, por
+   su parte, no la cargaba de ningún sitio aunque su index.html lo prometía.
+
+   Es UN archivo y no tres: Google sirve Inter v4 como fuente VARIABLE, y para los
+   pesos 400, 500 y 600 devolvía exactamente la misma URL. Se declara el rango
+   real del eje (100–900, leído de la tabla fvar del archivo): así el 700 de un
+   <strong> sale del eje y no de un engrosamiento sintético. Sólo el subconjunto
+   latino (518 glifos, 48 KB), el mismo `unicode-range` que entregaba Google:
+   cubre el español completo; lo que quede fuera cae a la fuente del sistema.
+
+   La ruta es relativa a css/ dentro del RCL para que sirva igual en la web
+   (/_content/IngenIA365ERP.Shared/fonts/…) y dentro del paquete MAUI. El SDK no
+   reescribe url() en CSS, así que esta petición va SIN huella: la ruta sin huella
+   de un woff2 sale con `max-age=3600, must-revalidate` (medido en el manifiesto
+   de static web assets), no con el `no-cache` de css/js. Por eso el preload de
+   App.razor usa esta misma URL literal y no @Assets[...]: un preload a otra URL
+   es una segunda descarga y una advertencia en consola. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('../fonts/Inter-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* --- 1. Rampas de marca --------------------------------------------------- */
 

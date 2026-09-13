@@ -8,10 +8,16 @@ on:
   # etiquetas quedan solo para que un humano las lea.
   push:
     branches: [main, develop, release]
+    # Un commit que solo toca documentacion no cambia ninguna imagen: no vale
+    # 9 minutos de runner ni un relevo de pods en DEV y QA (cada corrida produce
+    # digests nuevos aunque el binario sea el mismo). Ojo: con estos filtros un
+    # push de solo docs NO escribe digests en el GitOps, y es lo correcto.
+    paths-ignore: ['docs/**', 'specs/**', '**/*.md']
   # Los PRs a estas ramas tambien deben pasar el CI. Sin esto, el codigo
   # llegaba a develop sin ejecutar una sola prueba.
   pull_request:
     branches: [main, develop, release]
+    paths-ignore: ['docs/**', 'specs/**', '**/*.md']
   # Permite validar imagenes desde cualquier rama sin esperar a un merge.
   workflow_dispatch:
     inputs:
@@ -20,9 +26,28 @@ on:
         type: boolean
         default: false
 
+# Forma del pipeline (desde el 2026-09-13):
+#
+#   build-and-test ──┐
+#   publish-api ─────┼──> docker (matriz api|web|migrator) ──> gitops
+#   publish-web ─────┘
+#
+# Se compila UNA vez en el runner y las imagenes solo empaquetan el resultado.
+# Antes cada Dockerfile arrastraba el SDK y recompilaba el grafo completo, tres
+# veces y en serie, y ademas exportaba ~7 min de cache a GitHub Actions que nunca
+# acertaba (un solo scope para tres imagenes, y el repo en el tope de 10 GB):
+# 24 min de docker-build hasta para un commit que tocaba una linea de docs.
+# Ver docs/operaciones/despliegue-infraestructura.md, seccion "Imagenes".
+#
+# El publish del Web va en su propio job porque el recorte y la compresion del
+# cliente WebAssembly son el paso mas largo de todo el pipeline y no tienen por
+# que esperar a las pruebas ni retrasarlas.
+
 env:
-  DOTNET_VERSION: '10.0.x'
   REGISTRY: ghcr.io
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   # OJO: los nombres de repositorio de un registro Docker DEBEN ir en minusculas,
   # y github.repository conserva las mayusculas del nombre real
   # (JormanCopete/IngenIA365ERP). Se normalizan en el paso "Calcular etiquetas".
@@ -33,31 +58,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # global.json fija la banda 10.0.3xx (la 10.0.4xx publica el Web SIN
+      # blazor.web.js, ver la nota en global.json). Con "10.0.x" el runner instalaba
+      # la 10.0.401 y compilaba con la que trajera preinstalada la imagen.
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
 
-      # Se compilan los proyectos explicitamente en vez de la solucion completa:
-      # IngenIA365ERP.App es MAUI y requiere el workload correspondiente, que los
-      # runners no traen (instalarlo son ~5 min por corrida para un proyecto que
-      # el CI no despliega). API y Web arrastran todo el grafo de backend.
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Una sola invocacion sobre el filtro de solucion (sin MAUI ni pruebas con
+      # Docker): MSBuild resuelve el grafo una vez en lugar de siete.
       - name: Restore y Build
-        run: |
-          set -e
-          for p in \
-            src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj \
-            src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj \
-            tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj \
-            tests/IngenIA365ERP.Domain.Tests/IngenIA365ERP.Domain.Tests.csproj \
-            tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj \
-            tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj \
-            tests/IngenIA365ERP.Shared.Tests/IngenIA365ERP.Shared.Tests.csproj
-          do
-            echo "::group::build $p"
-            dotnet build "$p" -c Release
-            echo "::endgroup::"
-          done
+        run: dotnet build IngenIA365ERP.CI.slnf -c Release
 
       - name: Test Domain
         run: dotnet test tests/IngenIA365ERP.Domain.Tests -c Release --no-build --verbosity normal
@@ -72,23 +91,124 @@ jobs:
       - name: Test Shared
         run: dotnet test tests/IngenIA365ERP.Shared.Tests -c Release --no-build --verbosity normal
 
-  docker-build:
-    needs: build-and-test
+  # Lo que va dentro de las imagenes de API y migrador. ContainerPublish=true activa
+  # en los csproj RuntimeIdentifier linux-x64 + ReadyToRun (codigo nativo
+  # precompilado: el pod arranca y atiende la primera peticion sin pagar el JIT
+  # entero). Es una compilacion distinta de la que corren las pruebas (otro RID) y
+  # tarda ~4 min con crossgen; por eso va en su propio job, en paralelo con las
+  # pruebas y con el publish del Web, y no alarga el reloj del pipeline.
+  publish-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Publish API y Migrator
+        run: |
+          set -e
+          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -o artifacts/api
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
+          test -f artifacts/api/IngenIA365ERP.API.dll
+          test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publish-api
+          path: artifacts/api
+          retention-days: 3
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publish-migrator
+          path: artifacts/migrator
+          retention-days: 3
+          if-no-files-found: error
+
+  publish-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # SIN --no-restore, y no es un descuido: el script de arranque
+      # _framework/blazor.web.js llega en el paquete
+      # microsoft.aspnetcore.app.internal.assets, que el SDK resuelve durante el
+      # restore DEL PUBLISH. Con --no-restore el publish sale sin el y sin una sola
+      # advertencia: la app arranca, responde 200 y el navegador queda en blanco.
+      #
+      # Tampoco se instala el workload wasm-tools: sin el se usa el runtime
+      # WebAssembly prearmado (el relinking nativo necesita Python y mucha RAM).
+      - name: Publish Web
+        run: dotnet publish src/Presentation/IngenIA365ERP.Web/IngenIA365ERP.Web.csproj -c Release -o artifacts/web
+
+      # COMPROBACION QUE ROMPE EL PIPELINE A PROPOSITO. App.razor arranca con
+      # @Assets["_framework/blazor.web.js"]; si el SDK no lo genera, la imagen se
+      # construye, arranca, / responde HTTP 200 con el shell, la sonda la da por
+      # sana... y el navegador muestra una pantalla en blanco. Paso en produccion.
+      - name: Comprobar blazor.web.js
+        run: |
+          f=artifacts/web/IngenIA365ERP.Web.staticwebassets.endpoints.json
+          test -f "$f" && grep -q 'blazor\.web\.js' "$f" || {
+            echo "::error::el publish no incluye _framework/blazor.web.js; la aplicacion arrancaria en blanco. Revisar que el SDK cumpla global.json."
+            exit 1
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publish-web
+          path: artifacts/web
+          retention-days: 3
+          if-no-files-found: error
+
+  docker:
+    # Las tres publicaciones y las pruebas: una imagen no se construye si algo fallo.
+    needs: [build-and-test, publish-api, publish-web]
     runs-on: ubuntu-latest
     # Siempre se CONSTRUYE (un Dockerfile roto debe detectarse en el PR, no
     # despues de mergear). Solo se PUBLICA desde main/develop/release.
-    if: always() && needs.build-and-test.result == 'success'
     permissions:
       contents: read
       packages: write
-    # Los digests que publico: el job gitops los escribe en los overlays.
-    outputs:
-      push: ${{ steps.meta.outputs.push }}
-      api_digest: ${{ steps.build_api.outputs.digest }}
-      web_digest: ${{ steps.build_web.outputs.digest }}
-      migrator_digest: ${{ steps.build_migrator.outputs.digest }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: src/Presentation/IngenIA365ERP.API/Dockerfile
+          - image: web
+            dockerfile: src/Presentation/IngenIA365ERP.Web/Dockerfile
+          - image: migrator
+            dockerfile: tools/IngenIA365ERP.DbMigrator/Dockerfile
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-${{ matrix.image }}
+          path: contexto
 
       # El despliegue es GitOps: Argo CD sincroniza por DIGEST inmutable, no por
       # "latest". Estas etiquetas son solo para trazabilidad humana.
@@ -105,21 +225,14 @@ jobs:
           SHORT="${GITHUB_SHA::12}"
           # Normalizacion a minusculas: requisito del registro.
           REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
-          API_IMAGE="${REGISTRY}/${REPO_LC}/api"
-          WEB_IMAGE="${REGISTRY}/${REPO_LC}/web"
-          MIGRATOR_IMAGE="${REGISTRY}/${REPO_LC}/migrator"
-          echo "tags_api=${API_IMAGE}:${BRANCH},${API_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
-          echo "tags_web=${WEB_IMAGE}:${BRANCH},${WEB_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
-          echo "tags_mig=${MIGRATOR_IMAGE}:${BRANCH},${MIGRATOR_IMAGE}:${BRANCH}-${SHORT}" >> "$GITHUB_OUTPUT"
+          IMAGE="${REGISTRY}/${REPO_LC}/${{ matrix.image }}"
+          TAGS="${IMAGE}:${BRANCH},${IMAGE}:${BRANCH}-${SHORT}"
           # "latest" lo mueve la rama de PRODUCCION, no main: es la unica lectura
           # util de esa etiqueta ("lo que hay publicado para los clientes").
           # El despliegue real igual va por digest, no por esta etiqueta.
-          if [ "$GITHUB_REF_NAME" = "release" ]; then
-            echo "latest_api=,${API_IMAGE}:latest" >> "$GITHUB_OUTPUT"
-            echo "latest_web=,${WEB_IMAGE}:latest" >> "$GITHUB_OUTPUT"
-            echo "latest_mig=,${MIGRATOR_IMAGE}:latest" >> "$GITHUB_OUTPUT"
-          fi
-          # Solo se publica desde main/develop; en un PR se construye para
+          if [ "$GITHUB_REF_NAME" = "release" ]; then TAGS="${TAGS},${IMAGE}:latest"; fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          # Solo se publica desde main/develop/release; en un PR se construye para
           # validar, pero no se contamina el registro con imagenes sin mergear.
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
@@ -140,38 +253,35 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push API
-        id: build_api
+      # Sin cache-from/cache-to: la imagen es la base aspnet mas una capa con el
+      # publish; no hay nada que valga la pena cachear y la exportacion costaba
+      # mas que la construccion entera.
+      - name: Build and Push ${{ matrix.image }}
+        id: build
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: src/Presentation/IngenIA365ERP.API/Dockerfile
+          context: contexto
+          file: ${{ matrix.dockerfile }}
           push: ${{ steps.meta.outputs.push == 'true' }}
-          tags: ${{ steps.meta.outputs.tags_api }}${{ steps.meta.outputs.latest_api }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
 
-      - name: Build and Push Web
-        id: build_web
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: src/Presentation/IngenIA365ERP.Web/Dockerfile
-          push: ${{ steps.meta.outputs.push == 'true' }}
-          tags: ${{ steps.meta.outputs.tags_web }}${{ steps.meta.outputs.latest_web }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # Los outputs de un job con matriz se pisan entre si; el digest viaja como
+      # artefacto con nombre propio y gitops los recoge todos.
+      - name: Guardar digest
+        run: |
+          mkdir -p digests
+          case "${{ steps.build.outputs.digest }}" in
+            sha256:*) echo "${{ steps.build.outputs.digest }}" > "digests/${{ matrix.image }}" ;;
+            *) echo "::error::la imagen ${{ matrix.image }} no devolvio un digest valido: '${{ steps.build.outputs.digest }}'"; exit 1 ;;
+          esac
 
-      - name: Build and Push Migrator
-        id: build_migrator
-        uses: docker/build-push-action@v5
+      - uses: actions/upload-artifact@v4
         with:
-          context: .
-          file: tools/IngenIA365ERP.DbMigrator/Dockerfile
-          push: ${{ steps.meta.outputs.push == 'true' }}
-          tags: ${{ steps.meta.outputs.tags_mig }}${{ steps.meta.outputs.latest_mig }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: digest-${{ matrix.image }}
+          path: digests
+          retention-days: 3
+          if-no-files-found: error
 
   # Escribe el DIGEST de las imagenes recien publicadas en el overlay del ambiente
   # que alimenta esta rama, en el repositorio GitOps (P3, cerrado el 2026-09-10).
@@ -190,8 +300,8 @@ jobs:
   # escritura) sobre JormanCopete/ingenia365-gitops. Sin el, este job FALLA a
   # proposito: un despliegue que no llego y nadie noto es peor que un CI rojo.
   gitops:
-    needs: docker-build
-    if: github.event_name == 'push' && needs.docker-build.outputs.push == 'true' && (github.ref_name == 'develop' || github.ref_name == 'release')
+    needs: docker
+    if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'release')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -202,10 +312,13 @@ jobs:
       cancel-in-progress: false
     env:
       GITOPS_REPO: JormanCopete/ingenia365-gitops
-      API_DIGEST: ${{ needs.docker-build.outputs.api_digest }}
-      WEB_DIGEST: ${{ needs.docker-build.outputs.web_digest }}
-      MIGRATOR_DIGEST: ${{ needs.docker-build.outputs.migrator_digest }}
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
       - name: Comprobar credencial y digests
         env:
           GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
@@ -214,8 +327,9 @@ jobs:
             echo "::error::Falta el secreto GITOPS_TOKEN (token con permiso de contenido sobre $GITOPS_REPO). Las imagenes se publicaron, pero NINGUN ambiente las va a desplegar hasta que exista."
             exit 1
           fi
-          for v in API_DIGEST WEB_DIGEST MIGRATOR_DIGEST; do
-            case "${!v}" in sha256:*) ;; *) echo "::error::$v no trae un digest valido: '${!v}'"; exit 1;; esac
+          for i in api web migrator; do
+            d=$(cat "digests/$i" 2>/dev/null || true)
+            case "$d" in sha256:*) echo "${i^^}_DIGEST=$d" >> "$GITHUB_ENV" ;; *) echo "::error::$i no trae un digest valido: '$d'"; exit 1;; esac
           done
 
       - name: Checkout GitOps

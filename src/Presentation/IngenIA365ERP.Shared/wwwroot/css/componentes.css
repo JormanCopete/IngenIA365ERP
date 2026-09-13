@@ -667,6 +667,86 @@ input[type="checkbox"], input[type="radio"] {
     }
 }
 
+/* --- 14. Arranque (descarga del runtime WebAssembly) ------------------------ */
+
+/* Franja fija arriba que SÓLO existe en el HTML prerenderizado: MainLayout y
+   MinimalLayout la emiten cuando RendererInfo.IsInteractive es false, y el render
+   interactivo ya no la incluye, así que desaparece sola al hidratar. Entre lo uno
+   y lo otro pasan de 3 a 10 s (~8 MB de runtime) con la página aparentemente
+   lista; esto es lo que dice que no lo está. Va en el morado de la barra lateral
+   para que se lea como parte del producto y no como un aviso: no es un error, es
+   el runtime bajando. */
+.arranque {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1100;                       /* por encima de #blazor-error-ui (1000) */
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+    padding: var(--pad-sm) var(--pad-lg);
+    background: var(--lateral-fondo);
+    color: var(--lateral-texto);
+    font-size: var(--texto-sm);
+    box-shadow: var(--sombra-2);
+}
+
+.arranque-marca {
+    flex: none;
+    font-weight: var(--peso-fuerte);
+    letter-spacing: -.02em;
+    color: var(--lateral-texto-activo);
+}
+
+.arranque-marca-sufijo { color: var(--realce); }
+
+/* La barra es el carril; el relleno va en ::before y su ancho lo pone
+   --blazor-load-percentage, que blazor.web.js escribe en <html> a medida que baja
+   el runtime (`documentElement.style.setProperty`, verificado en el archivo del
+   paquete 10.0.10) y por eso se hereda hasta aquí. Antes de que ese script
+   arranque la variable no existe, y el 0% de reserva deja el carril vacío, que
+   es la verdad en ese momento. */
+.arranque-barra {
+    position: relative;
+    flex: 1 1 auto;
+    height: 6px;
+    border-radius: var(--radio-pill);
+    background: var(--lateral-hover);
+    overflow: hidden;
+}
+
+.arranque-barra::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--blazor-load-percentage, 0%);
+    border-radius: inherit;
+    background: var(--realce);
+    transition: width var(--dur-normal) var(--curva);
+}
+
+.arranque-texto {
+    flex: none;
+    white-space: nowrap;
+}
+
+/* El porcentaje llega como cadena ya entrecomillada ("43%"), que es justo lo que
+   `content` acepta; sin la variable, la reserva vacía no pinta nada. Cifras
+   tabulares para que pasar de «9%» a «10%» no mueva el texto de al lado. */
+.arranque-porcentaje::after {
+    content: var(--blazor-load-percentage-text, "");
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+    /* En un teléfono la marca compite con la barra por el ancho; la barra es la
+       que informa. */
+    .arranque-marca { display: none; }
+}
+
 /* =============================================================================
    Manual del sistema (/manual) y boton "¿Como se hace?" de la barra superior.
    Solo disposicion y tipografia: los colores vienen de las clases existentes

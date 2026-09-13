@@ -8,6 +8,23 @@
 @inject CentralAuthClient CentralAuth
 @implements IDisposable
 
+@* Indicador de arranque, FUERA y ANTES de <AuthorizeView>: adentro no se
+   pintaría, porque en el prerender la sesión vive sólo en el navegador y la rama
+   que sale es NotAuthorized. Sólo existe en el HTML prerenderizado (IsInteractive
+   es false en el servidor); al hidratar, el render interactivo ya no lo emite.
+   Aquí es lo único que hay en pantalla durante la descarga del runtime: un F5
+   sobre una ruta protegida mostraba una página en blanco de 3 a 10 s. Barra y
+   porcentaje leen --blazor-load-percentage(-text), que blazor.web.js pone en
+   <html> mientras baja el runtime. Misma pieza que en MinimalLayout. *@
+@if (!RendererInfo.IsInteractive)
+{
+    <div class="arranque" role="status" aria-live="polite">
+        <span class="arranque-marca">IngenIA365<span class="arranque-marca-sufijo">ERP</span></span>
+        <div class="arranque-barra" aria-hidden="true"></div>
+        <span class="arranque-texto">Cargando la aplicación <span class="arranque-porcentaje"></span></span>
+    </div>
+}
+
 <AuthorizeView>
     <Authorized>
         <div class="erp-layout">

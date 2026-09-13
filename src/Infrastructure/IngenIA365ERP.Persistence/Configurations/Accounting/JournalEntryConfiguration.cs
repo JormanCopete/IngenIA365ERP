@@ -27,6 +27,11 @@ public class JournalEntryConfiguration : IEntityTypeConfiguration<JournalEntry>
 
         builder.HasIndex(e => new { e.VoucherTypeCode, e.DocumentNumber });
         builder.HasIndex(e => e.TransactionDate);
+        // Indice de lectura (2026-09-13): el libro mayor, la conciliacion bancaria y los
+        // certificados tributarios filtran por AccountId y rango de TransactionDate
+        // (GeneralLedgerQuery, CreateBankReconciliation, GenerateTaxCertificates); el
+        // indice por fecha solo no sirve cuando la cuenta es el filtro selectivo.
+        builder.HasIndex(e => new { e.AccountId, e.TransactionDate }).HasDatabaseName("IX_ACC_JournalEntries_Account_Date");
         builder.HasIndex(e => e.PersonId);
 
         builder.HasOne(e => e.Account).WithMany(a => a.JournalEntries).HasForeignKey(e => e.AccountId);

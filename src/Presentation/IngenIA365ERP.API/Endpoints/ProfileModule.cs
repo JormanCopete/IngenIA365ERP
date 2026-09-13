@@ -155,7 +155,7 @@ public sealed class ProfileModule : ICarterModule
         await sender.Send(new ChangePasswordCommand(
             CurrentPassword: body.CurrentPassword,
             NewPassword: body.NewPassword,
-            IpAddress: http.Connection.RemoteIpAddress?.ToString(),
+            IpAddress: http.RequestServices.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.IIpAddressAccessor>().IpAddress,
             UserAgent: http.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null), ct);
 
     public sealed record ChangePasswordBody(string CurrentPassword, string NewPassword);

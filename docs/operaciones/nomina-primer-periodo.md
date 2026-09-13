@@ -158,11 +158,23 @@ cooperativas que ya tenían la semilla (al arrancar la API o con «Reaplicar sem
 inserta la versión nueva y se cierra la anterior el día antes, **sólo si la anterior es de la
 semilla y sigue abierta** —una vigencia o versión propia de la cooperativa no se pisa.
 
-| Qué | Hasta | Desde | Norma |
+**Semilla base 2026** (vigencia `2026-01-01`, lo que recibe toda cooperativa nueva y lo que
+debe tener toda cooperativa existente):
+
+| Qué | Base 2026 (desde el 01/01/2026) | Revisión de mitad de año | Norma |
 |---|---|---|---|
-| `HORAS_MES` (valor hora = salario / horas) | 220 (44 h/semana) hasta el 14/07/2026 | **210** (42 h) desde el 15/07/2026 | Ley 2101 de 2021 |
-| `RECARGO_DOMINICAL` | 0,80 hasta el 30/06/2026 | **0,90** desde el 01/07/2026 (1,00 desde el 01/07/2027: falta cargar) | Ley 2466 de 2025 |
-| `HEX_DOM_DIURNA` / `HEX_DOM_NOCTURNA` | 2,05 / 2,55 | **2,15 / 2,65** desde el 01/07/2026 | extra ordinaria (1,25 / 1,75) + recargo dominical |
+| `HORAS_MES` (valor hora = salario / horas) | **220** (44 h/semana) hasta el 14/07/2026 | **210** (42 h) desde el 15/07/2026 | Ley 2101 de 2021 |
+| `RECARGO_DOMINICAL` | **0,80** hasta el 30/06/2026 | **0,90** desde el 01/07/2026 (1,00 desde el 01/07/2027: falta cargar) | Ley 2466 de 2025 |
+| `HEX_DOM_DIURNA` / `HEX_DOM_NOCTURNA` | **2,05 / 2,55** | **2,15 / 2,65** desde el 01/07/2026 | extra ordinaria (1,25 / 1,75) + recargo dominical |
+
+Las cooperativas sembradas antes del 2026-09-12 (`ingenia365erp` y `cooflopal` en producción,
+`coop_prueba` en QA) nacieron con la base anterior —240 h, 0,75, 2,00 / 2,50— y la semilla, que
+es idempotente por `(código, vigencia)`, no la pisaba. La migración
+**`BaseLegal2026Corregida`** (2026-09-13) las corrige **sólo si la fila sigue siendo la de la
+semilla** (origen de semilla y valor viejo intacto); una vigencia ya corregida a mano no se toca.
+Desde entonces, la tabla de arriba es la única fuente de la semilla base: si la contadora
+determina otro valor, se cambia aquí, en el seeder y con una migración de datos, nunca sólo en
+una base.
 
 Lo que la ley cambia y **el módulo no decide**: la jornada nocturna empieza a las **19:00**
 (desde el 25/12/2025) —quien registra la novedad cuenta las horas nocturnas con esa

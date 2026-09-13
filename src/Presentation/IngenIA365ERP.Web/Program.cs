@@ -102,6 +102,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 // Add authorization services
 builder.Services.AddAuthorization();
 
+// Sondas de Kubernetes. Sin esto pegaban a "/", y "/" prerenderiza el shell de
+// Blazor (layout, AuthorizeView, componentes) cada 10-20 s por réplica, sólo para
+// contestar «vivo». Sin chequeos registrados el endpoint responde 200 «Healthy»
+// si el proceso atiende peticiones, que es exactamente lo que la sonda pregunta:
+// este host no tiene base de datos ni dependencias propias que verificar (la API
+// las tiene, y las sondea la API).
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -120,6 +128,14 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// /health para las sondas (ver AddHealthChecks arriba). El pipeline no tiene
+// UseAuthorization ni política de respaldo, así que hoy nada lo bloquearía;
+// AllowAnonymous queda declarado igual, como en MapRazorComponents, para que el
+// día que alguien agregue una política global la sonda no empiece a fallar en
+// silencio. La ruta literal gana al comodín de MapRazorComponents sin importar
+// el orden: el enrutador elige por precedencia, no por registro.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 // Feature 003 (US4, FR-113): la sesión vive SOLO en el cliente (JWT central en
 // sessionStorage) — el servidor no puede conocerla. Sin AllowAnonymous, el

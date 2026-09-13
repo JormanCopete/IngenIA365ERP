@@ -4,6 +4,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <!-- Publicacion para el contenedor (ci.yml pasa -p:ContainerPublish=true): ReadyToRun
+       precompila el IL a codigo nativo de linux-x64, asi el arranque del pod y la primera
+       peticion de cada endpoint tras un despliegue no pagan el JIT completo (en produccion
+       la API tardaba 100-140 s en responder /health/live). Condicionado para que dotnet run
+       y dotnet test en la maquina de desarrollo no cambien. Framework-dependent: la imagen
+       base aspnet:10.0 trae el runtime. -->
+  <PropertyGroup Condition="'$(ContainerPublish)' == 'true'">
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Carter" Version="10.0.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
@@ -11,6 +22,12 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.4.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <!-- Envuelve consola y archivo en una cola con hilo de fondo: antes los dos
+         sinks escribian en el hilo de la peticion. Serilog.Settings.Configuration
+         (ReadFrom.Configuration) y los sinks Console/File ya llegan con
+         Serilog.AspNetCore; este es el unico que faltaba. 2.1.0 es la ultima
+         estable y pide Serilog >= 4.1.0 (aca resuelve 4.3.0). -->
+    <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageReference Include="AspNetCoreRateLimit" Version="5.*" />
     <!-- Feature 004: health checks del motor activo (tag "ready"). Se registra
          uno u otro segun Database:Provider. -->

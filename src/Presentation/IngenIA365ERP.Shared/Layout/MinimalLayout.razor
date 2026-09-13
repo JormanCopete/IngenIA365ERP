@@ -1,5 +1,22 @@
 @inherits LayoutComponentBase
 
+@* Indicador de arranque. Sólo existe en el HTML prerenderizado (IsInteractive es
+   false en el servidor): cuando WebAssembly hidrata, el render interactivo ya no
+   lo emite y desaparece solo. Entre lo uno y lo otro pasan de 3 a 10 s con la
+   pantalla aparentemente lista, y sin esto nadie sabía que estaba cargando algo.
+   La barra y el porcentaje salen de --blazor-load-percentage y
+   --blazor-load-percentage-text, que blazor.web.js pone en <html> mientras baja
+   el runtime (verificado en el archivo del paquete 10.0.10:
+   documentElement.style.setProperty). En MAUI IsInteractive es true y no se pinta. *@
+@if (!RendererInfo.IsInteractive)
+{
+    <div class="arranque" role="status" aria-live="polite">
+        <span class="arranque-marca">IngenIA365<span class="arranque-marca-sufijo">ERP</span></span>
+        <div class="arranque-barra" aria-hidden="true"></div>
+        <span class="arranque-texto">Cargando la aplicación <span class="arranque-porcentaje"></span></span>
+    </div>
+}
+
 <div class="minimal-layout">
     @Body
 </div>

@@ -103,6 +103,51 @@ de modo que ninguna versión de la aplicación arranca contra un esquema viejo.
 > migraciones del feature 004, y el nombre de las imágenes llevaba mayúsculas
 > (`JormanCopete/IngenIA365ERP`), que un registro Docker rechaza.
 
+### Imágenes: se compila una vez, las imágenes sólo empaquetan (2026-09-13)
+
+Hasta el 2026-09-12 un despliegue tardaba **28–36 minutos**, y 24 eran el job
+`docker-build`. Medido en los logs de BuildKit: cada `Dockerfile` traía el SDK y
+recompilaba el grafo entero (API 128 s, Web 559 s, Migrator 122 s) **después** de
+que `build-and-test` ya lo había compilado; las tres iban en serie; y cada una
+exportaba caché a GitHub Actions (`type=gha`, `mode=max`) durante 200 + 150 + 111 s
+que **nunca acertaba**: las tres compartían un solo `scope` (cada exportación
+pisaba la anterior), el repositorio estaba en el tope de 10 GB, y la rama
+`release` ni siquiera puede leer la caché de `develop`. Un commit que tocaba una
+línea de `docs/` tardó 36 minutos.
+
+Forma actual del pipeline:
+
+```
+build-and-test (build del .slnf + las cuatro suites)                     ─┐
+publish-api (API y migrador para linux-x64 con ReadyToRun, ~4 min)        ─┼─> docker (matriz api|web|migrator, ~50 s cada una) ─> gitops
+publish-web (publish del Web: recorte + compresión del cliente WASM, ~8) ─┘
+```
+
+- `IngenIA365ERP.CI.slnf` compila en **una** invocación todo lo desplegable menos
+  MAUI y las pruebas con Docker.
+- Los `Dockerfile` son de una etapa: `aspnet:10.0` + `COPY` de la carpeta de
+  publicación, que es su **contexto**. Fallan a propósito si el contexto no trae
+  la DLL de la aplicación (un `COPY` de una carpeta vacía no falla solo).
+- La comprobación de `blazor.web.js` vive en el job `publish-web` y se repite en
+  el `Dockerfile` del Web.
+- Sin `cache-from/cache-to`: no hay etapa de compilación que cachear.
+- `setup-dotnet` usa `global-json-file`: antes instalaba `10.0.401` y compilaba con
+  la que trajera preinstalada la imagen del runner.
+- La API y el migrador se publican con `-p:ContainerPublish=true`: los csproj activan
+  `RuntimeIdentifier linux-x64` + `PublishReadyToRun` sólo con esa propiedad (en la
+  máquina de desarrollo nada cambia). El código llega precompilado a nativo y el pod
+  no paga el JIT entero al arrancar ni en la primera petición de cada endpoint; la
+  imagen crece (Application.dll pasa de 4 a 12 MB). Va en su propio job porque
+  crossgen tarda ~4 min: en la primera corrida iba dentro de `build-and-test` y el
+  reloj subió de 9:02 a 11:03.
+- Reproducir en local: `tools/scripts/construir-imagenes.ps1`.
+
+El techo lo pone ahora el `publish` del Web (~9 min en el runner: ILLink en modo
+`partial` más Brotli/Gzip de todo el cliente). Lo que lo baja es dejar de embarcar
+`Syncfusion.Blazor.dll` entera (27 MB, un solo ensamblado con toda la suite) y
+referenciar sólo los paquetes de los componentes usados; ver
+[estado-y-pendientes.md](estado-y-pendientes.md).
+
 ### Pendientes que bloquean el avance (acción manual)
 
 | # | Acción | Desbloquea |

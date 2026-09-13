@@ -1,9 +1,12 @@
+using Microsoft.Net.Http.Headers;
+
 namespace IngenIA365ERP.API.Middleware;
 
 /// <summary>
 /// T137 — Headers de seguridad HTTP. HSTS solo en prod (en dev HTTP local
 /// rompería). El CSP permite conexiones WebSocket para SignalR
-/// (<c>connect-src</c>) e inline styles para SyncFusion.
+/// (<c>connect-src</c>) e inline styles para SyncFusion. Bajo <c>/api</c>
+/// declara además <c>Cache-Control: no-store</c> si el endpoint no fijó uno.
 /// </summary>
 public class SecurityHeadersMiddleware
 {
@@ -50,6 +53,23 @@ public class SecurityHeadersMiddleware
         // No revelar versión del runtime.
         headers.Remove("Server");
         headers.Remove("X-Powered-By");
+
+        // Cache-Control declarado para todo lo que responde la API. Antes no
+        // llevaba ninguno: Cloudflare no cachea JSON por defecto, pero «por
+        // defecto» no es «declarado», y un saldo o un listado de empleados
+        // servido desde una caché intermedia es un dato de otra persona en otra
+        // pantalla. Va en OnStarting y no acá arriba porque un endpoint que fije
+        // la suya tiene que ganar —los health checks, por ejemplo, ya ponen
+        // «no-store, no-cache»— y eso sólo se sabe cuando la respuesta empieza.
+        context.Response.OnStarting(() =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api")
+                && !context.Response.Headers.ContainsKey(HeaderNames.CacheControl))
+            {
+                context.Response.Headers.CacheControl = "no-store";
+            }
+            return Task.CompletedTask;
+        });
 
         await _next(context);
     }

@@ -36,7 +36,7 @@ public sealed class AuthRecoveryModule : ICarterModule
         CancellationToken ct) =>
         await sender.Send(new RequestPasswordResetCommand(
             Email: body.Email,
-            IpAddress: http.Connection.RemoteIpAddress?.ToString()), ct);
+            IpAddress: http.RequestServices.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.IIpAddressAccessor>().IpAddress), ct);
 
     public sealed record ForgotBody(string Email);
 
