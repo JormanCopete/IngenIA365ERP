@@ -38,7 +38,7 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. **`release 8cf247a` y `0c7a555`** (2026-09-13,
+a release: …` y sincronización manual de Argo. **`release 7d278f7`** (2026-09-13 17:00, GitOps `fd84f0d`, respaldos `*-pre-julio2026-20260913.dump`): la semilla base 2026 con la norma de julio de 2026 (`NormaJulio2026ComoBase`: HORAS_MES 210, recargo 0,90, extras 2,15/2,65 en `ingenia365erp` y `cooflopal`; las vigencias de julio se conservan con el mismo valor) y el tipo de columna de Reportes de nómina por nombre (la pantalla fallaba con `DeserializeUnableToConvertValue`). Antes, **`release 8cf247a` y `0c7a555`** (2026-09-13,
 GitOps `6d947f0`/`bc49608`, respaldos `*-pre-rendimiento-20260913.dump`): la ronda 1 de
 rendimiento —ver [specs/007-rendimiento-percibido](../../specs/007-rendimiento-percibido/spec.md)—:
 pipeline de 9 min, Syncfusion por componente, estilos con huella, Serilog obediente, IP real
