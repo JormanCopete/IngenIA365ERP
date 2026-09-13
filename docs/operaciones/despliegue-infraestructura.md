@@ -148,6 +148,34 @@ El techo lo pone ahora el `publish` del Web (~9 min en el runner: ILLink en modo
 referenciar sólo los paquetes de los componentes usados; ver
 [estado-y-pendientes.md](estado-y-pendientes.md).
 
+### Webhook GitHub → Argo CD (nonprod)
+
+Argo CD descubre los commits del GitOps por **sondeo** cada 3 minutos; el 2026-09-13 hubo que
+refrescarlo a mano dos veces. Con el webhook, GitHub avisa en el momento del push. La VPS de
+nonprod no tiene puertos abiertos, así que la única vía es el túnel de Cloudflare, con Access
+delante para que **sólo** `/api/webhook` sea alcanzable desde internet:
+
+1. **Cloudflare → Zero Trust → Networks → Tunnels → `erp-nonprod` → Published applications →
+   Add**: hostname `argocd-webhook.ingenia365.com`, tipo `HTTPS`, URL
+   `argocd-server.argocd.svc.cluster.local:443`; en *Additional application settings → TLS*
+   activar **No TLS Verify** (el certificado de Argo es autofirmado). Puerto 443 y no 80: el
+   80 redirige a HTTPS y GitHub no sigue redirecciones.
+2. **Zero Trust → Access → Applications → Add → Self-hosted**, dos aplicaciones:
+   - `argocd-webhook.ingenia365.com` con path `api/webhook` → una política de acción
+     **Bypass**, include *Everyone*.
+   - `argocd-webhook.ingenia365.com` (sin path) → una política de acción **Block**,
+     include *Everyone*. Access evalúa primero la ruta más específica: el webhook pasa, la
+     interfaz de Argo no se ve desde internet.
+3. `tools/scripts/configurar-webhook-argocd.ps1`: pide el secreto compartido por teclado,
+   lo deja en `argocd-secret` (`webhook.github.secret`) por STDIN sobre SSH y crea el
+   webhook en el repo GitOps con `gh api` (evento `push`, JSON por STDIN). Argo verifica la
+   firma HMAC de GitHub: una petición sin firma válida se ignora.
+4. Verificar: en GitHub → Settings → Webhooks → *Recent Deliveries* el ping responde 200; el
+   siguiente push al GitOps deja `erp-dev`/`erp-qa` en `Syncing` en segundos.
+
+El sondeo sigue activo como respaldo. Producción no lleva webhook a propósito: su
+sincronización es manual.
+
 ### Pendientes que bloquean el avance (acción manual)
 
 | # | Acción | Desbloquea |
