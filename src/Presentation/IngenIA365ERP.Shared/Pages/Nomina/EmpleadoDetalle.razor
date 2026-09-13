@@ -47,9 +47,7 @@
 
 @if (_loading)
 {
-    <div class="module-placeholder">
-        <SfSpinner Visible="true" />
-    </div>
+    <IndicadorDeCarga Cargando="true" Texto="Cargando la ficha…"><div class="module-placeholder"></div></IndicadorDeCarga>
 }
 else if (_employee is null)
 {
@@ -62,6 +60,8 @@ else if (_employee is null)
 }
 else
 {
+    @* Velo de la ficha mientras se guardan los datos laborales; el guardado ya deshabilita el botón. *@
+    <IndicadorDeCarga Cargando="@_saving" Texto="Guardando…">
     <SfTab>
         <TabItems>
             @* ===== Tab 1: Datos Personales (read-only, vienen de Persona) ===== *@
@@ -268,12 +268,14 @@ else
             </TabItem>
         </TabItems>
     </SfTab>
+    </IndicadorDeCarga>
 }
 
 @* ===== Dialogo Terminar Contrato ===== *@
 <SfDialog @bind-Visible="_showTerminateConfirm" Header="Terminar Contrato" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_saving" Texto="Guardando…">
             <div class="panel-pestana">
                 <p style="margin-bottom:var(--pad-lg);">
                     ¿Seguro que desea terminar el contrato de
@@ -290,6 +292,7 @@ else
                     </div>
                 </div>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>

@@ -21,6 +21,7 @@
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="EmployeeRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -62,6 +63,7 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 @* ===== Dialog: Seleccionar Persona ===== *@
 <SfDialog @bind-Visible="_showSelectPerson" Header="Seleccionar Persona"
@@ -89,6 +91,7 @@
           Width="900px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@(_saving || _carga.Activa)" Texto="Guardando…">
             <SfTab>
                 <TabItems>
                     @* === Tab 1: Identificacion (COR_People) === *@
@@ -382,6 +385,7 @@
                     </TabItem>
                 </TabItems>
             </SfTab>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
@@ -396,6 +400,7 @@
           Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_saving" Texto="Guardando…">
             <div class="panel-pestana">
                 <p>¿Esta seguro de terminar el contrato de <strong>@_terminating?.FullName</strong>?</p>
                 <div style="display:flex;flex-direction:column;gap:var(--gap-md);margin-top:var(--gap-md);">
@@ -409,6 +414,7 @@
                     </div>
                 </div>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
@@ -419,6 +425,9 @@
 </SfDialog>
 
 @code {
+    // Indicador de carga por zona (ver docs/manual/indicador-de-carga.md): la lista y los
+    // nueve catálogos del formulario salen a la vez y el velo dura hasta el último.
+    private readonly EstadoDeCarga _carga = new();
     private SfGrid<EmployeeRow>? _grid;
     private List<EmployeeRow> _items = new();
     private string _search = "";
@@ -509,6 +518,7 @@
 
     private async Task LoadLookups()
     {
+        using var carga = _carga.Iniciar();
         // Los nueve catálogos ya salían a la vez, pero un solo try/catch envolvía el WhenAll: si
         // fallaba uno (un 404, un corte de red), la excepción saltaba antes de asignar los otros
         // ocho y el catch callaba, así que TODAS las listas del formulario quedaban vacías sin
@@ -560,6 +570,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/payroll/employees?PageNumber=1&PageSize=500"

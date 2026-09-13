@@ -11,6 +11,7 @@
     <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
         <GridColumn Field="Code" HeaderText="Codigo" Width="90" TextAlign="TextAlign.Center" />
@@ -32,10 +33,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="650px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
                 <div class="rejilla-campos">
                     <SfNumericTextBox TValue="int" @bind-Value="_model.Code" Placeholder="Codigo" FloatLabelType="FloatLabelType.Always" />
@@ -61,17 +64,20 @@
                 </div>
                 <SfNumericTextBox TValue="decimal" @bind-Value="_model.MinimumWage" Placeholder="Salario Minimo" Format="N2" FloatLabelType="FloatLabelType.Always" />
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDialog = false)" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<ItemModel>? _grid;
     private List<ItemModel> _items = [];
     private FormModel _model = new();
@@ -84,8 +90,9 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/auto-contribution-params?pageSize=500"); _items = r?.Items ?? []; }
-        catch { _items = []; }
+        catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro Autoaportes"; _showDialog = true; }
@@ -106,6 +113,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/auto-contribution-params/{_editId}", _model)
             : await Http.PostAsJsonAsync("/api/payroll/auto-contribution-params", _model);

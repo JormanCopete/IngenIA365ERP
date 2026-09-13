@@ -26,6 +26,7 @@
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="PersonRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -60,12 +61,14 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 @* ===== Dialog Create / Edit ===== *@
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="900px"
           IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
 
@@ -276,11 +279,12 @@
 
                 <button type="submit" id="personas-submit" style="display:none"></button>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
@@ -288,6 +292,8 @@
                Message="¿Esta seguro de eliminar esta persona? Esta accion no se puede deshacer." />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<PersonRow>? _grid;
     private List<PersonRow> _items = new();
     private string _search = "";
@@ -384,6 +390,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = $"/api/core/people?PageNumber=1&PageSize=500";
@@ -495,6 +502,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_saving) return;
 
         // Validacion cliente alineada al backend.

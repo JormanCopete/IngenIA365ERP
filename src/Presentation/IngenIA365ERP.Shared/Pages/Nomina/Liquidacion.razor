@@ -40,6 +40,9 @@
 
 <SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
 
+@* Un solo velo para la zona de trabajo: «Cargando…» mientras llegan corrida, empleados o
+   relación, «Procesando…» mientras corre un cálculo, aprobación, reverso o marca de pago. *@
+<IndicadorDeCarga Cargando="@(_carga.Activa || _ocupado)" Texto="@(_ocupado ? "Procesando…" : "Cargando…")">
 @if (_periodo is not null)
 {
     <div class="info-card">
@@ -322,6 +325,7 @@
         </SfTab>
     }
 }
+</IndicadorDeCarga>
 
 @* ------------------------------------------------------------- detalle del empleado --- *@
 <SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Detalle" : $"{_detalle.EmployeeName} · {_detalle.Document}")" Width="920px" IsModal="true" ShowCloseIcon="true">
@@ -416,11 +420,13 @@
 <SfDialog @bind-Visible="_mostrarDescartar" Header="Descartar el borrador" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Descartando…">
             <div class="info-card">
                 <span class="label">Qué pasa al descartar</span>
                 <p>La corrida v@(_corrida?.Version) queda marcada como descartada con tu nombre, la fecha y el motivo (no se borra). El período vuelve a <b>Abierto</b>: podés corregir fechas, plan o novedades y calcular de nuevo. Las novedades que generaron las recurrentes para este período se anulan y se vuelven a generar en el próximo cálculo; las manuales quedan como están. No hay contabilidad que tocar.</p>
             </div>
             <label>Motivo <SfTextBox @bind-Value="_motivoDescarte" Multiline="true" Placeholder="Por qué se descarta este borrador" MaxLength="300" /></label>
+        </IndicadorDeCarga>
         </Content>
         <FooterTemplate>
             <SfButton CssClass="e-flat" OnClick="@(() => _mostrarDescartar = false)">Cancelar</SfButton>
@@ -432,6 +438,7 @@
 <SfDialog @bind-Visible="_mostrarReversar" Header="Reversar la liquidación aprobada" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Reversando…">
             <div class="info-card">
                 <span class="label">Qué pasa al reversar</span>
                 <p>El comprobante contable @_corrida?.AccountingDocumentNumber se reversa con un asiento espejo que lo referencia; la corrida v@(_corrida?.Version) queda marcada como reversada con tu nombre, la fecha y el motivo; el período vuelve a abrirse con sus novedades intactas para corregir y recalcular. Nada se borra.</p>
@@ -445,6 +452,7 @@
                 </div>
             }
             <label>Motivo <SfTextBox @bind-Value="_motivoReversion" Multiline="true" Placeholder="Por qué se reversa esta liquidación" MaxLength="500" /></label>
+        </IndicadorDeCarga>
         </Content>
         <FooterTemplate>
             <SfButton CssClass="e-flat" OnClick="@(() => _mostrarReversar = false)">Cancelar</SfButton>
@@ -457,6 +465,7 @@
 <SfDialog @bind-Visible="_mostrarMarcarPago" Header="Marcar pagados" Width="460px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
             <p class="texto-tenue">Deja constancia de que el pago se ejecutó fuera del sistema para todos los empleados que aún no tienen marca. Cada marca queda auditada.</p>
             <div class="formulario">
                 <label>Fecha de pago <SfDatePicker TValue="DateTime" @bind-Value="_marca.Fecha" Format="dd/MM/yyyy" /></label>
@@ -469,6 +478,7 @@
                 </label>
                 <label>Referencia (opcional) <SfTextBox @bind-Value="_marca.Referencia" Placeholder="Número de lote, cheque o soporte" MaxLength="60" /></label>
             </div>
+        </IndicadorDeCarga>
         </Content>
         <FooterTemplate>
             <SfButton CssClass="e-flat" OnClick="@(() => _mostrarMarcarPago = false)">Cancelar</SfButton>
@@ -481,11 +491,13 @@
 <SfDialog @bind-Visible="_mostrarRetirarMarca" Header="Retirar la marca de pago" Width="460px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
             @if (_filaRetiro is not null)
             {
                 <p>@_filaRetiro.EmployeeName · pagado el @_filaRetiro.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy") (@_filaRetiro.PaymentMethod).</p>
             }
             <label>Motivo <SfTextBox @bind-Value="_motivoRetiro" Multiline="true" Placeholder="Por qué se retira la marca" MaxLength="300" /></label>
+        </IndicadorDeCarga>
         </Content>
         <FooterTemplate>
             <SfButton CssClass="e-flat" OnClick="@(() => _mostrarRetirarMarca = false)">Cancelar</SfButton>
@@ -495,6 +507,9 @@
 </SfDialog>
 
 @code {
+    // Indicador de carga por zona (ver docs/manual/indicador-de-carga.md); _ocupado sigue
+    // siendo la bandera de las acciones (calcular, aprobar, reversar…).
+    private readonly EstadoDeCarga _carga = new();
     private SelectorDePeriodo? _selector;
     private PanelDeAprobacion? _panel;
     private PeriodoPagoDto? _periodo;
@@ -516,6 +531,7 @@
 
     private async Task CargarHistorialAsync()
     {
+        using var carga = _carga.Iniciar();
         if (_periodo is null) return;
         var res = await Nomina.HistorialCorridasAsync(_periodo.PublicId);
         if (res.IsSuccess) _historial = res.Value!.ToList();
@@ -602,6 +618,7 @@
 
     private async Task CargarRelacionAsync()
     {
+        using var carga = _carga.Iniciar();
         if (_corrida is null) return;
         // Relación y envíos dependen sólo de la corrida: salen a la vez. Eran dos viajes en serie
         // de ~0,35 s cada uno (Colombia → Cloudflare → origen). Cada rama avisa su propio error.
@@ -700,6 +717,7 @@
 
     private async Task CargarCorridaAsync()
     {
+        using var carga = _carga.Iniciar();
         _corrida = null; _empleados = []; _historial = []; _comparativo = null; _cuadre = null; _relacion = null; _envios = null;
         if (_periodo is null) { StateHasChanged(); return; }
         // El historial depende sólo del período, así que sale a la vez que la corrida en vez de
@@ -717,6 +735,7 @@
 
     private async Task CargarEmpleadosAsync()
     {
+        using var carga = _carga.Iniciar();
         if (_corrida is null) return;
         var res = await Nomina.EmpleadosDeCorridaAsync(_corrida.PublicId,
             string.IsNullOrEmpty(_filtroBandera) ? null : _filtroBandera,

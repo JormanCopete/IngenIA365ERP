@@ -16,6 +16,7 @@
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="CountryRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -34,10 +35,12 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="450px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <EditForm Model="_model" OnValidSubmit="Save">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -50,11 +53,12 @@
                 </div>
                 <button type="submit" id="paises-submit" style="display:none"></button>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelDialog" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
@@ -62,6 +66,8 @@
                Message="¿Esta seguro de eliminar este pais?" />
 
 @code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<CountryRow>? _grid;
     private List<CountryRow> _items = new();
     private string _search = "";
@@ -77,6 +83,7 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/core/countries?PageNumber=1&PageSize=500";
@@ -141,6 +148,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         if (_saving) return;
 
         if (string.IsNullOrWhiteSpace(_model.Name))

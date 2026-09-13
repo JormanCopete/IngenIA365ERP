@@ -882,6 +882,53 @@ input[type="checkbox"], input[type="radio"] {
 .manual-pie { margin-top: var(--gap-lg, 1.5rem); }
 .manual-pie code { font-size: var(--texto-sm); }
 
+/* --- Indicador de carga por zona (IndicadorDeCarga.razor) ------------------ */
+
+/* La zona es el contenedor de referencia del velo; min-height para que una lista
+   todavía vacía tenga dónde pintar el spinner en vez de colapsar a cero. */
+.zona-cargable {
+    position: relative;
+    min-height: 56px;
+}
+
+.zona-cargable.compacta { min-height: 36px; }
+
+/* Lo que está debajo sigue visible pero atenuado y sin clics: la persona ve QUÉ
+   se está cargando, no una caja gris, y no puede disparar dos veces la misma
+   acción. La transición evita el parpadeo en cargas de pocos milisegundos. */
+.zona-cargable.esta-cargando > :not(.zona-cargable-velo) {
+    opacity: .45;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity var(--dur-normal) var(--curva);
+}
+
+.zona-cargable-velo {
+    position: absolute;
+    inset: 0;
+    z-index: 5;                          /* por encima de la grilla y del encabezado pegajoso */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radio);
+    /* Sin fondo propio: el atenuado lo da la opacidad del contenido, así el velo
+       hereda el tema (claro/oscuro/contraste) sin declarar un color. */
+}
+
+/* El spinner de Syncfusion (.e-spinner-pane) se posiciona solo: ocupa todo su
+   contenedor posicionado —el velo— y centra el círculo y la etiqueta. No se toca su
+   geometría salvo el alto: el tema fija .e-spin-show en 35px y dejaría el círculo
+   pegado arriba; aquí el velo es la referencia y el spinner va al centro. */
+.zona-cargable-velo .e-spinner-pane.e-spin-show { height: 100%; width: 100%; }
+.zona-cargable-velo .e-spinner-pane .e-spin-material,
+.zona-cargable-velo .e-spinner-pane .e-spin-bootstrap5,
+.zona-cargable-velo .e-spinner-pane .e-spin-fluent2 { stroke: var(--acento); }
+.zona-cargable-velo .e-spinner-pane .e-spin-label {
+    color: var(--texto-secundario);
+    font-size: var(--texto-sm);
+    font-weight: var(--peso-medio);
+}
+
 /* --- Campo «Código» de los catálogos (CampoCodigo.razor) ------------------- */
 /* El código es una clave, no un nombre: se escribe en mayúsculas y el aviso de
    duplicado aparece bajo el campo, no como toast, porque tiene que quedarse ahí

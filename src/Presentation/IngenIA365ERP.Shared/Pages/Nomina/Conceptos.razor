@@ -45,7 +45,8 @@
                     <span class="texto-tenue">@_visibles.Count() concepto(s)</span>
                 </div>
 
-                <SfGrid TValue="ConceptoDto" DataSource="@_visibles" AllowSorting="true" AllowPaging="true">
+                <IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="ConceptoDto" DataSource="@_visibles" AllowSorting="true" AllowPaging="true">
                     <GridPageSettings PageSize="30" />
                     <GridColumns>
                         <GridColumn Field="Code" HeaderText="Código" Width="170" />
@@ -84,6 +85,7 @@
                         </GridColumn>
                     </GridColumns>
                 </SfGrid>
+</IndicadorDeCarga>
             </ContentTemplate>
         </TabItem>
 
@@ -99,6 +101,7 @@
                         </select>
                     </label>
                 </div>
+                <IndicadorDeCarga Cargando="@_cargaVersiones.Activa" Compacto="true">
                 @if (_versiones.Count > 0)
                 {
                     <table class="data-grid">
@@ -118,6 +121,7 @@
                         </tbody>
                     </table>
                 }
+                </IndicadorDeCarga>
             </ContentTemplate>
         </TabItem>
 
@@ -131,7 +135,8 @@
                 <div class="toolbar">
                     <SfTextBox @bind-Value="_buscarHeredado" Placeholder="Buscar" ShowClearButton="true" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs e) => await CargarHeredadosAsync())" />
                 </div>
-                <SfGrid TValue="ConceptoHeredadoDto" DataSource="@_heredados" AllowPaging="true" AllowSorting="true">
+                <IndicadorDeCarga Cargando="@_cargaHeredados.Activa">
+<SfGrid TValue="ConceptoHeredadoDto" DataSource="@_heredados" AllowPaging="true" AllowSorting="true">
                     <GridPageSettings PageSize="30" />
                     <GridColumns>
                         <GridColumn Field="ConceptCode" HeaderText="Código" Width="90" TextAlign="TextAlign.Center" />
@@ -147,6 +152,7 @@
                         </GridColumn>
                     </GridColumns>
                 </SfGrid>
+</IndicadorDeCarga>
             </ContentTemplate>
         </TabItem>
     </TabItems>
@@ -156,6 +162,7 @@
 <SfDialog @bind-Visible="_mostrarForm" Header="@_tituloForm" Width="820px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
             <EditForm Model="_f" OnValidSubmit="Guardar">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -261,6 +268,7 @@
                     <SfButton CssClass="e-primary" type="submit" Disabled="@_ocupado">@(_revisando is null ? "Crear" : "Guardar versión")</SfButton>
                 </div>
             </EditForm>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -269,6 +277,7 @@
 <SfDialog @bind-Visible="_mostrarCuentas" Header="@($"Cuentas contables de {_cuentasDe?.Code}")" Width="760px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
             <div class="pagina">
                 <p class="texto-tenue">Una fila por defecto (sin centro de costo) y, si hace falta, una por centro de costo. El valor del concepto va al débito de la cuenta débito y al crédito de la cuenta crédito.</p>
                 <table class="data-grid">
@@ -301,6 +310,7 @@
                 <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarCuentas = false)">Cancelar</SfButton>
                 <SfButton CssClass="e-primary" type="button" Disabled="@_ocupado" OnClick="@GuardarCuentas">Guardar cuentas</SfButton>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -310,6 +320,7 @@
 <SfDialog @bind-Visible="_mostrarDesactivar" Header="@($"Desactivar {_desactivando?.Code}")" Width="480px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Desactivando…">
             <div class="pagina">
                 <p>Cierra la vigencia del concepto en la fecha indicada. No se borra: las liquidaciones anteriores lo siguen mostrando.</p>
                 <SfDatePicker TValue="DateTime" @bind-Value="_fechaDesactivar" Placeholder="Vigente hasta" FloatLabelType="FloatLabelType.Always" />
@@ -318,6 +329,7 @@
                 <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDesactivar = false)">Cancelar</SfButton>
                 <SfButton CssClass="e-danger" type="button" Disabled="@_ocupado" OnClick="@ConfirmarDesactivar">Desactivar</SfButton>
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -326,6 +338,7 @@
 <SfDialog @bind-Visible="_mostrarPrueba" Header="@($"Probar en seco: {_pruebaDe?.Code}")" Width="860px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Calculando…">
             <div class="pagina">
                 <p class="texto-tenue">Calcula al empleado en el período con esta definición como si fuera la vigente y muestra la línea con su explicación. No guarda nada.</p>
                 <div class="form-grid">
@@ -378,6 +391,7 @@
                     <p class="texto-tenue">Neto del empleado con esta definición: @_pruebaResultado.Totals.Net.ToString("N0").</p>
                 }
             </div>
+        </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -407,6 +421,9 @@
     private DateTime? _pruebaDesde, _pruebaHasta;
     private ResultadoPruebaEnSecoDto? _pruebaResultado;
 
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md): una por lista.
+    private readonly EstadoDeCarga _carga = new(), _cargaHeredados = new(), _cargaVersiones = new();
+
     private IEnumerable<ConceptoDto> _visibles => _conceptos
         .Where(c => string.IsNullOrEmpty(_filtroNaturaleza) || c.Nature == _filtroNaturaleza)
         .Where(c => string.IsNullOrEmpty(_filtroOrigen) || c.Origin == _filtroOrigen);
@@ -420,6 +437,7 @@
 
     private async Task CargarAsync()
     {
+        using var carga = _carga.Iniciar();
         var res = await Nomina.ListarConceptosAsync(null, _incluirInactivos);
         if (res.IsSuccess) _conceptos = res.Value!.ToList();
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los conceptos.");
@@ -427,6 +445,7 @@
 
     private async Task CargarHeredadosAsync()
     {
+        using var carga = _cargaHeredados.Iniciar();
         var res = await Nomina.ListarConceptosHeredadosAsync(string.IsNullOrWhiteSpace(_buscarHeredado) ? null : _buscarHeredado);
         if (res.IsSuccess) _heredados = res.Value!.ToList();
     }
@@ -447,6 +466,7 @@
     {
         _codigoVersiones = code;
         if (string.IsNullOrEmpty(code)) { _versiones = []; return; }
+        using var carga = _cargaVersiones.Iniciar();
         var res = await Nomina.VersionesDeConceptoAsync(code);
         _versiones = res.IsSuccess ? res.Value!.ToList() : [];
     }

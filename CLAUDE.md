@@ -211,6 +211,11 @@ faltaba —un PDF con un byte cambiado tiene que dar `valid: false`—.
   - `tokens.css` — única fuente de color, densidad, escala y contraste
   - `componentes.css` — clases de pantalla (`.pagina`, `.page-header`, `.toolbar`, `.info-card`, `.kpi-card`, `.data-grid`…)
   - Ninguna pantalla declara colores literales ni bloques `<style>` propios
+  - **Indicador de carga por zona** (desde el 2026-09-13): toda grilla, formulario o panel que
+    espera datos va dentro de `<IndicadorDeCarga Cargando="@_carga.Activa">` con una
+    `EstadoDeCarga` por zona (`using var carga = _carga.Iniciar();` en el método que carga;
+    se apaga sola). Está en todo Core y Nómina; el resto de módulos se migra con
+    `docs/manual/indicador-de-carga.md`. El velo global (`ILoadingService`) no se usa para esto.
 
 ## Cómo Empezar
 Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md` para la documentación completa por fase.
