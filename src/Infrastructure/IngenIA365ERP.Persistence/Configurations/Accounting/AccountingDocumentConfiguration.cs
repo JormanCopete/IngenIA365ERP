@@ -28,6 +28,10 @@ public class AccountingDocumentConfiguration : IEntityTypeConfiguration<Accounti
 
         builder.HasIndex(e => new { e.VoucherTypeCode, e.DocumentNumber }).IsUnique().HasDatabaseName("UK_ACC_Documents_VoucherDoc");
         builder.HasIndex(e => e.VoucherTypeCode).HasDatabaseName("IX_ACC_Documents_VoucherTypeCode");
+        // Indice de lectura (2026-09-13): el listado de comprobantes filtra por rango de
+        // DocumentDate y ordena por DocumentDate desc, DocumentNumber (DocumentQueries);
+        // el B-tree se recorre hacia atras, no hace falta IsDescending.
+        builder.HasIndex(e => new { e.DocumentDate, e.DocumentNumber }).HasDatabaseName("IX_ACC_Documents_Date_Number");
 
 
         builder.Property(e => e.CreatedBy).HasMaxLength(100).IsRequired();
