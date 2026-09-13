@@ -37,10 +37,10 @@
 
 ## Phase 5: Despliegue y verificación de la ronda 1
 
-- [ ] T040 Merge a `develop`, CI verde, QA verificado por `curl` al pod (huellas, `/health`, `no-store`, sin `Executed DbCommand`)
+- [x] T040 Merge a `develop` (`bff13d5`, `3b9…` publish-api paralelo), CI verde, QA verificado por `curl` al pod: huellas, `/health` 200, `no-store`, 0 `Executed DbCommand`, login prerenderizado con `disabled`/`readonly`, fuente local, migración `IndicesDeLectura` aplicada en `ingenia365erp` y `coop_prueba`; Started→Ready de la API 44 s (sin sondas nuevas aún)
 - [ ] T041 Empujar GitOps `ab23242` (autorización del usuario) y verificar `cpu.max`, `nr_throttled`, Started→Ready en DEV/QA
 - [ ] T042 Promover a `release`; `pg_dump` previo; sincronizar PDN; verificar índices creados, logs, IP real en `ADM_CentralUserLoginAttempts`, estilos nuevos
-- [ ] T043 Cache Rule de Cloudflare para `/_framework/` (panel; lo hace el propietario) y purga de `_content/Syncfusion.Blazor/scripts/syncfusion-blazor.min.js`
+- [ ] T043 Webhook GitHub → Argo CD en nonprod (hoy Argo descubre el commit por sondeo: hubo que refrescar a mano) y Cache Rule de Cloudflare para `/_framework/` (panel; lo hace el propietario) y purga de `_content/Syncfusion.Blazor/scripts/syncfusion-blazor.min.js`
 - [ ] T044 Corregir en producción la vigencia base 2026 de nómina (HORAS_MES 220, recargo 0,80, extras 2,05/2,55) — decisión del usuario/contadora
 
 ## Phase 6: Ronda 2 (cada una con spec propia)

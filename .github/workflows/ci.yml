@@ -8,10 +8,16 @@ on:
   # etiquetas quedan solo para que un humano las lea.
   push:
     branches: [main, develop, release]
+    # Un commit que solo toca documentacion no cambia ninguna imagen: no vale
+    # 9 minutos de runner ni un relevo de pods en DEV y QA (cada corrida produce
+    # digests nuevos aunque el binario sea el mismo). Ojo: con estos filtros un
+    # push de solo docs NO escribe digests en el GitOps, y es lo correcto.
+    paths-ignore: ['docs/**', 'specs/**', '**/*.md']
   # Los PRs a estas ramas tambien deben pasar el CI. Sin esto, el codigo
   # llegaba a develop sin ejecutar una sola prueba.
   pull_request:
     branches: [main, develop, release]
+    paths-ignore: ['docs/**', 'specs/**', '**/*.md']
   # Permite validar imagenes desde cualquier rama sin esperar a un merge.
   workflow_dispatch:
     inputs:
