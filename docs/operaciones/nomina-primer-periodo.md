@@ -158,23 +158,25 @@ cooperativas que ya tenían la semilla (al arrancar la API o con «Reaplicar sem
 inserta la versión nueva y se cierra la anterior el día antes, **sólo si la anterior es de la
 semilla y sigue abierta** —una vigencia o versión propia de la cooperativa no se pisa.
 
-**Semilla base 2026** (vigencia `2026-01-01`, lo que recibe toda cooperativa nueva y lo que
-debe tener toda cooperativa existente):
+**Semilla base 2026** (una sola vigencia, `2026-01-01`, abierta). Decisión del 2026-09-13: la
+plataforma está en pruebas y ninguna nómina real del primer semestre de 2026 se liquida aquí,
+así que la base lleva **directamente la norma de julio de 2026** en vez de dos vigencias:
 
-| Qué | Base 2026 (desde el 01/01/2026) | Revisión de mitad de año | Norma |
+| Qué | Semilla base (desde el 01/01/2026) | Norma | Próximo escalón (no cargado) |
 |---|---|---|---|
-| `HORAS_MES` (valor hora = salario / horas) | **220** (44 h/semana) hasta el 14/07/2026 | **210** (42 h) desde el 15/07/2026 | Ley 2101 de 2021 |
-| `RECARGO_DOMINICAL` | **0,80** hasta el 30/06/2026 | **0,90** desde el 01/07/2026 (1,00 desde el 01/07/2027: falta cargar) | Ley 2466 de 2025 |
-| `HEX_DOM_DIURNA` / `HEX_DOM_NOCTURNA` | **2,05 / 2,55** | **2,15 / 2,65** desde el 01/07/2026 | extra ordinaria (1,25 / 1,75) + recargo dominical |
+| `HORAS_MES` (valor hora = salario / horas) | **210** (42 h/semana) | Ley 2101 de 2021, vigente desde el 15/07/2026 | — |
+| `RECARGO_DOMINICAL` | **0,90** | Ley 2466 de 2025, vigente desde el 01/07/2026 | 1,00 desde el 01/07/2027 |
+| `HEX_DOM_DIURNA` / `HEX_DOM_NOCTURNA` | **2,15 / 2,65** | extra ordinaria (1,25 / 1,75) + recargo dominical | 2,25 / 2,75 desde el 01/07/2027 |
 
-Las cooperativas sembradas antes del 2026-09-12 (`ingenia365erp` y `cooflopal` en producción,
-`coop_prueba` en QA) nacieron con la base anterior —240 h, 0,75, 2,00 / 2,50— y la semilla, que
-es idempotente por `(código, vigencia)`, no la pisaba. La migración
-**`BaseLegal2026Corregida`** (2026-09-13) las corrige **sólo si la fila sigue siendo la de la
-semilla** (origen de semilla y valor viejo intacto); una vigencia ya corregida a mano no se toca.
-Desde entonces, la tabla de arriba es la única fuente de la semilla base: si la contadora
-determina otro valor, se cambia aquí, en el seeder y con una migración de datos, nunca sólo en
-una base.
+Historia: la semilla original traía 240 h, 0,75 y 2,00 / 2,50; el 2026-09-12 pasó a 220 / 0,80 /
+2,05 / 2,55 con revisiones de julio (210 / 0,90 / 2,15 / 2,65); el 2026-09-13 la base tomó los
+valores de julio. Las cooperativas ya sembradas se llevaron a esos valores con migraciones de
+datos (`BaseLegal2026Corregida`, `HorasMesBase2026`, `NormaJulio2026ComoBase`) que **sólo tocan
+la fila que sigue siendo la de la semilla**; las vigencias de julio que ya existían se conservan
+(mismo valor; nada se borra, Principio XII), así que esas cooperativas muestran dos filas iguales
+y las nuevas una. Esta tabla es la única fuente de la semilla base: si la contadora determina
+otro valor, se cambia aquí, en el seeder y con una migración de datos, nunca sólo en una base.
+El escalón de 2027 se carga como revisión (`Revisiones()` de ambos seeders) cuando se confirme.
 
 Lo que la ley cambia y **el módulo no decide**: la jornada nocturna empieza a las **19:00**
 (desde el 25/12/2025) —quien registra la novedad cuenta las horas nocturnas con esa

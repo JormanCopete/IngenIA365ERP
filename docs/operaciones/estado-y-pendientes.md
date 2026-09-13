@@ -44,7 +44,7 @@ rendimiento —ver [specs/007-rendimiento-percibido](../../specs/007-rendimiento
 pipeline de 9 min, Syncfusion por componente, estilos con huella, Serilog obediente, IP real
 por `CF-Connecting-IP`, `no-store` bajo `/api`, ReadyToRun, índices de lectura, arranque del
 cliente con indicador, y la base legal 2026 corregida por migración de datos
-(`BaseLegal2026Corregida`, `HorasMesBase2026`). En GitOps `b177479`: CPU explícita (API 2, Web 1),
+(`BaseLegal2026Corregida`, `HorasMesBase2026`; y por decisión del usuario del 2026-09-13 la base 2026 pasa a llevar directamente la norma de julio de 2026 —210 h, 0,90, 2,15/2,65— con `NormaJulio2026ComoBase`, ver [nomina-primer-periodo.md §4c](nomina-primer-periodo.md)). En GitOps `b177479`: CPU explícita (API 2, Web 1),
 `LimitRange` sólo memoria, sondas sin retardo. Medido en PDN tras el despliegue: API
 Started→Ready **39 s** (eran 100–140), `cpu.max 200000/100000`, 0 `Executed DbCommand`.
 Antes, **`release e63bc38`** (2026-09-12 23:30,

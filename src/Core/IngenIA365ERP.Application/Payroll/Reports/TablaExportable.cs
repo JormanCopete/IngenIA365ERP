@@ -1,6 +1,14 @@
+using System.Text.Json.Serialization;
+
 namespace IngenIA365ERP.Application.Payroll.Reports;
 
-/// <summary>Tipo de dato de una columna: decide alineación y formato en pantalla y en los archivos.</summary>
+/// <summary>
+/// Tipo de dato de una columna: decide alineación y formato en pantalla y en los archivos.
+/// Viaja en JSON <b>por nombre</b> («Moneda», no 2): la pantalla lo lee como texto
+/// (<c>ColumnaReporteDto.Tipo</c>) y hasta el 2026-09-13 la API lo mandaba como número, así que
+/// Reportes de nómina fallaba al deserializar con «DeserializeUnableToConvertValue … $.columnas[0].tipo».
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TipoDeColumna
 {
     Texto = 0,
