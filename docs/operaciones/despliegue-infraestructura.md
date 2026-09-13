@@ -173,8 +173,11 @@ delante para que **sólo** `/api/webhook` sea alcanzable desde internet:
 4. Verificar: en GitHub → Settings → Webhooks → *Recent Deliveries* el ping responde 200; el
    siguiente push al GitOps deja `erp-dev`/`erp-qa` en `Syncing` en segundos.
 
-El sondeo sigue activo como respaldo. Producción no lleva webhook a propósito: su
-sincronización es manual.
+Configurado el 2026-09-13: el ping de GitHub respondió 200 y un push de prueba dejó `erp-dev` y
+`erp-qa` refrescados en **10 s** (`refreshing app 'erp-qa' from webhook` en el log de
+`argocd-server`). Sin autenticar, `/` y `/api/version` del hostname redirigen al ingreso de Access
+y quien ingrese recibe el *Block*. El sondeo sigue activo como respaldo. Producción no lleva
+webhook a propósito: su sincronización es manual.
 
 ### Pendientes que bloquean el avance (acción manual)
 

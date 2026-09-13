@@ -41,7 +41,7 @@
 - [x] T041 GitOps `b177479` empujado con autorización del usuario (2026-09-13); QA: `cpu.max 200000/100000`, `nr_throttled` 10 de ~1.300 períodos, readiness cada 5 s, Web sondea `/health`
 - [x] T042 `release 8cf247a` + `0c7a555` en producción (GitOps `6d947f0` y `bc49608`; respaldos `*-pre-rendimiento-20260913.dump`): migraciones `IndicesDeLectura`, `BaseLegal2026Corregida`, `HorasMesBase2026` aplicadas en `ingenia365erp` y `cooflopal`; API con `limits.cpu=2`, Started→Ready **39 s** (eran 100–140), 0 `Executed DbCommand`, estilos con huella y `no-store` en el borde. Pendiente de observar: la IP real en `ADM_CentralUserLoginAttempts` con el próximo ingreso
 - [x] T043a Cache Rule de Cloudflare para `/_framework/` y purga: hechas por el usuario y verificadas (`HIT` en la segunda petición, `REVALIDATED` para lo sin huella)
-- [ ] T043b Webhook GitHub → Argo CD en nonprod: script `tools/scripts/configurar-webhook-argocd.ps1` y procedimiento en despliegue-infraestructura.md listos; faltan el hostname en el túnel + Access (panel) y correr el script
+- [x] T043b Webhook GitHub → Argo CD en nonprod: hostname `argocd-webhook.ingenia365.com` en el túnel + Access (Bypass en `api/webhook`, Block en el resto), secreto en `argocd-secret`, webhook `push` en el repo GitOps (ping 200). Medido: push → `erp-dev`/`erp-qa` refrescados en **10 s** («refreshing app from webhook»)
 - [x] T044 Base 2026 corregida por migración de datos en PDN y QA (`BaseLegal2026Corregida` + `HorasMesBase2026`): HORAS_MES 220, recargo 0,80, extras 2,05/2,55; el runbook §4c queda como semilla base
 
 ## Phase 6: Ronda 2 (cada una con spec propia)
