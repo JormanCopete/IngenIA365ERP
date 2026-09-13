@@ -85,13 +85,17 @@ jobs:
       - name: Test Shared
         run: dotnet test tests/IngenIA365ERP.Shared.Tests -c Release --no-build --verbosity normal
 
-      # Lo que va dentro de las imagenes. --no-build: es exactamente lo que se acaba
-      # de compilar y probar, no una compilacion distinta.
+      # Lo que va dentro de las imagenes. ContainerPublish=true activa en los csproj
+      # RuntimeIdentifier linux-x64 + ReadyToRun (codigo nativo precompilado: el pod
+      # arranca y atiende la primera peticion sin pagar el JIT entero). Por eso NO
+      # lleva --no-build: la compilacion para linux-x64 es distinta de la que
+      # corrieron las pruebas (mismo codigo, otro RID); sigue dentro del tiempo del
+      # publish del Web, que es el techo del pipeline.
       - name: Publish API y Migrator
         run: |
           set -e
-          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release --no-build -o artifacts/api
-          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release --no-build -o artifacts/migrator
+          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -o artifacts/api
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
           test -f artifacts/api/IngenIA365ERP.API.dll
           test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
 
