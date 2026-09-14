@@ -1,63 +1,34 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Contracts;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Core.People.Commands.UpdatePerson;
 
 /// <summary>
-/// Actualiza datos de la persona en la tabla maestra COR_People.
-/// La especializacion del rol (asociado, empleado interno, conyuge, vendedor)
-/// vive en sus propias tablas hijas y se administra desde sus propios modulos.
-/// Aqui SOLO se manejan datos personales, contacto, demografia y flags de rol.
+/// Actualiza datos de la persona en la tabla maestra COR_People: identificación, contacto,
+/// demografía, estado y las banderas de rol que son sólo una marca.
+///
+/// <para>
+/// <b>No toca</b> <c>IsEmployee</c>, <c>IsAssociate</c> ni <c>IsSalesperson</c>: no están en
+/// <see cref="PersonInput"/>. Hasta el 2026-09-13 el handler sobrescribía las ocho banderas con
+/// lo que trajera el cliente, y Empleados/Asociados mandaban sólo la suya: registrar como
+/// empleado a una persona asociada le apagaba «Asociado» (feature 008, US3).
+/// </para>
 /// </summary>
-public record UpdatePersonCommand : IRequest<Result>
+public record UpdatePersonCommand : PersonInput, IRequest<Result>
 {
     public Guid PublicId { get; init; }
-
-    // Identificacion
-    public string IdType { get; init; } = "C";
-    public string TaxId { get; init; } = string.Empty;
-    public string? TaxIdCheckDigit { get; init; }
-    public string? IdIssuedAt { get; init; }
-    public DateOnly? IdIssueDate { get; init; }
-    public string FirstName { get; init; } = string.Empty;
-    public string LastName { get; init; } = string.Empty;
-    public string? BusinessName { get; init; }
-    public string? PersonType { get; init; }
-
-    // Contacto
-    public string? Address { get; init; }
-    public string? Phone1 { get; init; }
-    public string? Phone2 { get; init; }
-    public string? Mobile { get; init; }
-    public string? Email { get; init; }
-    public Guid? CityPublicId { get; init; }
-
-    // Demografia
-    public string? Gender { get; init; }
-    public string? MaritalStatus { get; init; }
-    public DateOnly? DateOfBirth { get; init; }
-    public string? EducationLevel { get; init; }
-
-    // Roles
-    public bool IsAssociate { get; init; }
-    public bool IsEmployee { get; init; }
-    public bool IsThirdParty { get; init; }
-    public bool IsAdvisor { get; init; }
-    public bool IsCustomer { get; init; }
-    public bool IsSupplier { get; init; }
-    public bool IsSalesperson { get; init; }
-    public bool ReceivesInvoice { get; init; }
-
-    public string? Status { get; init; }
 }
 
 public class UpdatePersonCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    PersonFactory personas)
     : IRequestHandler<UpdatePersonCommand, Result>
 {
     public async Task<Result> Handle(UpdatePersonCommand request, CancellationToken ct)
@@ -69,21 +40,21 @@ public class UpdatePersonCommandHandler(
 
         if (person.TaxId != request.TaxId)
         {
-            var taxIdExists = await context.People.AsNoTracking()
-                .AnyAsync(p => p.TaxId == request.TaxId && p.Id != person.Id && !p.IsDeleted, ct);
-            if (taxIdExists)
-                return Result.Failure(new Error("Person.TaxIdDuplicate",
-                    "Ya existe otra persona con ese numero de identificacion."));
+            // Mismo criterio que al crear: eliminadas incluidas, porque el índice único no las distingue.
+            var colision = await personas.ColisionDeDocumentoAsync(request.TaxId, excluirId: person.Id, ct);
+            if (colision is not null)
+                return Result.Failure(colision);
         }
 
         int? cityId = null;
         if (request.CityPublicId.HasValue)
         {
-            var city = await context.Cities.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.PublicId == request.CityPublicId.Value && !c.IsDeleted, ct);
-            if (city is null)
+            cityId = await context.Cities.AsNoTracking()
+                .Where(c => c.PublicId == request.CityPublicId.Value && !c.IsDeleted)
+                .Select(c => (int?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (cityId is null)
                 return Result.Failure(new Error("Person.CityNotFound", "Ciudad no encontrada."));
-            cityId = city.Id;
         }
 
         person.IdType = request.IdType;
@@ -105,20 +76,26 @@ public class UpdatePersonCommandHandler(
         person.MaritalStatus = request.MaritalStatus;
         person.DateOfBirth = request.DateOfBirth;
         person.EducationLevel = request.EducationLevel;
-        person.IsAssociate = request.IsAssociate;
-        person.IsEmployee = request.IsEmployee;
+        // Banderas simples: las edita Personas. Las derivadas no se tocan aquí.
         person.IsThirdParty = request.IsThirdParty;
         person.IsAdvisor = request.IsAdvisor;
         person.IsCustomer = request.IsCustomer;
         person.IsSupplier = request.IsSupplier;
-        person.IsSalesperson = request.IsSalesperson;
         person.ReceivesInvoice = request.ReceivesInvoice;
         if (!string.IsNullOrWhiteSpace(request.Status))
             person.Status = request.Status;
         person.UpdatedAt = dateTime.UtcNow;
         person.UpdatedBy = currentUser.UserName;
 
-        await context.SaveChangesAsync(ct);
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (PersonFactory.EsColisionDeDocumento(ex))
+        {
+            var colision = await personas.TraducirColisionAsync(ex, request.TaxId, ct);
+            return Result.Failure(colision!);
+        }
         return Result.Success();
     }
 }
@@ -127,22 +104,7 @@ public class UpdatePersonCommandValidator : AbstractValidator<UpdatePersonComman
 {
     public UpdatePersonCommandValidator()
     {
+        Include(new PersonInputValidator());
         RuleFor(x => x.PublicId).NotEmpty();
-        RuleFor(x => x.TaxId).NotEmpty().MaximumLength(20);
-        RuleFor(x => x.IdType).NotEmpty().MaximumLength(2);
-        RuleFor(x => x.FirstName).NotEmpty().MaximumLength(150);
-        RuleFor(x => x.LastName).NotEmpty().MaximumLength(150);
-        RuleFor(x => x.BusinessName).MaximumLength(150);
-        RuleFor(x => x.Address).MaximumLength(120);
-        RuleFor(x => x.Phone1).MaximumLength(40);
-        RuleFor(x => x.Phone2).MaximumLength(40);
-        RuleFor(x => x.Mobile).MaximumLength(30);
-        RuleFor(x => x.Email).MaximumLength(120)
-            .EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email))
-            .WithMessage("Correo electronico no valido.");
-        RuleFor(x => x.DateOfBirth)
-            .LessThan(DateOnly.FromDateTime(DateTime.UtcNow))
-            .When(x => x.DateOfBirth.HasValue)
-            .WithMessage("La fecha de nacimiento debe ser anterior a hoy.");
     }
 }

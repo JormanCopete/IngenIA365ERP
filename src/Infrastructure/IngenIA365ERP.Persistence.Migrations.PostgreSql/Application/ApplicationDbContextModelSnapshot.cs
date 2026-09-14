@@ -28064,8 +28064,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<string>("TerminationCause")
-                        .HasMaxLength(4)
-                        .HasColumnType("character varying(4)");
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<DateTime>("TerminationDate")
                         .HasColumnType("timestamp with time zone");
@@ -28127,7 +28127,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("PersonId")
                         .IsUnique()
-                        .HasDatabaseName("UK_PAY_Employees_PersonId");
+                        .HasDatabaseName("UK_PAY_Employees_PersonId")
+                        .HasFilter("\"Status\" <> -1 AND \"IsDeleted\" = FALSE");
 
                     b.HasIndex("PublicId")
                         .IsUnique()

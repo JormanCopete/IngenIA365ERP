@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Persistence.Seeding;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,7 +31,12 @@ namespace IngenIA365ERP.Identity.Seed;
 /// que el orquestador entrega apuntado al esquema en curso.
 /// </para>
 /// </summary>
-public sealed class PhaseZeroSecuritySeeder : IDataSeeder
+/// <param name="cachePermisos">
+/// Opcional: la caché de permisos resueltos (Redis, TTL 30 min). Cuando el sembrado inserta
+/// vínculos rol↔permiso nuevos —feature 008: lectura de maestros para todo rol— se invalida
+/// la de la cooperativa, si no los usuarios verían 404 en Personas media hora tras desplegar.
+/// </param>
+public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermisos = null) : IDataSeeder
 {
     public int Order => 20;
     public SeedCategory Category => SeedCategory.Parametric;
@@ -49,7 +55,12 @@ public sealed class PhaseZeroSecuritySeeder : IDataSeeder
         // Nomina (feature 005): seeder hermano con los permisos Payroll.*; misma
         // idempotencia, mismo esquema en curso.
         await PayrollPermissionCatalogSeeder.SeedAsync(db, context.Logger);
-        await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
+        // Feature 008: maestros de Core (personas, asociados); Payroll.Employees.* va en el
+        // seeder de nómina.
+        await CorePermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
+        if (vinculosNuevos > 0)
+            await InvalidarCachePermisosAsync(context, vinculosNuevos, ct);
 
         context.Logger.LogInformation(
             "Seguridad sembrada en el esquema {Esquema}: catálogo de permisos y roles built-in.",
@@ -71,5 +82,25 @@ public sealed class PhaseZeroSecuritySeeder : IDataSeeder
 
         // Los seeders legacy no reportan conteos; 0 = "sin conteo disponible".
         return 0;
+    }
+
+    private async Task InvalidarCachePermisosAsync(SeedContext context, int vinculos, CancellationToken ct)
+    {
+        if (cachePermisos is null || context.Tenant is null) return;
+        try
+        {
+            // La clave de la caché es el Id interno de la cooperativa (UserPermissionResolver).
+            await cachePermisos.InvalidateAllForTenantAsync(context.Tenant.InternalId.ToString(), ct);
+            context.Logger.LogInformation(
+                "Caché de permisos de {Cooperativa} invalidada tras {Vinculos} vínculo(s) nuevo(s).",
+                context.Tenant.Identifier, vinculos);
+        }
+        catch (Exception ex)
+        {
+            // No detener el arranque por la caché: expira sola a los 30 minutos.
+            context.Logger.LogWarning(ex,
+                "No se pudo invalidar la caché de permisos de {Cooperativa}; expira sola en 30 minutos.",
+                context.Tenant.Identifier);
+        }
     }
 }

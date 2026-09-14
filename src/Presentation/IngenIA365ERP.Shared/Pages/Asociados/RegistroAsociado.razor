@@ -1,10 +1,10 @@
 @page "/asociados/registro"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
-@using IngenIA365ERP.Shared.Components.Shared
 @inject HttpClient Http
 @inject INotificationService Notification
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
 
 <PageTitle>Asociados - IngenIA365ERP</PageTitle>
 
@@ -14,34 +14,34 @@
         <SfTextBox Placeholder="Buscar por documento, nombre o apellido..." @bind-Value="_search"
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
-        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenSelectPersonDialog">Nuevo Asociado</SfButton>
+        <PermissionGate Required="Core.Associates.Create">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenSelectPersonDialog">Nuevo asociado</SfButton>
+        </PermissionGate>
     </div>
 </div>
 
+<IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="AssociateRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
     <GridColumns>
         <GridColumn Field="@nameof(AssociateRow.IdentificationNumber)" HeaderText="Documento" Width="130" />
-        <GridColumn Field="@nameof(AssociateRow.FullName)" HeaderText="Nombre Completo" Width="260" />
-        <GridColumn Field="@nameof(AssociateRow.JoinDate)" HeaderText="Fecha Ingreso" Width="130"
+        <GridColumn Field="@nameof(AssociateRow.FullName)" HeaderText="Nombre completo" Width="260" />
+        <GridColumn Field="@nameof(AssociateRow.JoinDate)" HeaderText="Fecha ingreso" Width="130"
                     Format="dd/MM/yyyy" Type="ColumnType.Date" />
         <GridColumn Field="@nameof(AssociateRow.ContributionRate)" HeaderText="% Aporte" Width="100"
                     Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="@nameof(AssociateRow.ExternalEmployerName)" HeaderText="Empresa Empleadora" Width="200" />
+        <GridColumn Field="@nameof(AssociateRow.ExternalEmployerName)" HeaderText="Empresa empleadora" Width="200" />
         <GridColumn Field="@nameof(AssociateRow.ExternalSalary)" HeaderText="Salario" Width="140"
                     Format="N2" TextAlign="TextAlign.Right" />
         <GridColumn HeaderText="Estado" Width="110" TextAlign="TextAlign.Center">
             <Template>
                 @{
                     var a = context as AssociateRow;
-                    var css = a?.Status == "A" ? "e-badge e-badge-success"
-                            : a?.Status == "I" ? "e-badge e-badge-warning"
-                            : "e-badge e-badge-danger";
-                    var label = a?.Status == "A" ? "Activo"
-                              : a?.Status == "I" ? "Inactivo"
-                              : a?.Status == "R" ? "Retirado" : a?.Status;
-                    <span class="@css" style="padding:2px var(--pad-sm);font-size:var(--texto-xs);">@label</span>
+                    var css = a?.Status == "A" ? "e-badge e-badge-success marca-rol"
+                            : a?.Status == "I" ? "e-badge e-badge-warning marca-rol"
+                            : "e-badge e-badge-danger marca-rol";
+                    <span class="@css">@CatalogosDePersona.Nombre(CatalogosDePersona.Estados, a?.Status)</span>
                 }
             </Template>
         </GridColumn>
@@ -49,27 +49,29 @@
             <Template>
                 @{
                     var a = context as AssociateRow;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
-                              OnClick="@(() => OpenEdit(a!))" Title="Editar" />
+                    <PermissionGate Required="Core.Associates.Update">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                                  OnClick="@(() => OpenEdit(a!))" Title="Editar" />
+                    </PermissionGate>
                 }
             </Template>
         </GridColumn>
     </GridColumns>
 </SfGrid>
+</IndicadorDeCarga>
 
-@* ===== Dialog: Seleccionar Persona (componente compartido) ===== *@
-<SfDialog @bind-Visible="_showSelectPerson" Header="Seleccionar Persona"
+@* ===== Diálogo: elegir la persona (o crearla, si puede) ===== *@
+<SfDialog @bind-Visible="_showSelectPerson" Header="Nuevo asociado: ¿quién es?"
           Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             <div class="panel-pestana">
-                <p class="muted" style="margin-bottom:var(--gap-md);">
-                    Para registrar un asociado, primero seleccione la persona.
-                    Si la persona aun no existe, debe crearla en
-                    <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
+                <p class="muted">
+                    Buscá la persona por documento o nombre. Si ya está registrada, se completa su afiliación;
+                    @(_puedeCrearPersona ? "si no existe, podés crearla aquí mismo y afiliarla en un solo paso." : "si no existe, pedile el registro a quien administra Maestros › Personas.")
                 </p>
-                <PersonSearchPicker OnPersonSelected="HandlePersonSelected"
-                                    ShowHelpText="false" />
+                <PersonSearchPicker OnPersonSelected="HandlePersonSelected" ShowHelpText="false"
+                                    PermitirCrear="@_puedeCrearPersona" OnCrearPersona="AbrirAltaConPersonaNueva" />
             </div>
         </Content>
     </DialogTemplates>
@@ -78,240 +80,178 @@
     </DialogButtons>
 </SfDialog>
 
-@* ===== Dialog: Editar asociado (datos persona + datos rol) ===== *@
+@* ===== Diálogo: registrar / editar asociado ===== *@
 <SfDialog @bind-Visible="_showEditDialog" Header="@_dialogTitle" Width="900px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDialogo.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+            @if (!_personaNueva)
+            {
+                <div class="persona-solo-lectura">
+                    <span class="muted">
+                        Datos personales de <strong>@_personaModelo.NombreVisible</strong> — se leen aquí; se editan en Personas.
+                    </span>
+                    <PermissionGate Required="Core.People.Update">
+                        <SfButton CssClass="e-small" IconCss="e-icons e-edit" OnClick="@(() => _showPersonaDialog = true)">Editar datos de la persona</SfButton>
+                    </PermissionGate>
+                </div>
+            }
             <SfTab>
                 <TabItems>
-                    @* --- Tab 1: Datos Persona (editables) --- *@
                     <TabItem>
-                        <ChildContent><TabHeader Text="Datos Persona" /></ChildContent>
+                        <ChildContent><TabHeader Text="Identificación" /></ChildContent>
                         <ContentTemplate>
-                            <div class="rejilla-campos panel-pestana">
-                                <div>
-                                    <label>Tipo Doc.</label>
-                                    <SfDropDownList TValue="string" TItem="CodeOption"
-                                                    @bind-Value="_personModel.IdType"
-                                                    DataSource="@_idTypes">
-                                        <DropDownListFieldSettings Text="Name" Value="Value" />
-                                    </SfDropDownList>
-                                </div>
-                                <div>
-                                    <label>Numero Documento <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.TaxId" />
-                                </div>
-                                <div>
-                                    <label>Nombres <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.FirstName" />
-                                </div>
-                                <div>
-                                    <label>Apellidos <span style="color:var(--peligro-texto)">*</span></label>
-                                    <SfTextBox @bind-Value="_personModel.LastName" />
-                                </div>
-                                <div class="campo-ancho">
-                                    <label>Razon Social (juridica)</label>
-                                    <SfTextBox @bind-Value="_personModel.BusinessName" />
-                                </div>
-                                <div>
-                                    <label>Email</label>
-                                    <SfTextBox @bind-Value="_personModel.Email" />
-                                </div>
-                                <div>
-                                    <label>Telefono</label>
-                                    <SfTextBox @bind-Value="_personModel.Phone1" />
-                                </div>
-                                <div>
-                                    <label>Movil</label>
-                                    <SfTextBox @bind-Value="_personModel.Mobile" />
-                                </div>
-                                <div>
-                                    <label>Genero</label>
-                                    <SfDropDownList TValue="string" TItem="CodeOption"
-                                                    @bind-Value="_personModel.Gender"
-                                                    DataSource="@_genders">
-                                        <DropDownListFieldSettings Text="Name" Value="Value" />
-                                    </SfDropDownList>
-                                </div>
-                                <div>
-                                    <label>Estado Civil</label>
-                                    <SfDropDownList TValue="string" TItem="CodeOption"
-                                                    @bind-Value="_personModel.MaritalStatus"
-                                                    DataSource="@_maritalStatuses">
-                                        <DropDownListFieldSettings Text="Name" Value="Value" />
-                                    </SfDropDownList>
-                                </div>
-                                <div>
-                                    <label>Fecha Nacimiento</label>
-                                    <SfDatePicker TValue="DateTime?" @bind-Value="_personModel.DateOfBirthDt" Format="dd/MM/yyyy" />
-                                </div>
-                                <div class="campo-ancho">
-                                    <label>Direccion</label>
-                                    <SfTextBox @bind-Value="_personModel.Address" />
-                                </div>
-                                <div>
-                                    <label>Ciudad</label>
-                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
-                                                    @bind-Value="_personModel.CityPublicId"
-                                                    DataSource="@_cities"
-                                                    AllowFiltering="true"
-                                                    Placeholder="Seleccione">
-                                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
-                                    </SfDropDownList>
-                                </div>
-                            </div>
+                            <PersonaCampos Seccion="SeccionDePersona.Identificacion" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" />
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Contacto" /></ChildContent>
+                        <ContentTemplate>
+                            <PersonaCampos Seccion="SeccionDePersona.Contacto" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" Ciudades="@_ciudades" />
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Demografía" /></ChildContent>
+                        <ContentTemplate>
+                            <PersonaCampos Seccion="SeccionDePersona.Demografia" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" />
                         </ContentTemplate>
                     </TabItem>
 
-                    @* --- Tab 2: Afiliacion --- *@
+                    @* --- Afiliación --- *@
                     <TabItem>
-                        <ChildContent><TabHeader Text="Afiliacion" /></ChildContent>
+                        <ChildContent><TabHeader Text="Afiliación" /></ChildContent>
                         <ContentTemplate>
                             <div class="rejilla-campos panel-pestana">
                                 <div>
-                                    <label>Fecha de Ingreso</label>
+                                    <label>Fecha de ingreso</label>
                                     <SfDatePicker TValue="DateTime?" @bind-Value="_associateModel.JoinDateDt" Format="dd/MM/yyyy" />
                                 </div>
                                 <div>
-                                    <label>Tasa de Aporte (%)</label>
+                                    <label>Tasa de aporte (%)</label>
                                     <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ContributionRate"
                                                       Format="N2" Min="0" Max="100" Step="0.5m" />
                                 </div>
                                 <div>
-                                    <label>Aporte Comprometido</label>
+                                    <label>Aporte comprometido</label>
                                     <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ContributionPledged"
                                                       Format="N2" Min="0" Step="50000m" />
                                 </div>
-                                <div>
-                                    <label>Estado</label>
-                                    <SfDropDownList TValue="string" TItem="CodeOption"
-                                                    @bind-Value="_associateModel.Status"
-                                                    DataSource="@_associateStatuses">
-                                        <DropDownListFieldSettings Text="Name" Value="Value" />
-                                    </SfDropDownList>
-                                </div>
+                                @if (!_isNewAssociate)
+                                {
+                                    <div>
+                                        <label>Estado</label>
+                                        <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="_associateModel.Status"
+                                                        DataSource="@CatalogosDePersona.Estados">
+                                            <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                                        </SfDropDownList>
+                                    </div>
+                                }
                                 <div>
                                     <label>Sucursal</label>
-                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
-                                                    @bind-Value="_associateModel.BranchPublicId"
-                                                    DataSource="@_branches"
-                                                    AllowFiltering="true"
-                                                    Placeholder="Seleccione">
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_associateModel.BranchPublicId"
+                                                    DataSource="@_branches" AllowFiltering="true" Placeholder="Seleccione">
                                         <DropDownListFieldSettings Text="Name" Value="PublicId" />
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Comite</label>
-                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
-                                                    @bind-Value="_associateModel.CommitteePublicId"
-                                                    DataSource="@_committees"
-                                                    AllowFiltering="true"
-                                                    Placeholder="Seleccione">
+                                    <label>Comité</label>
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_associateModel.CommitteePublicId"
+                                                    DataSource="@_committees" AllowFiltering="true" Placeholder="Seleccione">
                                         <DropDownListFieldSettings Text="Name" Value="PublicId" />
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Categoria</label>
+                                    <label>Categoría</label>
                                     <SfTextBox @bind-Value="_associateModel.CategoryRating" />
                                 </div>
                                 <div>
-                                    <label>Clase de Asociado</label>
+                                    <label>Clase de asociado</label>
                                     <SfTextBox @bind-Value="_associateModel.AssociateClass" />
                                 </div>
                             </div>
                         </ContentTemplate>
                     </TabItem>
 
-                    @* --- Tab 3: Empresa Empleadora Externa --- *@
+                    @* --- Empleo externo --- *@
                     <TabItem>
-                        <ChildContent><TabHeader Text="Empleo Externo" /></ChildContent>
+                        <ChildContent><TabHeader Text="Empleo externo" /></ChildContent>
                         <ContentTemplate>
                             <div class="rejilla-campos panel-pestana">
                                 <div class="campo-ancho">
                                     <label>Empresa donde trabaja el asociado</label>
-                                    <SfTextBox @bind-Value="_associateModel.ExternalEmployerName"
-                                               Placeholder="Nombre de la empresa empleadora" />
+                                    <SfTextBox @bind-Value="_associateModel.ExternalEmployerName" Placeholder="Nombre de la empresa empleadora" />
                                 </div>
                                 <div>
-                                    <label>Fecha de Ingreso a la Empresa</label>
+                                    <label>Fecha de ingreso a la empresa</label>
                                     <SfDatePicker TValue="DateTime?" @bind-Value="_associateModel.ExternalEmploymentStartDateDt" Format="dd/MM/yyyy" />
                                 </div>
                                 <div>
                                     <label>Salario</label>
-                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ExternalSalary"
-                                                      Format="N2" Min="0" Step="50000m" />
+                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ExternalSalary" Format="N2" Min="0" Step="50000m" />
                                 </div>
                                 <div>
-                                    <label>Tipo de Salario</label>
+                                    <label>Tipo de salario</label>
                                     <SfTextBox @bind-Value="_associateModel.ExternalSalaryType" />
                                 </div>
                                 <div>
-                                    <label>Cesantias</label>
-                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ExternalSeverance"
-                                                      Format="N2" Min="0" />
+                                    <label>Cesantías</label>
+                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.ExternalSeverance" Format="N2" Min="0" />
                                 </div>
                                 <div class="campo-ancho">
-                                    <label>Fondo de Cesantias</label>
+                                    <label>Fondo de cesantías</label>
                                     <SfTextBox @bind-Value="_associateModel.ExternalSeveranceFund" />
                                 </div>
                             </div>
                         </ContentTemplate>
                     </TabItem>
 
-                    @* --- Tab 4: Banca de Deposito --- *@
+                    @* --- Banca de depósito --- *@
                     <TabItem>
-                        <ChildContent><TabHeader Text="Banca Deposito" /></ChildContent>
+                        <ChildContent><TabHeader Text="Banca depósito" /></ChildContent>
                         <ContentTemplate>
                             <div class="rejilla-campos panel-pestana">
-                                <p class="campo-ancho hint">
-                                    Cuenta donde se depositan excedentes y aportes al asociado.
-                                </p>
+                                <p class="campo-ancho hint">Cuenta donde se depositan excedentes y aportes al asociado.</p>
                                 <div>
                                     <label>Banco</label>
-                                    <SfDropDownList TValue="Guid?" TItem="LookupOption"
-                                                    @bind-Value="_associateModel.DepositBankPublicId"
-                                                    DataSource="@_banks"
-                                                    AllowFiltering="true"
-                                                    Placeholder="Seleccione">
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_associateModel.DepositBankPublicId"
+                                                    DataSource="@_banks" AllowFiltering="true" Placeholder="Seleccione">
                                         <DropDownListFieldSettings Text="Name" Value="PublicId" />
                                     </SfDropDownList>
                                 </div>
                                 <div>
-                                    <label>Tipo Cuenta</label>
-                                    <SfDropDownList TValue="string" TItem="CodeOption"
-                                                    @bind-Value="_associateModel.DepositBankAccountType"
+                                    <label>Tipo de cuenta</label>
+                                    <SfDropDownList TValue="string" TItem="CodeOption" @bind-Value="_associateModel.DepositBankAccountType"
                                                     DataSource="@_accountTypes">
                                         <DropDownListFieldSettings Text="Name" Value="Value" />
                                     </SfDropDownList>
                                 </div>
                                 <div class="campo-ancho">
-                                    <label>Numero de Cuenta</label>
+                                    <label>Número de cuenta</label>
                                     <SfTextBox @bind-Value="_associateModel.DepositBankAccountNumber" />
                                 </div>
                             </div>
                         </ContentTemplate>
                     </TabItem>
 
-                    @* --- Tab 5: Conyuge laboral --- *@
+                    @* --- Cónyuge laboral --- *@
                     <TabItem>
-                        <ChildContent><TabHeader Text="Conyuge (Empleo)" /></ChildContent>
+                        <ChildContent><TabHeader Text="Cónyuge (empleo)" /></ChildContent>
                         <ContentTemplate>
                             <div class="rejilla-campos panel-pestana">
                                 <div class="campo-ancho">
-                                    <label>Empresa donde trabaja el conyuge</label>
+                                    <label>Empresa donde trabaja el cónyuge</label>
                                     <SfTextBox @bind-Value="_associateModel.SpouseEmployer" />
                                 </div>
                                 <div>
-                                    <label>Salario del Conyuge</label>
-                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.SpouseSalary"
-                                                      Format="N2" Min="0" Step="50000m" />
+                                    <label>Salario del cónyuge</label>
+                                    <SfNumericTextBox TValue="decimal" @bind-Value="_associateModel.SpouseSalary" Format="N2" Min="0" Step="50000m" />
                                 </div>
                                 <div>
-                                    <label>Cargo del Conyuge</label>
+                                    <label>Cargo del cónyuge</label>
                                     <SfTextBox @bind-Value="_associateModel.SpousePosition" />
                                 </div>
                                 <div>
-                                    <label>Profesion del Conyuge</label>
+                                    <label>Profesión del cónyuge</label>
                                     <SfTextBox @bind-Value="_associateModel.SpouseProfession" />
                                 </div>
                             </div>
@@ -319,92 +259,135 @@
                     </TabItem>
                 </TabItems>
             </SfTab>
+
+            @if (_colision is not null)
+            {
+                <div class="aviso aviso-error aviso-documento">
+                    <span>@_colision.Mensaje</span>
+                    @if (_colision.Eliminada)
+                    {
+                        <PermissionGate Required="Core.People.Delete">
+                            <SfButton CssClass="e-small" OnClick="@RestaurarYUsarAsync" Disabled="@_saving">Restaurar persona</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Core.People.Delete" Fallback="@PedirRestauracion" />
+                    }
+                    else
+                    {
+                        <SfButton CssClass="e-small" OnClick="@UsarExistenteAsync" Disabled="@_saving">Usar esa persona</SfButton>
+                    }
+                </div>
+            }
+            </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelEdit" />
-        <DialogButton Content="@(_isNewAssociate ? "Registrar" : "Guardar Cambios")"
-                      IsPrimary="true" OnClick="@Save" Disabled="@_saving" />
+        <DialogButton Content="@(_isNewAssociate ? "Registrar" : "Guardar cambios")"
+                      IsPrimary="true" OnClick="@Save" Disabled="@(_saving || _guardado.Activa)" />
     </DialogButtons>
 </SfDialog>
 
+@* El único sitio que escribe la persona: el diálogo compartido de Personas (FR-005). *@
+<PersonaDialog @bind-Visible="_showPersonaDialog" PersonaPublicId="@_personPublicId" OnGuardado="@PersonaEditadaAsync" />
+
 @code {
+    /// <summary>Feature 008: llegar con <c>?persona=</c> (desde Personas › Roles › «Registrar como asociado…») abre el diálogo con esa persona.</summary>
+    [SupplyParameterFromQuery(Name = "persona")] public Guid? Persona { get; set; }
+
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _cargaDialogo = new(), _guardado = new();
     private SfGrid<AssociateRow>? _grid;
     private List<AssociateRow> _items = new();
     private string _search = "";
     private System.Threading.CancellationTokenSource? _searchDebounce;
+    private bool _puedeCrearPersona;
+    private Guid? _personaAbiertaPorRuta;
 
-    // Person selector dialog
+    // Diálogo: elegir persona
     private bool _showSelectPerson;
 
-    // Edit/Create dialog
-    private bool _showEditDialog;
+    // Diálogo: registrar / editar
+    private bool _showEditDialog, _showPersonaDialog;
     private bool _saving;
     private bool _isNewAssociate;
+    /// <summary>Modo alta en un paso: la persona no existe todavía y sus campos se editan aquí (FR-001).</summary>
+    private bool _personaNueva;
     private string _dialogTitle = "";
     private Guid? _associatePublicId;
-    private Guid _personPublicId;
-    private PersonModel _personModel = new();
+    private Guid? _personPublicId;
+    private PersonaFormularioModelo _personaModelo = PersonaFormularioModelo.Nuevo();
     private AssociateModel _associateModel = new();
+    private Colision? _colision;
 
-    // Lookups
-    private List<LookupOption> _cities = new();
+    // Catálogos
+    private IReadOnlyList<OpcionDeCiudad> _ciudades = [];
     private List<LookupOption> _branches = new();
     private List<LookupOption> _committees = new();
     private List<LookupOption> _banks = new();
+    private List<CodeOption> _accountTypes = new() { new("A", "Ahorros"), new("C", "Corriente") };
 
-    private List<CodeOption> _idTypes = new()
-    {
-        new("C", "Cedula"), new("CE", "C. Extranjeria"), new("TI", "Tarjeta Identidad"),
-        new("NI", "NIT"), new("PA", "Pasaporte")
-    };
-    private List<CodeOption> _genders = new() { new("M", "Masculino"), new("F", "Femenino"), new("O", "Otro") };
-    private List<CodeOption> _maritalStatuses = new()
-    {
-        new("S", "Soltero(a)"), new("C", "Casado(a)"), new("U", "Union Libre"),
-        new("D", "Divorciado(a)"), new("V", "Viudo(a)")
-    };
-    private List<CodeOption> _associateStatuses = new()
-    {
-        new("A", "Activo"), new("I", "Inactivo"), new("R", "Retirado")
-    };
-    private List<CodeOption> _accountTypes = new()
-    {
-        new("A", "Ahorros"), new("C", "Corriente")
-    };
+    private RenderFragment PedirRestauracion => @<span>Pedile la restauración a quien administra Maestros › Personas.</span>;
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.WhenAll(LoadLookups(), LoadData());
+        await Task.WhenAll(LoadLookups(), LoadData(), CalcularPermisosAsync());
     }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Persona is { } id && _personaAbiertaPorRuta != id)
+        {
+            _personaAbiertaPorRuta = id;
+            await AbrirConPersonaExistenteAsync(id);
+        }
+    }
+
+    private async Task CalcularPermisosAsync() =>
+        _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
 
     private async Task LoadLookups()
     {
-        try
-        {
-            var citiesTask = Http.GetListAsync<LookupRaw>("/api/core/cities?PageNumber=1&PageSize=2000");
-            var branchesTask = Http.GetListAsync<LookupRaw>("/api/core/branches?PageNumber=1&PageSize=500");
-            var committeesTask = Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500");
-            var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
+        using var carga = _carga.Iniciar();
+        // Cada catálogo se revisa por separado: los que llegaron se muestran y los que no se
+        // nombran en el aviso (Principio IX). Antes un solo catch callaba todos.
+        var citiesTask = Personas.ListarCiudadesAsync();
+        var branchesTask = Http.GetListAsync<LookupRaw>("/api/core/branches?PageNumber=1&PageSize=500");
+        var committeesTask = Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500");
+        var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
+        try { await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask); }
+        catch { /* se revisa tarea por tarea */ }
 
-            await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask);
+        var caidos = new List<string>();
+        _ciudades = citiesTask.IsCompletedSuccessfully ? citiesTask.Result : Caido(citiesTask, "ciudades", caidos, (IReadOnlyList<OpcionDeCiudad>)[]);
+        _branches = Resultado(branchesTask, "sucursales", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _committees = Resultado(committeesTask, "comités", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _banks = Resultado(banksTask, "bancos", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
 
-            _cities = (await citiesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _branches = (await branchesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _committees = (await committeesTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-            _banks = (await banksTask).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
-        }
-        catch { /* silently */ }
+        if (caidos.Count > 0)
+            await Notification.ErrorAsync($"No se pudieron cargar estos catálogos: {string.Join("; ", caidos)}. Recargá la página antes de registrar un asociado.");
+    }
+
+    private static List<T> Resultado<T>(Task<List<T>> tarea, string nombre, List<string> caidos)
+    {
+        if (tarea.IsCompletedSuccessfully) return tarea.Result;
+        caidos.Add($"{nombre} ({tarea.Exception?.GetBaseException().Message ?? "cancelado"})");
+        return new List<T>();
+    }
+
+    private static T Caido<T>(Task tarea, string nombre, List<string> caidos, T vacio)
+    {
+        caidos.Add($"{nombre} ({tarea.Exception?.GetBaseException().Message ?? "cancelado"})");
+        return vacio;
     }
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/core/associates?PageNumber=1&PageSize=500";
             if (!string.IsNullOrWhiteSpace(_search))
                 url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
-
             _items = await Http.GetListAsync<AssociateRow>(url);
         }
         catch (Exception ex)
@@ -432,99 +415,114 @@
         catch (TaskCanceledException) { }
     }
 
-    private void OpenSelectPersonDialog()
-    {
-        _showSelectPerson = true;
-    }
+    // ---------- Elegir o crear la persona ----------
 
-    private async Task HandlePersonSelected(PersonSearchPicker.PersonSearchItem person)
+    private void OpenSelectPersonDialog() => _showSelectPerson = true;
+
+    private Task HandlePersonSelected(PersonSearchPicker.PersonSearchItem person)
     {
         _showSelectPerson = false;
-        _personPublicId = person.PublicId;
+        return AbrirConPersonaExistenteAsync(person.PublicId);
+    }
 
-        try
+    /// <summary>Persona existente: datos personales de sólo lectura (FR-005); si ya es asociada se edita su afiliación (US2.2).</summary>
+    private async Task AbrirConPersonaExistenteAsync(Guid personaId)
+    {
+        using var carga = _cargaDialogo.Iniciar();
+        _colision = null;
+        var persona = await Personas.ObtenerAsync(personaId);
+        if (!persona.IsSuccess || persona.Value is null)
         {
-            var p = await Http.GetFromJsonAsync<PersonEditDto>($"/api/core/people/{person.PublicId}");
-            if (p is null) { await Notification.ErrorAsync("No se cargo la persona."); return; }
-
-            _personModel = new PersonModel
-            {
-                IdType = p.IdType, TaxId = p.TaxId,
-                FirstName = p.FirstName, LastName = p.LastName, BusinessName = p.BusinessName,
-                Email = p.Email, Phone1 = p.Phone1, Mobile = p.Mobile,
-                Address = p.Address, CityPublicId = p.CityPublicId,
-                Gender = p.Gender, MaritalStatus = p.MaritalStatus,
-                DateOfBirthDt = p.DateOfBirth?.ToDateTime(TimeOnly.MinValue)
-            };
-        }
-        catch (Exception ex)
-        {
-            await Notification.ErrorAsync($"Error al cargar persona: {ex.Message}");
+            await Notification.ErrorAsync($"No se pudo cargar la persona: {persona.ErrorMessage}");
             return;
         }
+        _personPublicId = personaId;
+        _personaNueva = false;
+        _personaModelo = PersonaFormularioModelo.DesdeDto(persona.Value);
 
-        if (person.IsAssociate)
+        if (persona.Value.IsAssociate)
         {
-            try
+            var existente = await Http.GetAsync($"/api/core/associates/by-person/{personaId}");
+            if (existente.IsSuccessStatusCode)
             {
-                var a = await Http.GetFromJsonAsync<AssociateEditDto>($"/api/core/associates/by-person/{person.PublicId}");
-                if (a is not null)
+                var afiliacion = await existente.Content.ReadFromJsonAsync<AssociateEditDto>();
+                if (afiliacion is not null)
                 {
-                    _associatePublicId = a.PublicId;
-                    _isNewAssociate = false;
-                    _dialogTitle = $"Editar Asociado: {person.FullName}";
-                    _associateModel = MapAssociateDto(a);
-                    _showEditDialog = true;
+                    AbrirEdicion(afiliacion);
                     return;
                 }
             }
-            catch { /* fall through to new */ }
+            else if (existente.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                await Notification.ShowErrorAsync(existente, "No se pudo cargar la afiliación");
+                return;
+            }
         }
 
+        AbrirRegistro($"Registrar asociado: {_personaModelo.NombreVisible}");
+    }
+
+    /// <summary>Alta en un paso (FR-001): la persona no existe; se digita aquí y se guarda junto con la afiliación.</summary>
+    private void AbrirAltaConPersonaNueva(string termino)
+    {
+        _showSelectPerson = false;
+        _colision = null;
+        _personPublicId = null;
+        _personaNueva = true;
+        _personaModelo = PersonaFormularioModelo.Nuevo(termino.All(char.IsDigit) ? termino : null);
+        AbrirRegistro("Registrar asociado (persona nueva)");
+    }
+
+    private void AbrirRegistro(string titulo)
+    {
         _associatePublicId = null;
         _isNewAssociate = true;
-        _dialogTitle = $"Registrar Asociado: {person.FullName}";
-        _associateModel = new AssociateModel
-        {
-            JoinDateDt = DateTime.Today,
-            Status = "A"
-        };
+        _dialogTitle = titulo;
+        _associateModel = new AssociateModel { JoinDateDt = DateTime.Today, Status = "A" };
+        _showEditDialog = true;
+    }
+
+    private void AbrirEdicion(AssociateEditDto afiliacion)
+    {
+        _associatePublicId = afiliacion.PublicId;
+        _isNewAssociate = false;
+        _dialogTitle = $"Editar asociado: {_personaModelo.NombreVisible}";
+        _associateModel = MapAssociateDto(afiliacion);
         _showEditDialog = true;
     }
 
     private async Task OpenEdit(AssociateRow row)
     {
+        using var carga = _cargaDialogo.Iniciar();
         try
         {
-            var a = await Http.GetFromJsonAsync<AssociateEditDto>($"/api/core/associates/{row.PublicId}");
-            if (a is null) { await Notification.ErrorAsync("No se cargo el asociado."); return; }
-
-            _associatePublicId = a.PublicId;
-            _personPublicId = a.PersonPublicId;
-            _isNewAssociate = false;
-            _dialogTitle = $"Editar Asociado: {a.PersonName}";
-
-            var p = await Http.GetFromJsonAsync<PersonEditDto>($"/api/core/people/{a.PersonPublicId}");
-            if (p is not null)
+            var afiliacion = await Http.GetFromJsonAsync<AssociateEditDto>($"/api/core/associates/{row.PublicId}");
+            if (afiliacion is null) { await Notification.ErrorAsync("No se cargó el asociado."); return; }
+            var persona = await Personas.ObtenerAsync(afiliacion.PersonPublicId);
+            if (!persona.IsSuccess || persona.Value is null)
             {
-                _personModel = new PersonModel
-                {
-                    IdType = p.IdType, TaxId = p.TaxId,
-                    FirstName = p.FirstName, LastName = p.LastName, BusinessName = p.BusinessName,
-                    Email = p.Email, Phone1 = p.Phone1, Mobile = p.Mobile,
-                    Address = p.Address, CityPublicId = p.CityPublicId,
-                    Gender = p.Gender, MaritalStatus = p.MaritalStatus,
-                    DateOfBirthDt = p.DateOfBirth?.ToDateTime(TimeOnly.MinValue)
-                };
+                await Notification.ErrorAsync($"No se cargó la persona del asociado: {persona.ErrorMessage}");
+                return;
             }
-
-            _associateModel = MapAssociateDto(a);
-            _showEditDialog = true;
+            _personPublicId = afiliacion.PersonPublicId;
+            _personaNueva = false;
+            _personaModelo = PersonaFormularioModelo.DesdeDto(persona.Value);
+            _colision = null;
+            AbrirEdicion(afiliacion);
         }
         catch (Exception ex)
         {
             await Notification.ErrorAsync($"Error al cargar asociado: {ex.Message}");
         }
+    }
+
+    /// <summary>Volvió el diálogo compartido de Personas: se refrescan los datos de sólo lectura.</summary>
+    private async Task PersonaEditadaAsync(Guid personaId)
+    {
+        var persona = await Personas.ObtenerAsync(personaId);
+        if (persona.IsSuccess && persona.Value is not null)
+            _personaModelo = PersonaFormularioModelo.DesdeDto(persona.Value);
+        await LoadData();
     }
 
     private static AssociateModel MapAssociateDto(AssociateEditDto a) => new()
@@ -559,96 +557,51 @@
     {
         _showEditDialog = false;
         _associatePublicId = null;
-        _personModel = new PersonModel();
+        _colision = null;
+        _personaModelo = PersonaFormularioModelo.Nuevo();
         _associateModel = new AssociateModel();
     }
+
+    // ---------- Guardar ----------
 
     private async Task Save()
     {
         if (_saving) return;
-        if (string.IsNullOrWhiteSpace(_personModel.TaxId) ||
-            string.IsNullOrWhiteSpace(_personModel.FirstName) ||
-            string.IsNullOrWhiteSpace(_personModel.LastName))
+
+        if (_personaNueva)
         {
-            await Notification.WarningAsync("Documento, nombres y apellidos son obligatorios.");
-            return;
+            var avisos = _personaModelo.Validar();
+            if (avisos.Count > 0) { await Notification.WarningAsync(avisos[0]); return; }
         }
 
         _saving = true;
+        _colision = null;
+        using var guardado = _guardado.Iniciar();
         try
         {
-            // 1. Actualizar Persona
-            var personPayload = new
+            if (_isNewAssociate && _personaNueva)
             {
-                _personModel.IdType, _personModel.TaxId,
-                _personModel.FirstName, _personModel.LastName, _personModel.BusinessName,
-                _personModel.Email, _personModel.Phone1, _personModel.Mobile, _personModel.Address,
-                CityPublicId = _personModel.CityPublicId,
-                _personModel.Gender, _personModel.MaritalStatus,
-                DateOfBirth = _personModel.DateOfBirthDt.HasValue
-                    ? DateOnly.FromDateTime(_personModel.DateOfBirthDt.Value).ToString("yyyy-MM-dd")
-                    : null,
-                IsAssociate = true
-            };
-            var resPerson = await Http.PutAsJsonAsync($"/api/core/people/{_personPublicId}", personPayload);
-            if (!resPerson.IsSuccessStatusCode)
-            {
-                await Notification.ShowErrorAsync(resPerson, "Error al actualizar datos de la persona");
+                // Un solo paso: persona y afiliación juntas o ninguna (FR-001).
+                var r = await Personas.RegistrarAsociadoConPersonaAsync(
+                    new AltaAsociadoConPersonaRequest(_personaModelo.AInput(), PayloadAfiliacion()));
+                if (!r.IsSuccess) { await FalloDelAltaAsync(r.ErrorCode, r.ErrorMessage); return; }
+                await Notification.SuccessAsync("Persona y asociado registrados correctamente.");
+                _showEditDialog = false;
+                await LoadData();
                 return;
             }
 
-            // 2. Asociado: register o update
+            // Persona existente: la afiliación va sola; los datos personales NO se tocan desde aquí (FR-005).
             HttpResponseMessage resAssoc;
             if (_isNewAssociate)
             {
-                var registerPayload = new
-                {
-                    PersonPublicId = _personPublicId,
-                    JoinDate = _associateModel.JoinDateDt.HasValue
-                        ? DateOnly.FromDateTime(_associateModel.JoinDateDt.Value).ToString("yyyy-MM-dd")
-                        : null,
-                    _associateModel.ContributionRate,
-                    _associateModel.EmployerCompanyPublicId, _associateModel.BranchPublicId,
-                    _associateModel.SectionPublicId, _associateModel.CommitteePublicId,
-                    _associateModel.CategoryRating, _associateModel.AssociateClass, _associateModel.PaymentType,
-                    _associateModel.ContributionPledged,
-                    _associateModel.ExternalEmployerName,
-                    ExternalEmploymentStartDate = _associateModel.ExternalEmploymentStartDateDt.HasValue
-                        ? DateOnly.FromDateTime(_associateModel.ExternalEmploymentStartDateDt.Value).ToString("yyyy-MM-dd")
-                        : null,
-                    _associateModel.ExternalSalary, _associateModel.ExternalSalaryType,
-                    _associateModel.ExternalSeverance, _associateModel.ExternalSeveranceFund,
-                    _associateModel.DepositBankPublicId, _associateModel.DepositBankAccountNumber,
-                    _associateModel.DepositBankAccountType,
-                    _associateModel.SpouseEmployer, _associateModel.SpouseSalary,
-                    _associateModel.SpousePosition, _associateModel.SpouseProfession
-                };
-                resAssoc = await Http.PostAsJsonAsync("/api/core/associates", registerPayload);
+                resAssoc = await Http.PostAsJsonAsync("/api/core/associates",
+                    PayloadAfiliacion() with { PersonPublicId = _personPublicId!.Value });
             }
             else
             {
-                var updatePayload = new
-                {
-                    JoinDate = _associateModel.JoinDateDt.HasValue
-                        ? DateOnly.FromDateTime(_associateModel.JoinDateDt.Value).ToString("yyyy-MM-dd")
-                        : null,
-                    _associateModel.ContributionRate,
-                    _associateModel.EmployerCompanyPublicId, _associateModel.BranchPublicId,
-                    _associateModel.SectionPublicId, _associateModel.CommitteePublicId,
-                    _associateModel.CategoryRating, _associateModel.AssociateClass, _associateModel.PaymentType,
-                    _associateModel.ContributionPledged, _associateModel.Status,
-                    _associateModel.ExternalEmployerName,
-                    ExternalEmploymentStartDate = _associateModel.ExternalEmploymentStartDateDt.HasValue
-                        ? DateOnly.FromDateTime(_associateModel.ExternalEmploymentStartDateDt.Value).ToString("yyyy-MM-dd")
-                        : null,
-                    _associateModel.ExternalSalary, _associateModel.ExternalSalaryType,
-                    _associateModel.ExternalSeverance, _associateModel.ExternalSeveranceFund,
-                    _associateModel.DepositBankPublicId, _associateModel.DepositBankAccountNumber,
-                    _associateModel.DepositBankAccountType,
-                    _associateModel.SpouseEmployer, _associateModel.SpouseSalary,
-                    _associateModel.SpousePosition, _associateModel.SpouseProfession
-                };
-                resAssoc = await Http.PutAsJsonAsync($"/api/core/associates/{_associatePublicId}", updatePayload);
+                resAssoc = await Http.PutAsJsonAsync($"/api/core/associates/{_associatePublicId}",
+                    PayloadAfiliacion() with { Status = _associateModel.Status });
             }
 
             if (resAssoc.IsSuccessStatusCode)
@@ -674,7 +627,95 @@
         }
     }
 
-    // ---------- Models ----------
+    /// <summary>Los 23 campos de <c>AssociateInput</c>; con <c>PersonPublicId</c> es <c>RegisterAssociateCommand</c>, con <c>Status</c> el PUT.</summary>
+    private PayloadAfiliacionDto PayloadAfiliacion() => new(
+        _associateModel.JoinDateDt is { } j ? DateOnly.FromDateTime(j) : null,
+        _associateModel.ContributionRate, _associateModel.EmployerCompanyPublicId, _associateModel.BranchPublicId,
+        _associateModel.SectionPublicId, _associateModel.CommitteePublicId, _associateModel.CategoryRating,
+        _associateModel.AssociateClass, _associateModel.PaymentType, _associateModel.ContributionPledged,
+        _associateModel.ExternalEmployerName,
+        _associateModel.ExternalEmploymentStartDateDt is { } e ? DateOnly.FromDateTime(e) : null,
+        _associateModel.ExternalSalary, _associateModel.ExternalSalaryType, _associateModel.ExternalSeverance,
+        _associateModel.ExternalSeveranceFund, _associateModel.DepositBankPublicId, _associateModel.DepositBankAccountNumber,
+        _associateModel.DepositBankAccountType, _associateModel.SpouseEmployer, _associateModel.SpouseSalary,
+        _associateModel.SpousePosition, _associateModel.SpouseProfession);
+
+    private async Task FalloDelAltaAsync(string? codigo, string? mensaje)
+    {
+        switch (codigo)
+        {
+            case ErroresDePersona.DocumentoDuplicado:
+                _colision = new Colision(mensaje ?? "Ya existe una persona con ese documento.", Eliminada: false);
+                break;
+            case ErroresDePersona.DocumentoEliminado:
+                _colision = new Colision(mensaje ?? "Ese documento pertenece a una persona eliminada.", Eliminada: true);
+                break;
+            default:
+                await Notification.ErrorAsync(codigo == "Generic.NotFound"
+                    ? $"Error al registrar: {NotificationServiceExtensions.SinPermiso}"
+                    : $"Error al registrar: {mensaje}");
+                break;
+        }
+    }
+
+    private async Task UsarExistenteAsync()
+    {
+        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+        if (!quien.IsSuccess || quien.Value is null)
+        {
+            await Notification.ErrorAsync($"No se pudo abrir la persona existente: {quien.ErrorMessage}");
+            return;
+        }
+        await ContinuarConExistenteAsync(quien.Value.PublicId);
+    }
+
+    private async Task RestaurarYUsarAsync()
+    {
+        if (_saving) return;
+        _saving = true;
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+            if (!quien.IsSuccess || quien.Value is null)
+            {
+                await Notification.ErrorAsync($"No se encontró la persona eliminada: {quien.ErrorMessage}");
+                return;
+            }
+            var r = await Personas.RestaurarAsync(quien.Value.PublicId);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorCode == "Generic.NotFound"
+                    ? NotificationServiceExtensions.SinPermiso
+                    : $"No se pudo restaurar: {r.ErrorMessage}");
+                return;
+            }
+            await Notification.SuccessAsync($"Persona restaurada: {quien.Value.FullName}.");
+            await ContinuarConExistenteAsync(quien.Value.PublicId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    /// <summary>Cambia el diálogo a persona existente sin perder la afiliación ya digitada.</summary>
+    private async Task ContinuarConExistenteAsync(Guid personaId)
+    {
+        var afiliacion = _associateModel;
+        var titulo = _dialogTitle;
+        await AbrirConPersonaExistenteAsync(personaId);
+        if (_isNewAssociate)
+        {
+            _associateModel = afiliacion;
+        }
+        else if (titulo != _dialogTitle)
+        {
+            await Notification.InfoAsync("Esa persona ya es asociada: se abrió su afiliación para editarla.");
+        }
+    }
+
+    // ---------- Modelos ----------
 
     private class AssociateRow
     {
@@ -703,12 +744,9 @@
         public decimal ContributionRate { get; set; }
         public Guid? EmployerCompanyPublicId { get; set; }
         public Guid? BranchPublicId { get; set; }
-        public Guid? CostCenterPublicId { get; set; }
         public Guid? SectionPublicId { get; set; }
-        public short CutoffDay { get; set; }
         public string? Status { get; set; }
         public string? CategoryRating { get; set; }
-        public Guid? AdvisorPublicId { get; set; }
         public Guid? CommitteePublicId { get; set; }
         public string? AssociateClass { get; set; }
         public string? PaymentType { get; set; }
@@ -719,73 +757,13 @@
         public string? ExternalSalaryType { get; set; }
         public decimal ExternalSeverance { get; set; }
         public string? ExternalSeveranceFund { get; set; }
-        public string? ExternalOtherIncomeDescription { get; set; }
         public Guid? DepositBankPublicId { get; set; }
         public string? DepositBankAccountNumber { get; set; }
         public string? DepositBankAccountType { get; set; }
-        public bool AuthCentralRisk { get; set; }
-        public decimal CreditLimit { get; set; }
-        public decimal PosCardLimit { get; set; }
-        public decimal InsuranceRiskRate { get; set; }
-        public bool IsSiplaExempt { get; set; }
-        public bool SinglePromissoryNote { get; set; }
-        public bool PledgesContributions { get; set; }
-        public bool InManagement { get; set; }
-        public bool IsFromGovernment { get; set; }
-        public bool IsPublicResourceAdmin { get; set; }
-        public bool IsPensioner { get; set; }
-        public bool IsInsubordinate { get; set; }
-        public bool IsOnVacation { get; set; }
-        public bool IsOnUnpaidLeave { get; set; }
         public string? SpouseEmployer { get; set; }
         public decimal SpouseSalary { get; set; }
         public string? SpousePosition { get; set; }
         public string? SpouseProfession { get; set; }
-    }
-
-    private class PersonEditDto
-    {
-        public Guid PublicId { get; set; }
-        public string IdType { get; set; } = "C";
-        public string TaxId { get; set; } = "";
-        public string? TaxIdCheckDigit { get; set; }
-        public string? IdIssuedAt { get; set; }
-        public DateOnly? IdIssueDate { get; set; }
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string? BusinessName { get; set; }
-        public string? PersonType { get; set; }
-        public string? Address { get; set; }
-        public string? Phone1 { get; set; }
-        public string? Phone2 { get; set; }
-        public string? Mobile { get; set; }
-        public string? Email { get; set; }
-        public Guid? CityPublicId { get; set; }
-        public string? CityName { get; set; }
-        public string? Gender { get; set; }
-        public string? MaritalStatus { get; set; }
-        public DateOnly? DateOfBirth { get; set; }
-        public string? EducationLevel { get; set; }
-        public bool IsAssociate { get; set; }
-        public bool IsEmployee { get; set; }
-        public string? Status { get; set; }
-    }
-
-    private class PersonModel
-    {
-        public string IdType { get; set; } = "C";
-        public string TaxId { get; set; } = "";
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string? BusinessName { get; set; }
-        public string? Email { get; set; }
-        public string? Phone1 { get; set; }
-        public string? Mobile { get; set; }
-        public string? Address { get; set; }
-        public Guid? CityPublicId { get; set; }
-        public string? Gender { get; set; }
-        public string? MaritalStatus { get; set; }
-        public DateTime? DateOfBirthDt { get; set; }
     }
 
     private class AssociateModel
@@ -815,6 +793,18 @@
         public string? SpousePosition { get; set; }
         public string? SpouseProfession { get; set; }
     }
+
+    /// <summary><c>AssociateInput</c> del servidor; <c>PersonPublicId</c> y <c>Status</c> sólo viajan cuando aplican.</summary>
+    private sealed record PayloadAfiliacionDto(
+        DateOnly? JoinDate, decimal ContributionRate, Guid? EmployerCompanyPublicId, Guid? BranchPublicId,
+        Guid? SectionPublicId, Guid? CommitteePublicId, string? CategoryRating, string? AssociateClass, string? PaymentType,
+        decimal ContributionPledged, string? ExternalEmployerName, DateOnly? ExternalEmploymentStartDate,
+        decimal ExternalSalary, string? ExternalSalaryType, decimal ExternalSeverance, string? ExternalSeveranceFund,
+        Guid? DepositBankPublicId, string? DepositBankAccountNumber, string? DepositBankAccountType,
+        string? SpouseEmployer, decimal SpouseSalary, string? SpousePosition, string? SpouseProfession,
+        Guid? PersonPublicId = null, string? Status = null);
+
+    private sealed record Colision(string Mensaje, bool Eliminada);
 
     private class LookupRaw
     {

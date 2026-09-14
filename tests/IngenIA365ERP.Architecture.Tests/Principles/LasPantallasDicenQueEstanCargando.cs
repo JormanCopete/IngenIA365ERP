@@ -20,7 +20,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LasPantallasDicenQueEstanCargando
 {
     /// <summary>Carpetas bajo <c>Shared/Pages</c> ya migradas al patrón. Se amplía módulo a módulo.</summary>
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina"];
+    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados"];
 
     private static IEnumerable<string> PantallasMigradas()
     {

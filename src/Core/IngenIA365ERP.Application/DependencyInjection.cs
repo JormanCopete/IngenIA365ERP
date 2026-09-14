@@ -79,6 +79,13 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Payslips.PayslipModelBuilder>();
         services.AddScoped<Payroll.Services.IPayslipEmailDispatcher, Payroll.Payslips.PayslipEmailDispatcher>();
 
+        // Feature 008 — cómo se crea una persona y cómo se le da un rol con tabla hija, en
+        // un solo sitio. Los usan los comandos simples y los compuestos «con persona», que
+        // guardan todo en un solo SaveChanges.
+        services.AddScoped<Core.People.Services.PersonFactory>();
+        services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
+        services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
+
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<
             IngenIA365ERP.Application.Identity.Profile.Services.IPasswordResetEmailDispatcher,

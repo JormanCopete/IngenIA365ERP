@@ -21,9 +21,17 @@ public sealed class PermissionsModule : ICarterModule
 
         group.MapGet("/", ListAsync).WithName("Permissions_List")
             .RequirePermission("Security.Permissions.View");
+
+        // Feature 008: los permisos efectivos de quien pregunta, en la cooperativa activa. Sin
+        // código propio —cualquier sesión con cooperativa puede saber qué puede hacer— pero no
+        // exenta de cooperativa: sin ella el middleware responde Session.TenantNotSelected.
+        group.MapGet("/mine", MineAsync).WithName("Permissions_Mine");
     }
 
     private static async Task<object?> ListAsync(
         string? module, ISender sender, CancellationToken ct) =>
         await sender.Send(new ListPermissionsQuery(module), ct);
+
+    private static async Task<object?> MineAsync(ISender sender, CancellationToken ct) =>
+        await sender.Send(new GetMyPermissionsQuery(), ct);
 }

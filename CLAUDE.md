@@ -129,6 +129,31 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   clases ARL siguen numéricas 1..5 porque el motor las traduce. Un duplicado responde
   `Catalogo.CodigoDuplicado` con el nombre del existente, y la pantalla lo consulta
   antes (`GET /api/catalogos/{catalogo}/codigo/{codigo}`, componente `CampoCodigo`).
+- **Personas y roles (feature 008, 2026-09-13)**: la persona se escribe desde la interfaz en
+  **un solo sitio**, `Components/Personas/PersonaDialog` sobre `PersonasClient`; Empleados y
+  Asociados muestran a la persona existente **de sólo lectura** («Editar datos de la persona»
+  abre ese diálogo) y con persona nueva registran persona y rol en **un paso**
+  (`POST /api/payroll/employees/with-person`, `/api/core/associates/with-person`: un comando, un
+  `SaveChangesAsync`, un evento de auditoría). Las banderas `IsEmployee/IsAssociate/IsSalesperson`
+  **no están en el contrato** (`PersonInput`): las escribe sólo el handler que crea o retira la
+  fila hija; hasta esa fecha `UpdatePersonCommand` sobrescribía las ocho y registrar un empleado
+  apagaba «Asociado». Las otras cinco se editan en Personas. El documento es único **incluso
+  frente a eliminadas**: `Person.TaxIdDeleted` y `POST /api/core/people/{id}/restore` (misma fila,
+  permiso `Core.People.Delete`); una carrera entre dos usuarios se traduce a `Person.TaxIdDuplicate`.
+  El **reingreso** de un empleado retirado es una **ficha nueva** (`UK_PAY_Employees_PersonId`
+  filtrado a fichas vivas; `by-person` devuelve sólo la viva). `/api/core/people`, `/associates` y
+  `/payroll/employees` exigen `Core.People.*`, `Core.Associates.*`, `Payroll.Employees.*`
+  (Operador crea y edita; eliminar/restaurar y terminar contrato son del administrador; todo rol
+  existente conserva la lectura); el cliente los conoce por `GET /api/admin/permissions/mine`
+  (`PermisosDelUsuario`) y `PermissionGate` vive en `Shared` —antes estaba en `Web.Client`,
+  `Shared` no lo veía y era inerte—. `GET /api/core/people/{id}` devuelve la persona **completa**:
+  antes faltaban 13 campos y editar en Personas los borraba. Receta para sumar módulos (fase 2:
+  Vendedores, Proveedores, Clientes, Terceros y los 2 buscadores ad-hoc que quedan):
+  `docs/manual/alta-de-persona-desde-modulos.md`. Lo fijan `LaPersonaSeEscribeEnUnSoloSitio`,
+  `LosMaestrosDePersonaExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
+  De paso: `PAY_Employees.TerminationCause` era el `varchar(4)` del código SOLIDO y la pantalla lo
+  pedía como texto libre (500 con cualquier motivo real); pasó a 120 con validador
+  (`MotivoDeRetiroComoTexto`).
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -177,11 +202,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 674 en 142 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | 692 (2026-09-13) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 181 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 781 (136 Domain, 564 Application, 54 Architecture, 25 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 134 el 2026-09-10 con Docker: 133 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 940 el 2026-09-13 (165 Domain, 663 Application, 65 Architecture, 45 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -226,11 +251,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/005-nomina-novedades-liquidacion/plan.md](specs/005-nomina-novedades-liquidacion/plan.md)
+[specs/008-alta-persona-un-paso/plan.md](specs/008-alta-persona-un-paso/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/005-nomina-novedades-liquidacion/spec.md)
-- [research.md](specs/005-nomina-novedades-liquidacion/research.md)
-- [data-model.md](specs/005-nomina-novedades-liquidacion/data-model.md)
-- [quickstart.md](specs/005-nomina-novedades-liquidacion/quickstart.md)
-- [contracts/](specs/005-nomina-novedades-liquidacion/contracts/)
+- [spec.md](specs/008-alta-persona-un-paso/spec.md)
+- [research.md](specs/008-alta-persona-un-paso/research.md)
+- [data-model.md](specs/008-alta-persona-un-paso/data-model.md)
+- [quickstart.md](specs/008-alta-persona-un-paso/quickstart.md)
+- [contracts/](specs/008-alta-persona-un-paso/contracts/)
 <!-- SPECKIT END -->

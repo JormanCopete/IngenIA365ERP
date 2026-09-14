@@ -948,3 +948,19 @@ input[type="checkbox"], input[type="radio"] {
 .data-grid td.numero, .data-grid th.numero { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .data-grid tr.resaltada td { font-weight: var(--peso-medio); border-top: 1px solid var(--borde); }
 .lista-candidatos { list-style: none; margin: 0; padding: var(--pad-xs) 0; display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+
+/* --- Formulario de persona compartido (Components/Personas, feature 008) ---- */
+/* Los roles con ficha propia se ven como distintivo: encendido con el color del rol,
+   apagado en gris; los módulos que pueden registrarlo muestran un botón en su lugar. */
+/* Relleno del panel de cada pestaña de un diálogo con SfTab. Vivía en Personas.razor.css,
+   pero el formulario compartido se pinta desde otro componente y el CSS con ámbito no lo alcanza. */
+.panel-pestana { padding: var(--pad-lg); }
+.marca-rol { font-size: var(--texto-xs); margin-right: var(--gap-xs); }
+.marca-rol-apagada { background: var(--superficie-2); color: var(--texto-secundario); }
+.distintivos-derivados { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-items: center; }
+/* Datos de una persona existente dentro de Empleados/Asociados: se leen, no se editan (FR-005). */
+.persona-solo-lectura { display: flex; justify-content: space-between; align-items: center; gap: var(--gap-md); margin-bottom: var(--pad-md); }
+/* Botón de envío que sólo existe para que Enter en el formulario dispare OnValidSubmit. */
+.oculto { display: none; }
+/* Aviso de documento duplicado o eliminado, con la acción al lado. */
+.aviso-documento { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-top: var(--pad-sm); }

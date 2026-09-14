@@ -1,0 +1,87 @@
+@implements IDisposable
+@inject PermisosDelUsuario Permisos
+
+@if (_permitido)
+{
+    @ChildContent
+}
+else if (_resuelto && Fallback is not null)
+{
+    @Fallback
+}
+else if (_resuelto && MostrarAviso)
+{
+    <p class="muted">No tenés permiso para esta sección.</p>
+}
+
+@code {
+    /// <summary>
+    /// Muestra <see cref="ChildContent"/> sólo si el usuario tiene el permiso en la cooperativa
+    /// activa (feature 008, FR-011). Los permisos los da <see cref="PermisosDelUsuario"/>, que los
+    /// pide una vez a <c>/api/admin/permissions/mine</c> y los recalcula al cambiar de sesión o de
+    /// cooperativa; el gate se vuelve a pintar solo.
+    ///
+    /// <para>
+    /// Hasta el 2026-09-13 este componente vivía en <c>Web.Client</c> y miraba claims <c>perm</c>
+    /// del token, que el token central no lleva. Como <c>Shared</c> no referencia <c>Web.Client</c>,
+    /// las páginas de <c>Shared</c> que lo usaban lo compilaban como una etiqueta HTML desconocida:
+    /// no protegía nada. Desde aquí sí.
+    /// </para>
+    ///
+    /// <para>
+    /// Mientras los permisos no se han resuelto no pinta nada: ni el contenido (para no mostrar
+    /// un botón que luego desaparece) ni el aviso (para no acusar a quien sí puede). Sin sesión
+    /// —el prerender del Web— queda igual de callado.
+    /// </para>
+    /// </summary>
+    [Parameter, EditorRequired] public string Required { get; set; } = string.Empty;
+
+    /// <summary>Lista alternativa: el usuario necesita AL MENOS UNO de estos.</summary>
+    [Parameter] public IEnumerable<string>? AnyOf { get; set; }
+
+    /// <summary>Contenido a renderizar cuando el usuario tiene el permiso.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Contenido a renderizar cuando NO tiene el permiso (opcional).</summary>
+    [Parameter] public RenderFragment? Fallback { get; set; }
+
+    /// <summary>
+    /// Sin <see cref="Fallback"/>: si es verdadero pinta «No tenés permiso para esta sección»;
+    /// si es falso (por defecto), no pinta nada — es lo que quiere un botón dentro de una barra.
+    /// Una sección entera de pantalla lo pone en verdadero para no quedar en blanco.
+    /// </summary>
+    [Parameter] public bool MostrarAviso { get; set; }
+
+    private bool _permitido;
+    private bool _resuelto;
+
+    protected override void OnInitialized() => Permisos.Cambiaron += OnCambiaron;
+
+    protected override async Task OnParametersSetAsync() => await EvaluarAsync();
+
+    private async Task EvaluarAsync()
+    {
+        _resuelto = false;
+        var estado = await Permisos.ObtenerAsync();
+        if (estado.Provisional)
+        {
+            // Sin sesión todavía (prerender, restauración en curso): callado y cerrado.
+            _permitido = false;
+            return;
+        }
+
+        _permitido = estado.EsMaestro
+            || (!string.IsNullOrWhiteSpace(Required) && estado.Codigos.Contains(Required))
+            || (AnyOf is not null && AnyOf.Any(estado.Codigos.Contains))
+            || (string.IsNullOrWhiteSpace(Required) && AnyOf is null);
+        _resuelto = true;
+    }
+
+    private void OnCambiaron() => _ = InvokeAsync(async () =>
+    {
+        await EvaluarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Permisos.Cambiaron -= OnCambiaron;
+}

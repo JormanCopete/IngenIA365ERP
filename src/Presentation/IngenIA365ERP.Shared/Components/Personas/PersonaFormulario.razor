@@ -1,0 +1,45 @@
+@using IngenIA365ERP.Shared.Models.Personas
+
+@*
+    Las cuatro secciones de la persona en una SfTab: es el cuerpo del diálogo de Personas.
+    Empleados y Asociados no lo usan —arman su propia SfTab con PersonaCampos por pestaña y
+    sus pestañas laborales/de afiliación—, así que la pestaña Roles sólo existe aquí.
+*@
+
+<SfTab>
+    <TabItems>
+        <TabItem>
+            <ChildContent><TabHeader Text="Identificación" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.Identificacion" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Contacto" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.Contacto" Modelo="@Modelo" Deshabilitado="@Deshabilitado" Ciudades="@Ciudades" />
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Demografía" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.Demografia" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Roles" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.Roles" Modelo="@Modelo" Deshabilitado="@Deshabilitado"
+                               MostrarEstado="true" RolesRegistrables="@RolesRegistrables" OnRegistrarRol="@OnRegistrarRol" />
+            </ContentTemplate>
+        </TabItem>
+    </TabItems>
+</SfTab>
+
+@code {
+    [Parameter, EditorRequired] public PersonaFormularioModelo Modelo { get; set; } = new();
+    [Parameter] public bool Deshabilitado { get; set; }
+    [Parameter] public IReadOnlyList<OpcionDeCiudad> Ciudades { get; set; } = [];
+    [Parameter] public IReadOnlyCollection<string> RolesRegistrables { get; set; } = [];
+    [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
+}

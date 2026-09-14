@@ -29,6 +29,9 @@ public record RecentPayrollEntryDto(
 
 public record EmployeeDetailDto(
     Guid PublicId,
+    // Feature 008: la persona a la que pertenece la ficha. La pantalla la usaba para buscar la
+    // persona por documento en /search y quedarse con el primer resultado.
+    Guid PersonPublicId,
     // Datos personales: vienen de COR_People via JOIN
     string FirstName,
     string LastName,
@@ -127,6 +130,13 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
 
 // --- Get Employee by Person Id (para detectar "ya es empleado" desde el buscador) ---
 
+/// <summary>
+/// La ficha <b>viva</b> de una persona (feature 008, FR-017). Una persona puede tener varias
+/// fichas a lo largo del tiempo —cada reingreso tras un retiro crea una nueva y la retirada
+/// queda como historial—, pero a lo sumo una con <c>Status != -1</c>. Hasta el 2026-09-13 se
+/// tomaba la primera que apareciera, retirada o no, y la pantalla podía abrir la equivocada.
+/// Sin ficha viva responde <c>Employee.NotFound</c>: la pantalla pasa a modo registro.
+/// </summary>
 public record GetEmployeeByPersonIdQuery(Guid PersonPublicId) : IRequest<Result<EmployeeDetailDto>>;
 
 public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context)
@@ -135,12 +145,13 @@ public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context)
     public async Task<Result<EmployeeDetailDto>> Handle(GetEmployeeByPersonIdQuery request, CancellationToken ct)
     {
         var employee = await context.Employees.AsNoTracking()
-            .Include(e => e.Person)
-            .FirstOrDefaultAsync(e => e.Person.PublicId == request.PersonPublicId && !e.IsDeleted, ct);
+            .Where(e => e.Person.PublicId == request.PersonPublicId && !e.IsDeleted && e.Status != -1)
+            .OrderByDescending(e => e.JoinDate)
+            .FirstOrDefaultAsync(ct);
 
         if (employee is null)
             return Result.Failure<EmployeeDetailDto>(new Error("Employee.NotFound",
-                "Esta persona aun no tiene el rol empleado."));
+                "Esta persona no tiene una ficha de empleado vigente."));
 
         // Reusa el mismo helper interno como GetEmployeeByIdQueryHandler
         return await new GetEmployeeByIdQueryHandler(context).Handle(
@@ -242,6 +253,7 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
 
         return Result.Success(new EmployeeDetailDto(
             employee.PublicId,
+            person.PublicId,
             person.FirstName,
             person.LastName,
             person.TaxId,

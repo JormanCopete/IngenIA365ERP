@@ -71,10 +71,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
     public DbSet<Person> People => Set<Person>();
-    DbSet<Associate> IApplicationDbContext.Associates => throw new NotImplementedException();
+    // Feature 008: asociados, ciudades y vendedores entran al modelo para probar las fábricas
+    // de persona (duplicado, ciudad inexistente) y la reconciliación de banderas al restaurar.
+    public DbSet<Associate> Associates => Set<Associate>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
-    DbSet<City> IApplicationDbContext.Cities => throw new NotImplementedException();
+    public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<HealthInsuranceProvider> HealthInsuranceProviders => Set<HealthInsuranceProvider>();
     DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
@@ -160,7 +162,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
     DbSet<AssociateWithdrawal> IApplicationDbContext.AssociateWithdrawals => throw new NotImplementedException();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
-    DbSet<PayrollConcept> IApplicationDbContext.PayrollConcepts => throw new NotImplementedException();
+    public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
     DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
     DbSet<PensionProvider> IApplicationDbContext.PensionProviders => throw new NotImplementedException();
     DbSet<SeveranceProvider> IApplicationDbContext.SeveranceProviders => throw new NotImplementedException();
@@ -169,7 +171,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<WithholdingParameter> IApplicationDbContext.WithholdingParameters => throw new NotImplementedException();
     DbSet<WithholdingCause> IApplicationDbContext.WithholdingCauses => throw new NotImplementedException();
     DbSet<AutoContributionParam> IApplicationDbContext.AutoContributionParams => throw new NotImplementedException();
-    DbSet<PayrollTransaction> IApplicationDbContext.PayrollTransactions => throw new NotImplementedException();
+    // Feature 008: el detalle de la ficha lista movimientos recientes; entra vacío para poder probar by-person.
+    public DbSet<PayrollTransaction> PayrollTransactions => Set<PayrollTransaction>();
     DbSet<PayrollEntry> IApplicationDbContext.PayrollEntries => throw new NotImplementedException();
     DbSet<Absence> IApplicationDbContext.Absences => throw new NotImplementedException();
     DbSet<TaxCertificate> IApplicationDbContext.TaxCertificates => throw new NotImplementedException();
@@ -182,7 +185,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Location> IApplicationDbContext.Locations => throw new NotImplementedException();
     DbSet<SalesPoint> IApplicationDbContext.SalesPoints => throw new NotImplementedException();
     DbSet<Shift> IApplicationDbContext.Shifts => throw new NotImplementedException();
-    DbSet<Salesperson> IApplicationDbContext.Salespeople => throw new NotImplementedException();
+    public DbSet<Salesperson> Salespeople => Set<Salesperson>();
     DbSet<DiscountType> IApplicationDbContext.DiscountTypes => throw new NotImplementedException();
     DbSet<PriceListType> IApplicationDbContext.PriceListTypes => throw new NotImplementedException();
     DbSet<ProductAccount> IApplicationDbContext.ProductAccounts => throw new NotImplementedException();
@@ -208,7 +211,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
-        modelBuilder.Ignore<City>();
+        // Feature 008: City sí entra (PersonFactory valida CityPublicId); lo que cuelga de ella no.
+        modelBuilder.Ignore<Department>();
         modelBuilder.Ignore<Spouse>();
         modelBuilder.Ignore<Subscription>();
         modelBuilder.Ignore<TenantSetting>();
@@ -237,11 +241,25 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         // Nomina (feature 005): las cuentas contables y los centros de costo no hacen
         // falta para probar los handlers; el empleado se prueba sin su Person.
         modelBuilder.Ignore<ChartOfAccount>();
-        modelBuilder.Entity<Employee>(b => { b.Ignore(e => e.Person); b.Ignore("RowVersion"); });
+        // Feature 008: Employee.Person ya no se ignora — el alta en un paso enlaza la ficha a una
+        // persona sin Id por navegación y la prueba tiene que ver el PersonId resuelto.
+        modelBuilder.Entity<Employee>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Associate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Salesperson>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollTransaction>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollConcept>(b => b.Ignore("RowVersion"));
+        // City.People choca con las dos navegaciones Person→City (City y MailingCity); aquí no hace falta.
+        modelBuilder.Entity<City>(b => { b.Ignore(c => c.People); b.Ignore(c => c.Beneficiaries); b.Ignore(c => c.References); b.Ignore("RowVersion"); });
         // Feature 005: lo que el cargador de insumos y el contabilizador leen. ChartOfAccount
         // sigue fuera del modelo (su grafo arrastra medio dominio): las navegaciones hacia el
         // se ignoran y las cuentas se referencian por Id.
-        modelBuilder.Entity<Person>(b => { b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<Person>(b =>
+        {
+            b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion");
+            // Feature 008: dos navegaciones a City; se fija la de residencia y se ignora la de correspondencia.
+            b.HasOne(x => x.City).WithMany().HasForeignKey(x => x.CityId);
+            b.Ignore(x => x.MailingCity);
+        });
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
