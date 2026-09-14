@@ -85,6 +85,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.ParametrosClie
 // Feature 005 — cliente tipado del módulo de nómina (planes, períodos, novedades, liquidación).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
+// Feature 008 — cliente tipado del maestro de personas (Personas, Empleados y Asociados).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
+// Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();

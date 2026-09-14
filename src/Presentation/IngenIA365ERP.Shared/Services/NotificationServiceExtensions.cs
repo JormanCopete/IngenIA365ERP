@@ -13,12 +13,48 @@ public static class NotificationServiceExtensions
         HttpResponseMessage response,
         string fallback)
     {
-        var detail = await ExtractDetailAsync(response);
         var status = (int)response.StatusCode;
+        if (await EsPermisoNegadoAsync(response))
+        {
+            await notif.ErrorAsync($"{fallback}: {SinPermiso}");
+            return;
+        }
+
+        var detail = await ExtractDetailAsync(response);
         var message = string.IsNullOrWhiteSpace(detail)
             ? $"{fallback} (HTTP {status})"
             : $"{fallback} (HTTP {status}): {detail}";
         await notif.ErrorAsync(message);
+    }
+
+    /// <summary>Lo que se dice cuando una escritura recibe el 404 indistinguible de la puerta de permisos.</summary>
+    public const string SinPermiso = "No tenés permiso para esta acción o el registro ya no existe.";
+
+    /// <summary>
+    /// Feature 008: la API responde a la falta de permiso con un 404 <c>Generic.NotFound</c>
+    /// indistinguible de una ruta inexistente (FR-017 de la feature 003). En una lectura eso es
+    /// «no está»; en un POST/PUT/DELETE casi siempre es «no podés», y decirle a la persona
+    /// «recurso no encontrado» cuando acaba de pulsar Guardar la deja sin pista.
+    /// </summary>
+    private static async Task<bool> EsPermisoNegadoAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode != System.Net.HttpStatusCode.NotFound) return false;
+        var metodo = response.RequestMessage?.Method;
+        if (metodo is null || metodo == HttpMethod.Get || metodo == HttpMethod.Head) return false;
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+            using var doc = JsonDocument.Parse(raw);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("code", out var code)
+                && code.ValueKind == JsonValueKind.String
+                && string.Equals(code.GetString(), "Generic.NotFound", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false; // cuerpo no JSON: no es el envelope de la puerta
+        }
     }
 
     private static async Task<string?> ExtractDetailAsync(HttpResponseMessage response)

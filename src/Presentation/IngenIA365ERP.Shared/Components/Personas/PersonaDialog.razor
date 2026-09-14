@@ -1,0 +1,263 @@
+@using IngenIA365ERP.Shared.Models.Personas
+@inject PersonasClient Personas
+@inject INotificationService Notification
+
+@*
+    El diálogo de persona: crear una o editar una existente (feature 008, FR-006). Es el ÚNICO
+    sitio que escribe la persona desde la interfaz: Personas lo abre desde «Nueva» y «Editar»;
+    Empleados y Asociados lo abren desde «Editar datos de la persona» (FR-005).
+    Con documento duplicado ofrece abrir esa persona; con documento de una eliminada ofrece
+    restaurarla a quien tenga el permiso de eliminar (FR-007, FR-016).
+*@
+
+<SfDialog @bind-Visible="Visible" Header="@Titulo" Width="900px" IsModal="true" ShowCloseIcon="true">
+    <DialogEvents Opened="@OnAbiertoAsync" Closed="@OnCerrado" />
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <EditForm Model="_modelo" OnValidSubmit="GuardarAsync">
+                    <DataAnnotationsValidator />
+                    @* «Registrar como…» sólo tiene sentido con una persona ya guardada. *@
+                    <PersonaFormulario Modelo="@_modelo" Ciudades="@_ciudades"
+                                       RolesRegistrables="@(_modelo.PublicId is null ? [] : RolesRegistrables)"
+                                       OnRegistrarRol="@RegistrarRolAsync" />
+                    <button type="submit" class="oculto"></button>
+                </EditForm>
+
+                @if (_colision is not null)
+                {
+                    <div class="aviso aviso-error aviso-documento">
+                        <span>@_colision.Mensaje</span>
+                        @if (_colision.Eliminada)
+                        {
+                            <PermissionGate Required="Core.People.Delete">
+                                <SfButton CssClass="e-small" OnClick="@RestaurarAsync" Disabled="@_saving">Restaurar persona</SfButton>
+                            </PermissionGate>
+                            <PermissionGate Required="Core.People.Delete" Fallback="@FallbackRestaurar" />
+                        }
+                        else
+                        {
+                            <SfButton CssClass="e-small" OnClick="@AbrirExistenteAsync" Disabled="@_saving">Abrir esa persona</SfButton>
+                        }
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelarAsync" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_saving || _carga.Activa || _guardado.Activa)" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Persona a editar; nulo = crear una nueva.</summary>
+    [Parameter] public Guid? PersonaPublicId { get; set; }
+
+    /// <summary>Al crear: documento ya escrito (lo que se buscó y no existía).</summary>
+    [Parameter] public string? DocumentoInicial { get; set; }
+
+    /// <summary>
+    /// Fase 2: rol simple que viene premarcado al crear desde otro módulo
+    /// (<c>customer</c>, <c>supplier</c>, <c>advisor</c>, <c>thirdparty</c>, <c>invoice</c>).
+    /// </summary>
+    [Parameter] public string? RolSimpleInicial { get; set; }
+
+    /// <summary>Roles derivados que Personas puede ofrecer registrar según los permisos del usuario.</summary>
+    [Parameter] public IReadOnlyCollection<string> RolesRegistrables { get; set; } = [];
+
+    /// <summary>Se guardó (creación o edición); el argumento es el PublicId de la persona.</summary>
+    [Parameter] public EventCallback<Guid> OnGuardado { get; set; }
+
+    /// <summary>Se pulsó «Registrar como…» en Roles; el argumento es el rol. Quien contiene el diálogo navega.</summary>
+    [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private PersonaFormularioModelo _modelo = PersonaFormularioModelo.Nuevo();
+    private IReadOnlyList<OpcionDeCiudad> _ciudades = [];
+    private bool _saving, _ciudadesCargadas;
+    private Colision? _colision;
+
+    private string Titulo => _modelo.PublicId is null
+        ? "Nueva persona"
+        : $"Editar persona: {_modelo.NombreVisible}";
+
+    private RenderFragment FallbackRestaurar => @<span class="hint">Pedile la restauración a quien administra Maestros › Personas.</span>;
+
+    private async Task OnAbiertoAsync(Syncfusion.Blazor.Popups.OpenEventArgs _)
+    {
+        _colision = null;
+        await CargarCiudadesAsync();
+        if (PersonaPublicId is { } id) await CargarPersonaAsync(id);
+        else
+        {
+            _modelo = PersonaFormularioModelo.Nuevo(DocumentoInicial);
+            AplicarRolSimpleInicial();
+        }
+        StateHasChanged();
+    }
+
+    private void OnCerrado(Syncfusion.Blazor.Popups.CloseEventArgs _) => _colision = null;
+
+    private void AplicarRolSimpleInicial()
+    {
+        switch (RolSimpleInicial)
+        {
+            case "customer": _modelo.IsCustomer = true; break;
+            case "supplier": _modelo.IsSupplier = true; break;
+            case "advisor": _modelo.IsAdvisor = true; break;
+            case "thirdparty": _modelo.IsThirdParty = true; break;
+            case "invoice": _modelo.ReceivesInvoice = true; break;
+        }
+    }
+
+    private async Task CargarCiudadesAsync()
+    {
+        if (_ciudadesCargadas) return;
+        using var carga = _carga.Iniciar();
+        try
+        {
+            _ciudades = await Personas.ListarCiudadesAsync();
+            _ciudadesCargadas = true;
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"No se pudieron cargar las ciudades: {ex.Message}");
+        }
+    }
+
+    private async Task CargarPersonaAsync(Guid id)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Personas.ObtenerAsync(id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync($"No se pudieron cargar los datos de la persona: {r.ErrorMessage}");
+            await CerrarAsync();
+            return;
+        }
+        _modelo = PersonaFormularioModelo.DesdeDto(r.Value);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_saving) return;
+        var avisos = _modelo.Validar();
+        if (avisos.Count > 0)
+        {
+            await Notification.WarningAsync(avisos[0]);
+            return;
+        }
+
+        _saving = true;
+        _colision = null;
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var entrada = _modelo.AInput();
+            Guid publicId;
+            if (_modelo.PublicId is { } existente)
+            {
+                var r = await Personas.ActualizarAsync(existente, entrada);
+                if (!r.IsSuccess) { await FalloAsync(r.ErrorCode, r.ErrorMessage); return; }
+                publicId = existente;
+                await Notification.SuccessAsync("Persona actualizada correctamente.");
+            }
+            else
+            {
+                var r = await Personas.CrearAsync(entrada);
+                if (!r.IsSuccess) { await FalloAsync(r.ErrorCode, r.ErrorMessage); return; }
+                publicId = r.Value;
+                await Notification.SuccessAsync("Persona creada correctamente.");
+            }
+
+            await CerrarAsync();
+            await OnGuardado.InvokeAsync(publicId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    /// <summary>Un duplicado o una eliminada se muestran junto al formulario con su acción; lo demás, como aviso.</summary>
+    private async Task FalloAsync(string? codigo, string? mensaje)
+    {
+        switch (codigo)
+        {
+            case ErroresDePersona.DocumentoDuplicado:
+                _colision = new Colision(mensaje ?? "Ya existe una persona con ese documento.", Eliminada: false);
+                break;
+            case ErroresDePersona.DocumentoEliminado:
+                _colision = new Colision(mensaje ?? "Ese documento pertenece a una persona eliminada.", Eliminada: true);
+                break;
+            default:
+                await Notification.ErrorAsync(codigo == "Generic.NotFound"
+                    ? $"Error al guardar persona: {NotificationServiceExtensions.SinPermiso}"
+                    : $"Error al guardar persona: {mensaje}");
+                break;
+        }
+    }
+
+    /// <summary>«Abrir esa persona»: el documento ya es de alguien; se pasa a editarla.</summary>
+    private async Task AbrirExistenteAsync()
+    {
+        var r = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim());
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync($"No se pudo abrir la persona existente: {r.ErrorMessage}");
+            return;
+        }
+        _colision = null;
+        await CargarPersonaAsync(r.Value.PublicId);
+    }
+
+    /// <summary>«Restaurar persona»: misma fila, y se sigue editándola.</summary>
+    private async Task RestaurarAsync()
+    {
+        if (_saving) return;
+        _saving = true;
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var quien = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim());
+            if (!quien.IsSuccess || quien.Value is null)
+            {
+                await Notification.ErrorAsync($"No se encontró la persona eliminada: {quien.ErrorMessage}");
+                return;
+            }
+            var r = await Personas.RestaurarAsync(quien.Value.PublicId);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorCode == "Generic.NotFound"
+                    ? NotificationServiceExtensions.SinPermiso
+                    : $"No se pudo restaurar: {r.ErrorMessage}");
+                return;
+            }
+            await Notification.SuccessAsync($"Persona restaurada: {quien.Value.FullName}.");
+            _colision = null;
+            await CargarPersonaAsync(quien.Value.PublicId);
+            await OnGuardado.InvokeAsync(quien.Value.PublicId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task RegistrarRolAsync(string rol) => OnRegistrarRol.InvokeAsync(rol);
+
+    private Task CancelarAsync() => CerrarAsync();
+
+    private async Task CerrarAsync()
+    {
+        Visible = false;
+        _colision = null;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private sealed record Colision(string Mensaje, bool Eliminada);
+}

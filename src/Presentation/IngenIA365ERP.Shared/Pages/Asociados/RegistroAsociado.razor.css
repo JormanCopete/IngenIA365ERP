@@ -1,5 +1,0 @@
-/* Relleno del panel de cada pestaña del asistente de registro. Estaba repetido
-   en linea en las seis pestañas. */
-.panel-pestana {
-    padding: var(--pad-lg);
-}

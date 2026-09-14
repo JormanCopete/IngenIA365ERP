@@ -165,6 +165,8 @@ try
     // endpoint (identidad central → SEC_Users → cooperativa). Va después de Identity para que
     // esta registración sea la que resuelva IPermissionChecker.
     builder.Services.AddScoped<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker, IngenIA365ERP.API.Services.PermisosDelHandler>();
+    // Feature 008: los mismos permisos, expuestos al cliente por GET /api/admin/permissions/mine.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions, IngenIA365ERP.API.Services.PermisosDelHandler>();
     // T048 (Feature 002) — identidad central federada sobre AdminDbContext.
     // Registra IdentityCore<CentralUserIdentity>, BcryptPasswordHasher,
     // PwnedPasswordService, CentralJwtIssuer, ICentralIdentityProvider.

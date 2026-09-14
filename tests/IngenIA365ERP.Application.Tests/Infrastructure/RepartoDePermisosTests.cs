@@ -24,7 +24,9 @@ namespace IngenIA365ERP.Application.Tests.Infrastructure;
 public class RepartoDePermisosTests
 {
     private static readonly string[] Catalogo =
-        [.. DomainPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+        [.. DomainPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         .. CorePermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     public static TheoryData<string> RolesBuiltIn =>
         [.. BuiltInRolesSeeder.PermissionPatterns.Keys];
@@ -69,6 +71,58 @@ public class RepartoDePermisosTests
         concedidos.Should().Contain("Admin.Branches.View");
         concedidos.Should().NotContain("Admin.Tenants.View");
         concedidos.Should().OnlyContain(c => c.EndsWith(".View"));
+    }
+
+    // ------------------------------------------------------ feature 008: maestros de persona --
+
+    [Fact]
+    public void Operator_CreaYEdita_PeroNoDaDeBaja()
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol("Operator", Catalogo);
+
+        concedidos.Should().Contain(["Core.People.View", "Core.People.Create", "Core.People.Update",
+                                     "Core.Associates.View", "Core.Associates.Create", "Core.Associates.Update",
+                                     "Payroll.Employees.View", "Payroll.Employees.Create", "Payroll.Employees.Update"]);
+        concedidos.Should().NotContain("Core.People.Delete", "eliminar y restaurar personas es del administrador");
+        concedidos.Should().NotContain("Payroll.Employees.Terminate", "terminar contratos es del administrador");
+    }
+
+    [Theory]
+    [InlineData("ReadOnly")]
+    [InlineData("Auditor")]
+    public void ReadOnlyYAuditor_SoloLeenLosMaestros(string rol)
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol(rol, Catalogo);
+
+        concedidos.Should().Contain(BuiltInRolesSeeder.LecturaDeMaestros);
+        concedidos.Should().NotContain(c =>
+            (c.StartsWith("Core.People.") || c.StartsWith("Core.Associates.") || c.StartsWith("Payroll.Employees."))
+            && !c.EndsWith(".View"));
+    }
+
+    [Fact]
+    public void CompanyAdmin_PuedeTodoEnLosMaestros()
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol("CompanyAdmin", Catalogo);
+
+        concedidos.Should().Contain(["Core.People.Delete", "Payroll.Employees.Terminate"]);
+    }
+
+    [Fact]
+    public void LaLecturaDeMaestros_ExisteEnElCatalogo()
+    {
+        // Es lo que se concede a los roles personalizados el día del despliegue (FR-010):
+        // una errata en la lista la volvería inerte sin avisar.
+        foreach (var codigo in BuiltInRolesSeeder.LecturaDeMaestros)
+        {
+            Catalogo.Should().Contain(codigo);
+        }
+    }
+
+    [Fact]
+    public void LosCatalogosNoSePisan()
+    {
+        Catalogo.Should().OnlyHaveUniqueItems("un código repetido entre seeders se insertaría dos veces");
     }
 
     [Fact]

@@ -1,20 +1,26 @@
 @*
-    PersonSearchPicker — buscador inline de personas reutilizable.
+    PersonSearchPicker — buscador inline de personas reutilizable (constitución: es EL buscador;
+    no se reinventan buscadores ad-hoc).
     Uso:
         <PersonSearchPicker @bind-Selected="_selectedPerson"
-                            OnPersonSelected="HandlePersonSelected" />
+                            OnPersonSelected="HandlePersonSelected"
+                            PermitirCrear="@_puedeCrearPersona" OnCrearPersona="AbrirAltaConPersona" />
 
-    Maneja debounce + GET /api/core/people/search, muestra resultados con badges
-    (Empleado / Asociado / Tercero / etc.) y un chip cuando hay seleccion activa.
+    Maneja debounce + GET /api/core/people/search, muestra resultados con distintivos y un chip
+    cuando hay selección. Feature 008: sin resultados ofrece «Crear persona nueva con "…"» a quien
+    puede (PermitirCrear), o dice a quién pedirla; si el término es un documento de una persona
+    eliminada, lo dice y ofrece restaurarla a quien tiene el permiso. Ya no abre otra pestaña.
 *@
 
 @inject HttpClient Http
+@inject PersonasClient Personas
+@inject INotificationService Notification
 @using System.Net.Http.Json
 
 <div class="person-search-picker">
     @if (Selected is not null)
     {
-        @* Persona ya seleccionada — chip con boton para limpiar *@
+        @* Persona ya seleccionada — chip con botón para limpiar *@
         <div class="persona-chip">
             <span class="e-badge e-badge-info">@Selected.IdentificationNumber</span>
             <strong class="persona-nombre">@Selected.FullName</strong>
@@ -22,14 +28,9 @@
             {
                 <span class="texto-tenue">(@Selected.CityName)</span>
             }
-            @if (Selected.IsEmployee)
-            {
-                <span class="e-badge e-badge-warning">Empleado</span>
-            }
-            @if (Selected.IsAssociate)
-            {
-                <span class="e-badge e-badge-success">Asociado</span>
-            }
+            @if (Selected.IsEmployee) { <span class="e-badge e-badge-warning">Empleado</span> }
+            @if (Selected.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
+            @if (Selected.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
             @if (!HideClearButton)
             {
                 <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close"
@@ -44,45 +45,65 @@
                    Placeholder="@Placeholder"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
 
-        @if (_searching)
-        {
-            <div class="picker-nota">Buscando...</div>
-        }
-        else if (_options.Count > 0)
-        {
-            <div class="picker-resultados">
-                @foreach (var p in _options)
-                {
-                    <div class="picker-opcion" @onclick="async () => await HandleSelect(p)">
-                        <div class="picker-opcion-fila">
-                            <div class="picker-opcion-identidad">
-                                <span class="e-badge e-badge-info">@p.IdentificationNumber</span>
-                                <strong>@p.FullName</strong>
-                            </div>
-                            <div class="picker-opcion-meta">
-                                @if (!string.IsNullOrEmpty(p.CityName)) { <span>@p.CityName</span> }
-                                @if (p.IsEmployee)  { <span class="e-badge e-badge-warning">Empleado</span> }
-                                @if (p.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
+        <IndicadorDeCarga Cargando="@_busqueda.Activa" Compacto="true" Texto="Buscando…">
+            @if (_options.Count > 0)
+            {
+                <div class="picker-resultados">
+                    @foreach (var p in _options)
+                    {
+                        <div class="picker-opcion" @onclick="async () => await HandleSelect(p)">
+                            <div class="picker-opcion-fila">
+                                <div class="picker-opcion-identidad">
+                                    <span class="e-badge e-badge-info">@p.IdentificationNumber</span>
+                                    <strong>@p.FullName</strong>
+                                </div>
+                                <div class="picker-opcion-meta">
+                                    @if (!string.IsNullOrEmpty(p.CityName)) { <span>@p.CityName</span> }
+                                    @if (p.IsEmployee)  { <span class="e-badge e-badge-warning">Empleado</span> }
+                                    @if (p.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
+                                    @if (p.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
+                                </div>
                             </div>
                         </div>
-                    </div>
-                }
-            </div>
-        }
-        else if (!string.IsNullOrWhiteSpace(_searchText) && _searchText.Length >= 2)
-        {
-            <div class="picker-nota">
-                Sin resultados. La persona debe estar registrada en
-                <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
-            </div>
-        }
-        else if (ShowHelpText)
-        {
-            <div class="picker-nota">
-                La persona debe estar previamente registrada en
-                <a href="/maestros/personas" target="_blank">Maestros - Personas</a>.
-            </div>
-        }
+                    }
+                </div>
+            }
+            else if (_eliminada is not null)
+            {
+                <div class="picker-nota aviso-documento">
+                    <span>Ese documento pertenece a <strong>@_eliminada.FullName</strong>, una persona eliminada@(_eliminada.DeletedAt is { } f ? $" el {f:yyyy-MM-dd}" : "").</span>
+                    <PermissionGate Required="Core.People.Delete">
+                        <SfButton CssClass="e-small" OnClick="@RestaurarAsync" Disabled="@_restaurando">Restaurar persona</SfButton>
+                    </PermissionGate>
+                    <PermissionGate Required="Core.People.Delete" Fallback="@PedirRestauracion" />
+                </div>
+            }
+            else if (_buscado && !string.IsNullOrWhiteSpace(_searchText) && _searchText.Trim().Length >= 2)
+            {
+                <div class="picker-nota aviso-documento">
+                    <span>Sin resultados.</span>
+                    @if (PermitirCrear)
+                    {
+                        <SfButton CssClass="e-small e-primary" IconCss="e-icons e-plus"
+                                  OnClick="@(() => OnCrearPersona.InvokeAsync(_searchText.Trim()))">
+                            Crear persona nueva con "@_searchText.Trim()"
+                        </SfButton>
+                    }
+                    else
+                    {
+                        <span>@(TextoSinResultados ?? "Pedile el registro a quien administra Maestros › Personas.")</span>
+                    }
+                </div>
+            }
+            else if (ShowHelpText)
+            {
+                <div class="picker-nota">
+                    @(PermitirCrear
+                        ? "Buscá por documento o nombre; si la persona no existe, podés crearla desde aquí."
+                        : "La persona debe estar registrada en Maestros › Personas.")
+                </div>
+            }
+        </IndicadorDeCarga>
     }
 </div>
 
@@ -95,26 +116,45 @@
 
     /// <summary>
     /// Disparado cuando el usuario selecciona una persona del listado.
-    /// Util para que el padre cargue datos relacionados (ej. rol existente).
+    /// Útil para que el padre cargue datos relacionados (ej. rol existente).
     /// </summary>
     [Parameter] public EventCallback<PersonSearchItem> OnPersonSelected { get; set; }
 
-    /// <summary>Disparado cuando el usuario limpia la seleccion.</summary>
+    /// <summary>Disparado cuando el usuario limpia la selección.</summary>
     [Parameter] public EventCallback OnCleared { get; set; }
 
     /// <summary>Placeholder del buscador.</summary>
-    [Parameter] public string Placeholder { get; set; } = "Buscar por documento, nombre o apellido (min 2 caracteres)...";
+    [Parameter] public string Placeholder { get; set; } = "Buscar por documento, nombre o apellido (mín. 2 caracteres)...";
 
-    /// <summary>Si es true, muestra el texto de ayuda inicial cuando no hay busqueda.</summary>
+    /// <summary>Si es true, muestra el texto de ayuda inicial cuando no hay búsqueda.</summary>
     [Parameter] public bool ShowHelpText { get; set; } = true;
 
-    /// <summary>Si es true, oculta el boton de limpiar (X) cuando hay persona seleccionada.</summary>
+    /// <summary>Si es true, oculta el botón de limpiar (X) cuando hay persona seleccionada.</summary>
     [Parameter] public bool HideClearButton { get; set; }
 
+    /// <summary>
+    /// Feature 008: sin resultados, ofrecer «Crear persona nueva con "{término}"». El padre lo
+    /// pone en verdadero sólo si el usuario tiene <c>Core.People.Create</c>.
+    /// </summary>
+    [Parameter] public bool PermitirCrear { get; set; }
+
+    /// <summary>Se pulsó «Crear persona nueva»; el argumento es el término buscado (documento o nombre).</summary>
+    [Parameter] public EventCallback<string> OnCrearPersona { get; set; }
+
+    /// <summary>Filtra la búsqueda por bandera (associate, employee, salesperson, customer, supplier, advisor, thirdparty).</summary>
+    [Parameter] public string? FiltroRol { get; set; }
+
+    /// <summary>Texto para «sin resultados» cuando no se puede crear; por defecto dice a quién pedirla.</summary>
+    [Parameter] public string? TextoSinResultados { get; set; }
+
+    private readonly EstadoDeCarga _busqueda = new();
     private string _searchText = "";
-    private bool _searching;
+    private bool _buscado, _restaurando;
     private List<PersonSearchItem> _options = new();
+    private PersonaPorDocumentoDto? _eliminada;
     private System.Threading.CancellationTokenSource? _debounce;
+
+    private RenderFragment PedirRestauracion => @<span>Pedile la restauración a quien administra Maestros › Personas.</span>;
 
     private async Task OnSearchChanged()
     {
@@ -123,6 +163,8 @@
         var token = _debounce.Token;
 
         var term = (_searchText ?? "").Trim();
+        _eliminada = null;
+        _buscado = false;
         if (term.Length < 2)
         {
             _options = new List<PersonSearchItem>();
@@ -134,21 +176,68 @@
             await Task.Delay(300, token);
             if (token.IsCancellationRequested) return;
 
-            _searching = true;
+            using var busqueda = _busqueda.Iniciar();
             await InvokeAsync(StateHasChanged);
 
-            _options = await Http.GetListAsync<PersonSearchItem>(
-                $"/api/core/people/search?q={Uri.EscapeDataString(term)}");
+            var url = $"/api/core/people/search?q={Uri.EscapeDataString(term)}";
+            if (!string.IsNullOrWhiteSpace(FiltroRol)) url += $"&rol={Uri.EscapeDataString(FiltroRol)}";
+            _options = await Http.GetListAsync<PersonSearchItem>(url, token);
+
+            // Sin resultados y el término es un documento: puede ser de una persona eliminada,
+            // que la búsqueda nunca devuelve. Hay que decirlo antes de ofrecer crear otra.
+            if (_options.Count == 0 && EsSoloDigitos(term))
+            {
+                var dueno = await Personas.PorDocumentoAsync(term, token);
+                if (dueno.IsSuccess && dueno.Value is { IsDeleted: true }) _eliminada = dueno.Value;
+            }
+            _buscado = true;
         }
         catch (TaskCanceledException) { /* expected */ }
-        catch
+        catch (Exception ex)
         {
             _options = new List<PersonSearchItem>();
+            await Notification.ErrorAsync($"No se pudo buscar la persona: {ex.Message}");
         }
         finally
         {
-            _searching = false;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static bool EsSoloDigitos(string s) => s.Length <= 20 && s.All(char.IsDigit);
+
+    /// <summary>«Restaurar persona»: misma fila; al terminar queda seleccionada como existente.</summary>
+    private async Task RestaurarAsync()
+    {
+        if (_eliminada is null || _restaurando) return;
+        _restaurando = true;
+        try
+        {
+            var r = await Personas.RestaurarAsync(_eliminada.PublicId);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorCode == "Generic.NotFound"
+                    ? NotificationServiceExtensions.SinPermiso
+                    : $"No se pudo restaurar: {r.ErrorMessage}");
+                return;
+            }
+            await Notification.SuccessAsync($"Persona restaurada: {_eliminada.FullName}.");
+            var restaurada = new PersonSearchItem
+            {
+                PublicId = _eliminada.PublicId,
+                IdentificationNumber = _eliminada.TaxId,
+                FullName = _eliminada.FullName,
+                IsAssociate = _eliminada.IsAssociate,
+                IsEmployee = _eliminada.IsEmployee,
+                IsSalesperson = _eliminada.IsSalesperson,
+                Status = _eliminada.Status,
+            };
+            _eliminada = null;
+            await HandleSelect(restaurada);
+        }
+        finally
+        {
+            _restaurando = false;
         }
     }
 
@@ -157,6 +246,7 @@
         Selected = person;
         _options = new List<PersonSearchItem>();
         _searchText = "";
+        _buscado = false;
         await SelectedChanged.InvokeAsync(person);
         await OnPersonSelected.InvokeAsync(person);
     }
@@ -166,11 +256,13 @@
         Selected = null;
         _options = new List<PersonSearchItem>();
         _searchText = "";
+        _buscado = false;
+        _eliminada = null;
         await SelectedChanged.InvokeAsync(null);
         await OnCleared.InvokeAsync();
     }
 
-    /// <summary>Resultado de /api/core/people/search.</summary>
+    /// <summary>Resultado de /api/core/people/search (feature 008: con las ocho banderas).</summary>
     public class PersonSearchItem
     {
         public Guid PublicId { get; set; }
@@ -178,7 +270,12 @@
         public string FullName { get; set; } = "";
         public bool IsAssociate { get; set; }
         public bool IsEmployee { get; set; }
+        public bool IsSalesperson { get; set; }
+        public bool IsCustomer { get; set; }
+        public bool IsSupplier { get; set; }
+        public bool IsAdvisor { get; set; }
         public bool IsThirdParty { get; set; }
+        public bool ReceivesInvoice { get; set; }
         public string? CityName { get; set; }
         public string? Status { get; set; }
     }

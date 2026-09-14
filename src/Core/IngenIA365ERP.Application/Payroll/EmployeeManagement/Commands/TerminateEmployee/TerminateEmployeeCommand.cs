@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -5,10 +6,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.TerminateEmployee;
 
+/// <param name="TerminationCause">
+/// Motivo de retiro, texto libre de hasta <see cref="TerminateEmployeeCommandValidator.LargoMaximoDelMotivo"/>
+/// caracteres. Hasta el 2026-09-13 la columna era el código de 4 caracteres heredado de SOLIDO y la
+/// pantalla lo pedía como texto libre: cualquier motivo real daba 500.
+/// </param>
 public record TerminateEmployeeCommand(
     Guid EmployeePublicId,
     DateTime TerminationDate,
     string? TerminationCause) : IRequest<Result>;
+
+public sealed class TerminateEmployeeCommandValidator : AbstractValidator<TerminateEmployeeCommand>
+{
+    /// <summary>Mismo largo que la columna <c>PAY_Employees.TerminationCause</c> (EmployeeConfiguration).</summary>
+    public const int LargoMaximoDelMotivo = 120;
+
+    public TerminateEmployeeCommandValidator()
+    {
+        RuleFor(x => x.EmployeePublicId).NotEmpty().WithMessage("Empleado requerido.");
+        RuleFor(x => x.TerminationDate).NotEmpty().WithMessage("Fecha de terminación requerida.");
+        RuleFor(x => x.TerminationCause).MaximumLength(LargoMaximoDelMotivo)
+            .WithMessage($"El motivo admite hasta {LargoMaximoDelMotivo} caracteres.");
+    }
+}
 
 public class TerminateEmployeeCommandHandler(
     IApplicationDbContext context,

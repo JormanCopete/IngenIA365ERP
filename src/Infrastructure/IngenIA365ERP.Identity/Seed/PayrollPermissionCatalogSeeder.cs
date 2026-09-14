@@ -22,6 +22,13 @@ public static class PayrollPermissionCatalogSeeder
 {
     internal static readonly (string Resource, string Action, string Description)[] Catalog =
     [
+        // Feature 008: la ficha del empleado tenía sólo códigos legados (Read/Create/Update/
+        // Delete en IdentitySeedData, que nadie ejecuta). Estos son los que exige la API.
+        ("Payroll.Employees",       "View",               "Ver empleados y su ficha"),
+        ("Payroll.Employees",       "Create",             "Registrar empleados (con persona existente o nueva)"),
+        ("Payroll.Employees",       "Update",             "Editar la ficha laboral de un empleado"),
+        ("Payroll.Employees",       "Terminate",          "Terminar el contrato de un empleado"),
+
         ("Payroll.Plans",           "View",               "Ver planes de nómina"),
         ("Payroll.Plans",           "Manage",             "Crear, editar y desactivar planes; cambiar el plan de un empleado"),
 

@@ -27,6 +27,17 @@ public class DeleteSalespersonCommandHandler(
         entity.DeletedAt = dateTime.UtcNow;
         entity.DeletedBy = currentUser.UserName;
 
+        // La bandera derivada la escribe quien crea o retira la fila hija (Principio V,
+        // feature 008): hasta el 2026-09-13 la ficha se eliminaba y «Vendedor» quedaba encendido.
+        var person = await context.People
+            .FirstOrDefaultAsync(p => p.Id == entity.PersonId && !p.IsDeleted, cancellationToken);
+        if (person is not null && person.IsSalesperson)
+        {
+            person.IsSalesperson = false;
+            person.UpdatedAt = dateTime.UtcNow;
+            person.UpdatedBy = currentUser.UserName;
+        }
+
         await context.SaveChangesAsync(cancellationToken);
 
         return Result.Success();

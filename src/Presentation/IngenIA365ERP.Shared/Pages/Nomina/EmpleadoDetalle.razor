@@ -288,7 +288,8 @@ else
                     </div>
                     <div>
                         <label>Motivo</label>
-                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional)" Multiline="true" />
+                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional, hasta 120 caracteres)" Multiline="true"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                     </div>
                 </div>
             </div>

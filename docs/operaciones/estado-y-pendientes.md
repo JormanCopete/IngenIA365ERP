@@ -38,7 +38,17 @@ respaldo, y se otorgó `CREATEDB` al rol de la API (P13 cerrado). Con eso, lo ú
 que separa a producción de su primera cooperativa es P14.
 
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
-a release: …` y sincronización manual de Argo. **`release 79a2ea6`** (2026-09-13 19:20, GitOps `5caace3`): indicador de carga por zona en las 37 pantallas de Core y Nómina (`IndicadorDeCarga` + `EstadoDeCarga`, [docs/manual/indicador-de-carga.md](../manual/indicador-de-carga.md)) y la prueba de arquitectura que lo exige en pantallas nuevas o modificadas. Antes, **`release 7d278f7`** (2026-09-13 17:00, GitOps `fd84f0d`, respaldos `*-pre-julio2026-20260913.dump`): la semilla base 2026 con la norma de julio de 2026 (`NormaJulio2026ComoBase`: HORAS_MES 210, recargo 0,90, extras 2,15/2,65 en `ingenia365erp` y `cooflopal`; las vigencias de julio se conservan con el mismo valor) y el tipo de columna de Reportes de nómina por nombre (la pantalla fallaba con `DeserializeUnableToConvertValue`). Antes, **`release 8cf247a` y `0c7a555`** (2026-09-13,
+a release: …` y sincronización manual de Argo. **En la rama `008-alta-persona-un-paso`, aún sin
+mergear (2026-09-13)**: alta de persona en un paso desde Empleados y Asociados, formulario de
+persona en un solo componente, banderas derivadas escritas sólo por el servidor, permisos
+`Core.People.*`/`Core.Associates.*`/`Payroll.Employees.*` exigidos por la API y visibles en el
+cliente, restaurar personas eliminadas y reingreso como ficha nueva
+([docs/manual/alta-de-persona-desde-modulos.md](../manual/alta-de-persona-desde-modulos.md),
+`specs/008-alta-persona-un-paso/`); trae dos migraciones en par —`ReconciliarBanderasDerivadasDePersona`
+(datos), `UnaSolaFichaVivaPorPersona` (índice filtrado) y `MotivoDeRetiroComoTexto` (columna a 120)—
+y al promover a producción hay que respaldar antes y correr
+`specs/008-alta-persona-un-paso/diagnostico-banderas.sql` antes y después.
+**`release 79a2ea6`** (2026-09-13 19:20, GitOps `5caace3`): indicador de carga por zona en las 37 pantallas de Core y Nómina (`IndicadorDeCarga` + `EstadoDeCarga`, [docs/manual/indicador-de-carga.md](../manual/indicador-de-carga.md)) y la prueba de arquitectura que lo exige en pantallas nuevas o modificadas. Antes, **`release 7d278f7`** (2026-09-13 17:00, GitOps `fd84f0d`, respaldos `*-pre-julio2026-20260913.dump`): la semilla base 2026 con la norma de julio de 2026 (`NormaJulio2026ComoBase`: HORAS_MES 210, recargo 0,90, extras 2,15/2,65 en `ingenia365erp` y `cooflopal`; las vigencias de julio se conservan con el mismo valor) y el tipo de columna de Reportes de nómina por nombre (la pantalla fallaba con `DeserializeUnableToConvertValue`). Antes, **`release 8cf247a` y `0c7a555`** (2026-09-13,
 GitOps `6d947f0`/`bc49608`, respaldos `*-pre-rendimiento-20260913.dump`): la ronda 1 de
 rendimiento —ver [specs/007-rendimiento-percibido](../../specs/007-rendimiento-percibido/spec.md)—:
 pipeline de 9 min, Syncfusion por componente, estilos con huella, Serilog obediente, IP real
@@ -436,6 +446,28 @@ y además cumple el objetivo original de no depender de los límites de Actions.
 `blazor.web.js`**. No se investigó si es un cambio intencional que requiere
 ajustar el código o una regresión. Revisar al actualizar en vez de quedar
 anclados sin saber por qué.
+
+#### P13 — Fase 2 de la feature 008: los demás módulos con persona
+
+Vendedores (Inventario) sigue registrando sólo sobre persona existente, y Proveedores, Clientes y
+Terceros se marcan únicamente desde Personas. La receta está en
+`docs/manual/alta-de-persona-desde-modulos.md` (`PersonaDialog` con `RolSimpleInicial`, picker
+con `PermitirCrear`). Quedan además dos buscadores ad-hoc de personas
+(`CarteraFinanciera/Recaudos.razor`, `SolicitudCredito.razor`) que la prueba
+`LaPersonaSeEscribeEnUnSoloSitio` lista como heredados: al migrarlos a `PersonSearchPicker` se
+sacan de la lista. Los demás módulos que buscan personas por `/api/core/people?search=` o
+`/by-code` (Contabilidad, Tesorería, Cartera) están fuera del alcance de esa prueba.
+
+#### P14 — Motivo de terminación de contrato: texto libre sobre `varchar(4)` — ✅ cerrado el 2026-09-13
+
+`PAY_Employees.TerminationCause` era el código de 4 caracteres de SOLIDO y la pantalla lo pedía
+como texto libre: cualquier motivo real hacía fallar «Terminar contrato» con un 500
+(`22001: value too long for type character varying(4)`). Se vio al escribir la e2e de la 008. Como
+nada en la aplicación lo interpreta como código (el detalle del empleado lo muestra tal cual), la
+columna pasó a 120 caracteres (migración en par `MotivoDeRetiroComoTexto`, en la misma rama),
+`TerminateEmployeeCommand` tiene validador (un motivo más largo responde 422, no 500) y las dos
+pantallas que lo piden limitan el campo a 120. El `Down` de esa migración recorta a 4 y perdería
+lo escrito: respaldar antes de revertir.
 
 ### Pendientes de correo (diferidos por decisión del usuario)
 

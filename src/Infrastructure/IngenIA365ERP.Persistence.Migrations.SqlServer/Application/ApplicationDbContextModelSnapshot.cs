@@ -28298,8 +28298,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("TerminationCause")
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)");
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<DateTime>("TerminationDate")
                         .HasColumnType("datetime2");
@@ -28355,7 +28355,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("PersonId")
                         .IsUnique()
-                        .HasDatabaseName("UK_PAY_Employees_PersonId");
+                        .HasDatabaseName("UK_PAY_Employees_PersonId")
+                        .HasFilter("[Status] <> -1 AND [IsDeleted] = 0");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
