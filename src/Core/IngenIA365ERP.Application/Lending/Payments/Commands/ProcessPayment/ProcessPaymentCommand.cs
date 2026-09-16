@@ -1,20 +1,26 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Accounts;
+using IngenIA365ERP.Application.Accounting.Posting;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment;
 
-public record ProcessPaymentCommand : IRequest<Result<PaymentResultDto>>
+public record ProcessPaymentCommand : IRequest<Result<PaymentResultDto>>, IReintentableAnteConcurrencia
 {
     public Guid PortfolioPublicId { get; init; }
     public decimal Amount { get; init; }
     public DateOnly PaymentDate { get; init; }
     public string PaymentMethod { get; init; } = "EF"; // EF=Efectivo, CH=Cheque, TR=Transferencia
     public string? Reference { get; init; }
+    /// <summary>Banco que recibe el recaudo: su cuenta contable va al débito (feature 009).</summary>
+    public Guid? BankPublicId { get; init; }
+    /// <summary>O, en su defecto, el código de la cuenta de caja.</summary>
+    public string? CashAccountCode { get; init; }
 }
 
 public record PaymentResultDto(
@@ -36,7 +42,9 @@ public record PaymentDistributionLine(
 public class ProcessPaymentCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    AccountingPoster poster,
+    AccountEligibility cuentas)
     : IRequestHandler<ProcessPaymentCommand, Result<PaymentResultDto>>
 {
     public async Task<Result<PaymentResultDto>> Handle(ProcessPaymentCommand request, CancellationToken ct)
@@ -174,125 +182,44 @@ public class ProcessPaymentCommandHandler(
         };
         context.LendingTransactions.Add(transaction);
 
-        // 6. Create Accounting Document
-        var accVoucherType = await context.VoucherTypes
-            .FirstOrDefaultAsync(v => v.Code == "RC" && !v.IsDeleted, ct);
+        // 6. Comprobante RC por el contrato de contabilización (feature 009, FR-036): caja o banco al
+        //    débito; capital, intereses y mora al crédito con las cuentas de la línea de crédito, el
+        //    asociado como tercero y el pagaré como documento cruce. Sin parametrización no hay recaudo.
+        var codigoCaja = request.BankPublicId is { } bancoId
+            ? await context.Banks.AsNoTracking().Where(b => b.PublicId == bancoId && !b.IsDeleted).Select(b => b.AccountingAccountCode).FirstOrDefaultAsync(ct)
+            : request.CashAccountCode;
+        if (string.IsNullOrWhiteSpace(codigoCaja))
+            return Result.Failure<PaymentResultDto>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, "la cuenta contable de caja o banco del recaudo"));
+        var cuentaCaja = await cuentas.ResolverPorCodigoAsync(codigoCaja, ModuloContable.Cartera, ct);
+        if (cuentaCaja.IsFailure) return Result.Failure<PaymentResultDto>(cuentaCaja.Error);
+        var linea = portfolio.CreditLine;
+        if (linea is null)
+            return Result.Failure<PaymentResultDto>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, "la línea de crédito del crédito"));
 
-        if (accVoucherType is not null)
+        var personName = portfolio.Person is not null ? $"{portfolio.Person.FirstName} {portfolio.Person.LastName}" : portfolio.IdentificationNumber;
+        var detalle = $"Recaudo crédito #{portfolio.PortfolioNumber} - {personName}";
+        var pagare = portfolio.PortfolioNumber.ToString();
+        var lineas = new List<PostingLine>
         {
-            var nextAccDocNum = accVoucherType.NextSequenceNumber + 1;
-            accVoucherType.NextSequenceNumber = nextAccDocNum;
-
-            var periodCode = request.PaymentDate.Year * 100 + request.PaymentDate.Month;
-            var personName = portfolio.Person is not null
-                ? $"{portfolio.Person.FirstName} {portfolio.Person.LastName}"
-                : portfolio.IdentificationNumber;
-
-            var accDoc = new AccountingDocument
-            {
-                VoucherTypeCode = accVoucherType.Code,
-                DocumentNumber = nextAccDocNum,
-                Detail = $"Recaudo credito #{portfolio.PortfolioNumber} - {personName}",
-                TotalDebit = totalPayment,
-                TotalCredit = totalPayment,
-                DocumentDate = request.PaymentDate,
-                IsClosed = false,
-                IsVoided = false,
-                PeriodCode = periodCode,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(accDoc);
-
-            var defaultBranch = await context.Branches.AsNoTracking()
-                .Where(b => !b.IsDeleted).OrderBy(b => b.Id).FirstOrDefaultAsync(ct);
-            var defaultCC = await context.CostCenters.AsNoTracking()
-                .Where(c => !c.IsDeleted).OrderBy(c => c.Id).FirstOrDefaultAsync(ct);
-            var branchId = defaultBranch?.Id ?? 0;
-            var ccId = defaultCC?.Id ?? 0;
-
-            // Debit: Cash/Bank
-            var cashAccount = await context.ChartOfAccounts.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.AccountCode == "11100501" && !a.IsDeleted, ct);
-            if (cashAccount is not null)
-            {
-                context.JournalEntries.Add(new JournalEntry
-                {
-                    VoucherTypeCode = accDoc.VoucherTypeCode,
-                    DocumentNumber = accDoc.DocumentNumber,
-                    AccountId = cashAccount.Id,
-                    PersonId = portfolio.PersonId,
-                    BranchId = branchId,
-                    CostCenterId = ccId,
-                    PeriodCode = periodCode.ToString(),
-                    TransactionDate = request.PaymentDate,
-                    Description = accDoc.Detail,
-                    DebitAmount = totalPayment,
-                    CreditAmount = 0,
-                    Status = 0,
-                    UserName = currentUser.UserName,
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                });
-            }
-
-            // Credit: Portfolio account (capital portion)
-            if (totalPaidCapital > 0 && portfolio.CreditLine is not null)
-            {
-                var portfolioAccount = await context.ChartOfAccounts.AsNoTracking()
-                    .FirstOrDefaultAsync(a => a.AccountCode == portfolio.CreditLine.AccountCode && !a.IsDeleted, ct);
-                if (portfolioAccount is not null)
-                {
-                    context.JournalEntries.Add(new JournalEntry
-                    {
-                        VoucherTypeCode = accDoc.VoucherTypeCode,
-                        DocumentNumber = accDoc.DocumentNumber,
-                        AccountId = portfolioAccount.Id,
-                        PersonId = portfolio.PersonId,
-                        BranchId = branchId,
-                        CostCenterId = ccId,
-                        PeriodCode = periodCode.ToString(),
-                        TransactionDate = request.PaymentDate,
-                        Description = $"Abono capital credito #{portfolio.PortfolioNumber}",
-                        DebitAmount = 0,
-                        CreditAmount = totalPaidCapital,
-                        Status = 0,
-                        UserName = currentUser.UserName,
-                        CreatedAt = dateTime.UtcNow,
-                        CreatedBy = currentUser.UserName
-                    });
-                }
-            }
-
-            // Credit: Interest income account
-            if (totalPaidInterest + totalPaidDefault > 0 && portfolio.CreditLine is not null)
-            {
-                var interestAccount = await context.ChartOfAccounts.AsNoTracking()
-                    .FirstOrDefaultAsync(a => a.AccountCode == portfolio.CreditLine.AccountInterestIncome && !a.IsDeleted, ct);
-                if (interestAccount is not null)
-                {
-                    context.JournalEntries.Add(new JournalEntry
-                    {
-                        VoucherTypeCode = accDoc.VoucherTypeCode,
-                        DocumentNumber = accDoc.DocumentNumber,
-                        AccountId = interestAccount.Id,
-                        PersonId = portfolio.PersonId,
-                        BranchId = branchId,
-                        CostCenterId = ccId,
-                        PeriodCode = periodCode.ToString(),
-                        TransactionDate = request.PaymentDate,
-                        Description = $"Ingreso intereses credito #{portfolio.PortfolioNumber}",
-                        DebitAmount = 0,
-                        CreditAmount = totalPaidInterest + totalPaidDefault,
-                        Status = 0,
-                        UserName = currentUser.UserName,
-                        CreatedAt = dateTime.UtcNow,
-                        CreatedBy = currentUser.UserName
-                    });
-                }
-            }
+            new() { AccountId = cuentaCaja.Value.Id, Debit = totalPayment, Detail = detalle, PersonId = portfolio.PersonId },
+        };
+        foreach (var (valor, codigo, que, concepto) in new[]
+                 {
+                     (totalPaidCapital, linea.AccountCode, "la cuenta de cartera de la línea", "Abono capital"),
+                     (totalPaidInterest, linea.AccountInterestIncome, "la cuenta de ingreso por intereses de la línea", "Ingreso intereses"),
+                     (totalPaidDefault, linea.AccountInterestDefault, "la cuenta de intereses de mora de la línea", "Ingreso intereses de mora"),
+                 })
+        {
+            if (valor <= 0m) continue;
+            if (string.IsNullOrWhiteSpace(codigo))
+                return Result.Failure<PaymentResultDto>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, $"{que} {linea.Description}"));
+            var cuenta = await cuentas.ResolverPorCodigoAsync(codigo, ModuloContable.Cartera, ct);
+            if (cuenta.IsFailure) return Result.Failure<PaymentResultDto>(cuenta.Error);
+            lineas.Add(new PostingLine { AccountId = cuenta.Value.Id, Credit = valor, Detail = $"{concepto} crédito #{portfolio.PortfolioNumber}", PersonId = portfolio.PersonId, CrossDocumentType = "PG", CrossDocumentNumber = pagare });
         }
+        var posting = await poster.PrepareAsync(new PostingRequest("RC", request.PaymentDate, detalle,
+            new AccountingOrigin(ModuloContable.Cartera, "LoanPayment", transaction.PublicId), lineas), ct);
+        if (posting.IsFailure) return Result.Failure<PaymentResultDto>(posting.Error);
 
         // 7. Save all
         await context.SaveChangesAsync(ct);

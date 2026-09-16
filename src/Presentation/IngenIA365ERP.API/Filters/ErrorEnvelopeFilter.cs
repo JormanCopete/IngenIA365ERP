@@ -52,6 +52,14 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
 
             var (status, code, message) = MapFailure(r.Error);
             var traceId = http.TraceIdentifier;
+            // Feature 009 (FR-041): un ErrorConDatos agrega `data` (linea, cuenta, campo, regla)
+            // sin cambiar nada para el resto: codigo, mensaje y traceId siguen donde estaban.
+            if (r.Error is ErrorConDatos conDatos)
+            {
+                return Results.Json(
+                    new { code, message, traceId, data = conDatos.Data },
+                    statusCode: status);
+            }
             return Results.Json(
                 new { code, message, traceId },
                 statusCode: status);

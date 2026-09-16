@@ -9,6 +9,8 @@ public class BankConfiguration : IEntityTypeConfiguration<Bank>
     public void Configure(EntityTypeBuilder<Bank> builder)
     {
         builder.ToTable("COR_Banks");
+        builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict); // feature 009 (FR-088)
+        builder.HasIndex(e => e.PersonId);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

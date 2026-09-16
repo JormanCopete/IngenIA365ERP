@@ -9,6 +9,7 @@ public class CdtParameterConfiguration : IEntityTypeConfiguration<CdtParameter>
     public void Configure(EntityTypeBuilder<CdtParameter> builder)
     {
         builder.ToTable("CDT_Parameters");
+        builder.Property(e => e.InterestExpenseAccount).HasMaxLength(12); // feature 009 (R16)
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

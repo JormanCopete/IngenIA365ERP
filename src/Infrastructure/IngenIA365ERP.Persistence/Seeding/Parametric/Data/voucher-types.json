@@ -1,0 +1,23 @@
+[
+  // Feature 009 (data-model.md §1, contracts/contabilizacion.md §4). Un código pertenece a un solo
+  // módulo: Manual sólo se digita desde Contabilidad; Module sólo lo genera su módulo; Opening,
+  // Closing y Assets sólo su proceso. Los sembrados no se eliminan ni cambian de uso.
+  { "code": "CG", "name": "Comprobante general", "usage": "Manual", "module": null },
+  { "code": "NM", "name": "Nómina", "usage": "Module", "module": "NOM" },
+  { "code": "DS", "name": "Desembolso de crédito", "usage": "Module", "module": "CAR" },
+  { "code": "RC", "name": "Recaudo de cartera", "usage": "Module", "module": "CAR" },
+  { "code": "CA", "name": "Causación de intereses de cartera", "usage": "Module", "module": "CAR" },
+  { "code": "PV", "name": "Provisión de cartera", "usage": "Module", "module": "CAR" },
+  { "code": "DN", "name": "Descuento de nómina de cartera", "usage": "Module", "module": "CAR" },
+  { "code": "AH", "name": "Intereses de ahorros", "usage": "Module", "module": "CDT" },
+  { "code": "CD", "name": "Liquidación de intereses de CDT", "usage": "Module", "module": "CDT" },
+  { "code": "FV", "name": "Factura de venta", "usage": "Module", "module": "INV" },
+  { "code": "EI", "name": "Entrada de inventario", "usage": "Module", "module": "INV" },
+  { "code": "SI", "name": "Salida de inventario", "usage": "Module", "module": "INV" },
+  { "code": "CH", "name": "Cheque de tesorería", "usage": "Module", "module": "TES" },
+  { "code": "FP", "name": "Factura por pagar", "usage": "Module", "module": "TES" },
+  { "code": "CB", "name": "Cuenta por cobrar de tesorería", "usage": "Module", "module": "TES" },
+  { "code": "DP", "name": "Depreciación y amortización de activos", "usage": "Assets", "module": "ACT" },
+  { "code": "AP", "name": "Apertura de saldos", "usage": "Opening", "module": null },
+  { "code": "CI", "name": "Cierre del ejercicio", "usage": "Closing", "module": null }
+]

@@ -100,6 +100,8 @@ public class AuditBehavior<TRequest, TResponse>(
     private static string InferModuleFromNamespace(string? ns)
     {
         if (ns is null) return "Unknown";
+        // Feature 009 (FR-051): el ingreso a una opción del ERP se audita como navegación, no como escritura de un módulo.
+        if (ns.Contains(".Audit.RegisterOptionAccess")) return "Navigation";
         if (ns.Contains(".Accounting")) return "Accounting";
         if (ns.Contains(".Lending")) return "Lending";
         if (ns.Contains(".Payroll")) return "Payroll";

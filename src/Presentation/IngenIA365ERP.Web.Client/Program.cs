@@ -99,8 +99,12 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
 // Feature 008 — cliente tipado del maestro de personas (Personas, Empleados y Asociados).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
+// Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario>();
+// Feature 009 (FR-051): el ingreso a cada opción queda en la auditoría (cola con reintentos; nunca frena la pantalla).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();

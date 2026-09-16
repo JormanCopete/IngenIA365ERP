@@ -3,6 +3,8 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject INotificationService Notification
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
 
 <PageTitle>EPS - IngenIA365ERP</PageTitle>
 
@@ -19,6 +21,7 @@
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="180" />
         <GridColumn Field="TaxId" HeaderText="NIT" Width="140" />
         <GridColumn Field="CheckDigit" HeaderText="DV" Width="80" TextAlign="TextAlign.Center" />
+        <GridColumn Field="PersonName" HeaderText="Tercero" Width="200" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
             <Template>
                 @{
@@ -42,7 +45,12 @@
                 <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre *" MaxLength="100" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" MaxLength="50" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT" MaxLength="20" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
+                <div class="campo">
+                    <label>Persona que la representa como tercero (feature 009)</label>
+                    <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@CrearPersonaAsync" TextoSinResultados="Regístrela en Maestros › Personas y vuelva a buscarla." />
+                    <span class="texto-tenue">Con ella se contabilizan los aportes en las cuentas que exigen tercero.</span>
+                </div>
             </div>
         </IndicadorDeCarga>
         </Content>
@@ -52,6 +60,8 @@
         <DialogButton Content="Guardar" IsPrimary="true" OnClick="@Save" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
+
+<PersonaDialog @bind-Visible="_mostrarPersona" DocumentoInicial="@_documentoInicial" OnGuardado="@PersonaGuardadaAsync" />
 
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
 
@@ -67,7 +77,11 @@
     private string _dialogTitle = "";
     private Guid _deleteId;
 
-    protected override async Task OnInitializedAsync() => await LoadData();
+    protected override async Task OnInitializedAsync()
+    {
+        _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
+        await LoadData();
+    }
 
     private async Task LoadData()
     {
@@ -76,7 +90,7 @@
         catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nueva EPS"; _showDialog = true; }
+    private void OpenCreate() { _model = new(); _persona = null; _editId = null; _dialogTitle = "Nueva EPS"; _showDialog = true; }
 
     private void EditarExistente(Guid publicId)
     {
@@ -87,6 +101,7 @@
     private void OpenEdit(ItemModel item)
     {
         _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName, TaxId = item.TaxId, CheckDigit = item.CheckDigit };
+        _persona = item.PersonPublicId is { } pid ? new PersonSearchPicker.PersonSearchItem { PublicId = pid, FullName = item.PersonName ?? "" } : null;
         _editId = item.PublicId; _dialogTitle = "Editar EPS"; _showDialog = true;
     }
 
@@ -105,6 +120,7 @@
             await Notification.WarningAsync("Ese código ya existe: editá ese registro o usá otro código.");
             return;
         }
+        _model.PersonPublicId = _persona?.PublicId;
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/health-insurance/{_editId}", _model)
             : await Http.PostAsJsonAsync("/api/payroll/health-insurance", _model);
@@ -122,6 +138,8 @@
     private class Paged { public List<ItemModel> Items { get; set; } = []; }
     private class ItemModel
     {
+        public Guid? PersonPublicId { get; set; }
+        public string? PersonName { get; set; }
         public Guid PublicId { get; set; }
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
@@ -131,10 +149,31 @@
     }
     private class FormModel
     {
+        public Guid? PersonPublicId { get; set; }
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
         public string ShortName { get; set; } = "";
         public string TaxId { get; set; } = "";
         public int CheckDigit { get; set; }
+    }
+    // Feature 009 (FR-088): la persona que representa a la entidad como tercero contable.
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private bool _puedeCrearPersona;
+    private bool _mostrarPersona;
+    private string? _documentoInicial;
+
+    private async Task CrearPersonaAsync(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarPersona = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task PersonaGuardadaAsync(Guid publicId)
+    {
+        _mostrarPersona = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            _persona = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = string.IsNullOrWhiteSpace(p.BusinessName) ? $"{p.FirstName} {p.LastName}".Trim() : p.BusinessName };
     }
 }

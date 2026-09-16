@@ -45,6 +45,9 @@ public class PrincipioVIII_DualValidation
         "IngenIA365ERP.Application.Payroll.Concepts",
         "IngenIA365ERP.Application.Payroll.LegalParameters",
         "IngenIA365ERP.Application.Payroll.EmployeeTax",
+
+        // Feature 009 - contabilidad reescrita: nace con validador en cada request.
+        "IngenIA365ERP.Application.Accounting",
     ];
 
     private static readonly HashSet<string> AllowedWithoutValidator =

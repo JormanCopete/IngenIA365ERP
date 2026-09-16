@@ -62,22 +62,7 @@ public class VoidInventoryDocumentCommandHandler(
         var txType = await context.InventoryTransactionTypes.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == document.TransactionTypeId, ct);
 
-        if (txType is not null && txType.UpdatesAccounting == 1
-            && !string.IsNullOrEmpty(txType.TransactionVoucherCode))
-        {
-            var accDoc = await context.AccountingDocuments.FirstOrDefaultAsync(
-                a => a.ModuleCode == "INV"
-                  && a.VoucherTypeCode == txType.TransactionVoucherCode
-                  && !a.IsVoided && !a.IsDeleted, ct);
-
-            if (accDoc is not null)
-            {
-                accDoc.IsVoided = true;
-                accDoc.Detail = $"[ANULADO] Reversa inv doc {document.SequenceNumber}";
-                accDoc.UpdatedAt = dateTime.UtcNow;
-                accDoc.UpdatedBy = currentUser.UserName;
-            }
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(ct);
         return Result.Success();

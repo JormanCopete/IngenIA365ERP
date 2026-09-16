@@ -1,7 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -207,36 +206,7 @@ public class CreateInventoryDocumentCommandHandler(
             }
         }
 
-        // 9. Create AccountingDocument if transaction type updates accounting
-        if (txType.UpdatesAccounting == 1 && !string.IsNullOrEmpty(txType.TransactionVoucherCode))
-        {
-            var voucherType = await context.VoucherTypes.FirstOrDefaultAsync(
-                v => v.Code == txType.TransactionVoucherCode && !v.IsDeleted, ct);
-
-            if (voucherType is not null)
-            {
-                var nextAccNum = voucherType.NextSequenceNumber + 1;
-                voucherType.NextSequenceNumber = nextAccNum;
-                var periodCode = request.Date.Year * 100 + request.Date.Month;
-
-                var accDoc = new AccountingDocument
-                {
-                    VoucherTypeCode = voucherType.Code,
-                    DocumentNumber = nextAccNum,
-                    Detail = $"Inv {request.DocumentType} - {request.Description ?? ""}",
-                    TotalDebit = totalAmount,
-                    TotalCredit = totalAmount,
-                    DocumentDate = request.Date,
-                    IsClosed = false,
-                    IsVoided = false,
-                    PeriodCode = periodCode,
-                    ModuleCode = "INV",
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                };
-                context.AccountingDocuments.Add(accDoc);
-            }
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(ct);
         return Result.Success(document.PublicId);

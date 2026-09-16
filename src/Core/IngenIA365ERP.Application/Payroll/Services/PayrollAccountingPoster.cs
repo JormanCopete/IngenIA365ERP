@@ -1,72 +1,65 @@
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
+using IngenIA365ERP.Domain.Enums.Payroll;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.Services;
 
 /// <summary>
-/// Contabiliza una corrida aprobada (D-07, FR-019, FR-023) replicando el patrón de
-/// <c>CreateDocumentCommand</c> —tipo de comprobante, período contable abierto,
-/// numeración, documento, movimientos y saldos— pero SIN guardar: el comando de
-/// aprobación guarda todo en una sola transacción. Si algo falta (cuentas de un concepto,
-/// comprobante <c>NM</c>, período contable), devuelve el error y no toca el contexto.
-///
-/// <para>
-/// Cada línea que afecta contabilidad se agrupa por concepto y centro de costo del
-/// empleado, y toma las cuentas de <c>PAY_ConceptDefinitionAccounts</c> (la fila del
-/// centro de costo, o la fila por defecto): el valor va al débito de la cuenta débito y al
-/// crédito de la cuenta crédito. La naturaleza del concepto ya está en la configuración
-/// de cuentas, así que el comprobante cuadra por construcción. Un valor negativo (ajuste
-/// de redondeo en contra) invierte débito y crédito.
-/// </para>
+/// Arma el comprobante <c>NM</c> de una corrida aprobada (D-07, FR-019, FR-023) y lo entrega al
+/// contrato de contabilización (feature 009): agrupa por concepto, centro de costo del empleado y
+/// tercero, toma las cuentas de <c>PAY_ConceptDefinitionAccounts</c> (la fila del centro de
+/// costo, o la fila por defecto) y manda una línea al débito y otra al crédito por grupo. El
+/// tercero es el empleado en devengos y deducciones, y la persona vinculada a la EPS, ARL, fondo o
+/// caja del empleado en aportes y provisiones (FR-088, <see cref="TercerosDeNomina"/>): si la
+/// entidad no tiene persona vinculada y la cuenta exige tercero, falla nombrándola. El contrato
+/// aplica las reglas de cada cuenta, numera y agrega SIN guardar: el comando de aprobación guarda
+/// corrida y comprobante en una sola transacción, o nada. Un valor negativo (ajuste de redondeo en
+/// contra) invierte débito y crédito. Si a un concepto le faltan cuentas, devuelve el error y no
+/// toca el contexto.
 /// </summary>
-public sealed class PayrollAccountingPoster(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService currentUser)
+public sealed class PayrollAccountingPoster(IApplicationDbContext db, AccountingPoster poster)
 {
     public const string VoucherCode = "NM";
-    public const string ModuleCode = "NOM";
-    private const int DetailMaxLength = 200;
-    private const string AccountingPeriodModule = "CNT";
+    public const string ModuleCode = ModuloContable.Nomina;
+    public const string SourceType = "PayrollRun";
 
-    public sealed record Posting(AccountingDocument Document, IReadOnlyList<JournalEntry> Entries);
+    private sealed record Grupo(string Code, int? CostCenterId, int? PersonId, EntidadInstitucional Entidad, string? EntidadNombre);
 
-    public async Task<Result<Posting>> PostAsync(
+    public async Task<Result<AccountingDocument>> PostAsync(
         PayrollRun run,
         IReadOnlyList<(PayrollRunEmployee RunEmployee, Employee Employee, IReadOnlyList<PayrollRunLine> Lines)> employees,
         DateOnly documentDate,
         string detail,
         CancellationToken ct)
     {
-        var voucher = await db.VoucherTypes.FirstOrDefaultAsync(v => v.Code == VoucherCode && !v.IsDeleted, ct);
-        if (voucher is null)
-            return Result.Failure<Posting>(new Error("Payroll.VoucherTypeMissing",
-                $"No existe el tipo de comprobante {VoucherCode} (Nómina). Reaplique la semilla de nómina o créelo en Contabilidad."));
-
-        var periodoAbierto = await PeriodoContableAbiertoAsync(documentDate, ct);
-        if (!periodoAbierto)
-            return Result.Failure<Posting>(new Error("Payroll.AccountingPeriodClosed",
-                $"El período contable {documentDate:yyyy-MM} está cerrado o no existe: no se puede contabilizar la nómina."));
-
-        // --- centro de costo de cada empleado (código legado → Id) ---
+        // --- centro de costo de cada empleado (código legado → Id); sin centro, la cuenta decide ---
         var codigosCc = employees.Select(e => e.Employee.CostCenterId).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
         var centros = await db.CostCenters.AsNoTracking()
             .Where(c => !c.IsDeleted && c.LegacyCode != null && codigosCc.Contains(c.LegacyCode))
             .Select(c => new { c.Id, c.LegacyCode })
             .ToListAsync(ct);
         var ccPorCodigo = centros.ToDictionary(c => c.LegacyCode!, c => c.Id, StringComparer.OrdinalIgnoreCase);
-        var ccPorDefecto = await db.CostCenters.AsNoTracking().Where(c => !c.IsDeleted).OrderBy(c => c.Id).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct) ?? 0;
-        var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct) ?? 0;
 
-        // --- agrupar por (concepto, centro de costo) ---
-        var grupos = new Dictionary<(string Code, int CostCenterId), decimal>();
+        // --- entidades institucionales de los empleados: nombre y persona vinculada (FR-088) ---
+        var entidades = await CargarEntidadesAsync(employees.Select(e => e.Employee).ToList(), ct);
+
+        // --- agrupar por (concepto, centro de costo, tercero) ---
+        var grupos = new Dictionary<Grupo, decimal>();
         foreach (var (_, employee, lines) in employees)
         {
-            var cc = !string.IsNullOrWhiteSpace(employee.CostCenterId) && ccPorCodigo.TryGetValue(employee.CostCenterId, out var id) ? id : ccPorDefecto;
+            int? cc = !string.IsNullOrWhiteSpace(employee.CostCenterId) && ccPorCodigo.TryGetValue(employee.CostCenterId, out var id) ? id : null;
             foreach (var line in lines.Where(l => l.AffectsAccounting && l.Amount != 0m))
             {
-                var key = (line.ConceptCode, cc);
+                var entidad = TercerosDeNomina.EntidadDe(line.ConceptCode, line.Nature);
+                var (personId, nombre) = entidad == EntidadInstitucional.Ninguna
+                    ? (line.Nature is ConceptNature.Earning or ConceptNature.Deduction ? employee.PersonId : (int?)null, null)
+                    : entidades.Buscar(entidad, IdDeEntidad(employee, entidad));
+                var key = new Grupo(line.ConceptCode, cc, personId, entidad, nombre);
                 grupos[key] = grupos.GetValueOrDefault(key) + line.Amount;
             }
         }
@@ -77,158 +70,100 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, IDateTimeS
             .Where(a => !a.IsDeleted && codigos.Contains(a.ConceptCode))
             .ToListAsync(ct);
         var sinCuentas = new List<string>();
-        var asientos = new List<(string Code, int CostCenterId, int DebitAccountId, int CreditAccountId, decimal Amount)>();
-        foreach (var ((code, cc), amount) in grupos.OrderBy(g => g.Key.Code, StringComparer.Ordinal).ThenBy(g => g.Key.CostCenterId))
+        var asientos = new List<(Grupo Grupo, int DebitAccountId, int CreditAccountId, decimal Amount)>();
+        foreach (var (grupo, amount) in grupos.OrderBy(g => g.Key.Code, StringComparer.Ordinal).ThenBy(g => g.Key.CostCenterId).ThenBy(g => g.Key.PersonId))
         {
-            var fila = cuentas.FirstOrDefault(a => a.ConceptCode.Equals(code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == cc)
-                    ?? cuentas.FirstOrDefault(a => a.ConceptCode.Equals(code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == null);
-            if (fila is null) { if (!sinCuentas.Contains(code)) sinCuentas.Add(code); continue; }
-            asientos.Add((code, cc, fila.DebitAccountId, fila.CreditAccountId, amount));
+            var fila = cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == grupo.CostCenterId)
+                    ?? cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == null);
+            if (fila is null) { if (!sinCuentas.Contains(grupo.Code)) sinCuentas.Add(grupo.Code); continue; }
+            asientos.Add((grupo, fila.DebitAccountId, fila.CreditAccountId, amount));
         }
         if (sinCuentas.Count > 0)
-            return Result.Failure<Posting>(new Error("Payroll.ConceptWithoutAccounts",
+            return Result.Failure<AccountingDocument>(new Error("Payroll.ConceptWithoutAccounts",
                 $"Conceptos liquidados sin cuentas contables configuradas: {string.Join(", ", sinCuentas)}. " +
                 "Configúrelas en Nómina › Conceptos › Cuentas antes de aprobar."));
 
         if (asientos.Count == 0)
-            return Result.Failure<Posting>(new Error("Payroll.NothingToPost",
+            return Result.Failure<AccountingDocument>(new Error("Payroll.NothingToPost",
                 "La corrida no tiene líneas que afecten contabilidad."));
 
-        var lineas = new List<(int AccountId, int CostCenterId, decimal Debit, decimal Credit, string Description)>();
+        // --- FR-088: una entidad sin persona vinculada sólo es problema si la cuenta exige tercero; se dice cuál ---
+        var idsDeCuenta = asientos.SelectMany(a => new[] { a.DebitAccountId, a.CreditAccountId }).Distinct().ToList();
+        var exigenTercero = await db.ChartOfAccounts.AsNoTracking()
+            .Where(c => idsDeCuenta.Contains(c.Id) && c.RequiresThirdParty)
+            .Select(c => new { c.Id, c.Code })
+            .ToDictionaryAsync(c => c.Id, c => c.Code, ct);
+        foreach (var a in asientos.Where(a => a.Grupo.Entidad != EntidadInstitucional.Ninguna && a.Grupo.PersonId is null))
+        {
+            var cuenta = exigenTercero.GetValueOrDefault(a.DebitAccountId) ?? exigenTercero.GetValueOrDefault(a.CreditAccountId);
+            if (cuenta is null) continue;
+            var nombreEntidad = a.Grupo.EntidadNombre ?? $"la {TercerosDeNomina.Nombre(a.Grupo.Entidad)} del empleado";
+            return Result.Failure<AccountingDocument>(new ErrorConDatos("Accounting.Line.ThirdPartyRequired",
+                $"La cuenta {cuenta} del concepto {a.Grupo.Code} exige tercero y {nombreEntidad} no tiene persona vinculada. " +
+                $"Vincúlela en {TercerosDeNomina.Pantalla(a.Grupo.Entidad)} antes de aprobar.",
+                new { accountCode = cuenta, concept = a.Grupo.Code, entity = nombreEntidad, entityKind = a.Grupo.Entidad.ToString() }));
+        }
+
+        var lineas = new List<PostingLine>(asientos.Count * 2);
         foreach (var a in asientos)
         {
             var valor = Math.Abs(a.Amount);
             var (debito, credito) = a.Amount >= 0m ? (a.DebitAccountId, a.CreditAccountId) : (a.CreditAccountId, a.DebitAccountId);
-            lineas.Add((debito, a.CostCenterId, valor, 0m, $"Nómina {a.Code}"));
-            lineas.Add((credito, a.CostCenterId, 0m, valor, $"Nómina {a.Code}"));
+            var detalle = a.Grupo.EntidadNombre is null ? $"Nómina {a.Grupo.Code}" : $"Nómina {a.Grupo.Code} · {a.Grupo.EntidadNombre}";
+            lineas.Add(new PostingLine { AccountId = debito, Debit = valor, Detail = detalle, CostCenterId = a.Grupo.CostCenterId, PersonId = a.Grupo.PersonId });
+            lineas.Add(new PostingLine { AccountId = credito, Credit = valor, Detail = detalle, CostCenterId = a.Grupo.CostCenterId, PersonId = a.Grupo.PersonId });
         }
 
-        return Result.Success(Crear(voucher, documentDate, detail, lineas, sucursal));
+        return await poster.PrepareAsync(
+            new PostingRequest(VoucherCode, documentDate, detail, new AccountingOrigin(ModuleCode, SourceType, run.PublicId), lineas), ct);
     }
 
-    /// <summary>Comprobante reverso del original (FR-032): mismos movimientos con débito y crédito invertidos.</summary>
-    public async Task<Result<Posting>> ReverseAsync(AccountingDocument original, DateOnly documentDate, string reason, CancellationToken ct)
+    /// <summary>Comprobante reverso del original (FR-032) por el contrato: mismas líneas con débito y crédito invertidos, referencia en ambos sentidos.</summary>
+    public Task<Result<AccountingDocument>> ReverseAsync(AccountingDocument original, DateOnly documentDate, string reason, CancellationToken ct) =>
+        poster.PrepareReversalAsync(original, documentDate, reason,
+            new AccountingOrigin(ModuleCode, SourceType, original.SourcePublicId ?? Guid.Empty), ct);
+
+    // --------------------------------------------------------------------------------------------
+
+    private static int IdDeEntidad(Employee e, EntidadInstitucional entidad) => entidad switch
     {
-        var voucher = await db.VoucherTypes.FirstOrDefaultAsync(v => v.Code == VoucherCode && !v.IsDeleted, ct);
-        if (voucher is null)
-            return Result.Failure<Posting>(new Error("Payroll.VoucherTypeMissing", $"No existe el tipo de comprobante {VoucherCode}."));
+        EntidadInstitucional.Eps => e.HealthInsuranceId,
+        EntidadInstitucional.Arl => e.WorkRiskId,
+        EntidadInstitucional.FondoDePensiones => e.PensionFundId,
+        EntidadInstitucional.FondoDeCesantias => e.SeveranceFundId,
+        EntidadInstitucional.CajaDeCompensacion => e.FamilySubsidyId,
+        _ => 0,
+    };
 
-        if (!await PeriodoContableAbiertoAsync(documentDate, ct))
-            return Result.Failure<Posting>(new Error("Payroll.AccountingPeriodClosedForReversal",
-                $"El período contable {documentDate:yyyy-MM} está cerrado: la reversión no se puede contabilizar."));
+    private sealed class Entidades
+    {
+        private readonly Dictionary<(EntidadInstitucional, int), (int? PersonId, string Nombre)> _filas = [];
 
-        var movimientos = await db.JournalEntries.AsNoTracking()
-            .Where(j => j.VoucherTypeCode == original.VoucherTypeCode && j.DocumentNumber == original.DocumentNumber && !j.IsDeleted)
-            .OrderBy(j => j.Id)
-            .ToListAsync(ct);
-        if (movimientos.Count == 0)
-            return Result.Failure<Posting>(new Error("Payroll.NothingToPost",
-                $"El comprobante {original.VoucherTypeCode}-{original.DocumentNumber} no tiene movimientos que reversar."));
+        public void Agregar(EntidadInstitucional entidad, int id, int? personId, string nombre) => _filas[(entidad, id)] = (personId, nombre);
 
-        var lineas = movimientos
-            .Select(m => (m.AccountId, m.CostCenterId, m.CreditAmount, m.DebitAmount, $"Reversión {original.VoucherTypeCode}-{original.DocumentNumber}: {m.Description}"))
-            .ToList();
-        var sucursal = movimientos[0].BranchId;
-        var detalle = $"Reversión del comprobante {original.VoucherTypeCode}-{original.DocumentNumber}: {reason}";
-
-        return Result.Success(Crear(voucher, documentDate, detalle, lineas, sucursal));
+        /// <summary>Persona vinculada y nombre de la entidad; si la fila no existe, nombra la clase y el id para que el error sea accionable.</summary>
+        public (int? PersonId, string Nombre) Buscar(EntidadInstitucional entidad, int id) =>
+            _filas.TryGetValue((entidad, id), out var f) ? f : (null, $"la {TercerosDeNomina.Nombre(entidad)} #{id} (no existe en el catálogo)");
     }
 
-    private async Task<bool> PeriodoContableAbiertoAsync(DateOnly fecha, CancellationToken ct)
+    private async Task<Entidades> CargarEntidadesAsync(IReadOnlyList<Employee> empleados, CancellationToken ct)
     {
-        var periodo = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(
-            p => p.Year == fecha.Year && p.PeriodNumber == (byte)fecha.Month && p.ModuleCode == AccountingPeriodModule && !p.IsDeleted, ct);
-        return periodo is not null && periodo.Status != "C";
-    }
-
-    private Posting Crear(VoucherType voucher, DateOnly fecha, string detalle,
-        List<(int AccountId, int CostCenterId, decimal Debit, decimal Credit, string Description)> lineas, int sucursal)
-    {
-        var numero = voucher.NextSequenceNumber + 1;
-        voucher.NextSequenceNumber = numero;
-        var periodCode = fecha.Year * 100 + fecha.Month;
-        var ahora = clock.UtcNow;
-        var usuario = currentUser.UserName;
-
-        var documento = new AccountingDocument
-        {
-            VoucherTypeCode = voucher.Code,
-            DocumentNumber = numero,
-            Detail = detalle.Length <= DetailMaxLength ? detalle : detalle[..DetailMaxLength], // ACC_Documents.Detail: varchar(200)
-            TotalDebit = lineas.Sum(l => l.Debit),
-            TotalCredit = lineas.Sum(l => l.Credit),
-            DocumentDate = fecha,
-            IsClosed = false,
-            IsVoided = false,
-            PeriodCode = periodCode,
-            ModuleCode = ModuleCode,
-            CreatedAt = ahora,
-            CreatedBy = usuario,
-        };
-        db.AccountingDocuments.Add(documento);
-
-        var asientos = new List<JournalEntry>(lineas.Count);
-        foreach (var l in lineas)
-        {
-            var asiento = new JournalEntry
-            {
-                VoucherTypeCode = voucher.Code,
-                DocumentNumber = numero,
-                AccountId = l.AccountId,
-                BranchId = sucursal,
-                CostCenterId = l.CostCenterId,
-                PeriodCode = periodCode.ToString(),
-                TransactionDate = fecha,
-                Description = l.Description,
-                DebitAmount = l.Debit,
-                CreditAmount = l.Credit,
-                Status = 0,
-                UserName = usuario,
-                DocumentType = ModuleCode,
-                CreatedAt = ahora,
-                CreatedBy = usuario,
-            };
-            db.JournalEntries.Add(asiento);
-            asientos.Add(asiento);
-        }
-
-        // Saldos por cuenta y período, como CreateDocumentCommand. Se acumulan en memoria
-        // antes de tocar la tabla para no repetir la misma clave dentro del comprobante.
-        foreach (var grupo in lineas.GroupBy(l => (l.AccountId, l.CostCenterId)))
-        {
-            var (accountId, costCenterId) = grupo.Key;
-            var debito = grupo.Sum(g => g.Debit);
-            var credito = grupo.Sum(g => g.Credit);
-            var saldo = db.AccountBalances.Local.FirstOrDefault(b =>
-                            b.AccountId == accountId && b.PeriodYear == fecha.Year && b.PeriodMonth == (byte)fecha.Month
-                            && b.BranchId == sucursal && b.CostCenterId == costCenterId)
-                        ?? db.AccountBalances.FirstOrDefault(b =>
-                            b.AccountId == accountId && b.PeriodYear == fecha.Year && b.PeriodMonth == (byte)fecha.Month
-                            && b.BranchId == sucursal && b.CostCenterId == costCenterId);
-            if (saldo is null)
-            {
-                db.AccountBalances.Add(new AccountBalance
-                {
-                    AccountId = accountId,
-                    PeriodYear = fecha.Year,
-                    PeriodMonth = (byte)fecha.Month,
-                    BranchId = sucursal,
-                    CostCenterId = costCenterId,
-                    DebitAmount = debito,
-                    CreditAmount = credito,
-                    CreatedAt = ahora,
-                    CreatedBy = usuario,
-                });
-            }
-            else
-            {
-                saldo.DebitAmount += debito;
-                saldo.CreditAmount += credito;
-                saldo.UpdatedAt = ahora;
-                saldo.UpdatedBy = usuario;
-            }
-        }
-
-        return new Posting(documento, asientos);
+        var e = new Entidades();
+        var eps = empleados.Select(x => x.HealthInsuranceId).Distinct().ToList();
+        foreach (var f in await db.HealthInsuranceProviders.AsNoTracking().Where(x => !x.IsDeleted && eps.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.Eps, f.Id, f.PersonId, $"la EPS {f.Name}");
+        var arl = empleados.Select(x => x.WorkRiskId).Distinct().ToList();
+        foreach (var f in await db.WorkRiskProviders.AsNoTracking().Where(x => !x.IsDeleted && arl.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.Arl, f.Id, f.PersonId, $"la ARL {f.Name}");
+        var pensiones = empleados.Select(x => x.PensionFundId).Distinct().ToList();
+        foreach (var f in await db.PensionProviders.AsNoTracking().Where(x => !x.IsDeleted && pensiones.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.FondoDePensiones, f.Id, f.PersonId, $"el fondo de pensiones {f.Name}");
+        var cesantias = empleados.Select(x => x.SeveranceFundId).Distinct().ToList();
+        foreach (var f in await db.SeveranceProviders.AsNoTracking().Where(x => !x.IsDeleted && cesantias.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.FondoDeCesantias, f.Id, f.PersonId, $"el fondo de cesantías {f.Name}");
+        var cajas = empleados.Select(x => x.FamilySubsidyId).Distinct().ToList();
+        foreach (var f in await db.FamilyCompensationFunds.AsNoTracking().Where(x => !x.IsDeleted && cajas.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.CajaDeCompensacion, f.Id, f.PersonId, $"la caja de compensación {f.Name}");
+        return e;
     }
 }

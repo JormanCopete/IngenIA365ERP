@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-11**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-15**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -363,6 +363,34 @@ los tres pasos en orden, «BD admin: sin migraciones pendientes», «BD operativ
 sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)».
 Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
 copia del mismo manifiesto sin anotaciones de Argo y se borró después.
+
+#### P15 — Feature 009 (contabilidad NIIF): E1 en rama, pendiente de merge, QA y contador
+
+La rama `009-contabilidad-niif` tiene la **entrega E1 completa** (fases 1–8 salvo las e2e
+que exigen Docker): modelo nuevo, contrato `AccountingPoster`, configuración inicial y
+catálogos, plan de cuentas con reglas, digitación de comprobantes (borrador, validación por
+campo, contabilizar, reversar, imprimir), períodos, nómina con terceros institucionales,
+auditoría de ingreso a opciones y 30 permisos. 1.036 pruebas sin contenedores en verde.
+**No está en `develop`, ni en DEV, QA o producción.**
+
+Lo que exige al dueño antes del merge (memoria del proyecto y `specs/009-contabilidad-niif/tasks.md`):
+
+1. **Designar el segundo revisor** de la migración destructiva `ContabilidadNiif` y anotarlo
+   en la cabecera de los dos archivos `*_ContabilidadNiif.cs` (marcador
+   `MIGRACION-DESTRUCTIVA-APROBADA`). La migración retira 33 tablas heredadas (vacías en
+   los tres ambientes según `diagnostico-libros.sql`) y **vacía `PAY_ConceptDefinitionAccounts`**.
+2. **Validación de los dos PUC por el contador** (`puc-solidario.json` 695 entradas,
+   `puc-comercial.json` 1.869) con `POST /api/accounting/catalogs/{code}/validate` en QA
+   (T096): bloqueante para producción.
+3. Tras desplegar, en cada cooperativa: iniciar la contabilidad, crear auxiliares, vincular
+   EPS/ARL/fondos/cajas/bancos a su persona y **reparametrizar las cuentas por concepto de
+   nómina** ([contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md)).
+4. Correr las e2e con Docker (T056, T066, T077, T084, T091) y `NominaE2E` adaptada al
+   nuevo `POST /api/accounting/setup/initialize` antes del merge (T094).
+
+Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de libros vacíos.
+E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
+contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
 ### 🟡 Prioridad media
 

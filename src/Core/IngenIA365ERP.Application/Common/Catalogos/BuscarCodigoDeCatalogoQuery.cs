@@ -48,6 +48,10 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "cesantias" => db.SeveranceProviders.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "cajas-compensacion" => db.FamilyCompensationFunds.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "causas-retencion" => db.WithholdingCauses.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Contabilidad (feature 009): el código de la cuenta es la nomenclatura del plan.
+        "cuentas" => db.ChartOfAccounts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "tipos-comprobante" => db.VoucherTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "documentos-cruce" => db.CrossDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         // Core: el código es opcional y vive en LegacyCode.
         "agencias" => db.Branches.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "bancos" => db.Banks.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),

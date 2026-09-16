@@ -1,17 +1,22 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Accounts;
+using IngenIA365ERP.Application.Accounting.Posting;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.LoanApplications.Commands.DisburseLoan;
 
-public record DisburseLoanCommand : IRequest<Result<DisbursementResultDto>>
+public record DisburseLoanCommand : IRequest<Result<DisbursementResultDto>>, IReintentableAnteConcurrencia
 {
     public Guid ApplicationPublicId { get; init; }
     public DateOnly DisbursementDate { get; init; }
+    /// <summary>Banco elegido: su cuenta contable (COR_Banks.AccountingAccountCode) va al crédito.</summary>
+    public Guid? BankPublicId { get; init; }
+    /// <summary>O, en su defecto, el código de la cuenta de caja o banco.</summary>
     public string? BankAccountCode { get; init; }
     public string? VoucherTypeCode { get; init; }
 }
@@ -26,7 +31,9 @@ public record DisbursementResultDto(
 public class DisburseLoanCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    AccountingPoster poster,
+    AccountEligibility cuentas)
     : IRequestHandler<DisburseLoanCommand, Result<DisbursementResultDto>>
 {
     public async Task<Result<DisbursementResultDto>> Handle(DisburseLoanCommand request, CancellationToken ct)
@@ -229,95 +236,31 @@ public class DisburseLoanCommandHandler(
         };
         context.LendingTransactions.Add(disbTx);
 
-        // 9. Create Accounting Document (journal entry for disbursement)
-        var accVoucherType = await context.VoucherTypes
-            .FirstOrDefaultAsync(v => v.Code == "EG" && !v.IsDeleted, ct); // Egreso
+        // 9. Comprobante DS por el contrato de contabilización (feature 009, FR-036): cartera al
+        //    débito y banco o caja al crédito, con el asociado como tercero y el pagaré como
+        //    documento cruce. Las cuentas salen de la parametrización (línea de crédito y banco);
+        //    sin ellas no hay desembolso. El contrato numera y agrega sin guardar.
+        var cuentaCartera = string.IsNullOrWhiteSpace(creditLine.AccountCode)
+            ? Result.Failure<Domain.Entities.Accounting.ChartOfAccount>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, $"la cuenta de cartera de la línea {creditLine.Description}"))
+            : await cuentas.ResolverPorCodigoAsync(creditLine.AccountCode, ModuloContable.Cartera, ct);
+        if (cuentaCartera.IsFailure) return Result.Failure<DisbursementResultDto>(cuentaCartera.Error);
 
-        if (accVoucherType is not null)
-        {
-            var nextAccDocNum = accVoucherType.NextSequenceNumber + 1;
-            accVoucherType.NextSequenceNumber = nextAccDocNum;
+        var codigoBanco = request.BankPublicId is { } bancoId
+            ? await context.Banks.AsNoTracking().Where(b => b.PublicId == bancoId && !b.IsDeleted).Select(b => b.AccountingAccountCode).FirstOrDefaultAsync(ct)
+            : request.BankAccountCode;
+        if (string.IsNullOrWhiteSpace(codigoBanco))
+            return Result.Failure<DisbursementResultDto>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, "la cuenta contable del banco o caja del desembolso"));
+        var cuentaBanco = await cuentas.ResolverPorCodigoAsync(codigoBanco, ModuloContable.Cartera, ct);
+        if (cuentaBanco.IsFailure) return Result.Failure<DisbursementResultDto>(cuentaBanco.Error);
 
-            var periodCode = request.DisbursementDate.Year * 100 + request.DisbursementDate.Month;
-
-            var accDoc = new AccountingDocument
-            {
-                VoucherTypeCode = accVoucherType.Code,
-                DocumentNumber = nextAccDocNum,
-                Detail = $"Desembolso credito #{portfolioNumber} - {person.FirstName} {person.LastName}",
-                TotalDebit = approvedAmount,
-                TotalCredit = approvedAmount,
-                DocumentDate = request.DisbursementDate,
-                IsClosed = false,
-                IsVoided = false,
-                PeriodCode = periodCode,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(accDoc);
-
-            // Debit: Portfolio account (Cartera)
-            var portfolioAccount = await context.ChartOfAccounts.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.AccountCode == creditLine.AccountCode && !a.IsDeleted, ct);
-
-            // Credit: Bank/cash account (default first branch bank)
-            var bankAccountCode = request.BankAccountCode ?? "11100501"; // Default cash account
-            var bankAccount = await context.ChartOfAccounts.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.AccountCode == bankAccountCode && !a.IsDeleted, ct);
-
-            var defaultBranch = await context.Branches.AsNoTracking()
-                .Where(b => !b.IsDeleted).OrderBy(b => b.Id).FirstOrDefaultAsync(ct);
-            var defaultCC = await context.CostCenters.AsNoTracking()
-                .Where(c => !c.IsDeleted).OrderBy(c => c.Id).FirstOrDefaultAsync(ct);
-
-            var branchId = defaultBranch?.Id ?? 0;
-            var ccId = defaultCC?.Id ?? 0;
-
-            if (portfolioAccount is not null)
-            {
-                context.JournalEntries.Add(new JournalEntry
-                {
-                    VoucherTypeCode = accDoc.VoucherTypeCode,
-                    DocumentNumber = accDoc.DocumentNumber,
-                    AccountId = portfolioAccount.Id,
-                    PersonId = person.Id,
-                    BranchId = branchId,
-                    CostCenterId = ccId,
-                    PeriodCode = periodCode.ToString(),
-                    TransactionDate = request.DisbursementDate,
-                    Description = accDoc.Detail,
-                    DebitAmount = approvedAmount,
-                    CreditAmount = 0,
-                    Status = 0,
-                    UserName = currentUser.UserName,
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                });
-            }
-
-            if (bankAccount is not null)
-            {
-                context.JournalEntries.Add(new JournalEntry
-                {
-                    VoucherTypeCode = accDoc.VoucherTypeCode,
-                    DocumentNumber = accDoc.DocumentNumber,
-                    AccountId = bankAccount.Id,
-                    PersonId = person.Id,
-                    BranchId = branchId,
-                    CostCenterId = ccId,
-                    PeriodCode = periodCode.ToString(),
-                    TransactionDate = request.DisbursementDate,
-                    Description = accDoc.Detail,
-                    DebitAmount = 0,
-                    CreditAmount = approvedAmount,
-                    Status = 0,
-                    UserName = currentUser.UserName,
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                });
-            }
-        }
+        var detalle = $"Desembolso crédito #{portfolioNumber} - {person.FirstName} {person.LastName}";
+        var posting = await poster.PrepareAsync(new PostingRequest("DS", request.DisbursementDate, detalle,
+            new AccountingOrigin(ModuloContable.Cartera, "LoanApplication", application.PublicId),
+            [
+                new PostingLine { AccountId = cuentaCartera.Value.Id, Debit = approvedAmount, Detail = detalle, PersonId = person.Id, CrossDocumentType = "PG", CrossDocumentNumber = portfolioNumber.ToString() },
+                new PostingLine { AccountId = cuentaBanco.Value.Id, Credit = approvedAmount, Detail = detalle, PersonId = person.Id },
+            ]), ct);
+        if (posting.IsFailure) return Result.Failure<DisbursementResultDto>(posting.Error);
 
         // 10. Save all in transaction
         await context.SaveChangesAsync(ct);

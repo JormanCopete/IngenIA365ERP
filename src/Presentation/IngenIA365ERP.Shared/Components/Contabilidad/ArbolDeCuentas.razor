@@ -1,0 +1,64 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using Syncfusion.Blazor.TreeGrid
+
+@* Árbol del plan de cuentas (feature 009, US2): las de agrupación en negrita, las de movimiento
+   normales, las inactivas tachadas. El plan completo se carga de una vez (hasta unas 2 000 filas)
+   porque el TreeGrid filtra y colapsa en el cliente; quien lo usa recibe el nodo elegido. *@
+<div class="arbol-cuentas">
+    <SfTreeGrid @ref="_grid" TValue="CuentaNodoDto" DataSource="@Nodos" IdMapping="PublicId" ParentIdMapping="ParentPublicId" TreeColumnIndex="0"
+                AllowFiltering="true" AllowSorting="false" Height="@Alto" EnableCollapseAll="true" RowSelected="@Seleccionar">
+        <TreeGridColumns>
+            <TreeGridColumn Field="Code" HeaderText="Código" Width="180">
+                <Template>
+                    @{
+                        var n = (CuentaNodoDto)context;
+                        <span class="@Clase(n)"><span class="codigo">@n.Code</span></span>
+                    }
+                </Template>
+            </TreeGridColumn>
+            <TreeGridColumn Field="Name" HeaderText="Nombre" Width="360">
+                <Template>
+                    @{
+                        var n = (CuentaNodoDto)context;
+                        <span class="@Clase(n)">@n.Name</span>
+                    }
+                </Template>
+            </TreeGridColumn>
+            <TreeGridColumn Field="Level" HeaderText="Nivel" Width="70" TextAlign="TextAlign.Center" />
+            <TreeGridColumn Field="Nature" HeaderText="Nat." Width="80" />
+            <TreeGridColumn HeaderText="Tipo" Width="120">
+                <Template>
+                    @{
+                        var n = (CuentaNodoDto)context;
+                        <span class="texto-apoyo">@(n.IsMovement ? "Movimiento" : "Agrupación")@(n.Origin == "Company" ? " · propia" : "")</span>
+                    }
+                </Template>
+            </TreeGridColumn>
+            <TreeGridColumn HeaderText="Estado" Width="90">
+                <Template>
+                    @{
+                        var n = (CuentaNodoDto)context;
+                        <span class="@(n.IsActive ? "" : "texto-tenue")">@(n.IsActive ? "Activa" : "Inactiva")</span>
+                    }
+                </Template>
+            </TreeGridColumn>
+        </TreeGridColumns>
+    </SfTreeGrid>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<CuentaNodoDto> Nodos { get; set; } = [];
+    [Parameter] public string Alto { get; set; } = "560px";
+    [Parameter] public EventCallback<CuentaNodoDto?> SeleccionChanged { get; set; }
+
+    private SfTreeGrid<CuentaNodoDto>? _grid;
+
+    private static string Clase(CuentaNodoDto n) => n.IsActive ? (n.IsMovement ? "cuenta-movimiento" : "cuenta-agrupacion") : "cuenta-inactiva";
+
+    private Task Seleccionar(RowSelectEventArgs<CuentaNodoDto> args) => SeleccionChanged.InvokeAsync(args.Data);
+
+    public async Task RefrescarAsync()
+    {
+        if (_grid is not null) await _grid.RefreshAsync();
+    }
+}

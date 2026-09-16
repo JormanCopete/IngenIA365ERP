@@ -29,6 +29,8 @@ public record UpdateBankCommand : IRequest<Result>
     public decimal? CommissionAmount { get; init; }
     public bool PromptForPrinter { get; init; }
     public string? ControlSequential { get; init; }
+    /// <summary>Feature 009 (FR-088): persona de Personas que representa al banco como tercero; null = sin vínculo.</summary>
+    public Guid? PersonPublicId { get; init; }
 }
 
 public class UpdateBankCommandHandler(
@@ -76,6 +78,9 @@ public class UpdateBankCommandHandler(
         entity.CommissionAmount = request.CommissionAmount;
         entity.PromptForPrinter = request.PromptForPrinter;
         entity.ControlSequential = request.ControlSequential;
+        var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
+        if (persona.IsFailure) return Result.Failure(persona.Error);
+        entity.PersonId = persona.Value;
         entity.UpdatedAt = dateTime.UtcNow;
         entity.UpdatedBy = currentUser.UserName;
 

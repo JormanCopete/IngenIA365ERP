@@ -1,7 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Treasury;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -71,29 +70,7 @@ public class RegisterTreasuryInvoiceCommandHandler(
 
         context.TreasuryInvoices.Add(invoice);
 
-        // 5. Create AccountingDocument
-        var voucherType = request.InvoiceType == "CxC" ? "FV" : "CC"; // Factura venta or Causacion
-        var lastDocNum = await context.AccountingDocuments
-            .Where(d => d.VoucherTypeCode == voucherType)
-            .OrderByDescending(d => d.DocumentNumber)
-            .Select(d => d.DocumentNumber)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var accDoc = new AccountingDocument
-        {
-            VoucherTypeCode = voucherType,
-            DocumentNumber = lastDocNum + 1,
-            Detail = $"{(request.InvoiceType == "CxC" ? "CxC" : "CxP")} - {person.FirstName} {person.LastName} - {request.Description}",
-            TotalDebit = request.Amount,
-            TotalCredit = request.Amount,
-            DocumentDate = today,
-            BeneficiaryId = person.Id,
-            ModuleCode = "TRS",
-            CreatedAt = dateTime.UtcNow,
-            CreatedBy = currentUser.UserName
-        };
-
-        context.AccountingDocuments.Add(accDoc);
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

@@ -12,7 +12,7 @@
         { "keys": { "tenantId": 1, "occurredAt": -1 }, "name": "ix_tenant_occurredAt" },
         { "keys": { "tenantId": 1, "userId": 1, "occurredAt": -1 }, "name": "ix_tenant_user_occurredAt" },
         { "keys": { "tenantId": 1, "entityType": 1, "entityPublicId": 1, "occurredAt": -1 }, "name": "ix_tenant_entity_occurredAt" },
-        { "keys": { "occurredAt": 1 }, "name": "ttl_occurredAt_5y", "expireAfterSeconds": 157680000 }
+        { "keys": { "expiresAt": 1 }, "name": "ttl_expiresAt", "expireAfterSeconds": 0 }
       ]
     }
   ],

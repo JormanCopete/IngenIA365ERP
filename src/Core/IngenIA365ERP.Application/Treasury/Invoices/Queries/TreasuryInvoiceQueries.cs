@@ -144,21 +144,8 @@ public class GetCashFlowQueryHandler(IApplicationDbContext context)
         var monthFrom = request.MonthFrom ?? 1;
         var monthTo = request.MonthTo ?? 12;
 
-        // Get monthly income vs expense from AccountBalances
-        var balances = await context.AccountBalances.AsNoTracking()
-            .Where(ab => ab.PeriodYear == request.Year
-                         && ab.PeriodMonth >= monthFrom
-                         && ab.PeriodMonth <= monthTo
-                         && !ab.IsDeleted)
-            .GroupBy(ab => ab.PeriodMonth)
-            .Select(g => new
-            {
-                Month = g.Key,
-                TotalDebit = g.Sum(ab => ab.DebitAmount),
-                TotalCredit = g.Sum(ab => ab.CreditAmount)
-            })
-            .OrderBy(g => g.Month)
-            .ToListAsync(ct);
+        // E3 (feature 009): contabilización por AccountingPoster pendiente: los saldos se derivan de ACC_JournalEntries (R4); la tabla de saldos ya no existe.
+        var balances = new[] { new { Month = 0, TotalDebit = 0m, TotalCredit = 0m } }.Where(_ => false).ToList();
 
         var monthNames = new[]
         {

@@ -9,6 +9,7 @@ public class InventoryDocumentConfiguration : IEntityTypeConfiguration<Inventory
     public void Configure(EntityTypeBuilder<InventoryDocument> builder)
     {
         builder.ToTable("INV_Documents");
+        builder.HasOne(e => e.AccountingDocument).WithMany().HasForeignKey(e => e.AccountingDocumentId).OnDelete(DeleteBehavior.Restrict); // feature 009 (R16)
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

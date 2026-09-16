@@ -1,0 +1,237 @@
+@page "/contabilidad/tipos-de-comprobante"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Tipos de comprobante - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US3 (FR-018, FR-019, FR-013): tipos de comprobante con su uso y consecutivo, y tipos
+   de documento cruce. Los sembrados no cambian de uso ni se eliminan; se pueden inactivar. *@
+<PermissionGate Required="Accounting.VoucherTypes.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Tipos de comprobante</h3>
+    <div class="toolbar">
+        <SfCheckBox @bind-Checked="_incluirInactivos" Label="Ver inactivos" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
+    </div>
+</div>
+
+<SfTab>
+    <TabItems>
+        <TabItem>
+            <ChildContent><TabHeader Text="Tipos de comprobante" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <PermissionGate Required="Accounting.VoucherTypes.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirTipo(null))">Nuevo tipo</SfButton>
+                    </PermissionGate>
+                </div>
+                <IndicadorDeCarga Cargando="@_carga.Activa">
+                    <SfGrid TValue="TipoComprobanteDto" DataSource="@_tipos" AllowSorting="true" RowHeight="34">
+                        <GridColumns>
+                            <GridColumn Field="Code" HeaderText="Código" Width="90" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="240" />
+                            <GridColumn HeaderText="Uso" Width="200">
+                                <Template>@{ var t = (TipoComprobanteDto)context; }<span>@Uso(t.Usage)@(t.ModuleCode is null ? "" : $" · {t.ModuleCode}")</span></Template>
+                            </GridColumn>
+                            <GridColumn Field="NextNumber" HeaderText="Próximo número" Width="130" TextAlign="TextAlign.Right" />
+                            <GridColumn HeaderText="Estado" Width="110">
+                                <Template>@{ var t = (TipoComprobanteDto)context; }<span>@(t.IsActive ? "activo" : "inactivo")@(t.IsSeeded ? " · sembrado" : "")</span></Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="" Width="200">
+                                <Template>
+                                    @{ var t = (TipoComprobanteDto)context; }
+                                    <PermissionGate Required="Accounting.VoucherTypes.Manage">
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => AbrirTipo(t))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => ActivarTipoAsync(t))">@(t.IsActive ? "Inactivar" : "Activar")</SfButton>
+                                    </PermissionGate>
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                </IndicadorDeCarga>
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Documentos cruce" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <PermissionGate Required="Accounting.VoucherTypes.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirCruce(null))">Nuevo tipo de documento</SfButton>
+                    </PermissionGate>
+                </div>
+                <IndicadorDeCarga Cargando="@_carga.Activa">
+                    <SfGrid TValue="TipoCruceDto" DataSource="@_cruces" AllowSorting="true" RowHeight="34">
+                        <GridColumns>
+                            <GridColumn Field="Code" HeaderText="Código" Width="90" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="260" />
+                            <GridColumn HeaderText="Estado" Width="110">
+                                <Template>@{ var t = (TipoCruceDto)context; }<span>@(t.IsActive ? "activo" : "inactivo")@(t.IsSeeded ? " · sembrado" : "")</span></Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="" Width="120">
+                                <Template>
+                                    @{ var t = (TipoCruceDto)context; }
+                                    <PermissionGate Required="Accounting.VoucherTypes.Manage">
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => AbrirCruce(t))">Editar</SfButton>
+                                    </PermissionGate>
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                </IndicadorDeCarga>
+            </ContentTemplate>
+        </TabItem>
+    </TabItems>
+</SfTab>
+
+<SfDialog @bind-Visible="_mostrarTipo" Header="@(_tipoEditado is null ? "Nuevo tipo de comprobante" : $"Tipo {_tipoEditado.Code}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_tipoEditado is null)
+                    {
+                        <CampoCodigo Catalogo="tipos-comprobante" @bind-Value="_fTipo.Code" Largo="10" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    }
+                    <label class="campo campo-ancho">Nombre <input class="e-input" @bind="_fTipo.Name" maxlength="100" /></label>
+                    <label class="campo">Uso
+                        <select class="e-input" @bind="_fTipo.Usage" disabled="@(_tipoEditado?.IsSeeded == true)">
+                            <option value="Manual">Manual (digitación)</option>
+                            <option value="Module">De módulo</option>
+                            <option value="Opening">Apertura</option>
+                            <option value="Closing">Cierre</option>
+                            <option value="Assets">Activos fijos</option>
+                        </select>
+                    </label>
+                    @if (_fTipo.Usage is "Module" or "Assets")
+                    {
+                        <label class="campo">Módulo
+                            <select class="e-input" @bind="_fTipo.ModuleCode" disabled="@(_tipoEditado?.IsSeeded == true)">
+                                <option value="">Elija…</option>
+                                <option value="NOM">Nómina</option><option value="CAR">Cartera</option><option value="INV">Inventario</option>
+                                <option value="TES">Tesorería</option><option value="CDT">CDT</option><option value="ACT">Activos fijos</option>
+                            </select>
+                        </label>
+                    }
+                    <label class="campo"><SfCheckBox @bind-Checked="_fTipo.IsActive" Label="Activo" /></label>
+                </div>
+                @if (_tipoEditado?.IsSeeded == true) { <p class="texto-tenue">Es un tipo sembrado: el uso y el módulo no cambian; sí el nombre y el estado.</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_ocupado || _codigoRepetido)" OnClick="@GuardarTipoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTipo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCruce" Header="@(_cruceEditado is null ? "Nuevo tipo de documento cruce" : $"Documento {_cruceEditado.Code}")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_cruceEditado is null)
+                    {
+                        <CampoCodigo Catalogo="documentos-cruce" @bind-Value="_fCruce.Code" Largo="10" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    }
+                    <label class="campo campo-ancho">Nombre <input class="e-input" @bind="_fCruce.Name" maxlength="80" /></label>
+                    <label class="campo"><SfCheckBox @bind-Checked="_fCruce.IsActive" Label="Activo" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_ocupado || _codigoRepetido)" OnClick="@GuardarCruceAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCruce = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<TipoComprobanteDto> _tipos = [];
+    private List<TipoCruceDto> _cruces = [];
+    private bool _incluirInactivos, _ocupado, _mostrarTipo, _mostrarCruce, _codigoRepetido;
+    private TipoComprobanteDto? _tipoEditado;
+    private TipoCruceDto? _cruceEditado;
+    private FormTipo _fTipo = new();
+    private FormCruce _fCruce = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var t = Contabilidad.ListarTiposDeComprobanteAsync(_incluirInactivos);
+        var c = Contabilidad.ListarTiposDeCruceAsync(_incluirInactivos);
+        await Task.WhenAll(t, c);
+        if (!t.Result.IsSuccess) { await Notification.ErrorAsync(t.Result.ErrorMessage ?? "No se pudieron consultar los tipos."); return; }
+        _tipos = [.. t.Result.Value!];
+        _cruces = c.Result.IsSuccess ? [.. c.Result.Value!] : [];
+    }
+
+    private void AbrirTipo(TipoComprobanteDto? t)
+    {
+        _tipoEditado = t;
+        _codigoRepetido = false;
+        _fTipo = t is null ? new FormTipo() : new FormTipo { Code = t.Code, Name = t.Name, Usage = t.Usage, ModuleCode = t.ModuleCode ?? "", IsActive = t.IsActive };
+        _mostrarTipo = true;
+    }
+
+    private async Task GuardarTipoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_fTipo.Name)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        _ocupado = true;
+        try
+        {
+            var request = new TipoComprobanteRequest(_fTipo.Code, _fTipo.Name.Trim(), _fTipo.Usage, string.IsNullOrWhiteSpace(_fTipo.ModuleCode) ? null : _fTipo.ModuleCode, _fTipo.IsActive);
+            bool ok; string? error;
+            if (_tipoEditado is null) { var r = await Contabilidad.CrearTipoDeComprobanteAsync(request); ok = r.IsSuccess; error = r.ErrorMessage; }
+            else { var r = await Contabilidad.ActualizarTipoDeComprobanteAsync(_tipoEditado.PublicId, request); ok = r.IsSuccess; error = r.ErrorMessage; }
+            if (!ok) { await Notification.ErrorAsync(error ?? "No se pudo guardar."); return; }
+            _mostrarTipo = false;
+            await Notification.SuccessAsync("Tipo de comprobante guardado.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ActivarTipoAsync(TipoComprobanteDto t)
+    {
+        var r = t.IsActive ? await Contabilidad.InactivarTipoDeComprobanteAsync(t.PublicId) : await Contabilidad.ActivarTipoDeComprobanteAsync(t.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado."); return; }
+        await CargarAsync();
+    }
+
+    private void AbrirCruce(TipoCruceDto? t)
+    {
+        _cruceEditado = t;
+        _codigoRepetido = false;
+        _fCruce = t is null ? new FormCruce() : new FormCruce { Code = t.Code, Name = t.Name, IsActive = t.IsActive };
+        _mostrarCruce = true;
+    }
+
+    private async Task GuardarCruceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_fCruce.Name)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        _ocupado = true;
+        try
+        {
+            var request = new TipoCruceRequest(_fCruce.Code, _fCruce.Name.Trim(), _fCruce.IsActive);
+            bool ok; string? error;
+            if (_cruceEditado is null) { var r = await Contabilidad.CrearTipoDeCruceAsync(request); ok = r.IsSuccess; error = r.ErrorMessage; }
+            else { var r = await Contabilidad.ActualizarTipoDeCruceAsync(_cruceEditado.PublicId, request); ok = r.IsSuccess; error = r.ErrorMessage; }
+            if (!ok) { await Notification.ErrorAsync(error ?? "No se pudo guardar."); return; }
+            _mostrarCruce = false;
+            await Notification.SuccessAsync("Tipo de documento cruce guardado.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private static string Uso(string u) => u switch { "Manual" => "Manual (digitación)", "Module" => "De módulo", "Opening" => "Apertura", "Closing" => "Cierre", "Assets" => "Activos fijos", _ => u };
+
+    private sealed class FormTipo { public string Code { get; set; } = ""; public string Name { get; set; } = ""; public string Usage { get; set; } = "Manual"; public string ModuleCode { get; set; } = ""; public bool IsActive { get; set; } = true; }
+    private sealed class FormCruce { public string Code { get; set; } = ""; public string Name { get; set; } = ""; public bool IsActive { get; set; } = true; }
+}

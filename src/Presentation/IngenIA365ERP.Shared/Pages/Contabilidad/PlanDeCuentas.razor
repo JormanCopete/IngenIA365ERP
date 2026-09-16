@@ -1,0 +1,256 @@
+@page "/contabilidad/plan-de-cuentas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Plan de cuentas - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US2 (FR-008..FR-018): el plan hasta nivel 4 viene del catálogo; la cooperativa crea
+   las auxiliares y les fija las reglas; con movimientos las reglas se bloquean y la pantalla lo
+   explica; eliminar una referenciada dice dónde; todo cambio queda en el historial. *@
+<PermissionGate Required="Accounting.Accounts.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Plan de cuentas</h3>
+    <div class="toolbar">
+        <SfCheckBox @bind-Checked="_soloActivas" Label="Sólo activas" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
+        <PermissionGate Required="Accounting.Accounts.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(_seleccion is null || _seleccion.Level < 4 || _seleccion.IsMovement)">Nueva auxiliar bajo la seleccionada</SfButton>
+        </PermissionGate>
+    </div>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_nodos.Count == 0)
+    {
+        <div class="info-card"><span class="label">Sin plan de cuentas</span><p>La contabilidad no está iniciada. Vaya a Contabilidad › Configuración inicial.</p></div>
+    }
+    else
+    {
+        <ArbolDeCuentas Nodos="@_nodosVisibles" SeleccionChanged="@SeleccionarAsync" />
+    }
+</IndicadorDeCarga>
+
+@if (_ficha is not null)
+{
+    <div class="info-card">
+        <span class="label">@_ficha.Code · @_ficha.Name</span>
+        <p>
+            Nivel @_ficha.Level · @(_ficha.IsMovement ? "cuenta de movimiento" : "cuenta de agrupación") · naturaleza @(_ficha.Nature == "Debit" ? "débito" : "crédito") · rubro @_ficha.NiifItemCode
+            · @(_ficha.Origin == "Catalog" ? "del catálogo" : "propia") · @(_ficha.IsActive ? "activa" : "inactiva")
+        </p>
+        @if (_ficha.Locked)
+        {
+            <p class="aviso aviso-info">Tiene movimientos desde el @(_ficha.FirstMovementAt?.ToString("yyyy-MM-dd")): sólo pueden cambiar el nombre y el estado; las reglas ya no.</p>
+        }
+        @if (_ficha.IsMovement)
+        {
+            <p class="texto-apoyo">
+                Aplica a: @(string.Join(", ", _ficha.EnabledModules)).
+                Exige: @(string.Join(", ", Exigencias(_ficha)) is { Length: > 0 } ex ? ex : "nada más que la sucursal propuesta").
+            </p>
+        }
+        @if (_ficha.References.Count > 0)
+        {
+            <p class="texto-apoyo">Parametrizada en: @(string.Join("; ", _ficha.References.Select(r => $"{r.Module} › {r.Where} ({r.Detail})"))).</p>
+        }
+        <div class="toolbar">
+            <PermissionGate Required="Accounting.Accounts.Manage">
+                @if (_ficha.Origin == "Company")
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@AbrirEditar">Editar</SfButton>
+                }
+                <SfButton CssClass="e-outline" OnClick="@(() => CambiarEstadoAsync(!_ficha.IsActive))">@(_ficha.IsActive ? "Inactivar" : "Reactivar")</SfButton>
+                @if (_ficha.Origin == "Company")
+                {
+                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" OnClick="@(() => _confirmarEliminar = true)">Eliminar</SfButton>
+                }
+            </PermissionGate>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-history" OnClick="@VerHistorialAsync">Historial</SfButton>
+        </div>
+    </div>
+}
+
+<SfDialog @bind-Visible="_mostrarFormulario" Header="@_tituloFormulario" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="pagina">
+                @if (_editando is null)
+                {
+                    <p class="texto-apoyo">Cuelga de <strong>@_seleccion?.Code @_seleccion?.Name</strong>. El código empieza por @_seleccion?.Code y tiene la longitud configurada para su nivel.</p>
+                    <CampoCodigo Catalogo="cuentas" @bind-Value="_codigo" Largo="12" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                }
+                else
+                {
+                    <p class="texto-apoyo">Código <strong>@_editando.Code</strong> (no cambia).</p>
+                }
+                <SfTextBox @bind-Value="_nombre" Placeholder="Nombre *" MaxLength="150" FloatLabelType="FloatLabelType.Always" />
+                @if (_esDeMovimiento)
+                {
+                    <ReglasDeCuenta Modelo="@_reglas" SoloLectura="@(_editando?.Locked == true)" />
+                }
+                else
+                {
+                    <p class="hint">Esta auxiliar es de agrupación (el movimiento está en el nivel @_nivelDeMovimiento): las reglas se fijan en sus sub-auxiliares.</p>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _mostrarFormulario = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _codigoRepetido)" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarHistorial" Header="@($"Historial de {_ficha?.Code}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaHistorial.Activa">
+            @if (_historial.Count == 0) { <p class="muted">Sin cambios registrados.</p> }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Cuándo</th><th>Qué</th><th>Quién</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in _historial)
+                        {
+                            <tr><td>@e.OccurredAt.ToString("yyyy-MM-dd HH:mm")</td><td>@e.Action</td><td>@e.User</td><td class="texto-tenue">@e.Detail</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarEliminar" OnConfirm="EliminarAsync" Message="@($"¿Eliminar la cuenta {_ficha?.Code}? Sólo se elimina una auxiliar sin movimientos, sin hijas y sin parametrizaciones.")" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaHistorial = new();
+    private List<CuentaNodoDto> _nodos = [];
+    private bool _soloActivas;
+    private CuentaNodoDto? _seleccion;
+    private CuentaDto? _ficha;
+    private CuentaDto? _editando;
+    private bool _mostrarFormulario, _mostrarHistorial, _confirmarEliminar, _codigoRepetido, _esDeMovimiento;
+    private string _tituloFormulario = "";
+    private string? _codigo;
+    private string _nombre = "";
+    private ReglasDeCuentaModelo _reglas = new();
+    private byte _nivelDeMovimiento = 6;
+    private List<EventoDeCuentaDto> _historial = [];
+
+    private List<CuentaNodoDto> _nodosVisibles => _soloActivas ? _nodos.Where(n => n.IsActive).ToList() : _nodos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var config = await Contabilidad.ObtenerConfiguracionAsync();
+        if (config.IsSuccess && config.Value!.Initialized) _nivelDeMovimiento = config.Value.MovementLevel;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ArbolDeCuentasAsync(todo: true);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar el plan de cuentas."); return; }
+        _nodos = [.. r.Value!];
+        if (_ficha is not null) await SeleccionarAsync(_nodos.FirstOrDefault(n => n.PublicId == _ficha.PublicId));
+    }
+
+    private async Task SeleccionarAsync(CuentaNodoDto? nodo)
+    {
+        _seleccion = nodo;
+        _ficha = null;
+        if (nodo is null) return;
+        var r = await Contabilidad.ObtenerCuentaAsync(nodo.PublicId);
+        if (r.IsSuccess) _ficha = r.Value;
+    }
+
+    private static IEnumerable<string> Exigencias(CuentaDto c)
+    {
+        if (c.RequiresThirdParty) yield return "tercero";
+        if (c.RequiresCrossDocument) yield return "documento cruce";
+        if (c.RequiresCostCenter) yield return "centro de costo";
+        if (c.RequiresBranch) yield return "sucursal explícita";
+        if (c.Tax?.RequiresTaxBase == true) yield return "base gravable";
+    }
+
+    private void AbrirNueva()
+    {
+        if (_seleccion is null) return;
+        _editando = null;
+        _codigo = _seleccion.Code;
+        _nombre = "";
+        _reglas = new ReglasDeCuentaModelo();
+        _esDeMovimiento = _seleccion.Level + 1 == _nivelDeMovimiento;
+        _tituloFormulario = "Nueva auxiliar";
+        _mostrarFormulario = true;
+    }
+
+    private void AbrirEditar()
+    {
+        if (_ficha is null) return;
+        _editando = _ficha;
+        _codigo = _ficha.Code;
+        _nombre = _ficha.Name;
+        _reglas = ReglasDeCuentaModelo.Desde(_ficha);
+        _esDeMovimiento = _ficha.IsMovement;
+        _tituloFormulario = $"Editar {_ficha.Code}";
+        _mostrarFormulario = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        if (_editando is null)
+        {
+            var r = await Contabilidad.CrearCuentaAsync(_reglas.ARequest(_codigo?.Trim() ?? "", _nombre, _seleccion?.PublicId));
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la cuenta."); return; }
+            await Notification.SuccessAsync("Cuenta creada.");
+        }
+        else
+        {
+            var r = await Contabilidad.ActualizarCuentaAsync(_editando.PublicId, _reglas.ARequest(_editando.Code, _nombre, _editando.ParentPublicId));
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la cuenta."); return; }
+            await Notification.SuccessAsync("Cuenta guardada.");
+        }
+        _mostrarFormulario = false;
+        await CargarAsync();
+    }
+
+    private async Task CambiarEstadoAsync(bool activar)
+    {
+        if (_ficha is null) return;
+        var r = activar ? await Contabilidad.ActivarCuentaAsync(_ficha.PublicId) : await Contabilidad.InactivarCuentaAsync(_ficha.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado."); return; }
+        await Notification.SuccessAsync(activar ? "Cuenta reactivada." : "Cuenta inactivada.");
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync()
+    {
+        if (_ficha is null) return;
+        var r = await Contabilidad.EliminarCuentaAsync(_ficha.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo eliminar la cuenta."); return; }
+        await Notification.SuccessAsync("Cuenta eliminada.");
+        _ficha = null;
+        _seleccion = null;
+        await CargarAsync();
+    }
+
+    private async Task VerHistorialAsync()
+    {
+        if (_ficha is null) return;
+        _mostrarHistorial = true;
+        using var carga = _cargaHistorial.Iniciar();
+        var r = await Contabilidad.HistorialDeCuentaAsync(_ficha.PublicId);
+        _historial = r.IsSuccess ? [.. r.Value!] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el historial.");
+    }
+}

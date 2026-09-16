@@ -1,6 +1,8 @@
 using System.Text.Json;
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -33,7 +35,7 @@ public sealed record ApprovePayrollRunCommand(
     bool Confirm,
     IReadOnlyList<ApprovalExceptionDto>? Exceptions = null,
     bool ConfirmEmpty = false,
-    bool ConfirmWithoutSegregation = false) : IRequest<Result<ApproveRunResultDto>>;
+    bool ConfirmWithoutSegregation = false) : IRequest<Result<ApproveRunResultDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApprovePayrollRunCommandValidator : AbstractValidator<ApprovePayrollRunCommand>
 {
@@ -151,7 +153,7 @@ public sealed class ApprovePayrollRunCommandHandler(
         run.ApprovedBy = yo;
         run.ApprovedWithoutSegregation = sinSegregacion;
         run.ExceptionsJson = autorizadas.Count == 0 ? null : JsonSerializer.Serialize(autorizadas, RunJson.Options);
-        run.AccountingDocument = posting.Value.Document;
+        run.AccountingDocument = posting.Value;
         run.UpdatedAt = ahora;
         run.UpdatedBy = yo;
 
@@ -159,7 +161,7 @@ public sealed class ApprovePayrollRunCommandHandler(
         period.ApprovedAt = ahora;
         period.ApprovedBy = yo;
         period.RunPublicId = run.PublicId;
-        period.StatusMessage = PayPeriod.Mensaje($"Aprobado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC · comprobante {posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}");
+        period.StatusMessage = PayPeriod.Mensaje($"Aprobado por {yo} el {ahora:dd/MM/yyyy HH:mm} UTC · comprobante {posting.Value.Referencia()}");
         period.UpdatedAt = ahora;
         period.UpdatedBy = yo;
 
@@ -185,12 +187,12 @@ public sealed class ApprovePayrollRunCommandHandler(
             new
             {
                 status = "Approved", periodPublicId = period.PublicId, version = run.Version, employees = run.EmployeeCount,
-                totales, document = $"{posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}",
-                documentPublicId = posting.Value.Document.PublicId, exceptions = autorizadas, approvedWithoutSegregation = sinSegregacion,
+                totales, document = posting.Value.Referencia(),
+                documentPublicId = posting.Value.PublicId, exceptions = autorizadas, approvedWithoutSegregation = sinSegregacion,
             }, ct);
 
-        return Result.Success(new ApproveRunResultDto(run.PublicId, period.PublicId, posting.Value.Document.PublicId,
-            $"{posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}", totales, run.EmployeeCount, sinSegregacion));
+        return Result.Success(new ApproveRunResultDto(run.PublicId, period.PublicId, posting.Value.PublicId,
+            posting.Value.Referencia(), totales, run.EmployeeCount, sinSegregacion));
     }
 
     private static Result<ApproveRunResultDto> Fallo(string code, string message) =>

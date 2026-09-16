@@ -15,6 +15,8 @@ public record UpdateWorkRiskProviderCommand : IRequest<Result>
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
     public decimal Factor { get; init; }
+    /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
+    public Guid? PersonPublicId { get; init; }
 }
 
 public class UpdateWorkRiskProviderCommandHandler(
@@ -45,6 +47,9 @@ public class UpdateWorkRiskProviderCommandHandler(
         entity.TaxId = request.TaxId;
         entity.CheckDigit = request.CheckDigit;
         entity.Factor = request.Factor;
+        var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
+        if (persona.IsFailure) return Result.Failure(persona.Error);
+        entity.PersonId = persona.Value;
         entity.UpdatedAt = dateTime.UtcNow;
         entity.UpdatedBy = currentUser.UserName;
 

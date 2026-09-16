@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 
 namespace IngenIA365ERP.Domain.Entities.Inventory;
 
@@ -48,4 +49,8 @@ public class InventoryDocument : AuditableEntityLong
 
     // Navigation
     public InventoryTransactionType? TransactionType { get; set; }
+
+    // Feature 009 (R16): el comprobante contable que genero este documento; la anulacion reversa ESE comprobante.
+    public long? AccountingDocumentId { get; set; }
+    public AccountingDocument? AccountingDocument { get; set; }
 }

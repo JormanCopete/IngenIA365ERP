@@ -141,7 +141,7 @@ public sealed class GetRunBalanceCheckQueryHandler(IApplicationDbContext db)
         bool? documentoCuadrado = null;
         if (run.AccountingDocumentId is { } docId)
         {
-            var doc = await db.AccountingDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == docId, ct);
+            var doc = await db.AccountingDocuments.AsNoTracking().Include(d => d.VoucherType).FirstOrDefaultAsync(d => d.Id == docId, ct);
             if (doc is not null)
             {
                 // El asiento va por concepto y en valor absoluto (una línea negativa —el ajuste por
@@ -155,7 +155,7 @@ public sealed class GetRunBalanceCheckQueryHandler(IApplicationDbContext db)
                     .ToListAsync(ct);
                 var contable = porConcepto.Sum(Math.Abs);
                 documentoCuadrado = doc.TotalDebit == doc.TotalCredit && doc.TotalDebit == contable;
-                detalles.Add($"Comprobante {doc.VoucherTypeCode}-{doc.DocumentNumber}: débitos {doc.TotalDebit:N0}, créditos {doc.TotalCredit:N0}; líneas con asiento {contable:N0}.");
+                detalles.Add($"Comprobante {Accounting.Posting.ComprobanteExtensiones.Referencia(doc)}: débitos {doc.TotalDebit:N0}, créditos {doc.TotalCredit:N0}; líneas con asiento {contable:N0}.");
             }
         }
         else

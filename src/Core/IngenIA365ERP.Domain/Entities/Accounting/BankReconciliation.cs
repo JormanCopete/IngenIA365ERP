@@ -1,29 +1,30 @@
 using IngenIA365ERP.Domain.Common;
-using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Accounting;
 
 namespace IngenIA365ERP.Domain.Entities.Accounting;
 
-/// <summary>Maps to [dbo].[ACC_BankReconciliations] (cnt_concibanca).</summary>
-public class BankReconciliation : AuditableEntityLong
+/// <summary>
+/// Conciliación de una cuenta bancaria en un período (feature 009, FR-055..FR-060): saldos del
+/// extracto, saldo en libros al cerrar, estado. Reabrir el período contable la marca
+/// <c>Outdated</c>; reabrirla exige permiso y motivo.
+/// </summary>
+public class BankReconciliation : AuditableEntity
 {
     public int AccountId { get; set; }
-    public int BankId { get; set; }
-    public int? PeriodCode { get; set; }
-    public DateOnly TransactionDate { get; set; }
-    public string? DocumentType { get; set; }
-    public string? DocumentNumber { get; set; }
-    public string? Description { get; set; }
-    public decimal DebitAmount { get; set; }
-    public decimal CreditAmount { get; set; }
-    public bool IsReconciled { get; set; }
-    public DateOnly? ReconciliationDate { get; set; }
-    public int Status { get; set; }
-    public bool IsAdditional { get; set; }
-    public bool IsClosed { get; set; }
-    public int? MovementSequence { get; set; }
-    public string? ModuleCode { get; set; }
+    public ChartOfAccount? Account { get; set; }
+    public int PeriodId { get; set; }
+    public AccountingPeriod? Period { get; set; }
 
-    // Navigation
-    public ChartOfAccount Account { get; set; } = null!;
-    public Bank Bank { get; set; } = null!;
+    public decimal StatementOpeningBalance { get; set; }
+    public decimal StatementClosingBalance { get; set; }
+    public decimal? BookBalanceAtClose { get; set; }
+    public ReconciliationStatus Status { get; set; } = ReconciliationStatus.Open;
+
+    public DateTime? ClosedAt { get; set; }
+    public string? ClosedBy { get; set; }
+    public DateTime? ReopenedAt { get; set; }
+    public string? ReopenedBy { get; set; }
+    public string? ReopenReason { get; set; }
+
+    public ICollection<BankStatementLine> StatementLines { get; set; } = [];
 }

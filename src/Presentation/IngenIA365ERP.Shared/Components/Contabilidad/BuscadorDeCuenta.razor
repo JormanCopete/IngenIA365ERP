@@ -1,0 +1,136 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@implements IDisposable
+
+@* Buscador de cuentas (feature 009, FR-015): escribe código o nombre y ofrece sólo cuentas de
+   movimiento, activas y habilitadas para el módulo que pregunta. Expone la cuenta elegida con
+   sus reglas para que quien lo usa habilite o deshabilite tercero, documento, centro y sucursal.
+   Teclado: flechas para moverse, Enter elige, Esc limpia. En modo Compacto cabe en una celda. *@
+<div class="buscador-de-cuenta @(Compacto ? "buscador-compacto" : "")" @onkeydown="TeclaAsync" @onfocusout="Cerrar">
+    @if (Cuenta is not null)
+    {
+        <div class="cuenta-elegida" title="@Cuenta.Name">
+            <span class="codigo">@Cuenta.Code</span>
+            @if (!Compacto) { <span class="texto-apoyo">@Cuenta.Name</span> }
+            @if (!Deshabilitado)
+            {
+                <button type="button" class="enlace" @onclick="LimpiarAsync" aria-label="Quitar cuenta" tabindex="-1">×</button>
+            }
+        </div>
+    }
+    else
+    {
+        <input class="e-input" type="text" value="@_termino" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off"
+               @oninput="EscribirAsync" @ref="_entrada" />
+        @if (_abierto)
+        {
+            <ul class="lista-de-cuentas" role="listbox">
+                @if (_buscando) { <li class="texto-tenue">Buscando…</li> }
+                else if (_resultados.Count == 0) { <li class="texto-tenue">@(_termino.Length < 2 ? "Escriba al menos dos caracteres." : "Ninguna cuenta de movimiento coincide.")</li> }
+                @for (var i = 0; i < _resultados.Count; i++)
+                {
+                    var c = _resultados[i];
+                    var indice = i;
+                    <li class="@(indice == _activo ? "activa" : "")" role="option" @onmousedown="() => ElegirAsync(c)" @onmousedown:preventDefault>
+                        <span class="codigo">@c.Code</span> @c.Name
+                        @if (!Compacto)
+                        {
+                            <span class="texto-tenue">
+                                @(c.RequiresThirdParty ? " · tercero" : "")@(c.RequiresCrossDocument ? " · documento" : "")@(c.RequiresCostCenter ? " · centro" : "")@(c.RequiresBranch ? " · sucursal" : "")@(c.RequiresTaxBase ? " · base" : "")
+                            </span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Módulo que pregunta (CNT, NOM, CAR…): el buscador sólo devuelve cuentas habilitadas para él.</summary>
+    [Parameter] public string Modulo { get; set; } = "CNT";
+    [Parameter] public CuentaBuscadaDto? Cuenta { get; set; }
+    [Parameter] public EventCallback<CuentaBuscadaDto?> CuentaChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Código o nombre de la cuenta";
+    [Parameter] public bool Compacto { get; set; }
+    [Parameter] public bool Deshabilitado { get; set; }
+    /// <summary>Si no viene <see cref="Cuenta"/> pero sí un código, se resuelve al iniciar (edición).</summary>
+    [Parameter] public string? CodigoInicial { get; set; }
+
+    private ElementReference _entrada;
+    private string _termino = "";
+    private List<CuentaBuscadaDto> _resultados = [];
+    private bool _abierto, _buscando;
+    private int _activo = -1;
+    private CancellationTokenSource? _debounce;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Cuenta is null && !string.IsNullOrWhiteSpace(CodigoInicial))
+        {
+            var r = await Contabilidad.BuscarCuentasAsync(CodigoInicial, Modulo, onlyMovement: false);
+            var exacta = r.IsSuccess ? r.Value!.FirstOrDefault(c => c.Code == CodigoInicial) : null;
+            if (exacta is not null) await CuentaChanged.InvokeAsync(exacta);
+            CodigoInicial = null;
+        }
+    }
+
+    public ValueTask EnfocarAsync() => _entrada.FocusAsync();
+
+    private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _termino = e.Value?.ToString() ?? "";
+        _abierto = true;
+        _activo = -1;
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        try
+        {
+            await Task.Delay(250, token);
+            await BuscarAsync(token);
+        }
+        catch (TaskCanceledException) { /* escribió otra letra: la búsqueda anterior ya no sirve */ }
+    }
+
+    private async Task BuscarAsync(CancellationToken ct)
+    {
+        if (_termino.Trim().Length < 2) { _resultados = []; return; }
+        _buscando = true;
+        StateHasChanged();
+        var r = await Contabilidad.BuscarCuentasAsync(_termino.Trim(), Modulo, ct: ct);
+        _resultados = r.IsSuccess ? [.. r.Value!] : [];
+        _buscando = false;
+        _activo = _resultados.Count > 0 ? 0 : -1;
+    }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        if (Cuenta is not null) return;
+        switch (e.Key)
+        {
+            case "ArrowDown": if (_resultados.Count > 0) _activo = Math.Min(_activo + 1, _resultados.Count - 1); _abierto = true; break;
+            case "ArrowUp": if (_resultados.Count > 0) _activo = Math.Max(_activo - 1, 0); break;
+            case "Enter": if (_activo >= 0 && _activo < _resultados.Count) await ElegirAsync(_resultados[_activo]); break;
+            case "Escape": _termino = ""; _resultados = []; _abierto = false; break;
+        }
+    }
+
+    private async Task ElegirAsync(CuentaBuscadaDto c)
+    {
+        _abierto = false;
+        _termino = "";
+        _resultados = [];
+        await CuentaChanged.InvokeAsync(c);
+    }
+
+    private async Task LimpiarAsync()
+    {
+        await CuentaChanged.InvokeAsync(null);
+        _termino = "";
+    }
+
+    private void Cerrar() => _abierto = false;
+
+    public void Dispose() => _debounce?.Cancel();
+}

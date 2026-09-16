@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Accounting;
 
 namespace IngenIA365ERP.Domain.Entities.Treasury;
 
@@ -17,4 +18,10 @@ public class TreasuryConcept : AuditableEntity
 
     [MaxLength(5)]
     public string? ConceptType { get; set; }
+
+    // Feature 009 (R16): el concepto de tesoreria no tenia cuentas; los cheques y facturas contabilizan con estas.
+    public int? DebitAccountId { get; set; }
+    public ChartOfAccount? DebitAccount { get; set; }
+    public int? CreditAccountId { get; set; }
+    public ChartOfAccount? CreditAccount { get; set; }
 }

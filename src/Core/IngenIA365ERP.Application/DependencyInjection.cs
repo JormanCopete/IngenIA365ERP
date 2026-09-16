@@ -29,6 +29,10 @@ public static class DependencyInjection
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
+            // 3b) Feature 009: reintento ante ConcurrencyConflictException para los requests marcados
+            //     IReintentableAnteConcurrencia. Va DESPUES de Audit para que la auditoria vea un solo
+            //     evento con el resultado final, no uno por intento.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ReintentoPorConcurrenciaBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
         });
 
@@ -73,6 +77,12 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Services.PayrollAccountingPoster>();
         services.AddScoped<Payroll.Services.IPayrollRunStaleMarker, Payroll.Services.PayrollRunStaleMarker>();
         services.AddScoped<Payroll.Services.PayrollAuditEmitter>();
+        // Feature 009: mismo molde para contabilidad (exportaciones, envios, configuracion).
+        services.AddScoped<Accounting.Reports.AccountingAuditEmitter>();
+        // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad
+        // de cuentas que parametrizan los demas modulos (FR-016).
+        services.AddScoped<Accounting.Posting.AccountingPoster>();
+        services.AddScoped<Accounting.Accounts.AccountEligibility>();
         services.AddScoped<Payroll.Novelties.CarryOverNoveltiesService>();
         services.AddScoped<Payroll.Novelties.RecurringNovelties.RecurringNoveltiesMaterializer>();
         services.AddScoped<Payroll.Runs.Queries.RunSummaryBuilder>();

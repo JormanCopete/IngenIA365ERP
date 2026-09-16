@@ -1,7 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,33 +55,7 @@ public class ProcessCheckCommandHandler(
                 check.UpdatedAt = dateTime.UtcNow;
                 check.UpdatedBy = currentUser.UserName;
 
-                // Reverse accounting entry
-                var lastDocNum = await context.AccountingDocuments
-                    .Where(d => d.VoucherTypeCode == "NC") // Nota contable
-                    .OrderByDescending(d => d.DocumentNumber)
-                    .Select(d => d.DocumentNumber)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                var reverseDoc = new AccountingDocument
-                {
-                    VoucherTypeCode = "NC",
-                    DocumentNumber = lastDocNum + 1,
-                    Detail = $"Anulacion cheque #{check.CheckNumber}",
-                    TotalDebit = check.Amount,
-                    TotalCredit = check.Amount,
-                    DocumentDate = DateOnly.FromDateTime(dateTime.UtcNow),
-                    BeneficiaryId = check.PersonId,
-                    BankId = (short)check.BankId,
-                    ModuleCode = "TRS",
-                    IsVoided = false,
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                };
-
-                context.AccountingDocuments.Add(reverseDoc);
-
-                check.VoidVoucherCode = "NC";
-                check.VoidVoucherNumber = (int)reverseDoc.DocumentNumber;
+                // E3 (feature 009): contabilización por AccountingPoster pendiente
                 break;
             }
 
@@ -96,29 +69,7 @@ public class ProcessCheckCommandHandler(
                 check.UpdatedAt = dateTime.UtcNow;
                 check.UpdatedBy = currentUser.UserName;
 
-                // Create new causation entry for returned check
-                var lastCauDocNum = await context.AccountingDocuments
-                    .Where(d => d.VoucherTypeCode == "CC") // Causacion
-                    .OrderByDescending(d => d.DocumentNumber)
-                    .Select(d => d.DocumentNumber)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                var causationDoc = new AccountingDocument
-                {
-                    VoucherTypeCode = "CC",
-                    DocumentNumber = lastCauDocNum + 1,
-                    Detail = $"Devolucion cheque #{check.CheckNumber}",
-                    TotalDebit = check.Amount,
-                    TotalCredit = check.Amount,
-                    DocumentDate = DateOnly.FromDateTime(dateTime.UtcNow),
-                    BeneficiaryId = check.PersonId,
-                    BankId = (short)check.BankId,
-                    ModuleCode = "TRS",
-                    CreatedAt = dateTime.UtcNow,
-                    CreatedBy = currentUser.UserName
-                };
-
-                context.AccountingDocuments.Add(causationDoc);
+                // E3 (feature 009): contabilización por AccountingPoster pendiente
                 break;
             }
 

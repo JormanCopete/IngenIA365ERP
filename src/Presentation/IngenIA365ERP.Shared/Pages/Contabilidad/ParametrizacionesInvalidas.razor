@@ -1,0 +1,54 @@
+@page "/contabilidad/parametrizaciones-invalidas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Parametrizaciones inválidas - IngenIA365ERP</PageTitle>
+
+@* Feature 009 (FR-017, FR-088): cuentas parametrizadas en otros módulos que dejaron de cumplir
+   (agrupación, inactivas, no habilitadas) y entidades institucionales sin persona vinculada. Lo
+   que aquí aparece hará fallar la contabilización del módulo hasta que se corrija. *@
+<PermissionGate Required="Accounting.Accounts.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Parametrizaciones inválidas</h3>
+    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Revisar de nuevo</SfButton>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_revisado && _filas.Count == 0)
+    {
+        <div class="info-card"><span class="label">Todo en orden</span><p>Ninguna parametrización de módulo apunta a una cuenta que no sirva, y las entidades institucionales tienen su persona vinculada.</p></div>
+    }
+    else
+    {
+        <SfGrid TValue="ParametrizacionInvalidaDto" DataSource="@_filas" AllowSorting="true" AllowFiltering="true" AllowPaging="true">
+            <GridPageSettings PageSize="25" />
+            <GridColumns>
+                <GridColumn Field="Module" HeaderText="Módulo" Width="130" />
+                <GridColumn Field="Where" HeaderText="Dónde" Width="200" />
+                <GridColumn Field="Detail" HeaderText="Registro" Width="220" />
+                <GridColumn Field="AccountCode" HeaderText="Cuenta" Width="130" />
+                <GridColumn Field="Problem" HeaderText="Problema" Width="360" />
+            </GridColumns>
+        </SfGrid>
+    }
+</IndicadorDeCarga>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<ParametrizacionInvalidaDto> _filas = [];
+    private bool _revisado;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ParametrizacionesInvalidasAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar."); return; }
+        _filas = [.. r.Value!];
+        _revisado = true;
+    }
+}

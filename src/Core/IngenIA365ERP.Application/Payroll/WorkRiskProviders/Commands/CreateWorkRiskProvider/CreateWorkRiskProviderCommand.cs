@@ -16,6 +16,8 @@ public record CreateWorkRiskProviderCommand : IRequest<Result<Guid>>
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
     public decimal Factor { get; init; }
+    /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
+    public Guid? PersonPublicId { get; init; }
 }
 
 public class CreateWorkRiskProviderCommandHandler(
@@ -29,6 +31,8 @@ public class CreateWorkRiskProviderCommandHandler(
         CancellationToken cancellationToken)
     {
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
+        var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
+        if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
         var repetido = await context.WorkRiskProviders.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Code == codigo, cancellationToken);
         if (repetido is not null)
@@ -42,6 +46,7 @@ public class CreateWorkRiskProviderCommandHandler(
             TaxId = request.TaxId,
             CheckDigit = request.CheckDigit,
             Factor = request.Factor,
+            PersonId = persona.Value,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };

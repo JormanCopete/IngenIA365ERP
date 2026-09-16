@@ -1,0 +1,236 @@
+@page "/contabilidad/catalogos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using Syncfusion.Blazor.TreeGrid
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Catálogos PUC - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US1 (FR-002, FR-005, FR-006): los catálogos sembrados (comercial y solidario), los
+   propios importados desde Excel o CSV, la constancia de validación del contador y las cuentas
+   nuevas de una versión del catálogo que la empresa puede incorporar. *@
+<PermissionGate Required="Accounting.Setup.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Catálogos de cuentas</h3>
+    <PermissionGate Required="Accounting.Setup.Manage">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-upload" OnClick="@(() => _importando = true)">Importar catálogo propio</SfButton>
+    </PermissionGate>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="CatalogoContableDto" DataSource="@_catalogos" AllowSorting="true" RowSelected="@SeleccionarAsync">
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Código" Width="150" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
+        <GridColumn Field="Version" HeaderText="Versión" Width="130" />
+        <GridColumn Field="Source" HeaderText="Origen" Width="110" />
+        <GridColumn Field="EntryCount" HeaderText="Cuentas" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Validado por el contador" Width="220">
+            <Template>
+                @{
+                    var c = (CatalogoContableDto)context;
+                    if (c.ValidatedAt is { } v) { <span>@c.ValidatedBy · @v.ToString("yyyy-MM-dd")</span> }
+                    else { <span class="texto-tenue">Sin validar</span> }
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="220" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var c = (CatalogoContableDto)context;
+                    <PermissionGate Required="Accounting.Setup.Manage">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-check" OnClick="@(() => ValidarAsync(c))">Validar</SfButton>
+                        @if (c.Source == "Imported")
+                        {
+                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => { _aRetirar = c; _confirmarRetiro = true; })">Retirar</SfButton>
+                        }
+                    </PermissionGate>
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+</IndicadorDeCarga>
+
+@if (_seleccionado is not null)
+{
+    <div class="page-header">
+        <h4>Cuentas de @_seleccionado.Name</h4>
+        <SfDropDownList TValue="byte?" TItem="OpcionNivel" @bind-Value="_nivel" DataSource="@_niveles" Placeholder="Todos los niveles" Width="220px">
+            <DropDownListFieldSettings Text="Texto" Value="Valor" />
+            <DropDownListEvents TValue="byte?" TItem="OpcionNivel" ValueChange="@(async _ => await CargarEntradasAsync())" />
+        </SfDropDownList>
+    </div>
+    <IndicadorDeCarga Cargando="@_cargaEntradas.Activa">
+    <div class="arbol-cuentas">
+        <SfTreeGrid TValue="EntradaDeCatalogoDto" DataSource="@_entradas" IdMapping="Code" ParentIdMapping="ParentCode" TreeColumnIndex="0"
+                    AllowFiltering="true" AllowSorting="false" Height="480px" EnableCollapseAll="true">
+            <TreeGridColumns>
+                <TreeGridColumn Field="Code" HeaderText="Código" Width="160" />
+                <TreeGridColumn Field="Name" HeaderText="Nombre" Width="360" />
+                <TreeGridColumn Field="Level" HeaderText="Nivel" Width="80" TextAlign="TextAlign.Center" />
+                <TreeGridColumn Field="Nature" HeaderText="Naturaleza" Width="110" />
+                <TreeGridColumn Field="NiifItemCode" HeaderText="Rubro NIIF" Width="160" />
+            </TreeGridColumns>
+        </SfTreeGrid>
+    </div>
+    </IndicadorDeCarga>
+}
+
+@if (_novedades.Count > 0)
+{
+    <div class="info-card">
+        <span class="label">Cuentas nuevas del catálogo de la empresa</span>
+        <p>El catálogo trae @_novedades.Count cuenta(s) que la empresa todavía no tiene en su plan.</p>
+        <ul>
+            @foreach (var n in _novedades.Take(20)) { <li><span class="codigo">@n.Code</span> @n.Name</li> }
+            @if (_novedades.Count > 20) { <li class="texto-tenue">… y @(_novedades.Count - 20) más</li> }
+        </ul>
+        <PermissionGate Required="Accounting.Setup.Manage">
+            <SfButton CssClass="e-primary" OnClick="@AdoptarAsync" Disabled="@_guardado.Activa">Incorporar al plan</SfButton>
+        </PermissionGate>
+    </div>
+}
+
+<SfDialog @bind-Visible="_importando" Header="Importar catálogo propio" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Importando…">
+            <div class="pagina">
+                <p class="texto-apoyo">Excel o CSV con columnas <code>codigo</code>, <code>nombre</code>, <code>naturaleza</code> (D/C) y <code>rubro</code> (rubro NIIF).
+                   Códigos de 1, 2, 4 o 6 dígitos; toda cuenta cuelga de una existente en el archivo. Si una fila falla, no se guarda nada y se indica cuál.</p>
+                <SfTextBox @bind-Value="_nombreImportacion" Placeholder="Nombre del catálogo *" MaxLength="150" FloatLabelType="FloatLabelType.Always" />
+                <InputFile OnChange="@ArchivoElegido" accept=".xlsx,.csv,.txt" />
+                @if (_erroresImportacion.Count > 0)
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _erroresImportacion) { <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _importando = false)" />
+        <DialogButton Content="Importar" IsPrimary="true" OnClick="@ImportarAsync" Disabled="@(_guardado.Activa || _archivo is null)" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarRetiro" OnConfirm="RetirarAsync" Message="@($"¿Retirar el catálogo {_aRetirar?.Code}? Sólo se retira un catálogo importado que la empresa no use.")" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaEntradas = new(), _guardado = new();
+    private List<CatalogoContableDto> _catalogos = [];
+    private CatalogoContableDto? _seleccionado;
+    private List<EntradaDeCatalogoDto> _entradas = [];
+    private List<CuentaNuevaDeCatalogoDto> _novedades = [];
+    private byte? _nivel;
+    private bool _importando, _confirmarRetiro;
+    private CatalogoContableDto? _aRetirar;
+    private string _nombreImportacion = "";
+    private IBrowserFile? _archivo;
+    private List<ErrorDeFilaDto> _erroresImportacion = [];
+
+    private static readonly List<OpcionNivel> _niveles = [new(1, "Clases"), new(2, "Hasta grupos"), new(3, "Hasta cuentas"), new(4, "Hasta subcuentas")];
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ListarCatalogosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cargar los catálogos."); return; }
+        _catalogos = [.. r.Value!];
+        var novedades = await Contabilidad.CuentasNuevasDelCatalogoAsync();
+        _novedades = novedades.IsSuccess ? [.. novedades.Value!] : [];
+    }
+
+    private async Task SeleccionarAsync(RowSelectEventArgs<CatalogoContableDto> args)
+    {
+        _seleccionado = args.Data;
+        await CargarEntradasAsync();
+    }
+
+    private async Task CargarEntradasAsync()
+    {
+        if (_seleccionado is null) return;
+        using var carga = _cargaEntradas.Iniciar();
+        var r = await Contabilidad.ListarEntradasDeCatalogoAsync(_seleccionado.Code, _nivel);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cargar las cuentas."); return; }
+        _entradas = [.. r.Value!];
+    }
+
+    private async Task ValidarAsync(CatalogoContableDto c)
+    {
+        var r = await Contabilidad.ValidarCatalogoAsync(c.Code);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la validación."); return; }
+        await Notification.SuccessAsync($"Catálogo {c.Code} validado.");
+        await CargarAsync();
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_aRetirar is null) return;
+        var r = await Contabilidad.RetirarCatalogoAsync(_aRetirar.Code);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el catálogo."); return; }
+        await Notification.SuccessAsync("Catálogo retirado.");
+        if (_seleccionado?.Code == _aRetirar.Code) { _seleccionado = null; _entradas = []; }
+        await CargarAsync();
+    }
+
+    private async Task AdoptarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.AdoptarCuentasNuevasAsync(_novedades.Select(n => n.Code).ToList());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron incorporar las cuentas."); return; }
+        await Notification.SuccessAsync($"{r.Value!.Accounts} cuenta(s) incorporadas al plan.");
+        await CargarAsync();
+    }
+
+    private void ArchivoElegido(InputFileChangeEventArgs e)
+    {
+        _archivo = e.File;
+        _erroresImportacion = [];
+        if (string.IsNullOrWhiteSpace(_nombreImportacion)) _nombreImportacion = System.IO.Path.GetFileNameWithoutExtension(e.File.Name);
+    }
+
+    private async Task ImportarAsync()
+    {
+        if (_archivo is null) return;
+        using var guardado = _guardado.Iniciar();
+        _erroresImportacion = [];
+        byte[] bytes;
+        try
+        {
+            using var ms = new MemoryStream();
+            await _archivo.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (IOException ex)
+        {
+            await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        var r = await Contabilidad.ImportarCatalogoAsync(_nombreImportacion, _archivo.Name, bytes);
+        if (!r.IsSuccess)
+        {
+            _erroresImportacion = r.ErroresDeFila();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo importar el catálogo.");
+            return;
+        }
+        await Notification.SuccessAsync($"Catálogo {r.Value!.Code} importado con {r.Value.EntryCount} cuentas.");
+        _importando = false;
+        _archivo = null;
+        await CargarAsync();
+    }
+
+    private sealed record OpcionNivel(byte? Valor, string Texto);
+}

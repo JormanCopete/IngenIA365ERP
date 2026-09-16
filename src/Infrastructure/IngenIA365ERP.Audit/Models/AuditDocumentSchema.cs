@@ -53,6 +53,12 @@ public static class AuditDocumentSchema
     public const string DurationMs = "durationMs";
     public const string OccurredAt = "occurredAt";
     public const string Metadata = "metadata";
+    /// <summary>
+    /// Feature 009 (FR-052): momento en que el evento puede purgarse. Lo calcula
+    /// <see cref="IngenIA365ERP.Audit.Indexes.AuditRetention"/> segun el modulo (contabilidad y
+    /// navegacion, diez anios; el resto, cinco) y lo aplica un unico indice TTL sobre este campo.
+    /// </summary>
+    public const string ExpiresAt = "expiresAt";
 
     /// <summary>
     /// Nombres con los que el class map de <see cref="AuditLog"/> escribió hasta el
@@ -104,6 +110,7 @@ public static class AuditDocumentSchema
         { HttpStatusCode, e.HttpStatusCode ?? 0 },
         { DurationMs, e.DurationMs ?? 0L },
         { OccurredAt, e.OccurredAt },
+        { ExpiresAt, IngenIA365ERP.Audit.Indexes.AuditRetention.VenceEl(e.OccurredAt, e.Module) },
     };
 
     /// <summary>
@@ -133,6 +140,7 @@ public static class AuditDocumentSchema
             { HttpStatusCode, e.HttpStatusCode ?? 0 },
             { DurationMs, e.DurationMs },
             { OccurredAt, e.Timestamp },
+            { ExpiresAt, IngenIA365ERP.Audit.Indexes.AuditRetention.VenceEl(e.Timestamp, e.Module) },
         };
         if (e.Metadata is not null) doc.Add(Metadata, e.Metadata);
         return doc;
