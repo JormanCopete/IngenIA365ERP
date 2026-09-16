@@ -171,6 +171,7 @@ internal sealed class NotificacionesGrabadas : INotificationService
     public List<string> Errores { get; } = [];
     public Task SuccessAsync(string message) => Task.CompletedTask;
     public Task ErrorAsync(string message) { Errores.Add(message); return Task.CompletedTask; }
-    public Task WarningAsync(string message) => Task.CompletedTask;
+    public List<string>? Advertencias { get; set; }
+    public Task WarningAsync(string message) { Advertencias?.Add(message); return Task.CompletedTask; }
     public Task InfoAsync(string message) => Task.CompletedTask;
 }

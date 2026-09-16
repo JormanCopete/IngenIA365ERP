@@ -6,6 +6,7 @@
 @inject INotificationService NotificationService
 @inject ILoadingService LoadingService
 @inject CentralAuthClient CentralAuth
+@inject IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos Accesos
 @implements IDisposable
 
 @* Indicador de arranque, FUERA y ANTES de <AuthorizeView>: adentro no se
@@ -137,7 +138,13 @@
 
         NotificationService.OnNotify += ShowToast;
         LoadingService.OnChange += StateHasChanged;
+
+        // Feature 009 (FR-051): cada opción a la que se entra queda en la auditoría; la primera es la actual.
+        Navigation.LocationChanged += OnLocationChanged;
+        Accesos.Registrar(Navigation.Uri);
     }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Accesos.Registrar(e.Location);
 
     /// <summary>US5 (FR-117): identidad real del header vía GET /api/auth/me.</summary>
     private async Task RefreshIdentityAsync()
@@ -187,6 +194,7 @@
 
     public void Dispose()
     {
+        Navigation.LocationChanged -= OnLocationChanged;
         CentralAuth.Authenticated -= OnSessionChanged;
         NotificationService.OnNotify -= ShowToast;
         LoadingService.OnChange -= StateHasChanged;

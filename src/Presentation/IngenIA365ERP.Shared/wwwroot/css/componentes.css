@@ -964,3 +964,78 @@ input[type="checkbox"], input[type="radio"] {
 .oculto { display: none; }
 /* Aviso de documento duplicado o eliminado, con la acción al lado. */
 .aviso-documento { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-top: var(--pad-sm); }
+
+/* --- Contabilidad (feature 009) ------------------------------------------- */
+/* Grilla de líneas de un comprobante: la digitación es por teclado y las celdas con
+   error o aviso se señalan en el sitio, no como toast, porque tienen que quedarse
+   mientras la persona corrige. */
+.grilla-lineas { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.grilla-lineas th, .grilla-lineas td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); vertical-align: top; }
+.grilla-lineas td.numero, .grilla-lineas th.numero { text-align: right; white-space: nowrap; }
+.grilla-lineas tr.linea-activa td { background: var(--acento-suave); }
+.celda-error { outline: 2px solid var(--peligro); outline-offset: -2px; background: var(--peligro-fondo); }
+.celda-aviso { outline: 2px solid var(--alerta); outline-offset: -2px; background: var(--alerta-fondo); }
+.celda-error .hint, .celda-aviso .hint { display: block; margin-top: 2px; font-size: var(--texto-xs); }
+.celda-error .hint { color: var(--peligro-texto); }
+.celda-aviso .hint { color: var(--alerta-texto); }
+/* Totales y diferencia al pie de las líneas; la diferencia en rojo hasta que cuadra. */
+.pie-de-totales { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--gap-lg); padding: var(--pad-sm) var(--pad-md); border-top: 2px solid var(--borde-fuerte); font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
+.pie-de-totales .diferencia { color: var(--peligro-texto); }
+.pie-de-totales .cuadrado { color: var(--exito-texto); }
+/* Árbol del plan de cuentas: las de movimiento se distinguen de las de agrupación. */
+.arbol-cuentas .cuenta-agrupacion { font-weight: var(--peso-medio); }
+.arbol-cuentas .cuenta-movimiento { color: var(--texto-primario); }
+.arbol-cuentas .cuenta-inactiva { color: var(--texto-tenue); text-decoration: line-through; }
+.arbol-cuentas .codigo { font-family: var(--fuente-mono); margin-right: var(--gap-sm); }
+/* Guía de pasos de la configuración inicial: qué va antes de qué, y por dónde va la persona. */
+.guia-de-pasos { display: flex; flex-direction: column; gap: var(--gap-sm); margin-bottom: var(--pad-lg); }
+.guia-de-pasos .paso { display: flex; align-items: flex-start; gap: var(--gap-md); padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.guia-de-pasos .paso-numero { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: var(--radio-pill); display: inline-flex; align-items: center; justify-content: center; background: var(--superficie-2); font-weight: var(--peso-fuerte); }
+.guia-de-pasos .paso-activo { border-color: var(--acento); }
+.guia-de-pasos .paso-activo .paso-numero { background: var(--acento); color: var(--texto-invertido); }
+.guia-de-pasos .paso-hecho .paso-numero { background: var(--exito-fondo); color: var(--exito-texto); }
+/* Marca del módulo que originó un comprobante (nómina, cartera…): se consulta aquí, se anula allá. */
+.marca-origen { display: inline-block; padding: 1px var(--pad-sm); border-radius: var(--radio-pill); font-size: var(--texto-xs); font-weight: var(--peso-medio); background: var(--info-fondo); color: var(--info-texto); }
+.marca-origen-manual { background: var(--superficie-2); color: var(--texto-secundario); }
+
+/* Buscador de cuentas (Components/Contabilidad/BuscadorDeCuenta.razor, feature 009) */
+.buscador-de-cuenta { position: relative; min-width: 220px; }
+.buscador-compacto { min-width: 140px; }
+.buscador-de-cuenta .cuenta-elegida { display: flex; align-items: center; gap: var(--gap-sm); min-height: var(--alto-control); padding: 0 var(--pad-sm); border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-1); }
+.buscador-de-cuenta .cuenta-elegida .codigo { font-family: var(--fuente-mono); font-weight: var(--peso-medio); }
+.buscador-de-cuenta .lista-de-cuentas { position: absolute; z-index: 20; left: 0; right: 0; max-height: 260px; overflow-y: auto; margin: 2px 0 0; padding: var(--pad-xs) 0; list-style: none; background: var(--superficie-0); border: 1px solid var(--borde); border-radius: var(--radio-sm); box-shadow: var(--sombra-2); }
+.buscador-de-cuenta .lista-de-cuentas li { padding: var(--pad-xs) var(--pad-sm); cursor: pointer; }
+.buscador-de-cuenta .lista-de-cuentas li.activa, .buscador-de-cuenta .lista-de-cuentas li:hover { background: var(--acento-suave); }
+.buscador-de-cuenta .lista-de-cuentas .codigo { font-family: var(--fuente-mono); margin-right: var(--gap-xs); }
+.reglas-de-cuenta fieldset { border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--pad-sm) var(--pad-md); margin-bottom: var(--pad-sm); }
+.reglas-de-cuenta legend { font-weight: var(--peso-medio); font-size: var(--texto-sm); color: var(--texto-secundario); }
+
+/* Ventana de digitación de comprobantes (feature 009, US3) */
+.grilla-lineas .celda-doble { display: flex; gap: var(--gap-xs); }
+.grilla-lineas .celda-doble select { flex: 0 0 5.5rem; }
+.grilla-lineas input.importe { width: 7.5rem; text-align: right; }
+.grilla-lineas select.e-input { min-width: 7rem; }
+.grilla-lineas td.linea-acciones { white-space: nowrap; }
+.grilla-lineas td.linea-acciones .enlace { padding: 0 var(--pad-xs); font-size: var(--texto-md); }
+.grilla-lineas .hint { display: block; margin-top: 2px; font-size: var(--texto-xs); }
+.grilla-lineas .texto-peligro { color: var(--peligro-texto); }
+.grilla-lineas .texto-alerta { color: var(--alerta-texto); }
+.tabla-desplazable { overflow-x: auto; }
+/* PersonSearchPicker en una celda: una línea, sin ayuda ni distintivos (parámetro Compacto). */
+.person-search-picker.picker-compacto { min-width: 180px; }
+.person-search-picker.picker-compacto .persona-chip { flex-wrap: nowrap; }
+.person-search-picker.picker-compacto .persona-nombre { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-search-picker.picker-compacto .picker-resultados { position: absolute; z-index: 20; min-width: 320px; max-height: 260px; overflow-y: auto; background: var(--superficie-0); border: 1px solid var(--borde); border-radius: var(--radio-sm); box-shadow: var(--sombra-2); }
+/* Lista de errores del comprobante con salto a la línea. */
+.lista-de-errores { margin: 0; padding-left: var(--pad-lg); }
+.lista-de-errores li { margin-bottom: var(--gap-xs); }
+.lista-de-errores .enlace { padding: 0; }
+/* Panel de ayuda del campo activo, al costado de las líneas. */
+.ayuda-de-campo { position: sticky; top: var(--pad-md); }
+.disposicion-comprobante { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--gap-lg); align-items: start; }
+@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .ayuda-de-campo { position: static; } }
+/* Calendario de períodos: doce meses con su estado. */
+.periodos-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--gap-md); }
+.periodo-tarjeta { padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.periodo-tarjeta.periodo-cerrado { background: var(--superficie-2); color: var(--texto-secundario); }
+.periodo-tarjeta .periodo-mes { font-weight: var(--peso-fuerte); }

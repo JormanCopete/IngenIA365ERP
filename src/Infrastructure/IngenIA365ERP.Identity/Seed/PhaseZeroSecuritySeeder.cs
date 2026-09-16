@@ -58,6 +58,8 @@ public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermiso
         // Feature 008: maestros de Core (personas, asociados); Payroll.Employees.* va en el
         // seeder de nómina.
         await CorePermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Feature 009: contabilidad (30 codigos Accounting.*); antes ninguna ruta contable exigia permiso.
+        await AccountingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
         if (vinculosNuevos > 0)
             await InvalidarCachePermisosAsync(context, vinculosNuevos, ct);

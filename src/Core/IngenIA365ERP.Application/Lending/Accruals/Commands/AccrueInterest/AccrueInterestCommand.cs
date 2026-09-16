@@ -1,6 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -113,25 +112,7 @@ public class AccrueInterestCommandHandler(
 
         // Create accounting document
         Guid? docId = null;
-        if (totalInterest + totalDefault > 0)
-        {
-            var doc = new AccountingDocument
-            {
-                VoucherTypeCode = "CAU",
-                DocumentNumber = 0, // Auto-assign
-                Detail = $"Causacion intereses cartera {request.AccrualDate:yyyy-MM-dd}",
-                TotalDebit = totalInterest + totalDefault,
-                TotalCredit = totalInterest + totalDefault,
-                DocumentDate = request.AccrualDate,
-                IsClosed = true,
-                PeriodCode = accrualPeriod,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(doc);
-            docId = doc.PublicId;
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

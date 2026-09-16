@@ -1,6 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.CDT;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -89,26 +88,7 @@ public class LiquidateCDTInterestCommandHandler(
 
         // Create accounting document
         Guid? docId = null;
-        if (totalInterest > 0)
-        {
-            var periodCode = request.LiquidationDate.Year * 100 + request.LiquidationDate.Month;
-            var doc = new AccountingDocument
-            {
-                VoucherTypeCode = "CDT",
-                DocumentNumber = 0,
-                Detail = $"Liquidacion intereses CDT {request.LiquidationDate:yyyy-MM-dd}",
-                TotalDebit = totalInterest,
-                TotalCredit = totalInterest,
-                DocumentDate = request.LiquidationDate,
-                IsClosed = true,
-                PeriodCode = periodCode,
-                ModuleCode = "CDT",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(doc);
-            docId = doc.PublicId;
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

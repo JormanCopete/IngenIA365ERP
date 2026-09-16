@@ -9,6 +9,8 @@ public class CreditLineParameterConfiguration : IEntityTypeConfiguration<CreditL
     public void Configure(EntityTypeBuilder<CreditLineParameter> builder)
     {
         builder.ToTable("LND_CreditLineParameters");
+        builder.Property(e => e.ProvisionExpenseAccountCode).HasMaxLength(12); // feature 009 (R16)
+        builder.Property(e => e.ProvisionAccountCode).HasMaxLength(12);
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.PublicId);

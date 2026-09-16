@@ -1,0 +1,101 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject HttpClient Http
+
+@* Reglas de una cuenta de movimiento (feature 009, FR-009, FR-010, FR-014): a qué módulos aplica,
+   qué exige cada línea, si es bancaria y si es de impuesto. En modo lectura muestra lo mismo sin
+   controles: la pantalla de cuentas por concepto de nómina lo usa así. *@
+<div class="reglas-de-cuenta">
+    <fieldset class="campo">
+        <legend>Aplica a</legend>
+        @foreach (var (codigo, nombre) in ReglasDeCuentaModelo.ModulosDisponibles)
+        {
+            var c = codigo;
+            <SfCheckBox Label="@nombre" Checked="@Modelo.Modulos.Contains(c)" Disabled="@SoloLectura"
+                        CheckedChanged="@((bool v) => { if (v) Modelo.Modulos.Add(c); else Modelo.Modulos.Remove(c); })" />
+        }
+        <span class="hint">Sólo los módulos marcados pueden parametrizar y mover esta cuenta.</span>
+    </fieldset>
+
+    <fieldset class="campo">
+        <legend>Cada línea exige</legend>
+        <SfCheckBox @bind-Checked="Modelo.ExigeTercero" Label="Tercero (persona vigente)" Disabled="@SoloLectura" />
+        <SfCheckBox @bind-Checked="Modelo.ExigeDocumento" Label="Documento cruce (tipo y número)" Disabled="@SoloLectura" />
+        <SfCheckBox @bind-Checked="Modelo.ExigeCentroDeCosto" Label="Centro de costo" Disabled="@SoloLectura" />
+        <SfCheckBox @bind-Checked="Modelo.ExigeSucursal" Label="Elegir la sucursal (no vale la propuesta)" Disabled="@SoloLectura" />
+    </fieldset>
+
+    <fieldset class="campo">
+        <legend>Cuenta bancaria</legend>
+        <SfCheckBox @bind-Checked="Modelo.EsBancaria" Label="Es una cuenta de banco (se concilia con extracto)" Disabled="@SoloLectura" />
+        @if (Modelo.EsBancaria)
+        {
+            <SfDropDownList TValue="Guid?" TItem="BancoItem" @bind-Value="Modelo.BancoPublicId" DataSource="@_bancos" Placeholder="Banco" Enabled="@(!SoloLectura)">
+                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+            </SfDropDownList>
+            <SfTextBox @bind-Value="Modelo.NumeroDeCuenta" Placeholder="Número de cuenta" MaxLength="30" Enabled="@(!SoloLectura)" />
+        }
+    </fieldset>
+
+    <fieldset class="campo">
+        <legend>Impuesto</legend>
+        <SfCheckBox @bind-Checked="Modelo.EsDeImpuesto" Label="Es una cuenta de impuesto (retención, IVA, ICA, GMF)" Disabled="@SoloLectura" />
+        @if (Modelo.EsDeImpuesto)
+        {
+            <SfDropDownList TValue="string" TItem="OpcionTexto" @bind-Value="Modelo.ClaseDeImpuesto" DataSource="@_clases" Enabled="@(!SoloLectura)">
+                <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+            </SfDropDownList>
+            <SfTextBox @bind-Value="Modelo.ConceptoTributario" Placeholder="Concepto tributario (p. ej. 2365 honorarios)" MaxLength="20" Enabled="@(!SoloLectura)" />
+            <SfCheckBox @bind-Checked="Modelo.ExigeBase" Label="Cada línea exige la base gravable" Disabled="@SoloLectura" />
+            <table class="data-grid">
+                <thead><tr><th>Vigente desde</th><th class="numero">Tarifa</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in Modelo.Tarifas.OrderBy(t => t.ValidFrom))
+                    {
+                        <tr>
+                            <td>@t.ValidFrom.ToString("yyyy-MM-dd")</td>
+                            <td class="numero">@((t.Rate * 100m).ToString("N2")) %</td>
+                            <td>@if (!SoloLectura) { <button type="button" class="enlace" @onclick="() => Modelo.Tarifas.Remove(t)">Quitar</button> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (!SoloLectura)
+            {
+                <div class="toolbar">
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_nuevaVigencia" Placeholder="Vigente desde" Format="yyyy-MM-dd" />
+                    <SfNumericTextBox TValue="decimal?" @bind-Value="_nuevaTarifa" Placeholder="Tarifa %" Min="0" Max="100" Format="N2" />
+                    <SfButton CssClass="e-outline e-small" type="button" OnClick="@AgregarTarifa">Agregar tarifa</SfButton>
+                </div>
+                <span class="hint">La línea usa la tarifa vigente a su fecha; una tarifa nueva no cambia lo ya contabilizado.</span>
+            }
+        }
+    </fieldset>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ReglasDeCuentaModelo Modelo { get; set; } = new();
+    [Parameter] public bool SoloLectura { get; set; }
+
+    private List<BancoItem> _bancos = [];
+    private DateTime? _nuevaVigencia;
+    private decimal? _nuevaTarifa;
+    private static readonly List<OpcionTexto> _clases = ReglasDeCuentaModelo.ClasesDeImpuesto.Select(c => new OpcionTexto(c.Codigo, c.Nombre)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SoloLectura) _bancos = await Http.TryGetListAsync<BancoItem>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+    }
+
+    private void AgregarTarifa()
+    {
+        if (_nuevaVigencia is not { } desde || _nuevaTarifa is not { } tarifa) return;
+        var fecha = DateOnly.FromDateTime(desde);
+        Modelo.Tarifas.RemoveAll(t => t.ValidFrom == fecha);
+        Modelo.Tarifas.Add(new TarifaDto(fecha, Math.Round(tarifa / 100m, 4)));
+        _nuevaVigencia = null;
+        _nuevaTarifa = null;
+    }
+
+    private sealed record OpcionTexto(string Codigo, string Nombre);
+    private sealed class BancoItem { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

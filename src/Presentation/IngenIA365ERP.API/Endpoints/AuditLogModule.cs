@@ -3,6 +3,7 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Audit.ExportAuditLogCsv;
 using IngenIA365ERP.Application.Audit.ExportAuditLogPdf;
 using IngenIA365ERP.Application.Audit.QueryAuditLog;
+using IngenIA365ERP.Application.Audit.RegisterOptionAccess;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using MediatR;
@@ -44,6 +45,18 @@ public sealed class AuditLogModule : ICarterModule
 
         group.MapGet("/export.pdf", ExportPdfAsync).WithName("AuditLog_ExportPdf")
             .RequirePermission("AuditLog.Export");
+
+        // Feature 009 (FR-051): ingreso a una opción del ERP. Sesión y cooperativa activa bastan: es el
+        // propio usuario contando dónde estuvo; el evento lo escribe AuditBehavior con Module=Navigation.
+        app.MapPost("/api/audit/access", async (RegisterOptionAccessCommand body, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(body, ct);
+                return result.IsSuccess ? Results.Accepted() : (object)result;
+            })
+            .WithTags("Audit")
+            .WithName("AuditLog_RegisterAccess")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>();
     }
 
     private static async Task<object?> QueryAsync(

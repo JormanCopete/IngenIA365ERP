@@ -15,6 +15,8 @@ public record CreateHealthInsuranceProviderCommand : IRequest<Result<Guid>>
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
+    /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
+    public Guid? PersonPublicId { get; init; }
 }
 
 public class CreateHealthInsuranceProviderCommandHandler(
@@ -28,6 +30,8 @@ public class CreateHealthInsuranceProviderCommandHandler(
         CancellationToken cancellationToken)
     {
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
+        var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
+        if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
         var repetido = await context.HealthInsuranceProviders.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Code == codigo, cancellationToken);
         if (repetido is not null)
@@ -40,6 +44,7 @@ public class CreateHealthInsuranceProviderCommandHandler(
             ShortName = request.ShortName ?? string.Empty,
             TaxId = request.TaxId,
             CheckDigit = request.CheckDigit,
+            PersonId = persona.Value,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };

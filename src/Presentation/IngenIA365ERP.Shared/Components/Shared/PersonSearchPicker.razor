@@ -17,20 +17,20 @@
 @inject INotificationService Notification
 @using System.Net.Http.Json
 
-<div class="person-search-picker">
+<div class="person-search-picker @(Compacto ? "picker-compacto" : "")">
     @if (Selected is not null)
     {
         @* Persona ya seleccionada — chip con botón para limpiar *@
         <div class="persona-chip">
             <span class="e-badge e-badge-info">@Selected.IdentificationNumber</span>
-            <strong class="persona-nombre">@Selected.FullName</strong>
-            @if (!string.IsNullOrEmpty(Selected.CityName))
+            <strong class="persona-nombre" title="@Selected.FullName">@Selected.FullName</strong>
+            @if (!Compacto && !string.IsNullOrEmpty(Selected.CityName))
             {
                 <span class="texto-tenue">(@Selected.CityName)</span>
             }
-            @if (Selected.IsEmployee) { <span class="e-badge e-badge-warning">Empleado</span> }
-            @if (Selected.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
-            @if (Selected.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
+            @if (!Compacto && Selected.IsEmployee) { <span class="e-badge e-badge-warning">Empleado</span> }
+            @if (!Compacto && Selected.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
+            @if (!Compacto && Selected.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
             @if (!HideClearButton)
             {
                 <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close"
@@ -42,7 +42,7 @@
     {
         @* Buscador inline *@
         <SfTextBox @bind-Value="_searchText"
-                   Placeholder="@Placeholder"
+                   Placeholder="@(Compacto ? "Documento o nombre" : Placeholder)"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
 
         <IndicadorDeCarga Cargando="@_busqueda.Activa" Compacto="true" Texto="Buscando…">
@@ -95,7 +95,7 @@
                     }
                 </div>
             }
-            else if (ShowHelpText)
+            else if (ShowHelpText && !Compacto)
             {
                 <div class="picker-nota">
                     @(PermitirCrear
@@ -146,6 +146,12 @@
 
     /// <summary>Texto para «sin resultados» cuando no se puede crear; por defecto dice a quién pedirla.</summary>
     [Parameter] public string? TextoSinResultados { get; set; }
+
+    /// <summary>
+    /// Feature 009: en una celda de grilla cabe en una línea —sin ayuda, sin ciudad ni distintivos,
+    /// con el nombre recortado— y conserva el buscador completo al desplegar.
+    /// </summary>
+    [Parameter] public bool Compacto { get; set; }
 
     private readonly EstadoDeCarga _busqueda = new();
     private string _searchText = "";

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 
 namespace IngenIA365ERP.Domain.Entities.Payroll;
 
@@ -20,4 +21,8 @@ public class HealthInsuranceProvider : AuditableEntity
     public string TaxId { get; set; } = string.Empty;
 
     public int CheckDigit { get; set; }
+
+    // Feature 009 (FR-088): persona del maestro que representa a la entidad como tercero contable.
+    public int? PersonId { get; set; }
+    public Person? Person { get; set; }
 }

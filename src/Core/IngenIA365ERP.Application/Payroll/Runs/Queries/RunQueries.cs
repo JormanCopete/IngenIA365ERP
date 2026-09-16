@@ -48,7 +48,7 @@ public sealed class RunSummaryBuilder(IApplicationDbContext db)
         }
 
         var documento = run.AccountingDocumentId is { } docId
-            ? await db.AccountingDocuments.AsNoTracking().Where(d => d.Id == docId).Select(d => new { d.PublicId, d.VoucherTypeCode, d.DocumentNumber }).FirstOrDefaultAsync(ct)
+            ? await db.AccountingDocuments.AsNoTracking().Where(d => d.Id == docId).Select(d => new { d.PublicId, VoucherTypeCode = d.VoucherType!.Code, DocumentNumber = d.Number }).FirstOrDefaultAsync(ct)
             : null;
         var reverso = run.ReversalAccountingDocumentId is { } revId
             ? await db.AccountingDocuments.AsNoTracking().Where(d => d.Id == revId).Select(d => (Guid?)d.PublicId).FirstOrDefaultAsync(ct)

@@ -83,14 +83,19 @@ public static class BuiltInRolesSeeder
         // Nomina (feature 005): el auditor exporta el detalle con explicaciones; el
         // operador registra novedades y calcula, pero NO aprueba, ni marca pagos, ni
         // reversa (segregacion de funciones, FR-020).
-        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export"],
+        // Feature 009: el auditor (y el revisor fiscal, que suele llevar ese rol) exporta los
+        // libros y los estados financieros.
+        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export", "Accounting.Reports.Export"],
         // Feature 008: el operador crea y edita personas, empleados y asociados; no da de
         // baja (Core.People.Delete, Payroll.Employees.Terminate) — eso queda en CompanyAdmin.
+        // Feature 009: registra borradores de comprobantes y exporta informes, pero NO
+        // contabiliza, anula, cierra ni parametriza (segregación; cuatro ojos opcional).
         ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn",
                             "Payroll.Novelties.*", "Payroll.Runs.Calculate",
                             "Core.People.Create", "Core.People.Update",
                             "Core.Associates.Create", "Core.Associates.Update",
-                            "Payroll.Employees.Create", "Payroll.Employees.Update"],
+                            "Payroll.Employees.Create", "Payroll.Employees.Update",
+                            "Accounting.Vouchers.Create", "Accounting.Reports.Export"],
         ["ReadOnly"]     = ["*.View"],
     };
 
@@ -106,6 +111,11 @@ public static class BuiltInRolesSeeder
         "Core.People.View",
         "Core.Associates.View",
         "Payroll.Employees.View",
+        // Feature 009: el plan de cuentas y los tipos de comprobante los eligen todos los
+        // módulos (cuentas por concepto, parámetros de cartera, bancos…); sin lectura, sus
+        // buscadores amanecerían vacíos.
+        "Accounting.Accounts.View",
+        "Accounting.VoucherTypes.View",
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

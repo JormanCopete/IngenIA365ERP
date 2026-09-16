@@ -23,7 +23,9 @@ namespace IngenIA365ERP.API.Services;
 /// Son tres saltos, y ninguno es opcional:
 /// identidad central (email del token) → fila en <c>SEC_Users</c>;
 /// <c>active_tenant_id</c> (PublicId) → Id interno de la cooperativa;
-/// y (usuario, cooperativa) → códigos.
+/// y (usuario, cooperativa) → códigos. Los dos primeros los expone
+/// <see cref="ResolverUsuarioYCooperativaAsync"/> porque el alcance de sucursales
+/// (feature 009) necesita exactamente ese par.
 /// </para>
 ///
 /// <para>
@@ -42,6 +44,7 @@ internal sealed class PermisosDeLaPeticion(
     ILogger<PermisosDeLaPeticion> logger)
 {
     private const string ClaveMemo = "__permisos_resueltos";
+    private const string ClaveUsuario = "__usuario_y_cooperativa";
 
     public async Task<IReadOnlyCollection<string>> ResolverAsync(
         HttpContext http, CancellationToken ct)
@@ -58,15 +61,42 @@ internal sealed class PermisosDeLaPeticion(
         return resultado;
     }
 
+    /// <summary>
+    /// Id interno en <c>SEC_Users</c> de quien hace la petición y de la cooperativa activa;
+    /// cualquiera de los dos en null significa «no se pudo resolver». Memoizado por petición.
+    /// </summary>
+    public async Task<(int? Usuario, int? Cooperativa)> ResolverUsuarioYCooperativaAsync(
+        HttpContext http, CancellationToken ct)
+    {
+        if (http.Items.TryGetValue(ClaveUsuario, out var memo) && memo is ValueTuple<int?, int?> ya)
+        {
+            return ya;
+        }
+
+        var resultado = await ResolverUsuarioSinMemoAsync(http, ct);
+        http.Items[ClaveUsuario] = resultado;
+        return resultado;
+    }
+
     private async Task<IReadOnlyCollection<string>> ResolverSinMemoAsync(
+        HttpContext http, CancellationToken ct)
+    {
+        var (idUsuario, idCooperativa) = await ResolverUsuarioYCooperativaAsync(http, ct);
+        if (idUsuario is null || idCooperativa is null) return [];
+
+        return (IReadOnlyCollection<string>)await resolutor.ResolveForTenantAsync(
+            idUsuario.Value, idCooperativa.Value, ct);
+    }
+
+    private async Task<(int? Usuario, int? Cooperativa)> ResolverUsuarioSinMemoAsync(
         HttpContext http, CancellationToken ct)
     {
         var identidadCentral = LeerIdentidadCentral(http.User);
         var email = LeerEmail(http.User);
-        if (identidadCentral is null && string.IsNullOrWhiteSpace(email)) return [];
+        if (identidadCentral is null && string.IsNullOrWhiteSpace(email)) return (null, null);
 
         var idCooperativa = await ResolverCooperativaAsync(http, ct);
-        if (idCooperativa is null) return [];
+        if (idCooperativa is null) return (null, null);
 
         // Por identidad central, que es lo que el token realmente afirma. El correo
         // queda de respaldo y sólo para filas anteriores al cutover: el puente por
@@ -89,11 +119,10 @@ internal sealed class PermisosDeLaPeticion(
             logger.LogDebug(
                 "La identidad central no tiene fila activa en SEC_Users para la cooperativa " +
                 "{TenantId}. Sin permisos.", idCooperativa);
-            return [];
+            return (null, idCooperativa);
         }
 
-        return (IReadOnlyCollection<string>)await resolutor.ResolveForTenantAsync(
-            idUsuario.Value, idCooperativa.Value, ct);
+        return (idUsuario, idCooperativa);
     }
 
     /// <summary>
@@ -128,12 +157,6 @@ internal sealed class PermisosDeLaPeticion(
     }
 
     /// <summary>
-    /// El emisor pone el claim como <c>email</c>, pero el mapeo de entrada por
-    /// defecto de <c>JwtSecurityTokenHandler</c> lo renombra al URI largo de
-    /// <see cref="ClaimTypes.Email"/>. Se leen los dos: si algún día se activa
-    /// <c>MapInboundClaims = false</c>, esto sigue funcionando.
-    /// </summary>
-    /// <summary>
     /// La identidad central del token. El emisor la pone en <c>sub</c>, que el
     /// mapeo de entrada por defecto renombra a <see cref="ClaimTypes.NameIdentifier"/>.
     /// </summary>
@@ -144,6 +167,12 @@ internal sealed class PermisosDeLaPeticion(
         return Guid.TryParse(valor, out var id) ? id : null;
     }
 
+    /// <summary>
+    /// El emisor pone el claim como <c>email</c>, pero el mapeo de entrada por
+    /// defecto de <c>JwtSecurityTokenHandler</c> lo renombra al URI largo de
+    /// <see cref="ClaimTypes.Email"/>. Se leen los dos: si algún día se activa
+    /// <c>MapInboundClaims = false</c>, esto sigue funcionando.
+    /// </summary>
     private static string? LeerEmail(ClaimsPrincipal usuario)
     {
         var valor = usuario.FindFirst(ClaimTypes.Email)?.Value

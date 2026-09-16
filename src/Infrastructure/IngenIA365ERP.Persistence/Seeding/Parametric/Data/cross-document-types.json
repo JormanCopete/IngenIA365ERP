@@ -1,0 +1,12 @@
+[
+  // Feature 009 (data-model.md §1): tipos de documento cruce con los que una cuenta que «exige
+  // documento» identifica la obligación o el derecho. La empresa puede agregar otros.
+  { "code": "FV", "name": "Factura de venta" },
+  { "code": "FC", "name": "Factura de compra" },
+  { "code": "CC", "name": "Cuenta de cobro" },
+  { "code": "NC", "name": "Nota crédito" },
+  { "code": "ND", "name": "Nota débito" },
+  { "code": "CT", "name": "Contrato" },
+  { "code": "PG", "name": "Pagaré" },
+  { "code": "OT", "name": "Otro documento" }
+]

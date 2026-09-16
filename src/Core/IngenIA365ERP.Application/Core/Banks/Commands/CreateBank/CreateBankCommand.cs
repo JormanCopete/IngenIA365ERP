@@ -31,6 +31,8 @@ public record CreateBankCommand : IRequest<Result<Guid>>
     public decimal? CommissionAmount { get; init; }
     public bool PromptForPrinter { get; init; }
     public string? ControlSequential { get; init; }
+    /// <summary>Feature 009 (FR-088): persona de Personas que representa al banco como tercero; null = sin vínculo.</summary>
+    public Guid? PersonPublicId { get; init; }
 }
 
 public class CreateBankCommandHandler(
@@ -44,6 +46,8 @@ public class CreateBankCommandHandler(
         CancellationToken cancellationToken)
     {
         var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
+        if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
         if (codigo is not null)
         {
             var repetido = await context.Banks.AsNoTracking()
@@ -74,6 +78,7 @@ public class CreateBankCommandHandler(
             CommissionAmount = request.CommissionAmount,
             PromptForPrinter = request.PromptForPrinter,
             ControlSequential = request.ControlSequential,
+            PersonId = persona.Value,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };

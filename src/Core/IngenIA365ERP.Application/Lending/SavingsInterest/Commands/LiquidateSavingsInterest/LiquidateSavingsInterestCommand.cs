@@ -1,6 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -110,25 +109,7 @@ public class LiquidateSavingsInterestCommandHandler(
 
         // Create accounting document
         Guid? docId = null;
-        if (totalInterest > 0)
-        {
-            var doc = new AccountingDocument
-            {
-                VoucherTypeCode = "AHO",
-                DocumentNumber = 0,
-                Detail = $"Liquidacion intereses ahorros {request.LiquidationDate:yyyy-MM-dd}",
-                TotalDebit = totalInterest,
-                TotalCredit = totalInterest,
-                DocumentDate = request.LiquidationDate,
-                IsClosed = true,
-                PeriodCode = periodCode,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(doc);
-            docId = doc.PublicId;
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

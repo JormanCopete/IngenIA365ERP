@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Payroll.Novelties.Queries;
 using IngenIA365ERP.Application.Payroll.Runs.Queries;
 using IngenIA365ERP.Domain.Enums.Payroll;

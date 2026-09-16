@@ -170,6 +170,8 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
+        services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();
 
         // Aprovisionador por BASE. Convive con el de esquema y todavia no lo llama
@@ -196,7 +198,6 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.SystemParametersSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CurrenciesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DocumentTypesSeeder>();
-        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ChartOfAccountsSeeder>();
         // Nomina (feature 005): plan por defecto, conceptos estandar, parametros legales
         // del ano, las cinco clases de riesgo ARL y tipo de comprobante NM. Idempotentes
         // por clave natural.
@@ -204,7 +205,11 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.WorkRiskClassesSeeder>();
-        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollVoucherTypeSeeder>();
+        // Contabilidad (feature 009): tipos de comprobante (reemplaza al NM de nomina) y tipos de documento cruce, desde JSON incrustado.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AccountCatalogsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.FinancialStatementItemsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.VoucherTypesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CrossDocumentTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

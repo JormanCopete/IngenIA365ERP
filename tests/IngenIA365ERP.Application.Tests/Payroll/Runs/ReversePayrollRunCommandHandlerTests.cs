@@ -39,7 +39,7 @@ public class ReversePayrollRunCommandHandlerTests
         var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
-        var poster = new PayrollAccountingPoster(d.Db, d.Clock, Contadora);
+        var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
         var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit)
             .Handle(new ApprovePayrollRunCommand(calc.Value.RunPublicId, Confirm: true), CancellationToken.None);
@@ -48,7 +48,7 @@ public class ReversePayrollRunCommandHandlerTests
     }
 
     private static ReversePayrollRunCommandHandler Reversor(NominaTestData d) =>
-        new(d.Db, new PayrollAccountingPoster(d.Db, d.Clock, Gerente), d.Clock, Gerente,
+        new(d.Db, d.Contabilizador(Gerente), d.Clock, Gerente,
             new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
 
     [Fact]
@@ -75,9 +75,9 @@ public class ReversePayrollRunCommandHandlerTests
         var reverso = await d.Db.AccountingDocuments.SingleAsync(x => x.Id == run.ReversalAccountingDocumentId);
         reverso.TotalDebit.Should().Be(original.TotalCredit);
         reverso.TotalCredit.Should().Be(original.TotalDebit);
-        reverso.Detail.Should().Contain("NM-1").And.Contain("Faltó la incapacidad de Ana");
-        var asientosReverso = await d.Db.JournalEntries.Where(j => j.VoucherTypeCode == "NM" && j.DocumentNumber == 2).ToListAsync();
-        asientosReverso.Sum(a => a.DebitAmount).Should().Be(asientosReverso.Sum(a => a.CreditAmount)).And.Be(original.TotalDebit);
+        reverso.Description.Should().Contain("NM-1").And.Contain("Faltó la incapacidad de Ana");
+        var asientosReverso = await d.Db.JournalEntries.Where(j => j.DocumentId == reverso.Id).ToListAsync();
+        asientosReverso.Sum(a => a.Debit).Should().Be(asientosReverso.Sum(a => a.Credit)).And.Be(original.TotalDebit);
 
         var periodo = await d.Db.PayPeriods.SingleAsync(p => p.Id == d.Marzo.Id);
         periodo.Status.Should().Be(PayPeriodStatus.Open);
@@ -123,12 +123,12 @@ public class ReversePayrollRunCommandHandlerTests
     {
         var d = new NominaTestData();
         var runId = await Aprobada(d);
-        (await d.Db.AccountingPeriods.SingleAsync()).Status = "C";
+        (await d.Db.AccountingPeriods.SingleAsync()).Status = Domain.Enums.Accounting.PeriodStatus.Closed;
         await d.Db.SaveChangesAsync();
 
         var r = await Reversor(d).Handle(new ReversePayrollRunCommand(runId, "tarde"), CancellationToken.None);
 
-        r.Error.Code.Should().Be("Payroll.AccountingPeriodClosedForReversal");
+        r.Error.Code.Should().Be("Accounting.Period.Closed");
         (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == runId)).Status.Should().Be(PayrollRunStatus.Approved);
         (await d.Db.PayPeriods.SingleAsync(p => p.Id == d.Marzo.Id)).Status.Should().Be(PayPeriodStatus.Approved);
     }

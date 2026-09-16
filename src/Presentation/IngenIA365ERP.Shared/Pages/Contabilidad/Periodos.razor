@@ -1,0 +1,152 @@
+@page "/contabilidad/periodos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Períodos contables - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US3 (FR-020..FR-023): el ejercicio con sus doce meses; cerrar exige que no queden
+   borradores fechados en el mes; reabrir pide motivo, queda auditado y desactualiza las
+   conciliaciones cerradas. El cierre del ejercicio (comprobante CI) llega en la etapa 2. *@
+<PermissionGate Required="Accounting.Periods.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Períodos contables</h3>
+    <div class="toolbar">
+        <label class="campo">Ejercicio
+            <select class="e-input" value="@_anio" @onchange="@(async e => { _anio = int.TryParse(e.Value?.ToString(), out var a) ? a : _anio; await CargarAsync(); })">
+                @foreach (var a in _anios) { <option value="@a">@a</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
+        <PermissionGate Required="Accounting.Periods.CloseYear">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_ocupado || _anios.Count == 0)" OnClick="@AbrirSiguienteAsync">Abrir el ejercicio @(_anios.Count == 0 ? "" : (_anios.Max() + 1).ToString())</SfButton>
+        </PermissionGate>
+    </div>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_ejercicio is null)
+    {
+        <div class="info-card"><span class="label">Sin ejercicio</span><p>La contabilidad no está iniciada. Vaya a Contabilidad › Configuración inicial.</p></div>
+    }
+    else
+    {
+        <p class="texto-apoyo">Ejercicio @_ejercicio.Year · @(_ejercicio.Status == "Closed" ? "cerrado" : "abierto"). Un mes cerrado no recibe comprobantes; para corregir algo se reabre con motivo y queda registrado quién y cuándo.</p>
+        <div class="periodos-grilla">
+            @foreach (var p in _ejercicio.Periods)
+            {
+                <div class="periodo-tarjeta @(p.Status == "Closed" ? "periodo-cerrado" : "")">
+                    <div class="periodo-mes">@Mes(p.Month) @p.Year</div>
+                    <div>@(p.Status == "Closed" ? "Cerrado" : "Abierto")@(p.Drafts > 0 ? $" · {p.Drafts} borrador{(p.Drafts == 1 ? "" : "es")}" : "")</div>
+                    @if (p.ClosedAt is { } c) { <div class="texto-tenue">Cerró @p.ClosedBy el @c.ToLocalTime().ToString("yyyy-MM-dd")</div> }
+                    @if (p.ReopenedAt is { } r) { <div class="texto-tenue" title="@p.ReopenReason">Reabrió @p.ReopenedBy el @r.ToLocalTime().ToString("yyyy-MM-dd"): @p.ReopenReason</div> }
+                    <div class="toolbar">
+                        @if (p.Status == "Open")
+                        {
+                            <PermissionGate Required="Accounting.Periods.Close">
+                                <SfButton CssClass="e-small e-outline" Disabled="@_ocupado" OnClick="@(() => CerrarAsync(p))" title="@(p.Drafts > 0 ? "Hay borradores fechados en este mes: contabilícelos o descártelos primero" : "")">Cerrar</SfButton>
+                            </PermissionGate>
+                        }
+                        else if (_ejercicio.Status != "Closed")
+                        {
+                            <PermissionGate Required="Accounting.Periods.Reopen">
+                                <SfButton CssClass="e-small e-outline" Disabled="@_ocupado" OnClick="@(() => { _aReabrir = p; _motivo = ""; _mostrarMotivo = true; })">Reabrir</SfButton>
+                            </PermissionGate>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</IndicadorDeCarga>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@($"Reabrir {(_aReabrir is null ? "" : Mes(_aReabrir.Month))} {_aReabrir?.Year}")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p>La reapertura queda en la auditoría con su motivo, y las conciliaciones bancarias cerradas de ese mes pasan a «desactualizadas».</p>
+            <label class="campo">Motivo <input class="e-input" @bind="_motivo" maxlength="200" placeholder="Por qué se reabre" /></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReabrirAsync">Reabrir</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<int> _anios = [];
+    private int _anio;
+    private EjercicioDto? _ejercicio;
+    private bool _ocupado, _mostrarMotivo;
+    private PeriodoContableDto? _aReabrir;
+    private string _motivo = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var a = await Contabilidad.ListarEjerciciosAsync();
+        _anios = a.IsSuccess ? [.. a.Value!] : [];
+        if (_anios.Count == 0) return;
+        _anio = _anios.Contains(DateTime.Today.Year) ? DateTime.Today.Year : _anios[0];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (_anio == 0) return;
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ObtenerEjercicioAsync(_anio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el ejercicio."); return; }
+        _ejercicio = r.Value;
+    }
+
+    private async Task CerrarAsync(PeriodoContableDto p)
+    {
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
+            await Notification.SuccessAsync($"{Mes(p.Month)} {p.Year} cerrado.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (_aReabrir is null) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.ReabrirPeriodoAsync(_aReabrir.Year, _aReabrir.Month, _motivo.Trim());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reabrir el período."); return; }
+            _mostrarMotivo = false;
+            await Notification.SuccessAsync($"{Mes(_aReabrir.Month)} {_aReabrir.Year} reabierto.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task AbrirSiguienteAsync()
+    {
+        if (_anios.Count == 0) return;
+        var siguiente = _anios.Max() + 1;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.AbrirEjercicioAsync(siguiente);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el ejercicio."); return; }
+            await Notification.SuccessAsync($"Ejercicio {siguiente} abierto con sus doce períodos.");
+            _anios.Insert(0, siguiente);
+            _anio = siguiente;
+            _ejercicio = r.Value;
+        }
+        finally { _ocupado = false; }
+    }
+
+    private static string Mes(int m) => System.Globalization.CultureInfo.GetCultureInfo("es-CO").DateTimeFormat.GetMonthName(m) is { } n ? char.ToUpperInvariant(n[0]) + n[1..] : m.ToString();
+}

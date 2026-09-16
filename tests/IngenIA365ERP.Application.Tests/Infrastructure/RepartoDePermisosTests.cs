@@ -26,7 +26,8 @@ public class RepartoDePermisosTests
     private static readonly string[] Catalogo =
         [.. DomainPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. CorePermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     public static TheoryData<string> RolesBuiltIn =>
         [.. BuiltInRolesSeeder.PermissionPatterns.Keys];
@@ -116,6 +117,66 @@ public class RepartoDePermisosTests
         foreach (var codigo in BuiltInRolesSeeder.LecturaDeMaestros)
         {
             Catalogo.Should().Contain(codigo);
+        }
+    }
+
+    [Fact]
+    public void ElCatalogoContableTieneLosTreintaPermisosDelContrato()
+    {
+        // Feature 009 (contracts/api.md §1): 30 códigos Accounting.*; la compuerta T046 los cuenta en SEC_Permissions.
+        AccountingPermissionCatalogSeeder.Catalog.Should().HaveCount(30);
+        AccountingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => p.Resource.StartsWith("Accounting."));
+    }
+
+    // ------------------------------------------------------------ feature 009: contabilidad --
+
+    [Fact]
+    public void Operator_RegistraBorradoresYExporta_PeroNoContabilizaNiAnulaNiCierraNiParametriza()
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol("Operator", Catalogo);
+
+        concedidos.Should().Contain(["Accounting.Vouchers.Create", "Accounting.Reports.Export", "Accounting.Vouchers.View", "Accounting.Accounts.View"]);
+        concedidos.Should().NotContain(["Accounting.Vouchers.Post", "Accounting.Vouchers.Void", "Accounting.Periods.Close", "Accounting.Periods.Reopen",
+                                        "Accounting.Accounts.Manage", "Accounting.Setup.Manage", "Accounting.VoucherTypes.Manage"],
+            "segregación de funciones (Q3:C): quien digita no contabiliza; cuatro ojos es opcional por empresa");
+    }
+
+    [Fact]
+    public void ReadOnly_SoloVeLaContabilidad()
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol("ReadOnly", Catalogo).Where(c => c.StartsWith("Accounting.")).ToList();
+
+        concedidos.Should().NotBeEmpty().And.OnlyContain(c => c.EndsWith(".View"));
+        concedidos.Should().NotContain("Accounting.Reports.Export");
+    }
+
+    [Fact]
+    public void Auditor_ExportaLosLibros_YNoEscribeNada()
+    {
+        var concedidos = BuiltInRolesSeeder.CodigosParaRol("Auditor", Catalogo).Where(c => c.StartsWith("Accounting.")).ToList();
+
+        concedidos.Should().Contain("Accounting.Reports.Export");
+        concedidos.Where(c => !c.EndsWith(".View")).Should().BeEquivalentTo(["Accounting.Reports.Export"]);
+    }
+
+    [Fact]
+    public void TodoRol_LeeElPlanDeCuentasYLosTiposDeComprobante()
+    {
+        // Los buscadores de cuenta de los demás módulos (cuentas por concepto, bancos…) los usa cualquier rol.
+        BuiltInRolesSeeder.LecturaDeMaestros.Should().Contain(["Accounting.Accounts.View", "Accounting.VoucherTypes.View"]);
+    }
+
+    [Fact]
+    public void TodaLecturaContable_LaRecibenLosCuatroRolesBuiltIn()
+    {
+        // Se cuenta contra el catálogo, no contra un número: la apertura sólo tiene Manage y eso está bien.
+        var lecturas = AccountingPermissionCatalogSeeder.Catalog.Where(p => p.Action == "View").Select(p => $"{p.Resource}.{p.Action}").ToList();
+        lecturas.Should().NotBeEmpty();
+
+        foreach (var rol in BuiltInRolesSeeder.PermissionPatterns.Keys)
+        {
+            var concedidos = BuiltInRolesSeeder.CodigosParaRol(rol, Catalogo);
+            concedidos.Should().Contain(lecturas, $"«{rol}» conserva la lectura de toda la contabilidad");
         }
     }
 

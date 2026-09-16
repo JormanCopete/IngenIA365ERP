@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Audit.Indexes;
 
 /// <summary>
 /// <see cref="IHostedService"/> que al arranque garantiza los índices
-/// y el TTL de 5 años de la colección <c>audit_events</c> (FR-023, SC-007).
+/// y el TTL de la colección <c>audit_events</c> (FR-023, SC-007; feature 009: por módulo, ver <see cref="AuditRetention"/>).
 /// Es idempotente: <c>CreateMany</c> en MongoDB no falla si el índice ya
 /// existe con la misma especificación.
 ///
@@ -23,7 +23,11 @@ internal sealed class AuditIndexBootstrap(
     IOptions<MongoDbSettings> settings,
     ILogger<AuditIndexBootstrap> logger) : IHostedService
 {
-    private static readonly TimeSpan TtlFiveYears = TimeSpan.FromDays(365 * 5);
+    /// <summary>Índice TTL anterior a la feature 009 (cinco años sobre <c>occurredAt</c>, igual para todo).</summary>
+    internal const string IndiceTtlHeredado = "ttl_occurredAt_5y";
+
+    /// <summary>Índice TTL vigente: cada documento trae su vencimiento (<see cref="AuditRetention"/>).</summary>
+    internal const string IndiceTtl = "ttl_expiresAt";
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -50,7 +54,7 @@ internal sealed class AuditIndexBootstrap(
             {
                 var db = client.GetDatabase(nombre);
                 var coll = db.GetCollection<BsonDocument>(AuditDatabaseNames.Coleccion);
-                await EnsureIndexesAsync(coll, cancellationToken);
+                await EnsureIndexesAsync(coll, cancellationToken, logger);
                 logger.LogInformation(
                     "AuditIndexBootstrap: índices y TTL garantizados en {Base}", nombre);
             }
@@ -65,7 +69,7 @@ internal sealed class AuditIndexBootstrap(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    internal static async Task EnsureIndexesAsync(IMongoCollection<BsonDocument> coll, CancellationToken ct)
+    internal static async Task EnsureIndexesAsync(IMongoCollection<BsonDocument> coll, CancellationToken ct, ILogger? logger = null)
     {
         var keys = Builders<BsonDocument>.IndexKeys;
         var models = new[]
@@ -81,18 +85,57 @@ internal sealed class AuditIndexBootstrap(
             new CreateIndexModel<BsonDocument>(
                 keys.Ascending("tenantId").Ascending("entityType").Ascending("entityPublicId").Descending("occurredAt"),
                 new CreateIndexOptions { Name = "ix_tenant_entity_occurredAt" }),
-
-            // TTL 5 años (SARLAFT — FR-023, SC-007). MongoDB lo aplica con
-            // resolución de minutos sobre el campo `occurredAt`.
-            new CreateIndexModel<BsonDocument>(
-                keys.Ascending("occurredAt"),
-                new CreateIndexOptions
-                {
-                    Name = "ttl_occurredAt_5y",
-                    ExpireAfter = TtlFiveYears
-                })
         };
 
         await coll.Indexes.CreateManyAsync(models, ct);
+        await AsegurarRetencionAsync(coll, ct, logger);
+    }
+
+    /// <summary>
+    /// Feature 009 (FR-052): retención por módulo con un solo índice TTL sobre
+    /// <c>expiresAt</c> (<c>expireAfterSeconds = 0</c>: MongoDB purga cuando la fecha del
+    /// documento pasa). Tres pasos idempotentes: (1) a los documentos anteriores, que no traen
+    /// <c>expiresAt</c>, se les calcula desde <c>occurredAt</c> (o el <c>Timestamp</c>
+    /// heredado) con la retención de su módulo; (2) se retira el índice heredado de cinco años
+    /// sobre <c>occurredAt</c>, que de quedar purgaría el rastro contable a los cinco;
+    /// (3) se crea el índice nuevo. Verificado contra MongoDB 7.0 (el del clúster).
+    /// </summary>
+    internal static async Task AsegurarRetencionAsync(IMongoCollection<BsonDocument> coll, CancellationToken ct, ILogger? logger = null)
+    {
+        var sinVencimiento = Builders<BsonDocument>.Filter.Exists("expiresAt", false);
+        var diezAnios = new BsonArray(AuditRetention.ModulosDeDiezAnios);
+        var ocurridoEl = new BsonDocument("$ifNull", new BsonArray { "$occurredAt", "$Timestamp" });
+        var retencion = new BsonDocument("$cond", new BsonArray
+        {
+            new BsonDocument("$in", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$module", "$Module" }), diezAnios }),
+            (long)AuditRetention.Contable.TotalMilliseconds,
+            (long)AuditRetention.Regulatoria.TotalMilliseconds,
+        });
+        var vencimiento = new BsonDocument("$add", new BsonArray { ocurridoEl, retencion });
+        var etapas = new[] { new BsonDocument("$set", new BsonDocument("expiresAt", vencimiento)) };
+        try
+        {
+            await coll.UpdateManyAsync(sinVencimiento, Builders<BsonDocument>.Update.Pipeline(etapas), cancellationToken: ct);
+        }
+        catch (MongoCommandException ex)
+        {
+            // La colección es append-only por rol (el descriptor 15_Audit_Mongodb_Bootstrap.json
+            // sólo concede insert): si la API entra con ese usuario, el estampado de los
+            // documentos anteriores lo hace un administrador con el mismo updateMany. Sin él,
+            // esos documentos no vencen nunca (nunca menos retención de la exigida) y el rastro
+            // nuevo sí trae su fecha. Se dice, no se calla.
+            logger?.LogWarning(ex,
+                "AuditIndexBootstrap: no se pudo estampar expiresAt en los documentos anteriores de {Coleccion}; " +
+                "ejecutarlo con un usuario con permiso de update (docs/operaciones/contabilidad-primer-ejercicio.md).",
+                coll.CollectionNamespace.FullName);
+        }
+
+        var existentes = await (await coll.Indexes.ListAsync(ct)).ToListAsync(ct);
+        if (existentes.Any(i => i["name"] == IndiceTtlHeredado))
+            await coll.Indexes.DropOneAsync(IndiceTtlHeredado, ct);
+
+        await coll.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("expiresAt"),
+            new CreateIndexOptions { Name = IndiceTtl, ExpireAfter = TimeSpan.Zero }), cancellationToken: ct);
     }
 }

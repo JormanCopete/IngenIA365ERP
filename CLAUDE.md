@@ -154,6 +154,34 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   De paso: `PAY_Employees.TerminationCause` era el `varchar(4)` del código SOLIDO y la pantalla lo
   pedía como texto libre (500 con cualquier motivo real); pasó a 120 con validador
   (`MotivoDeRetiroComoTexto`).
+- **Contabilidad (feature 009, en la rama `009-contabilidad-niif`, entrega E1)**: contabilidad
+  NIIF nueva sobre 29 tablas `ACC_*`; las 33 heredadas se retiran con la migración par
+  `ContabilidadNiif`, que es **destructiva con guarda** (falla si `ACC_JournalEntries` o
+  `ACC_Documents` tienen filas; marcador `MIGRACION-DESTRUCTIVA-APROBADA` con respaldo y
+  segundo revisor) y **vacía `PAY_ConceptDefinitionAccounts`**: tras iniciar la contabilidad
+  hay que reparametrizar las cuentas por concepto. Reglas que no se negocian: **un solo
+  camino al libro**, `AccountingPoster` (`Application/Accounting/Posting`) —nadie más hace
+  `new AccountingDocument`/`JournalEntry` ni toca `VoucherType.NextNumber`; lo vigila
+  `NingunModuloEscribeMovimientosFueraDelContrato`—; **no hay saldos guardados** (todo es una
+  suma sobre `ACC_JournalEntries` con `IsPosted`); **las reglas viven en la cuenta**
+  (módulos habilitados, exige tercero/documento/centro/sucursal, bancaria, de impuesto con
+  tarifas) y las evalúa `AccountLineRules`; lo contabilizado **no se edita ni se borra**: se
+  reversa, y sólo el módulo dueño reversa lo suyo (`Accounting.Document.ModuleOwned`). «Fecha
+  ≤ hoy» sólo aplica al digitar: un módulo fecha según su operación (la nómina, al fin del
+  período). El borrador manual se guarda con errores, se valida al salir de cada campo
+  (`POST /documents/validate`, errores con `lineNumber`/`field`) y contabilizar es otro
+  permiso (`Vouchers.Post`; cuatro ojos opcional por empresa). Toda línea lleva sucursal (la
+  propuesta si no viene); el tercero es una **persona** y las entidades institucionales
+  (EPS, ARL, fondos, cajas, bancos) se vinculan a la suya (`PersonId`, FR-088). Semillas
+  JSON embebidas: PUC solidario (695) y comercial (1.869) **pendientes de validar por el
+  contador**, 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
+  (`Operator` digita y exporta, no contabiliza). El ingreso a cada opción del ERP queda en
+  la auditoría con módulo `Navigation` (`RegistroDeAccesos` → `POST /api/audit/access`).
+  Entregas: E1 (núcleo, esta rama), E2 consultas/cierres/apertura, E3 los otros seis módulos
+  sobre el contrato (sus escritores muertos llevan el marcador `E3 (feature 009)`), E4
+  conciliación, impuestos, exógena, activos. Recetas:
+  `docs/manual/contabilidad-contrato-de-contabilizacion.md` y
+  `docs/operaciones/contabilidad-primer-ejercicio.md`.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -195,17 +223,17 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-05 (cierre de la feature 005), remedida. **Son cifras que
+Instantánea del 2026-09-15 (cierre de E1 de la feature 009, en su rama), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 692 (2026-09-13) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 181 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 940 el 2026-09-13 (165 Domain, 663 Application, 65 Architecture, 45 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 1.036 el 2026-09-15 (165 Domain, 743 Application, 74 Architecture, 52 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
@@ -251,11 +279,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/008-alta-persona-un-paso/plan.md](specs/008-alta-persona-un-paso/plan.md)
+[specs/009-contabilidad-niif/plan.md](specs/009-contabilidad-niif/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/008-alta-persona-un-paso/spec.md)
-- [research.md](specs/008-alta-persona-un-paso/research.md)
-- [data-model.md](specs/008-alta-persona-un-paso/data-model.md)
-- [quickstart.md](specs/008-alta-persona-un-paso/quickstart.md)
-- [contracts/](specs/008-alta-persona-un-paso/contracts/)
+- [spec.md](specs/009-contabilidad-niif/spec.md)
+- [research.md](specs/009-contabilidad-niif/research.md)
+- [data-model.md](specs/009-contabilidad-niif/data-model.md)
+- [quickstart.md](specs/009-contabilidad-niif/quickstart.md)
+- [contracts/](specs/009-contabilidad-niif/contracts/)
 <!-- SPECKIT END -->

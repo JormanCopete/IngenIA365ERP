@@ -1,0 +1,224 @@
+@page "/contabilidad/configuracion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Configuración contable - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US1 (FR-003, FR-004): una sola vez se elige catálogo, nivel de movimiento,
+   longitudes, grupo NIIF, primer ejercicio, sucursal principal y cuatro ojos. Después, lo
+   estructural queda bloqueado con la primera auxiliar o el primer movimiento y la pantalla lo
+   dice; cuatro ojos, cuenta de resultado y tolerancias cambian siempre. *@
+<PermissionGate Required="Accounting.Setup.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Configuración inicial de la contabilidad</h3>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+@if (_config is not null)
+{
+    @if (!_config.Initialized)
+    {
+        <div class="guia-de-pasos">
+            <div class="paso paso-activo"><span class="paso-numero">1</span><div><strong>Elegir el catálogo y el nivel de movimiento.</strong> El plan se copia hasta nivel 4 y las auxiliares (5 o 6) las crea la cooperativa.</div></div>
+            <div class="paso"><span class="paso-numero">2</span><div><strong>Crear las auxiliares y sus reglas</strong> en Contabilidad › Plan de cuentas.</div></div>
+            <div class="paso"><span class="paso-numero">3</span><div><strong>Parametrizar los módulos</strong> (cuentas por concepto de nómina, líneas de crédito…) y cargar la apertura.</div></div>
+        </div>
+    }
+    else
+    {
+        <div class="info-card">
+            <span class="label">Contabilidad iniciada</span>
+            <p>Catálogo <strong>@_config.CatalogName</strong> (@_config.CatalogCode), movimiento en nivel @_config.MovementLevel, grupo NIIF @_config.NiifGroup,
+               primer ejercicio @_config.FirstFiscalYear. Iniciada por @_config.InitializedBy el @(_config.InitializedAt?.ToString("yyyy-MM-dd HH:mm")) UTC.</p>
+            @if (_config.Locked)
+            {
+                <p class="aviso aviso-info">@_config.LockReason El catálogo, el nivel y las longitudes ya no cambian.</p>
+            }
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+    <div class="form-grid">
+        <div class="campo">
+            <label>Catálogo <span class="obligatorio">*</span></label>
+            <SfDropDownList TValue="string" TItem="CatalogoContableDto" @bind-Value="_modelo.CatalogCode" DataSource="@_catalogos" Enabled="@Estructural" Placeholder="Elija el catálogo">
+                <DropDownListFieldSettings Text="Name" Value="Code" />
+            </SfDropDownList>
+            <span class="hint">Solidario para cooperativas vigiladas por la Supersolidaria; comercial (Decreto 2650) para las demás. Un catálogo propio se importa en Catálogos.</span>
+        </div>
+        <div class="campo">
+            <label>Nivel de movimiento <span class="obligatorio">*</span></label>
+            <SfDropDownList TValue="byte" TItem="OpcionNivel" @bind-Value="_modelo.MovementLevel" DataSource="@_niveles" Enabled="@Estructural">
+                <DropDownListFieldSettings Text="Texto" Value="Valor" />
+            </SfDropDownList>
+            <span class="hint">Sólo las cuentas de este nivel reciben movimientos y se parametrizan en otros módulos.</span>
+        </div>
+        <div class="campo">
+            <label>Longitud del nivel 5 <span class="obligatorio">*</span></label>
+            <SfNumericTextBox TValue="int" @bind-Value="_modelo.Level5Length" Min="7" Max="12" Format="N0" Enabled="@Estructural" />
+            <span class="hint">Dígitos del código de una auxiliar (la subcuenta tiene 6).</span>
+        </div>
+        @if (_modelo.MovementLevel == 6)
+        {
+            <div class="campo">
+                <label>Longitud del nivel 6 <span class="obligatorio">*</span></label>
+                <SfNumericTextBox TValue="int" @bind-Value="_modelo.Level6Length" Min="8" Max="12" Format="N0" Enabled="@Estructural" />
+            </div>
+        }
+        <div class="campo">
+            <label>Grupo NIIF <span class="obligatorio">*</span></label>
+            <SfDropDownList TValue="byte" TItem="OpcionNivel" @bind-Value="_modelo.NiifGroup" DataSource="@_grupos">
+                <DropDownListFieldSettings Text="Texto" Value="Valor" />
+            </SfDropDownList>
+        </div>
+        @if (!_config.Initialized)
+        {
+            <div class="campo">
+                <label>Primer ejercicio <span class="obligatorio">*</span></label>
+                <SfNumericTextBox TValue="int" @bind-Value="_modelo.FirstFiscalYear" Min="2000" Max="2100" Format="####" />
+                <span class="hint">Se abre con sus doce períodos. La apertura se fecha el día anterior.</span>
+            </div>
+        }
+        <div class="campo">
+            <label>Sucursal principal <span class="obligatorio">*</span></label>
+            <SfDropDownList TValue="Guid?" TItem="SucursalItem" @bind-Value="_modelo.MainBranchPublicId" DataSource="@_sucursales" Placeholder="Elija la sucursal">
+                <DropDownListFieldSettings Text="Name" Value="PublicId" />
+            </SfDropDownList>
+            <span class="hint">Se propone en toda línea; una cuenta que «exige sucursal» obliga a elegirla explícitamente.</span>
+        </div>
+        <div class="campo campo-check">
+            <SfCheckBox @bind-Checked="_modelo.FourEyes" Label="Exigir cuatro ojos: quien contabiliza es distinto de quien registró el borrador" />
+        </div>
+        @if (_config.Initialized)
+        {
+            <div class="campo">
+                <label>Cuenta de resultado del ejercicio</label>
+                <SfTextBox @bind-Value="_busquedaCuenta" Placeholder="Código o nombre de la cuenta de movimiento" OnBlur="@BuscarCuentasAsync" />
+                <SfDropDownList TValue="Guid?" TItem="CuentaBuscadaDto" @bind-Value="_modelo.ResultAccountPublicId" DataSource="@_cuentas" Placeholder="@(_config.ResultAccountCode ?? "Sin definir")">
+                    <DropDownListFieldSettings Text="Texto" Value="PublicId" />
+                </SfDropDownList>
+                <span class="hint">A esta cuenta lleva el cierre el resultado del ejercicio; hace falta antes de cerrar el año.</span>
+            </div>
+            <div class="campo">
+                <label>Tolerancia de días en conciliación</label>
+                <SfNumericTextBox TValue="int" @bind-Value="_modelo.ReconciliationDayTolerance" Min="0" Max="30" Format="N0" />
+            </div>
+            <div class="campo">
+                <label>Tolerancia en pesos entre base × tarifa y el valor</label>
+                <SfNumericTextBox TValue="decimal" @bind-Value="_modelo.TaxTolerance" Min="0" Format="N2" />
+            </div>
+        }
+    </div>
+    <div class="toolbar">
+        <PermissionGate Required="Accounting.Setup.Manage">
+            @if (!_config.Initialized)
+            {
+                <SfButton CssClass="e-primary" OnClick="@IniciarAsync" Disabled="@_guardado.Activa">Iniciar la contabilidad</SfButton>
+            }
+            else
+            {
+                <SfButton CssClass="e-primary" OnClick="@GuardarAsync" Disabled="@_guardado.Activa">Guardar cambios</SfButton>
+            }
+        </PermissionGate>
+    </div>
+    </IndicadorDeCarga>
+}
+</IndicadorDeCarga>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ConfiguracionContableDto? _config;
+    private List<CatalogoContableDto> _catalogos = [];
+    private List<SucursalItem> _sucursales = [];
+    private List<CuentaBuscadaDto> _cuentas = [];
+    private string _busquedaCuenta = "";
+    private readonly Modelo _modelo = new();
+
+    private static readonly List<OpcionNivel> _niveles = [new(5, "Nivel 5 (auxiliar)"), new(6, "Nivel 6 (sub-auxiliar)")];
+    private static readonly List<OpcionNivel> _grupos = [new(1, "Grupo 1 - NIIF plenas"), new(2, "Grupo 2 - NIIF para PYMES"), new(3, "Grupo 3 - microempresas")];
+
+    private bool Estructural => _config is { Initialized: false } or { Locked: false };
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var config = await Contabilidad.ObtenerConfiguracionAsync();
+        if (!config.IsSuccess) { await Notification.ErrorAsync(config.ErrorMessage ?? "No se pudo leer la configuración."); return; }
+        _config = config.Value!;
+        var catalogos = await Contabilidad.ListarCatalogosAsync();
+        _catalogos = catalogos.IsSuccess ? [.. catalogos.Value!] : [];
+        _sucursales = await Http.TryGetListAsync<SucursalItem>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+
+        _modelo.CatalogCode = _config.CatalogCode ?? _catalogos.FirstOrDefault(c => c.Code == "PUC-SOLIDARIO")?.Code ?? _catalogos.FirstOrDefault()?.Code;
+        _modelo.MovementLevel = _config.MovementLevel;
+        _modelo.Level5Length = _config.Level5Length;
+        _modelo.Level6Length = _config.Level6Length == 0 ? 10 : _config.Level6Length;
+        _modelo.NiifGroup = _config.NiifGroup;
+        _modelo.FirstFiscalYear = _config.FirstFiscalYear;
+        _modelo.MainBranchPublicId = _config.MainBranchPublicId ?? (_sucursales.Count == 1 ? _sucursales[0].PublicId : null);
+        _modelo.FourEyes = _config.FourEyes;
+        _modelo.ResultAccountPublicId = _config.ResultAccountPublicId;
+        _modelo.ReconciliationDayTolerance = _config.ReconciliationDayTolerance;
+        _modelo.TaxTolerance = _config.TaxTolerance;
+    }
+
+    private async Task BuscarCuentasAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_busquedaCuenta)) return;
+        var r = await Contabilidad.BuscarCuentasAsync(_busquedaCuenta, "CNT");
+        _cuentas = r.IsSuccess ? [.. r.Value!] : [];
+    }
+
+    private async Task IniciarAsync()
+    {
+        if (_modelo.CatalogCode is null || _modelo.MainBranchPublicId is null)
+        {
+            await Notification.ErrorAsync("Elija el catálogo y la sucursal principal.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.InicializarAsync(new InicializarContabilidadRequest(
+            _modelo.CatalogCode, _modelo.MovementLevel, (byte)_modelo.Level5Length, (byte)_modelo.Level6Length, _modelo.NiifGroup,
+            _modelo.FirstFiscalYear, _modelo.MainBranchPublicId.Value, _modelo.FourEyes));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo iniciar la contabilidad."); return; }
+        await Notification.SuccessAsync($"Contabilidad iniciada: {r.Value!.Accounts} cuentas del catálogo y {r.Value.Periods} períodos abiertos.");
+        await CargarAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.ActualizarConfiguracionAsync(new ActualizarConfiguracionRequest(
+            Estructural ? _modelo.CatalogCode : null, Estructural ? _modelo.MovementLevel : null,
+            Estructural ? (byte)_modelo.Level5Length : null, Estructural ? (byte)_modelo.Level6Length : null,
+            _modelo.NiifGroup, _modelo.ResultAccountPublicId, _modelo.MainBranchPublicId, _modelo.FourEyes,
+            _modelo.ReconciliationDayTolerance, _modelo.TaxTolerance));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la configuración."); return; }
+        await Notification.SuccessAsync("Configuración guardada.");
+        await CargarAsync();
+    }
+
+    private sealed class Modelo
+    {
+        public string? CatalogCode { get; set; }
+        public byte MovementLevel { get; set; } = 6;
+        public int Level5Length { get; set; } = 8;
+        public int Level6Length { get; set; } = 10;
+        public byte NiifGroup { get; set; } = 2;
+        public int FirstFiscalYear { get; set; } = DateTime.Today.Year;
+        public Guid? MainBranchPublicId { get; set; }
+        public bool FourEyes { get; set; }
+        public Guid? ResultAccountPublicId { get; set; }
+        public int ReconciliationDayTolerance { get; set; } = 3;
+        public decimal TaxTolerance { get; set; } = 1m;
+    }
+
+    private sealed record OpcionNivel(byte Valor, string Texto);
+    private sealed class SucursalItem { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

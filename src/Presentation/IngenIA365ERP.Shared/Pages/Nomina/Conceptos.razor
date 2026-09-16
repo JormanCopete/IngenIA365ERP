@@ -1,6 +1,7 @@
 @page "/nomina/conceptos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Contabilidad
 @using IngenIA365ERP.Shared.Components.Nomina
 @inject NominaClient Nomina
 @inject INotificationService Notification
@@ -73,7 +74,7 @@
                                 @{
                                     var c = (ConceptoDto)context;
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Nueva versión" OnClick="@(() => AbrirRevisar(c))" />
-                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-table" Title="Cuentas contables" OnClick="@(() => AbrirCuentas(c))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-table" Title="Cuentas contables" OnClick="@(async () => await AbrirCuentas(c))" />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-play" Title="Probar en seco" OnClick="@(() => AbrirPruebaEnSeco(c))" />
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Versiones" OnClick="@(() => AbrirVersiones(c.Code))" />
                                     @if (c.IsActive && c.ValidTo is null)
@@ -288,16 +289,14 @@
                             <tr>
                                 <td><SfTextBox @bind-Value="fila.CostCenterPublicId" Placeholder="vacío = por defecto (PublicId del centro)" /></td>
                                 <td>
-                                    <div class="toolbar">
-                                        <SfTextBox @bind-Value="fila.Debito" Placeholder="Código" />
-                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" type="button" OnClick="@(() => BuscarCuenta(fila, true))" />
-                                    </div>
+                                    <BuscadorDeCuenta Modulo="NOM" @bind-Cuenta="fila.Debito" />
+                                    @if (fila.Debito is not null) { <span class="hint">@Reglas(fila.Debito)</span> }
+                                    @if (fila.ProblemaDebito is not null) { <span class="hint aviso-error">@fila.ProblemaDebito</span> }
                                 </td>
                                 <td>
-                                    <div class="toolbar">
-                                        <SfTextBox @bind-Value="fila.Credito" Placeholder="Código" />
-                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-search" type="button" OnClick="@(() => BuscarCuenta(fila, false))" />
-                                    </div>
+                                    <BuscadorDeCuenta Modulo="NOM" @bind-Cuenta="fila.Credito" />
+                                    @if (fila.Credito is not null) { <span class="hint">@Reglas(fila.Credito)</span> }
+                                    @if (fila.ProblemaCredito is not null) { <span class="hint aviso-error">@fila.ProblemaCredito</span> }
                                 </td>
                                 <td><SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" OnClick="@(() => _filasCuentas.Remove(fila))" /></td>
                             </tr>
@@ -314,7 +313,6 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
-<AccountSearchDialog @bind-Visible="_mostrarBuscarCuenta" OnAccountSelected="CuentaElegida" />
 
 @* ----------------------------------------------------------- desactivar --- *@
 <SfDialog @bind-Visible="_mostrarDesactivar" Header="@($"Desactivar {_desactivando?.Code}")" Width="480px" IsModal="true" ShowCloseIcon="true">
@@ -408,12 +406,11 @@
     private List<PeriodoPagoDto> _periodos = [];
     private List<EmpleadoResumenDto> _empleados = [];
     private string _filtroNaturaleza = string.Empty, _filtroOrigen = string.Empty, _codigoVersiones = string.Empty, _buscarHeredado = string.Empty, _buscarEmpleado = string.Empty;
-    private bool _incluirInactivos, _ocupado, _mostrarForm, _mostrarCuentas, _mostrarBuscarCuenta, _mostrarDesactivar, _mostrarPrueba;
+    private bool _incluirInactivos, _ocupado, _mostrarForm, _mostrarCuentas, _mostrarDesactivar, _mostrarPrueba;
     private FormConcepto _f = new();
     private ConceptoDto? _revisando, _cuentasDe, _desactivando, _pruebaDe;
     private string _tituloForm = string.Empty;
     private List<FilaCuenta> _filasCuentas = [];
-    private FilaCuenta? _filaBuscando; private bool _buscandoDebito;
     private DateTime _fechaDesactivar = DateTime.Today;
     private EmpleadoResumenDto? _pruebaEmpleado;
     private string _pruebaPeriodoId = string.Empty;
@@ -560,20 +557,35 @@
 
     // ------------------------------------------------------------------- cuentas ---
 
-    private void AbrirCuentas(ConceptoDto c)
+    // Feature 009 (T065): las cuentas vigentes se cargan con sus reglas; el buscador sólo ofrece
+    // cuentas de movimiento habilitadas para Nómina (FR-015) y el servidor rechaza las demás (FR-016).
+    private async Task AbrirCuentas(ConceptoDto c)
     {
         _cuentasDe = c;
-        _filasCuentas = [new FilaCuenta()];
         _mostrarCuentas = true;
+        var actuales = await Nomina.ObtenerCuentasDeConceptoAsync(c.Code);
+        _filasCuentas = actuales.IsSuccess && actuales.Value!.Count > 0
+            ? actuales.Value.Select(f => new FilaCuenta
+            {
+                CostCenterPublicId = f.CostCenterPublicId?.ToString() ?? string.Empty,
+                Debito = ComoBuscada(f.Debit), Credito = ComoBuscada(f.Credit),
+                ProblemaDebito = f.Debit.Problem is { } pd ? $"La cuenta {pd}." : null,
+                ProblemaCredito = f.Credit.Problem is { } pc ? $"La cuenta {pc}." : null,
+            }).ToList()
+            : [new FilaCuenta()];
     }
 
-    private void BuscarCuenta(FilaCuenta fila, bool debito) { _filaBuscando = fila; _buscandoDebito = debito; _mostrarBuscarCuenta = true; }
+    private static CuentaBuscadaDto ComoBuscada(CuentaParametrizadaDto c) =>
+        new(c.PublicId, c.Code, c.Name, "", c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresCostCenter, c.RequiresBranch, false);
 
-    private void CuentaElegida(AccountSearchDialog.AccountSearchResult cuenta)
+    private static string Reglas(CuentaBuscadaDto c)
     {
-        if (_filaBuscando is null) return;
-        if (_buscandoDebito) _filaBuscando.Debito = cuenta.Code; else _filaBuscando.Credito = cuenta.Code;
-        _mostrarBuscarCuenta = false;
+        var exige = new List<string>();
+        if (c.RequiresThirdParty) exige.Add("tercero");
+        if (c.RequiresCrossDocument) exige.Add("documento cruce");
+        if (c.RequiresCostCenter) exige.Add("centro de costo");
+        if (c.RequiresBranch) exige.Add("sucursal explícita");
+        return exige.Count == 0 ? "Sin exigencias adicionales." : "Exige " + string.Join(", ", exige) + ".";
     }
 
     private async Task GuardarCuentas()
@@ -583,7 +595,7 @@
         try
         {
             var filas = _filasCuentas.Select(f => new CuentaDeConceptoRequest(
-                Guid.TryParse(f.CostCenterPublicId, out var cc) ? cc : null, f.Debito.Trim(), f.Credito.Trim())).ToList();
+                Guid.TryParse(f.CostCenterPublicId, out var cc) ? cc : null, f.Debito?.Code ?? string.Empty, f.Credito?.Code ?? string.Empty)).ToList();
             var res = await Nomina.GuardarCuentasDeConceptoAsync(_cuentasDe.Code, filas);
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron guardar las cuentas."); return; }
             await Notification.SuccessAsync("Cuentas guardadas.");
@@ -661,7 +673,14 @@
         finally { _ocupado = false; }
     }
 
-    private sealed class FilaCuenta { public string CostCenterPublicId { get; set; } = string.Empty; public string Debito { get; set; } = string.Empty; public string Credito { get; set; } = string.Empty; }
+    private sealed class FilaCuenta
+    {
+        public string CostCenterPublicId { get; set; } = string.Empty;
+        public CuentaBuscadaDto? Debito { get; set; }
+        public CuentaBuscadaDto? Credito { get; set; }
+        public string? ProblemaDebito { get; set; }
+        public string? ProblemaCredito { get; set; }
+    }
 
     private sealed class FormConcepto
     {

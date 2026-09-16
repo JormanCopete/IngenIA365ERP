@@ -324,15 +324,33 @@ public sealed class SetConceptAccountsCommandHandler(IApplicationDbContext db, I
     public async Task<Result> Handle(SetConceptAccountsCommand request, CancellationToken ct)
     {
         var code = request.Code.Trim().ToUpperInvariant();
-        if (!await db.PayrollConceptDefinitions.AnyAsync(c => c.Code == code, ct))
+        var concepto = await db.PayrollConceptDefinitions.AsNoTracking().Where(c => c.Code == code).Select(c => new { c.Nature }).FirstOrDefaultAsync(ct);
+        if (concepto is null)
             return Result.Failure(new Error("Payroll.ConceptNotFound", $"No existe el concepto {code}."));
 
         var codigosCuenta = request.Rows.SelectMany(r => new[] { r.DebitAccountCode.Trim(), r.CreditAccountCode.Trim() }).Distinct().ToList();
-        var cuentas = await db.ChartOfAccounts.AsNoTracking().Where(a => codigosCuenta.Contains(a.AccountCode)).Select(a => new { a.Id, a.AccountCode }).ToListAsync(ct);
-        var faltan = codigosCuenta.Where(c => !cuentas.Any(x => x.AccountCode == c)).ToList();
+        var cuentas = await db.ChartOfAccounts.AsNoTracking().Where(a => codigosCuenta.Contains(a.Code) && !a.IsDeleted).ToListAsync(ct);
+        var faltan = codigosCuenta.Where(c => !cuentas.Any(x => x.Code == c)).ToList();
         if (faltan.Count > 0)
             return Result.Failure(new Error("Payroll.AccountNotFound", $"Cuentas contables inexistentes: {string.Join(", ", faltan)}."));
-        var cuentaPorCodigo = cuentas.ToDictionary(a => a.AccountCode, a => a.Id);
+        // Feature 009 (FR-016): una parametrizacion solo admite cuentas de movimiento, activas y habilitadas para Nomina.
+        foreach (var cuenta in cuentas)
+        {
+            if (Accounting.Accounts.AccountEligibility.Reparo(cuenta, Accounting.Posting.ModuloContable.Nomina) is { } reparo)
+                return Result.Failure(Accounting.Posting.AccountingErrors.AccountNotEligible(cuenta.Code, Accounting.Posting.ModuloContable.Nomina, reparo));
+        }
+        // Feature 009 (FR-088): en aportes y provisiones el tercero es la entidad (EPS, fondo, ARL, caja) vinculada al
+        // empleado; si la cuenta lo exige, toda entidad del catálogo tiene que tener su persona antes de parametrizar.
+        var entidad = Services.TercerosDeNomina.EntidadDe(code, concepto.Nature);
+        if (entidad != Services.EntidadInstitucional.Ninguna && cuentas.Any(c => c.RequiresThirdParty))
+        {
+            var sinVinculo = await Services.VinculosInstitucionales.SinPersonaAsync(db, entidad, ct);
+            if (sinVinculo is not null)
+                return Result.Failure(new ErrorConDatos(Accounting.Posting.AccountingErrors.InstitutionalLinkMissing(sinVinculo).Code,
+                    $"{Accounting.Posting.AccountingErrors.InstitutionalLinkMissing(sinVinculo).Message} Se vincula en {Services.TercerosDeNomina.Pantalla(entidad)}.",
+                    new { entity = sinVinculo, entityKind = entidad.ToString() }));
+        }
+        var cuentaPorCodigo = cuentas.ToDictionary(a => a.Code, a => a.Id);
 
         var ccIds = request.Rows.Where(r => r.CostCenterPublicId is not null).Select(r => r.CostCenterPublicId!.Value).Distinct().ToList();
         var centros = await db.CostCenters.AsNoTracking().Where(c => ccIds.Contains(c.PublicId)).Select(c => new { c.Id, c.PublicId }).ToListAsync(ct);

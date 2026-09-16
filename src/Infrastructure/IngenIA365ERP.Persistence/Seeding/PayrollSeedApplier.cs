@@ -18,7 +18,7 @@ public sealed class PayrollSeedApplier(ApplicationDbContext tenantDb, IHostEnvir
     public async Task<IReadOnlyList<(string Seeder, int Inserted)>> ReapplyAsync(CancellationToken ct)
     {
         var context = new SeedContext { TenantDb = tenantDb, EnvironmentName = environment.EnvironmentName, Logger = logger };
-        IDataSeeder[] seeders = [new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new PayrollVoucherTypeSeeder()];
+        IDataSeeder[] seeders = [new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new VoucherTypesSeeder()];
 
         var resultado = new List<(string, int)>();
         foreach (var seeder in seeders.OrderBy(s => s.Order))

@@ -9,6 +9,8 @@ public class HealthInsuranceProviderConfiguration : IEntityTypeConfiguration<Hea
     public void Configure(EntityTypeBuilder<HealthInsuranceProvider> builder)
     {
         builder.ToTable("PAY_HealthInsuranceProviders");
+        builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict); // feature 009 (FR-088)
+        builder.HasIndex(e => e.PersonId);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

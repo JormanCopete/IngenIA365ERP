@@ -9,6 +9,7 @@ public class BranchConfiguration : IEntityTypeConfiguration<Branch>
     public void Configure(EntityTypeBuilder<Branch> builder)
     {
         builder.ToTable("COR_Branches");
+        builder.HasIndex(e => e.TenantBranchPublicId).IsUnique().HasFilter("[TenantBranchPublicId] IS NOT NULL"); // feature 009 (R7)
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

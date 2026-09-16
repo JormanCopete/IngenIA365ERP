@@ -1,0 +1,364 @@
+@page "/contabilidad/comprobantes/nuevo"
+@page "/contabilidad/comprobantes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Models.Contabilidad
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+@implements IDisposable
+
+<PageTitle>@_titulo - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US3 (FR-025..FR-031, FR-041, U3): la ventana de digitación. Se guarda como borrador
+   con errores; al salir de cada campo se valida contra el servidor y cada infracción se pinta en
+   su celda; «Contabilizar» y «Anular» son permisos aparte; un comprobante de módulo se consulta
+   aquí de sólo lectura y se anula en su módulo («Ver en {módulo}»). *@
+<PermissionGate Required="Accounting.Vouchers.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>@_titulo</h3>
+    <div class="toolbar">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-arrow-left" OnClick="@(() => Navigation.NavigateTo(_documento?.Status == "Draft" || Id is null ? "/contabilidad/borradores" : "/contabilidad/comprobantes"))">Volver</SfButton>
+        @if (_documento is not null)
+        {
+            <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_saving" OnClick="@ImprimirAsync">Imprimir</SfButton>
+        }
+        @if (_documento?.Origin is { } origen && origen.Module != "CNT" && (origen.Link ?? EnlacesDeOrigen.Ruta(origen.SourceType, origen.SourcePublicId)) is { } enlace)
+        {
+            <SfButton CssClass="e-outline" IconCss="e-icons e-open-link" OnClick="@(() => Navigation.NavigateTo(enlace))">Ver en @origen.ModuleName</SfButton>
+        }
+    </div>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+@if (_documento is not null && !_esBorrador)
+{
+    <div class="info-card">
+        <span class="label">
+            <span class="marca-origen @(_documento.Origin.Module == "CNT" ? "marca-origen-manual" : "")">@_documento.Origin.ModuleName</span>
+            @_documento.Referencia · @Estado(_documento.Status) · @_documento.Date.ToString("yyyy-MM-dd")
+        </span>
+        <p>
+            Registró @_documento.RegisteredBy el @_documento.RegisteredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            @if (_documento.PostedBy is not null) { <text>· contabilizó @_documento.PostedBy el @_documento.PostedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</text> }
+        </p>
+        @if (_documento.Reversal.ReversedByPublicId is { } rev)
+        {
+            <p class="aviso aviso-info">Reversado por <a href="/contabilidad/comprobantes/@rev">@_documento.Reversal.ReversedByNumber</a>. Motivo: @_documento.Reversal.Reason</p>
+        }
+        @if (_documento.Reversal.ReversesPublicId is { } orig)
+        {
+            <p class="aviso aviso-info">Reversa a <a href="/contabilidad/comprobantes/@orig">@_documento.Reversal.ReversesNumber</a>.</p>
+        }
+        @if (_documento.Origin.Module != "CNT")
+        {
+            <p class="texto-apoyo">Lo generó @_documento.Origin.ModuleName: se consulta aquí y sólo se anula desde ese módulo.</p>
+        }
+    </div>
+}
+
+<div class="disposicion-comprobante">
+<div>
+    <div class="form-grid">
+        <label class="campo">Tipo de comprobante
+            <select class="e-input" value="@_m.TipoCode" disabled="@_soloLectura" @onchange="@(async e => { _m.TipoCode = e.Value?.ToString() ?? ""; await RevalidarAsync(); })" @onfocus="@(() => _campo = "VoucherType")">
+                @if (_soloLectura) { <option value="@_m.TipoCode">@_m.TipoCode · @_documento?.VoucherTypeName</option> }
+                @foreach (var t in _tipos) { <option value="@t.Code">@t.Code · @t.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Fecha
+            <SfDatePicker TValue="DateTime" @bind-Value="_m.Fecha" Enabled="@(!_soloLectura)" Format="yyyy-MM-dd" Max="DateTime.Today" ValueChange="@(async (Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime> _) => await RevalidarAsync())" OnFocus="@(() => _campo = "Date")" />
+        </label>
+        <label class="campo campo-ancho">Descripción
+            <input class="e-input" value="@_m.Descripcion" maxlength="200" disabled="@_soloLectura" placeholder="Qué registra este comprobante" @onchange="@(e => _m.Descripcion = e.Value?.ToString() ?? "")" @onfocus="@(() => _campo = "Description")" />
+        </label>
+    </div>
+
+    @foreach (var e in _errores.Where(x => x.LineNumber == 0))
+    {
+        <p class="aviso @(e.Bloquea ? "aviso-error" : "aviso-alerta")">@e.Message</p>
+    }
+
+    <LineasDeComprobante @ref="_lineas" Lineas="@_m.Lineas" Errores="@_errores" Sucursales="@_sucursales" Centros="@_centros" TiposDeCruce="@_tiposDeCruce"
+                         SoloLectura="@_soloLectura" OnCambio="@RevalidarAsync" OnCampo="@(c => _campo = c)" OnAyuda="@(() => _mostrarAyuda = true)" />
+
+    <div class="pie-de-totales">
+        <span>Débitos: @_m.TotalDebito.ToString("N2")</span>
+        <span>Créditos: @_m.TotalCredito.ToString("N2")</span>
+        <span class="@(_m.Diferencia == 0m ? "cuadrado" : "diferencia")">@(_m.Diferencia == 0m ? "Cuadrado" : $"Diferencia: {_m.Diferencia:N2}")</span>
+    </div>
+
+    @if (_errores.Count > 0)
+    {
+        <div class="info-card">
+            <span class="label">@(_errores.Count(x => x.Bloquea)) por corregir · @(_errores.Count(x => !x.Bloquea)) avisos</span>
+            <ul class="lista-de-errores">
+                @foreach (var e in _errores.OrderBy(x => x.LineNumber))
+                {
+                    <li class="@(e.Bloquea ? "" : "texto-tenue")">
+                        @if (e.LineNumber > 0) { <button type="button" class="enlace" @onclick="() => _lineas!.IrALineaAsync(e.LineNumber)">Línea @e.LineNumber</button> <text>· </text> }
+                        @e.Message
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (!_soloLectura)
+    {
+        <div class="toolbar">
+            <PermissionGate Required="Accounting.Vouchers.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@_saving" OnClick="@GuardarAsync">Guardar borrador</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.Vouchers.Post">
+                <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_saving || Id is null || _errores.Any(x => x.Bloquea))" OnClick="@ContabilizarAsync" title="@(Id is null ? "Guarde el borrador primero" : _errores.Any(x => x.Bloquea) ? "Corrija los errores marcados" : "Toma el consecutivo y pasa al libro")">Contabilizar</SfButton>
+            </PermissionGate>
+            @if (Id is not null)
+            {
+                <PermissionGate Required="Accounting.Vouchers.Create">
+                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" Disabled="@_saving" OnClick="@(() => _confirmarDescarte = true)">Descartar borrador</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    }
+    else if (_documento is { Status: "Posted", Origin.Module: "CNT" })
+    {
+        <div class="toolbar">
+            <PermissionGate Required="Accounting.Vouchers.Void">
+                <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_saving" OnClick="@(() => { _motivo = ""; _mostrarReversion = true; })">Anular (reversar)</SfButton>
+            </PermissionGate>
+        </div>
+    }
+
+    @if (Id is { } idAdjuntos)
+    {
+        <h4>Soportes</h4>
+        <AttachmentList OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" PermitirEliminar="@_esBorrador" />
+    }
+</div>
+
+<aside class="ayuda-de-campo">
+    <div class="info-card">
+        <span class="label">Pasos</span>
+        <div class="guia-de-pasos">
+            <div class="paso @(Paso == 1 ? "paso-activo" : Paso > 1 ? "paso-hecho" : "")"><span class="paso-numero">1</span><span>Tipo, fecha y descripción.</span></div>
+            <div class="paso @(Paso == 2 ? "paso-activo" : Paso > 2 ? "paso-hecho" : "")"><span class="paso-numero">2</span><span>Líneas: cuenta, lo que exige, débito o crédito.</span></div>
+            <div class="paso @(Paso == 3 ? "paso-activo" : Paso > 3 ? "paso-hecho" : "")"><span class="paso-numero">3</span><span>Cuadre y corrección de lo marcado; «Guardar borrador» conserva el avance.</span></div>
+            <div class="paso @(Paso == 4 ? "paso-activo" : "")"><span class="paso-numero">4</span><span>«Contabilizar» toma el número y pasa al libro. Después sólo se reversa.</span></div>
+        </div>
+    </div>
+    <div class="info-card">
+        <span class="label">Ayuda · @NombreDeCampo(_campo)</span>
+        <p>@AyudaDeCampo(_campo)</p>
+        <p class="texto-tenue">Ctrl+Alt+N línea nueva · Ctrl+Alt+D duplicar · Ctrl+Alt+B balancear · Ctrl+Alt+Supr quitar · F2 esta ayuda.</p>
+    </div>
+</aside>
+</div>
+</IndicadorDeCarga>
+
+<ConfirmDialog @bind-Visible="_confirmarDescarte" Title="Descartar borrador" Message="El borrador se descarta y no aparece más en la lista. ¿Continuar?" ConfirmText="Descartar" OnConfirm="@DescartarAsync" />
+
+<SfDialog @bind-Visible="_mostrarReversion" Header="Anular comprobante" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p>Se crea un comprobante de reversión con las líneas invertidas y el original queda «Reversado». Si el mes está cerrado, la reversión se fecha en el primer período abierto.</p>
+            <label class="campo">Motivo
+                <input class="e-input" @bind="_motivo" maxlength="200" placeholder="Por qué se anula" />
+            </label>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(_saving || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReversarAsync">Reversar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReversion = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAyuda" Header="Ayuda del campo" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content><p><strong>@NombreDeCampo(_campo)</strong>: @AyudaDeCampo(_campo)</p></Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private ComprobanteModelo _m = new();
+    private ComprobanteDto? _documento;
+    private List<ErrorDeLineaDto> _errores = [];
+    private List<TipoComprobanteDto> _tipos = [];
+    private List<LineasDeComprobante.ItemDeCatalogo> _sucursales = [], _centros = [];
+    private List<TipoCruceDto> _tiposDeCruce = [];
+    private LineasDeComprobante? _lineas;
+    private bool _saving, _confirmarDescarte, _mostrarReversion, _mostrarAyuda;
+    private string _motivo = "", _campo = "VoucherType";
+    private CancellationTokenSource? _debounce;
+    private Guid? _cargado;
+
+    private bool _esBorrador => _documento is null || _documento.Status == "Draft";
+    private bool _soloLectura => !_esBorrador || (_documento is not null && _documento.Origin.Module != "CNT");
+    private string _titulo => _documento is null ? "Nuevo comprobante" : _esBorrador ? "Borrador de comprobante" : $"Comprobante {_documento.Referencia}";
+    private int Paso => string.IsNullOrEmpty(_m.TipoCode) || string.IsNullOrWhiteSpace(_m.Descripcion) ? 1 : _m.Lineas.Count < 2 ? 2 : _errores.Any(x => x.Bloquea) || Id is null ? 3 : 4;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var tipos = Contabilidad.ListarTiposDeComprobanteAsync();
+        var cruces = Contabilidad.ListarTiposDeCruceAsync();
+        var sucursales = Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        await Task.WhenAll(tipos, cruces, sucursales, centros);
+        _tipos = tipos.Result.IsSuccess ? tipos.Result.Value!.Where(t => t.Usage == "Manual").ToList() : [];
+        _tiposDeCruce = cruces.Result.IsSuccess ? [.. cruces.Result.Value!] : [];
+        _sucursales = sucursales.Result.Select(x => new LineasDeComprobante.ItemDeCatalogo(x.PublicId, x.Name)).ToList();
+        _centros = centros.Result.Select(x => new LineasDeComprobante.ItemDeCatalogo(x.PublicId, x.Name)).ToList();
+        if (_tipos.Count > 0 && string.IsNullOrEmpty(_m.TipoCode)) _m.TipoCode = _tipos[0].Code;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id is null)
+        {
+            if (_cargado is not null) { _cargado = null; _documento = null; _m = new ComprobanteModelo { TipoCode = _tipos.FirstOrDefault()?.Code ?? "" }; _errores = []; }
+            return;
+        }
+        if (_cargado == Id) return;
+        _cargado = Id;
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ObtenerComprobanteAsync(Id.Value);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el comprobante."); Navigation.NavigateTo("/contabilidad/comprobantes"); return; }
+        _documento = r.Value!;
+        // Las reglas de cada cuenta vienen del buscador: sin ellas la grilla no sabría qué exigir.
+        var cuentas = new Dictionary<string, CuentaBuscadaDto>();
+        foreach (var codigo in _documento.Lines.Select(l => l.AccountCode).Distinct())
+        {
+            var b = await Contabilidad.BuscarCuentasAsync(codigo, "CNT", onlyMovement: false);
+            if (b.IsSuccess && b.Value!.FirstOrDefault(c => c.Code == codigo) is { } c) cuentas[codigo] = c;
+        }
+        _m = ComprobanteModelo.Desde(_documento, cuentas);
+        _errores = [.. _documento.Errors];
+    }
+
+    /// <summary>Al salir de cada campo: espera 400 ms de silencio y valida sin guardar (FR-041).</summary>
+    private async Task RevalidarAsync()
+    {
+        if (_soloLectura) return;
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        try
+        {
+            await Task.Delay(400, token);
+            if (string.IsNullOrEmpty(_m.TipoCode) || _m.Lineas.Count == 0) { _errores = []; return; }
+            var r = await Contabilidad.ValidarAsync(_m.ARequest(), token);
+            if (token.IsCancellationRequested) return;
+            if (r.IsSuccess) _errores = [.. r.Value!.Errors];
+        }
+        catch (TaskCanceledException) { /* llegó otro cambio: esa validación ya no sirve */ }
+        finally { await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrEmpty(_m.TipoCode)) { await Notification.WarningAsync("Elija el tipo de comprobante."); return; }
+        if (_m.Lineas.Count == 0) { await Notification.WarningAsync("Digite al menos una línea."); return; }
+        if (_m.Lineas.Any(l => l.Cuenta is null)) { await Notification.WarningAsync("Toda línea lleva cuenta; quite las vacías o elíjales una."); return; }
+        _saving = true;
+        try
+        {
+            var r = Id is { } id ? await Contabilidad.ActualizarBorradorAsync(id, _m.ARequest()) : await Contabilidad.GuardarBorradorAsync(_m.ARequest());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el borrador."); return; }
+            _errores = [.. r.Value!.Errors];
+            await Notification.SuccessAsync(_errores.Any(x => x.Bloquea) ? "Borrador guardado; quedan errores por corregir antes de contabilizar." : "Borrador guardado.");
+            if (Id is null) Navigation.NavigateTo($"/contabilidad/comprobantes/{r.Value.PublicId}", replace: true);
+            else { _cargado = null; await OnParametersSetAsync(); }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ContabilizarAsync()
+    {
+        if (_saving || Id is null) return;
+        _saving = true;
+        try
+        {
+            var r = await Contabilidad.ContabilizarAsync(Id.Value);
+            if (!r.IsSuccess)
+            {
+                var detalle = r.ErroresDeLinea();
+                if (detalle.Count > 0) _errores = detalle;
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo contabilizar.");
+                return;
+            }
+            await Notification.SuccessAsync($"Contabilizado con el número {_m.TipoCode}-{r.Value!.Number}.");
+            _cargado = null;
+            await OnParametersSetAsync();
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (_saving || Id is null) return;
+        _saving = true;
+        try
+        {
+            var r = await Contabilidad.ReversarAsync(Id.Value, new ReversionRequest(_motivo.Trim(), null));
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reversar."); return; }
+            _mostrarReversion = false;
+            await Notification.SuccessAsync($"Reversado con el comprobante {_m.TipoCode}-{r.Value!.Number}.");
+            Navigation.NavigateTo($"/contabilidad/comprobantes/{r.Value.ReversalPublicId}");
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (Id is null) return;
+        var r = await Contabilidad.DescartarBorradorAsync(Id.Value);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+        await Notification.SuccessAsync("Borrador descartado.");
+        Navigation.NavigateTo("/contabilidad/borradores");
+    }
+
+    private async Task ImprimirAsync()
+    {
+        if (Id is null) return;
+        var r = await Contabilidad.ImprimirComprobanteAsync(Id.Value);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imprimir."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static string Estado(string s) => s switch { "Draft" => "borrador", "Posted" => "contabilizado", "Reversed" => "reversado", _ => s };
+
+    private static string NombreDeCampo(string c) => c switch
+    {
+        "VoucherType" => "Tipo de comprobante", "Date" => "Fecha", "Description" => "Descripción", "Account" => "Cuenta", "Person" => "Tercero",
+        "CrossDocument" => "Documento cruce", "CostCenter" => "Centro de costo", "Branch" => "Sucursal", "Amount" => "Débito / crédito", "TaxBase" => "Base gravable", "Detail" => "Detalle", _ => c,
+    };
+
+    private static string AyudaDeCampo(string c) => c switch
+    {
+        "VoucherType" => "Sólo los tipos de uso manual: los de módulo (nómina, cartera…) los genera cada módulo al aprobar su operación.",
+        "Date" => "Debe caer en un mes abierto y no ser posterior a hoy. Un mes cerrado se reabre en Períodos, con motivo.",
+        "Description" => "Qué registra el comprobante; se imprime como concepto y aparece en la lista.",
+        "Account" => "Escriba código o nombre: sólo aparecen cuentas de movimiento, activas y habilitadas para Contabilidad. Lo que la cuenta exige se habilita al elegirla.",
+        "Person" => "Obligatorio cuando la cuenta lo exige (cuentas por cobrar, por pagar, retenciones…). Busque por documento o nombre; si no existe, se crea en Maestros › Personas.",
+        "CrossDocument" => "Tipo y número del documento que soporta el movimiento (factura, recibo…). Obligatorio si la cuenta lo exige.",
+        "CostCenter" => "Sólo se admite en cuentas que lo manejan; en las demás es un error.",
+        "Branch" => "Vacío toma la sucursal propuesta (la suya o la principal). Si la cuenta «exige sucursal», hay que elegirla.",
+        "Amount" => "Una línea lleva débito o crédito, nunca ambos ni cero. Ctrl+Alt+B pone en la línea activa lo que falta para cuadrar.",
+        "TaxBase" => "Base sobre la que se calcula el impuesto; el valor de la línea se compara con base × tarifa vigente, con la tolerancia configurada.",
+        "Detail" => "Detalle de la línea; en «Detalle», Enter abre la línea siguiente repitiendo tercero, centro y sucursal.",
+        _ => "Elija un campo para ver su ayuda.",
+    };
+
+    public void Dispose() => _debounce?.Cancel();
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

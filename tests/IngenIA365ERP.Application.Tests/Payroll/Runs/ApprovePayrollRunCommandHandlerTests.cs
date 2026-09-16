@@ -31,7 +31,7 @@ public class ApprovePayrollRunCommandHandlerTests
     private static ApprovePayrollRunCommandHandler Aprobador(NominaTestData d, ICurrentUserService? quien = null)
     {
         var usuario = quien ?? Contadora;
-        var poster = new PayrollAccountingPoster(d.Db, d.Clock, usuario);
+        var poster = d.Contabilizador(usuario);
         var audit = new PayrollAuditEmitter(d.Audit, usuario, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
         return new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, usuario, audit);
     }
@@ -67,14 +67,17 @@ public class ApprovePayrollRunCommandHandlerTests
         periodo.ApprovedBy.Should().Be("contadora@demo");
         periodo.RunPublicId.Should().Be(runId);
 
-        var doc = await d.Db.AccountingDocuments.SingleAsync(x => x.Id == run.AccountingDocumentId);
-        doc.VoucherTypeCode.Should().Be("NM");
+        var doc = await d.Db.AccountingDocuments.Include(x => x.VoucherType).SingleAsync(x => x.Id == run.AccountingDocumentId);
+        doc.VoucherType!.Code.Should().Be("NM");
         doc.TotalDebit.Should().Be(doc.TotalCredit).And.BeGreaterThan(0m);
-        doc.ModuleCode.Should().Be("NOM");
-        var asientos = await d.Db.JournalEntries.Where(j => j.VoucherTypeCode == "NM" && j.DocumentNumber == 1).ToListAsync();
-        asientos.Sum(a => a.DebitAmount).Should().Be(asientos.Sum(a => a.CreditAmount));
+        doc.OriginModule.Should().Be("NOM");
+        doc.Number.Should().Be(1);
+        doc.Status.Should().Be(Domain.Enums.Accounting.DocumentStatus.Posted);
+        var asientos = await d.Db.JournalEntries.Where(j => j.DocumentId == doc.Id).ToListAsync();
+        asientos.Sum(a => a.Debit).Should().Be(asientos.Sum(a => a.Credit));
+        asientos.Should().OnlyContain(a => a.IsPosted && a.Date == new DateOnly(2026, 3, 31) && a.BranchId == d.Principal.Id);
         asientos.Should().HaveCountGreaterThan(2);
-        (await d.Db.VoucherTypes.SingleAsync(v => v.Code == "NM")).NextSequenceNumber.Should().Be(1);
+        (await d.Db.VoucherTypes.SingleAsync(v => v.Code == "NM")).NextNumber.Should().Be(2);
 
         // Devengos y deducciones menos las líneas sin asiento tienen que estar en el comprobante.
         // El asiento va por concepto y en valor absoluto: una línea negativa (el ajuste por
@@ -174,7 +177,7 @@ public class ApprovePayrollRunCommandHandlerTests
 
         var r = await Aprobador(d).Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
 
-        r.Error.Code.Should().Be("Payroll.AccountingPeriodClosed");
+        r.Error.Code.Should().Be("Accounting.Period.Closed");
         (await d.Db.PayPeriods.SingleAsync(p => p.Id == d.Marzo.Id)).Status.Should().Be(PayPeriodStatus.Calculated);
     }
 
@@ -213,5 +216,28 @@ public class ApprovePayrollRunCommandHandlerTests
         var calculo = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calculo.Error.Code.Should().Be("Payroll.PeriodApproved");
+    }
+
+    [Fact]
+    public async Task Un_concepto_parametrizado_a_una_cuenta_de_agrupacion_impide_aprobar_nombrandola_y_no_deja_nada()
+    {
+        var d = new NominaTestData();
+        d.ConfigurarContabilidad();
+        var cuentasSalario = await d.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "SALARIO");
+        var gasto = await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentasSalario.DebitAccountId);
+        gasto.IsMovement = false;
+        gasto.Level = 4;
+        await d.Db.SaveChangesAsync();
+        var runId = await Calcular(d);
+
+        var r = await Aprobador(d).Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Accounting.Line.AccountNotMovement");
+        r.Error.Message.Should().Contain(gasto.Code);
+        d.Db.AccountingDocuments.Should().BeEmpty();
+        d.Db.JournalEntries.Should().BeEmpty();
+        (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == runId)).Status.Should().Be(PayrollRunStatus.Draft);
+        (await d.Db.VoucherTypes.SingleAsync(v => v.Code == "NM")).NextNumber.Should().Be(1);
     }
 }

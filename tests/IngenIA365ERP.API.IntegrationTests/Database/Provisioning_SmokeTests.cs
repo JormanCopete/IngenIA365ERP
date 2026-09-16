@@ -72,7 +72,14 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         (await appDb.SystemSettings.CountAsync()).Should().BeGreaterThanOrEqualTo(5);
         (await appDb.ListParameters.CountAsync(p => p.ListType == "MONE")).Should().BeGreaterThanOrEqualTo(3);
         (await appDb.ListParameters.CountAsync(p => p.ListType == "TDOC")).Should().BeGreaterThanOrEqualTo(6);
-        (await appDb.ChartOfAccounts.CountAsync(a => a.Level == 1)).Should().Be(9);
+        // Feature 009: el plan de cuentas ya no se siembra (se copia del catálogo al iniciar la contabilidad);
+        // lo que deja la semilla son los dos PUC, los rubros NIIF, los tipos de comprobante y los documentos cruce.
+        (await appDb.ChartOfAccounts.CountAsync()).Should().Be(0, "el plan nace con la inicialización, no con la semilla");
+        (await appDb.AccountCatalogs.CountAsync()).Should().Be(2, "PUC solidario y PUC comercial");
+        (await appDb.AccountCatalogEntries.CountAsync()).Should().BeGreaterThan(2_000);
+        (await appDb.FinancialStatementItems.CountAsync()).Should().BeGreaterThan(100);
+        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(18);
+        (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(8);
 
         // RunTestSeed=false en la fixture ⇒ cero datos demo (FR-017/SC-005).
         (await appDb.People.CountAsync(p => p.CreatedBy == "system:seed-demo")).Should().Be(0);

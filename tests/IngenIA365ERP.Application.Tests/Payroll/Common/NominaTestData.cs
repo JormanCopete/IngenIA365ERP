@@ -1,4 +1,6 @@
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Payroll.Novelties;
@@ -9,6 +11,7 @@ using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
+using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Persistence.Seeding.Parametric;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -36,6 +39,7 @@ public sealed class NominaTestData
     public PayrollAuditEmitter AuditEmitter { get; }
     public PayrollPolicyReader Policies { get; }
     public CalculationInputLoader Loader { get; }
+    public IUserBranchScope Alcance { get; }
     public PayrollAccountingPoster Poster { get; }
     public RecurringNoveltiesMaterializer Recurrentes { get; }
 
@@ -64,7 +68,9 @@ public sealed class NominaTestData
         AuditEmitter = new PayrollAuditEmitter(Audit, User, Clock, NullLogger<PayrollAuditEmitter>.Instance);
         Policies = new PayrollPolicyReader(Db);
         Loader = new CalculationInputLoader(Db, Policies);
-        Poster = new PayrollAccountingPoster(Db, Clock, User);
+        Alcance = Substitute.For<IUserBranchScope>();
+        Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));
+        Poster = Contabilizador(User);
         Recurrentes = new RecurringNoveltiesMaterializer(Db, Clock, User);
 
         Plan = new PayrollPlan { Code = "DEFAULT", Name = "Nómina general", Periodicity = PayrollPeriodicity.Monthly, IsDefault = true, IsActive = true, CreatedBy = "system:seed" };
@@ -178,27 +184,81 @@ public sealed class NominaTestData
         return run;
     }
 
-    /// <summary>Lo que la aprobación necesita: sucursal, centro de costo, comprobante NM, período contable abierto y cuentas para todos los conceptos de la semilla.</summary>
+    /// <summary>El contabilizador de nómina sobre el contrato (feature 009), con el usuario indicado.</summary>
+    public PayrollAccountingPoster Contabilizador(ICurrentUserService quien) =>
+        new(Db, new AccountingPoster(Db, Clock, quien, Alcance));
+
+    public Branch Principal { get; private set; } = null!;
+
+    /// <summary>
+    /// Lo que la aprobación necesita (modelo de la feature 009): sucursal principal, centro de
+    /// costo, configuración contable iniciada, ejercicio 2026 con marzo abierto (o cerrado), el
+    /// tipo NM del módulo y un par de cuentas de movimiento habilitadas para Nómina por cada
+    /// concepto de la semilla.
+    /// </summary>
     public void ConfigurarContabilidad(bool periodoContableAbierto = true)
     {
-        Db.Branches.Add(new Branch { Name = "Principal", CreatedBy = "test" });
+        Principal = new Branch { Name = "Principal", CreatedBy = "test" };
+        Db.Branches.Add(Principal);
         Db.CostCenters.Add(new CostCenter { LegacyCode = "01", Name = "Administración", CreatedBy = "test" });
-        Db.VoucherTypes.Add(new VoucherType { Code = "NM", Name = "Nómina", ModuleCode = "NOM", UpdatesAccounting = true, NextSequenceNumber = 0, CreatedBy = "test" });
-        Db.AccountingPeriods.Add(new AccountingPeriod
+        Db.VoucherTypes.Add(new VoucherType { Code = "NM", Name = "Nómina", Usage = VoucherUsage.Module, ModuleCode = "NOM", NextNumber = 1, IsSeeded = true, CreatedBy = "test" });
+        var catalogo = new AccountCatalog { Code = "PRUEBA", Name = "Catálogo de prueba", Version = "2026", CreatedBy = "test" };
+        Db.AccountCatalogs.Add(catalogo);
+        Db.SaveChanges();
+        Db.AccountingSetups.Add(new AccountingSetup
         {
-            ModuleCode = "CNT", Year = 2026, PeriodNumber = 3, StartDate = new DateOnly(2026, 3, 1), EndDate = new DateOnly(2026, 3, 31),
-            Status = periodoContableAbierto ? "O" : "C", CreatedBy = "test",
+            CatalogId = catalogo.Id, MovementLevel = 5, Level5Length = 6, Level6Length = 8, NiifGroup = 2, FirstFiscalYear = 2026,
+            MainBranchId = Principal.Id, InitializedAt = Ahora, InitializedBy = "test", CreatedBy = "test",
         });
+        PeriodoContable(2026, 3, periodoContableAbierto);
+
         var i = 0;
         foreach (var code in Db.PayrollConceptDefinitions.Select(c => c.Code).Distinct().ToList())
         {
             i++;
+            var debito = Cuenta($"5105{i:00}", $"Gasto {code}", AccountNature.Debit);
+            var credito = Cuenta($"2505{i:00}", $"Pasivo {code}", AccountNature.Credit);
             Db.PayrollConceptDefinitionAccounts.Add(new PayrollConceptDefinitionAccount
             {
-                ConceptCode = code, CostCenterId = null, DebitAccountId = 1000 + i, CreditAccountId = 2000 + i, CreatedBy = "test",
+                ConceptCode = code, CostCenterId = null, DebitAccountId = debito.Id, CreditAccountId = credito.Id, CreatedBy = "test",
             });
         }
         Db.SaveChanges();
+    }
+
+    /// <summary>Un período mensual del ejercicio (que se crea si no existe), abierto o cerrado.</summary>
+    public AccountingPeriod PeriodoContable(int year, int month, bool abierto = true)
+    {
+        var ejercicio = Db.FiscalYears.FirstOrDefault(f => f.Year == year);
+        if (ejercicio is null)
+        {
+            ejercicio = new FiscalYear { Year = year, CreatedBy = "test" };
+            Db.FiscalYears.Add(ejercicio);
+            Db.SaveChanges();
+        }
+        var inicio = new DateOnly(year, month, 1);
+        var periodo = new AccountingPeriod
+        {
+            FiscalYearId = ejercicio.Id, Month = (byte)month, StartDate = inicio, EndDate = inicio.AddMonths(1).AddDays(-1),
+            Status = abierto ? PeriodStatus.Open : PeriodStatus.Closed, CreatedBy = "test",
+        };
+        Db.AccountingPeriods.Add(periodo);
+        Db.SaveChanges();
+        return periodo;
+    }
+
+    /// <summary>Cuenta de movimiento activa, habilitada para Contabilidad y Nómina; las reglas se piden aparte.</summary>
+    public ChartOfAccount Cuenta(string code, string name, AccountNature nature, bool exigeCentroDeCosto = false, bool exigeTercero = false,
+        AccountingModules modulos = AccountingModules.Accounting | AccountingModules.Payroll)
+    {
+        var c = new ChartOfAccount
+        {
+            Code = code, Name = name, Level = 5, Nature = nature, NiifItemCode = "X", Origin = AccountOrigin.Company, IsMovement = true, IsActive = true,
+            EnabledModules = modulos, RequiresCostCenter = exigeCentroDeCosto, RequiresThirdParty = exigeTercero, CreatedBy = "test",
+        };
+        Db.ChartOfAccounts.Add(c);
+        Db.SaveChanges();
+        return c;
     }
 
     public void PermitirAprobarMismoUsuario()
