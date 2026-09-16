@@ -364,16 +364,18 @@ sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)»
 Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
 copia del mismo manifiesto sin anotaciones de Argo y se borró después.
 
-#### P15 — Feature 009 (contabilidad NIIF): E1 en rama, pendiente de merge, QA y contador
+#### P15 — Feature 009 (contabilidad NIIF): E1 en DEV y QA; pendiente QA por rol, contador y producción
 
-La rama `009-contabilidad-niif` tiene la **entrega E1 completa** (fases 1–8 salvo las e2e
-que exigen Docker): modelo nuevo, contrato `AccountingPoster`, configuración inicial y
-catálogos, plan de cuentas con reglas, digitación de comprobantes (borrador, validación por
-campo, contabilizar, reversar, imprimir), períodos, nómina con terceros institucionales,
-auditoría de ingreso a opciones y 30 permisos. 1.036 pruebas sin contenedores en verde.
-**No está en `develop`, ni en DEV, QA o producción.**
+La **entrega E1 está en `develop`** (merge `6d0c89d`, 2026-09-15) y desplegada en **DEV y QA**
+por el pipeline (`gitops` `9c614c8`, imágenes `api@8f36b0b7…`, `web@0c2fc64c…`). En los dos
+namespaces la API aplicó `ContabilidadNiif` al arrancar y sembró los dos PUC (2.566 entradas),
+205 rubros, 18 tipos de comprobante, 8 documentos cruce y los 30 permisos `Accounting.*`; las 29
+tablas `ACC_*` nuevas están y ninguna heredada queda; `/health/ready` 200 y toda ruta contable
+sin token responde 401. En QA, `coop_prueba` quedó migrada y sembrada igual. Antes del merge el
+diagnóstico de libros dio 0 documentos y 0 movimientos en las tres bases. Pruebas: 1.036 sin
+contenedores y 151 de integración con Docker (1 omitida). **Producción no se tocó.**
 
-Lo que exige al dueño antes del merge (memoria del proyecto y `specs/009-contabilidad-niif/tasks.md`):
+Lo que sigue exigiendo al dueño (memoria del proyecto y `specs/009-contabilidad-niif/tasks.md`):
 
 1. **Designar el segundo revisor** de la migración destructiva `ContabilidadNiif` y anotarlo
    en la cabecera de los dos archivos `*_ContabilidadNiif.cs` (marcador
@@ -385,8 +387,10 @@ Lo que exige al dueño antes del merge (memoria del proyecto y `specs/009-contab
 3. Tras desplegar, en cada cooperativa: iniciar la contabilidad, crear auxiliares, vincular
    EPS/ARL/fondos/cajas/bancos a su persona y **reparametrizar las cuentas por concepto de
    nómina** ([contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md)).
-4. Correr las e2e con Docker (T056, T066, T077, T084, T091) y `NominaE2E` adaptada al
-   nuevo `POST /api/accounting/setup/initialize` antes del merge (T094).
+4. Escribir y correr las e2e contables (T056, T066, T077, T084, T091); `NominaE2E` ya usa
+   `POST /api/accounting/setup/initialize` y las 151 de integración pasan.
+5. QA manual por rol (administrador, Operador, sólo lectura) según `quickstart.md` §4; la
+   interfaz de DEV/QA está detrás de Cloudflare Access y la recorre el usuario.
 
 Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de libros vacíos.
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
