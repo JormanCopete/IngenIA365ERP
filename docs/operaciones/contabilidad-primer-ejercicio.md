@@ -38,7 +38,7 @@ Es **destructiva** (Principio XII): retira las 33 tablas contables heredadas y v
 (diagnóstico corrido desde el nodo antes del merge); **producción se diagnostica antes de promover**, y
 si no da cero, no se despliega. La cabecera
 del archivo lleva el marcador `MIGRACION-DESTRUCTIVA-APROBADA` con la referencia del respaldo
-y **el segundo revisor, que el dueño designa antes del merge**.
+y el segundo revisor (Jorman Copete, designado el 2026-09-17).
 
 Consecuencia operativa: **las cuentas por concepto de nómina hay que volver a
 parametrizarlas** (paso 5) después de iniciar la contabilidad.

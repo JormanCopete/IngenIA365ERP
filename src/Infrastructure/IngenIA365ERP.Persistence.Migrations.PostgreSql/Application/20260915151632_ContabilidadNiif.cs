@@ -20,8 +20,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
     /// <para>
     /// Respaldo: <c>pg_dump</c> de cada base de cooperativa inmediatamente antes de aplicar, en cada
     /// ambiente (runbook de despliegue; en DEV el respaldo es el propio contenedor). Segundo revisor:
-    /// quien el dueño designe en la revisión del PR de la feature 009 (T095); su nombre se anota aquí
-    /// antes del merge a <c>develop</c>.
+    /// Jorman Copete (dueño del producto), designado el 2026-09-17 tras revisar el merge <c>6d0c89d</c> a
+    /// <c>develop</c> y su despliegue en DEV y QA (T095); la promoción a producción sigue exigiendo su autorización expresa.
     /// </para>
     ///
     /// <para>

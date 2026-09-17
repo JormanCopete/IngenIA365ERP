@@ -377,9 +377,8 @@ contenedores y 151 de integración con Docker (1 omitida). **Producción no se t
 
 Lo que sigue exigiendo al dueño (memoria del proyecto y `specs/009-contabilidad-niif/tasks.md`):
 
-1. **Designar el segundo revisor** de la migración destructiva `ContabilidadNiif` y anotarlo
-   en la cabecera de los dos archivos `*_ContabilidadNiif.cs` (marcador
-   `MIGRACION-DESTRUCTIVA-APROBADA`). La migración retira 33 tablas heredadas (vacías en
+1. ~~Designar el segundo revisor~~ Hecho el 2026-09-17: Jorman Copete, anotado en la cabecera de los
+   dos archivos `*_ContabilidadNiif.cs` (marcador `MIGRACION-DESTRUCTIVA-APROBADA`). La migración retira 33 tablas heredadas (vacías en
    los tres ambientes según `diagnostico-libros.sql`) y **vacía `PAY_ConceptDefinitionAccounts`**.
 2. **Validación de los dos PUC por el contador** (`puc-solidario.json` 695 entradas,
    `puc-comercial.json` 1.869) con `POST /api/accounting/catalogs/{code}/validate` en QA
