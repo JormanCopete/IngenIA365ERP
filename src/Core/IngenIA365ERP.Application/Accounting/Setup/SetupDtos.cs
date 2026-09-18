@@ -8,8 +8,6 @@ public sealed record ConfiguracionContableDto(
     string? CatalogCode,
     string? CatalogName,
     byte MovementLevel,
-    byte Level5Length,
-    byte Level6Length,
     byte NiifGroup,
     int FirstFiscalYear,
     Guid? ResultAccountPublicId,

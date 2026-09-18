@@ -12,8 +12,6 @@ public sealed record ConfiguracionContableDto(
     string? CatalogCode,
     string? CatalogName,
     byte MovementLevel,
-    byte Level5Length,
-    byte Level6Length,
     byte NiifGroup,
     int FirstFiscalYear,
     Guid? ResultAccountPublicId,
@@ -32,8 +30,6 @@ public sealed record ConfiguracionContableDto(
 public sealed record InicializarContabilidadRequest(
     string CatalogCode,
     byte MovementLevel,
-    byte Level5Length,
-    byte Level6Length,
     byte NiifGroup,
     int FirstFiscalYear,
     Guid MainBranchPublicId,
@@ -44,8 +40,6 @@ public sealed record InicializacionDto(int Accounts, int Periods);
 public sealed record ActualizarConfiguracionRequest(
     string? CatalogCode,
     byte? MovementLevel,
-    byte? Level5Length,
-    byte? Level6Length,
     byte? NiifGroup,
     Guid? ResultAccountPublicId,
     Guid? MainBranchPublicId,

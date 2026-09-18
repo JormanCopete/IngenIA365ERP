@@ -207,7 +207,7 @@ public sealed class NominaTestData
         Db.SaveChanges();
         Db.AccountingSetups.Add(new AccountingSetup
         {
-            CatalogId = catalogo.Id, MovementLevel = 5, Level5Length = 6, Level6Length = 8, NiifGroup = 2, FirstFiscalYear = 2026,
+            CatalogId = catalogo.Id, MovementLevel = 5, NiifGroup = 2, FirstFiscalYear = 2026,
             MainBranchId = Principal.Id, InitializedAt = Ahora, InitializedBy = "test", CreatedBy = "test",
         });
         PeriodoContable(2026, 3, periodoContableAbierto);

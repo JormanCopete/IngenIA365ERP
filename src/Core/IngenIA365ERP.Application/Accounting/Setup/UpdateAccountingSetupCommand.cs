@@ -20,8 +20,6 @@ namespace IngenIA365ERP.Application.Accounting.Setup;
 public sealed record UpdateAccountingSetupCommand(
     string? CatalogCode,
     byte? MovementLevel,
-    byte? Level5Length,
-    byte? Level6Length,
     byte? NiifGroup,
     Guid? ResultAccountPublicId,
     Guid? MainBranchPublicId,
@@ -57,17 +55,15 @@ public sealed class UpdateAccountingSetupCommandHandler(
         var quien = user.UserName ?? "system";
         var antes = new
         {
-            catalog = setup.Catalog?.Code, setup.MovementLevel, setup.Level5Length, setup.Level6Length, setup.NiifGroup,
+            catalog = setup.Catalog?.Code, setup.MovementLevel, setup.NiifGroup,
             setup.ResultAccountId, setup.MainBranchId, setup.FourEyes, setup.ReconciliationDayTolerance, setup.TaxTolerance,
         };
 
-        // --- lo estructural: catálogo, nivel y longitudes (FR-004) ---
+        // --- lo estructural: catálogo y nivel de movimiento (FR-004); la longitud por nivel es regla fija ---
         var codigoCatalogo = string.IsNullOrWhiteSpace(request.CatalogCode) ? null : request.CatalogCode.Trim().ToUpperInvariant();
         var cambiaCatalogo = codigoCatalogo is not null && !string.Equals(codigoCatalogo, setup.Catalog?.Code, StringComparison.OrdinalIgnoreCase);
         var nivel = request.MovementLevel ?? setup.MovementLevel;
-        var largo5 = request.Level5Length ?? setup.Level5Length;
-        var largo6 = request.Level6Length ?? setup.Level6Length;
-        var cambiaEstructura = cambiaCatalogo || nivel != setup.MovementLevel || largo5 != setup.Level5Length || (nivel == 6 && largo6 != setup.Level6Length);
+        var cambiaEstructura = cambiaCatalogo || nivel != setup.MovementLevel;
 
         if (cambiaEstructura)
         {
@@ -76,7 +72,7 @@ public sealed class UpdateAccountingSetupCommandHandler(
             if (auxiliares > 0 || primerMovimiento is not null)
                 return Result.Failure(AccountingErrors.SetupLocked(auxiliares, primerMovimiento));
 
-            if (CopiaDelCatalogo.ReparoDeLongitudes(nivel, largo5, largo6) is { } reparo)
+            if (CopiaDelCatalogo.ReparoDeNivel(nivel) is { } reparo)
                 return Result.Failure(AccountingErrors.SetupLengthsInvalid(reparo));
 
             if (cambiaCatalogo)
@@ -99,8 +95,6 @@ public sealed class UpdateAccountingSetupCommandHandler(
             }
 
             setup.MovementLevel = nivel;
-            setup.Level5Length = largo5;
-            setup.Level6Length = nivel == 6 ? largo6 : (byte)0;
         }
 
         // --- lo que cambia siempre ---
@@ -131,7 +125,7 @@ public sealed class UpdateAccountingSetupCommandHandler(
 
         await audit.EmitAsync("Accounting.Setup.Updated", nameof(AccountingSetup), setup.PublicId, antes, new
         {
-            catalog = setup.Catalog?.Code, setup.MovementLevel, setup.Level5Length, setup.Level6Length, setup.NiifGroup,
+            catalog = setup.Catalog?.Code, setup.MovementLevel, setup.NiifGroup,
             setup.ResultAccountId, setup.MainBranchId, setup.FourEyes, setup.ReconciliationDayTolerance, setup.TaxTolerance,
         }, ct);
 

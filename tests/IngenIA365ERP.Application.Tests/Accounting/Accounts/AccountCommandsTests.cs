@@ -14,7 +14,7 @@ using NSubstitute;
 namespace IngenIA365ERP.Application.Tests.Accounting.Accounts;
 
 /// <summary>
-/// T060 — US2: las auxiliares cuelgan de su padre con el prefijo y la longitud configurados, sólo
+/// T060 — US2: las auxiliares cuelgan de su padre con su prefijo y la longitud del nivel (7–9 y 10–12), sólo
 /// la del nivel de movimiento recibe reglas, las del catálogo no se editan ni eliminan, con
 /// movimientos las reglas se bloquean, y el buscador sólo ofrece lo que cada módulo puede usar.
 /// </summary>
@@ -31,11 +31,11 @@ public class AccountCommandsTests
         {
             Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
             Referencias.BuscarAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<ReferenciaDeCuenta>>([]));
-            // Un tramo del catálogo: 1 › 11 › 1105 › 110505, ninguna de movimiento (Setup: movimiento en 5, longitud 8).
+            // Un tramo del catálogo: 1 › 11 › 1105 › 110505, ninguna de movimiento (Setup: movimiento en 5; una auxiliar lleva de 7 a 9 dígitos).
             var clase = Catalogo("1", 1, null); var grupo = Catalogo("11", 2, clase); var cuenta = Catalogo("1105", 3, grupo);
             Subcuenta = Catalogo("110505", 4, cuenta);
             var setup = D.Db.AccountingSetups.Single();
-            setup.MovementLevel = 5; setup.Level5Length = 8; setup.Level6Length = 0;
+            setup.MovementLevel = 5;
             D.Db.SaveChanges();
         }
 
@@ -82,7 +82,10 @@ public class AccountCommandsTests
         aux.IsSuccess.Should().BeTrue(aux.Error.Message);
 
         (await e.Creador().Handle(e.Peticion("1105050101", aux.Value), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.LevelNotAllowed");
-        (await e.Creador().Handle(e.Peticion("1105050"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid");
+        (await e.Creador().Handle(e.Peticion("110505"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid", "6 dígitos es la subcuenta: una auxiliar lleva de 7 a 9");
+        (await e.Creador().Handle(e.Peticion("1105050001"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid", "10 dígitos ya son de nivel 6");
+        (await e.Creador().Handle(e.Peticion("1105059"), CancellationToken.None)).IsSuccess.Should().BeTrue("7 dígitos es el mínimo de una auxiliar");
+        (await e.Creador().Handle(e.Peticion("110505999"), CancellationToken.None)).IsSuccess.Should().BeTrue("9 dígitos es el máximo de una auxiliar");
         (await e.Creador().Handle(e.Peticion("11059901"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid");
         (await e.Creador().Handle(e.Peticion("11050501"), CancellationToken.None)).Error.Code.Should().Be("Catalogo.CodigoDuplicado");
         (await e.Creador().Handle(e.Peticion(padre: Guid.NewGuid()), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.ParentNotFound");

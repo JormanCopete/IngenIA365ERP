@@ -20,8 +20,6 @@ namespace IngenIA365ERP.Application.Accounting.Setup;
 public sealed record InitializeAccountingCommand(
     string CatalogCode,
     byte MovementLevel,
-    byte Level5Length,
-    byte Level6Length,
     byte NiifGroup,
     int FirstFiscalYear,
     Guid MainBranchPublicId,
@@ -36,8 +34,6 @@ public sealed class InitializeAccountingCommandValidator : AbstractValidator<Ini
         RuleFor(x => x.NiifGroup).InclusiveBetween((byte)1, (byte)3).WithMessage("El grupo NIIF es 1, 2 o 3.");
         RuleFor(x => x.FirstFiscalYear).InclusiveBetween(2000, 2100);
         RuleFor(x => x.MainBranchPublicId).NotEmpty();
-        RuleFor(x => x).Must(x => CopiaDelCatalogo.ReparoDeLongitudes(x.MovementLevel, x.Level5Length, x.Level6Length) is null)
-            .WithMessage(x => CopiaDelCatalogo.ReparoDeLongitudes(x.MovementLevel, x.Level5Length, x.Level6Length) ?? string.Empty);
     }
 }
 
@@ -53,7 +49,7 @@ public sealed class InitializeAccountingCommandHandler(
         if (await db.AccountingSetups.AnyAsync(s => !s.IsDeleted, ct))
             return Result.Failure<InicializacionDto>(AccountingErrors.SetupAlreadyInitialized);
 
-        if (CopiaDelCatalogo.ReparoDeLongitudes(request.MovementLevel, request.Level5Length, request.Level6Length) is { } reparo)
+        if (CopiaDelCatalogo.ReparoDeNivel(request.MovementLevel) is { } reparo)
             return Result.Failure<InicializacionDto>(AccountingErrors.SetupLengthsInvalid(reparo));
 
         var codigoCatalogo = request.CatalogCode.Trim().ToUpperInvariant();
@@ -76,8 +72,6 @@ public sealed class InitializeAccountingCommandHandler(
         {
             CatalogId = catalogo.Id,
             MovementLevel = request.MovementLevel,
-            Level5Length = request.Level5Length,
-            Level6Length = request.MovementLevel == 6 ? request.Level6Length : (byte)0,
             NiifGroup = request.NiifGroup,
             FirstFiscalYear = request.FirstFiscalYear,
             MainBranchId = sucursal.Id,
@@ -97,7 +91,7 @@ public sealed class InitializeAccountingCommandHandler(
             new
             {
                 catalog = catalogo.Code, catalogVersion = catalogo.Version, movementLevel = request.MovementLevel,
-                level5Length = request.Level5Length, level6Length = setup.Level6Length, niifGroup = request.NiifGroup,
+                niifGroup = request.NiifGroup,
                 firstFiscalYear = request.FirstFiscalYear, mainBranch = sucursal.Name, fourEyes = request.FourEyes,
                 accounts = cuentas.Count, periods = ejercicio.Periods.Count,
             }, ct);

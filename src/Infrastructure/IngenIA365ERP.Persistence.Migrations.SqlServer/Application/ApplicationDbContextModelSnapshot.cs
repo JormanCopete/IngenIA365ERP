@@ -386,12 +386,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<byte>("Level5Length")
-                        .HasColumnType("tinyint");
-
-                    b.Property<byte>("Level6Length")
-                        .HasColumnType("tinyint");
-
                     b.Property<int>("MainBranchId")
                         .HasColumnType("int");
 

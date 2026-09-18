@@ -18,8 +18,6 @@ public class AccountingSetup : AuditableEntity
     /// <summary>5 o 6: el nivel cuyas cuentas reciben movimientos.</summary>
     public byte MovementLevel { get; set; }
 
-    public byte Level5Length { get; set; }
-    public byte Level6Length { get; set; }
 
     /// <summary>1, 2 o 3 (NIIF plenas, NIIF para PYMES, microempresas).</summary>
     public byte NiifGroup { get; set; }

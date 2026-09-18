@@ -98,6 +98,14 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
   operación (la del empleado, del crédito, de la factura), sin importar el alcance de quien la
   ejecuta.
 
+### Session 2026-09-18
+
+- Q: ¿La longitud de los códigos de nivel 5 y 6 se configura por empresa o es fija? → A: Es fija: con
+  movimiento en el nivel 5, las auxiliares llevan entre 7 y 9 dígitos; con movimiento en el nivel 6, las de
+  nivel 5 llevan entre 7 y 9 y las de nivel 6, hijas de una de nivel 5, entre 10 y 12. La configuración
+  sólo pide el nivel de movimiento (FR-003, FR-004, FR-008 ajustados; columnas `Level5Length`/`Level6Length`
+  retiradas con la migración `LongitudDeAuxiliarPorRango`).
+
 ## Alcance
 
 ### Dentro de esta feature
@@ -145,8 +153,8 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
 | Nivel 2 · grupo | 2 dígitos (p. ej. 11 Efectivo y equivalentes). |
 | Nivel 3 · cuenta | 4 dígitos (1105 Caja). |
 | Nivel 4 · subcuenta | 6 dígitos (110505 Caja general). Es hasta donde llegan los catálogos. |
-| Nivel 5 · auxiliar | Cuenta creada por la empresa bajo una subcuenta; longitud configurable (8 dígitos por defecto). |
-| Nivel 6 · sub-auxiliar | Cuenta creada por la empresa bajo una auxiliar; longitud configurable (10 dígitos por defecto). |
+| Nivel 5 · auxiliar | Cuenta creada por la empresa bajo una subcuenta; entre 7 y 9 dígitos (regla fija). |
+| Nivel 6 · sub-auxiliar | Cuenta creada por la empresa bajo una auxiliar de nivel 5; entre 10 y 12 dígitos (regla fija). |
 | Cuenta de movimiento | La del **nivel de movimiento** que la empresa configuró (5 o 6). Es la única que recibe movimientos y la única que otros módulos pueden parametrizar. |
 | Cuenta de agrupación | Toda cuenta que no es de movimiento: niveles 1 a 4 siempre; nivel 5 cuando el nivel de movimiento es 6. |
 | Catálogo | Plantilla de cuentas hasta nivel 4: Solidario, Comercial o el propio de la cooperativa (importado). |
@@ -170,7 +178,7 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
 
 El administrador de una cooperativa recién creada abre «Contabilidad › Configuración inicial»,
 elige el catálogo (Solidario, Comercial o uno propio importado), el nivel de las cuentas de
-movimiento (5 o 6), la longitud de los códigos de esos niveles, el grupo NIIF al que pertenece la
+movimiento (5 o 6), el grupo NIIF al que pertenece la
 empresa, el primer ejercicio y si exige cuatro ojos, y confirma. El sistema crea el plan de cuentas
 completo hasta nivel 4 y deja el módulo listo para crear auxiliares.
 
@@ -746,10 +754,10 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   unicidad, naturaleza y rubro, reportar los errores fila por fila, no dejar nada a medias, y
   ofrecerlo como plantilla adicional sólo cuando está sin errores.
 - **FR-003**: El administrador MUST poder iniciar la contabilidad de la empresa eligiendo
-  catálogo, nivel de movimiento (5 o 6), longitud de los códigos de nivel 5 y 6, grupo NIIF (1, 2
-  o 3), primer ejercicio, cuenta de resultado del ejercicio, sucursal principal y si exige cuatro
+  catálogo, nivel de movimiento (5 o 6), grupo NIIF (1, 2 o 3), primer ejercicio, cuenta de
+  resultado del ejercicio, sucursal principal y si exige cuatro
   ojos; al confirmar, el sistema crea el plan completo hasta nivel 4 y los períodos del ejercicio.
-- **FR-004**: El sistema MUST permitir cambiar catálogo, nivel de movimiento o longitudes sólo
+- **FR-004**: El sistema MUST permitir cambiar catálogo o nivel de movimiento sólo
   mientras no exista ninguna auxiliar ni ningún movimiento, y MUST auditar el cambio con los
   valores anteriores; la regla de cuatro ojos MUST poder cambiarse en cualquier momento, auditada,
   con efecto hacia adelante.
@@ -764,7 +772,8 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 **Plan de cuentas y auxiliares**
 
 - **FR-008**: Una cuenta de nivel N MUST crearse bajo una cuenta existente de nivel N−1 cuyo código
-  sea prefijo del suyo, con la longitud configurada para su nivel y código único en la empresa.
+  sea prefijo del suyo, con la longitud de su nivel (nivel 5: 7 a 9 dígitos; nivel 6: 10 a 12) y
+  código único en la empresa.
 - **FR-009**: El sistema MUST tratar como cuenta de movimiento sólo las del nivel de movimiento
   configurado, y MUST rechazar movimientos y parametrizaciones sobre cualquier otra.
 - **FR-010**: Cada auxiliar MUST tener: nombre, módulos habilitados (Contabilidad, Nómina, Cartera,
@@ -1147,8 +1156,8 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 - **Catálogos**: el equipo transcribe el Comercial desde el Decreto 2650 y el Solidario desde el
   catálogo de la Supersolidaria bajo NIIF, con el rubro NIIF asignado por el equipo; el contador de
   la cooperativa los valida en QA y esa validación es una tarea explícita antes de producción.
-- **Niveles y longitudes**: catálogo hasta nivel 4 (6 dígitos); nivel 5 con 8 dígitos y nivel 6
-  con 10 por defecto, configurables en la inicialización hasta un máximo de 12 dígitos en total.
+- **Niveles y longitudes**: catálogo hasta nivel 4 (6 dígitos); nivel 5 entre 7 y 9 dígitos y nivel
+  6 entre 10 y 12; no se configuran por empresa (aclaración del dueño, 2026-09-18).
 - **Naturaleza y rubro NIIF vienen del catálogo** en cada subcuenta y se heredan hacia abajo; no
   se editan en la empresa.
 - **Nómina es el primer módulo** integrado por el contrato porque es el único en producción; los

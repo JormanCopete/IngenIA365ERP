@@ -52,12 +52,13 @@ parametrizarlas** (paso 5) después de iniciar la contabilidad.
    para las demás. **El contador lo valida antes** (`POST /catalogs/{code}/validate` deja
    `ValidatedAt/By`); la inicialización sin catálogo validado se admite en DEV/QA pero no
    debería ocurrir en producción.
-2. Nivel de movimiento (5 o 6) y longitud de los códigos de nivel 5 y 6 (6 y 8 por defecto).
+2. Nivel de movimiento (5 o 6). La longitud de los códigos no se configura: una auxiliar de nivel 5
+   lleva entre 7 y 9 dígitos y una de nivel 6, hija de una de nivel 5, entre 10 y 12.
 3. Grupo NIIF (1, 2 o 3), primer ejercicio, sucursal principal, cuatro ojos (sí/no),
    tolerancias.
 
 Deja copiados los niveles 1–4 del catálogo en `ACC_ChartOfAccounts` (`Origin = Catalog`), el
-ejercicio con sus doce períodos abiertos y la configuración. **Catálogo, nivel y longitudes
+ejercicio con sus doce períodos abiertos y la configuración. **Catálogo y nivel de movimiento
 sólo cambian mientras no exista ninguna auxiliar ni ningún movimiento.**
 
 ## 4. Auxiliares mínimas

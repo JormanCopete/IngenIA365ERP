@@ -17,7 +17,6 @@ inglés; los que otros módulos referencian por FK **conservan su nombre**.
 |---|---|---|
 | `CatalogId` | FK `ACC_AccountCatalogs` | catálogo con que se inició |
 | `MovementLevel` | tinyint 5 \| 6 | FR-003 |
-| `Level5Length`, `Level6Length` | tinyint (8, 10) | `Level6Length ≤ 12`, `Level5Length > 6`, `Level6Length > Level5Length` |
 | `NiifGroup` | tinyint 1 \| 2 \| 3 | |
 | `FirstFiscalYear` | int | |
 | `ResultAccountId` | FK `ACC_ChartOfAccounts`, nullable | de movimiento; obligatoria al cerrar ejercicio |
@@ -27,7 +26,7 @@ inglés; los que otros módulos referencian por FK **conservan su nombre**.
 | `TaxTolerance` | decimal (1.00) | pesos; FR-065 |
 | `OpeningDocumentId` | FK `ACC_Documents`, nullable | FR-087 |
 | `InitializedAt`, `InitializedBy` | | |
-| `Locked` (calculado) | — | `∃ cuenta Origin=Company ∨ ∃ línea`: bloquea catálogo, nivel y longitudes (FR-004) |
+| `Locked` (calculado) | — | `∃ cuenta Origin=Company ∨ ∃ línea`: bloquea catálogo y nivel de movimiento (FR-004) |
 
 ### `ACC_AccountCatalogs` — `AccountCatalog`
 
@@ -51,7 +50,7 @@ válida, rubro existente, sin duplicados.
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `Code` | nvarchar(12), único **filtrado `[IsDeleted] = 0`** | prefijo del padre; longitud por nivel (FR-008); reinicializar con otro catálogo y recrear un código eliminado insertan de nuevo: una eliminada nunca colisiona |
+| `Code` | nvarchar(12), único **filtrado `[IsDeleted] = 0`** | prefijo del padre; longitud por nivel: 7–9 dígitos en el 5, 10–12 en el 6 (FR-008); reinicializar con otro catálogo y recrear un código eliminado insertan de nuevo: una eliminada nunca colisiona |
 | `Name` | nvarchar(150) | editable siempre |
 | `Level` | tinyint 1..6 | |
 | `Nature` | `D`/`C` | heredada (FR-011) |

@@ -66,7 +66,7 @@ public class SetupCommandsTests
 
         public InitializeAccountingCommandHandler Iniciador() => new(Db, Clock, User, Emisor);
         public UpdateAccountingSetupCommandHandler Actualizador() => new(Db, Clock, User, Emisor);
-        public InitializeAccountingCommand Peticion(byte nivel = 6) => new("PUC-SOLIDARIO", nivel, 8, 10, 2, 2026, Principal.PublicId, false);
+        public InitializeAccountingCommand Peticion(byte nivel = 6) => new("PUC-SOLIDARIO", nivel, 2, 2026, Principal.PublicId, false);
 
         public async Task<Result<InicializacionDto>> IniciarAsync(byte nivel = 6) => await Iniciador().Handle(Peticion(nivel), CancellationToken.None);
 
@@ -115,7 +115,7 @@ public class SetupCommandsTests
         var e2 = new Escenario();
         (await e2.Iniciador().Handle(e2.Peticion() with { CatalogCode = "NOEXISTE" }, CancellationToken.None)).Error.Code.Should().Be("Accounting.Setup.CatalogNotFound");
         (await e2.Iniciador().Handle(e2.Peticion() with { MainBranchPublicId = Guid.NewGuid() }, CancellationToken.None)).Error.Code.Should().Be("Accounting.Setup.BranchNotFound");
-        (await e2.Iniciador().Handle(e2.Peticion() with { Level6Length = 8 }, CancellationToken.None)).Error.Code.Should().Be("Accounting.Setup.LengthsInvalid");
+        (await e2.Iniciador().Handle(e2.Peticion() with { MovementLevel = 7 }, CancellationToken.None)).Error.Code.Should().Be("Accounting.Setup.LengthsInvalid", "el nivel de movimiento es 5 o 6");
         (await e2.Db.ChartOfAccounts.CountAsync()).Should().Be(0, "nada se guarda si falla");
     }
 
@@ -126,13 +126,13 @@ public class SetupCommandsTests
         await e.IniciarAsync();
         e.Auxiliar("11050501", "110505");
 
-        var r = await e.Actualizador().Handle(new UpdateAccountingSetupCommand(null, 5, null, null, null, null, null, true, 3, 1m), CancellationToken.None);
+        var r = await e.Actualizador().Handle(new UpdateAccountingSetupCommand(null, 5, null, null, null, true, 3, 1m), CancellationToken.None);
 
         r.Error.Code.Should().Be("Accounting.Setup.Locked");
         r.Error.Should().BeOfType<ErrorConDatos>();
         r.Error.Message.Should().Contain("1 cuenta(s) auxiliar(es)");
 
-        var soloCuatroOjos = await e.Actualizador().Handle(new UpdateAccountingSetupCommand(null, null, null, null, null, null, null, true, 5, 2m), CancellationToken.None);
+        var soloCuatroOjos = await e.Actualizador().Handle(new UpdateAccountingSetupCommand(null, null, null, null, null, true, 5, 2m), CancellationToken.None);
         soloCuatroOjos.IsSuccess.Should().BeTrue(soloCuatroOjos.Error.Message);
         var setup = await e.Db.AccountingSetups.SingleAsync();
         setup.FourEyes.Should().BeTrue();
@@ -150,7 +150,7 @@ public class SetupCommandsTests
         aux.FirstMovementAt = new DateOnly(2026, 3, 15);
         await e.Db.SaveChangesAsync();
 
-        var r = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-SOLIDARIO", 6, 9, 11, null, null, null, false, 3, 1m), CancellationToken.None);
+        var r = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-SOLIDARIO", 5, null, null, null, false, 3, 1m), CancellationToken.None);
 
         r.Error.Code.Should().Be("Accounting.Setup.Locked");
         r.Error.Message.Should().Contain("2026-03-15");
@@ -167,12 +167,12 @@ public class SetupCommandsTests
         e.Db.AccountCatalogs.Add(comercial);
         await e.Db.SaveChangesAsync();
 
-        var aComercial = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-COMERCIAL", null, null, null, null, null, null, false, 3, 1m), CancellationToken.None);
+        var aComercial = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-COMERCIAL", null, null, null, null, false, 3, 1m), CancellationToken.None);
         aComercial.IsSuccess.Should().BeTrue(aComercial.Error.Message);
         (await e.Db.ChartOfAccounts.CountAsync(a => !a.IsDeleted)).Should().Be(2);
         (await e.Db.ChartOfAccounts.CountAsync(a => a.IsDeleted)).Should().Be(8, "el plan anterior queda retirado, no borrado");
 
-        var deVuelta = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-SOLIDARIO", null, null, null, null, null, null, false, 3, 1m), CancellationToken.None);
+        var deVuelta = await e.Actualizador().Handle(new UpdateAccountingSetupCommand("PUC-SOLIDARIO", null, null, null, null, false, 3, 1m), CancellationToken.None);
         deVuelta.IsSuccess.Should().BeTrue(deVuelta.Error.Message);
         (await e.Db.ChartOfAccounts.CountAsync(a => !a.IsDeleted && a.Code == "1")).Should().Be(1, "el código vuelve a existir entre las vivas");
         (await e.Db.AccountingSetups.SingleAsync()).CatalogId.Should().Be(e.Catalogo.Id);

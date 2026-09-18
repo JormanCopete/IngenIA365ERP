@@ -69,12 +69,7 @@ public static class CopiaDelCatalogo
     }
 
     /// <summary>Longitudes admitidas de las auxiliares: más largas que la subcuenta (6) y dentro del código (12), crecientes por nivel.</summary>
-    public static string? ReparoDeLongitudes(byte movementLevel, byte level5Length, byte level6Length)
-    {
-        if (movementLevel is not (5 or 6)) return "El nivel de movimiento es 5 o 6.";
-        if (level5Length is < 7 or > 12) return "La longitud del nivel 5 va de 7 a 12 dígitos (la subcuenta tiene 6).";
-        if (movementLevel == 6 && (level6Length <= level5Length || level6Length > 12))
-            return $"La longitud del nivel 6 tiene que ser mayor que la del nivel 5 ({level5Length}) y de hasta 12 dígitos.";
-        return null;
-    }
+    /// <summary>Sólo el nivel se configura; la longitud de cada nivel es la regla fija de <see cref="Accounts.LongitudDeAuxiliar"/>.</summary>
+    public static string? ReparoDeNivel(byte movementLevel) =>
+        movementLevel is 5 or 6 ? null : "El nivel de movimiento es 5 o 6.";
 }

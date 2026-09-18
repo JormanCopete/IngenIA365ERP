@@ -24,7 +24,7 @@ public sealed class GetAccountingSetupQueryHandler(IApplicationDbContext db) : I
             .FirstOrDefaultAsync(s => !s.IsDeleted, ct);
         if (setup is null)
         {
-            return Result.Success(new ConfiguracionContableDto(false, null, null, 6, 8, 10, 2, DateTime.UtcNow.Year, null, null, null, null,
+            return Result.Success(new ConfiguracionContableDto(false, null, null, 6, 2, DateTime.UtcNow.Year, null, null, null, null,
                 false, 3, 1m, false, null, null, null, null));
         }
 
@@ -36,7 +36,7 @@ public sealed class GetAccountingSetupQueryHandler(IApplicationDbContext db) : I
             : $"Ya existen {auxiliares} auxiliar(es) y hay movimientos desde el {primerMovimiento:yyyy-MM-dd}.";
 
         return Result.Success(new ConfiguracionContableDto(
-            true, setup.Catalog?.Code, setup.Catalog?.Name, setup.MovementLevel, setup.Level5Length, setup.Level6Length, setup.NiifGroup,
+            true, setup.Catalog?.Code, setup.Catalog?.Name, setup.MovementLevel, setup.NiifGroup,
             setup.FirstFiscalYear, setup.ResultAccount?.PublicId, setup.ResultAccount?.Code, setup.MainBranch?.PublicId, setup.MainBranch?.Name,
             setup.FourEyes, setup.ReconciliationDayTolerance, setup.TaxTolerance, bloqueada, motivo, setup.OpeningDocument?.PublicId,
             setup.InitializedAt, setup.InitializedBy));

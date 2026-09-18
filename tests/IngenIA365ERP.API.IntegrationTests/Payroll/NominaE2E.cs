@@ -96,7 +96,7 @@ public static class NominaE2E
         var sucursalPublicId = sucursales.GetProperty("items").EnumerateArray().First().GetProperty("publicId").GetGuid();
         await CrearAsync(http, tokenAdmin, "/api/accounting/setup/initialize", new
         {
-            catalogCode = "PUC-SOLIDARIO", movementLevel = 5, level5Length = 8, level6Length = 0, niifGroup = 2, firstFiscalYear = 2026,
+            catalogCode = "PUC-SOLIDARIO", movementLevel = 5, niifGroup = 2, firstFiscalYear = 2026,
             mainBranchPublicId = sucursalPublicId, fourEyes = false,
         });
         await CrearAuxiliarAsync(http, tokenAdmin, CuentaDebito, "Sueldos y salarios", "510505");

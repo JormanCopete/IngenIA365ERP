@@ -64,8 +64,7 @@ public sealed class CreateAccountCommandHandler(IApplicationDbContext db, IDateT
         var nivel = (byte)(padre.Level + 1);
         if (nivel < 5) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid("Una auxiliar cuelga de una subcuenta (nivel 4) o de una auxiliar de nivel 5."));
         if (nivel > setup.MovementLevel) return Result.Failure<Guid>(AccountingErrors.AccountLevelNotAllowed(nivel, setup.MovementLevel));
-        var largo = nivel == 5 ? setup.Level5Length : setup.Level6Length;
-        if (codigo.Length != largo) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid($"Una cuenta de nivel {nivel} tiene {largo} dígitos; {codigo} tiene {codigo.Length}."));
+        if (LongitudDeAuxiliar.Reparo(codigo, nivel) is { } reparoDeLargo) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid(reparoDeLargo));
         if (!codigo.StartsWith(padre.Code, StringComparison.Ordinal)) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid($"El código debe empezar por el de su cuenta padre ({padre.Code})."));
 
         var existente = await db.ChartOfAccounts.AsNoTracking().Where(a => a.Code == codigo && !a.IsDeleted).Select(a => a.Name).FirstOrDefaultAsync(ct);

@@ -71,7 +71,7 @@ public sealed class ContabilidadTestData
 
         Setup = new AccountingSetup
         {
-            CatalogId = catalogo.Id, MovementLevel = 5, Level5Length = 6, Level6Length = 8, NiifGroup = 2, FirstFiscalYear = 2026,
+            CatalogId = catalogo.Id, MovementLevel = 5, NiifGroup = 2, FirstFiscalYear = 2026,
             MainBranchId = Principal.Id, TaxTolerance = 5m, InitializedAt = Ahora, InitializedBy = "test", CreatedBy = "test",
         };
         if (iniciada) Db.AccountingSetups.Add(Setup);

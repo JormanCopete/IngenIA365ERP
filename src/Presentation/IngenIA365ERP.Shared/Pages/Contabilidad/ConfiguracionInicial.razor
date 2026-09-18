@@ -8,7 +8,7 @@
 <PageTitle>Configuración contable - IngenIA365ERP</PageTitle>
 
 @* Feature 009, US1 (FR-003, FR-004): una sola vez se elige catálogo, nivel de movimiento,
-   longitudes, grupo NIIF, primer ejercicio, sucursal principal y cuatro ojos. Después, lo
+   grupo NIIF, primer ejercicio, sucursal principal y cuatro ojos. Después, lo
    estructural queda bloqueado con la primera auxiliar o el primer movimiento y la pantalla lo
    dice; cuatro ojos, cuenta de resultado y tolerancias cambian siempre. *@
 <PermissionGate Required="Accounting.Setup.View" MostrarAviso="true">
@@ -56,18 +56,12 @@
             </SfDropDownList>
             <span class="hint">Sólo las cuentas de este nivel reciben movimientos y se parametrizan en otros módulos.</span>
         </div>
-        <div class="campo">
-            <label>Longitud del nivel 5 <span class="obligatorio">*</span></label>
-            <SfNumericTextBox TValue="int" @bind-Value="_modelo.Level5Length" Min="7" Max="12" Format="N0" Enabled="@Estructural" />
-            <span class="hint">Dígitos del código de una auxiliar (la subcuenta tiene 6).</span>
+        <div class="campo campo-ancho">
+            <label>Longitud de los códigos</label>
+            <p class="texto-apoyo">El catálogo llega a la subcuenta (nivel 4, 6 dígitos). Las auxiliares de nivel 5 llevan <strong>entre 7 y 9 dígitos</strong>
+                @if (_modelo.MovementLevel == 6) { <text>y las sub-auxiliares de nivel 6, hijas de una de nivel 5, <strong>entre 10 y 12</strong></text> }
+                ; el código siempre empieza por el de su cuenta padre. No se configura: es la regla del plan.</p>
         </div>
-        @if (_modelo.MovementLevel == 6)
-        {
-            <div class="campo">
-                <label>Longitud del nivel 6 <span class="obligatorio">*</span></label>
-                <SfNumericTextBox TValue="int" @bind-Value="_modelo.Level6Length" Min="8" Max="12" Format="N0" Enabled="@Estructural" />
-            </div>
-        }
         <div class="campo">
             <label>Grupo NIIF <span class="obligatorio">*</span></label>
             <SfDropDownList TValue="byte" TItem="OpcionNivel" @bind-Value="_modelo.NiifGroup" DataSource="@_grupos">
@@ -157,8 +151,6 @@
 
         _modelo.CatalogCode = _config.CatalogCode ?? _catalogos.FirstOrDefault(c => c.Code == "PUC-SOLIDARIO")?.Code ?? _catalogos.FirstOrDefault()?.Code;
         _modelo.MovementLevel = _config.MovementLevel;
-        _modelo.Level5Length = _config.Level5Length;
-        _modelo.Level6Length = _config.Level6Length == 0 ? 10 : _config.Level6Length;
         _modelo.NiifGroup = _config.NiifGroup;
         _modelo.FirstFiscalYear = _config.FirstFiscalYear;
         _modelo.MainBranchPublicId = _config.MainBranchPublicId ?? (_sucursales.Count == 1 ? _sucursales[0].PublicId : null);
@@ -184,7 +176,7 @@
         }
         using var guardado = _guardado.Iniciar();
         var r = await Contabilidad.InicializarAsync(new InicializarContabilidadRequest(
-            _modelo.CatalogCode, _modelo.MovementLevel, (byte)_modelo.Level5Length, (byte)_modelo.Level6Length, _modelo.NiifGroup,
+            _modelo.CatalogCode, _modelo.MovementLevel, _modelo.NiifGroup,
             _modelo.FirstFiscalYear, _modelo.MainBranchPublicId.Value, _modelo.FourEyes));
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo iniciar la contabilidad."); return; }
         await Notification.SuccessAsync($"Contabilidad iniciada: {r.Value!.Accounts} cuentas del catálogo y {r.Value.Periods} períodos abiertos.");
@@ -196,7 +188,6 @@
         using var guardado = _guardado.Iniciar();
         var r = await Contabilidad.ActualizarConfiguracionAsync(new ActualizarConfiguracionRequest(
             Estructural ? _modelo.CatalogCode : null, Estructural ? _modelo.MovementLevel : null,
-            Estructural ? (byte)_modelo.Level5Length : null, Estructural ? (byte)_modelo.Level6Length : null,
             _modelo.NiifGroup, _modelo.ResultAccountPublicId, _modelo.MainBranchPublicId, _modelo.FourEyes,
             _modelo.ReconciliationDayTolerance, _modelo.TaxTolerance));
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la configuración."); return; }
@@ -208,8 +199,6 @@
     {
         public string? CatalogCode { get; set; }
         public byte MovementLevel { get; set; } = 6;
-        public int Level5Length { get; set; } = 8;
-        public int Level6Length { get; set; } = 10;
         public byte NiifGroup { get; set; } = 2;
         public int FirstFiscalYear { get; set; } = DateTime.Today.Year;
         public Guid? MainBranchPublicId { get; set; }

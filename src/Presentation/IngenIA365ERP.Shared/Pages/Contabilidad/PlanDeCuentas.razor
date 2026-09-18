@@ -59,7 +59,7 @@
                             }
                             else
                             {
-                                <p class="texto-apoyo">@(PuedeColgar(_seleccion) ? $"Las auxiliares cuelgan de aquí: código de {LargoDelSiguienteNivel(_seleccion)} dígitos que empieza por {_seleccion.Code}." : MotivoNoColgar(_seleccion))</p>
+                                <p class="texto-apoyo">@(PuedeColgar(_seleccion) ? $"Las auxiliares cuelgan de aquí: código de {LargoDelSiguienteNivel(_seleccion)} que empieza por {_seleccion.Code}." : MotivoNoColgar(_seleccion))</p>
                             }
                             @if (_ficha.References.Count > 0)
                             {
@@ -102,7 +102,7 @@
             <div class="pagina">
                 @if (_editando is null)
                 {
-                    <p class="texto-apoyo">Cuelga de <strong>@_seleccion?.Code @_seleccion?.Name</strong>. El código empieza por @_seleccion?.Code y tiene la longitud configurada para su nivel.</p>
+                    <p class="texto-apoyo">Cuelga de <strong>@_seleccion?.Code @_seleccion?.Name</strong>. El código empieza por @_seleccion?.Code y lleva @(_seleccion is null ? "" : LongitudDeAuxiliar.Texto(_seleccion.Level + 1)).</p>
                     <CampoCodigo Catalogo="cuentas" @bind-Value="_codigo" Largo="12" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
                 }
                 else
@@ -167,7 +167,6 @@
     private string _nombre = "";
     private ReglasDeCuentaModelo _reglas = new();
     private byte _nivelDeMovimiento = 6;
-    private int _largoNivel5 = 8, _largoNivel6 = 10;
     private List<EventoDeCuentaDto> _historial = [];
 
     // Misma lista mientras no cambien los datos ni el filtro: el arbol reindexa solo cuando recibe otra referencia.
@@ -189,12 +188,7 @@
     protected override async Task OnInitializedAsync()
     {
         var config = await Contabilidad.ObtenerConfiguracionAsync();
-        if (config.IsSuccess && config.Value!.Initialized)
-        {
-            _nivelDeMovimiento = config.Value.MovementLevel;
-            _largoNivel5 = config.Value.Level5Length;
-            _largoNivel6 = config.Value.Level6Length;
-        }
+        if (config.IsSuccess && config.Value!.Initialized) _nivelDeMovimiento = config.Value.MovementLevel;
         await CargarAsync();
     }
 
@@ -230,7 +224,8 @@
         _ => $"El nivel de movimiento es {_nivelDeMovimiento}: bajo esta cuenta ya no cabe otro nivel.",
     };
 
-    private int LargoDelSiguienteNivel(CuentaNodoDto n) => n.Level + 1 == 5 ? _largoNivel5 : _largoNivel6;
+    /// <summary>La regla fija por nivel («entre 7 y 9 dígitos»), la misma que aplica el servidor.</summary>
+    private static string LargoDelSiguienteNivel(CuentaNodoDto n) => LongitudDeAuxiliar.Texto(n.Level + 1);
 
     private async Task AbrirNuevaBajo(CuentaNodoDto nodo)
     {
