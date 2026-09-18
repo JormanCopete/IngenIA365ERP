@@ -982,11 +982,31 @@ input[type="checkbox"], input[type="radio"] {
 .pie-de-totales { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--gap-lg); padding: var(--pad-sm) var(--pad-md); border-top: 2px solid var(--borde-fuerte); font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
 .pie-de-totales .diferencia { color: var(--peligro-texto); }
 .pie-de-totales .cuadrado { color: var(--exito-texto); }
-/* Árbol del plan de cuentas: las de movimiento se distinguen de las de agrupación. */
-.arbol-cuentas .cuenta-agrupacion { font-weight: var(--peso-medio); }
+/* Árbol del plan de cuentas (Components/Contabilidad/ArbolDeCuentas.razor): HTML propio, una fila por
+   cuenta visible; la sangría sale del nivel (--nivel). Las de agrupación en negrita, las de movimiento
+   normales, las inactivas tachadas; la elegida resaltada y las coincidencias del buscador marcadas. */
+.arbol-cuentas { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.arbol-buscador { display: flex; align-items: center; gap: var(--gap-md); flex-wrap: wrap; }
+.arbol-buscador input { flex: 1 1 280px; max-width: 480px; }
+.arbol-filas { overflow-y: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-0); }
+.arbol-fila { display: flex; align-items: center; gap: var(--gap-sm); padding: var(--pad-xs) var(--pad-sm); padding-left: calc(var(--pad-sm) + var(--nivel, 0) * 1.25rem); border-bottom: 1px solid var(--borde-suave, var(--borde)); cursor: pointer; user-select: none; }
+.arbol-fila:hover { background: var(--superficie-1); }
+.arbol-fila.elegida { background: var(--acento-suave); box-shadow: inset 3px 0 0 var(--acento); }
+.arbol-fila:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+.arbol-fila.coincide .codigo, .arbol-fila.coincide .nombre { font-weight: var(--peso-fuerte); }
+.arbol-fila .codigo { font-family: var(--fuente-mono); min-width: 7.5rem; }
+.arbol-fila .nombre { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arbol-fila .arbol-tipo { flex: 0 0 auto; font-size: var(--texto-xs); }
+.arbol-flecha { flex: 0 0 1.25rem; width: 1.25rem; height: 1.25rem; padding: 0; border: 0; background: transparent; color: var(--texto-secundario); cursor: pointer; font-size: var(--texto-sm); line-height: 1; }
+.arbol-hoja { display: inline-block; }
+.arbol-vacio { padding: var(--pad-md); margin: 0; }
+.arbol-cuentas .cuenta-agrupacion .nombre { font-weight: var(--peso-medio); }
 .arbol-cuentas .cuenta-movimiento { color: var(--texto-primario); }
 .arbol-cuentas .cuenta-inactiva { color: var(--texto-tenue); text-decoration: line-through; }
-.arbol-cuentas .codigo { font-family: var(--fuente-mono); margin-right: var(--gap-sm); }
+/* Plan de cuentas: árbol a la izquierda y ficha a la derecha, para elegir sin perder el sitio. */
+.disposicion-plan { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--gap-lg); align-items: start; }
+.disposicion-plan .info-card { position: sticky; top: var(--pad-md); }
+@media (max-width: 1000px) { .disposicion-plan { grid-template-columns: minmax(0, 1fr); } .disposicion-plan .info-card { position: static; } }
 /* Guía de pasos de la configuración inicial: qué va antes de qué, y por dónde va la persona. */
 .guia-de-pasos { display: flex; flex-direction: column; gap: var(--gap-sm); margin-bottom: var(--pad-lg); }
 .guia-de-pasos .paso { display: flex; align-items: flex-start; gap: var(--gap-md); padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }

@@ -1,7 +1,6 @@
 @page "/contabilidad/catalogos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Contabilidad
-@using Syncfusion.Blazor.TreeGrid
 @inject ContabilidadClient Contabilidad
 @inject INotificationService Notification
 
@@ -19,7 +18,8 @@
 </div>
 
 <IndicadorDeCarga Cargando="@_carga.Activa">
-<SfGrid TValue="CatalogoContableDto" DataSource="@_catalogos" AllowSorting="true" RowSelected="@SeleccionarAsync">
+<SfGrid TValue="CatalogoContableDto" DataSource="@_catalogos" AllowSorting="true">
+    <GridEvents TValue="CatalogoContableDto" RowSelected="@SeleccionarAsync" />
     <GridColumns>
         <GridColumn Field="Code" HeaderText="Código" Width="150" />
         <GridColumn Field="Name" HeaderText="Nombre" Width="300" />
@@ -63,17 +63,24 @@
         </SfDropDownList>
     </div>
     <IndicadorDeCarga Cargando="@_cargaEntradas.Activa">
+    @* Lista plana filtrable en el cliente (prefijo de código o nombre) con sangría por nivel: hasta 1 900
+       filas del PUC comercial; se pintan como mucho @TopeDeFilas y se pide afinar el filtro para ver más. *@
     <div class="arbol-cuentas">
-        <SfTreeGrid TValue="EntradaDeCatalogoDto" DataSource="@_entradas" IdMapping="Code" ParentIdMapping="ParentCode" TreeColumnIndex="0"
-                    AllowFiltering="true" AllowSorting="false" Height="480px" EnableCollapseAll="true">
-            <TreeGridColumns>
-                <TreeGridColumn Field="Code" HeaderText="Código" Width="160" />
-                <TreeGridColumn Field="Name" HeaderText="Nombre" Width="360" />
-                <TreeGridColumn Field="Level" HeaderText="Nivel" Width="80" TextAlign="TextAlign.Center" />
-                <TreeGridColumn Field="Nature" HeaderText="Naturaleza" Width="110" />
-                <TreeGridColumn Field="NiifItemCode" HeaderText="Rubro NIIF" Width="160" />
-            </TreeGridColumns>
-        </SfTreeGrid>
+        <div class="arbol-buscador">
+            <input class="e-input" type="search" placeholder="Código (prefijo) o nombre" value="@_filtroEntradas" @oninput="@(e => _filtroEntradas = e.Value?.ToString() ?? "")" />
+            <span class="texto-tenue">@EntradasFiltradas.Count de @_entradas.Count entradas@(EntradasFiltradas.Count > TopeDeFilas ? $" · se muestran {TopeDeFilas}; afine el filtro" : "")</span>
+        </div>
+        <div class="arbol-filas" style="max-height:480px">
+            @foreach (var e in EntradasFiltradas.Take(TopeDeFilas))
+            {
+                <div class="arbol-fila @(e.Level <= 3 ? "cuenta-agrupacion" : "")" style="--nivel:@(e.Level - 1)">
+                    <span class="arbol-flecha arbol-hoja"></span>
+                    <span class="codigo">@e.Code</span>
+                    <span class="nombre">@e.Name</span>
+                    <span class="texto-apoyo arbol-tipo">nivel @e.Level · @(e.Nature == "Debit" ? "débito" : "crédito") · @e.NiifItemCode</span>
+                </div>
+            }
+        </div>
     </div>
     </IndicadorDeCarga>
 }
@@ -133,6 +140,28 @@
     private List<EntradaDeCatalogoDto> _entradas = [];
     private List<CuentaNuevaDeCatalogoDto> _novedades = [];
     private byte? _nivel;
+    private string _filtroEntradas = "";
+    private const int TopeDeFilas = 400;
+
+    private List<EntradaDeCatalogoDto> EntradasFiltradas
+    {
+        get
+        {
+            var t = _filtroEntradas.Trim();
+            if (t.Length == 0) return _entradas;
+            if (t.All(char.IsDigit)) return _entradas.Where(e => e.Code.StartsWith(t, StringComparison.Ordinal)).ToList();
+            var sin = SinAcentos(t);
+            return _entradas.Where(e => SinAcentos(e.Name).Contains(sin, StringComparison.OrdinalIgnoreCase) || e.Code.Contains(t, StringComparison.Ordinal)).ToList();
+        }
+    }
+
+    private static string SinAcentos(string texto)
+    {
+        var sb = new System.Text.StringBuilder(texto.Length);
+        foreach (var c in texto.Normalize(System.Text.NormalizationForm.FormD))
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) sb.Append(c);
+        return sb.ToString();
+    }
     private bool _importando, _confirmarRetiro;
     private CatalogoContableDto? _aRetirar;
     private string _nombreImportacion = "";
@@ -166,6 +195,7 @@
         var r = await Contabilidad.ListarEntradasDeCatalogoAsync(_seleccionado.Code, _nivel);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cargar las cuentas."); return; }
         _entradas = [.. r.Value!];
+        _filtroEntradas = "";
     }
 
     private async Task ValidarAsync(CatalogoContableDto c)

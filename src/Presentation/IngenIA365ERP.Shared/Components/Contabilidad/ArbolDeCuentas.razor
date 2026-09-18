@@ -1,64 +1,209 @@
+@using System.Globalization
+@using System.Text
 @using IngenIA365ERP.Shared.Services.Contabilidad
-@using Syncfusion.Blazor.TreeGrid
 
-@* Árbol del plan de cuentas (feature 009, US2): las de agrupación en negrita, las de movimiento
-   normales, las inactivas tachadas. El plan completo se carga de una vez (hasta unas 2 000 filas)
-   porque el TreeGrid filtra y colapsa en el cliente; quien lo usa recibe el nodo elegido. *@
+@* Árbol del plan de cuentas (feature 009, US2). Es HTML propio, no un TreeGrid: el plan completo
+   (hasta unas 2 000 filas) vive en memoria y sólo se pintan las filas visibles —las raíces y los
+   hijos de lo expandido—, así que expandir un nivel no cuesta nada y no llama al servidor.
+   Expandir y seleccionar son gestos distintos: la flecha abre, la fila elige. El buscador filtra
+   en el cliente por prefijo de código o por nombre (sin acentos), deja visibles sólo las
+   coincidencias con sus antecesores y las expande; Enter en el buscador elige la primera. *@
 <div class="arbol-cuentas">
-    <SfTreeGrid @ref="_grid" TValue="CuentaNodoDto" DataSource="@Nodos" IdMapping="PublicId" ParentIdMapping="ParentPublicId" TreeColumnIndex="0"
-                AllowFiltering="true" AllowSorting="false" Height="@Alto" EnableCollapseAll="true" RowSelected="@Seleccionar">
-        <TreeGridColumns>
-            <TreeGridColumn Field="Code" HeaderText="Código" Width="180">
-                <Template>
-                    @{
-                        var n = (CuentaNodoDto)context;
-                        <span class="@Clase(n)"><span class="codigo">@n.Code</span></span>
-                    }
-                </Template>
-            </TreeGridColumn>
-            <TreeGridColumn Field="Name" HeaderText="Nombre" Width="360">
-                <Template>
-                    @{
-                        var n = (CuentaNodoDto)context;
-                        <span class="@Clase(n)">@n.Name</span>
-                    }
-                </Template>
-            </TreeGridColumn>
-            <TreeGridColumn Field="Level" HeaderText="Nivel" Width="70" TextAlign="TextAlign.Center" />
-            <TreeGridColumn Field="Nature" HeaderText="Nat." Width="80" />
-            <TreeGridColumn HeaderText="Tipo" Width="120">
-                <Template>
-                    @{
-                        var n = (CuentaNodoDto)context;
-                        <span class="texto-apoyo">@(n.IsMovement ? "Movimiento" : "Agrupación")@(n.Origin == "Company" ? " · propia" : "")</span>
-                    }
-                </Template>
-            </TreeGridColumn>
-            <TreeGridColumn HeaderText="Estado" Width="90">
-                <Template>
-                    @{
-                        var n = (CuentaNodoDto)context;
-                        <span class="@(n.IsActive ? "" : "texto-tenue")">@(n.IsActive ? "Activa" : "Inactiva")</span>
-                    }
-                </Template>
-            </TreeGridColumn>
-        </TreeGridColumns>
-    </SfTreeGrid>
+    <div class="arbol-buscador">
+        <input class="e-input" type="search" placeholder="Código (prefijo) o nombre de la cuenta" value="@_termino" @oninput="Filtrar" @onkeydown="TeclaEnBuscador" />
+        <span class="texto-tenue">
+            @if (_hayFiltro) { <text>@_coincidencias.Count coincidencia@(_coincidencias.Count == 1 ? "" : "s")</text> }
+            else { <text>@Nodos.Count cuentas</text> }
+        </span>
+        <button type="button" class="enlace" @onclick="ColapsarTodo" title="Colapsar todo">Colapsar</button>
+        <button type="button" class="enlace" @onclick="() => ExpandirHasta(4)" title="Expandir hasta las subcuentas (nivel 4)">Expandir hasta 4</button>
+    </div>
+    <div class="arbol-filas" style="max-height:@Alto" role="tree">
+        @if (_hayFiltro && _coincidencias.Count == 0)
+        {
+            <p class="texto-tenue arbol-vacio">Ninguna cuenta empieza por ese código ni lleva ese nombre.</p>
+        }
+        else
+        {
+            @foreach (var raiz in Raices()) { @Fila(raiz) }
+        }
+    </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public List<CuentaNodoDto> Nodos { get; set; } = [];
     [Parameter] public string Alto { get; set; } = "560px";
+    [Parameter] public Guid? SeleccionPublicId { get; set; }
     [Parameter] public EventCallback<CuentaNodoDto?> SeleccionChanged { get; set; }
+    /// <summary>Doble clic o Enter sobre una cuenta de agrupación con sitio para hijas: la página abre «Nueva auxiliar».</summary>
+    [Parameter] public EventCallback<CuentaNodoDto> NuevaAuxiliarPedida { get; set; }
 
-    private SfTreeGrid<CuentaNodoDto>? _grid;
+    private readonly HashSet<Guid> _expandidos = [];
+    private readonly HashSet<Guid> _coincidencias = [];
+    private readonly HashSet<Guid> _visibles = [];
+    private Dictionary<Guid, List<CuentaNodoDto>> _hijos = [];
+    private Dictionary<Guid, CuentaNodoDto> _porId = [];
+    private List<CuentaNodoDto> _raices = [];
+    private List<CuentaNodoDto>? _indexados;
+    private string _termino = "";
+    private bool _hayFiltro;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_indexados, Nodos)) return;
+        _indexados = Nodos;
+        _porId = Nodos.ToDictionary(n => n.PublicId);
+        _hijos = Nodos.Where(n => n.ParentPublicId is not null).GroupBy(n => n.ParentPublicId!.Value).ToDictionary(g => g.Key, g => g.OrderBy(n => n.Code, StringComparer.Ordinal).ToList());
+        _raices = Nodos.Where(n => n.ParentPublicId is null || !_porId.ContainsKey(n.ParentPublicId.Value)).OrderBy(n => n.Code, StringComparer.Ordinal).ToList();
+        _expandidos.RemoveWhere(id => !_porId.ContainsKey(id));
+        if (_hayFiltro) AplicarFiltro();
+        if (SeleccionPublicId is { } sel) MostrarRuta(sel);
+    }
+
+    /// <summary>Expande los antecesores de una cuenta para que quede a la vista (tras crear o al volver a la pantalla).</summary>
+    public void MostrarRuta(Guid publicId)
+    {
+        foreach (var a in Antecesores(publicId)) _expandidos.Add(a);
+    }
+
+    private IEnumerable<CuentaNodoDto> Raices() => _hayFiltro ? _raices.Where(r => _visibles.Contains(r.PublicId)) : _raices;
+
+    private IEnumerable<CuentaNodoDto> Hijos(CuentaNodoDto n)
+    {
+        if (!_hijos.TryGetValue(n.PublicId, out var lista)) return [];
+        return _hayFiltro ? lista.Where(h => _visibles.Contains(h.PublicId)) : lista;
+    }
+
+    private bool TieneHijos(CuentaNodoDto n) => _hijos.ContainsKey(n.PublicId) && (!_hayFiltro || Hijos(n).Any());
+
+    private RenderFragment Fila(CuentaNodoDto n) => __builder =>
+    {
+        var abierto = _expandidos.Contains(n.PublicId);
+        var conHijos = TieneHijos(n);
+        var elegido = SeleccionPublicId == n.PublicId;
+        <div class="arbol-fila @(elegido ? "elegida" : "") @Clase(n) @(_hayFiltro && _coincidencias.Contains(n.PublicId) ? "coincide" : "")" style="--nivel:@(n.Level - 1)" role="treeitem" aria-level="@n.Level" aria-expanded="@(conHijos ? abierto.ToString().ToLowerInvariant() : null)" aria-selected="@elegido.ToString().ToLowerInvariant()" tabindex="0"
+             @onclick="() => ElegirAsync(n)" @ondblclick="() => DobleClicAsync(n)" @onkeydown="e => TeclaEnFilaAsync(e, n)" @onkeydown:preventDefault="false">
+            @if (conHijos)
+            {
+                <button type="button" class="arbol-flecha" @onclick="() => Alternar(n)" @onclick:stopPropagation title="@(abierto ? "Colapsar" : "Expandir")" tabindex="-1">@(abierto ? "▾" : "▸")</button>
+            }
+            else { <span class="arbol-flecha arbol-hoja"></span> }
+            <span class="codigo">@n.Code</span>
+            <span class="nombre">@n.Name</span>
+            <span class="texto-apoyo arbol-tipo">@(n.IsMovement ? "movimiento" : $"nivel {n.Level}")@(n.Origin == "Company" ? " · propia" : "")@(n.IsActive ? "" : " · inactiva")</span>
+        </div>
+        @if (abierto && conHijos)
+        {
+            foreach (var h in Hijos(n)) { @Fila(h) }
+        }
+    };
 
     private static string Clase(CuentaNodoDto n) => n.IsActive ? (n.IsMovement ? "cuenta-movimiento" : "cuenta-agrupacion") : "cuenta-inactiva";
 
-    private Task Seleccionar(RowSelectEventArgs<CuentaNodoDto> args) => SeleccionChanged.InvokeAsync(args.Data);
-
-    public async Task RefrescarAsync()
+    private void Alternar(CuentaNodoDto n)
     {
-        if (_grid is not null) await _grid.RefreshAsync();
+        if (!_expandidos.Remove(n.PublicId)) _expandidos.Add(n.PublicId);
+    }
+
+    private async Task ElegirAsync(CuentaNodoDto n)
+    {
+        if (SeleccionPublicId == n.PublicId) return;
+        await SeleccionChanged.InvokeAsync(n);
+    }
+
+    private async Task DobleClicAsync(CuentaNodoDto n)
+    {
+        if (TieneHijos(n)) { Alternar(n); return; }
+        if (!n.IsMovement) await NuevaAuxiliarPedida.InvokeAsync(n);
+    }
+
+    private async Task TeclaEnFilaAsync(KeyboardEventArgs e, CuentaNodoDto n)
+    {
+        switch (e.Key)
+        {
+            case "ArrowRight": if (TieneHijos(n)) _expandidos.Add(n.PublicId); break;
+            case "ArrowLeft":
+                if (_expandidos.Contains(n.PublicId)) _expandidos.Remove(n.PublicId);
+                else if (n.ParentPublicId is { } p) { _expandidos.Remove(p); if (_porId.TryGetValue(p, out var padre)) await ElegirAsync(padre); }
+                break;
+            case "Enter": case " ": await ElegirAsync(n); break;
+            case "Insert": if (!n.IsMovement) await NuevaAuxiliarPedida.InvokeAsync(n); break;
+        }
+    }
+
+    private void ColapsarTodo() => _expandidos.Clear();
+
+    private void ExpandirHasta(int nivel)
+    {
+        foreach (var n in Nodos.Where(x => x.Level < nivel && _hijos.ContainsKey(x.PublicId))) _expandidos.Add(n.PublicId);
+    }
+
+    // ---------------------------------------------------------------------------- filtro --
+
+    private void Filtrar(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _termino = e.Value?.ToString() ?? "";
+        AplicarFiltro();
+    }
+
+    private void AplicarFiltro()
+    {
+        var t = Normalizar(_termino);
+        _coincidencias.Clear();
+        _visibles.Clear();
+        _hayFiltro = t.Length >= 1;
+        if (!_hayFiltro) return;
+        var porCodigo = t.All(char.IsDigit);
+        foreach (var n in Nodos)
+        {
+            var coincide = porCodigo ? n.Code.StartsWith(t, StringComparison.Ordinal) : Normalizar(n.Name).Contains(t) || n.Code.Contains(t, StringComparison.Ordinal);
+            if (!coincide) continue;
+            _coincidencias.Add(n.PublicId);
+            _visibles.Add(n.PublicId);
+            foreach (var a in Antecesores(n.PublicId)) { _visibles.Add(a); _expandidos.Add(a); }
+        }
+        // Con un prefijo de código las hijas de la coincidencia también se ven (buscar «1105» muestra toda la subcuenta).
+        if (porCodigo)
+            foreach (var id in _coincidencias.ToList()) foreach (var d in Descendientes(id)) _visibles.Add(d);
+    }
+
+    private async Task TeclaEnBuscador(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { _termino = ""; AplicarFiltro(); return; }
+        if (e.Key != "Enter" || !_hayFiltro) return;
+        var primera = Nodos.Where(n => _coincidencias.Contains(n.PublicId)).OrderBy(n => n.Code.Length).ThenBy(n => n.Code, StringComparer.Ordinal).FirstOrDefault();
+        if (primera is null) return;
+        MostrarRuta(primera.PublicId);
+        await ElegirAsync(primera);
+    }
+
+    private IEnumerable<Guid> Antecesores(Guid id)
+    {
+        var actual = _porId.GetValueOrDefault(id);
+        var guarda = 0;
+        while (actual?.ParentPublicId is { } p && _porId.TryGetValue(p, out var padre) && guarda++ < 12)
+        {
+            yield return p;
+            actual = padre;
+        }
+    }
+
+    private IEnumerable<Guid> Descendientes(Guid id)
+    {
+        if (!_hijos.TryGetValue(id, out var lista)) yield break;
+        foreach (var h in lista)
+        {
+            yield return h.PublicId;
+            foreach (var d in Descendientes(h.PublicId)) yield return d;
+        }
+    }
+
+    private static string Normalizar(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return "";
+        var sb = new StringBuilder(texto.Length);
+        foreach (var c in texto.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD))
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark) sb.Append(c);
+        return sb.ToString();
     }
 }

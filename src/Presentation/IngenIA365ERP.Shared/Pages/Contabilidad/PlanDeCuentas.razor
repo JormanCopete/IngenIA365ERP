@@ -16,7 +16,7 @@
         <SfCheckBox @bind-Checked="_soloActivas" Label="Sólo activas" />
         <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
         <PermissionGate Required="Accounting.Accounts.Manage">
-            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(_seleccion is null || _seleccion.Level < 4 || _seleccion.IsMovement)">Nueva auxiliar bajo la seleccionada</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(!PuedeColgar(_seleccion))" title="@MotivoNoColgar(_seleccion)">Nueva auxiliar bajo la seleccionada</SfButton>
         </PermissionGate>
     </div>
 </div>
@@ -28,49 +28,72 @@
     }
     else
     {
-        <ArbolDeCuentas Nodos="@_nodosVisibles" SeleccionChanged="@SeleccionarAsync" />
+        <div class="disposicion-plan">
+            <ArbolDeCuentas @ref="_arbol" Nodos="@_nodosVisibles" SeleccionPublicId="@_seleccion?.PublicId" SeleccionChanged="@SeleccionarAsync" NuevaAuxiliarPedida="@AbrirNuevaBajo" Alto="calc(100vh - 260px)" />
+            <div class="info-card">
+                @if (_seleccion is null)
+                {
+                    <span class="label">Elija una cuenta</span>
+                    <p class="texto-apoyo">Escriba el código o el nombre en el buscador, o abra el árbol con las flechas. La fila elige; la flecha expande. Doble clic (o Insert) sobre una cuenta de agrupación abre «Nueva auxiliar».</p>
+                }
+                else
+                {
+                    <IndicadorDeCarga Cargando="@_cargaFicha.Activa" Compacto="true" Texto="Leyendo la cuenta…">
+                        <span class="label">@_seleccion.Code · @_seleccion.Name</span>
+                        @if (_ficha is not null)
+                        {
+                            <p>
+                                Nivel @_ficha.Level · @(_ficha.IsMovement ? "cuenta de movimiento" : "cuenta de agrupación") · naturaleza @(_ficha.Nature == "Debit" ? "débito" : "crédito") · rubro @_ficha.NiifItemCode
+                                · @(_ficha.Origin == "Catalog" ? "del catálogo" : "propia") · @(_ficha.IsActive ? "activa" : "inactiva")
+                            </p>
+                            @if (_ficha.Locked)
+                            {
+                                <p class="aviso aviso-info">Tiene movimientos desde el @(_ficha.FirstMovementAt?.ToString("yyyy-MM-dd")): sólo pueden cambiar el nombre y el estado; las reglas ya no.</p>
+                            }
+                            @if (_ficha.IsMovement)
+                            {
+                                <p class="texto-apoyo">
+                                    Aplica a: @(string.Join(", ", _ficha.EnabledModules)).
+                                    Exige: @(string.Join(", ", Exigencias(_ficha)) is { Length: > 0 } ex ? ex : "nada más que la sucursal propuesta").
+                                </p>
+                            }
+                            else
+                            {
+                                <p class="texto-apoyo">@(PuedeColgar(_seleccion) ? $"Las auxiliares cuelgan de aquí: código de {LargoDelSiguienteNivel(_seleccion)} dígitos que empieza por {_seleccion.Code}." : MotivoNoColgar(_seleccion))</p>
+                            }
+                            @if (_ficha.References.Count > 0)
+                            {
+                                <p class="texto-apoyo">Parametrizada en: @(string.Join("; ", _ficha.References.Select(r => $"{r.Module} › {r.Where} ({r.Detail})"))).</p>
+                            }
+                            <div class="toolbar">
+                                <PermissionGate Required="Accounting.Accounts.Manage">
+                                    @if (PuedeColgar(_seleccion))
+                                    {
+                                        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva auxiliar</SfButton>
+                                    }
+                                    @if (_ficha.Origin == "Company")
+                                    {
+                                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-edit" OnClick="@AbrirEditar">Editar</SfButton>
+                                    }
+                                    <SfButton CssClass="e-outline e-small" OnClick="@(() => CambiarEstadoAsync(!_ficha.IsActive))">@(_ficha.IsActive ? "Inactivar" : "Reactivar")</SfButton>
+                                    @if (_ficha.Origin == "Company")
+                                    {
+                                        <SfButton CssClass="e-outline e-small e-danger" IconCss="e-icons e-trash" OnClick="@(() => _confirmarEliminar = true)">Eliminar</SfButton>
+                                    }
+                                </PermissionGate>
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" OnClick="@VerHistorialAsync">Historial</SfButton>
+                            </div>
+                        }
+                        else if (!_cargaFicha.Activa)
+                        {
+                            <p class="aviso aviso-error">No se pudo leer la cuenta. Pruebe de nuevo.</p>
+                        }
+                    </IndicadorDeCarga>
+                }
+            </div>
+        </div>
     }
 </IndicadorDeCarga>
-
-@if (_ficha is not null)
-{
-    <div class="info-card">
-        <span class="label">@_ficha.Code · @_ficha.Name</span>
-        <p>
-            Nivel @_ficha.Level · @(_ficha.IsMovement ? "cuenta de movimiento" : "cuenta de agrupación") · naturaleza @(_ficha.Nature == "Debit" ? "débito" : "crédito") · rubro @_ficha.NiifItemCode
-            · @(_ficha.Origin == "Catalog" ? "del catálogo" : "propia") · @(_ficha.IsActive ? "activa" : "inactiva")
-        </p>
-        @if (_ficha.Locked)
-        {
-            <p class="aviso aviso-info">Tiene movimientos desde el @(_ficha.FirstMovementAt?.ToString("yyyy-MM-dd")): sólo pueden cambiar el nombre y el estado; las reglas ya no.</p>
-        }
-        @if (_ficha.IsMovement)
-        {
-            <p class="texto-apoyo">
-                Aplica a: @(string.Join(", ", _ficha.EnabledModules)).
-                Exige: @(string.Join(", ", Exigencias(_ficha)) is { Length: > 0 } ex ? ex : "nada más que la sucursal propuesta").
-            </p>
-        }
-        @if (_ficha.References.Count > 0)
-        {
-            <p class="texto-apoyo">Parametrizada en: @(string.Join("; ", _ficha.References.Select(r => $"{r.Module} › {r.Where} ({r.Detail})"))).</p>
-        }
-        <div class="toolbar">
-            <PermissionGate Required="Accounting.Accounts.Manage">
-                @if (_ficha.Origin == "Company")
-                {
-                    <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@AbrirEditar">Editar</SfButton>
-                }
-                <SfButton CssClass="e-outline" OnClick="@(() => CambiarEstadoAsync(!_ficha.IsActive))">@(_ficha.IsActive ? "Inactivar" : "Reactivar")</SfButton>
-                @if (_ficha.Origin == "Company")
-                {
-                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" OnClick="@(() => _confirmarEliminar = true)">Eliminar</SfButton>
-                }
-            </PermissionGate>
-            <SfButton CssClass="e-flat" IconCss="e-icons e-history" OnClick="@VerHistorialAsync">Historial</SfButton>
-        </div>
-    </div>
-}
 
 <SfDialog @bind-Visible="_mostrarFormulario" Header="@_tituloFormulario" Width="720px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -131,7 +154,8 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaHistorial = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaHistorial = new(), _cargaFicha = new();
+    private ArbolDeCuentas? _arbol;
     private List<CuentaNodoDto> _nodos = [];
     private bool _soloActivas;
     private CuentaNodoDto? _seleccion;
@@ -143,14 +167,34 @@
     private string _nombre = "";
     private ReglasDeCuentaModelo _reglas = new();
     private byte _nivelDeMovimiento = 6;
+    private int _largoNivel5 = 8, _largoNivel6 = 10;
     private List<EventoDeCuentaDto> _historial = [];
 
-    private List<CuentaNodoDto> _nodosVisibles => _soloActivas ? _nodos.Where(n => n.IsActive).ToList() : _nodos;
+    // Misma lista mientras no cambien los datos ni el filtro: el arbol reindexa solo cuando recibe otra referencia.
+    private List<CuentaNodoDto>? _soloActivasCache; private bool _soloActivasCacheDe; private List<CuentaNodoDto>? _nodosCacheDe;
+    private List<CuentaNodoDto> _nodosVisibles
+    {
+        get
+        {
+            if (!_soloActivas) return _nodos;
+            if (_soloActivasCache is null || !ReferenceEquals(_nodosCacheDe, _nodos) || !_soloActivasCacheDe)
+            {
+                _soloActivasCache = _nodos.Where(n => n.IsActive).ToList();
+                _nodosCacheDe = _nodos; _soloActivasCacheDe = true;
+            }
+            return _soloActivasCache;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         var config = await Contabilidad.ObtenerConfiguracionAsync();
-        if (config.IsSuccess && config.Value!.Initialized) _nivelDeMovimiento = config.Value.MovementLevel;
+        if (config.IsSuccess && config.Value!.Initialized)
+        {
+            _nivelDeMovimiento = config.Value.MovementLevel;
+            _largoNivel5 = config.Value.Level5Length;
+            _largoNivel6 = config.Value.Level6Length;
+        }
         await CargarAsync();
     }
 
@@ -163,13 +207,36 @@
         if (_ficha is not null) await SeleccionarAsync(_nodos.FirstOrDefault(n => n.PublicId == _ficha.PublicId));
     }
 
+    /// <summary>La fila elegida: la ficha se lee aparte, con su propio indicador, sin tocar el árbol.</summary>
     private async Task SeleccionarAsync(CuentaNodoDto? nodo)
     {
         _seleccion = nodo;
         _ficha = null;
         if (nodo is null) return;
+        using var carga = _cargaFicha.Iniciar();
         var r = await Contabilidad.ObtenerCuentaAsync(nodo.PublicId);
         if (r.IsSuccess) _ficha = r.Value;
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la cuenta.");
+    }
+
+    /// <summary>FR-011: una auxiliar cuelga de una cuenta de agrupación desde la subcuenta (nivel 4) hacia abajo, mientras quede nivel antes del de movimiento.</summary>
+    private bool PuedeColgar(CuentaNodoDto? n) => n is { IsMovement: false } && n.Level >= 4 && n.Level < _nivelDeMovimiento;
+
+    private string MotivoNoColgar(CuentaNodoDto? n) => n switch
+    {
+        null => "Elija primero la cuenta bajo la que va la auxiliar.",
+        { IsMovement: true } => "Es una cuenta de movimiento: no lleva hijas.",
+        { Level: < 4 } => "Las auxiliares cuelgan de una subcuenta (nivel 4) o de otra auxiliar de agrupación; abra el árbol hasta ahí.",
+        _ => $"El nivel de movimiento es {_nivelDeMovimiento}: bajo esta cuenta ya no cabe otro nivel.",
+    };
+
+    private int LargoDelSiguienteNivel(CuentaNodoDto n) => n.Level + 1 == 5 ? _largoNivel5 : _largoNivel6;
+
+    private async Task AbrirNuevaBajo(CuentaNodoDto nodo)
+    {
+        if (!PuedeColgar(nodo)) { await Notification.WarningAsync(MotivoNoColgar(nodo)); return; }
+        if (_seleccion?.PublicId != nodo.PublicId) await SeleccionarAsync(nodo);
+        AbrirNueva();
     }
 
     private static IEnumerable<string> Exigencias(CuentaDto c)
@@ -189,7 +256,7 @@
         _nombre = "";
         _reglas = new ReglasDeCuentaModelo();
         _esDeMovimiento = _seleccion.Level + 1 == _nivelDeMovimiento;
-        _tituloFormulario = "Nueva auxiliar";
+        _tituloFormulario = $"Nueva auxiliar bajo {_seleccion.Code}";
         _mostrarFormulario = true;
     }
 
@@ -213,6 +280,11 @@
             var r = await Contabilidad.CrearCuentaAsync(_reglas.ARequest(_codigo?.Trim() ?? "", _nombre, _seleccion?.PublicId));
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la cuenta."); return; }
             await Notification.SuccessAsync("Cuenta creada.");
+            _mostrarFormulario = false;
+            await CargarAsync();
+            // La recién creada queda elegida y a la vista bajo su padre.
+            if (_nodos.FirstOrDefault(n => n.PublicId == r.Value!.PublicId) is { } nueva) { _arbol?.MostrarRuta(nueva.PublicId); await SeleccionarAsync(nueva); }
+            return;
         }
         else
         {
