@@ -36,7 +36,7 @@ public sealed class CreateAccountCommandValidator : AbstractValidator<CreateAcco
     public CreateAccountCommandValidator()
     {
         RuleFor(x => x.Code).NotEmpty().MaximumLength(12).Matches("^[0-9]+$").WithMessage("El código de una cuenta es numérico.");
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.ParentPublicId).NotEmpty().WithMessage("Una auxiliar cuelga de una cuenta padre.");
         RuleForEach(x => x.EnabledModules).Must(ModuloContable.EsValido).WithMessage("Módulo desconocido.");
         When(x => x.Tax is not null, () =>
@@ -62,8 +62,17 @@ public sealed class CreateAccountCommandHandler(IApplicationDbContext db, IDateT
 
         var codigo = request.Code.Trim();
         var nivel = (byte)(padre.Level + 1);
-        if (nivel < 5) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid("Una auxiliar cuelga de una subcuenta (nivel 4) o de una auxiliar de nivel 5."));
         if (nivel > setup.MovementLevel) return Result.Failure<Guid>(AccountingErrors.AccountLevelNotAllowed(nivel, setup.MovementLevel));
+        if (nivel < 5)
+        {
+            // Cuenta propia (grupo, cuenta o subcuenta) sólo donde el catálogo no trae hijos: el CUIF
+            // solidario deja así 127 cuentas y 6 grupos (reservas, fondos sociales, provisiones,
+            // excedentes, contras de orden…). Donde sí los define, las auxiliares cuelgan de ellos.
+            var conHijosDelCatalogo = await db.ChartOfAccounts.AsNoTracking()
+                .AnyAsync(a => a.ParentId == padre.Id && !a.IsDeleted && a.Origin == AccountOrigin.Catalog, ct);
+            if (conHijosDelCatalogo)
+                return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid($"Bajo {padre.Code} el catálogo ya define sus cuentas: elija una de ellas. Las cuentas propias van sólo donde el catálogo no trae ninguna."));
+        }
         if (LongitudDeAuxiliar.Reparo(codigo, nivel) is { } reparoDeLargo) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid(reparoDeLargo));
         if (!codigo.StartsWith(padre.Code, StringComparison.Ordinal)) return Result.Failure<Guid>(AccountingErrors.AccountCodeInvalid($"El código debe empezar por el de su cuenta padre ({padre.Code})."));
 
@@ -178,7 +187,7 @@ public sealed class UpdateAccountCommandValidator : AbstractValidator<UpdateAcco
     public UpdateAccountCommandValidator()
     {
         RuleFor(x => x.PublicId).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleForEach(x => x.EnabledModules).Must(ModuloContable.EsValido).WithMessage("Módulo desconocido.");
         When(x => x.Tax is not null, () =>
         {

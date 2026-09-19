@@ -16,7 +16,7 @@
         <SfCheckBox @bind-Checked="_soloActivas" Label="Sólo activas" />
         <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
         <PermissionGate Required="Accounting.Accounts.Manage">
-            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(!PuedeColgar(_seleccion))" title="@MotivoNoColgar(_seleccion)">Nueva auxiliar bajo la seleccionada</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(!PuedeColgar(_seleccion))" title="@MotivoNoColgar(_seleccion)">@(_seleccion is { Level: < 4 } ? "Nueva cuenta propia bajo la seleccionada" : "Nueva auxiliar bajo la seleccionada")</SfButton>
         </PermissionGate>
     </div>
 </div>
@@ -59,7 +59,7 @@
                             }
                             else
                             {
-                                <p class="texto-apoyo">@(PuedeColgar(_seleccion) ? $"Las auxiliares cuelgan de aquí: código de {LargoDelSiguienteNivel(_seleccion)} que empieza por {_seleccion.Code}." : MotivoNoColgar(_seleccion))</p>
+                                <p class="texto-apoyo">@(PuedeColgar(_seleccion) ? (_seleccion.Level < 4 ? $"El catálogo no trae {QueCuelga(_seleccion.Level + 1)} aquí: la empresa crea las suyas, con código de {LargoDelSiguienteNivel(_seleccion)} que empieza por {_seleccion.Code}." : $"Las auxiliares cuelgan de aquí: código de {LargoDelSiguienteNivel(_seleccion)} que empieza por {_seleccion.Code}.") : MotivoNoColgar(_seleccion))</p>
                             }
                             @if (_ficha.References.Count > 0)
                             {
@@ -69,7 +69,7 @@
                                 <PermissionGate Required="Accounting.Accounts.Manage">
                                     @if (PuedeColgar(_seleccion))
                                     {
-                                        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva auxiliar</SfButton>
+                                        <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" OnClick="@AbrirNueva">@(_seleccion.Level < 4 ? "Nueva cuenta propia" : "Nueva auxiliar")</SfButton>
                                     }
                                     @if (_ficha.Origin == "Company")
                                     {
@@ -109,14 +109,14 @@
                 {
                     <p class="texto-apoyo">Código <strong>@_editando.Code</strong> (no cambia).</p>
                 }
-                <SfTextBox @bind-Value="_nombre" Placeholder="Nombre *" MaxLength="150" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_nombre" Placeholder="Nombre *" MaxLength="200" FloatLabelType="FloatLabelType.Always" />
                 @if (_esDeMovimiento)
                 {
                     <ReglasDeCuenta Modelo="@_reglas" SoloLectura="@(_editando?.Locked == true)" />
                 }
                 else
                 {
-                    <p class="hint">Esta auxiliar es de agrupación (el movimiento está en el nivel @_nivelDeMovimiento): las reglas se fijan en sus sub-auxiliares.</p>
+                    <p class="hint">Esta cuenta es de agrupación (el movimiento está en el nivel @_nivelDeMovimiento): las reglas se fijan en las auxiliares que cuelguen de ella.</p>
                 }
             </div>
             </IndicadorDeCarga>
@@ -213,16 +213,25 @@
         else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la cuenta.");
     }
 
-    /// <summary>FR-011: una auxiliar cuelga de una cuenta de agrupación desde la subcuenta (nivel 4) hacia abajo, mientras quede nivel antes del de movimiento.</summary>
-    private bool PuedeColgar(CuentaNodoDto? n) => n is { IsMovement: false } && n.Level >= 4 && n.Level < _nivelDeMovimiento;
+    /// <summary>
+    /// FR-011: una auxiliar cuelga de una cuenta de agrupación desde la subcuenta (nivel 4) hacia abajo,
+    /// mientras quede nivel antes del de movimiento. Por encima del nivel 4 la empresa sólo crea
+    /// cuentas propias donde el catálogo no trae hijos (el CUIF deja así reservas, fondos, provisiones…).
+    /// </summary>
+    private bool PuedeColgar(CuentaNodoDto? n) =>
+        n is { IsMovement: false } && n.Level < _nivelDeMovimiento && (n.Level >= 4 || !TieneHijasDelCatalogo(n));
+
+    private bool TieneHijasDelCatalogo(CuentaNodoDto n) => _nodos.Any(h => h.ParentPublicId == n.PublicId && h.Origin == "Catalog");
 
     private string MotivoNoColgar(CuentaNodoDto? n) => n switch
     {
-        null => "Elija primero la cuenta bajo la que va la auxiliar.",
+        null => "Elija primero la cuenta bajo la que va la nueva.",
         { IsMovement: true } => "Es una cuenta de movimiento: no lleva hijas.",
-        { Level: < 4 } => "Las auxiliares cuelgan de una subcuenta (nivel 4) o de otra auxiliar de agrupación; abra el árbol hasta ahí.",
+        { Level: < 4 } => $"Bajo {n.Code} el catálogo ya define sus {QueCuelga(n.Level + 1)}: abra el árbol y elija una de ellas. Las cuentas propias van sólo donde el catálogo no trae ninguna.",
         _ => $"El nivel de movimiento es {_nivelDeMovimiento}: bajo esta cuenta ya no cabe otro nivel.",
     };
+
+    private static string QueCuelga(int nivel) => nivel switch { 2 => "grupos", 3 => "cuentas", 4 => "subcuentas", _ => "auxiliares" };
 
     /// <summary>La regla fija por nivel («entre 7 y 9 dígitos»), la misma que aplica el servidor.</summary>
     private static string LargoDelSiguienteNivel(CuentaNodoDto n) => LongitudDeAuxiliar.Texto(n.Level + 1);
@@ -251,7 +260,7 @@
         _nombre = "";
         _reglas = new ReglasDeCuentaModelo();
         _esDeMovimiento = _seleccion.Level + 1 == _nivelDeMovimiento;
-        _tituloFormulario = $"Nueva auxiliar bajo {_seleccion.Code}";
+        _tituloFormulario = _seleccion.Level < 4 ? $"Nueva {QueCuelga(_seleccion.Level + 1).TrimEnd('s')} propia bajo {_seleccion.Code}" : $"Nueva auxiliar bajo {_seleccion.Code}";
         _mostrarFormulario = true;
     }
 

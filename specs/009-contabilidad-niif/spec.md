@@ -105,6 +105,13 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
   nivel 5 llevan entre 7 y 9 y las de nivel 6, hijas de una de nivel 5, entre 10 y 12. La configuración
   sólo pide el nivel de movimiento (FR-003, FR-004, FR-008 ajustados; columnas `Level5Length`/`Level6Length`
   retiradas con la migración `LongitudDeAuxiliarPorRango`).
+- Q: El PUC solidario sembrado (transcripción del equipo, 695 códigos) no era el oficial; el dueño
+  entregó el formato SIAC «Catálogo de cuentas» de la Supersolidaria del 2023-11-03 y el anexo de la
+  Resolución 2015110009615 → A: `puc-solidario.json` es ahora el CUIF oficial completo (2.110 cuentas,
+  nombres tal como los publica la Supersolidaria); un catálogo ya sembrado se pone al día cuando el
+  archivo cambia de versión y el plan de una empresa se vuelve a copiar sólo si sigue intacto. Como el
+  CUIF deja 127 cuentas y 6 grupos sin subcuentas, la empresa crea ahí sus **cuentas propias** de 2, 4 o
+  6 dígitos (FR-008 ajustado); donde el catálogo trae hijos, no.
 
 ## Alcance
 
@@ -773,7 +780,11 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 
 - **FR-008**: Una cuenta de nivel N MUST crearse bajo una cuenta existente de nivel N−1 cuyo código
   sea prefijo del suyo, con la longitud de su nivel (nivel 5: 7 a 9 dígitos; nivel 6: 10 a 12) y
-  código único en la empresa.
+  código único en la empresa. Por encima del nivel 5 la empresa MUST poder crear **cuentas propias**
+  (grupo de 2, cuenta de 4 o subcuenta de 6 dígitos) **sólo bajo un nodo del catálogo que no trae
+  hijos** —el CUIF solidario deja así 127 cuentas y 6 grupos: reservas, fondos sociales,
+  provisiones, excedentes, contras de orden—; donde el catálogo sí define hijos, las auxiliares
+  cuelgan de ellos y no se admiten cuentas propias de ese nivel.
 - **FR-009**: El sistema MUST tratar como cuenta de movimiento sólo las del nivel de movimiento
   configurado, y MUST rechazar movimientos y parametrizaciones sobre cualquier otra.
 - **FR-010**: Cada auxiliar MUST tener: nombre, módulos habilitados (Contabilidad, Nómina, Cartera,
@@ -1153,9 +1164,10 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   Grupo 1 o 3 en la inicialización; la conciliación fiscal se hace fuera del módulo con los
   informes exportados. Las bases gravables se guardan por línea y alimentan impuestos, certificados
   y exógena.
-- **Catálogos**: el equipo transcribe el Comercial desde el Decreto 2650 y el Solidario desde el
-  catálogo de la Supersolidaria bajo NIIF, con el rubro NIIF asignado por el equipo; el contador de
-  la cooperativa los valida en QA y esa validación es una tarea explícita antes de producción.
+- **Catálogos**: el equipo transcribe el Comercial desde el Decreto 2650; el Solidario es el CUIF
+  oficial de la Supersolidaria (formato SIAC 2023-11-03, 2.110 cuentas), con el rubro NIIF asignado
+  por el equipo; el contador de la cooperativa los valida en QA y esa validación es una tarea
+  explícita antes de producción.
 - **Niveles y longitudes**: catálogo hasta nivel 4 (6 dígitos); nivel 5 entre 7 y 9 dígitos y nivel
   6 entre 10 y 12; no se configuran por empresa (aclaración del dueño, 2026-09-18).
 - **Naturaleza y rubro NIIF vienen del catálogo** en cada subcuenta y se heredan hacia abajo; no

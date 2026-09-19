@@ -76,8 +76,8 @@ public sealed class ImportAccountCatalogCommandHandler(
             else if (!codigos.Add(codigo))
                 errores.Add(new ErrorDeFila(fila.Numero, "codigo", "Accounting.Catalog.Duplicate", $"El código {codigo} está repetido."));
 
-            if (nombre.Length == 0 || nombre.Length > 150)
-                errores.Add(new ErrorDeFila(fila.Numero, "nombre", "Accounting.Catalog.NameInvalid", "El nombre es obligatorio y de hasta 150 caracteres."));
+            if (nombre.Length == 0 || nombre.Length > 200)
+                errores.Add(new ErrorDeFila(fila.Numero, "nombre", "Accounting.Catalog.NameInvalid", "El nombre es obligatorio y de hasta 200 caracteres."));
             if (naturaleza is not ("D" or "C"))
                 errores.Add(new ErrorDeFila(fila.Numero, "naturaleza", "Accounting.Catalog.NatureInvalid", $"La naturaleza es D o C, no «{naturaleza}»."));
             if (rubro.Length == 0 || !rubros.Contains(rubro))

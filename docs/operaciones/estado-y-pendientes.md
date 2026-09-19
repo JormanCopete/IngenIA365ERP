@@ -380,9 +380,13 @@ Lo que sigue exigiendo al dueño (memoria del proyecto y `specs/009-contabilidad
 1. ~~Designar el segundo revisor~~ Hecho el 2026-09-17: Jorman Copete, anotado en la cabecera de los
    dos archivos `*_ContabilidadNiif.cs` (marcador `MIGRACION-DESTRUCTIVA-APROBADA`). La migración retira 33 tablas heredadas (vacías en
    los tres ambientes según `diagnostico-libros.sql`) y **vacía `PAY_ConceptDefinitionAccounts`**.
-2. **Validación de los dos PUC por el contador** (`puc-solidario.json` 695 entradas,
-   `puc-comercial.json` 1.869) con `POST /api/accounting/catalogs/{code}/validate` en QA
-   (T096): bloqueante para producción.
+2. **Validación de los dos PUC por el contador** (`puc-solidario.json` 2.110 entradas —el CUIF
+   oficial desde el 2026-09-18, formato SIAC 2023-11-03; hasta entonces era una transcripción con
+   695 códigos, varios inexistentes—, `puc-comercial.json` 1.869) con
+   `POST /api/accounting/catalogs/{code}/validate` en QA (T096): bloqueante para producción. Al
+   cambiar la versión del archivo, el arranque pone al día el catálogo sembrado y retira la
+   validación anterior; el plan de una empresa se vuelve a copiar sólo si no tiene cuentas propias
+   ni movimientos (queda en el log).
 3. Tras desplegar, en cada cooperativa: iniciar la contabilidad, crear auxiliares, vincular
    EPS/ARL/fondos/cajas/bancos a su persona y **reparametrizar las cuentas por concepto de
    nómina** ([contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md)).

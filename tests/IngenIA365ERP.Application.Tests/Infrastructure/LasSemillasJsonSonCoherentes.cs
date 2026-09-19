@@ -36,7 +36,7 @@ public class LasSemillasJsonSonCoherentes
 
         var entradas = catalogo.Entradas();
         entradas.Should().HaveCount(codigos.Count);
-        entradas.Should().OnlyContain(e => e.Name.Length > 0 && e.Name.Length <= 150);
+        entradas.Should().OnlyContain(e => e.Name.Length > 0 && e.Name.Length <= 200);
         entradas.Should().OnlyContain(e => e.Nature == AccountNature.Debit || e.Nature == AccountNature.Credit);
         entradas.Where(e => !RubrosValidos.Contains(e.NiifItemCode)).Should().BeEmpty("el rubro tiene que existir en rubros-niif.json");
 

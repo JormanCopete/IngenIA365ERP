@@ -30,8 +30,8 @@ public static class NominaE2E
     public const string ClaveAdmin = "Nomina-Admin-2026!";
     public const string CorreoSoloLectura = "nomina.lectura@coop.nomina.test";
     public const string ClaveSoloLectura = "Nomina-Lectura-2026!";
-    public const string CuentaDebito = "51050501";
-    public const string CuentaCredito = "25050501";
+    public const string CuentaDebito = "51050301";   // bajo 510503 SUELDOS del CUIF
+    public const string CuentaCredito = "27100501";  // bajo 271005 BENEFICIOS A EMPLEADOS A CORTO PLAZO
 
     public sealed class Contexto
     {
@@ -99,8 +99,8 @@ public static class NominaE2E
             catalogCode = "PUC-SOLIDARIO", movementLevel = 5, niifGroup = 2, firstFiscalYear = 2026,
             mainBranchPublicId = sucursalPublicId, fourEyes = false,
         });
-        await CrearAuxiliarAsync(http, tokenAdmin, CuentaDebito, "Sueldos y salarios", "510505");
-        await CrearAuxiliarAsync(http, tokenAdmin, CuentaCredito, "Salarios por pagar", "250505");
+        await CrearAuxiliarAsync(http, tokenAdmin, CuentaDebito, "Sueldos y salarios", "510503");
+        await CrearAuxiliarAsync(http, tokenAdmin, CuentaCredito, "Salarios por pagar", "271005");
 
         // --- cuentas contables para todos los conceptos de la semilla ---
         var conceptos = await LeerAsync(await EnviarAsync(http, tokenAdmin, HttpMethod.Get, "/api/payroll/concept-definitions", null));

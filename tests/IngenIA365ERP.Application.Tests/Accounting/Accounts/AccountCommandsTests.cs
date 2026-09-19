@@ -39,7 +39,7 @@ public class AccountCommandsTests
             D.Db.SaveChanges();
         }
 
-        private ChartOfAccount Catalogo(string code, byte level, ChartOfAccount? padre)
+        public ChartOfAccount Catalogo(string code, byte level, ChartOfAccount? padre)
         {
             var c = new ChartOfAccount { Code = code, Name = $"Cuenta {code}", Level = level, Nature = AccountNature.Debit, ParentId = padre?.Id, NiifItemCode = "ESF-A-EFE", Origin = AccountOrigin.Catalog, IsMovement = false, CreatedBy = "test" };
             D.Db.ChartOfAccounts.Add(c);
@@ -89,6 +89,32 @@ public class AccountCommandsTests
         (await e.Creador().Handle(e.Peticion("11059901"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid");
         (await e.Creador().Handle(e.Peticion("11050501"), CancellationToken.None)).Error.Code.Should().Be("Catalogo.CodigoDuplicado");
         (await e.Creador().Handle(e.Peticion(padre: Guid.NewGuid()), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.ParentNotFound");
+    }
+
+    [Fact]
+    public async Task Bajo_un_nodo_del_catalogo_sin_hijos_la_empresa_crea_su_subcuenta_y_solo_ahi()
+    {
+        // El CUIF solidario deja 127 cuentas y 6 grupos sin subcuentas (reservas, fondos, provisiones…):
+        // la empresa crea las suyas ahí, con el largo exacto del nivel; bajo 1105, que sí trae 110505, no.
+        var e = new Escenario();
+        var patrimonio = e.Catalogo("3", 1, null); var reservas = e.Catalogo("32", 2, patrimonio); var reserva = e.Catalogo("3205", 3, reservas);
+        var pasivos = e.Catalogo("2", 1, null); var diferido = e.Catalogo("25", 2, pasivos);
+        var cuenta1105 = await e.D.Db.ChartOfAccounts.SingleAsync(a => a.Code == "1105");
+
+        var subcuenta = await e.Creador().Handle(e.Peticion("320505", reserva.PublicId), CancellationToken.None);
+        subcuenta.IsSuccess.Should().BeTrue(subcuenta.Error.Message);
+        var propia = await e.D.Db.ChartOfAccounts.SingleAsync(a => a.PublicId == subcuenta.Value);
+        propia.Level.Should().Be(4);
+        propia.IsMovement.Should().BeFalse("el movimiento está en el 5");
+        propia.Origin.Should().Be(AccountOrigin.Company);
+        propia.Nature.Should().Be(reserva.Nature);
+        (await e.Creador().Handle(e.Peticion("32050501", subcuenta.Value), CancellationToken.None)).IsSuccess.Should().BeTrue("de la subcuenta propia cuelgan las auxiliares");
+
+        (await e.Creador().Handle(e.Peticion("2505", diferido.PublicId), CancellationToken.None)).IsSuccess.Should().BeTrue("un grupo sin cuentas admite una cuenta propia de 4 dígitos");
+        (await e.Creador().Handle(e.Peticion("32051", reserva.PublicId), CancellationToken.None)).Error.Code.Should().Be("Accounting.Account.CodeInvalid", "una subcuenta lleva 6 dígitos exactos");
+        var bajo1105 = await e.Creador().Handle(e.Peticion("110599", cuenta1105.PublicId), CancellationToken.None);
+        bajo1105.Error.Code.Should().Be("Accounting.Account.CodeInvalid");
+        bajo1105.Error.Message.Should().Contain("el catálogo ya define sus cuentas");
     }
 
     [Fact]

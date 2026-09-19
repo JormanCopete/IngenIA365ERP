@@ -9,7 +9,7 @@ natural al crear una cooperativa y al arrancar (`SeedOrchestrator`). Quien los l
 | Archivo | Seeder | Orden | Qué siembra |
 |---|---|---|---|
 | `puc-comercial.json` | `AccountCatalogsSeeder` | 58 | Catálogo PUC comercial (Decreto 2650 de 1993) hasta nivel 4 |
-| `puc-solidario.json` | `AccountCatalogsSeeder` | 58 | Catálogo Único de Información Financiera de la Supersolidaria (Resolución 2015110009615) hasta nivel 4 |
+| `puc-solidario.json` | `AccountCatalogsSeeder` | 58 | Catálogo Único de Información Financiera de la Supersolidaria (Resolución 2015110009615 y modificaciones; formato SIAC del 2023-11-03, 2.110 cuentas) hasta nivel 4 |
 | `rubros-niif.json` | `FinancialStatementItemsSeeder` | 59 | Rubros de ESF, ERI, cambios en el patrimonio y flujo de efectivo por grupo NIIF |
 | `voucher-types.json` | `VoucherTypesSeeder` | 60 | Tipos de comprobante: manual, reservados por módulo, apertura, cierre, activos |
 | `cross-document-types.json` | `CrossDocumentTypesSeeder` | 61 | Tipos de documento cruce |
@@ -41,7 +41,11 @@ Los archivos admiten comentarios `//` y coma final: se leen con `ReadCommentHand
 ```
 
 - **Nivel** por longitud del código: 1 → clase, 2 → grupo, 4 → cuenta, 6 → subcuenta. No hay
-  otras longitudes en un catálogo oficial; las auxiliares (5 y 6) las crea la empresa.
+  otras longitudes en un catálogo oficial; las auxiliares (5 y 6) las crea la empresa. Un nodo del
+  catálogo **sin hijos** (el CUIF deja 127 cuentas y 6 grupos así) admite **cuentas propias** de la
+  empresa en el nivel siguiente, con el largo exacto de ese nivel; donde el catálogo trae hijos, no.
+- **Nombres** tal como los publica la norma (el CUIF viene en mayúsculas y con sus marcas «(CR)»/
+  «(DB)»), hasta 200 caracteres.
 - **Padre**: el código sin sus últimos dígitos (`110505` → `1105` → `11` → `1`) y tiene que existir.
 - **Naturaleza**: la de la clase, salvo los prefijos de `exceptions` (deterioros, depreciaciones,
   devoluciones y descuentos, que van contra la naturaleza de su clase).
@@ -68,9 +72,19 @@ permiso `Accounting.Setup.Manage`.
 - Un catálogo oficial que cambia (nueva resolución) es un **archivo nuevo** con otro `version`
   y otro `code` (`PUC-SOLIDARIO-2027`), no una edición del existente: las cooperativas ya
   iniciadas conservan su plan (las cuentas se copian al iniciar, FR-003) y las nuevas eligen.
-- Corregir una errata sí edita el archivo: el seeder sólo inserta lo que falta, así que una
-  cooperativa ya sembrada recibe la entrada nueva pero **no** cambia una existente (D-10, FR-016
-  de la feature 004). Si la corrección es de nombre en una entrada ya sembrada, va por migración
-  de datos con la referencia de la resolución.
+- Corregir el archivo sí edita el archivo, **y cambia `version`**: con la misma versión el seeder
+  no toca un catálogo ya sembrado (lo que el contador validó se respeta); con otra versión
+  `SincronizacionDeCatalogo` lo pone al día en su sitio —corrige nombre, nivel, naturaleza, rubro y
+  padre; inserta lo que falta (o revive lo retirado); retira lo que sobra—, conserva el Id del
+  catálogo, le quita la validación del contador y lo deja en el log. Si una empresa ya copió ese
+  catálogo a su plan y el plan sigue intacto (sin cuentas propias ni movimientos) lo vuelve a copiar;
+  si no, el plan se conserva y el log dice por qué. Así se reemplazó el 2026-09-18 la transcripción
+  del solidario (695 códigos) por el CUIF oficial (2.110).
+- **De dónde sale el solidario**: del formato SIAC «Catálogo de cuentas» que publica la
+  Supersolidaria (Excel, códigos de 6 dígitos rellenos con ceros: `100000` es la clase 1, `110500`
+  la cuenta 1105) y del anexo de la Resolución 2015110009615. Para regenerarlo: normalizar los
+  códigos (quitar los ceros de relleno), limpiar los caracteres de control del Excel, naturaleza
+  contraria donde el nombre lleva «(CR)» en clases débito o «(DB)» en clases crédito (más los
+  deterioros que el formulario no marcó y el 98, contra del 93), y el rubro NIIF por prefijo.
 - El catálogo propio de una cooperativa (importado desde Excel o CSV, U2) no vive aquí: queda en
   `ACC_AccountCatalogs` con `Source = Imported`.

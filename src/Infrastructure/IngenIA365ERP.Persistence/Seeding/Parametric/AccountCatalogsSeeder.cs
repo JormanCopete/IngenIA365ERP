@@ -5,9 +5,11 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <summary>
 /// Los dos catálogos oficiales (feature 009, FR-002; <c>puc-comercial.json</c> y
 /// <c>puc-solidario.json</c>) en <c>ACC_AccountCatalogs</c> con sus entradas. Idempotente por
-/// código de catálogo: un catálogo ya sembrado no se toca (una versión nueva es otro archivo con
-/// otro código, docs/manual/semillas-json.md). Las cuentas de la empresa se copian de aquí al
-/// iniciar la contabilidad; después el catálogo sólo sirve para «cuentas nuevas» (FR-006).
+/// código de catálogo: un catálogo ya sembrado no se toca mientras el archivo traiga la misma
+/// <c>version</c>; si la versión cambia, <see cref="SincronizacionDeCatalogo"/> lo pone al día en
+/// su sitio (una resolución nueva sigue siendo otro archivo con otro código,
+/// docs/manual/semillas-json.md). Las cuentas de la empresa se copian de aquí al iniciar la
+/// contabilidad; después el catálogo sólo sirve para «cuentas nuevas» (FR-006).
 /// </summary>
 public sealed class AccountCatalogsSeeder : IDataSeeder
 {
@@ -22,17 +24,23 @@ public sealed class AccountCatalogsSeeder : IDataSeeder
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
     {
         var db = context.TenantDb!;
-        var existentes = (await db.AccountCatalogs.IgnoreQueryFilters().Select(c => c.Code).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existentes = await db.AccountCatalogs.IgnoreQueryFilters().ToDictionaryAsync(c => c.Code, StringComparer.OrdinalIgnoreCase, ct);
 
         var insertadas = 0;
+        var ahora = DateTime.UtcNow;
         foreach (var json in Catalogos())
         {
-            if (existentes.Contains(json.Code)) continue;
+            if (existentes.TryGetValue(json.Code, out var sembrado))
+            {
+                var r = await SincronizacionDeCatalogo.SincronizarAsync(db, sembrado, json, SeedContext.ParametricCreatedBy, ahora, context.Logger, ct);
+                if (r is not null) insertadas += r.Corregidas + r.Insertadas + r.Retiradas;
+                continue;
+            }
             var catalogo = json.ComoCatalogo(SeedContext.ParametricCreatedBy);
             db.AccountCatalogs.Add(catalogo);
             insertadas += 1 + catalogo.Entries.Count;
         }
-        if (insertadas > 0) await db.SaveChangesAsync(ct);
+        if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync(ct);
         return insertadas;
     }
 }

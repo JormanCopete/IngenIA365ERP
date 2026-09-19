@@ -8,7 +8,7 @@
 
 | Tabla | Filas | Origen |
 |---|---|---|
-| `ACC_AccountCatalogs` | 2: `PUC-SOLIDARIO` (Res. 2015110009615, 695 entradas) y `PUC-COMERCIAL` (Decreto 2650, 1.869 entradas) | `puc-solidario.json`, `puc-comercial.json` |
+| `ACC_AccountCatalogs` | 2: `PUC-SOLIDARIO` (CUIF de la Supersolidaria, Res. 2015110009615 y formato SIAC 2023-11-03, 2.110 entradas) y `PUC-COMERCIAL` (Decreto 2650, 1.869 entradas) | `puc-solidario.json`, `puc-comercial.json` |
 | `ACC_AccountCatalogEntries` | 2.564 | ídem |
 | `ACC_FinancialStatementItems` | 205 (69 rubros × grupos NIIF 1/2/3) | `rubros-niif.json` |
 | `ACC_VoucherTypes` | 18 (`CG` manual, `NM` nómina, `DS`/`RC` cartera, `AP` apertura, `CI` cierre…) | `voucher-types.json` |
@@ -64,7 +64,10 @@ sólo cambian mientras no exista ninguna auxiliar ni ningún movimiento.**
 ## 4. Auxiliares mínimas
 
 `Contabilidad › Plan de cuentas`: elegir la subcuenta de nivel 4 y «Nueva auxiliar bajo la
-seleccionada». Cada auxiliar de nivel de movimiento lleva sus reglas: módulos a los que
+seleccionada». **Donde el CUIF no trae subcuentas** (reservas 32xx, fondos sociales 26xx y 33xx,
+provisiones 28xx, excedentes 3505/3605/3905, y los grupos 25, 29, 53, 86, 88 y 98) el botón dice
+«Nueva cuenta propia»: la empresa crea la subcuenta (o la cuenta) de 6 (o 4) dígitos y de ella
+cuelga la auxiliar. Cada auxiliar de nivel de movimiento lleva sus reglas: módulos a los que
 aplica, exige tercero / documento cruce / centro / sucursal, bancaria (banco y número), de
 impuesto (clase, concepto, base, tarifas con vigencia). **Con movimientos las reglas se
 bloquean**; sólo cambian nombre y estado.

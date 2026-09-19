@@ -13,7 +13,7 @@ public class ChartOfAccountConfiguration : IEntityTypeConfiguration<ChartOfAccou
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_ChartOfAccounts_PublicId");
 
         builder.Property(e => e.Code).HasMaxLength(12).IsRequired();
-        builder.Property(e => e.Name).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(200).IsRequired();   // los nombres oficiales del CUIF llegan a 193
         builder.Property(e => e.Nature).HasConversion<string>().HasMaxLength(10);
         builder.Property(e => e.NiifItemCode).HasMaxLength(20).IsRequired();
         builder.Property(e => e.Origin).HasConversion<string>().HasMaxLength(10);

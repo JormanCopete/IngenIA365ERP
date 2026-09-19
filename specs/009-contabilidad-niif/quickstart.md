@@ -73,13 +73,15 @@ Con tres usuarios de `coop_prueba` (administrador, Operador, sólo lectura) y el
 
 1. **Contador valida los catálogos**: abre Configuración inicial › Catálogos, revisa Solidario y
    Comercial contra la norma (muestreo por clase) y pulsa «Validar»; queda `validatedAt/By`.
-2. **Administrador inicia** con Solidario, nivel 6, longitudes 8/10, grupo 2, ejercicio 2026,
-   sucursal principal, cuatro ojos **activo**; ve el plan hasta nivel 4; intenta cambiar el
+2. **Administrador inicia** con Solidario (CUIF, 2.110 cuentas), nivel 6, grupo 2, ejercicio
+   2026, sucursal principal, cuatro ojos **activo**; ve el plan hasta nivel 4; intenta cambiar el
    nivel tras crear la primera auxiliar → rechazado con la razón.
 3. **Auxiliares**: crea `11050501` (agrupación) y `1105050101` (movimiento, exige sucursal
-   explícita), `13050501` (exige tercero y documento `FV`), `23650501` (impuesto retefuente 4 %,
-   exige base), `51050501` (Nómina, exige centro); Cartera no puede parametrizar `13050501`
-   hasta habilitarla; una de agrupación no se ofrece en ningún buscador.
+   explícita), `16050501` (exige tercero y documento `FV`), `24352501` (impuesto retefuente 4 %,
+   exige base), `51050301` (Nómina, exige centro); Cartera no puede parametrizar `16050501`
+   hasta habilitarla; una de agrupación no se ofrece en ningún buscador. **Cuentas propias**: bajo
+   `3205 RESERVA PROTECCIÓN DE APORTES` (el CUIF no trae subcuentas) crea `320505` y bajo ella
+   `32050501`; bajo `1105` (que sí trae `110505`) el botón no se habilita y dice por qué.
 4. **Operador digita** un comprobante `CG` de 20 líneas sólo con teclado; línea sin tercero
    marcada al salir; base con valor descuadrado avisa; guarda borrador; **no** ve «Contabilizar».
 5. **Administrador contabiliza** el borrador de otro; intenta contabilizar uno propio → cuatro

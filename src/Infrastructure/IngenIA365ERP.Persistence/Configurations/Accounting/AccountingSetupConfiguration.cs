@@ -33,7 +33,7 @@ public class AccountCatalogConfiguration : IEntityTypeConfiguration<AccountCatal
 
         builder.Property(e => e.Code).HasMaxLength(20).IsRequired();
         builder.Property(e => e.Name).HasMaxLength(150).IsRequired();
-        builder.Property(e => e.Version).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.Version).HasMaxLength(40).IsRequired();
         builder.Property(e => e.Source).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.ImportedBy).HasMaxLength(100);
         builder.Property(e => e.ValidatedBy).HasMaxLength(100);
@@ -52,7 +52,7 @@ public class AccountCatalogEntryConfiguration : IEntityTypeConfiguration<Account
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_AccountCatalogEntries_PublicId");
 
         builder.Property(e => e.Code).HasMaxLength(6).IsRequired();
-        builder.Property(e => e.Name).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(200).IsRequired();   // los nombres oficiales del CUIF llegan a 193
         builder.Property(e => e.Nature).HasConversion<string>().HasMaxLength(10);
         builder.Property(e => e.NiifItemCode).HasMaxLength(20).IsRequired();
         builder.Property(e => e.ParentCode).HasMaxLength(6);

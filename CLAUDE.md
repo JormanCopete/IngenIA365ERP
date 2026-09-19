@@ -186,8 +186,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   permiso (`Vouchers.Post`; cuatro ojos opcional por empresa). Toda línea lleva sucursal (la
   propuesta si no viene); el tercero es una **persona** y las entidades institucionales
   (EPS, ARL, fondos, cajas, bancos) se vinculan a la suya (`PersonId`, FR-088). Semillas
-  JSON embebidas: PUC solidario (695) y comercial (1.869) **pendientes de validar por el
-  contador**, 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
+  JSON embebidas: PUC solidario —el **CUIF oficial** de la Supersolidaria, formato SIAC 2023-11-03,
+  2.110 cuentas, desde el 2026-09-18; antes era una transcripción con 695 códigos, varios
+  inexistentes— y comercial (1.869), **pendientes de validar por el contador**; un catálogo
+  sembrado se pone al día al cambiar `version` (`SincronizacionDeCatalogo`: en su sitio, sin
+  duplicar, y el plan se vuelve a copiar sólo si sigue intacto). Los códigos son regla fija por
+  nivel (`LongitudDeAuxiliar`: 2/4/6 exactos; nivel 5 de 7 a 9; nivel 6 de 10 a 12) y **donde el
+  catálogo no trae hijos** (127 cuentas y 6 grupos del CUIF: reservas, fondos, provisiones,
+  excedentes, contras de orden) la empresa crea **cuentas propias** del nivel siguiente; donde sí
+  los trae, no. 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
   (`Operator` digita y exporta, no contabiliza). El ingreso a cada opción del ERP queda en
   la auditoría con módulo `Navigation` (`RegistroDeAccesos` → `POST /api/audit/access`).
   Entregas: E1 (núcleo, esta rama), E2 consultas/cierres/apertura, E3 los otros seis módulos
@@ -250,7 +257,7 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.049 el 2026-09-18 (165 Domain, 753 Application, 76 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas sin contenedores | 1.053 el 2026-09-18 (165 Domain, 757 Application, 76 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
