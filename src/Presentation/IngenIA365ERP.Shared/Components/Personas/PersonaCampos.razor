@@ -23,7 +23,7 @@
                 <label>Número de documento <span class="obligatorio">*</span></label>
                 <SfTextBox @bind-Value="Modelo.TaxId" Placeholder="Número de identificación *" Enabled="@Editable"
                            HtmlAttributes="@Largo(20)" />
-                <ValidationMessage For="@(() => Modelo.TaxId)" />
+                @Mensaje(() => Modelo.TaxId)
             </div>
             <div>
                 <label>Dígito de verificación (NIT)</label>
@@ -39,12 +39,12 @@
             <div>
                 <label>Nombres <span class="obligatorio">*</span></label>
                 <SfTextBox @bind-Value="Modelo.FirstName" Placeholder="Nombres *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
-                <ValidationMessage For="@(() => Modelo.FirstName)" />
+                @Mensaje(() => Modelo.FirstName)
             </div>
             <div>
                 <label>Apellidos <span class="obligatorio">*</span></label>
                 <SfTextBox @bind-Value="Modelo.LastName" Placeholder="Apellidos *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
-                <ValidationMessage For="@(() => Modelo.LastName)" />
+                @Mensaje(() => Modelo.LastName)
             </div>
             <div class="campo-ancho">
                 <label>Razón social (si aplica)</label>
@@ -78,7 +78,7 @@
             <div>
                 <label>Correo electrónico</label>
                 <SfTextBox @bind-Value="Modelo.Email" Placeholder="usuario@dominio.com" Enabled="@Editable" HtmlAttributes="@Largo(120)" />
-                <ValidationMessage For="@(() => Modelo.Email)" />
+                @Mensaje(() => Modelo.Email)
             </div>
             <div>
                 <label>Teléfono principal</label>
@@ -183,7 +183,24 @@
     /// <summary>Se pulsó «Registrar como…»; el argumento es el rol (<c>employee</c>, <c>associate</c>).</summary>
     [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
 
+    /// <summary>
+    /// El EditContext del EditForm que envuelve al formulario, si lo hay. Lo hay en el diálogo
+    /// de Personas; Empleados y Asociados ponen estas secciones dentro de su SfTab sin EditForm
+    /// y validan en código (<c>Validar()</c>). Un <c>ValidationMessage</c> sin EditContext no se
+    /// omite: revienta el render del diálogo entero (QA, 2026-09-18, «Editar empleado»).
+    /// </summary>
+    [CascadingParameter] private EditContext? Contexto { get; set; }
+
     private bool Editable => !Deshabilitado;
+
+    /// <summary>El mensaje de validación del campo, sólo cuando hay un EditForm que lo alimente.</summary>
+    private RenderFragment Mensaje(System.Linq.Expressions.Expression<Func<string?>> campo) => __builder =>
+    {
+        if (Contexto is not null)
+        {
+            <ValidationMessage For="@campo" />
+        }
+    };
 
     private static Dictionary<string, object> Largo(int max) => new() { { "maxlength", max.ToString() } };
 
