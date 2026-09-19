@@ -67,7 +67,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   desde la pantalla respondía un 400 vacío —sin sobre, sin log— antes de llegar al handler. Un
   enum con su propio `[JsonConverter]` (`TipoDeColumna`, que viaja por nombre) queda fuera del
   convertidor global: en STJ el de las opciones pisa al atributo del tipo, y el 2026-09-19
-  Reportes de nómina volvió a caer por eso.
+  Reportes de nómina volvió a caer por eso. Un cuerpo que no se puede leer responde **400 con el
+  sobre** `Request.BodyInvalid` y el motivo («“Lunar” no es un valor de PayrollPeriodicity.
+  Admite: …»): `RouteHandlerOptions.ThrowOnBadRequest = true` en todos los ambientes y el
+  manejador de excepciones lo traduce; antes era un 400 vacío en producción y un 500 en Development.
 - **Menú**: todo `NavLink` del menú apunta a una página con `@page`
   (`TodoEnlaceDelMenuTieneSuPagina`); una ruta sin página muestra «Página no encontrada» con el
   layout mínimo y parece que la app se sale. Los informes contables (E2) y Beneficiarios no
@@ -269,7 +272,7 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
 | Pruebas sin contenedores | 1.060 el 2026-09-19 (165 Domain, 763 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas de integración | 153 el 2026-09-19 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
