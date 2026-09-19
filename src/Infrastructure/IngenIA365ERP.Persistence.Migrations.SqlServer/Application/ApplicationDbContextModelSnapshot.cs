@@ -30901,6 +30901,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("PayrollCompanyId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PayrollPlanId")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -30931,8 +30934,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.HasIndex("PayrollCompanyId", "UvtRangeStart", "UvtRangeEnd")
-                        .IsUnique();
+                    b.HasIndex("PayrollPlanId", "UvtRangeStart", "UvtRangeEnd")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_WithholdingParameters_Plan_Range");
 
                     b.ToTable("PAY_WithholdingParameters", "dbo");
                 });
@@ -34999,6 +35003,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingParameter", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", "PayrollPlan")
+                        .WithMany()
+                        .HasForeignKey("PayrollPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollPlan");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WorkRiskProvider", b =>

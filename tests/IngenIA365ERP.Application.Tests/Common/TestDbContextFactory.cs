@@ -60,6 +60,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<PayrollConceptDefinition> PayrollConceptDefinitions => Set<PayrollConceptDefinition>();
     public DbSet<PayrollConceptDefinitionAccount> PayrollConceptDefinitionAccounts => Set<PayrollConceptDefinitionAccount>();
     public DbSet<PayrollLegalParameter> PayrollLegalParameters => Set<PayrollLegalParameter>();
+    public DbSet<WithholdingParameter> WithholdingParameters => Set<WithholdingParameter>();
     public DbSet<PayrollLegalParameterRange> PayrollLegalParameterRanges => Set<PayrollLegalParameterRange>();
     public DbSet<PayrollNovelty> PayrollNovelties => Set<PayrollNovelty>();
     public DbSet<PayrollRecurringNovelty> PayrollRecurringNovelties => Set<PayrollRecurringNovelty>();
@@ -178,7 +179,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<SeveranceProvider> SeveranceProviders => Set<SeveranceProvider>();
     public DbSet<FamilyCompensationFund> FamilyCompensationFunds => Set<FamilyCompensationFund>();
     DbSet<ConceptAccount> IApplicationDbContext.ConceptAccounts => throw new NotImplementedException();
-    DbSet<WithholdingParameter> IApplicationDbContext.WithholdingParameters => throw new NotImplementedException();
     DbSet<WithholdingCause> IApplicationDbContext.WithholdingCauses => throw new NotImplementedException();
     DbSet<AutoContributionParam> IApplicationDbContext.AutoContributionParams => throw new NotImplementedException();
     // Feature 008: el detalle de la ficha lista movimientos recientes; entra vacío para poder probar by-person.

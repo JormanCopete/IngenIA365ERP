@@ -14,7 +14,12 @@ public class WithholdingParameterConfiguration : IEntityTypeConfiguration<Withho
 
         builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
-        builder.HasIndex(e => new { e.PayrollCompanyId, e.UvtRangeStart, e.UvtRangeEnd }).IsUnique();
+        // Un tramo por plan y rango (2026-09-19: los tramos son del plan de nómina, no de la empresa del legado).
+        builder.HasIndex(e => new { e.PayrollPlanId, e.UvtRangeStart, e.UvtRangeEnd }).IsUnique().HasDatabaseName("UK_PAY_WithholdingParameters_Plan_Range");
+        builder.HasOne(e => e.PayrollPlan)
+            .WithMany()
+            .HasForeignKey(e => e.PayrollPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(e => e.Rate).HasPrecision(17, 4);
 

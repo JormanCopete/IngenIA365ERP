@@ -839,7 +839,7 @@ public static class ManualCatalogo
         t.Add(Maestro("/nomina/arl-tarifas", "Tarifas ARL", Modulos.Nomina, "una tarifa ARL", "Por clase de riesgo.", "arl", "tarifa", "clase de riesgo"));
         t.Add(Maestro("/nomina/pensiones", "Fondos de pensiones", Modulos.Nomina, "un fondo de pensiones", null, "pensiones", "fondo", "afiliacion"));
         t.Add(Maestro("/nomina/cesantias", "Fondos de cesantías", Modulos.Nomina, "un fondo de cesantías", null, "cesantias", "fondo"));
-        t.Add(Maestro("/nomina/parametros-retencion", "Parámetros de retención", Modulos.Nomina, "un parámetro de retención en la fuente por salarios", "Tabla del año, UVT y procedimiento.", "retencion", "salarios", "uvt", "tabla"));
+        t.Add(Maestro("/nomina/parametros-retencion", "Parámetros de retención", Modulos.Nomina, "un tramo de la tabla de retención en la fuente propia de un plan de nómina", "Tramos en UVT y tarifa marginal por plan; si el plan tiene tramos, la liquidación los usa en lugar de la tabla legal RETEFTE_TABLA_UVT.", "retencion", "salarios", "uvt", "tabla", "plan"));
         t.Add(Maestro("/nomina/causas-retencion", "Causas de retención", Modulos.Nomina, "una causa de retención", null, "causas", "retencion"));
         t.Add(Maestro("/nomina/cuentas-concepto", "Cuentas por concepto", Modulos.Nomina, "una cuenta por concepto", "Contra qué cuentas contabiliza cada concepto de nómina.", "cuentas", "concepto", "contabilizacion"));
         t.Add(Maestro("/nomina/parametros-autoaportes", "Parámetros de autoliquidación de aportes", Modulos.Nomina, "un parámetro de autoliquidación", "Porcentajes de salud, pensión, ARL y parafiscales (PILA).", "pila", "autoliquidacion", "aportes", "parafiscales"));

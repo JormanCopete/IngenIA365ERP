@@ -41,6 +41,8 @@ public sealed class RangeTableRule : ICalculationRule
             Novelty = RuleContext.Describe(novelty),
         };
         exp.Step(Bases.Label(baseKind), baseValor);
+        // De dónde salen los tramos: la norma, o la tabla propia del plan de nómina (Parámetros de retención).
+        if (!string.IsNullOrWhiteSpace(tabla.Source)) exp.Note("Tabla", tabla.Source);
 
         var enUnidades = baseValor / unidadValor;
         if (unidadValor != 1m)
