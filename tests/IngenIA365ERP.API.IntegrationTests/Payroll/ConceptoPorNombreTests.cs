@@ -34,8 +34,12 @@ public class ConceptoPorNombreTests(CentralIdentityApiFixture fx)
         var plan = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/plans", new { code = "QUINCENA_QA", name = "Quincenal", periodicity = "Biweekly" });
         plan.StatusCode.Should().Be(HttpStatusCode.Created, await plan.Content.ReadAsStringAsync());
 
-        // Un nombre inexistente sigue siendo un 400 (el binding no llega al handler), no un 500.
+        // Un nombre inexistente es un 400 con el sobre y el motivo (no un 500 ni un 400 vacío): el cuerpo
+        // no llega al handler, lo traduce el manejador de excepciones con ThrowOnBadRequest.
         var malo = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/plans", new { code = "X", name = "X", periodicity = "Lunar" });
         malo.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var sobre = await NominaE2E.LeerAsync(malo);
+        sobre.GetProperty("code").GetString().Should().Be("Request.BodyInvalid");
+        sobre.GetProperty("message").GetString().Should().Contain("Lunar").And.Contain("Monthly");
     }
 }

@@ -124,6 +124,9 @@ try
 
     // Los enums entran por nombre o por número y salen como número (ver EnumPorNombreONumero).
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new IngenIA365ERP.Application.Common.Json.EnumPorNombreONumero()));
+    // Un cuerpo que no se puede leer lanza (en todos los ambientes, no solo en Development) y el
+    // manejador de excepciones lo devuelve como 400 con el sobre y el motivo.
+    builder.Services.Configure<RouteHandlerOptions>(o => o.ThrowOnBadRequest = true);
 
     // CORS
     builder.Services.AddCors(options =>
@@ -386,6 +389,29 @@ try
             {
                 code = IngenIA365ERP.Application.Common.Models.Error.StaleRowVersion.Code,
                 message = conflicto.Message,
+                traceId = contexto.TraceIdentifier,
+            });
+            return;
+        }
+
+        // Un cuerpo que no se pudo leer (JSON malformado, un enum con un nombre que no existe…)
+        // es un 400 con el motivo, no un 500: con ThrowOnBadRequest (abajo) llega aqui en todos los
+        // ambientes y sale con el sobre de siempre. Antes, en Development revantaba como 500
+        // «Generic.Unexpected» y en produccion salia un 400 vacio que la pantalla mostraba como
+        // «Error HTTP 400» sin decir que estaba mal.
+        if (fallo is BadHttpRequestException mala)
+        {
+            var motivo = mala.InnerException is System.Text.Json.JsonException json && !string.IsNullOrWhiteSpace(json.Message)
+                ? json.Message
+                : mala.Message;
+            contexto.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ExcepcionNoControlada")
+                .LogWarning("Cuerpo invalido en {Metodo} {Ruta}: {Motivo}", contexto.Request.Method, contexto.Request.Path, motivo);
+            contexto.Response.StatusCode = mala.StatusCode;
+            contexto.Response.ContentType = "application/json";
+            await contexto.Response.WriteAsJsonAsync(new
+            {
+                code = "Request.BodyInvalid",
+                message = "La solicitud no tiene el formato esperado: " + motivo,
                 traceId = contexto.TraceIdentifier,
             });
             return;
