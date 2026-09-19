@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Inventory;
@@ -89,40 +90,36 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Sequence> Sequences => Set<Sequence>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
-    // === Accounting (33) ===
+    // === Accounting (feature 009: 29 entidades; las 33 heredadas se retiraron) ===
+    public DbSet<AccountingSetup> AccountingSetups => Set<AccountingSetup>();
+    public DbSet<AccountCatalog> AccountCatalogs => Set<AccountCatalog>();
+    public DbSet<AccountCatalogEntry> AccountCatalogEntries => Set<AccountCatalogEntry>();
+    public DbSet<FinancialStatementItem> FinancialStatementItems => Set<FinancialStatementItem>();
     public DbSet<ChartOfAccount> ChartOfAccounts => Set<ChartOfAccount>();
-    public DbSet<AccountBalance> AccountBalances => Set<AccountBalance>();
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
-    public DbSet<JournalEntryItem> JournalEntryItems => Set<JournalEntryItem>();
+    public DbSet<AccountTaxRate> AccountTaxRates => Set<AccountTaxRate>();
     public DbSet<VoucherType> VoucherTypes => Set<VoucherType>();
-    public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
+    public DbSet<CrossDocumentType> CrossDocumentTypes => Set<CrossDocumentType>();
+    public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
     public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
-    public DbSet<Amortization> Amortizations => Set<Amortization>();
-    public DbSet<AuxiliaryDocument> AuxiliaryDocuments => Set<AuxiliaryDocument>();
+    public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<BankStatementColumnMap> BankStatementColumnMaps => Set<BankStatementColumnMap>();
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
-    public DbSet<BankReconciliationFlat> BankReconciliationFlats => Set<BankReconciliationFlat>();
-    public DbSet<BankReconciliationMaster> BankReconciliationMasters => Set<BankReconciliationMaster>();
+    public DbSet<BankStatementLine> BankStatementLines => Set<BankStatementLine>();
     public DbSet<Budget> Budgets => Set<Budget>();
-    public DbSet<Depreciation> Depreciations => Set<Depreciation>();
-    public DbSet<ThirdPartyAccount> ThirdPartyAccounts => Set<ThirdPartyAccount>();
-    public DbSet<FiscalPeriod> FiscalPeriods => Set<FiscalPeriod>();
-    public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
-    public DbSet<AccountSubgroup> AccountSubgroups => Set<AccountSubgroup>();
-    public DbSet<GroupName> GroupNames => Set<GroupName>();
-    public DbSet<SubgroupName> SubgroupNames => Set<SubgroupName>();
-    public DbSet<DianReportFormat> DianReportFormats => Set<DianReportFormat>();
-    public DbSet<ExchangeRateHistory> ExchangeRateHistories => Set<ExchangeRateHistory>();
-    public DbSet<FinancialReport> FinancialReports => Set<FinancialReport>();
-    public DbSet<FinancialReportParam> FinancialReportParams => Set<FinancialReportParam>();
-    public DbSet<FinancialReportValue> FinancialReportValues => Set<FinancialReportValue>();
-    public DbSet<RiskCategory> RiskCategories => Set<RiskCategory>();
-    public DbSet<TaxFormCode> TaxFormCodes => Set<TaxFormCode>();
-    public DbSet<GmfTaxLine> GmfTaxLines => Set<GmfTaxLine>();
-    public DbSet<IcaTaxLine> IcaTaxLines => Set<IcaTaxLine>();
-    public DbSet<IncomeTaxLine> IncomeTaxLines => Set<IncomeTaxLine>();
-    public DbSet<VatTaxLine> VatTaxLines => Set<VatTaxLine>();
-    public DbSet<WithholdingTaxLine> WithholdingTaxLines => Set<WithholdingTaxLine>();
-    public DbSet<StampTax> StampTaxes => Set<StampTax>();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+    public DbSet<WithholdingCertificate> WithholdingCertificates => Set<WithholdingCertificate>();
+    public DbSet<WithholdingCertificateLine> WithholdingCertificateLines => Set<WithholdingCertificateLine>();
+    public DbSet<TaxForm> TaxForms => Set<TaxForm>();
+    public DbSet<TaxFormLine> TaxFormLines => Set<TaxFormLine>();
+    public DbSet<ExogenousFormat> ExogenousFormats => Set<ExogenousFormat>();
+    public DbSet<ExogenousConcept> ExogenousConcepts => Set<ExogenousConcept>();
+    public DbSet<ExogenousConceptAccount> ExogenousConceptAccounts => Set<ExogenousConceptAccount>();
+    public DbSet<ExogenousRun> ExogenousRuns => Set<ExogenousRun>();
+    public DbSet<ExogenousRunLine> ExogenousRunLines => Set<ExogenousRunLine>();
+    public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
+    public DbSet<FixedAssetInstallment> FixedAssetInstallments => Set<FixedAssetInstallment>();
+    public DbSet<AssetRun> AssetRuns => Set<AssetRun>();
 
     // === Lending (93) ===
     public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
@@ -419,6 +416,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
         base.ConfigureConventions(configurationBuilder);
     }
+
+    /// <inheritdoc />
+    public void DescartarCambios() => ChangeTracker.Clear();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

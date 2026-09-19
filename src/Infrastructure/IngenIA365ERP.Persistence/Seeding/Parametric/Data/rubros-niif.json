@@ -1,0 +1,91 @@
+{
+  // Feature 009 (R9, FR-047..FR-050): rubros con los que se presentan los estados financieros bajo
+  // NIIF —situación financiera (ESF), resultado integral (ERI), cambios en el patrimonio (ECP) y
+  // flujo de efectivo por el método indirecto (EFE)— para los grupos 1 (NIIF plenas), 2 (NIIF para
+  // PYMES) y 3 (microempresas). El mismo rubro sirve a los tres grupos salvo que "groups" diga
+  // otra cosa. Toda cuenta de un catálogo apunta a uno de estos códigos (data-model.md §1).
+  // "sign" es cómo suma al rubro padre: 1 natural, -1 contra (deterioros, depreciaciones,
+  // devoluciones). "order" ordena dentro de la sección.
+  "groups": [1, 2, 3],
+  "items": [
+    // ---------------------------------------------------------------- Estado de situación financiera
+    { "code": "ESF-A",        "name": "Activo",                                   "statement": "FinancialPosition", "section": "Activo",        "order": 100, "sign": 1,  "parent": null },
+    { "code": "ESF-A-EFE",    "name": "Efectivo y equivalentes al efectivo",       "statement": "FinancialPosition", "section": "Activo",        "order": 110, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-INV",    "name": "Inversiones",                              "statement": "FinancialPosition", "section": "Activo",        "order": 120, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-CAR",    "name": "Cartera de créditos",                      "statement": "FinancialPosition", "section": "Activo",        "order": 130, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-CAR-DET","name": "Deterioro de cartera de créditos",         "statement": "FinancialPosition", "section": "Activo",        "order": 131, "sign": -1, "parent": "ESF-A-CAR" },
+    { "code": "ESF-A-CXC",    "name": "Cuentas comerciales y otras cuentas por cobrar", "statement": "FinancialPosition", "section": "Activo", "order": 140, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-CXC-DET","name": "Deterioro de cuentas por cobrar",          "statement": "FinancialPosition", "section": "Activo",        "order": 141, "sign": -1, "parent": "ESF-A-CXC" },
+    { "code": "ESF-A-INVT",   "name": "Inventarios",                              "statement": "FinancialPosition", "section": "Activo",        "order": 150, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-PPE",    "name": "Propiedades, planta y equipo",             "statement": "FinancialPosition", "section": "Activo",        "order": 160, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-PPE-DEP","name": "Depreciación acumulada",                   "statement": "FinancialPosition", "section": "Activo",        "order": 161, "sign": -1, "parent": "ESF-A-PPE" },
+    { "code": "ESF-A-PIN",    "name": "Propiedades de inversión",                 "statement": "FinancialPosition", "section": "Activo",        "order": 170, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-INTG",   "name": "Activos intangibles",                      "statement": "FinancialPosition", "section": "Activo",        "order": 180, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-INTG-AM","name": "Amortización acumulada de intangibles",    "statement": "FinancialPosition", "section": "Activo",        "order": 181, "sign": -1, "parent": "ESF-A-INTG" },
+    { "code": "ESF-A-DIF",    "name": "Activos por impuestos y diferidos",        "statement": "FinancialPosition", "section": "Activo",        "order": 190, "sign": 1,  "parent": "ESF-A" },
+    { "code": "ESF-A-OTR",    "name": "Otros activos",                            "statement": "FinancialPosition", "section": "Activo",        "order": 195, "sign": 1,  "parent": "ESF-A" },
+
+    { "code": "ESF-P",        "name": "Pasivo",                                   "statement": "FinancialPosition", "section": "Pasivo",        "order": 200, "sign": 1,  "parent": null },
+    { "code": "ESF-P-DEP",    "name": "Depósitos y exigibilidades",               "statement": "FinancialPosition", "section": "Pasivo",        "order": 210, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-OBF",    "name": "Obligaciones financieras",                 "statement": "FinancialPosition", "section": "Pasivo",        "order": 220, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-CXP",    "name": "Cuentas comerciales y otras cuentas por pagar", "statement": "FinancialPosition", "section": "Pasivo",  "order": 230, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-IMP",    "name": "Pasivos por impuestos corrientes",         "statement": "FinancialPosition", "section": "Pasivo",        "order": 240, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-LAB",    "name": "Beneficios a los empleados",               "statement": "FinancialPosition", "section": "Pasivo",        "order": 250, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-FSO",    "name": "Fondos sociales y mutuales",               "statement": "FinancialPosition", "section": "Pasivo",        "order": 260, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-PRV",    "name": "Provisiones",                              "statement": "FinancialPosition", "section": "Pasivo",        "order": 270, "sign": 1,  "parent": "ESF-P" },
+    { "code": "ESF-P-DIF",    "name": "Pasivos por impuestos diferidos e ingresos diferidos", "statement": "FinancialPosition", "section": "Pasivo", "order": 280, "sign": 1, "parent": "ESF-P" },
+    { "code": "ESF-P-OTR",    "name": "Otros pasivos",                            "statement": "FinancialPosition", "section": "Pasivo",        "order": 290, "sign": 1,  "parent": "ESF-P" },
+
+    { "code": "ESF-PT",       "name": "Patrimonio",                               "statement": "FinancialPosition", "section": "Patrimonio",    "order": 300, "sign": 1,  "parent": null },
+    { "code": "ESF-PT-CAP",   "name": "Capital social",                           "statement": "FinancialPosition", "section": "Patrimonio",    "order": 310, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-RES",   "name": "Reservas",                                 "statement": "FinancialPosition", "section": "Patrimonio",    "order": 320, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-FDE",   "name": "Fondos de destinación específica",         "statement": "FinancialPosition", "section": "Patrimonio",    "order": 330, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-SUP",   "name": "Superávit y primas",                       "statement": "FinancialPosition", "section": "Patrimonio",    "order": 340, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-RAC",   "name": "Resultados acumulados",                    "statement": "FinancialPosition", "section": "Patrimonio",    "order": 350, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-REJ",   "name": "Resultado del ejercicio",                  "statement": "FinancialPosition", "section": "Patrimonio",    "order": 360, "sign": 1,  "parent": "ESF-PT" },
+    { "code": "ESF-PT-ORI",   "name": "Otro resultado integral acumulado",        "statement": "FinancialPosition", "section": "Patrimonio",    "order": 370, "sign": 1,  "parent": "ESF-PT" },
+
+    { "code": "ORD",          "name": "Cuentas de orden",                         "statement": "FinancialPosition", "section": "Cuentas de orden", "order": 900, "sign": 1, "parent": null },
+    { "code": "ORD-DEU",      "name": "Cuentas de orden deudoras",                "statement": "FinancialPosition", "section": "Cuentas de orden", "order": 910, "sign": 1, "parent": "ORD" },
+    { "code": "ORD-ACR",      "name": "Cuentas de orden acreedoras",              "statement": "FinancialPosition", "section": "Cuentas de orden", "order": 920, "sign": 1, "parent": "ORD" },
+
+    // ---------------------------------------------------------------- Estado de resultado integral
+    { "code": "ERI-ING",      "name": "Ingresos de actividades ordinarias",       "statement": "IncomeStatement",   "section": "Ingresos",      "order": 100, "sign": 1,  "parent": null },
+    { "code": "ERI-ING-DEV",  "name": "Devoluciones, rebajas y descuentos",       "statement": "IncomeStatement",   "section": "Ingresos",      "order": 101, "sign": -1, "parent": "ERI-ING" },
+    { "code": "ERI-COS",      "name": "Costo de ventas y de prestación de servicios", "statement": "IncomeStatement", "section": "Costos",      "order": 200, "sign": 1,  "parent": null },
+    { "code": "ERI-GAD",      "name": "Gastos de administración",                 "statement": "IncomeStatement",   "section": "Gastos",        "order": 300, "sign": 1,  "parent": null },
+    { "code": "ERI-GVT",      "name": "Gastos de ventas",                         "statement": "IncomeStatement",   "section": "Gastos",        "order": 310, "sign": 1,  "parent": null },
+    { "code": "ERI-DET",      "name": "Deterioro, depreciación y amortización",   "statement": "IncomeStatement",   "section": "Gastos",        "order": 320, "sign": 1,  "parent": null },
+    { "code": "ERI-OING",     "name": "Otros ingresos",                           "statement": "IncomeStatement",   "section": "Otros resultados", "order": 400, "sign": 1, "parent": null },
+    { "code": "ERI-OGAS",     "name": "Otros gastos",                             "statement": "IncomeStatement",   "section": "Otros resultados", "order": 410, "sign": 1, "parent": null },
+    { "code": "ERI-FIN",      "name": "Gastos financieros",                       "statement": "IncomeStatement",   "section": "Otros resultados", "order": 420, "sign": 1, "parent": null },
+    { "code": "ERI-IMP",      "name": "Impuesto a las ganancias",                 "statement": "IncomeStatement",   "section": "Impuestos",     "order": 500, "sign": 1,  "parent": null },
+    { "code": "ERI-ORI",      "name": "Otro resultado integral del período",      "statement": "IncomeStatement",   "section": "Otro resultado integral", "order": 600, "sign": 1, "parent": null, "groups": [1, 2] },
+    { "code": "ERI-CIE",      "name": "Cierre del ejercicio",                     "statement": "IncomeStatement",   "section": "Cierre",        "order": 900, "sign": 1,  "parent": null },
+
+    // ---------------------------------------------------------------- Estado de cambios en el patrimonio
+    { "code": "ECP-CAP",      "name": "Capital social",                           "statement": "EquityChanges",     "section": "Patrimonio",    "order": 100, "sign": 1,  "parent": null },
+    { "code": "ECP-RES",      "name": "Reservas",                                 "statement": "EquityChanges",     "section": "Patrimonio",    "order": 200, "sign": 1,  "parent": null },
+    { "code": "ECP-FDE",      "name": "Fondos de destinación específica",         "statement": "EquityChanges",     "section": "Patrimonio",    "order": 300, "sign": 1,  "parent": null },
+    { "code": "ECP-SUP",      "name": "Superávit",                                "statement": "EquityChanges",     "section": "Patrimonio",    "order": 400, "sign": 1,  "parent": null },
+    { "code": "ECP-RAC",      "name": "Resultados acumulados",                    "statement": "EquityChanges",     "section": "Patrimonio",    "order": 500, "sign": 1,  "parent": null },
+    { "code": "ECP-REJ",      "name": "Resultado del ejercicio",                  "statement": "EquityChanges",     "section": "Patrimonio",    "order": 600, "sign": 1,  "parent": null },
+    { "code": "ECP-ORI",      "name": "Otro resultado integral",                  "statement": "EquityChanges",     "section": "Patrimonio",    "order": 700, "sign": 1,  "parent": null, "groups": [1, 2] },
+
+    // ---------------------------------------------------------------- Flujo de efectivo (método indirecto)
+    { "code": "EFE-OPE",      "name": "Actividades de operación",                 "statement": "CashFlow",          "section": "Operación",     "order": 100, "sign": 1,  "parent": null },
+    { "code": "EFE-OPE-RES",  "name": "Resultado del ejercicio",                  "statement": "CashFlow",          "section": "Operación",     "order": 110, "sign": 1,  "parent": "EFE-OPE" },
+    { "code": "EFE-OPE-AJU",  "name": "Ajustes por partidas que no afectan el efectivo", "statement": "CashFlow",   "section": "Operación",     "order": 120, "sign": 1,  "parent": "EFE-OPE" },
+    { "code": "EFE-OPE-CAR",  "name": "Cambios en cartera y cuentas por cobrar",  "statement": "CashFlow",          "section": "Operación",     "order": 130, "sign": -1, "parent": "EFE-OPE" },
+    { "code": "EFE-OPE-INV",  "name": "Cambios en inventarios",                   "statement": "CashFlow",          "section": "Operación",     "order": 140, "sign": -1, "parent": "EFE-OPE" },
+    { "code": "EFE-OPE-DEP",  "name": "Cambios en depósitos de asociados",        "statement": "CashFlow",          "section": "Operación",     "order": 150, "sign": 1,  "parent": "EFE-OPE" },
+    { "code": "EFE-OPE-CXP",  "name": "Cambios en cuentas por pagar y otros pasivos", "statement": "CashFlow",      "section": "Operación",     "order": 160, "sign": 1,  "parent": "EFE-OPE" },
+    { "code": "EFE-INV",      "name": "Actividades de inversión",                 "statement": "CashFlow",          "section": "Inversión",     "order": 200, "sign": 1,  "parent": null },
+    { "code": "EFE-INV-PPE",  "name": "Propiedades, planta, equipo e intangibles", "statement": "CashFlow",         "section": "Inversión",     "order": 210, "sign": -1, "parent": "EFE-INV" },
+    { "code": "EFE-INV-FIN",  "name": "Inversiones financieras",                  "statement": "CashFlow",          "section": "Inversión",     "order": 220, "sign": -1, "parent": "EFE-INV" },
+    { "code": "EFE-FIN",      "name": "Actividades de financiación",              "statement": "CashFlow",          "section": "Financiación",  "order": 300, "sign": 1,  "parent": null },
+    { "code": "EFE-FIN-OBF",  "name": "Obligaciones financieras",                 "statement": "CashFlow",          "section": "Financiación",  "order": 310, "sign": 1,  "parent": "EFE-FIN" },
+    { "code": "EFE-FIN-CAP",  "name": "Aportes sociales y patrimonio",            "statement": "CashFlow",          "section": "Financiación",  "order": 320, "sign": 1,  "parent": "EFE-FIN" },
+    { "code": "EFE-EFE",      "name": "Efectivo y equivalentes",                  "statement": "CashFlow",          "section": "Efectivo",      "order": 400, "sign": 1,  "parent": null }
+  ]
+}

@@ -83,11 +83,40 @@ public static class BuiltInRolesSeeder
         // Nomina (feature 005): el auditor exporta el detalle con explicaciones; el
         // operador registra novedades y calcula, pero NO aprueba, ni marca pagos, ni
         // reversa (segregacion de funciones, FR-020).
-        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export"],
+        // Feature 009: el auditor (y el revisor fiscal, que suele llevar ese rol) exporta los
+        // libros y los estados financieros.
+        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export", "Accounting.Reports.Export"],
+        // Feature 008: el operador crea y edita personas, empleados y asociados; no da de
+        // baja (Core.People.Delete, Payroll.Employees.Terminate) — eso queda en CompanyAdmin.
+        // Feature 009: registra borradores de comprobantes y exporta informes, pero NO
+        // contabiliza, anula, cierra ni parametriza (segregación; cuatro ojos opcional).
         ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn",
-                            "Payroll.Novelties.*", "Payroll.Runs.Calculate"],
+                            "Payroll.Novelties.*", "Payroll.Runs.Calculate",
+                            "Core.People.Create", "Core.People.Update",
+                            "Core.Associates.Create", "Core.Associates.Update",
+                            "Payroll.Employees.Create", "Payroll.Employees.Update",
+                            "Accounting.Vouchers.Create", "Accounting.Reports.Export"],
         ["ReadOnly"]     = ["*.View"],
     };
+
+    /// <summary>
+    /// Lectura de los maestros de persona que recibe <b>todo</b> rol de la cooperativa, también
+    /// los personalizados (feature 008, FR-010). Hasta que la API exigió permiso, cualquier
+    /// sesión podía consultar Personas, Empleados y Asociados; conservar esa lectura el día del
+    /// despliegue evita que un rol creado por el administrador amanezca con 404. Los
+    /// built-in ya la tienen por <c>*.View</c>; el paso explícito es para los demás.
+    /// </summary>
+    internal static readonly string[] LecturaDeMaestros =
+    [
+        "Core.People.View",
+        "Core.Associates.View",
+        "Payroll.Employees.View",
+        // Feature 009: el plan de cuentas y los tipos de comprobante los eligen todos los
+        // módulos (cuentas por concepto, parámetros de cartera, bancos…); sin lectura, sus
+        // buscadores amanecerían vacíos.
+        "Accounting.Accounts.View",
+        "Accounting.VoucherTypes.View",
+    ];
 
     public static async Task SeedAsync(IServiceProvider services)
     {
@@ -102,7 +131,12 @@ public static class BuiltInRolesSeeder
     /// equivalente en <see cref="DomainPermissionCatalogSeeder"/>: los roles tienen
     /// que existir dentro del esquema de cada cooperativa, no solo en dbo.
     /// </summary>
-    public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
+    /// <returns>
+    /// Cuántos vínculos rol↔permiso se insertaron. Si es mayor que cero, quien llama
+    /// invalida la caché de permisos de la cooperativa: tiene TTL de 30 minutos y, sin eso,
+    /// el día del despliegue los usuarios verían 404 en los maestros media hora.
+    /// </returns>
+    public static async Task<int> SeedAsync(IApplicationDbContext db, ILogger logger)
     {
         try
         {
@@ -112,8 +146,10 @@ public static class BuiltInRolesSeeder
             // nada. Ya no hay plantillas que replicar — este seeder corre una vez
             // por esquema.
             await SeedRolesAsync(db, logger);
-            await SeedRolePermissionsAsync(db, logger);
+            var vinculos = await SeedRolePermissionsAsync(db, logger);
+            vinculos += await ConcederLecturaDeMaestrosATodosLosRolesAsync(db, logger);
             await PurgarPermisosSaasGlobalesAsync(db, logger);
+            return vinculos;
         }
         catch (Exception ex) when (IsSchemaIssue(ex))
         {
@@ -124,7 +160,65 @@ public static class BuiltInRolesSeeder
                 "  - database/migration/21_Roles_Scope_BuiltIn.sql\n" +
                 "  - database/migration/22_SEC_Permissions_Resource_Action_Plus_Roles_TenantNullable.sql\n" +
                 "El seed se omitió — los endpoints US2 no funcionarán hasta aplicar las migraciones.");
+            return 0;
         }
+    }
+
+    /// <summary>
+    /// Todo rol de la cooperativa —built-in o personalizado— recibe
+    /// <see cref="LecturaDeMaestros"/> si le falta. Idempotente: sin faltantes no toca la base.
+    /// </summary>
+    private static async Task<int> ConcederLecturaDeMaestrosATodosLosRolesAsync(
+        IApplicationDbContext db, ILogger logger)
+    {
+        var lectura = (await db.Permissions
+                .IgnoreQueryFilters()
+                .Select(p => new { p.Id, p.Resource, p.Action })
+                .ToListAsync())
+            .Where(p => LecturaDeMaestros.Contains($"{p.Resource}.{p.Action}", StringComparer.OrdinalIgnoreCase))
+            .Select(p => p.Id)
+            .ToList();
+        if (lectura.Count == 0)
+        {
+            logger.LogWarning("Faltan los permisos de lectura de maestros en SEC_Permissions — corre CorePermissionCatalogSeeder y PayrollPermissionCatalogSeeder antes.");
+            return 0;
+        }
+
+        var roles = await db.Roles.IgnoreQueryFilters()
+            .Where(r => r.IsActive)
+            .Select(r => r.Id)
+            .ToListAsync();
+        if (roles.Count == 0) return 0;
+
+        var existentes = (await db.RolePermissions.IgnoreQueryFilters()
+                .Where(rp => lectura.Contains(rp.PermissionId))
+                .Select(rp => new { rp.RoleId, rp.PermissionId })
+                .ToListAsync())
+            .Select(rp => (rp.RoleId, rp.PermissionId))
+            .ToHashSet();
+
+        var insertados = 0;
+        foreach (var rolId in roles)
+        foreach (var permisoId in lectura)
+        {
+            if (existentes.Contains((rolId, permisoId))) continue;
+            db.RolePermissions.Add(new RolePermission
+            {
+                RoleId = rolId,
+                PermissionId = permisoId,
+                CreatedBy = "Seed",
+                UpdatedBy = "Seed"
+            });
+            insertados++;
+        }
+
+        if (insertados == 0) return 0;
+
+        await db.SaveChangesAsync(default);
+        logger.LogInformation(
+            "Lectura de Personas/Empleados/Asociados concedida a los roles que no la tenían: {Insertados} vínculo(s).",
+            insertados);
+        return insertados;
     }
 
     private static bool IsSchemaIssue(Exception ex)
@@ -254,13 +348,13 @@ public static class BuiltInRolesSeeder
             sobrantes.Count);
     }
 
-    private static async Task SeedRolePermissionsAsync(IApplicationDbContext db, ILogger logger)
+    private static async Task<int> SeedRolePermissionsAsync(IApplicationDbContext db, ILogger logger)
     {
         var roles = await db.Roles
             .IgnoreQueryFilters()
             .Where(r => r.TenantId == null && r.IsBuiltIn)
             .ToListAsync();
-        if (roles.Count == 0) return;
+        if (roles.Count == 0) return 0;
 
         var permissions = await db.Permissions
             .IgnoreQueryFilters()
@@ -269,7 +363,7 @@ public static class BuiltInRolesSeeder
         if (permissions.Count == 0)
         {
             logger.LogWarning("No hay permisos en SEC_Permissions — corre DomainPermissionCatalogSeeder antes.");
-            return;
+            return 0;
         }
 
         var existingLinks = await db.RolePermissions
@@ -315,6 +409,7 @@ public static class BuiltInRolesSeeder
         {
             logger.LogInformation("Built-in role↔permission links ya están al día.");
         }
+        return inserted;
     }
 
     /// <summary>

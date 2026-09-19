@@ -30,8 +30,8 @@ public static class NominaE2E
     public const string ClaveAdmin = "Nomina-Admin-2026!";
     public const string CorreoSoloLectura = "nomina.lectura@coop.nomina.test";
     public const string ClaveSoloLectura = "Nomina-Lectura-2026!";
-    public const string CuentaDebito = "510506";
-    public const string CuentaCredito = "250505";
+    public const string CuentaDebito = "51050301";   // bajo 510503 SUELDOS del CUIF
+    public const string CuentaCredito = "27100501";  // bajo 271005 BENEFICIOS A EMPLEADOS A CORTO PLAZO
 
     public sealed class Contexto
     {
@@ -86,19 +86,21 @@ public static class NominaE2E
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación de sólo lectura: «{await invitacion.Content.ReadAsStringAsync()}»");
         var tokenSoloLectura = await AceptarInvitacionAsync(fx, http, CorreoSoloLectura, ClaveSoloLectura);
 
-        // --- lo que la semilla no deja: sucursal, centro de costo, cuentas, períodos contables ---
+        // --- lo que la semilla no deja: sucursal, centro de costo, contabilidad iniciada y dos auxiliares ---
+        // Feature 009: la contabilidad se inicia una vez por cooperativa (catálogo PUC solidario, movimiento en el
+        // nivel 5 con ocho dígitos, ejercicio 2026 con sus doce períodos abiertos) y las auxiliares cuelgan de la
+        // subcuenta del catálogo con sus reglas; ambas habilitadas para Nómina.
         await CrearAsync(http, tokenAdmin, "/api/core/branches", new { name = "Principal", shortName = "PPAL" });
         await CrearAsync(http, tokenAdmin, "/api/core/cost-centers", new { name = "Administración", payrollType = 1, period = 1, payrollPeriodicity = 30 });
-        await CrearAsync(http, tokenAdmin, "/api/accounting/chart-of-accounts", new { accountCode = CuentaDebito, name = "Sueldos y salarios", level = 4, nature = "D", rate = 0 });
-        await CrearAsync(http, tokenAdmin, "/api/accounting/chart-of-accounts", new { accountCode = CuentaCredito, name = "Salarios por pagar", level = 4, nature = "C", rate = 0 });
-        for (var mes = 1; mes <= 12; mes++)
+        var sucursales = await LeerAsync(await EnviarAsync(http, tokenAdmin, HttpMethod.Get, "/api/core/branches?PageNumber=1&PageSize=10", null));
+        var sucursalPublicId = sucursales.GetProperty("items").EnumerateArray().First().GetProperty("publicId").GetGuid();
+        await CrearAsync(http, tokenAdmin, "/api/accounting/setup/initialize", new
         {
-            var desde = new DateOnly(2026, mes, 1);
-            await CrearAsync(http, tokenAdmin, "/api/accounting/accounting-periods", new
-            {
-                moduleCode = "CNT", year = 2026, periodNumber = mes, startDate = desde, endDate = desde.AddMonths(1).AddDays(-1), status = "O",
-            });
-        }
+            catalogCode = "PUC-SOLIDARIO", movementLevel = 5, niifGroup = 2, firstFiscalYear = 2026,
+            mainBranchPublicId = sucursalPublicId, fourEyes = false,
+        });
+        await CrearAuxiliarAsync(http, tokenAdmin, CuentaDebito, "Sueldos y salarios", "510503");
+        await CrearAuxiliarAsync(http, tokenAdmin, CuentaCredito, "Salarios por pagar", "271005");
 
         // --- cuentas contables para todos los conceptos de la semilla ---
         var conceptos = await LeerAsync(await EnviarAsync(http, tokenAdmin, HttpMethod.Get, "/api/payroll/concept-definitions", null));
@@ -133,6 +135,19 @@ public static class NominaE2E
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();
         return acceso!;
+    }
+
+    /// <summary>Una auxiliar de movimiento bajo la subcuenta del catálogo, habilitada para Contabilidad y Nómina (feature 009).</summary>
+    private static async Task CrearAuxiliarAsync(HttpClient http, string token, string codigo, string nombre, string codigoPadre)
+    {
+        var busqueda = await LeerAsync(await EnviarAsync(http, token, HttpMethod.Get, $"/api/accounting/accounts/search?q={codigoPadre}&onlyMovement=false", null));
+        var padre = busqueda.EnumerateArray().FirstOrDefault(c => c.GetProperty("code").GetString() == codigoPadre);
+        padre.ValueKind.Should().Be(JsonValueKind.Object, $"la subcuenta {codigoPadre} viene del catálogo PUC solidario");
+        await CrearAsync(http, token, "/api/accounting/accounts", new
+        {
+            code = codigo, name = nombre, parentPublicId = padre.GetProperty("publicId").GetGuid(),
+            enabledModules = new[] { "CNT", "NOM" }, requiresThirdParty = false, requiresCrossDocument = false, requiresCostCenter = false, requiresBranch = false,
+        });
     }
 
     private static async Task CrearAsync(HttpClient http, string token, string url, object cuerpo)

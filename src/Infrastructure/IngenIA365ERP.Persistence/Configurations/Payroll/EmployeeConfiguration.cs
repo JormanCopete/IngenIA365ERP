@@ -6,6 +6,9 @@ namespace IngenIA365ERP.Persistence.Configurations.Payroll;
 
 public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 {
+    /// <summary>Largo del motivo de retiro; lo comparte el validador del comando (Principio VIII).</summary>
+    public const int TerminationCauseMaxLength = 120;
+
     public void Configure(EntityTypeBuilder<Employee> builder)
     {
         builder.ToTable("PAY_Employees");
@@ -17,7 +20,15 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         // PersonId is now NOT NULL (every Employee belongs to a Person)
         builder.Property(e => e.PersonId).IsRequired();
-        builder.HasIndex(e => e.PersonId).IsUnique().HasDatabaseName("UK_PAY_Employees_PersonId");
+        // Feature 008 (FR-017): una persona tiene a lo sumo UNA ficha viva, pero puede tener
+        // varias a lo largo del tiempo — cada reingreso tras un retiro es una ficha nueva y la
+        // retirada queda como historial de sus liquidaciones. Hasta el 2026-09-13 el índice era
+        // único sin filtro: el reingreso pasaba la validación (sólo mira fichas vivas) y
+        // reventaba en la base con un 500. El filtro va en la sintaxis T-SQL canónica;
+        // ProviderModelConventions lo traduce para PostgreSQL.
+        builder.HasIndex(e => e.PersonId).IsUnique()
+            .HasDatabaseName("UK_PAY_Employees_PersonId")
+            .HasFilter("[Status] <> -1 AND [IsDeleted] = 0");
 
         // === Labor data ===
         builder.Property(e => e.CostCenterId).HasMaxLength(8).IsRequired();
@@ -26,7 +37,10 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Salary).HasPrecision(18, 2);
         builder.Property(e => e.WithholdingTaxRate).HasPrecision(7, 4);
         builder.Property(e => e.DeductibleWithholding).HasPrecision(17, 4);
-        builder.Property(e => e.TerminationCause).HasMaxLength(4);
+        // Motivo de retiro. En SOLIDO era un código de 4 caracteres; aquí la pantalla lo pide
+        // como texto libre y nada lo interpreta como código, así que desde el 2026-09-13 admite
+        // 120 (migración MotivoDeRetiroComoTexto). Antes cualquier motivo de más de 4 daba 500.
+        builder.Property(e => e.TerminationCause).HasMaxLength(TerminationCauseMaxLength);
 
         // === Payroll banking ===
         builder.Property(e => e.PayrollBankId).HasMaxLength(4);

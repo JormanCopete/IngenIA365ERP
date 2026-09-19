@@ -16,4 +16,8 @@ public class Branch : AuditableEntity
 
     [MaxLength(40)]
     public string? ShortName { get; set; }
+
+    // Feature 009 (R7): vinculo con la oficina registrada en ADM_Branches (por PublicId, sin FK entre bases)
+    // para traducir las sucursales asignadas a un usuario al alcance contable.
+    public Guid? TenantBranchPublicId { get; set; }
 }

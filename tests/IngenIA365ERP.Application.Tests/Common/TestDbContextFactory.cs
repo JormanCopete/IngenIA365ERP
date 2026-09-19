@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
@@ -25,6 +26,8 @@ namespace IngenIA365ERP.Application.Tests.Common;
 public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IApplicationDbContext
 {
     public TestApplicationDbContext(DbContextOptions<TestApplicationDbContext> options) : base(options) { }
+
+    public void DescartarCambios() => ChangeTracker.Clear();
 
     // === Auth-related, sí registradas ===
     public DbSet<User> Users => Set<User>();
@@ -71,10 +74,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
     public DbSet<Person> People => Set<Person>();
-    DbSet<Associate> IApplicationDbContext.Associates => throw new NotImplementedException();
+    // Feature 008: asociados, ciudades y vendedores entran al modelo para probar las fábricas
+    // de persona (duplicado, ciudad inexistente) y la reconciliación de banderas al restaurar.
+    public DbSet<Associate> Associates => Set<Associate>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
-    DbSet<City> IApplicationDbContext.Cities => throw new NotImplementedException();
+    public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<HealthInsuranceProvider> HealthInsuranceProviders => Set<HealthInsuranceProvider>();
     DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
@@ -101,29 +106,36 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<EmployerCompany> IApplicationDbContext.EmployerCompanies => throw new NotImplementedException();
     DbSet<Advisor> IApplicationDbContext.Advisors => throw new NotImplementedException();
     DbSet<PaymentMethod> IApplicationDbContext.PaymentMethods => throw new NotImplementedException();
-    DbSet<ChartOfAccount> IApplicationDbContext.ChartOfAccounts => throw new NotImplementedException();
-    public DbSet<AccountBalance> AccountBalances => Set<AccountBalance>();
+    // Feature 009: el contabilizador lee configuración, plan, tipos y períodos, y escribe documentos y líneas.
+    public DbSet<AccountingSetup> AccountingSetups => Set<AccountingSetup>();
+    public DbSet<AccountCatalog> AccountCatalogs => Set<AccountCatalog>();
+    public DbSet<AccountCatalogEntry> AccountCatalogEntries => Set<AccountCatalogEntry>();
+    public DbSet<FinancialStatementItem> FinancialStatementItems => Set<FinancialStatementItem>();
+    public DbSet<ChartOfAccount> ChartOfAccounts => Set<ChartOfAccount>();
+    public DbSet<AccountTaxRate> AccountTaxRates => Set<AccountTaxRate>();
+    public DbSet<CrossDocumentType> CrossDocumentTypes => Set<CrossDocumentType>();
+    public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
+    DbSet<BankStatementColumnMap> IApplicationDbContext.BankStatementColumnMaps => throw new NotImplementedException();
+    DbSet<BankStatementLine> IApplicationDbContext.BankStatementLines => throw new NotImplementedException();
+    DbSet<BudgetLine> IApplicationDbContext.BudgetLines => throw new NotImplementedException();
+    DbSet<WithholdingCertificate> IApplicationDbContext.WithholdingCertificates => throw new NotImplementedException();
+    DbSet<WithholdingCertificateLine> IApplicationDbContext.WithholdingCertificateLines => throw new NotImplementedException();
+    DbSet<TaxForm> IApplicationDbContext.TaxForms => throw new NotImplementedException();
+    DbSet<TaxFormLine> IApplicationDbContext.TaxFormLines => throw new NotImplementedException();
+    DbSet<ExogenousFormat> IApplicationDbContext.ExogenousFormats => throw new NotImplementedException();
+    DbSet<ExogenousConcept> IApplicationDbContext.ExogenousConcepts => throw new NotImplementedException();
+    DbSet<ExogenousConceptAccount> IApplicationDbContext.ExogenousConceptAccounts => throw new NotImplementedException();
+    DbSet<ExogenousRun> IApplicationDbContext.ExogenousRuns => throw new NotImplementedException();
+    DbSet<ExogenousRunLine> IApplicationDbContext.ExogenousRunLines => throw new NotImplementedException();
+    DbSet<FixedAsset> IApplicationDbContext.FixedAssets => throw new NotImplementedException();
+    DbSet<FixedAssetInstallment> IApplicationDbContext.FixedAssetInstallments => throw new NotImplementedException();
+    DbSet<AssetRun> IApplicationDbContext.AssetRuns => throw new NotImplementedException();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<VoucherType> VoucherTypes => Set<VoucherType>();
     public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
-    DbSet<AccountGroup> IApplicationDbContext.AccountGroups => throw new NotImplementedException();
-    DbSet<AccountSubgroup> IApplicationDbContext.AccountSubgroups => throw new NotImplementedException();
-    DbSet<RiskCategory> IApplicationDbContext.RiskCategories => throw new NotImplementedException();
-    DbSet<VatTaxLine> IApplicationDbContext.VatTaxLines => throw new NotImplementedException();
-    DbSet<IncomeTaxLine> IApplicationDbContext.IncomeTaxLines => throw new NotImplementedException();
-    DbSet<WithholdingTaxLine> IApplicationDbContext.WithholdingTaxLines => throw new NotImplementedException();
-    DbSet<IcaTaxLine> IApplicationDbContext.IcaTaxLines => throw new NotImplementedException();
-    DbSet<GmfTaxLine> IApplicationDbContext.GmfTaxLines => throw new NotImplementedException();
-    DbSet<DianReportFormat> IApplicationDbContext.DianReportFormats => throw new NotImplementedException();
-    DbSet<TaxFormCode> IApplicationDbContext.TaxFormCodes => throw new NotImplementedException();
     public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
-    DbSet<JournalEntryItem> IApplicationDbContext.JournalEntryItems => throw new NotImplementedException();
-    DbSet<AuxiliaryDocument> IApplicationDbContext.AuxiliaryDocuments => throw new NotImplementedException();
-    DbSet<ThirdPartyAccount> IApplicationDbContext.ThirdPartyAccounts => throw new NotImplementedException();
-    DbSet<BankReconciliation> IApplicationDbContext.BankReconciliations => throw new NotImplementedException();
-    DbSet<BankReconciliationMaster> IApplicationDbContext.BankReconciliationMasters => throw new NotImplementedException();
-    DbSet<Amortization> IApplicationDbContext.Amortizations => throw new NotImplementedException();
-    DbSet<Depreciation> IApplicationDbContext.Depreciations => throw new NotImplementedException();
+    // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
+    public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
     DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
     DbSet<LoanPortfolio> IApplicationDbContext.LoanPortfolios => throw new NotImplementedException();
     DbSet<LendingTransaction> IApplicationDbContext.LendingTransactions => throw new NotImplementedException();
@@ -160,16 +172,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
     DbSet<AssociateWithdrawal> IApplicationDbContext.AssociateWithdrawals => throw new NotImplementedException();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
-    DbSet<PayrollConcept> IApplicationDbContext.PayrollConcepts => throw new NotImplementedException();
-    DbSet<WorkRiskProvider> IApplicationDbContext.WorkRiskProviders => throw new NotImplementedException();
-    DbSet<PensionProvider> IApplicationDbContext.PensionProviders => throw new NotImplementedException();
-    DbSet<SeveranceProvider> IApplicationDbContext.SeveranceProviders => throw new NotImplementedException();
-    DbSet<FamilyCompensationFund> IApplicationDbContext.FamilyCompensationFunds => throw new NotImplementedException();
+    public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
+    public DbSet<WorkRiskProvider> WorkRiskProviders => Set<WorkRiskProvider>();
+    public DbSet<PensionProvider> PensionProviders => Set<PensionProvider>();
+    public DbSet<SeveranceProvider> SeveranceProviders => Set<SeveranceProvider>();
+    public DbSet<FamilyCompensationFund> FamilyCompensationFunds => Set<FamilyCompensationFund>();
     DbSet<ConceptAccount> IApplicationDbContext.ConceptAccounts => throw new NotImplementedException();
     DbSet<WithholdingParameter> IApplicationDbContext.WithholdingParameters => throw new NotImplementedException();
     DbSet<WithholdingCause> IApplicationDbContext.WithholdingCauses => throw new NotImplementedException();
     DbSet<AutoContributionParam> IApplicationDbContext.AutoContributionParams => throw new NotImplementedException();
-    DbSet<PayrollTransaction> IApplicationDbContext.PayrollTransactions => throw new NotImplementedException();
+    // Feature 008: el detalle de la ficha lista movimientos recientes; entra vacío para poder probar by-person.
+    public DbSet<PayrollTransaction> PayrollTransactions => Set<PayrollTransaction>();
     DbSet<PayrollEntry> IApplicationDbContext.PayrollEntries => throw new NotImplementedException();
     DbSet<Absence> IApplicationDbContext.Absences => throw new NotImplementedException();
     DbSet<TaxCertificate> IApplicationDbContext.TaxCertificates => throw new NotImplementedException();
@@ -182,7 +195,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Location> IApplicationDbContext.Locations => throw new NotImplementedException();
     DbSet<SalesPoint> IApplicationDbContext.SalesPoints => throw new NotImplementedException();
     DbSet<Shift> IApplicationDbContext.Shifts => throw new NotImplementedException();
-    DbSet<Salesperson> IApplicationDbContext.Salespeople => throw new NotImplementedException();
+    public DbSet<Salesperson> Salespeople => Set<Salesperson>();
     DbSet<DiscountType> IApplicationDbContext.DiscountTypes => throw new NotImplementedException();
     DbSet<PriceListType> IApplicationDbContext.PriceListTypes => throw new NotImplementedException();
     DbSet<ProductAccount> IApplicationDbContext.ProductAccounts => throw new NotImplementedException();
@@ -208,11 +221,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
-        modelBuilder.Ignore<City>();
+        // Feature 008: City sí entra (PersonFactory valida CityPublicId); lo que cuelga de ella no.
+        modelBuilder.Ignore<Department>();
         modelBuilder.Ignore<Spouse>();
         modelBuilder.Ignore<Subscription>();
         modelBuilder.Ignore<TenantSetting>();
         modelBuilder.Ignore<TenantBranch>();
+        modelBuilder.Ignore<BankStatementLine>();
 
         base.OnModelCreating(modelBuilder);
 
@@ -236,21 +251,55 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
         // Nomina (feature 005): las cuentas contables y los centros de costo no hacen
         // falta para probar los handlers; el empleado se prueba sin su Person.
-        modelBuilder.Ignore<ChartOfAccount>();
-        modelBuilder.Entity<Employee>(b => { b.Ignore(e => e.Person); b.Ignore("RowVersion"); });
+        // Feature 008: Employee.Person ya no se ignora — el alta en un paso enlaza la ficha a una
+        // persona sin Id por navegación y la prueba tiene que ver el PersonId resuelto.
+        modelBuilder.Entity<Employee>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Associate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Salesperson>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollTransaction>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PayrollConcept>(b => b.Ignore("RowVersion"));
+        // City.People choca con las dos navegaciones Person→City (City y MailingCity); aquí no hace falta.
+        modelBuilder.Entity<City>(b => { b.Ignore(c => c.People); b.Ignore(c => c.Beneficiaries); b.Ignore(c => c.References); b.Ignore("RowVersion"); });
         // Feature 005: lo que el cargador de insumos y el contabilizador leen. ChartOfAccount
         // sigue fuera del modelo (su grafo arrastra medio dominio): las navegaciones hacia el
         // se ignoran y las cuentas se referencian por Id.
-        modelBuilder.Entity<Person>(b => { b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<Person>(b =>
+        {
+            b.Ignore(x => x.Beneficiaries); b.Ignore(x => x.References); b.Ignore(x => x.CommitteeMemberships); b.Ignore("RowVersion");
+            // Feature 008: dos navegaciones a City; se fija la de residencia y se ignora la de correspondencia.
+            b.HasOne(x => x.City).WithMany().HasForeignKey(x => x.CityId);
+            b.Ignore(x => x.MailingCity);
+        });
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<AccountingPeriod>(b => b.Ignore("RowVersion"));
-        modelBuilder.Entity<AccountingDocument>(b => b.Ignore("RowVersion"));
-        modelBuilder.Entity<JournalEntry>(b => { b.Ignore(x => x.Account); b.Ignore(x => x.Items); b.Ignore("RowVersion"); });
-        modelBuilder.Entity<AccountBalance>(b => { b.Ignore(x => x.Account); b.Ignore("RowVersion"); });
+        // Feature 009: las dos referencias de reversion son relaciones distintas (original -> reverso y
+        // reverso -> original); sin esto la convencion las empareja como uno a uno y el modelo no valida.
+        modelBuilder.Entity<AccountingDocument>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.ReversesDocument).WithMany().HasForeignKey(d => d.ReversesDocumentId);
+            b.HasOne(d => d.ReversedByDocument).WithMany().HasForeignKey(d => d.ReversedByDocumentId);
+            b.HasMany(d => d.Lines).WithOne(l => l.Document).HasForeignKey(l => l.DocumentId);
+        });
+        modelBuilder.Entity<JournalEntry>(b => b.Ignore("RowVersion"));
+        // Feature 009: el plan de cuentas entra al modelo (el contabilizador lo lee y fija FirstMovementAt).
+        modelBuilder.Entity<AccountingSetup>(b => b.Ignore("RowVersion"));
+        // Feature 009: entidades institucionales con su persona vinculada (parametrizaciones invalidas).
+        modelBuilder.Entity<WorkRiskProvider>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PensionProvider>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<SeveranceProvider>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<FamilyCompensationFund>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AccountCatalog>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AccountCatalogEntry>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<FinancialStatementItem>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ChartOfAccount>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AccountTaxRate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<CrossDocumentType>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<FiscalYear>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollDeductionEntry>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayPeriod>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SalaryChange>(b => b.Ignore("RowVersion"));

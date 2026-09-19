@@ -1,0 +1,224 @@
+@using IngenIA365ERP.Shared.Models.Personas
+
+@*
+    Los campos de UNA sección del formulario de persona (feature 008, FR-006). Personas los
+    compone en su SfTab (PersonaFormulario); Empleados y Asociados ponen cada sección en una
+    pestaña de su propia SfTab junto a las suyas — un hijo no puede emitir TabItem dentro del
+    TabItems del padre, así que se comparte por sección, no por pestaña.
+    Un campo nuevo se agrega aquí y aparece en las tres pantallas.
+*@
+
+@switch (Seccion)
+{
+    case SeccionDePersona.Identificacion:
+        <div class="rejilla-campos panel-pestana">
+            <div>
+                <label>Tipo de documento <span class="obligatorio">*</span></label>
+                <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.IdType"
+                                DataSource="@CatalogosDePersona.TiposDeDocumento" Placeholder="Seleccione" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Número de documento <span class="obligatorio">*</span></label>
+                <SfTextBox @bind-Value="Modelo.TaxId" Placeholder="Número de identificación *" Enabled="@Editable"
+                           HtmlAttributes="@Largo(20)" />
+                @Mensaje(() => Modelo.TaxId)
+            </div>
+            <div>
+                <label>Dígito de verificación (NIT)</label>
+                <SfTextBox @bind-Value="Modelo.TaxIdCheckDigit" Placeholder="DV" Enabled="@Editable" HtmlAttributes="@Largo(2)" />
+            </div>
+            <div>
+                <label>Tipo de persona</label>
+                <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.PersonType"
+                                DataSource="@CatalogosDePersona.TiposDePersona" Placeholder="Natural / Jurídica" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Nombres <span class="obligatorio">*</span></label>
+                <SfTextBox @bind-Value="Modelo.FirstName" Placeholder="Nombres *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+                @Mensaje(() => Modelo.FirstName)
+            </div>
+            <div>
+                <label>Apellidos <span class="obligatorio">*</span></label>
+                <SfTextBox @bind-Value="Modelo.LastName" Placeholder="Apellidos *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+                @Mensaje(() => Modelo.LastName)
+            </div>
+            <div class="campo-ancho">
+                <label>Razón social (si aplica)</label>
+                <SfTextBox @bind-Value="Modelo.BusinessName" Placeholder="Razón social comercial" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+            </div>
+            <div>
+                <label>Lugar de expedición</label>
+                <SfTextBox @bind-Value="Modelo.IdIssuedAt" Placeholder="Ej: Cali" Enabled="@Editable" HtmlAttributes="@Largo(40)" />
+            </div>
+            <div>
+                <label>Fecha de expedición</label>
+                <SfDatePicker TValue="DateTime?" @bind-Value="Modelo.IdIssueDateDt" Format="dd/MM/yyyy"
+                              Placeholder="dd/mm/aaaa" Enabled="@Editable" />
+            </div>
+        </div>
+        break;
+
+    case SeccionDePersona.Contacto:
+        <div class="rejilla-campos panel-pestana">
+            <div class="campo-ancho">
+                <label>Dirección</label>
+                <SfTextBox @bind-Value="Modelo.Address" Placeholder="Dirección residencial / comercial" Enabled="@Editable" HtmlAttributes="@Largo(120)" />
+            </div>
+            <div>
+                <label>Ciudad</label>
+                <SfDropDownList TValue="Guid?" TItem="OpcionDeCiudad" @bind-Value="Modelo.CityPublicId"
+                                DataSource="@Ciudades" Placeholder="Seleccione ciudad" AllowFiltering="true" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Correo electrónico</label>
+                <SfTextBox @bind-Value="Modelo.Email" Placeholder="usuario@dominio.com" Enabled="@Editable" HtmlAttributes="@Largo(120)" />
+                @Mensaje(() => Modelo.Email)
+            </div>
+            <div>
+                <label>Teléfono principal</label>
+                <SfTextBox @bind-Value="Modelo.Phone1" Placeholder="Teléfono fijo" Enabled="@Editable" HtmlAttributes="@Largo(40)" />
+            </div>
+            <div>
+                <label>Teléfono secundario</label>
+                <SfTextBox @bind-Value="Modelo.Phone2" Placeholder="Teléfono alterno" Enabled="@Editable" HtmlAttributes="@Largo(40)" />
+            </div>
+            <div>
+                <label>Móvil</label>
+                <SfTextBox @bind-Value="Modelo.Mobile" Placeholder="Celular" Enabled="@Editable" HtmlAttributes="@Largo(30)" />
+            </div>
+        </div>
+        break;
+
+    case SeccionDePersona.Demografia:
+        <div class="rejilla-campos panel-pestana">
+            <div>
+                <label>Género</label>
+                <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.Gender"
+                                DataSource="@CatalogosDePersona.Generos" Placeholder="Seleccione" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Estado civil</label>
+                <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.MaritalStatus"
+                                DataSource="@CatalogosDePersona.EstadosCiviles" Placeholder="Seleccione" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                </SfDropDownList>
+            </div>
+            <div>
+                <label>Fecha de nacimiento</label>
+                <SfDatePicker TValue="DateTime?" @bind-Value="Modelo.DateOfBirthDt" Format="dd/MM/yyyy"
+                              Placeholder="dd/mm/aaaa" Max="DateTime.Today" Enabled="@Editable" />
+            </div>
+            <div>
+                <label>Nivel educativo</label>
+                <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.EducationLevel"
+                                DataSource="@CatalogosDePersona.NivelesEducativos" Placeholder="Seleccione" Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                </SfDropDownList>
+            </div>
+        </div>
+        break;
+
+    case SeccionDePersona.Roles:
+        <div class="panel-pestana">
+            <p class="hint">
+                Los roles con ficha propia (empleado, asociado, vendedor) se ven aquí como distintivo y se
+                registran desde su módulo; los demás se marcan directamente.
+            </p>
+            <div class="rejilla-campos">
+                <div class="campo-ancho distintivos-derivados">
+                    @Derivado("Asociado", Modelo.EsAsociado, "associate", "e-badge-success")
+                    @Derivado("Empleado (interno cooperativa)", Modelo.EsEmpleado, "employee", "e-badge-warning")
+                    @Derivado("Vendedor", Modelo.EsVendedor, "salesperson", "e-badge-info")
+                </div>
+                <div><SfCheckBox @bind-Checked="Modelo.IsCustomer" Label="Cliente" Disabled="@Deshabilitado" /></div>
+                <div><SfCheckBox @bind-Checked="Modelo.IsSupplier" Label="Proveedor" Disabled="@Deshabilitado" /></div>
+                <div><SfCheckBox @bind-Checked="Modelo.IsAdvisor" Label="Asesor comercial" Disabled="@Deshabilitado" /></div>
+                <div><SfCheckBox @bind-Checked="Modelo.IsThirdParty" Label="Tercero contable" Disabled="@Deshabilitado" /></div>
+                <div><SfCheckBox @bind-Checked="Modelo.ReceivesInvoice" Label="Recibe factura electrónica" Disabled="@Deshabilitado" /></div>
+                @if (MostrarEstado)
+                {
+                    <div>
+                        <label>Estado</label>
+                        <SfDropDownList TValue="string" TItem="OpcionDeCatalogo" @bind-Value="Modelo.Status"
+                                        DataSource="@CatalogosDePersona.Estados" Placeholder="Seleccione" Enabled="@Editable">
+                            <DropDownListFieldSettings Text="Nombre" Value="Codigo" />
+                        </SfDropDownList>
+                    </div>
+                }
+            </div>
+        </div>
+        break;
+}
+
+@code {
+    /// <summary>Qué grupo de campos pinta esta instancia.</summary>
+    [Parameter, EditorRequired] public SeccionDePersona Seccion { get; set; }
+
+    [Parameter, EditorRequired] public PersonaFormularioModelo Modelo { get; set; } = new();
+
+    /// <summary>Sólo lectura: la persona existe y sus datos se editan desde el diálogo de Personas (FR-005).</summary>
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    /// <summary>Ciudades para el desplegable de Contacto; las carga quien contiene el formulario.</summary>
+    [Parameter] public IReadOnlyList<OpcionDeCiudad> Ciudades { get; set; } = [];
+
+    /// <summary>En Roles, si se muestra el estado de la persona (Personas sí; los módulos no).</summary>
+    [Parameter] public bool MostrarEstado { get; set; }
+
+    /// <summary>
+    /// Roles derivados que esta pantalla puede ofrecer registrar («Registrar como empleado…»):
+    /// <c>employee</c>, <c>associate</c>. Quien contiene el formulario decide según los permisos
+    /// del usuario. Vacío = sin botones (sólo distintivos).
+    /// </summary>
+    [Parameter] public IReadOnlyCollection<string> RolesRegistrables { get; set; } = [];
+
+    /// <summary>Se pulsó «Registrar como…»; el argumento es el rol (<c>employee</c>, <c>associate</c>).</summary>
+    [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
+
+    /// <summary>
+    /// El EditContext del EditForm que envuelve al formulario, si lo hay. Lo hay en el diálogo
+    /// de Personas; Empleados y Asociados ponen estas secciones dentro de su SfTab sin EditForm
+    /// y validan en código (<c>Validar()</c>). Un <c>ValidationMessage</c> sin EditContext no se
+    /// omite: revienta el render del diálogo entero (QA, 2026-09-18, «Editar empleado»).
+    /// </summary>
+    [CascadingParameter] private EditContext? Contexto { get; set; }
+
+    private bool Editable => !Deshabilitado;
+
+    /// <summary>El mensaje de validación del campo, sólo cuando hay un EditForm que lo alimente.</summary>
+    private RenderFragment Mensaje(System.Linq.Expressions.Expression<Func<string?>> campo) => __builder =>
+    {
+        if (Contexto is not null)
+        {
+            <ValidationMessage For="@campo" />
+        }
+    };
+
+    private static Dictionary<string, object> Largo(int max) => new() { { "maxlength", max.ToString() } };
+
+    private RenderFragment Derivado(string etiqueta, bool tiene, string rol, string cssBadge) => __builder =>
+    {
+        if (tiene)
+        {
+            <span class="e-badge @cssBadge marca-rol">@etiqueta</span>
+        }
+        else if (RolesRegistrables.Contains(rol))
+        {
+            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" OnClick="@(() => OnRegistrarRol.InvokeAsync(rol))">
+                Registrar como @etiqueta.ToLowerInvariant()…
+            </SfButton>
+        }
+        else
+        {
+            <span class="e-badge marca-rol marca-rol-apagada">@etiqueta: no</span>
+        }
+    };
+}

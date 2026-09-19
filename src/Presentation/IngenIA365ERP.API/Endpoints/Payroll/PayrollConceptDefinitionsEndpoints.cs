@@ -57,6 +57,13 @@ public sealed class PayrollConceptDefinitionsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Concepts.Manage");
 
+        // Feature 009 (T062): las cuentas vigentes del concepto con sus reglas y su reparo, para que la pantalla no las pida a ciegas.
+        group.MapGet("/{code}/accounts", async (string code, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Payroll.Concepts.Queries.GetConceptAccountsQuery(code), ct))
+            .WithName("Payroll_Concepts_Accounts_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Concepts.View");
+
         group.MapPut("/{code}/accounts", async (string code, AccountsBody body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new SetConceptAccountsCommand(code, body.Rows), ct))
             .WithName("Payroll_Concepts_Accounts")

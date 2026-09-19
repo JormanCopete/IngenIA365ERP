@@ -83,7 +83,6 @@ public sealed class PreferenciasClient(
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, RutaApi);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(req, ct);
             resultado = await CentralAuthApi.ParseAsync<PreferenciasUsuarioRespuesta>(resp, ct);
         }
@@ -150,7 +149,6 @@ public sealed class PreferenciasClient(
             {
                 Content = JsonContent.Create(new { preferencias }),
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
         }

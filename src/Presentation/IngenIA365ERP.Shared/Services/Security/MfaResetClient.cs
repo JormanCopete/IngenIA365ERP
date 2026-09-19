@@ -92,7 +92,6 @@ public sealed class MfaResetClient
         if (string.IsNullOrWhiteSpace(token)) return null;
 
         var req = new HttpRequestMessage(metodo, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return req;
     }
 }

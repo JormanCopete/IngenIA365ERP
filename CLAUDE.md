@@ -51,7 +51,20 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   navegar; `?returnUrl=` devuelve a la pantalla donde se estaba. Hasta el 2026-09-10
   nadie llamaba al refresh y la app expulsaba a los quince minutos; las claves
   `CentralIdentity:AccessTokenLifetimeMinutes/RefreshTokenLifetimeHours` que había en
-  `appsettings.json` no las leía nadie y se retiraron.
+  `appsettings.json` no las leía nadie y se retiraron. **La cabecera `Authorization` la pone
+  sólo el handler**: ningún cliente ni pantalla de Shared la pone a mano
+  (`ElTokenDeSesionLoPoneElHandler`; se exceptúan los tokens de desafío y el cierre de sesión).
+  Hasta el 2026-09-18 quince clientes tipados (Nómina, Personas, Contabilidad, Permisos…)
+  mandaban `CurrentAccessToken` en la cabecera y el handler se apartaba al verla: salían sin
+  renovar ni reintentar, y a los quince minutos del último canje decían «La sesión expiró»
+  mientras las pantallas con `Http.GetAsync` a secas seguían andando —y al renovar éstas, aquéllos
+  volvían solos—. Hoy el handler reconoce el access de la sesión (vigente o recién rotado,
+  `RenovadorDeSesion.EsTokenDeSesion`) y lo reemplaza por el vigente.
+- **JSON de la API**: los enums **entran por nombre o por número y salen como número**
+  (`Application/Common/Json/EnumPorNombreONumero`, registrado en `ConfigureHttpJsonOptions`).
+  Las pantallas mandan el nombre («Earning», «Monthly») y los DTOs de Shared leen `int`; hasta
+  el 2026-09-18 System.Text.Json sólo aceptaba números y crear un concepto o un plan de nómina
+  desde la pantalla respondía un 400 vacío —sin sobre, sin log— antes de llegar al handler.
 - **Segundo factor**: vive en `ADM_MfaCredentials`, una tabla con discriminador
   (TPH) — no en la columna `ADM_CentralUsers.MfaSecret`. Esa columna **sigue
   escribiéndose** como red de rollback mientras dure el traslado, y la
@@ -129,6 +142,66 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   clases ARL siguen numéricas 1..5 porque el motor las traduce. Un duplicado responde
   `Catalogo.CodigoDuplicado` con el nombre del existente, y la pantalla lo consulta
   antes (`GET /api/catalogos/{catalogo}/codigo/{codigo}`, componente `CampoCodigo`).
+- **Personas y roles (feature 008, 2026-09-13)**: la persona se escribe desde la interfaz en
+  **un solo sitio**, `Components/Personas/PersonaDialog` sobre `PersonasClient`; Empleados y
+  Asociados muestran a la persona existente **de sólo lectura** («Editar datos de la persona»
+  abre ese diálogo) y con persona nueva registran persona y rol en **un paso**
+  (`POST /api/payroll/employees/with-person`, `/api/core/associates/with-person`: un comando, un
+  `SaveChangesAsync`, un evento de auditoría). Las banderas `IsEmployee/IsAssociate/IsSalesperson`
+  **no están en el contrato** (`PersonInput`): las escribe sólo el handler que crea o retira la
+  fila hija; hasta esa fecha `UpdatePersonCommand` sobrescribía las ocho y registrar un empleado
+  apagaba «Asociado». Las otras cinco se editan en Personas. El documento es único **incluso
+  frente a eliminadas**: `Person.TaxIdDeleted` y `POST /api/core/people/{id}/restore` (misma fila,
+  permiso `Core.People.Delete`); una carrera entre dos usuarios se traduce a `Person.TaxIdDuplicate`.
+  El **reingreso** de un empleado retirado es una **ficha nueva** (`UK_PAY_Employees_PersonId`
+  filtrado a fichas vivas; `by-person` devuelve sólo la viva). `/api/core/people`, `/associates` y
+  `/payroll/employees` exigen `Core.People.*`, `Core.Associates.*`, `Payroll.Employees.*`
+  (Operador crea y edita; eliminar/restaurar y terminar contrato son del administrador; todo rol
+  existente conserva la lectura); el cliente los conoce por `GET /api/admin/permissions/mine`
+  (`PermisosDelUsuario`) y `PermissionGate` vive en `Shared` —antes estaba en `Web.Client`,
+  `Shared` no lo veía y era inerte—. `GET /api/core/people/{id}` devuelve la persona **completa**:
+  antes faltaban 13 campos y editar en Personas los borraba. Receta para sumar módulos (fase 2:
+  Vendedores, Proveedores, Clientes, Terceros y los 2 buscadores ad-hoc que quedan):
+  `docs/manual/alta-de-persona-desde-modulos.md`. Lo fijan `LaPersonaSeEscribeEnUnSoloSitio`,
+  `LosMaestrosDePersonaExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
+  De paso: `PAY_Employees.TerminationCause` era el `varchar(4)` del código SOLIDO y la pantalla lo
+  pedía como texto libre (500 con cualquier motivo real); pasó a 120 con validador
+  (`MotivoDeRetiroComoTexto`).
+- **Contabilidad (feature 009, en la rama `009-contabilidad-niif`, entrega E1)**: contabilidad
+  NIIF nueva sobre 29 tablas `ACC_*`; las 33 heredadas se retiran con la migración par
+  `ContabilidadNiif`, que es **destructiva con guarda** (falla si `ACC_JournalEntries` o
+  `ACC_Documents` tienen filas; marcador `MIGRACION-DESTRUCTIVA-APROBADA` con respaldo y
+  segundo revisor) y **vacía `PAY_ConceptDefinitionAccounts`**: tras iniciar la contabilidad
+  hay que reparametrizar las cuentas por concepto. Reglas que no se negocian: **un solo
+  camino al libro**, `AccountingPoster` (`Application/Accounting/Posting`) —nadie más hace
+  `new AccountingDocument`/`JournalEntry` ni toca `VoucherType.NextNumber`; lo vigila
+  `NingunModuloEscribeMovimientosFueraDelContrato`—; **no hay saldos guardados** (todo es una
+  suma sobre `ACC_JournalEntries` con `IsPosted`); **las reglas viven en la cuenta**
+  (módulos habilitados, exige tercero/documento/centro/sucursal, bancaria, de impuesto con
+  tarifas) y las evalúa `AccountLineRules`; lo contabilizado **no se edita ni se borra**: se
+  reversa, y sólo el módulo dueño reversa lo suyo (`Accounting.Document.ModuleOwned`). «Fecha
+  ≤ hoy» sólo aplica al digitar: un módulo fecha según su operación (la nómina, al fin del
+  período). El borrador manual se guarda con errores, se valida al salir de cada campo
+  (`POST /documents/validate`, errores con `lineNumber`/`field`) y contabilizar es otro
+  permiso (`Vouchers.Post`; cuatro ojos opcional por empresa). Toda línea lleva sucursal (la
+  propuesta si no viene); el tercero es una **persona** y las entidades institucionales
+  (EPS, ARL, fondos, cajas, bancos) se vinculan a la suya (`PersonId`, FR-088). Semillas
+  JSON embebidas: PUC solidario —el **CUIF oficial** de la Supersolidaria, formato SIAC 2023-11-03,
+  2.110 cuentas, desde el 2026-09-18; antes era una transcripción con 695 códigos, varios
+  inexistentes— y comercial (1.869), **pendientes de validar por el contador**; un catálogo
+  sembrado se pone al día al cambiar `version` (`SincronizacionDeCatalogo`: en su sitio, sin
+  duplicar, y el plan se vuelve a copiar sólo si sigue intacto). Los códigos son regla fija por
+  nivel (`LongitudDeAuxiliar`: 2/4/6 exactos; nivel 5 de 7 a 9; nivel 6 de 10 a 12) y **donde el
+  catálogo no trae hijos** (127 cuentas y 6 grupos del CUIF: reservas, fondos, provisiones,
+  excedentes, contras de orden) la empresa crea **cuentas propias** del nivel siguiente; donde sí
+  los trae, no. 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
+  (`Operator` digita y exporta, no contabiliza). El ingreso a cada opción del ERP queda en
+  la auditoría con módulo `Navigation` (`RegistroDeAccesos` → `POST /api/audit/access`).
+  Entregas: E1 (núcleo, esta rama), E2 consultas/cierres/apertura, E3 los otros seis módulos
+  sobre el contrato (sus escritores muertos llevan el marcador `E3 (feature 009)`), E4
+  conciliación, impuestos, exógena, activos. Recetas:
+  `docs/manual/contabilidad-contrato-de-contabilizacion.md` y
+  `docs/operaciones/contabilidad-primer-ejercicio.md`.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -153,7 +226,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». La
   ficha también guarda fondo de cesantías (`SeveranceFundId`, entero desde el 2026-09-12)
   y caja de compensación (`FamilySubsidyId` → catálogo `PAY_FamilyCompensationFunds`,
-  sin semilla). **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
+  sin semilla). La **fecha de ingreso** se corrige desde la ficha (`UpdateEmployeeCommand.HireDate`,
+  nula = no cambia) mientras no haya nómina aprobada del período, novedad en período cerrado
+  antes ni cambio de salario anterior (`Employee.HireDateLocked`); el cambio de salario inicial
+  se mueve con ella. Hasta el 2026-09-18 el PUT no la llevaba y la pantalla la mostraba editable.
+  **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
   base de proporción); cada período lleva `SubPeriodNumber` e `ImputationYear/Month`
   (`PeriodCalendar` los propone y valida la duración); las recurrentes tienen `ApplyOn`
   (cada período / primero / último del mes); «Descartar borrador» deja la corrida `Superseded`
@@ -170,18 +247,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-05 (cierre de la feature 005), remedida. **Son cifras que
+Instantánea del 2026-09-15 (cierre de E1 de la feature 009, en su rama), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 674 en 142 archivos | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 180 con `@page` | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 15 clases `*Report` | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 781 (136 Domain, 564 Application, 54 Architecture, 25 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 134 el 2026-09-10 con Docker: 133 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 1.053 el 2026-09-18 (165 Domain, 757 Application, 76 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -226,11 +303,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/005-nomina-novedades-liquidacion/plan.md](specs/005-nomina-novedades-liquidacion/plan.md)
+[specs/009-contabilidad-niif/plan.md](specs/009-contabilidad-niif/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/005-nomina-novedades-liquidacion/spec.md)
-- [research.md](specs/005-nomina-novedades-liquidacion/research.md)
-- [data-model.md](specs/005-nomina-novedades-liquidacion/data-model.md)
-- [quickstart.md](specs/005-nomina-novedades-liquidacion/quickstart.md)
-- [contracts/](specs/005-nomina-novedades-liquidacion/contracts/)
+- [spec.md](specs/009-contabilidad-niif/spec.md)
+- [research.md](specs/009-contabilidad-niif/research.md)
+- [data-model.md](specs/009-contabilidad-niif/data-model.md)
+- [quickstart.md](specs/009-contabilidad-niif/quickstart.md)
+- [contracts/](specs/009-contabilidad-niif/contracts/)
 <!-- SPECKIT END -->

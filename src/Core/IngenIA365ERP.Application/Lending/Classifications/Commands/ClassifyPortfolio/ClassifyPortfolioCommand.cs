@@ -143,25 +143,7 @@ public class ClassifyPortfolioCommandHandler(
         var totalProvision = buckets.Values.Sum(b => b.Provision);
         Guid? docId = null;
 
-        if (totalProvision > 0)
-        {
-            var doc = new AccountingDocument
-            {
-                VoucherTypeCode = "PRV",
-                DocumentNumber = 0,
-                Detail = $"Provision cartera por calificacion {request.ClassificationDate:yyyy-MM-dd}",
-                TotalDebit = totalProvision,
-                TotalCredit = totalProvision,
-                DocumentDate = request.ClassificationDate,
-                IsClosed = true,
-                PeriodCode = acctPeriod,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(doc);
-            docId = doc.PublicId;
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

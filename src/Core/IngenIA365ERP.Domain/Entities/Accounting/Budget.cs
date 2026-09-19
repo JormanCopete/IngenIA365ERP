@@ -1,31 +1,22 @@
 using IngenIA365ERP.Domain.Common;
-using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Accounting;
 
 namespace IngenIA365ERP.Domain.Entities.Accounting;
 
-/// <summary>Maps to [dbo].[ACC_Budgets] (cnt_presupto).</summary>
+/// <summary>
+/// Presupuesto de un ejercicio (feature 009, FR-061..FR-064). Versionado: modificar uno aprobado
+/// crea otra versión con motivo y deja la anterior <c>Superseded</c>; el informe puede mostrar
+/// inicial y vigente.
+/// </summary>
 public class Budget : AuditableEntity
 {
-    public int PeriodYear { get; set; }
-    public int AccountId { get; set; }
-    public int BranchId { get; set; }
-    public int CostCenterId { get; set; }
-    public decimal? JanBudget { get; set; }
-    public decimal? FebBudget { get; set; }
-    public decimal? MarBudget { get; set; }
-    public decimal? AprBudget { get; set; }
-    public decimal? MayBudget { get; set; }
-    public decimal? JunBudget { get; set; }
-    public decimal? JulBudget { get; set; }
-    public decimal? AugBudget { get; set; }
-    public decimal? SepBudget { get; set; }
-    public decimal? OctBudget { get; set; }
-    public decimal? NovBudget { get; set; }
-    public decimal? DecBudget { get; set; }
-    public decimal? TotalBudget { get; set; }
+    public int FiscalYearId { get; set; }
+    public FiscalYear? FiscalYear { get; set; }
+    public int Version { get; set; } = 1;
+    public BudgetStatus Status { get; set; } = BudgetStatus.Draft;
+    public DateTime? ApprovedAt { get; set; }
+    public string? ApprovedBy { get; set; }
+    public string? ChangeReason { get; set; }
 
-    // Navigation
-    public ChartOfAccount Account { get; set; } = null!;
-    public Branch Branch { get; set; } = null!;
-    public CostCenter CostCenter { get; set; } = null!;
+    public ICollection<BudgetLine> Lines { get; set; } = [];
 }

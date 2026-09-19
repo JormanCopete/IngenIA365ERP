@@ -1,0 +1,150 @@
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services
+@using IngenIA365ERP.Shared.Services.Security
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject CentralAuthClient Auth
+@inject IJSRuntime JS
+
+@* Soportes de una entidad (feature 009, T045): vivía en Web.Client y Shared no lo veía. Lista,
+   descarga y elimina adjuntos por (OwnerEntityType, OwnerEntityPublicId); el token va en cada
+   petición como en los clientes tipados, porque en el prerenderizado el HttpClient plano sale sin
+   autorización. La descarga pasa por window.descargas (Shared/wwwroot/js/descargas.js). *@
+<div class="attachment-list">
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="aviso aviso-error">@_error</p>
+        }
+        else if (_items.Count == 0)
+        {
+            <p class="muted">Sin soportes.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Archivo</th><th>Tipo</th><th class="numero">Tamaño</th><th>Subido</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _items)
+                    {
+                        <tr>
+                            <td>@a.FileName</td>
+                            <td>@a.ContentType</td>
+                            <td class="numero">@FormatBytes(a.SizeBytes)</td>
+                            <td>@a.CreatedAt.ToString("yyyy-MM-dd HH:mm") @a.CreatedBy</td>
+                            <td class="acciones">
+                                <button type="button" class="boton boton-secundario" @onclick="() => DownloadAsync(a)">Descargar</button>
+                                @if (PermitirEliminar)
+                                {
+                                    <button type="button" class="boton boton-peligro" @onclick="() => DeleteAsync(a)">Eliminar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string OwnerEntityType { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public Guid OwnerEntityPublicId { get; set; }
+
+    /// <summary>Un comprobante contabilizado conserva sus soportes: quien lo muestra decide si se pueden retirar.</summary>
+    [Parameter] public bool PermitirEliminar { get; set; } = true;
+
+    private readonly EstadoDeCarga _carga = new();
+    private string _error = string.Empty;
+    private List<AttachmentDto> _items = [];
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    /// <summary>Recarga la lista — llamable desde el padre tras subir un archivo.</summary>
+    public async Task RefreshAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = string.Empty;
+        try
+        {
+            using var req = Peticion(HttpMethod.Get,
+                $"/api/attachments/by-owner?ownerEntityType={Uri.EscapeDataString(OwnerEntityType)}&ownerEntityPublicId={OwnerEntityPublicId}");
+            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
+            using var resp = await Http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"No se pudieron cargar los soportes (error {(int)resp.StatusCode}).";
+                return;
+            }
+            _items = await resp.Content.ReadFromJsonAsync<List<AttachmentDto>>() ?? [];
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Error de red: {ex.Message}";
+        }
+    }
+
+    private async Task DownloadAsync(AttachmentDto a)
+    {
+        try
+        {
+            using var req = Peticion(HttpMethod.Get, $"/api/attachments/{a.PublicId}");
+            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
+            using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"No se pudo descargar (error {(int)resp.StatusCode}).";
+                return;
+            }
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var streamRef = new DotNetStreamReference(stream, leaveOpen: false);
+            await JS.InvokeVoidAsync("descargas.downloadFromStream", a.FileName, a.ContentType, streamRef);
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Error de red: {ex.Message}";
+        }
+        catch (JSException ex)
+        {
+            _error = $"El navegador no pudo guardar el archivo: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteAsync(AttachmentDto a)
+    {
+        using var req = Peticion(HttpMethod.Delete, $"/api/attachments/{a.PublicId}");
+        if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
+        using var resp = await Http.SendAsync(req);
+        if (!resp.IsSuccessStatusCode)
+        {
+            _error = $"No se pudo eliminar (error {(int)resp.StatusCode}).";
+            return;
+        }
+        await RefreshAsync();
+    }
+
+    private HttpRequestMessage? Peticion(HttpMethod metodo, string url)
+    {
+        var token = Auth.CurrentAccessToken;
+        if (token is null) return null;
+        var req = new HttpRequestMessage(metodo, url);
+        return req;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] suffixes = ["B", "KB", "MB", "GB"];
+        double value = bytes;
+        var i = 0;
+        while (value >= 1024 && i < suffixes.Length - 1) { value /= 1024; i++; }
+        return $"{value:N1} {suffixes[i]}";
+    }
+
+    public sealed record AttachmentDto(
+        Guid PublicId, string OwnerEntityType, Guid OwnerEntityPublicId,
+        string FileName, string ContentType, long SizeBytes, string Sha256Hex,
+        DateTime CreatedAt, string? CreatedBy);
+}

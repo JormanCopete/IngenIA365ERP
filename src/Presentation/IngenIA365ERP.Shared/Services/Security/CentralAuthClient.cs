@@ -336,7 +336,6 @@ public sealed class CentralAuthClient : IDisposable
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             var parsed = await CentralAuthApi.ParseAsync<MeResponse>(resp, ct);
             _me = parsed.IsSuccess ? parsed.Value : null;
@@ -361,7 +360,9 @@ public sealed class CentralAuthClient : IDisposable
                 {
                     Content = JsonContent.Create(new { refreshToken = _sesion.RefreshToken }),
                 };
+                // Va con el access que hay, sin renovar: es el cierre, y el refresh del cuerpo es el que se revoca.
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _sesion.AccessToken);
+                req.Options.Set(RenovadorDeSesion.SinSesion, true);
                 await _http.SendAsync(req, ct);
             }
             catch (HttpRequestException ex)

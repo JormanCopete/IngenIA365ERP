@@ -9,6 +9,8 @@ public class TreasuryConceptConfiguration : IEntityTypeConfiguration<TreasuryCon
     public void Configure(EntityTypeBuilder<TreasuryConcept> builder)
     {
         builder.ToTable("TRS_Concepts");
+        builder.HasOne(e => e.DebitAccount).WithMany().HasForeignKey(e => e.DebitAccountId).OnDelete(DeleteBehavior.Restrict); // feature 009 (R16)
+        builder.HasOne(e => e.CreditAccount).WithMany().HasForeignKey(e => e.CreditAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

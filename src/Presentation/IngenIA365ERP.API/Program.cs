@@ -122,6 +122,9 @@ try
     // Carter for Minimal API endpoints
     builder.Services.AddCarter();
 
+    // Los enums entran por nombre o por número y salen como número (ver EnumPorNombreONumero).
+    builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new IngenIA365ERP.Application.Common.Json.EnumPorNombreONumero()));
+
     // CORS
     builder.Services.AddCors(options =>
     {
@@ -165,6 +168,10 @@ try
     // endpoint (identidad central → SEC_Users → cooperativa). Va después de Identity para que
     // esta registración sea la que resuelva IPermissionChecker.
     builder.Services.AddScoped<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker, IngenIA365ERP.API.Services.PermisosDelHandler>();
+    // Feature 008: los mismos permisos, expuestos al cliente por GET /api/admin/permissions/mine.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions, IngenIA365ERP.API.Services.PermisosDelHandler>();
+    // Feature 009 (FR-035): sucursales asignadas de quien digita, para el contrato de contabilizacion.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IUserBranchScope, IngenIA365ERP.API.Services.UserBranchScope>();
     // T048 (Feature 002) — identidad central federada sobre AdminDbContext.
     // Registra IdentityCore<CentralUserIdentity>, BcryptPasswordHasher,
     // PwnedPasswordService, CentralJwtIssuer, ICentralIdentityProvider.
@@ -278,6 +285,9 @@ try
     builder.Services.AddStorageServices(builder.Configuration);
     // Feature 005: el comprobante de pago se pinta con QuestPDF, que solo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.IPayslipPdfRenderer, IngenIA365ERP.API.Reports.PayslipPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Documents.IVoucherPdfRenderer, IngenIA365ERP.API.Reports.VoucherPdfRenderer>();
+    // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 
     // T031 — SignalR para el push de notificaciones in-app.
     builder.Services.AddSignalR();
@@ -363,6 +373,23 @@ try
     app.UseExceptionHandler(rama => rama.Run(async contexto =>
     {
         var fallo = contexto.Features.Get<IExceptionHandlerFeature>()?.Error;
+
+        // Feature 009: la carrera de edicion que ApplicationDbContext traduce a
+        // ConcurrencyConflictException salia de aqui como 500 Generic.Unexpected, cuando el
+        // ErrorEnvelopeFilter promete 409 para Concurrency.*. Es el usuario quien puede
+        // resolverla (refrescar y reintentar), asi que se le dice.
+        if (fallo is IngenIA365ERP.Domain.Exceptions.ConcurrencyConflictException conflicto)
+        {
+            contexto.Response.StatusCode = StatusCodes.Status409Conflict;
+            contexto.Response.ContentType = "application/json";
+            await contexto.Response.WriteAsJsonAsync(new
+            {
+                code = IngenIA365ERP.Application.Common.Models.Error.StaleRowVersion.Code,
+                message = conflicto.Message,
+                traceId = contexto.TraceIdentifier,
+            });
+            return;
+        }
 
         contexto.RequestServices
             .GetRequiredService<ILoggerFactory>()

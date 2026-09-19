@@ -1,5 +1,7 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -24,7 +26,7 @@ public sealed record ReverseRunResultDto(
 /// siguen como estaban, listas para corregirse y recalcular. Si algún empleado tiene marca de
 /// pago vigente no se reversa: primero se retiran las marcas, con motivo.
 /// </summary>
-public sealed record ReversePayrollRunCommand(Guid RunPublicId, string Reason) : IRequest<Result<ReverseRunResultDto>>;
+public sealed record ReversePayrollRunCommand(Guid RunPublicId, string Reason) : IRequest<Result<ReverseRunResultDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ReversePayrollRunCommandValidator : AbstractValidator<ReversePayrollRunCommand>
 {
@@ -84,7 +86,7 @@ public sealed class ReversePayrollRunCommandHandler(
         run.ReversedAt = ahora;
         run.ReversedBy = yo;
         run.ReversalReason = request.Reason.Trim();
-        run.ReversalAccountingDocument = posting.Value.Document;
+        run.ReversalAccountingDocument = posting.Value;
         run.UpdatedAt = ahora;
         run.UpdatedBy = yo;
 
@@ -112,12 +114,12 @@ public sealed class ReversePayrollRunCommandHandler(
 
         await db.SaveChangesAsync(ct);
 
-        var numero = $"{posting.Value.Document.VoucherTypeCode}-{posting.Value.Document.DocumentNumber}";
+        var numero = posting.Value.Referencia();
         await audit.EmitAsync(AuditEventTypes.PayrollRunReversed, nameof(PayrollRun), run.PublicId,
-            new { status = "Approved", accountingDocument = $"{original.VoucherTypeCode}-{original.DocumentNumber}" },
+            new { status = "Approved", accountingDocument = original.Referencia() },
             new { status = "Reversed", reason = request.Reason.Trim(), reversalDocument = numero, period = period.PublicId, periodStatus = "Open" }, ct);
 
-        return Result.Success(new ReverseRunResultDto(run.PublicId, period.PublicId, posting.Value.Document.PublicId, numero));
+        return Result.Success(new ReverseRunResultDto(run.PublicId, period.PublicId, posting.Value.PublicId, numero));
     }
 
     private static Result<ReverseRunResultDto> Fallo(string code, string message) => Result.Failure<ReverseRunResultDto>(new Error(code, message));

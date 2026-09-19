@@ -1,7 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Treasury;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -80,30 +79,7 @@ public class RegisterCheckCommandHandler(
 
         context.Checks.Add(check);
 
-        // 7. Create AccountingDocument (Debit: CxP/Gasto, Credit: Banco)
-        var lastDocNum = await context.AccountingDocuments
-            .Where(d => d.VoucherTypeCode == "EG") // Egreso
-            .OrderByDescending(d => d.DocumentNumber)
-            .Select(d => d.DocumentNumber)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var accDoc = new AccountingDocument
-        {
-            VoucherTypeCode = "EG",
-            DocumentNumber = lastDocNum + 1,
-            Detail = $"Cheque #{request.CheckNumber} - {payee.FirstName} {payee.LastName}",
-            TotalDebit = request.Amount,
-            TotalCredit = request.Amount,
-            DocumentDate = request.IssueDate,
-            BeneficiaryId = payee.Id,
-            CheckNumber = request.CheckNumber,
-            BankId = (short)bank.Id,
-            ModuleCode = "TRS",
-            CreatedAt = dateTime.UtcNow,
-            CreatedBy = currentUser.UserName
-        };
-
-        context.AccountingDocuments.Add(accDoc);
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 

@@ -56,4 +56,8 @@ public class SavingsParameter : AuditableEntity
     [MaxLength(15)]
     public string TreasuryAccount { get; set; } = string.Empty;
     public int? LegacyLinCred { get; set; }
+
+    // Feature 009 (R16): cuenta del gasto por intereses de ahorro (contrapartida de TreasuryAccount).
+    [MaxLength(12)]
+    public string? InterestExpenseAccount { get; set; }
 }

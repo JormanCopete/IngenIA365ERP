@@ -28,6 +28,8 @@ public record BankDto
     public decimal? CommissionAmount { get; init; }
     public bool PromptForPrinter { get; init; }
     public string? ControlSequential { get; init; }
+    public Guid? PersonPublicId { get; init; }
+    public string? PersonName { get; init; }
 }
 
 public record ListBanksQuery : IRequest<Result<PagedList<BankDto>>>
@@ -90,7 +92,7 @@ public class ListBanksQueryHandler(IApplicationDbContext context)
                 CommissionType = e.CommissionType,
                 CommissionAmount = e.CommissionAmount,
                 PromptForPrinter = e.PromptForPrinter,
-                ControlSequential = e.ControlSequential
+                ControlSequential = e.ControlSequential, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .ToListAsync(cancellationToken);
 
@@ -133,7 +135,7 @@ public class GetBankByIdQueryHandler(IApplicationDbContext context)
                 CommissionType = e.CommissionType,
                 CommissionAmount = e.CommissionAmount,
                 PromptForPrinter = e.PromptForPrinter,
-                ControlSequential = e.ControlSequential
+                ControlSequential = e.ControlSequential, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .FirstOrDefaultAsync(cancellationToken);
 

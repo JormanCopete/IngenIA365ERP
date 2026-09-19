@@ -138,6 +138,32 @@ public class RenovacionDeSesionHandlerTests
     }
 
     [Fact]
+    public async Task Con_el_access_de_la_sesion_puesto_a_mano_renueva_y_reintenta_igual()
+    {
+        // Así mandaban los clientes tipados (Nómina, Personas…) hasta el 2026-09-18: con
+        // CurrentAccessToken en la cabecera. Un token de la sesión —aunque sea el que acaba de
+        // rotar— no es un desafío: se reemplaza por el vigente y ante un 401 se canjea y reintenta.
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        var viejo = _sesion.AccessToken!;
+        var llamadas = 0;
+        _servidor.Responder = (req, _) => req.RequestUri!.AbsolutePath switch
+        {
+            "/api/auth/refresh" => Renovacion("access-2", "refresh-2"),
+            _ => ++llamadas == 1 ? new HttpResponseMessage(HttpStatusCode.Unauthorized) : new HttpResponseMessage(HttpStatusCode.OK),
+        };
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/payroll/concept-definitions") { Content = JsonContent.Create(new { code = "X" }) };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", viejo);
+
+        var resp = await _http.SendAsync(req);
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        _servidor.Peticiones.Select(p => p.Ruta).Should().Equal("/api/payroll/concept-definitions", "/api/auth/refresh", "/api/payroll/concept-definitions");
+        _servidor.A("/api/payroll/concept-definitions").Last().Bearer.Should().Be("access-2");
+        _sesion.EsTokenDeSesion(viejo).Should().BeTrue("el que acaba de rotar sigue siendo de la sesión");
+        _sesion.EsTokenDeSesion("token-de-desafio").Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Cada_peticion_con_sesion_cuenta_como_actividad()
     {
         await ConSesionAsync(TimeSpan.FromMinutes(10));

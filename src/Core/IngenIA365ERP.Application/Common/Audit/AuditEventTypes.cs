@@ -109,6 +109,19 @@ public static class AuditEventTypes
     public const string PayrollEmployeeWithholdingChanged = "Payroll.EmployeeWithholding.Changed";
     public const string PayrollRunExported = "Payroll.Run.Exported";
 
+    // -------------------- Contabilidad (feature 009) --------------------
+    // Eventos explicitos ademas del AuditBehavior generico: exportaciones (FR-050), envios de
+    // certificados, inicializacion y validacion de catalogos. Modulo "Accounting".
+    public const string AccountingSetupInitialized = "Accounting.Setup.Initialized";
+    public const string AccountingCatalogValidated = "Accounting.Catalog.Validated";
+    public const string AccountingReportExported = "Accounting.Report.Exported";
+    public const string AccountingCertificateSent = "Accounting.Certificate.Sent";
+
+    // -------------------- Navegacion (feature 009, FR-051) --------------------
+    // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
+    // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.
+    public const string NavigationOpened = "Navigation.Opened";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

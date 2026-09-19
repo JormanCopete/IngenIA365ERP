@@ -36,6 +36,10 @@
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Feature 009 (R9): los catalogos contables son datos incrustados, no codigo. -->
+    <EmbeddedResource Include="Seeding\Parametric\Data\*.json" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
     <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />
   </ItemGroup>

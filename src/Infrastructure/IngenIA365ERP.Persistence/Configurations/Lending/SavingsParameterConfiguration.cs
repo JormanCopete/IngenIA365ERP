@@ -9,6 +9,7 @@ public class SavingsParameterConfiguration : IEntityTypeConfiguration<SavingsPar
     public void Configure(EntityTypeBuilder<SavingsParameter> builder)
     {
         builder.ToTable("LND_SavingsParameters");
+        builder.Property(e => e.InterestExpenseAccount).HasMaxLength(12); // feature 009 (R16)
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

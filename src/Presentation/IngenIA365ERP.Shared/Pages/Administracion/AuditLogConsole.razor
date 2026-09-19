@@ -9,7 +9,7 @@
 
 <PageTitle>Registro de auditoría — IngenIA365ERP</PageTitle>
 
-<PermissionGate Required="AuditLog.View">
+<PermissionGate Required="AuditLog.View" MostrarAviso="true">
     <ChildContent>
         <div class="admin-page">
             <div class="page-header">
@@ -21,7 +21,12 @@
                     <input type="text" placeholder="UserId" @bind="_userId" />
                 </label>
                 <label>Módulo
-                    <input type="text" placeholder="Security" @bind="_module" />
+                    <input type="text" placeholder="Security" list="modulos-auditoria" @bind="_module" />
+                    <datalist id="modulos-auditoria">
+                        <option value="Navigation">Navigation — ingreso a opciones (feature 009)</option>
+                        <option value="Security" /><option value="Core" /><option value="Payroll" /><option value="Accounting" />
+                        <option value="Lending" /><option value="Inventory" /><option value="Treasury" /><option value="CDT" /><option value="General" />
+                    </datalist>
                 </label>
                 <label>Acción
                     <input type="text" placeholder="Created/Updated/…" @bind="_action" />
@@ -60,6 +65,7 @@
                             <th>Módulo</th>
                             <th>Acción</th>
                             <th>Entidad</th>
+                            <th>Opción</th>
                             <th>Id</th>
                             <th>IP</th>
                             <th>Endpoint</th>
@@ -74,6 +80,7 @@
                                 <td>@e.Module</td>
                                 <td>@e.Action</td>
                                 <td>@e.EntityType</td>
+                                <td>@Opcion(e)</td>
                                 <td>@e.EntityId</td>
                                 <td>@e.IpAddress</td>
                                 <td>@e.Endpoint</td>
@@ -107,21 +114,10 @@
     private string? _error;
     private List<AuditEntryItem> _items = new();
 
-    private IJSObjectReference? _downloadModule;
-
     private int TotalPages => PageSize <= 0 ? 0
         : (int)Math.Ceiling((double)_totalCount / PageSize);
 
     protected override Task OnInitializedAsync() => SearchAsync();
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _downloadModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./audit-console.js");
-        }
-    }
 
     private async Task SearchAsync()
     {
@@ -172,7 +168,6 @@
 
     private async Task DownloadAsync(string endpoint, string contentType, string fileName)
     {
-        if (_downloadModule is null) return;
         _loading = true; _error = null;
         try
         {
@@ -189,8 +184,8 @@
                 ?? fileName;
             using var stream = await resp.Content.ReadAsStreamAsync();
             using var streamRef = new DotNetStreamReference(stream, leaveOpen: false);
-            await _downloadModule.InvokeVoidAsync(
-                "downloadFromStream", serverFileName, contentType, streamRef);
+            // Feature 009 (T045): el helper de descarga vive en Shared/wwwroot/js/descargas.js.
+            await JS.InvokeVoidAsync("descargas.downloadFromStream", serverFileName, contentType, streamRef);
         }
         catch (Exception ex)
         {
@@ -250,14 +245,26 @@
         }
     }
 
-    public async ValueTask DisposeAsync()
+    /// <summary>Feature 009 (FR-051): en los eventos de navegación, el título y la ruta de la opción vienen en newValuesJson.</summary>
+    private static string Opcion(AuditEntryItem e)
     {
-        if (_downloadModule is not null)
+        if (!string.Equals(e.Module, "Navigation", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(e.NewValuesJson)) return "";
+        try
         {
-            try { await _downloadModule.DisposeAsync(); }
-            catch (JSDisconnectedException) { /* navigation away */ }
+            using var doc = System.Text.Json.JsonDocument.Parse(e.NewValuesJson);
+            var raiz = doc.RootElement;
+            string? Leer(string a, string b) => raiz.TryGetProperty(a, out var v) ? v.GetString() : raiz.TryGetProperty(b, out var w) ? w.GetString() : null;
+            var titulo = Leer("title", "Title");
+            var ruta = Leer("route", "Route");
+            return string.IsNullOrEmpty(titulo) ? ruta ?? "" : $"{titulo} ({ruta})";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return e.NewValuesJson.Length > 60 ? e.NewValuesJson[..60] + "…" : e.NewValuesJson;
         }
     }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     public sealed record AuditEntryItem(
         string Id, string TenantId, string UserId, string UserName,

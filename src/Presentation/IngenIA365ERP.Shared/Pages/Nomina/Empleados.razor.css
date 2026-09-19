@@ -1,5 +1,0 @@
-/* Relleno del panel de cada pestaña del dialogo de empleado. Estaba repetido en
-   linea en las cinco pestañas y en los dos dialogos auxiliares. */
-.panel-pestana {
-    padding: var(--pad-lg);
-}

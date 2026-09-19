@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
@@ -56,31 +57,37 @@ public interface IApplicationDbContext
     DbSet<HabeasDataPolicyVersion> HabeasDataPolicyVersions { get; }
     DbSet<HabeasDataConsent> HabeasDataConsents { get; }
 
-    // Accounting
+    // Accounting (feature 009): modelo nuevo; las 33 tablas heredadas se retiraron.
+    // Documentos y lineas viven en Entities.Accounting.Transactions (Principio XI).
+    DbSet<AccountingSetup> AccountingSetups { get; }
+    DbSet<AccountCatalog> AccountCatalogs { get; }
+    DbSet<AccountCatalogEntry> AccountCatalogEntries { get; }
+    DbSet<FinancialStatementItem> FinancialStatementItems { get; }
     DbSet<ChartOfAccount> ChartOfAccounts { get; }
-    DbSet<AccountBalance> AccountBalances { get; }
-    DbSet<JournalEntry> JournalEntries { get; }
+    DbSet<AccountTaxRate> AccountTaxRates { get; }
     DbSet<VoucherType> VoucherTypes { get; }
+    DbSet<CrossDocumentType> CrossDocumentTypes { get; }
+    DbSet<FiscalYear> FiscalYears { get; }
     DbSet<AccountingPeriod> AccountingPeriods { get; }
-    DbSet<AccountGroup> AccountGroups { get; }
-    DbSet<AccountSubgroup> AccountSubgroups { get; }
-    DbSet<RiskCategory> RiskCategories { get; }
-    DbSet<VatTaxLine> VatTaxLines { get; }
-    DbSet<IncomeTaxLine> IncomeTaxLines { get; }
-    DbSet<WithholdingTaxLine> WithholdingTaxLines { get; }
-    DbSet<IcaTaxLine> IcaTaxLines { get; }
-    DbSet<GmfTaxLine> GmfTaxLines { get; }
-    DbSet<DianReportFormat> DianReportFormats { get; }
-    DbSet<TaxFormCode> TaxFormCodes { get; }
     DbSet<AccountingDocument> AccountingDocuments { get; }
-    DbSet<JournalEntryItem> JournalEntryItems { get; }
-    DbSet<AuxiliaryDocument> AuxiliaryDocuments { get; }
-    DbSet<ThirdPartyAccount> ThirdPartyAccounts { get; }
+    DbSet<JournalEntry> JournalEntries { get; }
+    DbSet<BankStatementColumnMap> BankStatementColumnMaps { get; }
     DbSet<BankReconciliation> BankReconciliations { get; }
-    DbSet<BankReconciliationMaster> BankReconciliationMasters { get; }
-    DbSet<Amortization> Amortizations { get; }
-    DbSet<Depreciation> Depreciations { get; }
+    DbSet<BankStatementLine> BankStatementLines { get; }
     DbSet<Budget> Budgets { get; }
+    DbSet<BudgetLine> BudgetLines { get; }
+    DbSet<WithholdingCertificate> WithholdingCertificates { get; }
+    DbSet<WithholdingCertificateLine> WithholdingCertificateLines { get; }
+    DbSet<TaxForm> TaxForms { get; }
+    DbSet<TaxFormLine> TaxFormLines { get; }
+    DbSet<ExogenousFormat> ExogenousFormats { get; }
+    DbSet<ExogenousConcept> ExogenousConcepts { get; }
+    DbSet<ExogenousConceptAccount> ExogenousConceptAccounts { get; }
+    DbSet<ExogenousRun> ExogenousRuns { get; }
+    DbSet<ExogenousRunLine> ExogenousRunLines { get; }
+    DbSet<FixedAsset> FixedAssets { get; }
+    DbSet<FixedAssetInstallment> FixedAssetInstallments { get; }
+    DbSet<AssetRun> AssetRuns { get; }
 
     // Lending
     DbSet<LoanPortfolio> LoanPortfolios { get; }
@@ -216,6 +223,12 @@ public interface IApplicationDbContext
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
     // ese contexto y decirlo, en vez de alcanzarlas por la puerta de atras.
+
+    /// <summary>
+    /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento
+    /// por concurrencia entre un intento y el siguiente. No toca la base.
+    /// </summary>
+    void DescartarCambios();
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

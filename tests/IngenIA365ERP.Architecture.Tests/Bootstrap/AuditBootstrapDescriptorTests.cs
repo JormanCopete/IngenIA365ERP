@@ -42,9 +42,10 @@ public class AuditBootstrapDescriptorTests
         Assert.True(template.CreateIfMissing);
         Assert.Equal(4, template.Indexes.Count);
 
-        var ttl = template.Indexes.Single(i => i.Name == "ttl_occurredAt_5y");
-        Assert.Equal(157_680_000, ttl.ExpireAfterSeconds); // 5 años en segundos
-        Assert.Equal(1, ttl.Keys["occurredAt"]);
+        // Feature 009 (FR-052): un solo TTL sobre expiresAt; cada documento trae su vencimiento por modulo.
+        var ttl = template.Indexes.Single(i => i.Name == "ttl_expiresAt");
+        Assert.Equal(0, ttl.ExpireAfterSeconds);
+        Assert.Equal(1, ttl.Keys["expiresAt"]);
 
         // 2 roles: appendOnly + readOnly, ambos sobre IngenIA365ERP_Audit.
         Assert.Equal(2, descriptor.Roles.Count);

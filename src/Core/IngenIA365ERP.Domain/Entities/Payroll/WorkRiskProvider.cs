@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 
 namespace IngenIA365ERP.Domain.Entities.Payroll;
 
@@ -21,4 +22,8 @@ public class WorkRiskProvider : AuditableEntity
 
     public int CheckDigit { get; set; }
     public decimal Factor { get; set; }
+
+    // Feature 009 (FR-088): persona del maestro que representa a la entidad como tercero contable.
+    public int? PersonId { get; set; }
+    public Person? Person { get; set; }
 }

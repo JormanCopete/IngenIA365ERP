@@ -12,11 +12,23 @@ namespace IngenIA365ERP.Shared.Services;
 ///
 /// <para>
 /// Va <b>antes</b> de <see cref="AuthBearerHandler"/> y deja la cabecera puesta,
-/// así aquél no la toca. Se aparta en dos casos: la petición trae ya su propia
-/// <c>Authorization</c> —son los desafíos de login, MFA y selección de cooperativa,
-/// que viajan con un token temporal que no se renueva ni se reintenta— y la que
-/// lleva la marca <see cref="RenovadorDeSesion.SinSesion"/>, que es el propio canje
-/// del refresh.
+/// así aquél no la toca. Se aparta en dos casos: la petición trae una
+/// <c>Authorization</c> que <b>no es el access de la sesión</b> —son los desafíos de
+/// login, MFA y selección de cooperativa, que viajan con un token temporal que no se
+/// renueva ni se reintenta— y la que lleva la marca
+/// <see cref="RenovadorDeSesion.SinSesion"/>, que es el propio canje del refresh.
+/// </para>
+///
+/// <para>
+/// Hasta el 2026-09-18 se apartaba ante <i>cualquier</i> cabecera puesta, y los clientes
+/// tipados (Nómina, Personas, Contabilidad, Cooperativas, Permisos…) la ponían a mano con
+/// <c>CurrentAccessToken</c>: salían sin renovación previa y sin reintento, así que a los
+/// quince minutos del último canje devolvían «La sesión expiró» mientras cualquier pantalla
+/// con <c>Http.GetAsync</c> a secas seguía andando —y al renovar ésta, aquéllos volvían a
+/// funcionar solos—. Ahora la cabecera que trae el access de la sesión (vigente o recién
+/// rotado, <see cref="RenovadorDeSesion.EsTokenDeSesion"/>) se reemplaza por el vigente y la
+/// petición sigue el camino de siempre; y los clientes ya no la ponen
+/// (<c>ElTokenDeSesionLoPoneElHandler</c>).
 /// </para>
 ///
 /// <para>
@@ -67,8 +79,13 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
     private async Task<HttpResponseMessage> EnviarConSesionAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        if (request.Headers.Authorization is not null)
-            return await base.SendAsync(request, cancellationToken);
+        if (request.Headers.Authorization is { } propia)
+        {
+            await sesion.RestaurarAsync();
+            if (!sesion.EsTokenDeSesion(propia.Parameter))
+                return await base.SendAsync(request, cancellationToken);
+            request.Headers.Authorization = null;
+        }
 
         var token = await sesion.TokenVigenteAsync(cancellationToken);
         if (string.IsNullOrEmpty(token))

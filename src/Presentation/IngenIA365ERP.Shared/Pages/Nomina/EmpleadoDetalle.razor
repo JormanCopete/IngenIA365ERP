@@ -288,7 +288,8 @@ else
                     </div>
                     <div>
                         <label>Motivo</label>
-                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional)" Multiline="true" />
+                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional, hasta 120 caracteres)" Multiline="true"
+                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
                     </div>
                 </div>
             </div>
@@ -438,14 +439,20 @@ else
         _saving = true;
         try
         {
-            // Payload alineado a UpdateEmployeeCommand (banca renombrada a Payroll*)
+            // Payload alineado a UpdateEmployeeCommand (banca renombrada a Payroll*). El comando
+            // reemplaza la ficha entera: lo que esta pantalla no edita (clase ARL, fondo de
+            // cesantías, caja, fecha de ingreso) va tal como llegó, o el PUT lo borraría.
             var payload = new
             {
                 BaseSalary = _labor.BaseSalary,
                 ContractType = _labor.ContractType,
+                HireDate = _employee.HireDate,
                 HealthInsurancePublicId = _labor.HealthInsurancePublicId,
                 PensionProviderPublicId = _labor.PensionProviderPublicId,
                 WorkRiskProviderPublicId = _labor.WorkRiskProviderPublicId,
+                WorkRiskRatePublicId = _employee.WorkRiskRatePublicId,
+                SeveranceProviderPublicId = _employee.SeveranceProviderPublicId,
+                FamilyCompensationFundPublicId = _employee.FamilyCompensationFundPublicId,
                 PayrollBankPublicId = _labor.BankPublicId,
                 PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_labor.BankAccountNumber) ? null : _labor.BankAccountNumber,
                 PayrollBankAccountType = _labor.AccountType
@@ -537,6 +544,9 @@ else
         public Guid? HealthInsurancePublicId { get; set; }
         public Guid? PensionProviderPublicId { get; set; }
         public Guid? WorkRiskProviderPublicId { get; set; }
+        public Guid? WorkRiskRatePublicId { get; set; }
+        public Guid? SeveranceProviderPublicId { get; set; }
+        public Guid? FamilyCompensationFundPublicId { get; set; }
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankName { get; set; }
         public List<SalaryHistoryItem> SalaryHistory { get; set; } = new();

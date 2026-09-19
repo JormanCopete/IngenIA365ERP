@@ -23,7 +23,6 @@ public sealed partial class NominaClient
             contenido.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
             form.Add(contenido, "file", nombre);
             using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/payroll/pay-periods/{periodoId}/novelties/import") { Content = form };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(req, ct);
             if (resp.IsSuccessStatusCode || (int)resp.StatusCode == 422)
             {

@@ -9,6 +9,8 @@ public class FamilyCompensationFundConfiguration : IEntityTypeConfiguration<Fami
     public void Configure(EntityTypeBuilder<FamilyCompensationFund> builder)
     {
         builder.ToTable("PAY_FamilyCompensationFunds");
+        builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict); // feature 009 (FR-088)
+        builder.HasIndex(e => e.PersonId);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

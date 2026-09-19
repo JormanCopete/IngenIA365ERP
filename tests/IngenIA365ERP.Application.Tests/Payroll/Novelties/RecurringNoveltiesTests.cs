@@ -22,7 +22,7 @@ public class RecurringNoveltiesTests
 
     private static async Task Aprobar(NominaTestData d, Guid runId)
     {
-        var poster = new PayrollAccountingPoster(d.Db, d.Clock, Contadora);
+        var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
         var r = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
@@ -65,10 +65,9 @@ public class RecurringNoveltiesTests
     {
         var d = new NominaTestData();
         d.ConfigurarContabilidad();
-        d.Db.AccountingPeriods.AddRange(
-            new Domain.Entities.Accounting.AccountingPeriod { ModuleCode = "CNT", Year = 2026, PeriodNumber = 4, StartDate = new DateOnly(2026, 4, 1), EndDate = new DateOnly(2026, 4, 30), Status = "O", CreatedBy = "test" },
-            new Domain.Entities.Accounting.AccountingPeriod { ModuleCode = "CNT", Year = 2026, PeriodNumber = 5, StartDate = new DateOnly(2026, 5, 1), EndDate = new DateOnly(2026, 5, 31), Status = "O", CreatedBy = "test" },
-            new Domain.Entities.Accounting.AccountingPeriod { ModuleCode = "CNT", Year = 2026, PeriodNumber = 6, StartDate = new DateOnly(2026, 6, 1), EndDate = new DateOnly(2026, 6, 30), Status = "O", CreatedBy = "test" });
+        d.PeriodoContable(2026, 4);
+        d.PeriodoContable(2026, 5);
+        d.PeriodoContable(2026, 6);
         await d.Db.SaveChangesAsync();
         var id = await Crear(d, d.Ana, "LIBRANZA", null, 120_000m, new DateTime(2026, 3, 1), 3);
 

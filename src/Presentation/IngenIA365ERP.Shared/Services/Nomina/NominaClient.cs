@@ -64,7 +64,6 @@ public sealed partial class NominaClient(HttpClient http, CentralAuthClient auth
         {
             using var req = new HttpRequestMessage(metodo, url);
             if (cuerpo is not null) req.Content = JsonContent.Create(cuerpo);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }
@@ -88,7 +87,6 @@ public sealed partial class NominaClient(HttpClient http, CentralAuthClient auth
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
                 return await CentralAuthApi.ParseAsync<ArchivoDescargado>(resp, ct);

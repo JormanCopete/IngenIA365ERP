@@ -175,4 +175,10 @@ public class CreditLineParameter : AuditableEntity
 
     // Navigation
     public ICollection<LoanPortfolio> LoanPortfolios { get; set; } = [];
+
+    // Feature 009 (R16): cuentas de la provision de cartera (gasto y provision), por codigo como las demas.
+    [MaxLength(12)]
+    public string? ProvisionExpenseAccountCode { get; set; }
+    [MaxLength(12)]
+    public string? ProvisionAccountCode { get; set; }
 }

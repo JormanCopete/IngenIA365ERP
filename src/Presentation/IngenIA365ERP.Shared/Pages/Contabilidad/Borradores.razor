@@ -1,0 +1,60 @@
+@page "/contabilidad/borradores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Mis borradores - IngenIA365ERP</PageTitle>
+
+@* Feature 009, US3 (FR-026): lo que cada persona dejó a medias, para retomarlo o descartarlo. *@
+<PermissionGate Required="Accounting.Vouchers.Create" MostrarAviso="true">
+<div class="page-header">
+    <h3>Mis borradores</h3>
+    <div class="toolbar">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Navigation.NavigateTo("/contabilidad/comprobantes/nuevo"))">Nuevo comprobante</SfButton>
+    </div>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_cargado && _borradores.Count == 0)
+    {
+        <div class="info-card"><span class="label">Sin borradores</span><p>No tiene comprobantes a medias. Los borradores de otras personas no aparecen aquí; se ven en Comprobantes con estado «Borrador».</p></div>
+    }
+    else
+    {
+        <SfGrid TValue="ComprobanteResumenDto" DataSource="@_borradores" AllowSorting="true" RowHeight="34">
+            <GridEvents TValue="ComprobanteResumenDto" RowSelected="@(async (RowSelectEventArgs<ComprobanteResumenDto> e) => await Task.Run(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{e.Data.PublicId}")))" />
+            <GridColumns>
+                <GridColumn Field="VoucherTypeCode" HeaderText="Tipo" Width="80" />
+                <GridColumn Field="Date" HeaderText="Fecha" Width="100" Format="yyyy-MM-dd" Type="ColumnType.Date" />
+                <GridColumn Field="Description" HeaderText="Descripción" Width="320" />
+                <GridColumn Field="Lines" HeaderText="Líneas" Width="80" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalDebit" HeaderText="Débitos" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn Field="TotalCredit" HeaderText="Créditos" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                <GridColumn HeaderText="Cuadre" Width="120">
+                    <Template>@{ var d = (ComprobanteResumenDto)context; }<span class="@(d.TotalDebit == d.TotalCredit ? "" : "texto-peligro")">@(d.TotalDebit == d.TotalCredit ? "cuadrado" : $"diferencia {d.TotalDebit - d.TotalCredit:N2}")</span></Template>
+                </GridColumn>
+            </GridColumns>
+        </SfGrid>
+    }
+</IndicadorDeCarga>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<ComprobanteResumenDto> _borradores = [];
+    private bool _cargado;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.MisBorradoresAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los borradores."); return; }
+        _borradores = [.. r.Value!];
+        _cargado = true;
+    }
+}

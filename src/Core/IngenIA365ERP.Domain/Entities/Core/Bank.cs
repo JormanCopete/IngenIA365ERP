@@ -59,4 +59,8 @@ public class Bank : AuditableEntity
 
     [MaxLength(2)]
     public string? ControlSequential { get; set; }
+
+    // Feature 009 (FR-088): persona del maestro que representa a la entidad como tercero contable.
+    public int? PersonId { get; set; }
+    public Person? Person { get; set; }
 }

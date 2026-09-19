@@ -26,29 +26,24 @@
         </div>
 
         <NavMenuGroup Icon="e-chart" Title="Contabilidad" Expanded="SidebarOpen">
-            <NavLink href="/contabilidad/plan-cuentas" class="nav-subitem">Plan de Cuentas</NavLink>
-            <NavLink href="/contabilidad/comprobantes/lista" class="nav-subitem">Comprobantes Contables</NavLink>
-            <NavLink href="/contabilidad/movimientos" class="nav-subitem">Movimientos</NavLink>
-            <NavLink href="/contabilidad/saldos" class="nav-subitem">Saldos por Cuenta</NavLink>
-            <NavLink href="/contabilidad/conciliacion" class="nav-subitem">Conciliacion Bancaria</NavLink>
-            <NavLink href="/contabilidad/presupuestos" class="nav-subitem">Presupuestos</NavLink>
-            <NavLink href="/contabilidad/tipos-comprobante" class="nav-subitem">Tipos Comprobante</NavLink>
-            <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos Contables</NavLink>
-            <NavLink href="/contabilidad/grupos-cuenta" class="nav-subitem">Grupos de Cuenta</NavLink>
-            <NavLink href="/contabilidad/categorias-riesgo" class="nav-subitem">Categorias Riesgo</NavLink>
-            <NavLink href="/contabilidad/impuestos/iva" class="nav-subitem">Lineas IVA</NavLink>
-            <NavLink href="/contabilidad/formatos-dian" class="nav-subitem">Formatos DIAN</NavLink>
-            <NavLink href="/contabilidad/codigos-impuestos" class="nav-subitem">Codigos Impuestos</NavLink>
-            <NavLink href="/contabilidad/cierre-periodo" class="nav-subitem">Cierre Periodo</NavLink>
-            <NavLink href="/contabilidad/balance-prueba" class="nav-subitem">Balance de Prueba</NavLink>
-            <NavLink href="/contabilidad/certificados-retencion" class="nav-subitem">Cert. Retencion</NavLink>
+            @* Feature 009: el modulo reescrito bajo NIIF. Las rutas heredadas (plan-cuentas,
+               movimientos, saldos, grupos, categorias de riesgo, lineas IVA, formatos DIAN,
+               codigos de impuestos, cierre) desaparecieron con el modelo de SOLIDO; lo que
+               vuelve en E2-E4 (conciliacion, presupuesto, impuestos, exogena, activos) se
+               agrega en su entrega. *@
+            <NavLink href="/contabilidad/configuracion" class="nav-subitem">Configuracion inicial</NavLink>
+            <NavLink href="/contabilidad/catalogos" class="nav-subitem">Catalogos PUC</NavLink>
+            <NavLink href="/contabilidad/plan-de-cuentas" class="nav-subitem">Plan de cuentas</NavLink>
+            <NavLink href="/contabilidad/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+            <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos</NavLink>
+            <NavLink href="/contabilidad/comprobantes" class="nav-subitem">Comprobantes</NavLink>
+            <NavLink href="/contabilidad/borradores" class="nav-subitem">Borradores</NavLink>
+            <NavLink href="/contabilidad/parametrizaciones-invalidas" class="nav-subitem">Parametrizaciones invalidas</NavLink>
             @* Los reportes de cada modulo viven en su modulo. Estaban en un grupo
                "Reportes" aparte, que obligaba a saber de antemano que algo era un
                reporte para encontrarlo. Lo transversal queda en SISTEMA. *@
             <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/reportes/balance-general" class="nav-subitem">Balance General</NavLink>
-            <NavLink href="/reportes/estado-resultados" class="nav-subitem">Estado Resultados</NavLink>
-            <NavLink href="/reportes/libro-mayor" class="nav-subitem">Libro Mayor</NavLink>
+            <NavLink href="/contabilidad/informes" class="nav-subitem">Informes y estados financieros</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">

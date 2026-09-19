@@ -23,7 +23,7 @@ public class ComparisonAndBalanceQueriesTests
     private static async Task Aprobar(NominaTestData d, Guid runId)
     {
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
-        var h = new ApprovePayrollRunCommandHandler(d.Db, new PayrollAccountingPoster(d.Db, d.Clock, contadora), d.Policies, d.Permissions, d.Clock, contadora,
+        var h = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
             new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
         var r = await h.Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
@@ -38,7 +38,7 @@ public class ComparisonAndBalanceQueriesTests
 
         // Febrero aprobado con Ana y Beto.
         var febrero = d.Periodo(new DateTime(2026, 2, 1), new DateTime(2026, 2, 28), PayPeriodStatus.Open, planilla: 99);
-        d.Db.AccountingPeriods.Add(new Domain.Entities.Accounting.AccountingPeriod { ModuleCode = "CNT", Year = 2026, PeriodNumber = 2, StartDate = new DateOnly(2026, 2, 1), EndDate = new DateOnly(2026, 2, 28), Status = "O", CreatedBy = "test" });
+        d.PeriodoContable(2026, 2);
         d.Db.SaveChanges();
         await Aprobar(d, await Calcular(d, febrero));
 

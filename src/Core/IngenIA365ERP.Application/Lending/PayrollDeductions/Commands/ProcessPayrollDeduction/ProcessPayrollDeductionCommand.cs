@@ -1,6 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -106,26 +105,7 @@ public class ProcessPayrollDeductionCommandHandler(
 
         // Create consolidated accounting document
         Guid? docId = null;
-        if (totalDeducted > 0)
-        {
-            var periodCode = payPeriod.EndDate.Year * 100 + payPeriod.EndDate.Month;
-            var doc = new AccountingDocument
-            {
-                VoucherTypeCode = "NOM",
-                DocumentNumber = 0,
-                Detail = $"Descuento nomina periodo {payPeriod.Description ?? period.ToString()}",
-                TotalDebit = totalDeducted,
-                TotalCredit = totalDeducted,
-                DocumentDate = DateOnly.FromDateTime(payPeriod.EndDate),
-                IsClosed = true,
-                PeriodCode = periodCode,
-                ModuleCode = "COP",
-                CreatedAt = dateTime.UtcNow,
-                CreatedBy = currentUser.UserName
-            };
-            context.AccountingDocuments.Add(doc);
-            docId = doc.PublicId;
-        }
+        // E3 (feature 009): contabilización por AccountingPoster pendiente
 
         await context.SaveChangesAsync(cancellationToken);
 
