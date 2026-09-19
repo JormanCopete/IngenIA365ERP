@@ -16,10 +16,18 @@ namespace IngenIA365ERP.Application.Common.Json;
 /// 400 vacío antes de llegar al handler: sin sobre de error, sin log, y la persona veía
 /// «Error HTTP 400». Así estaba crear un concepto de nómina en QA el 2026-09-18.
 /// </para>
+///
+/// <para>
+/// Un enum que declara su propio <c>[JsonConverter]</c> (<c>TipoDeColumna</c>, que viaja por
+/// nombre) queda fuera: en System.Text.Json un convertidor de las opciones pisa al atributo del
+/// tipo, y el 2026-09-19 este convertidor volvió a mandar el tipo de columna como número y
+/// Reportes de nómina cayó otra vez con «DeserializeUnableToConvertValue … $.columnas[0].tipo».
+/// </para>
 /// </summary>
 public sealed class EnumPorNombreONumero : JsonConverterFactory
 {
-    public override bool CanConvert(Type typeToConvert) => typeToConvert.IsEnum;
+    public override bool CanConvert(Type typeToConvert) =>
+        typeToConvert.IsEnum && typeToConvert.GetCustomAttributes(typeof(JsonConverterAttribute), inherit: false).Length == 0;
 
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
         (JsonConverter?)Activator.CreateInstance(typeof(Convertidor<>).MakeGenericType(typeToConvert));

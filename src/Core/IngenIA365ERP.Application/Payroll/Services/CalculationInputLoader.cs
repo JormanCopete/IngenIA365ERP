@@ -128,6 +128,11 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             .Include(p => p.Ranges)
             .Where(p => p.ValidFrom <= end && (p.ValidTo == null || p.ValidTo >= end))
             .ToListAsync(ct);
+        // La tabla de retención propia del plan (Parámetros de retención) reemplaza a la legal si el plan trae tramos.
+        var tramosDelPlan = await db.WithholdingParameters.AsNoTracking()
+            .Where(t => t.PayrollPlanId == plan.Id && !t.IsDeleted)
+            .ToListAsync(ct);
+        var parametrosDelPlan = TablaDeRetencionDelPlan.Aplicar(parametros, tramosDelPlan, plan, end);
 
         // --- retención y deducciones declaradas ---
         var tasas = await db.EmployeeWithholdingRates.AsNoTracking()
@@ -214,7 +219,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             PeriodInput = periodInput,
             Employees = cargados,
             Concepts = conceptos,
-            Parameters = parametros,
+            Parameters = parametrosDelPlan,
             Policies = politicas,
             NoveltyIds = noveltyIds,
         };

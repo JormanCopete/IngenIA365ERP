@@ -64,7 +64,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   (`Application/Common/Json/EnumPorNombreONumero`, registrado en `ConfigureHttpJsonOptions`).
   Las pantallas mandan el nombre («Earning», «Monthly») y los DTOs de Shared leen `int`; hasta
   el 2026-09-18 System.Text.Json sólo aceptaba números y crear un concepto o un plan de nómina
-  desde la pantalla respondía un 400 vacío —sin sobre, sin log— antes de llegar al handler.
+  desde la pantalla respondía un 400 vacío —sin sobre, sin log— antes de llegar al handler. Un
+  enum con su propio `[JsonConverter]` (`TipoDeColumna`, que viaja por nombre) queda fuera del
+  convertidor global: en STJ el de las opciones pisa al atributo del tipo, y el 2026-09-19
+  Reportes de nómina volvió a caer por eso.
+- **Menú**: todo `NavLink` del menú apunta a una página con `@page`
+  (`TodoEnlaceDelMenuTieneSuPagina`); una ruta sin página muestra «Página no encontrada» con el
+  layout mínimo y parece que la app se sale. Los informes contables (E2) y Beneficiarios no
+  tienen enlace hasta que exista la pantalla.
 - **Segundo factor**: vive en `ADM_MfaCredentials`, una tabla con discriminador
   (TPH) — no en la columna `ADM_CentralUsers.MfaSecret`. Esa columna **sigue
   escribiéndose** como red de rollback mientras dure el traslado, y la
@@ -226,7 +233,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». La
   ficha también guarda fondo de cesantías (`SeveranceFundId`, entero desde el 2026-09-12)
   y caja de compensación (`FamilySubsidyId` → catálogo `PAY_FamilyCompensationFunds`,
-  sin semilla). La **fecha de ingreso** se corrige desde la ficha (`UpdateEmployeeCommand.HireDate`,
+  sin semilla). La **tabla de retención propia de un plan** (`/nomina/parametros-retencion`,
+  `PAY_WithholdingParameters.PayrollPlanId`, desde el 2026-09-19) entra al cálculo por
+  `TablaDeRetencionDelPlan`: si el plan del período tiene tramos, reemplazan a
+  `RETEFTE_TABLA_UVT` sólo para esa corrida; sin tramos, la tabla legal. Hasta entonces la
+  pantalla escribía sobre la «empresa nómina» del legado y la liquidación no la miraba. La **fecha de ingreso** se corrige desde la ficha (`UpdateEmployeeCommand.HireDate`,
   nula = no cambia) mientras no haya nómina aprobada del período, novedad en período cerrado
   antes ni cambio de salario anterior (`Employee.HireDateLocked`); el cambio de salario inicial
   se mueve con ella. Hasta el 2026-09-18 el PUT no la llevaba y la pantalla la mostraba editable.
@@ -257,7 +268,7 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.053 el 2026-09-18 (165 Domain, 757 Application, 76 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas sin contenedores | 1.060 el 2026-09-19 (165 Domain, 763 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 

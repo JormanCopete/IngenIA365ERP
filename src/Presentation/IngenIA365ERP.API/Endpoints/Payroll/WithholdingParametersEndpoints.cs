@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.CreateWit
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.UpdateWithholdingParameter;
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.DeleteWithholdingParameter;
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Queries;
+using IngenIA365ERP.Application.Common.Models;
 using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Payroll;
@@ -39,7 +40,9 @@ public class WithholdingParametersEndpoints : ICarterModule
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
-            return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
+            // Un tramo que se cruza o un plan inexistente no es un 404: es un 400 con el motivo.
+            return result.IsSuccess ? Results.NoContent()
+                : result.Error.Code == Error.NotFound.Code ? Results.NotFound(result.Error) : Results.BadRequest(result.Error);
         }).WithName("UpdateWithholdingParameter");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>

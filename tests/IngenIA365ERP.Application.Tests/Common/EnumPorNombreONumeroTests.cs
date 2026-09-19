@@ -56,6 +56,18 @@ public class EnumPorNombreONumeroTests
     }
 
     [Fact]
+    public void Un_enum_con_su_propio_convertidor_sigue_viajando_por_nombre()
+    {
+        // TipoDeColumna lleva [JsonConverter(JsonStringEnumConverter)] porque la pantalla de Reportes lo lee como
+        // texto; el convertidor global no debe pisarlo (2026-09-19: volvió a salir como número y Reportes cayó).
+        var columna = new IngenIA365ERP.Application.Common.Reports.ColumnaExportable("Total", IngenIA365ERP.Application.Common.Reports.TipoDeColumna.Moneda);
+
+        JsonSerializer.Serialize(columna, Opciones).Should().Contain("\"tipo\":\"Moneda\"");
+        JsonSerializer.Deserialize<IngenIA365ERP.Application.Common.Reports.ColumnaExportable>("""{"nombre":"Total","tipo":"Moneda"}""", Opciones)!
+            .Tipo.Should().Be(IngenIA365ERP.Application.Common.Reports.TipoDeColumna.Moneda);
+    }
+
+    [Fact]
     public void Se_escribe_como_numero_para_no_cambiar_lo_que_ya_leen_los_clientes()
     {
         JsonSerializer.Serialize(new { status = MembershipStatus.Active, canales = NotificationChannels.InApp | NotificationChannels.Email }, Opciones)

@@ -1,24 +1,58 @@
 @page "/nomina/parametros-retencion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Nomina
 @inject HttpClient Http
+@inject NominaClient Nomina
 @inject INotificationService Notification
+
+@*
+    Tabla de retención en la fuente por salarios PROPIA DE UN PLAN DE NÓMINA (pedido del dueño,
+    2026-09-19). Antes el tramo colgaba de la «empresa nómina» del legado (un número) y la
+    liquidación no lo miraba: la retención salía siempre de RETEFTE_TABLA_UVT de Parámetros
+    legales. Ahora, si el plan del período tiene tramos aquí, la liquidación los usa en lugar de
+    la tabla legal para ese plan; si no tiene, aplica la legal. Tramos en UVT, semiabiertos como
+    los legales (0–95, 95–150…), tarifa marginal en porcentaje sobre el exceso del inicio del
+    tramo más las UVT fijas; «UVT hasta» en 0 = en adelante.
+*@
 
 <PageTitle>Parametros de Retencion - IngenIA365ERP</PageTitle>
 
 <div class="page-header">
     <h3>Parametros de Retencion en la Fuente</h3>
-    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
+    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo tramo</SfButton>
+</div>
+
+<div class="info-card">
+    <p class="texto-apoyo">
+        Cada tramo pertenece a un <strong>plan de nómina</strong>. Al liquidar un período, si su plan tiene tramos aquí, la
+        retención se calcula con ellos <strong>en lugar de</strong> la tabla legal <code>RETEFTE_TABLA_UVT</code> de
+        <a href="/nomina/parametros-legales">Parámetros legales</a>; un plan sin tramos usa la legal. Tramos en UVT, tarifa
+        marginal (%) sobre el exceso del inicio del tramo más las UVT fijas; «UVT hasta» en 0 significa «en adelante».
+    </p>
+    <div class="toolbar">
+        <label class="campo">Plan
+            <select class="e-input" value="@_filtroPlan" @onchange="@(async e => { _filtroPlan = e.Value?.ToString() ?? ""; await LoadData(); })">
+                <option value="">Todos los planes</option>
+                @foreach (var p in _planes)
+                {
+                    <option value="@p.PublicId">@p.Code · @p.Name</option>
+                }
+            </select>
+        </label>
+    </div>
 </div>
 
 <IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="ItemModel" DataSource="@_items" AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridColumns>
-        <GridColumn Field="PayrollCompanyId" HeaderText="Empresa" Width="110" TextAlign="TextAlign.Center" />
-        <GridColumn Field="UvtRangeStart" HeaderText="UVT Desde" Width="120" TextAlign="TextAlign.Right" />
-        <GridColumn Field="UvtRangeEnd" HeaderText="UVT Hasta" Width="120" TextAlign="TextAlign.Right" />
-        <GridColumn Field="Rate" HeaderText="Tarifa" Width="130" Format="N4" TextAlign="TextAlign.Right" />
-        <GridColumn Field="AdditionalUvt" HeaderText="UVT Adicional" Width="130" TextAlign="TextAlign.Right" />
+        <GridColumn Field="PayrollPlanCode" HeaderText="Plan" Width="150" />
+        <GridColumn Field="UvtRangeStart" HeaderText="UVT desde" Width="120" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="UVT hasta" Width="120" TextAlign="TextAlign.Right">
+            <Template>@{ var it = (ItemModel)context; }@(it.UvtRangeEnd <= 0 ? "en adelante" : it.UvtRangeEnd.ToString("N0"))</Template>
+        </GridColumn>
+        <GridColumn Field="Rate" HeaderText="Tarifa (%)" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AdditionalUvt" HeaderText="UVT fijas" Width="120" TextAlign="TextAlign.Right" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
             <Template>
                 @{
@@ -32,18 +66,27 @@
 </SfGrid>
 </IndicadorDeCarga>
 
-<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="500px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
-                <SfNumericTextBox TValue="int" @bind-Value="_model.PayrollCompanyId" Placeholder="Empresa Nomina" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeStart" Placeholder="UVT Rango Inicio" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeEnd" Placeholder="UVT Rango Fin" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tarifa" Format="N4" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.AdditionalUvt" Placeholder="UVT Adicional" FloatLabelType="FloatLabelType.Always" />
+                <label class="campo">Plan de nómina *
+                    <select class="e-input" @bind="_model.PayrollPlanPublicId">
+                        <option value="@Guid.Empty">Elija…</option>
+                        @foreach (var p in _planes)
+                        {
+                            <option value="@p.PublicId">@p.Code · @p.Name@(p.IsDefault ? " (por defecto)" : "")</option>
+                        }
+                    </select>
+                </label>
+                <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeStart" Placeholder="UVT desde (inclusive)" FloatLabelType="FloatLabelType.Always" Min="0" Format="N0" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.UvtRangeEnd" Placeholder="UVT hasta (exclusive; 0 = en adelante)" FloatLabelType="FloatLabelType.Always" Min="0" Format="N0" />
+                <SfNumericTextBox TValue="decimal" @bind-Value="_model.Rate" Placeholder="Tarifa marginal (%)" Format="N2" Decimals="2" Min="0" Max="100" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.AdditionalUvt" Placeholder="UVT fijas del tramo" FloatLabelType="FloatLabelType.Always" Min="0" Format="N0" />
+                <p class="hint">Retención = (base en UVT − «UVT desde») × tarifa + UVT fijas, en UVT, convertida a pesos con la UVT vigente. Los tramos de un plan no pueden cruzarse.</p>
             </div>
-        </IndicadorDeCarga>
+            </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
@@ -52,44 +95,63 @@
     </DialogButtons>
 </SfDialog>
 
-<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="Esta seguro de eliminar este registro?" />
+<ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete" Message="¿Eliminar este tramo? Si el plan queda sin tramos, la liquidación vuelve a la tabla legal." />
 
 @code {
     // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<ItemModel>? _grid;
     private List<ItemModel> _items = [];
+    private IReadOnlyList<PlanNominaDto> _planes = [];
+    private string _filtroPlan = "";
     private FormModel _model = new();
     private Guid? _editId;
     private bool _showDialog, _showConfirm;
     private string _dialogTitle = "";
     private Guid _deleteId;
 
-    protected override async Task OnInitializedAsync() => await LoadData();
+    protected override async Task OnInitializedAsync()
+    {
+        var planes = await Nomina.ListarPlanesAsync();
+        _planes = planes.IsSuccess ? planes.Value! : [];
+        if (!planes.IsSuccess) await Notification.ErrorAsync(planes.ErrorMessage ?? "No se pudieron cargar los planes de nómina.");
+        await LoadData();
+    }
 
     private async Task LoadData()
     {
         using var carga = _carga.Iniciar();
-        try { var r = await Http.GetFromJsonAsync<Paged>("/api/payroll/withholding-parameters?pageSize=500"); _items = r?.Items ?? []; }
+        try
+        {
+            var url = "/api/payroll/withholding-parameters?pageSize=500" + (string.IsNullOrEmpty(_filtroPlan) ? "" : $"&planPublicId={_filtroPlan}");
+            var r = await Http.GetFromJsonAsync<Paged>(url);
+            _items = r?.Items ?? [];
+        }
         catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
-    private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Parametro de Retencion"; _showDialog = true; }
+    private void OpenCreate()
+    {
+        var plan = Guid.TryParse(_filtroPlan, out var f) ? f : _planes.FirstOrDefault(p => p.IsDefault)?.PublicId ?? Guid.Empty;
+        _model = new() { PayrollPlanPublicId = plan };
+        _editId = null; _dialogTitle = "Nuevo tramo de retención"; _showDialog = true;
+    }
 
     private void OpenEdit(ItemModel item)
     {
         _model = new()
         {
-            PayrollCompanyId = item.PayrollCompanyId, UvtRangeStart = item.UvtRangeStart,
+            PayrollPlanPublicId = item.PayrollPlanPublicId, UvtRangeStart = item.UvtRangeStart,
             UvtRangeEnd = item.UvtRangeEnd, Rate = item.Rate, AdditionalUvt = item.AdditionalUvt
         };
-        _editId = item.PublicId; _dialogTitle = "Editar Parametro de Retencion"; _showDialog = true;
+        _editId = item.PublicId; _dialogTitle = $"Editar tramo ({item.PayrollPlanCode})"; _showDialog = true;
     }
 
     private void OpenDelete(ItemModel item) { _deleteId = item.PublicId; _showConfirm = true; }
 
     private async Task Save()
     {
+        if (_model.PayrollPlanPublicId == Guid.Empty) { await Notification.WarningAsync("Elija el plan de nómina."); return; }
         using var guardado = _guardado.Iniciar();
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/withholding-parameters/{_editId}", _model)
@@ -109,7 +171,9 @@
     private class ItemModel
     {
         public Guid PublicId { get; set; }
-        public int PayrollCompanyId { get; set; }
+        public Guid PayrollPlanPublicId { get; set; }
+        public string PayrollPlanCode { get; set; } = "";
+        public string PayrollPlanName { get; set; } = "";
         public int UvtRangeStart { get; set; }
         public int UvtRangeEnd { get; set; }
         public decimal Rate { get; set; }
@@ -117,7 +181,7 @@
     }
     private class FormModel
     {
-        public int PayrollCompanyId { get; set; }
+        public Guid PayrollPlanPublicId { get; set; }
         public int UvtRangeStart { get; set; }
         public int UvtRangeEnd { get; set; }
         public decimal Rate { get; set; }

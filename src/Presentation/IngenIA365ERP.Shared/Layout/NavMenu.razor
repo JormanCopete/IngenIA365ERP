@@ -39,11 +39,11 @@
             <NavLink href="/contabilidad/comprobantes" class="nav-subitem">Comprobantes</NavLink>
             <NavLink href="/contabilidad/borradores" class="nav-subitem">Borradores</NavLink>
             <NavLink href="/contabilidad/parametrizaciones-invalidas" class="nav-subitem">Parametrizaciones invalidas</NavLink>
-            @* Los reportes de cada modulo viven en su modulo. Estaban en un grupo
-               "Reportes" aparte, que obligaba a saber de antemano que algo era un
-               reporte para encontrarlo. Lo transversal queda en SISTEMA. *@
-            <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/contabilidad/informes" class="nav-subitem">Informes y estados financieros</NavLink>
+            @* Los reportes de cada modulo viven en su modulo (no en un grupo "Reportes"
+               aparte). Los informes contables y los estados financieros son de la entrega E2
+               (T107: /contabilidad/informes y /contabilidad/estados-financieros); el enlace
+               se agrega cuando exista la pagina: hasta el 2026-09-19 apuntaba a una ruta sin
+               pagina y mostraba "Pagina no encontrada". *@
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
@@ -149,7 +149,7 @@
 
         <NavMenuGroup Icon="e-user" Title="Asociados" Expanded="SidebarOpen">
             <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
-            <NavLink href="/asociados/beneficiarios" class="nav-subitem">Beneficiarios</NavLink>
+            @* Beneficiarios no tiene pagina ni API todavia (venia asi desde la primera version); el enlace vuelve con la pantalla. *@
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-list-unordered" Title="Maestros Core" Expanded="SidebarOpen">

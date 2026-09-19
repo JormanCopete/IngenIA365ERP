@@ -9,7 +9,9 @@ namespace IngenIA365ERP.Application.Payroll.WithholdingParameters.Queries;
 public record WithholdingParameterDto
 {
     public Guid PublicId { get; init; }
-    public int PayrollCompanyId { get; init; }
+    public Guid PayrollPlanPublicId { get; init; }
+    public string PayrollPlanCode { get; init; } = string.Empty;
+    public string PayrollPlanName { get; init; } = string.Empty;
     public int UvtRangeStart { get; init; }
     public int UvtRangeEnd { get; init; }
     public decimal Rate { get; init; }
@@ -21,6 +23,8 @@ public record ListWithholdingParametersQuery : IRequest<Result<PagedList<Withhol
 {
     public PaginationParams Pagination { get; init; } = new();
     public string? SearchTerm { get; init; }
+    /// <summary>Sólo los tramos de ese plan.</summary>
+    public Guid? PlanPublicId { get; init; }
 }
 
 public class ListWithholdingParametersQueryHandler(IApplicationDbContext context)
@@ -34,13 +38,12 @@ public class ListWithholdingParametersQueryHandler(IApplicationDbContext context
             .AsNoTracking()
             .Where(e => !e.IsDeleted);
 
+        if (request.PlanPublicId is { } planId)
+            query = query.Where(e => e.PayrollPlan!.PublicId == planId);
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
-            var term = request.SearchTerm.Trim();
-            if (int.TryParse(term, out var companyId))
-            {
-                query = query.Where(e => e.PayrollCompanyId == companyId);
-            }
+            var term = request.SearchTerm.Trim().ToUpperInvariant();
+            query = query.Where(e => e.PayrollPlan!.Code.Contains(term) || e.PayrollPlan.Name.ToUpper().Contains(term));
         }
 
         query = request.Pagination.SortBy?.ToLower() switch
@@ -51,7 +54,7 @@ public class ListWithholdingParametersQueryHandler(IApplicationDbContext context
             "rate" => request.Pagination.IsDescending
                 ? query.OrderByDescending(e => e.Rate)
                 : query.OrderBy(e => e.Rate),
-            _ => query.OrderBy(e => e.UvtRangeStart)
+            _ => query.OrderBy(e => e.PayrollPlan!.Code).ThenBy(e => e.UvtRangeStart)
         };
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -62,7 +65,9 @@ public class ListWithholdingParametersQueryHandler(IApplicationDbContext context
             .Select(e => new WithholdingParameterDto
             {
                 PublicId = e.PublicId,
-                PayrollCompanyId = e.PayrollCompanyId,
+                PayrollPlanPublicId = e.PayrollPlan!.PublicId,
+                PayrollPlanCode = e.PayrollPlan.Code,
+                PayrollPlanName = e.PayrollPlan.Name,
                 UvtRangeStart = e.UvtRangeStart,
                 UvtRangeEnd = e.UvtRangeEnd,
                 Rate = e.Rate,
@@ -91,7 +96,9 @@ public class GetWithholdingParameterByIdQueryHandler(IApplicationDbContext conte
             .Select(e => new WithholdingParameterDto
             {
                 PublicId = e.PublicId,
-                PayrollCompanyId = e.PayrollCompanyId,
+                PayrollPlanPublicId = e.PayrollPlan!.PublicId,
+                PayrollPlanCode = e.PayrollPlan.Code,
+                PayrollPlanName = e.PayrollPlan.Name,
                 UvtRangeStart = e.UvtRangeStart,
                 UvtRangeEnd = e.UvtRangeEnd,
                 Rate = e.Rate,
