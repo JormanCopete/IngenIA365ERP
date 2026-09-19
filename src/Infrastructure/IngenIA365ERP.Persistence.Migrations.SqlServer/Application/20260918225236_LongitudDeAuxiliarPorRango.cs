@@ -14,8 +14,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
     /// <remarks>
     /// MIGRACION-DESTRUCTIVA-APROBADA (Principio XII): <c>DropColumn</c> de dos parámetros de configuración,
     /// sin datos transaccionales. Respaldo: el <c>pg_dump</c> previo al despliegue de cada ambiente (runbook);
-    /// en DEV/QA los valores retirados eran 8 y 10 y no se necesitan de vuelta. Segundo revisor: pendiente
-    /// de designación por el dueño antes de promover a producción (se anota aquí, como en ContabilidadNiif).
+    /// en DEV/QA los valores retirados eran 8 y 10 y no se necesitan de vuelta. Segundo revisor: Jorman Copete
+    /// (dueño del producto), designado el 2026-09-19 al autorizar la promoción a producción (respaldos
+    /// <c>*-20260919-pre-f008-f009.dump</c> en <c>/root/respaldos/</c> del nodo de PDN).
     /// </remarks>
     public partial class LongitudDeAuxiliarPorRango : Migration
     {
