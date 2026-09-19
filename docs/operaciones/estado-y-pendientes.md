@@ -40,6 +40,22 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release fb8f016`** (2026-09-19 20:12–20:15 UTC, GitOps `56be5ec`, autorizado por el dueño con
+«empújalo a PDN»): recurrentes de nómina sin duplicados. En `cooflopal` la contadora quedó con la
+misma deducción registrada dos veces (Ids 2 y 3, 16:17 y 16:25 UTC, sin ninguna búsqueda de
+empleado entre las dos): «Nueva recurrente» abría con el buscador y los resultados del empleado
+anterior; cada cálculo generaba las dos novedades y anular una no servía porque el siguiente cálculo
+la regeneraba. Desde este release el diálogo abre limpio, la misma orden responde
+`Payroll.RecurringNoveltyDuplicate`, el cálculo no regenera una novedad anulada por una persona (sólo
+la del descarte del borrador) y de dos recurrentes iguales entra la más antigua y avisa. Lleva también
+`4d05e26` (sobre `Request.BodyInvalid` en el 400 de un cuerpo ilegible). Sin migraciones (22 en
+`cooflopal` antes y después). Respaldos `*-20260919c-pre-recurrentes.dump` (23/288/288 tablas con
+datos); `cooflopal` conserva 11 empleados, 14 corridas, 28 novedades activas y 12 recurrentes;
+imágenes por digest iguales al overlay (api `7dc8c76b`, web `b7ce7f58`); `/health/ready` 200,
+`app.ingenia365.com` 200, 0 errores en el log de la API tras el relevo. **Pendiente en la
+cooperativa**: desactivar en Novedades › Recurrentes la segunda recurrente de FONDO DE SOLIDARIDAD del
+empleado 8 (la de las 16:25 UTC) y recalcular la 1.ª quincena de agosto.
+
 **`release d7e4d0e`** (2026-09-19 ~11:45 UTC, GitOps `01b8918`, autorizado por el dueño): arregla
 la regresión que llevó `ff25948` a producción —Reportes de nómina caía con
 `DeserializeUnableToConvertValue … $.columnas[0].tipo` porque el convertidor global de enums
