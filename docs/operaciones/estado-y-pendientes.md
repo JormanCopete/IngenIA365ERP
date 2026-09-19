@@ -40,6 +40,15 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release d7e4d0e`** (2026-09-19 ~11:45 UTC, GitOps `01b8918`, autorizado por el dueño): arregla
+la regresión que llevó `ff25948` a producción —Reportes de nómina caía con
+`DeserializeUnableToConvertValue … $.columnas[0].tipo` porque el convertidor global de enums
+pisaba el `[JsonConverter]` de `TipoDeColumna`—, la tabla de retención por plan de nómina que la
+liquidación sí usa (`RetencionPorPlanDeNomina`: agrega `PayrollPlanId`, 0 filas en PDN) y los
+enlaces del menú sin página (informes contables E2, Beneficiarios). Respaldos
+`*-20260919b-pre-retencion-plan.dump` (23/288/288 tablas con datos); `cooflopal` conserva 11
+empleados y 9 corridas; `/health/ready` 200.
+
 **`release ff25948`** (2026-09-19 04:37–04:41 UTC, GitOps `12d1101`, autorizado por el dueño con
 «sí, empujalo a PDN»): **features 008 y 009 juntas** —alta de persona en un paso, permisos de
 maestros, contabilidad NIIF E1 con el CUIF oficial (2.110 cuentas), cuentas propias donde el
