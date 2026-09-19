@@ -247,7 +247,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
   base de proporción); cada período lleva `SubPeriodNumber` e `ImputationYear/Month`
   (`PeriodCalendar` los propone y valida la duración); las recurrentes tienen `ApplyOn`
-  (cada período / primero / último del mes); «Descartar borrador» deja la corrida `Superseded`
+  (cada período / primero / último del mes; **la misma orden no se registra dos veces**:
+  `RecurrenteRepetida` rechaza otra recurrente activa del mismo empleado y concepto con vigencia
+  cruzada si el concepto no admite repetirse, o idéntica en cantidad y valor si lo admite; el
+  materializador aplica la misma regla a las ya registradas —entra la más antigua, el cálculo avisa—
+  y **no vuelve a generar una novedad anulada por una persona** en ese período, sólo la anulada por
+  el descarte del borrador. El 2026-09-19 en producción quedó una deducción registrada dos veces porque
+  «Nueva recurrente» abría con el buscador y los resultados del empleado anterior —los tres diálogos de
+  Novedades comparten `_buscarEmpleado`/`_empleadosEncontrados` y ése no los limpiaba—, salía doble en
+  cada cálculo y anularla no servía); «Descartar borrador» deja la corrida `Superseded`
   con `DiscardedAt/By/Reason` y el período en `Open`; el centro de reportes
   (`/api/reports/payroll/{vista}?format=`) produce `TablaExportable` y la exporta con
   ClosedXML, OpenXML y QuestPDF desde `API/Reports/Exportadores`. El **cálculo preliminar** anterior
@@ -271,7 +279,7 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.060 el 2026-09-19 (165 Domain, 763 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas sin contenedores | 1.065 el 2026-09-19 (165 Domain, 768 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 153 el 2026-09-19 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 

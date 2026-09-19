@@ -248,6 +248,10 @@
             <IndicadorDeCarga Cargando="@_guardando" Texto="Anulando…">
             <div class="pagina">
                 <p>Se anula <strong>@_anulando?.ConceptName</strong> de <strong>@_anulando?.EmployeeName</strong>. La novedad queda visible como anulada.</p>
+                @if (_anulando?.Origin == "Recurring")
+                {
+                    <p class="texto-tenue">Esta novedad la generó una recurrente. Anularla la quita <strong>sólo de este período</strong> y el cálculo no la vuelve a generar aquí; para que deje de salir en los períodos siguientes, desactive la recurrente en «Recurrentes».</p>
+                }
                 <SfTextBox @bind-Value="_motivoAnulacion" Placeholder="Motivo (obligatorio)" FloatLabelType="FloatLabelType.Always" />
             </div>
             <div class="toolbar">
@@ -403,7 +407,7 @@
             <p class="texto-tenue">Una novedad que se repite cada período se registra una vez: en cada cálculo aparece como novedad «Recurrente» con su número de cuota, y al aprobar se cuenta la cuota emitida. Al llegar a la última deja de generarse.</p>
             <div class="toolbar">
                 <label class="campo-check"><input type="checkbox" @bind="_soloRecurrentesActivas" @bind:after="CargarRecurrentesAsync" /> Sólo activas</label>
-                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" type="button" OnClick="@(() => { _nuevaRecurrente = new FormRecurrente(); _mostrarNuevaRecurrente = true; })">Nueva recurrente</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" type="button" OnClick="@AbrirNuevaRecurrente">Nueva recurrente</SfButton>
             </div>
             <IndicadorDeCarga Cargando="@_cargaRecurrentes.Activa">
             <SfGrid TValue="RecurrenteDto" DataSource="@_recurrentes" AllowPaging="true" AllowSorting="true" RowHeight="38">
@@ -601,6 +605,20 @@
         if (res.IsSuccess) _recurrentes = res.Value!.ToList();
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las recurrentes.");
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// El buscador de empleado y sus resultados son compartidos por los tres diálogos y hasta el
+    /// 2026-09-19 éste no los limpiaba: al abrir «Nueva recurrente» seguía el nombre del empleado
+    /// anterior en la lista, se elegía sin buscar y quedaba la misma recurrente dos veces (pasó en
+    /// producción, con ocho minutos de diferencia y sin ninguna búsqueda entre las dos).
+    /// </summary>
+    private void AbrirNuevaRecurrente()
+    {
+        _nuevaRecurrente = new FormRecurrente();
+        _empleadosEncontrados = [];
+        _buscarEmpleado = string.Empty;
+        _mostrarNuevaRecurrente = true;
     }
 
     private async Task GuardarRecurrente()

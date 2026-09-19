@@ -144,6 +144,18 @@ hay que recalcularlos antes de aprobar.
   sólo el último período del mes admite lo que el calendario le quite o le sume.
 - Una recurrente tiene **«Aplica en»**: cada período, sólo el primero del mes o sólo el último
   (en semanal, la mayor semana creada del mes). El valor es por período en que aplica.
+- **La misma orden no se registra dos veces** (desde el 2026-09-19): un empleado no puede tener
+  dos recurrentes activas del mismo concepto con vigencias que se cruzan si el concepto no admite
+  repetirse en el período, ni dos idénticas (misma cantidad y valor) aunque lo admita
+  (`Payroll.RecurringNoveltyDuplicate`, con la existente). Si cambió el valor: desactivar la
+  anterior en Novedades › Recurrentes y registrar la nueva. Con dos ya registradas de antes, el
+  cálculo genera la más antigua y lo dice en sus avisos hasta que se desactive la sobrante. El caso
+  de producción nació en la pantalla: «Nueva recurrente» abría con el nombre del empleado anterior
+  todavía en la lista de resultados y se eligió sin buscar; desde esa fecha el diálogo abre limpio.
+- **Anular la novedad de una recurrente** la quita sólo de ese período y el siguiente cálculo
+  **no la vuelve a generar** (hasta esa fecha sí, y anular no servía de nada). Para que deje de
+  salir en los períodos siguientes, se desactiva la recurrente. Las recurrentes aparecen en
+  Novedades **al calcular**, no al registrarlas: antes de calcular se ven en «Recurrentes».
 - Un período **Calculado** se devuelve a Abierto con **«Descartar borrador»** (Liquidación):
   la corrida queda descartada con motivo, las recurrentes generadas se anulan y se regeneran al
   recalcular; nada se borra ni toca contabilidad. Una aprobada sigue reversándose.

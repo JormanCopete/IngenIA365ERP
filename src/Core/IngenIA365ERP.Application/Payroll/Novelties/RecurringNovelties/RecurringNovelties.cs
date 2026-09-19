@@ -94,6 +94,16 @@ public sealed class CreateRecurringNoveltyCommandHandler(IApplicationDbContext d
             CreatedAt = ahora,
             CreatedBy = user.UserName,
         };
+
+        // La misma orden dos veces no se registra (RecurrenteRepetida): en producción pasó, y cada cálculo
+        // generaba las dos novedades.
+        var vigentes = await db.PayrollRecurringNovelties.AsNoTracking()
+            .Where(r => r.EmployeeId == employee.Id && r.ConceptCode == concept.Code && r.IsActive)
+            .OrderBy(r => r.Id)
+            .ToListAsync(ct);
+        var repetida = vigentes.FirstOrDefault(v => RecurrenteRepetida.EsLaMisma(v, recurrente, concept.AllowsRepeatInPeriod));
+        if (repetida is not null) return Result.Failure<Guid>(RecurrenteRepetida.Reparo(repetida, concept));
+
         db.PayrollRecurringNovelties.Add(recurrente);
         await db.SaveChangesAsync(ct);
 
@@ -205,27 +215,56 @@ public sealed record MaterializationResult(int Created, IReadOnlyList<string> Wa
 
 /// <summary>
 /// Antes de calcular un período, convierte cada recurrente activa que lo cubre en una novedad
-/// <c>Origin = Recurring</c> con su número de cuota, si aún no existe una activa para ese
-/// período. Guarda en el acto: la novedad es un hecho del período, exista o no el cálculo.
-/// La cuota se cuenta como emitida al aprobar (y se descuenta al reversar), no aquí.
+/// <c>Origin = Recurring</c> con su número de cuota, si la recurrente aún no dejó novedad en ese
+/// período <b>en ningún estado</b>: una anulada quiere decir que alguien decidió que esta vez no va,
+/// y hasta el 2026-09-19 el siguiente cálculo la volvía a crear porque sólo se miraban las activas.
+/// Guarda en el acto: la novedad es un hecho del período, exista o no el cálculo. La cuota se
+/// cuenta como emitida al aprobar (y se descuenta al reversar), no aquí.
+///
+/// <para>
+/// Aplica las mismas reglas de repetición que una novedad digitada: si el concepto no admite
+/// repetirse y el empleado ya tiene una activa de ese concepto en el período, la recurrente no
+/// entra; y de dos recurrentes que son la misma orden (<see cref="RecurrenteRepetida"/>) entra la
+/// más antigua. En ambos casos el cálculo lo dice en sus avisos.
+/// </para>
 /// </summary>
 public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user)
 {
+    /// <summary>
+    /// Con este motivo anula «Descartar borrador» las novedades que las recurrentes generaron para el
+    /// período: son las únicas anuladas que el próximo cálculo vuelve a generar. Una anulada por una
+    /// persona, con su motivo, no vuelve.
+    /// </summary>
+    public const string AnuladaPorDescarte = "Borrador descartado: se regenera en el próximo cálculo.";
+
     public async Task<MaterializationResult> MaterializeAsync(PayPeriod period, CancellationToken ct)
     {
         var candidatas = await (
             from r in db.PayrollRecurringNovelties.AsNoTracking()
             join e in db.Employees.AsNoTracking() on r.EmployeeId equals e.Id
+            join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where r.IsActive && r.StartDate <= period.EndDate && (r.EndDate == null || r.EndDate >= period.StartDate)
                   && (r.TotalInstallments == null || r.InstallmentsIssued < r.TotalInstallments)
                   && e.PayrollPlanId == period.PayrollPlanId
-            select new { r, e }).ToListAsync(ct);
+            orderby r.Id
+            select new { r, e, nombre = (p.FirstName + " " + p.LastName).Trim() }).ToListAsync(ct);
         if (candidatas.Count == 0) return new MaterializationResult(0, []);
 
-        var existentes = await db.PayrollNovelties.AsNoTracking()
-            .Where(n => n.PayPeriodId == period.Id && n.RecurringNoveltyId != null && n.Status == NoveltyStatus.Active)
-            .Select(n => n.RecurringNoveltyId!.Value).ToListAsync(ct);
-        var ya = existentes.ToHashSet();
+        var delPeriodo = await db.PayrollNovelties.AsNoTracking()
+            .Where(n => n.PayPeriodId == period.Id)
+            .Select(n => new { n.EmployeeId, n.ConceptCode, n.Status, n.StatusReason, n.RecurringNoveltyId })
+            .ToListAsync(ct);
+        // Con novedad en el período, en cualquier estado: ya entró, o alguien la anuló para este período.
+        // Sólo la anulada por el descarte del borrador se vuelve a generar.
+        var ya = delPeriodo
+            .Where(n => n.RecurringNoveltyId != null && !(n.Status == NoveltyStatus.Cancelled && n.StatusReason == AnuladaPorDescarte))
+            .Select(n => n.RecurringNoveltyId!.Value).ToHashSet();
+        // Las que hoy pesan en el período: activas de cada concepto por empleado, y qué recurrentes las generaron.
+        var activasPorConcepto = delPeriodo.Where(n => n.Status == NoveltyStatus.Active)
+            .GroupBy(n => (n.EmployeeId, Codigo: n.ConceptCode.ToUpperInvariant()))
+            .ToDictionary(g => g.Key, g => g.Count());
+        var recurrentesActivas = delPeriodo.Where(n => n.Status == NoveltyStatus.Active && n.RecurringNoveltyId != null)
+            .Select(n => n.RecurringNoveltyId!.Value).ToHashSet();
 
         var avisos = new List<string>();
         var creadas = 0;
@@ -243,6 +282,7 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
         var esPrimero = period.SubPeriodNumber == 1;
         var esUltimo = PeriodCalendar.EsUltimoDelMes(periodicidad, period.SubPeriodNumber, mayorSemana);
 
+        var generadasAhora = new List<PayrollRecurringNovelty>();
         foreach (var c in candidatas.Where(c => !ya.Contains(c.r.Id)))
         {
             if (NoveltyRules.EnsureEmployeeInPeriod(c.e, period).IsFailure) continue;
@@ -256,9 +296,28 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
             var concepto = await NoveltyRules.ResolveConceptAsync(db, c.r.ConceptCode, period.EndDate, c.e.EmployeeClass, ct);
             if (concepto.IsFailure)
             {
-                avisos.Add($"Recurrente {c.r.ConceptCode} del empleado {c.e.PublicId}: {concepto.Error.Message}");
+                avisos.Add($"Recurrente {c.r.ConceptCode} de {c.nombre}: {concepto.Error.Message}");
                 continue;
             }
+
+            // Las mismas reglas que una novedad digitada (NoveltyRules.EnsureNoDuplicateAsync y RecurrenteRepetida).
+            var clave = (c.e.Id, concepto.Value.Code.ToUpperInvariant());
+            var activas = activasPorConcepto.GetValueOrDefault(clave) + generadasAhora.Count(g => g.EmployeeId == c.e.Id && string.Equals(g.ConceptCode, concepto.Value.Code, StringComparison.OrdinalIgnoreCase));
+            if (!concepto.Value.AllowsRepeatInPeriod && activas > 0)
+            {
+                avisos.Add($"Recurrente {concepto.Value.Name} de {c.nombre}: no se generó porque el empleado ya tiene una novedad activa de ese concepto en el período y el concepto no admite repetirse. Si sobra una recurrente, desactívela en Novedades › Recurrentes.");
+                continue;
+            }
+            var gemela = candidatas
+                .Where(o => o.r.Id != c.r.Id && (recurrentesActivas.Contains(o.r.Id) || generadasAhora.Contains(o.r)))
+                .Select(o => o.r)
+                .FirstOrDefault(o => RecurrenteRepetida.EsLaMisma(o, c.r, concepto.Value.AllowsRepeatInPeriod));
+            if (gemela is not null)
+            {
+                avisos.Add($"Recurrente {concepto.Value.Name} de {c.nombre} (registrada el {c.r.CreatedAt:dd/MM/yyyy HH:mm}): es la misma orden que otra recurrente activa ({RecurrenteRepetida.Descripcion(gemela, concepto.Value.Name)}, registrada el {gemela.CreatedAt:dd/MM/yyyy HH:mm}) y no se generó dos veces. Desactive la sobrante en Novedades › Recurrentes.");
+                continue;
+            }
+
             db.PayrollNovelties.Add(new PayrollNovelty
             {
                 PayPeriodId = period.Id,
@@ -276,6 +335,7 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
                 CreatedAt = ahora,
                 CreatedBy = user.UserName ?? "sistema",
             });
+            generadasAhora.Add(c.r);
             creadas++;
         }
         if (creadas > 0) await db.SaveChangesAsync(ct);

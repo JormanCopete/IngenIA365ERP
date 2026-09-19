@@ -80,14 +80,15 @@ public sealed class DiscardPayrollRunCommandHandler(
         period.UpdatedAt = ahora;
         period.UpdatedBy = yo;
 
-        // Las recurrentes se regeneran en el próximo cálculo; sin anularlas quedarían dobles.
+        // Las recurrentes se regeneran en el próximo cálculo: el materializador reconoce este motivo y sólo
+        // por él vuelve a generar una anulada (una anulada por una persona no vuelve).
         var generadas = await db.PayrollNovelties
             .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active && n.Origin == NoveltyOrigin.Recurring)
             .ToListAsync(ct);
         foreach (var n in generadas)
         {
             n.Status = NoveltyStatus.Cancelled;
-            n.StatusReason = "Borrador descartado: se regenera en el próximo cálculo.";
+            n.StatusReason = Novelties.RecurringNovelties.RecurringNoveltiesMaterializer.AnuladaPorDescarte;
             n.UpdatedAt = ahora;
             n.UpdatedBy = yo;
         }
