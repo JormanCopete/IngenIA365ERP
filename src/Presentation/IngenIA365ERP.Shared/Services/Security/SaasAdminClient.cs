@@ -44,7 +44,6 @@ public sealed class SaasAdminClient
             {
                 Content = JsonContent.Create(body),
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }

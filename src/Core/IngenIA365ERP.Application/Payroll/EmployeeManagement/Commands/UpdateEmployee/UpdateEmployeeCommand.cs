@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,17 @@ public record UpdateEmployeeCommand : IRequest<Result>
 
     public decimal BaseSalary { get; init; }
     public int ContractType { get; init; }
+
+    /// <summary>
+    /// Fecha de ingreso (<c>PAY_Employees.JoinDate</c>). Hasta el 2026-09-18 no viajaba en el
+    /// PUT y la pantalla la mostraba editable: se cambiaba y no cambiaba. Se puede corregir
+    /// mientras no haya nada liquidado ni registrado que dependa de ella: una nómina aprobada
+    /// de un período que empieza antes, una novedad en un período ya cerrado antes del nuevo
+    /// ingreso o un cambio de salario anterior. El cambio de salario inicial —el que el alta
+    /// deja en la fecha de ingreso— se mueve con ella. Nula, no cambia: es lo que mandan la
+    /// ficha de detalle y las pruebas que sólo tocan otros campos.
+    /// </summary>
+    public DateTime? HireDate { get; init; }
 
     public Guid? HealthInsurancePublicId { get; init; }
     public Guid? PensionProviderPublicId { get; init; }
@@ -50,6 +62,12 @@ public class UpdateEmployeeCommandHandler(
         if (employee.Status == -1)
             return Result.Failure(new Error("Employee.Terminated",
                 "No se puede modificar un empleado retirado."));
+
+        if (request.HireDate is { } ingreso)
+        {
+            var reparoDeIngreso = await CambiarIngresoAsync(employee, ingreso.Date, ct);
+            if (reparoDeIngreso is not null) return Result.Failure(reparoDeIngreso);
+        }
 
         int healthInsuranceId = 0;
         if (request.HealthInsurancePublicId.HasValue)
@@ -143,6 +161,55 @@ public class UpdateEmployeeCommandHandler(
         await context.SaveChangesAsync(ct);
         return Result.Success();
     }
+
+    /// <summary>
+    /// Mueve la fecha de ingreso si nada de lo ya registrado la contradice. Null si quedó
+    /// (o no cambiaba); si no, el reparo con la fecha que lo impide.
+    /// </summary>
+    private async Task<Error?> CambiarIngresoAsync(Employee employee, DateTime ingreso, CancellationToken ct)
+    {
+        var anterior = employee.JoinDate.Date;
+        if (ingreso == anterior) return null;
+
+        // Una nómina aprobada (o reversada: también fue historia) cuyo período empieza antes de
+        // la fecha más tardía de las dos calculó los días trabajados con el ingreso viejo.
+        var tope = ingreso > anterior ? ingreso : anterior;
+        var liquidado = await context.PayrollRunEmployees.AsNoTracking()
+            .Where(re => re.EmployeeId == employee.Id
+                && (re.Run!.Status == PayrollRunStatus.Approved || re.Run.Status == PayrollRunStatus.Reversed)
+                && re.Run.PayPeriod!.StartDate < tope)
+            .Select(re => (DateTime?)re.Run!.PayPeriod!.StartDate)
+            .OrderBy(d => d)
+            .FirstOrDefaultAsync(ct);
+        if (liquidado is { } inicioLiquidado)
+            return new Error("Employee.HireDateLocked",
+                $"La fecha de ingreso no se puede cambiar: hay una nómina aprobada del período que empieza el {inicioLiquidado:dd/MM/yyyy}. Reversala primero.");
+
+        // Una novedad activa en un período que termina antes del nuevo ingreso quedaría fuera de la vinculación.
+        var novedadFuera = await context.PayrollNovelties.AsNoTracking()
+            .Where(n => n.EmployeeId == employee.Id && n.Status == NoveltyStatus.Active && n.PayPeriod!.EndDate < ingreso)
+            .Select(n => (DateTime?)n.PayPeriod!.EndDate)
+            .OrderBy(d => d)
+            .FirstOrDefaultAsync(ct);
+        if (novedadFuera is { } finDeNovedad)
+            return new Error("Employee.HireDateLocked",
+                $"La fecha de ingreso no se puede cambiar al {ingreso:dd/MM/yyyy}: hay novedades en un período que termina el {finDeNovedad:dd/MM/yyyy}, antes del ingreso.");
+
+        // El cambio de salario inicial se mueve con el ingreso; cualquier otro anterior lo impide.
+        var cambios = await context.SalaryChanges
+            .Where(c => c.EmployeeId == employee.Id)
+            .OrderBy(c => c.EffectiveDate)
+            .ToListAsync(ct);
+        var inicial = cambios.FirstOrDefault(c => c.EffectiveDate.Date == anterior);
+        var anteriorAlIngreso = cambios.FirstOrDefault(c => c != inicial && c.EffectiveDate.Date < ingreso);
+        if (anteriorAlIngreso is not null)
+            return new Error("Employee.HireDateLocked",
+                $"La fecha de ingreso no se puede cambiar al {ingreso:dd/MM/yyyy}: hay un cambio de salario con efecto el {anteriorAlIngreso.EffectiveDate:dd/MM/yyyy}, antes del ingreso.");
+        if (inicial is not null) inicial.EffectiveDate = ingreso;
+
+        employee.JoinDate = ingreso;
+        return null;
+    }
 }
 
 public class UpdateEmployeeCommandValidator : AbstractValidator<UpdateEmployeeCommand>
@@ -151,6 +218,7 @@ public class UpdateEmployeeCommandValidator : AbstractValidator<UpdateEmployeeCo
     {
         RuleFor(x => x.EmployeePublicId).NotEmpty();
         RuleFor(x => x.BaseSalary).GreaterThan(0).WithMessage("El salario base debe ser mayor a 0.");
+        RuleFor(x => x.HireDate).NotEqual(default(DateTime)).When(x => x.HireDate.HasValue).WithMessage("Fecha de ingreso inválida.");
         RuleFor(x => x.ContractType).InclusiveBetween(0, 10);
         RuleFor(x => x.PayrollBankAccountType).InclusiveBetween(0, 2);
         RuleFor(x => x.PayrollBankAccountNumber).MaximumLength(25);

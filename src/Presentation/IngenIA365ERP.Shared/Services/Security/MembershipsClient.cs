@@ -67,7 +67,6 @@ public sealed class MembershipsClient
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }
@@ -85,7 +84,6 @@ public sealed class MembershipsClient
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, url);
             if (body is not null) req.Content = JsonContent.Create(body);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }
@@ -105,7 +103,6 @@ public sealed class MembershipsClient
             {
                 Content = JsonContent.Create(body),
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }

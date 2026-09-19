@@ -74,6 +74,8 @@ public sealed class RenovadorDeSesion
     private readonly SemaphoreSlim _unaRenovacionALaVez = new(1, 1);
 
     private string? _accessToken;
+    /// <summary>El access que acaba de rotar: un cliente que lo leyó antes de la renovación lo manda todavía.</summary>
+    private string? _accessTokenAnterior;
     private DateTime _accessTokenExpiresAt;
     private string? _refreshToken;
     private DateTime? _vencimientoDeSesion;
@@ -102,6 +104,17 @@ public sealed class RenovadorDeSesion
     public DateTime? VencimientoDeSesion => _vencimientoDeSesion;
 
     public bool TieneSesion => !string.IsNullOrWhiteSpace(_accessToken);
+
+    /// <summary>
+    /// Si ese Bearer es el access de <b>esta</b> sesión —el vigente o el que acaba de rotar— y
+    /// no un token temporal de desafío (login, MFA, elegir cooperativa). Es lo que le permite a
+    /// <c>RenovacionDeSesionHandler</c> tratar como suya una petición a la que un cliente le
+    /// puso la cabecera a mano.
+    /// </summary>
+    public bool EsTokenDeSesion(string? token) =>
+        !string.IsNullOrEmpty(token)
+        && (string.Equals(token, _accessToken, StringComparison.Ordinal)
+            || string.Equals(token, _accessTokenAnterior, StringComparison.Ordinal));
 
     public bool AccessTokenVigente => TieneSesion && _accessTokenExpiresAt > Ahora;
 
@@ -208,6 +221,8 @@ public sealed class RenovadorDeSesion
         bool esActividad = true)
     {
         _restaurado = true;
+        if (_accessToken is not null && !string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
+            _accessTokenAnterior = _accessToken;
         _accessToken = accessToken;
         _accessTokenExpiresAt = accessTokenExpiresAt ?? LeerVencimientoDelJwt(accessToken) ?? Ahora.AddMinutes(15);
         if (!string.IsNullOrWhiteSpace(refreshToken)) _refreshToken = refreshToken;
@@ -230,6 +245,7 @@ public sealed class RenovadorDeSesion
     public void Limpiar()
     {
         _accessToken = null;
+        _accessTokenAnterior = null;
         _accessTokenExpiresAt = DateTime.MinValue;
         _refreshToken = null;
         _vencimientoDeSesion = null;

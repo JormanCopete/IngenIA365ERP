@@ -30,7 +30,9 @@ public class PermisosDelUsuarioTests
     public PermisosDelUsuarioTests()
     {
         _sesion = new RenovadorDeSesion(_almacen, new FabricaDeUnSoloServidor(_servidor), _reloj);
-        var http = new HttpClient(_servidor, disposeHandler: false) { BaseAddress = new Uri("https://erp.pruebas") };
+        // La cadena real del cliente «api»: el Bearer lo pone el handler, no el cliente (2026-09-18).
+        var cadena = new RenovacionDeSesionHandler(_sesion) { InnerHandler = new AuthBearerHandler(_almacen) { InnerHandler = _servidor } };
+        var http = new HttpClient(cadena, disposeHandler: false) { BaseAddress = new Uri("https://erp.pruebas") };
         _auth = new CentralAuthClient(http, _sesion, _estado);
         _permisos = new PermisosDelUsuario(http, _auth, _estado, _avisos);
     }

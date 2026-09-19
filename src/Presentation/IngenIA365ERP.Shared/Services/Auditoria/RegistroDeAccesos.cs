@@ -84,7 +84,6 @@ public sealed class RegistroDeAccesos(
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, Ruta) { Content = JsonContent.Create(new { route = acceso.Route, title = acceso.Title }) };
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 using var resp = await http.SendAsync(req);
                 if (resp.IsSuccessStatusCode) return;
                 // Un 4xx no mejora reintentando: sin cooperativa activa o sin sesión válida no hay a quién atribuir el acceso.

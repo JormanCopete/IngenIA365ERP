@@ -131,7 +131,6 @@
         var token = Auth.CurrentAccessToken;
         if (token is null) return null;
         var req = new HttpRequestMessage(metodo, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return req;
     }
 

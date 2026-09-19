@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.Shared.Services;
 using IngenIA365ERP.Shared.Services.Auditoria;
 using IngenIA365ERP.Shared.Services.Security;
 using IngenIA365ERP.Shared.Tests.Seguridad;
@@ -26,8 +27,11 @@ public class RegistroDeAccesosTests
 
     public RegistroDeAccesosTests()
     {
-        var sesion = new RenovadorDeSesion(new AlmacenEnMemoria(), new FabricaDeUnSoloServidor(_servidor), new RelojFijo(Ahora));
-        var http = new HttpClient(_servidor, disposeHandler: false) { BaseAddress = new Uri("https://erp.pruebas") };
+        var almacen = new AlmacenEnMemoria();
+        var sesion = new RenovadorDeSesion(almacen, new FabricaDeUnSoloServidor(_servidor), new RelojFijo(Ahora));
+        // La cadena real del cliente «api»: el Bearer lo pone el handler, no el cliente (2026-09-18).
+        var cadena = new RenovacionDeSesionHandler(sesion) { InnerHandler = new AuthBearerHandler(almacen) { InnerHandler = _servidor } };
+        var http = new HttpClient(cadena, disposeHandler: false) { BaseAddress = new Uri("https://erp.pruebas") };
         _auth = new CentralAuthClient(http, sesion, new EstadoDeAutenticacionFalso());
         _registro = new RegistroDeAccesos(http, _auth, _avisos, NullLogger<RegistroDeAccesos>.Instance, SinEspera);
         _servidor.Responder = (_, _) => new HttpResponseMessage(HttpStatusCode.Accepted);

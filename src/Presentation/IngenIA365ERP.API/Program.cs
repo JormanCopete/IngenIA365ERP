@@ -122,6 +122,9 @@ try
     // Carter for Minimal API endpoints
     builder.Services.AddCarter();
 
+    // Los enums entran por nombre o por número y salen como número (ver EnumPorNombreONumero).
+    builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new IngenIA365ERP.Application.Common.Json.EnumPorNombreONumero()));
+
     // CORS
     builder.Services.AddCors(options =>
     {

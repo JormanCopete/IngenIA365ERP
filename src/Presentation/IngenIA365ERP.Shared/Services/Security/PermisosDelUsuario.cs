@@ -108,7 +108,6 @@ public sealed class PermisosDelUsuario : IDisposable
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, "/api/admin/permissions/mine");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             var resultado = await CentralAuthApi.ParseAsync<PermisosMiosDto>(resp, ct);
             if (!resultado.IsSuccess)

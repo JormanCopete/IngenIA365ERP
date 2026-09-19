@@ -54,7 +54,6 @@ public sealed class TenantSessionClient
             {
                 Content = JsonContent.Create(new { tenantPublicId }),
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
         }
@@ -71,7 +70,6 @@ public sealed class TenantSessionClient
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }
@@ -92,7 +90,6 @@ public sealed class TenantSessionClient
             {
                 Content = JsonContent.Create(body),
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var resp = await _http.SendAsync(req, ct);
             return await CentralAuthApi.ParseAsync<T>(resp, ct);
         }

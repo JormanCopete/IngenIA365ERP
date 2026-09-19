@@ -51,7 +51,20 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   navegar; `?returnUrl=` devuelve a la pantalla donde se estaba. Hasta el 2026-09-10
   nadie llamaba al refresh y la app expulsaba a los quince minutos; las claves
   `CentralIdentity:AccessTokenLifetimeMinutes/RefreshTokenLifetimeHours` que había en
-  `appsettings.json` no las leía nadie y se retiraron.
+  `appsettings.json` no las leía nadie y se retiraron. **La cabecera `Authorization` la pone
+  sólo el handler**: ningún cliente ni pantalla de Shared la pone a mano
+  (`ElTokenDeSesionLoPoneElHandler`; se exceptúan los tokens de desafío y el cierre de sesión).
+  Hasta el 2026-09-18 quince clientes tipados (Nómina, Personas, Contabilidad, Permisos…)
+  mandaban `CurrentAccessToken` en la cabecera y el handler se apartaba al verla: salían sin
+  renovar ni reintentar, y a los quince minutos del último canje decían «La sesión expiró»
+  mientras las pantallas con `Http.GetAsync` a secas seguían andando —y al renovar éstas, aquéllos
+  volvían solos—. Hoy el handler reconoce el access de la sesión (vigente o recién rotado,
+  `RenovadorDeSesion.EsTokenDeSesion`) y lo reemplaza por el vigente.
+- **JSON de la API**: los enums **entran por nombre o por número y salen como número**
+  (`Application/Common/Json/EnumPorNombreONumero`, registrado en `ConfigureHttpJsonOptions`).
+  Las pantallas mandan el nombre («Earning», «Monthly») y los DTOs de Shared leen `int`; hasta
+  el 2026-09-18 System.Text.Json sólo aceptaba números y crear un concepto o un plan de nómina
+  desde la pantalla respondía un 400 vacío —sin sobre, sin log— antes de llegar al handler.
 - **Segundo factor**: vive en `ADM_MfaCredentials`, una tabla con discriminador
   (TPH) — no en la columna `ADM_CentralUsers.MfaSecret`. Esa columna **sigue
   escribiéndose** como red de rollback mientras dure el traslado, y la
@@ -206,7 +219,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   pantalla dejaba elegirla, así que toda liquidación salía «sin clase de riesgo ARL». La
   ficha también guarda fondo de cesantías (`SeveranceFundId`, entero desde el 2026-09-12)
   y caja de compensación (`FamilySubsidyId` → catálogo `PAY_FamilyCompensationFunds`,
-  sin semilla). **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
+  sin semilla). La **fecha de ingreso** se corrige desde la ficha (`UpdateEmployeeCommand.HireDate`,
+  nula = no cambia) mientras no haya nómina aprobada del período, novedad en período cerrado
+  antes ni cambio de salario anterior (`Employee.HireDateLocked`); el cambio de salario inicial
+  se mueve con ella. Hasta el 2026-09-18 el PUT no la llevaba y la pantalla la mostraba editable.
+  **Feature 006 (2026-09-12)**: periodicidades `TenDay=10` y `Weekly=7` (el valor del enum ES la
   base de proporción); cada período lleva `SubPeriodNumber` e `ImputationYear/Month`
   (`PeriodCalendar` los propone y valida la duración); las recurrentes tienen `ApplyOn`
   (cada período / primero / último del mes); «Descartar borrador» deja la corrida `Superseded`
@@ -233,7 +250,7 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.036 el 2026-09-15 (165 Domain, 743 Application, 74 Architecture, 52 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas sin contenedores | 1.049 el 2026-09-18 (165 Domain, 753 Application, 76 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 153 el 2026-09-13 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
