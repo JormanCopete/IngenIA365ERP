@@ -83,7 +83,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<HealthInsuranceProvider> HealthInsuranceProviders => Set<HealthInsuranceProvider>();
-    DbSet<Company> IApplicationDbContext.Companies => throw new NotImplementedException();
+    public DbSet<Company> Companies => Set<Company>();
     DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
     DbSet<Reference> IApplicationDbContext.References => throw new NotImplementedException();
@@ -118,7 +118,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
     DbSet<BankStatementColumnMap> IApplicationDbContext.BankStatementColumnMaps => throw new NotImplementedException();
     DbSet<BankStatementLine> IApplicationDbContext.BankStatementLines => throw new NotImplementedException();
-    DbSet<BudgetLine> IApplicationDbContext.BudgetLines => throw new NotImplementedException();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
     DbSet<WithholdingCertificate> IApplicationDbContext.WithholdingCertificates => throw new NotImplementedException();
     DbSet<WithholdingCertificateLine> IApplicationDbContext.WithholdingCertificateLines => throw new NotImplementedException();
     DbSet<TaxForm> IApplicationDbContext.TaxForms => throw new NotImplementedException();
@@ -137,7 +137,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
     // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
-    DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
+    public DbSet<Budget> Budgets => Set<Budget>();
     DbSet<LoanPortfolio> IApplicationDbContext.LoanPortfolios => throw new NotImplementedException();
     DbSet<LendingTransaction> IApplicationDbContext.LendingTransactions => throw new NotImplementedException();
     DbSet<PendingInstallment> IApplicationDbContext.PendingInstallments => throw new NotImplementedException();
@@ -298,6 +298,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<FinancialStatementItem>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<ChartOfAccount>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<AccountTaxRate>(b => b.Ignore("RowVersion"));
+        // Feature 009 E2: la empresa (encabezado de los informes) y el presupuesto.
+        modelBuilder.Entity<Company>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Budget>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<BudgetLine>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CrossDocumentType>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<FiscalYear>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollDeductionEntry>(b => b.Ignore("RowVersion"));

@@ -67,7 +67,8 @@ public static class MovimientosContables
         TerceroResuelto? tercero = null;
         if (f.Person is { } personaId)
         {
-            tercero = await db.People.AsNoTracking().Where(p => p.PublicId == personaId)
+            // Un tercero dado de baja conserva sus movimientos: su estado de cuenta sigue existiendo.
+            tercero = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.PublicId == personaId)
                 .Select(p => new TerceroResuelto(p.Id, p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.LastName, p.BusinessName), p.TaxId))
                 .FirstOrDefaultAsync(ct);
             if (tercero is null) return Result.Failure<Contexto>(TerceroNoEncontrado);
