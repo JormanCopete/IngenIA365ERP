@@ -158,6 +158,43 @@ public class TercerosQueriesTests
     }
 
     [Fact]
+    public async Task Una_cuenta_saldada_y_sin_movimiento_en_el_rango_no_sale_en_el_estado_de_cuenta()
+    {
+        var e = new Escenario();
+        var aportes = e.D.Cuenta("310505", AccountNature.Credit, tercero: true);
+        // Marzo: aportes de 100 que se devuelven completos; la cartera queda con 300 pendientes.
+        await e.Contabilizar(Marzo3, PostingLine.Debito(e.Caja.Id, 100m), new PostingLine { AccountId = aportes.Id, Credit = 100m, PersonId = e.D.Tercero.Id });
+        await e.Contabilizar(Marzo12, new PostingLine { AccountId = aportes.Id, Debit = 100m, PersonId = e.D.Tercero.Id }, PostingLine.Credito(e.Caja.Id, 100m));
+        await e.Contabilizar(Marzo15, e.CarteraDebito(300m, "1001"), PostingLine.Credito(e.Ingreso.Id, 300m));
+
+        // Abril, sin movimiento del tercero: sólo la cartera trae saldo.
+        var r = await e.EstadoDeCuenta.Handle(new ThirdPartyStatementQuery(e.Filtros(new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30))), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var t = r.Value;
+        t.Filas.Should().ContainSingle("la cartera trae 300 de saldo inicial; los aportes quedaron en cero en marzo y no se mueven en abril: no hay sección para ellos");
+        t.Filas[0].Seccion.Should().Be("130505 Cuenta 130505");
+        t.Filas[0].Valores[Col(t, "Detalle")].Should().Be("Saldo inicial");
+        t.Filas[0].Valores[Col(t, "Saldo")].Should().Be(300m);
+    }
+
+    [Fact]
+    public async Task Una_cuenta_en_cero_pero_con_movimiento_en_el_rango_si_sale_con_su_saldo_inicial()
+    {
+        var e = new Escenario();
+        // La factura y su pago completo caen dentro del rango: el saldo inicial es 0 pero hay que ver el movimiento.
+        await e.Contabilizar(Marzo3, e.CarteraDebito(300m, "1001"), PostingLine.Credito(e.Ingreso.Id, 300m));
+        await e.Contabilizar(Marzo12, PostingLine.Debito(e.Caja.Id, 300m), e.CarteraCredito(300m, "1001"));
+
+        var r = await e.EstadoDeCuenta.Handle(new ThirdPartyStatementQuery(e.Filtros(Marzo1, Marzo31)), CancellationToken.None);
+
+        var t = r.Value;
+        t.Filas.Should().HaveCount(3, "saldo inicial 0 + factura + pago");
+        t.Filas[0].Valores[Col(t, "Saldo")].Should().Be(0m);
+        t.Filas[^1].Valores[Col(t, "Saldo")].Should().Be(0m);
+    }
+
+    [Fact]
     public async Task Sin_tercero_el_estado_de_cuenta_responde_PersonRequired()
     {
         var e = new Escenario();
@@ -312,6 +349,49 @@ public class TercerosQueriesTests
         t.Filas.Select(f => f.Valores[saldo]).Should().Equal(100m, 100m, 100m, 150m);
         // (100 + 100 + 150) / 3 = 116,666… → 116,67
         t.Totales!.Valores[saldo].Should().Be(116.67m);
+    }
+
+    [Fact]
+    public async Task El_saldo_diario_rechaza_un_rango_de_mas_de_un_anio_con_su_codigo_en_vez_de_iterar_los_dias()
+    {
+        var e = new Escenario();
+
+        // 400 días: antes salían 400 filas (y con 0001-01-01..9999-12-31, 3,65 millones o un 500 al pasarse de DateOnly.MaxValue).
+        var largo = await e.Promedio.Handle(new DailyAverageBalanceQuery(new FiltrosDeInforme { From = new DateOnly(2025, 1, 1), To = new DateOnly(2026, 2, 4), AccountPublicId = e.Caja.PublicId }), CancellationToken.None);
+        largo.IsFailure.Should().BeTrue();
+        largo.Error.Code.Should().Be("Accounting.Report.RangeTooLong");
+        largo.Error.Message.Should().Contain("un año");
+
+        // Un ejercicio completo cabe justo.
+        var ejercicio = await e.Promedio.Handle(new DailyAverageBalanceQuery(new FiltrosDeInforme { From = new DateOnly(2025, 1, 1), To = new DateOnly(2025, 12, 31), AccountPublicId = e.Caja.PublicId }), CancellationToken.None);
+        ejercicio.IsSuccess.Should().BeTrue(ejercicio.Error.Message);
+        ejercicio.Value.Filas.Should().HaveCount(366, "el saldo inicial y los 365 días");
+
+        // Los demás informes admiten cinco años; el sexto no.
+        var cinco = await e.EstadoDeCuenta.Handle(new ThirdPartyStatementQuery(e.Filtros(new DateOnly(2021, 1, 1), new DateOnly(2025, 12, 31))), CancellationToken.None);
+        cinco.IsSuccess.Should().BeTrue(cinco.Error.Message);
+        var seis = await e.EstadoDeCuenta.Handle(new ThirdPartyStatementQuery(e.Filtros(new DateOnly(2020, 1, 1), new DateOnly(2025, 12, 31))), CancellationToken.None);
+        seis.Error.Code.Should().Be("Accounting.Report.RangeTooLong");
+        seis.Error.Message.Should().Contain("5 años");
+    }
+
+    [Fact]
+    public async Task Las_fechas_fuera_del_dominio_contable_se_rechazan_antes_de_restar_un_dia()
+    {
+        var e = new Escenario();
+
+        // Con from = 0001-01-01 el «día anterior al rango» se salía de DateOnly y el informe respondía 500.
+        var minimo = await e.EstadoDeCuenta.Handle(new ThirdPartyStatementQuery(e.Filtros(DateOnly.MinValue, new DateOnly(1, 6, 30))), CancellationToken.None);
+        minimo.Error.Code.Should().Be("Accounting.Report.DateOutOfRange");
+
+        var maximo = await e.Pendientes.Handle(new PendingDocumentsQuery(new FiltrosDeInforme { From = new DateOnly(9999, 1, 1), To = DateOnly.MaxValue }), CancellationToken.None);
+        maximo.Error.Code.Should().Be("Accounting.Report.DateOutOfRange");
+
+        // Un año después de hoy (20/03/2026) todavía entra; un día más, no.
+        var futuro = await e.Pendientes.Handle(new PendingDocumentsQuery(new FiltrosDeInforme { From = new DateOnly(2027, 1, 1), To = new DateOnly(2027, 3, 20) }), CancellationToken.None);
+        futuro.IsSuccess.Should().BeTrue(futuro.Error.Message);
+        var lejano = await e.Pendientes.Handle(new PendingDocumentsQuery(new FiltrosDeInforme { From = new DateOnly(2027, 1, 1), To = new DateOnly(2027, 3, 21) }), CancellationToken.None);
+        lejano.Error.Code.Should().Be("Accounting.Report.DateOutOfRange");
     }
 
     // ------------------------------------------------------------------- auditoría --

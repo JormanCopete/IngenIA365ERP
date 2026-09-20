@@ -77,6 +77,9 @@ public class LedgerQueryTests
             return padre!;
         }
 
+        /// <summary>Otra venta a Ana con FV 001 dentro del rango, para que la combinación tenga más de un comprobante.</summary>
+        public AccountingDocument OtraVentaAnaFv001(DateOnly fecha, decimal valor) => Contabilizar(Venta(fecha, valor, D.Tercero, "FV", "001"));
+
         private PostingRequest Venta(DateOnly fecha, decimal valor, Person? tercero, string? tipoCruce, string? numero, Branch? sucursal = null) =>
             new("CG", fecha, $"Venta {valor:N0}", ContabilidadTestData.Manual(),
             [
@@ -139,7 +142,27 @@ public class LedgerQueryTests
         raiz.Totales.Should().NotBeNull();
         N(raiz.Totales!, Debitos).Should().Be(650m);
         N(raiz.Totales!, Creditos).Should().Be(650m);
+        // Activo 2.150 + ingresos 2.150 = 4.300 no es el saldo de nada: como en el balance de prueba, vacío y con la nota.
+        raiz.Totales!.Valores[SaldoInicial].Should().BeNull("las clases mezclan naturalezas");
+        raiz.Totales!.Valores[SaldoFinal].Should().BeNull("las clases mezclan naturalezas");
+        raiz.Notas.Should().Contain("Totales: suma de débitos y créditos del período; los saldos no se suman porque mezclan naturalezas.");
         raiz.Notas.Should().Contain(n => n.StartsWith("Período: 08/03/2026"));
+    }
+
+    [Fact]
+    public async Task Bajo_una_cuenta_el_total_suma_los_saldos_de_las_hijas_porque_comparten_naturaleza()
+    {
+        var e = new Escenario();
+
+        var grupos = await e.Consultar("account:1");
+        Saldos(grupos.Totales!, 1500m, 650m, 0m, 2150m);
+        grupos.Notas.Should().NotContain(n => n.StartsWith("Totales:"));
+
+        var terceros = await e.Consultar("account:11050501");
+        Saldos(terceros.Totales!, 1500m, 650m, 0m, 2150m);
+
+        var documentos = await e.Consultar($"person:11050501|{e.D.Tercero.PublicId}");
+        Saldos(documentos.Totales!, 500m, 300m, 0m, 800m);
     }
 
     [Fact]
@@ -233,6 +256,26 @@ public class LedgerQueryTests
         Fila(lineas, "41350501").Valores[Comprobante].Should().Be(e.AnaFv001.PublicId);
         N(lineas.Totales!, Debitos).Should().Be(100m);
         N(lineas.Totales!, Creditos).Should().Be(100m);
+        lineas.Totales!.Valores[SaldoInicial].Should().BeNull("las líneas no llevan saldo");
+        lineas.Totales!.Valores[SaldoFinal].Should().BeNull("las líneas no llevan saldo");
+        lineas.Notas.Should().NotContain(n => n.StartsWith("Totales:"), "la nota de naturalezas es para filas con saldo");
+    }
+
+    [Fact]
+    public async Task El_total_de_los_comprobantes_lleva_el_saldo_inicial_de_la_combinacion_y_el_final_corrido_no_la_suma_de_corridos()
+    {
+        var e = new Escenario();
+        e.OtraVentaAnaFv001(new DateOnly(2026, 3, 11), 100m);
+        e.OtraVentaAnaFv001(new DateOnly(2026, 3, 13), 200m);
+
+        var comprobantes = await e.Consultar($"document:11050501|{e.D.Tercero.PublicId}|FV|001");
+
+        comprobantes.Filas.Should().HaveCount(3);
+        Saldos(comprobantes.Filas[0], 500m, 100m, 0m, 600m);
+        Saldos(comprobantes.Filas[1], 600m, 100m, 0m, 700m);
+        Saldos(comprobantes.Filas[2], 700m, 200m, 0m, 900m);
+        // Sumar los corridos daría 1.800 y 2.200: el total es el inicial de la combinación y el final del último comprobante.
+        Saldos(comprobantes.Totales!, 500m, 400m, 0m, 900m);
     }
 
     [Fact]

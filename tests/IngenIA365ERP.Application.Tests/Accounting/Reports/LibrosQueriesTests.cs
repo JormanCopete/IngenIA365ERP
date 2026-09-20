@@ -40,6 +40,7 @@ public class LibrosQueriesTests
         public ChartOfAccount Banco { get; }
         public ChartOfAccount Cxc { get; }
         public ChartOfAccount Capital { get; }
+        public ChartOfAccount Excedente { get; }
         public ChartOfAccount Ingreso { get; }
         public ChartOfAccount Gasto { get; }
 
@@ -50,6 +51,7 @@ public class LibrosQueriesTests
             Banco = Rama("1", "11", "1110", "111005", AccountNature.Debit);
             Cxc = Rama("1", "13", "1305", "130505", AccountNature.Debit, tercero: true);
             Capital = Rama("3", "31", "3105", "310505", AccountNature.Credit);
+            Excedente = Rama("3", "35", "3505", "350505", AccountNature.Credit);
             Ingreso = Rama("4", "41", "4135", "413505", AccountNature.Credit);
             Gasto = Rama("5", "51", "5105", "510505", AccountNature.Debit);
         }
@@ -80,6 +82,25 @@ public class LibrosQueriesTests
         public GeneralLedgerQueryHandler Mayor() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
         public JournalQueryHandler Diario() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
         public VoucherListQueryHandler Relacion() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public LedgerQueryHandler Auxiliar() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public ThirdPartyStatementQueryHandler EstadoDeCuenta() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+
+        /// <summary>
+        /// Un ejercicio anterior con su diciembre abierto, para contabilizar movimientos y el cierre del
+        /// año 1 y consultar el año 2 (los datos de prueba sólo traen 2026).
+        /// </summary>
+        public void AbrirDiciembreDe2025()
+        {
+            var ejercicio = new FiscalYear { Year = 2025, CreatedBy = "test" };
+            D.Db.FiscalYears.Add(ejercicio);
+            D.Db.SaveChanges();
+            D.Db.AccountingPeriods.Add(new AccountingPeriod
+            {
+                FiscalYearId = ejercicio.Id, Month = 12, StartDate = new DateOnly(2025, 12, 1), EndDate = new DateOnly(2025, 12, 31),
+                Status = PeriodStatus.Open, CreatedBy = "test",
+            });
+            D.Db.SaveChanges();
+        }
 
         /// <summary>Contabiliza y guarda un comprobante cuadrado; devuelve el documento.</summary>
         public async Task<AccountingDocument> ContabilizarAsync(PostingRequest request)
@@ -206,6 +227,70 @@ public class LibrosQueriesTests
         Numero(conCierre.Totales!, 3).Should().Be(200m);
         Numero(conCierre.Totales!, 4).Should().Be(200m);
         conCierre.Notas.Should().Contain(n => n.Contains("incluye el cierre"));
+    }
+
+    [Fact]
+    public async Task El_cierre_del_ejercicio_anterior_forma_el_saldo_inicial_del_siguiente_en_balance_auxiliar_y_estado_de_cuenta()
+    {
+        // Año 1 (2025): una venta a Ana de 100 y el cierre del 31/12 que lleva el ingreso al excedente.
+        // Año 2 (2026): otra venta de 40. Sin pedir el cierre, el año 2 tiene que arrancar con los
+        // resultados en cero y el excedente en la 35 (US6, escenario 4); hasta corregirlo, la 4135
+        // traía 100 de saldo inicial y la 3505 no aparecía, y el balance igual cuadraba.
+        var e = new Escenario();
+        e.AbrirDiciembreDe2025();
+        var venta2025 = new DateOnly(2025, 12, 10);
+        var cierre2025 = new DateOnly(2025, 12, 31);
+        await e.ContabilizarAsync(new PostingRequest("CG", venta2025, "Venta a Ana", ContabilidadTestData.Manual(),
+        [
+            new PostingLine { AccountId = e.Cxc.Id, Debit = 100m, Detail = "Factura", PersonId = e.D.Tercero.Id },
+            new PostingLine { AccountId = e.Ingreso.Id, Credit = 100m, Detail = "Venta", PersonId = e.D.Tercero.Id },
+        ]));
+        await e.ContabilizarAsync(new PostingRequest("CI", cierre2025, "Cierre 2025", ContabilidadTestData.Manual(),
+        [
+            new PostingLine { AccountId = e.Ingreso.Id, Debit = 100m, Detail = "Cierre", PersonId = e.D.Tercero.Id },
+            new PostingLine { AccountId = e.Excedente.Id, Credit = 100m, Detail = "Excedente" },
+        ], DocumentKind.Closing));
+        await e.ContabilizarAsync(e.Caja, e.Ingreso, 40m);
+
+        // Balance de prueba del año 2 con la bandera por defecto.
+        var balance = await e.BalanceAsync();
+        var ingreso = Fila(balance, "413505");
+        Numero(ingreso, 2).Should().Be(0m, "el cierre de 2025 ya canceló el ingreso de 2025");
+        Numero(ingreso, 4).Should().Be(40m);
+        Numero(ingreso, 5).Should().Be(40m);
+        Numero(Fila(balance, "350505"), 2).Should().Be(100m, "el excedente del año 1 es saldo inicial del año 2");
+        Numero(Fila(balance, "350505"), 5).Should().Be(100m);
+        Numero(Fila(balance, "130505"), 2).Should().Be(100m);
+        Numero(balance.Totales!, 3).Should().Be(40m, "el cierre del año anterior no es movimiento del período");
+        Numero(balance.Totales!, 4).Should().Be(40m);
+
+        // El del propio ejercicio sigue fuera salvo que se pida: en diciembre de 2025 el ingreso está vivo.
+        var diciembre = await e.BalanceAsync(new FiltrosDeInforme { From = new DateOnly(2025, 12, 1), To = cierre2025 });
+        Numero(Fila(diciembre, "413505"), 5).Should().Be(100m);
+        diciembre.Filas.Select(f => f.Valores[0]).Should().NotContain("350505");
+        var diciembreCerrado = await e.BalanceAsync(new FiltrosDeInforme { From = new DateOnly(2025, 12, 1), To = cierre2025, IncludeClosing = true });
+        Numero(Fila(diciembreCerrado, "413505"), 5).Should().Be(0m);
+        Numero(Fila(diciembreCerrado, "350505"), 5).Should().Be(100m);
+
+        // El libro auxiliar dice lo mismo desde la raíz.
+        var auxiliar = await e.Auxiliar().Handle(new LedgerQuery(new FiltrosDeInforme(), null), CancellationToken.None);
+        auxiliar.IsSuccess.Should().BeTrue(auxiliar.Error.Message);
+        Numero(Fila(auxiliar.Value, "4"), 2).Should().Be(0m);
+        Numero(Fila(auxiliar.Value, "4"), 5).Should().Be(40m);
+        Numero(Fila(auxiliar.Value, "3"), 2).Should().Be(100m);
+
+        // Y el estado de cuenta de Ana no le inventa un saldo inicial en el ingreso: la cuenta quedó
+        // saldada en 2025 y sin movimiento en 2026, así que ni se lista; la cartera sí, con sus 100.
+        var estado = await e.EstadoDeCuenta().Handle(new ThirdPartyStatementQuery(new FiltrosDeInforme { Person = e.D.Tercero.PublicId }), CancellationToken.None);
+        estado.IsSuccess.Should().BeTrue(estado.Error.Message);
+        estado.Value.Filas.Should().NotContain(f => Equals(f.Valores[2], "413505"));
+        var cartera = estado.Value.Filas.Should().ContainSingle(f => Equals(f.Valores[2], "130505")).Subject;
+        cartera.Valores[4].Should().Be("Saldo inicial");
+        cartera.Valores[7].Should().Be(100m);
+
+        // El diario del año 2 tampoco lista el cierre del año 1.
+        var diario = await e.Diario().Handle(new JournalQuery(new FiltrosDeInforme()), CancellationToken.None);
+        diario.Value.Filas.Should().OnlyContain(f => Equals(f.Valores[1], "CG-2"));
     }
 
     [Fact]

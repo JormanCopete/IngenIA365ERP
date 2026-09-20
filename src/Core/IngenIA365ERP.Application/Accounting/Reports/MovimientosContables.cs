@@ -16,8 +16,10 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// consulta (FR-035) y todos los filtros de <see cref="FiltrosDeInforme"/> aplicados a la vez.
 ///
 /// <para>
-/// Dos reglas de fechas que parecen detalle y no lo son: el comprobante de <b>cierre</b> sólo
-/// entra si se pide (<c>IncludeClosing</c>), y las líneas del comprobante de <b>apertura</b> son
+/// Dos reglas de fechas que parecen detalle y no lo son: el comprobante de <b>cierre</b> del
+/// ejercicio consultado sólo entra si se pide (<c>IncludeClosing</c>) —el de los ejercicios
+/// anteriores entra siempre, porque es lo que deja los resultados en cero y el excedente en la
+/// 35 al arrancar el año—, y las líneas del comprobante de <b>apertura</b> son
 /// siempre saldo inicial, caiga o no su fecha dentro del rango (US13: son el saldo con el que la
 /// cooperativa entró, no un movimiento del período).
 /// </para>
@@ -51,14 +53,41 @@ public static class MovimientosContables
     public static readonly Error TerceroRequerido = new("Accounting.Report.PersonRequired", "Esta consulta necesita un tercero.");
     public static readonly Error CuentaRequerida = new("Accounting.Report.AccountRequired", "Esta consulta necesita una cuenta.");
 
-    /// <summary>Resuelve los filtros una sola vez (PublicId → Id, nombres para el encabezado) y el alcance de sucursal.</summary>
+    // El rango de fechas se acota aquí, una sola vez, y no en cada validador (hay cuatro y ninguno
+    // lo hacía). Sin tope, `from=0001-01-01&to=9999-12-31` era válido: el saldo diario promedio
+    // iteraba 3,65 millones de días en memoria y los `AddDays(-1)`/`AddYears(-1)` con que los
+    // informes calculan «el día anterior» y «el año comparativo» se salían del dominio de DateOnly
+    // y respondían 500. Un rango de siglos tampoco significa nada contable: el ejercicio es el año.
+    public const string RangoDemasiadoLargoCodigo = "Accounting.Report.RangeTooLong";
+    /// <summary>Años que puede abarcar un rango si la consulta no pide menos (libros, terceros, estados).</summary>
+    public const int RangoMaximoEnAnios = 5;
+    /// <summary>Nada contable de una cooperativa es anterior a esto, y deja holgura de sobra para restar un año o un día.</summary>
+    public static readonly DateOnly FechaMinima = DateOnly.FromDateTime(DateTime.UnixEpoch);
+    /// <summary>Hasta dónde puede llegar <c>To</c>: un año después de hoy (presupuestos y proyecciones digitan a futuro, pero no más).</summary>
+    public static DateOnly FechaMaxima(DateOnly hoy) => hoy.AddYears(1);
+
+    public static readonly Error FechaFueraDeDominio = new("Accounting.Report.DateOutOfRange",
+        $"Las fechas deben estar entre el {FechaMinima:dd/MM/yyyy} y un año después de hoy.");
+
+    public static Error RangoDemasiadoLargo(int anios) => new(RangoDemasiadoLargoCodigo,
+        anios == 1 ? "El rango no puede superar un año." : $"El rango no puede superar {anios} años.");
+
+    /// <summary>
+    /// Resuelve los filtros una sola vez (PublicId → Id, nombres para el encabezado) y el alcance de sucursal.
+    /// <paramref name="rangoMaximoEnAnios"/> es lo más que puede abarcar <c>From..To</c>; el saldo diario
+    /// promedio pide 1 porque es por definición de un período y produce una fila por día.
+    /// </summary>
     public static async Task<Result<Contexto>> PrepararAsync(
-        IApplicationDbContext db, IUserBranchScope alcance, IDateTimeService clock, FiltrosDeInforme f, CancellationToken ct)
+        IApplicationDbContext db, IUserBranchScope alcance, IDateTimeService clock, FiltrosDeInforme f, CancellationToken ct,
+        int rangoMaximoEnAnios = RangoMaximoEnAnios)
     {
         var hoy = clock.TodayUtc;
         var desde = f.Desde(hoy);
         var hasta = f.Hasta(hoy);
         if (hasta < desde) return Result.Failure<Contexto>(RangoInvalido);
+        if (desde < FechaMinima || hasta > FechaMaxima(hoy)) return Result.Failure<Contexto>(FechaFueraDeDominio);
+        // Un ejercicio completo (01/01..31/12) cabe justo en un año: el tope se compara con el mismo día del año siguiente.
+        if (hasta >= desde.AddYears(rangoMaximoEnAnios)) return Result.Failure<Contexto>(RangoDemasiadoLargo(rangoMaximoEnAnios));
 
         ChartOfAccount? cuenta = null;
         if (f.AccountPublicId is { } cuentaId)
@@ -114,7 +143,16 @@ public static class MovimientosContables
     public static IQueryable<JournalEntry> Base(IApplicationDbContext db, Contexto c)
     {
         var q = db.JournalEntries.AsNoTracking().Where(e => e.IsPosted);
-        if (!c.Filtros.IncludeClosing) q = q.Where(e => e.Document!.Kind != DocumentKind.Closing);
+        if (!c.Filtros.IncludeClosing)
+        {
+            // Se aparta sólo el cierre del ejercicio consultado (o de uno posterior): el de los años
+            // anteriores ya es historia y forma parte del saldo inicial. Cuando se apartaba todo
+            // cierre, en el año 2 los ingresos y gastos arrancaban con el saldo del año 1 y la 35 sin
+            // el excedente; el balance «cuadraba» (Σ débitos = Σ créditos) con los saldos mal (US6,
+            // escenario 4). Es la misma regla que ya aplica SaldosPorRubro.ALaFechaAsync al ESF.
+            var inicioDelEjercicio = SaldosPorRubro.InicioDelEjercicio(c.Desde);
+            q = q.Where(e => e.Document!.Kind != DocumentKind.Closing || e.Date < inicioDelEjercicio);
+        }
         if (c.Alcance.Restringido)
         {
             var permitidas = c.Alcance.Sucursales.ToList();

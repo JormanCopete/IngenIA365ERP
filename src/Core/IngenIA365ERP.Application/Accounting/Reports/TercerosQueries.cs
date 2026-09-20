@@ -59,7 +59,8 @@ file static class TextosDeInforme
 /// arranca en lo que traía antes del rango en esa cuenta. El tercero es obligatorio
 /// (<see cref="MovimientosContables.TerceroRequerido"/>); uno dado de baja conserva su estado de
 /// cuenta porque sus movimientos siguen en el libro. La reversa aparece como dos movimientos —el
-/// original y su espejo— porque así está en el libro (decisión 7 del diseño E2).
+/// original y su espejo— porque así está en el libro (decisión 7 del diseño E2). Una cuenta que
+/// llega al rango saldada y no se mueve en él no sale: no hay nada que mostrar de ella.
 /// </summary>
 public sealed record ThirdPartyStatementQuery(FiltrosDeInforme Filtros) : IRequest<Result<TablaExportable>>;
 
@@ -127,9 +128,17 @@ public sealed class ThirdPartyStatementQueryHandler(
 
             var inicial = iniciales.FirstOrDefault(i => i.Key == id);
             var saldo = TextosDeInforme.Saldo(naturaleza, inicial?.D ?? 0m, inicial?.C ?? 0m);
+            var delRango = lineas.Where(l => l.AccountId == id).OrderBy(l => l.Date).ThenBy(l => l.Tipo, StringComparer.Ordinal).ThenBy(l => l.Numero).ThenBy(l => l.LineNumber).ToList();
+
+            // Una cuenta que el tercero tocó alguna vez pero que llega al rango saldada y sin
+            // movimiento (el crédito ya cancelado, los aportes ya devueltos) no dice nada: con un
+            // asociado antiguo el estado de cuenta se llenaba de secciones con una sola fila
+            // «Saldo inicial 0». Se conserva la sección si trae saldo o si hay movimiento en el rango.
+            if (saldo == 0m && delRango.Count == 0) continue;
+
             filas.Add(new FilaExportable([c.Desde.AddDays(-1), string.Empty, codigo, string.Empty, "Saldo inicial", null, null, saldo, null, cuentaPublicId, nodo], seccion, Resaltada: true));
 
-            foreach (var l in lineas.Where(l => l.AccountId == id).OrderBy(l => l.Date).ThenBy(l => l.Tipo, StringComparer.Ordinal).ThenBy(l => l.Numero).ThenBy(l => l.LineNumber))
+            foreach (var l in delRango)
             {
                 saldo += TextosDeInforme.Saldo(naturaleza, l.Debito, l.Credito);
                 totalDebitos += l.Debito;
@@ -143,7 +152,7 @@ public sealed class ThirdPartyStatementQueryHandler(
 
         var totales = new FilaExportable(["Totales", string.Empty, string.Empty, string.Empty, string.Empty, totalDebitos, totalCreditos, null, null, null, null], Resaltada: true);
         var notas = (await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct)).ToList();
-        notas.Add("La primera fila de cada cuenta es el saldo del tercero al día anterior al rango (incluida la apertura); el saldo corrido va según la naturaleza de la cuenta.");
+        notas.Add("La primera fila de cada cuenta es el saldo del tercero al día anterior al rango (incluida la apertura); el saldo corrido va según la naturaleza de la cuenta. Una cuenta saldada y sin movimiento en el rango no se lista.");
         var tabla = new TablaExportable($"Estado de cuenta · {tercero.Nombre} ({tercero.TaxId})", c.PeriodoTexto, Columnas, filas, totales, notas);
 
         if (request.Filtros.EsExportacion)
@@ -280,6 +289,7 @@ public sealed class DailyAverageBalanceQueryHandler(
     : IRequestHandler<DailyAverageBalanceQuery, Result<TablaExportable>>
 {
     public const string Vista = "daily-average";
+    public const int RangoMaximoEnAnios = 1;
 
     private static readonly IReadOnlyList<ColumnaExportable> Columnas =
     [
@@ -293,7 +303,8 @@ public sealed class DailyAverageBalanceQueryHandler(
     {
         if (request.Filtros.AccountPublicId is null) return Result.Failure<TablaExportable>(MovimientosContables.CuentaRequerida);
 
-        var ctx = await MovimientosContables.PrepararAsync(db, alcance, clock, request.Filtros, ct);
+        // Un año como mucho: el informe produce una fila por día del rango y el promedio es de un período.
+        var ctx = await MovimientosContables.PrepararAsync(db, alcance, clock, request.Filtros, ct, rangoMaximoEnAnios: RangoMaximoEnAnios);
         if (ctx.IsFailure) return Result.Failure<TablaExportable>(ctx.Error);
         var c = ctx.Value;
         var cuenta = c.Cuenta!;

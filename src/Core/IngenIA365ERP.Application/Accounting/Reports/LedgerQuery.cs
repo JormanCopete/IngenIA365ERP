@@ -97,11 +97,14 @@ public sealed class LedgerQueryHandler(
         if (nivel.IsFailure) return Result.Failure<TablaExportable>(nivel.Error);
 
         var n = nivel.Value;
-        var notas = await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct);
+        var notas = (await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct)).ToList();
+        // La misma nota que deja el balance de prueba en la misma situación: filas con saldo que no se suman.
+        if (n.Saldos == SaldosDelTotal.NoSumables && n.Filas.Any(f => f.Valores[2] is decimal))
+            notas.Add("Totales: suma de débitos y créditos del período; los saldos no se suman porque mezclan naturalezas.");
         var tabla = new TablaExportable(
             string.Join(" · ", new[] { "Libro auxiliar" }.Concat(n.Camino)),
             $"{n.Descripcion} · {c.PeriodoTexto}",
-            Columnas, n.Filas, Totales(n.Filas, n.ConSaldos), notas);
+            Columnas, n.Filas, Totales(n), notas);
 
         if (request.Filtros.EsExportacion)
             await audit.EmitirExportacionAsync(Informe, new { filtros = request.Filtros, node = request.Node }, request.Filtros.Format!, tabla.Filas.Count, ct);
@@ -110,8 +113,29 @@ public sealed class LedgerQueryHandler(
 
     // ------------------------------------------------------------------ niveles --
 
-    /// <summary>Lo que devuelve un nodo: el camino legible para el título, qué se está viendo y sus filas.</summary>
-    private sealed record Nivel(IReadOnlyList<string> Camino, string Descripcion, IReadOnlyList<FilaExportable> Filas, bool ConSaldos = true);
+    /// <summary>
+    /// Cómo se llenan las celdas de saldo de la fila «Total» de un nivel. Débitos y créditos se suman
+    /// siempre; los saldos sólo cuando sumarlos significa algo:
+    /// <list type="bullet">
+    /// <item><see cref="Sumables"/>: las filas comparten naturaleza (hijas de una misma cuenta, terceros o
+    /// documentos de una cuenta), así que Σ saldo inicial y Σ saldo final son el saldo del padre;</item>
+    /// <item><see cref="NoSumables"/>: las filas mezclan naturalezas (las clases en la raíz) o no llevan
+    /// saldo (las líneas de un comprobante): las celdas van vacías, como en el balance de prueba;</item>
+    /// <item><see cref="Corridos"/>: cada fila lleva el saldo corrido antes y después de su comprobante,
+    /// así que sumarlos multiplica el saldo por el número de filas; el total lleva el saldo inicial de
+    /// la combinación y el saldo final de la última fila (<see cref="Nivel.SaldoInicial"/>, <see cref="Nivel.SaldoFinal"/>).</item>
+    /// </list>
+    /// </summary>
+    private enum SaldosDelTotal { Sumables, NoSumables, Corridos }
+
+    /// <summary>
+    /// Lo que devuelve un nodo: el camino legible para el título, qué se está viendo, sus filas y cómo se
+    /// totalizan sus saldos. <paramref name="SaldoInicial"/> y <paramref name="SaldoFinal"/> sólo cuentan
+    /// con <see cref="SaldosDelTotal.Corridos"/>.
+    /// </summary>
+    private sealed record Nivel(
+        IReadOnlyList<string> Camino, string Descripcion, IReadOnlyList<FilaExportable> Filas,
+        SaldosDelTotal Saldos = SaldosDelTotal.Sumables, decimal SaldoInicial = 0m, decimal SaldoFinal = 0m);
 
     private async Task<Result<Nivel>> DesdeCuentaAsync(IQueryable<JournalEntry> q, MovimientosContables.Contexto c, JerarquiaDelPlan plan, Nodo nodo, CancellationToken ct)
     {
@@ -143,10 +167,13 @@ public sealed class LedgerQueryHandler(
             .Select(x => Fila(x.Cuenta.Code, x.Cuenta.Name, x.Sumas, x.Cuenta.Nature, $"account:{x.Cuenta.Code}", "account", x.Cuenta.PublicId, null))
             .ToList();
 
+        // En la raíz cada clase trae su saldo «positivo según naturaleza»: activo + pasivo + patrimonio
+        // no es un saldo de nada. Las hijas de una cuenta heredan su naturaleza y sí se suman.
         return Result.Success(new Nivel(
             cuenta is null ? [] : [Etiqueta(cuenta)],
             cuenta is null ? "Clases del plan" : $"Cuentas de nivel {cuenta.Level + 1}",
-            filas));
+            filas,
+            cuenta is null ? SaldosDelTotal.NoSumables : SaldosDelTotal.Sumables));
     }
 
     /// <summary>Los terceros con saldo o movimiento en una cuenta de movimiento; la fila «Sin tercero» agrupa las líneas sin él.</summary>
@@ -272,7 +299,8 @@ public sealed class LedgerQueryHandler(
                 .Select(d => new { d.Id, d.PublicId, Tipo = d.VoucherType!.Code, d.Number, d.Date, d.Description }).ToListAsync(ct);
         var porId = documentos.ToDictionary(d => d.Id);
 
-        var saldo = new SumasDeCuenta(inicial?.D ?? 0m, inicial?.C ?? 0m, 0m, 0m).SaldoInicial(cuenta.Nature);
+        var saldoInicial = new SumasDeCuenta(inicial?.D ?? 0m, inicial?.C ?? 0m, 0m, 0m).SaldoInicial(cuenta.Nature);
+        var saldo = saldoInicial;
         var filas = new List<FilaExportable>();
         foreach (var m in movimientos.Where(m => porId.ContainsKey(m.Key)).OrderBy(m => porId[m.Key].Date).ThenBy(m => porId[m.Key].Number).ThenBy(m => m.Key))
         {
@@ -287,7 +315,9 @@ public sealed class LedgerQueryHandler(
         var documento = nodo.TipoDeCruce is null && numero is null
             ? "Sin documento"
             : string.Join(" ", new[] { nodo.TipoDeCruce, numero }.Where(s => !string.IsNullOrWhiteSpace(s))) + (tipoNombre is null ? string.Empty : $" ({tipoNombre})");
-        return Result.Success(new Nivel([Etiqueta(cuenta), Etiqueta(tercero.Value), documento], "Comprobantes", filas));
+        // Tras el bucle, «saldo» es el saldo corrido después del último comprobante: el final de la combinación.
+        return Result.Success(new Nivel([Etiqueta(cuenta), Etiqueta(tercero.Value), documento], "Comprobantes", filas,
+            SaldosDelTotal.Corridos, saldoInicial, saldo));
     }
 
     /// <summary>Todas las líneas de un comprobante, con el alcance de sucursal de quien consulta; las columnas de saldo van vacías.</summary>
@@ -320,7 +350,7 @@ public sealed class LedgerQueryHandler(
             return new FilaExportable([l.Codigo, nombre, null, l.Debit, l.Credit, null, null, "line", l.Cuenta, doc.PublicId]);
         }).ToList();
 
-        return Result.Success(new Nivel([$"{doc.Tipo}-{doc.Number}", $"{doc.Date:dd/MM/yyyy} {doc.Description}"], "Líneas del comprobante", filas, ConSaldos: false));
+        return Result.Success(new Nivel([$"{doc.Tipo}-{doc.Number}", $"{doc.Date:dd/MM/yyyy} {doc.Description}"], "Líneas del comprobante", filas, SaldosDelTotal.NoSumables));
     }
 
     // ------------------------------------------------------------------ apoyo --
@@ -328,11 +358,23 @@ public sealed class LedgerQueryHandler(
     private static FilaExportable Fila(string codigo, string nombre, SumasDeCuenta s, AccountNature naturaleza, string nodo, string tipo, Guid? cuenta, Guid? comprobante) =>
         new([codigo, nombre, s.SaldoInicial(naturaleza), s.Debitos, s.Creditos, s.SaldoFinal(naturaleza), nodo, tipo, cuenta, comprobante]);
 
-    private static FilaExportable? Totales(IReadOnlyList<FilaExportable> filas, bool conSaldos)
+    /// <summary>
+    /// La fila «Total» del nivel: Σ débitos y Σ créditos siempre; los saldos según lo que el nivel
+    /// declaró en <see cref="Nivel.Saldos"/>. Hasta el 2026-09-20 se sumaban en todos los niveles: en la
+    /// raíz mezclaba activo + pasivo + patrimonio y en los comprobantes sumaba saldos corridos (tres
+    /// comprobantes de 50 sobre un inicial de 100 daban «saldo inicial 450, final 600» en vez de 100 y 250).
+    /// </summary>
+    private static FilaExportable? Totales(Nivel n)
     {
-        if (filas.Count == 0) return null;
-        decimal Suma(int i) => filas.Sum(f => f.Valores[i] as decimal? ?? 0m);
-        return new FilaExportable(["Total", string.Empty, conSaldos ? Suma(2) : null, Suma(3), Suma(4), conSaldos ? Suma(5) : null, null, null, null, null], Resaltada: true);
+        if (n.Filas.Count == 0) return null;
+        decimal Suma(int i) => n.Filas.Sum(f => f.Valores[i] as decimal? ?? 0m);
+        var (inicial, final) = n.Saldos switch
+        {
+            SaldosDelTotal.Sumables => ((decimal?)Suma(2), (decimal?)Suma(5)),
+            SaldosDelTotal.Corridos => (n.SaldoInicial, n.SaldoFinal),
+            _ => (null, null),
+        };
+        return new FilaExportable(["Total", string.Empty, inicial, Suma(3), Suma(4), final, null, null, null, null], Resaltada: true);
     }
 
     private static string Etiqueta(JerarquiaDelPlan.Cuenta cuenta) => $"{cuenta.Code} {cuenta.Name}";
