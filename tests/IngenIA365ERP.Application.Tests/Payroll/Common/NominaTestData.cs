@@ -65,7 +65,7 @@ public sealed class NominaTestData
 
         StaleMarker = new PayrollRunStaleMarker(Db, NullLogger<PayrollRunStaleMarker>.Instance);
         CarryOver = new CarryOverNoveltiesService(Db, Clock, User);
-        AuditEmitter = new PayrollAuditEmitter(Audit, User, Clock, NullLogger<PayrollAuditEmitter>.Instance);
+        AuditEmitter = new PayrollAuditEmitter(Audit, User, CooperativaDePrueba.Actual, Clock, NullLogger<PayrollAuditEmitter>.Instance);
         Policies = new PayrollPolicyReader(Db);
         Loader = new CalculationInputLoader(Db, Policies);
         Alcance = Substitute.For<IUserBranchScope>();

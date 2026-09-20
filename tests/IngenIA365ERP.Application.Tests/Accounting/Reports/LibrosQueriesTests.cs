@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -46,7 +47,7 @@ public class LibrosQueriesTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Audit, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
             Caja = Rama("1", "11", "1105", "110505", AccountNature.Debit);
             Banco = Rama("1", "11", "1110", "111005", AccountNature.Debit);
             Cxc = Rama("1", "13", "1305", "130505", AccountNature.Debit, tercero: true);

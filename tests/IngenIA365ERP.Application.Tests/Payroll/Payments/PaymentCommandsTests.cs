@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -28,7 +29,7 @@ public class PaymentCommandsTests
         var r = await calc.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var poster = d.Contabilizador(Contadora);
-        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
+        var audit = new PayrollAuditEmitter(d.Audit, Contadora, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
         var apr = new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit);
         var a = await apr.Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
         a.IsSuccess.Should().BeTrue(a.Error.Message);
@@ -36,10 +37,10 @@ public class PaymentCommandsTests
     }
 
     private static MarkPaymentsCommandHandler Marcador(NominaTestData d) =>
-        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
 
     private static RevertPaymentMarkCommandHandler Retirador(NominaTestData d) =>
-        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
 
     [Fact]
     public async Task La_relacion_de_pago_trae_neto_banco_cuenta_y_estado()

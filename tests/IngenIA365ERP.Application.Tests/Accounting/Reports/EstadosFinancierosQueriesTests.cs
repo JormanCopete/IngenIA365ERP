@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -44,7 +45,7 @@ public class EstadosFinancierosQueriesTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Audit, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
             SembrarRubros();
             Caja = Cuenta("110505", AccountNature.Debit, "ESF-A-EFE");
             Cxc = Cuenta("160505", AccountNature.Debit, "ESF-A-CXC");
@@ -617,7 +618,7 @@ public class EstadosFinancierosQueriesTests
     public async Task Sin_contabilidad_iniciada_responde_el_error_del_modulo()
     {
         var d = new ContabilidadTestData(iniciada: false);
-        var emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), d.User, d.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+        var emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), d.User, CooperativaDePrueba.Actual, d.Clock, NullLogger<AccountingAuditEmitter>.Instance);
 
         var r = await new FinancialPositionQueryHandler(d.Db, d.Alcance, d.Clock, d.User, emisor).Handle(new FinancialPositionQuery(Escenario.Rango()), CancellationToken.None);
 

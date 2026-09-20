@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -43,7 +44,7 @@ public class TercerosQueriesTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Audit, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
             Cartera = D.Cuenta("130505", tercero: true, cruce: true);
             Caja = D.Cuenta("110505");
             Ingreso = D.Cuenta("413505", AccountNature.Credit);

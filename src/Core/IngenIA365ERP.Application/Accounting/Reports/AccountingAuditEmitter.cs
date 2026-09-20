@@ -12,10 +12,20 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// <c>Accounting.Report.Exported</c> con informe, filtros y formato. También lo usan los envíos
 /// de certificados, la inicialización y la validación de catálogos. Si la escritura falla no
 /// tumba la operación, pero lo deja en el log con la acción y el motivo (Principio IX).
+///
+/// <para>
+/// La cooperativa del evento sale de <see cref="ICurrentTenantService"/> —el PublicId en formato N,
+/// el mismo con el que <c>MongoAuditService</c> escribe los comandos y con el que la consola lee—
+/// y <b>no</b> de <see cref="ICurrentUserService.TenantId"/>, que es el Id interno («3»). Hasta el
+/// 2026-09-20 se usaba éste: el rastro se escribía en <c>…_Audit_3</c>, una base que nadie consulta,
+/// y <c>GET /api/audit/logs</c> nunca mostró una exportación de informes. Lo fija la e2e de
+/// informes (<c>Accounting.Report.Exported</c> visible en la consola tras exportar).
+/// </para>
 /// </summary>
 public sealed class AccountingAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
+    ICurrentTenantService tenant,
     IDateTimeService clock,
     ILogger<AccountingAuditEmitter> logger)
 {
@@ -28,7 +38,7 @@ public sealed class AccountingAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: currentUser.TenantId ?? string.Empty,
+                TenantId: tenant.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

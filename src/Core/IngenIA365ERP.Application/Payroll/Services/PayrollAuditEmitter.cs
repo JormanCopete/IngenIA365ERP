@@ -11,10 +11,15 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// <c>AuditBehavior</c> genérico guarda el comando tal cual; esto guarda además la
 /// entidad, y los valores antes y después. Si la escritura falla no tumba el comando,
 /// pero lo deja en el log con la acción y el motivo (nunca en silencio, Principio IX).
+/// La cooperativa del evento es la de <see cref="ICurrentTenantService"/> (PublicId en formato N,
+/// la base que la consola lee), no el Id interno de <see cref="ICurrentUserService.TenantId"/>:
+/// con éste, hasta el 2026-09-20, los eventos explícitos de nómina iban a una base que nadie
+/// consultaba (ver <c>AccountingAuditEmitter</c>).
 /// </summary>
 public sealed class PayrollAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
+    ICurrentTenantService tenant,
     IDateTimeService clock,
     ILogger<PayrollAuditEmitter> logger)
 {
@@ -25,7 +30,7 @@ public sealed class PayrollAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: currentUser.TenantId ?? string.Empty,
+                TenantId: tenant.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

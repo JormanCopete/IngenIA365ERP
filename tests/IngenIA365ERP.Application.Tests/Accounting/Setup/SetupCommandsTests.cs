@@ -38,7 +38,7 @@ public class SetupCommandsTests
         {
             Clock.UtcNow.Returns(new DateTime(2026, 3, 20, 14, 0, 0, DateTimeKind.Utc));
             Clock.TodayUtc.Returns(new DateOnly(2026, 3, 20));
-            Emisor = new AccountingAuditEmitter(Audit, User, Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, User, CooperativaDePrueba.Actual, Clock, NullLogger<AccountingAuditEmitter>.Instance);
             Principal = new Branch { Name = "Principal", CreatedBy = "test" };
             Db.Branches.Add(Principal);
             Db.FinancialStatementItems.AddRange(
