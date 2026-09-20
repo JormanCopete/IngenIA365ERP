@@ -1,0 +1,204 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+
+@* Panel de filtros combinables de las consultas contables (feature 009 E2, FR-043). Las fechas
+   van siempre a la vista; lo demás se pliega bajo «Filtros (n)» para que la pantalla no arranque
+   con quince controles. Los catálogos (sucursales, centros, tipos de comprobante y de cruce) se
+   cargan una vez, y se comparten entre las pantallas por ser el mismo componente. «Aplicar»
+   entrega una COPIA del modelo: la pantalla consulta con esa y la persona sigue editando ésta. *@
+<div class="filtros-de-informe">
+    <div class="toolbar">
+        @if (MostrarFechas)
+        {
+            @if (SoloFechaDeCorte)
+            {
+                <label class="campo">Al <input class="e-input" type="date" value="@(Modelo.To?.ToString("yyyy-MM-dd"))" @onchange="@(e => Modelo.To = Fecha(e))" /></label>
+            }
+            else
+            {
+                <label class="campo">Desde <input class="e-input" type="date" value="@(Modelo.From?.ToString("yyyy-MM-dd"))" @onchange="@(e => Modelo.From = Fecha(e))" /></label>
+                <label class="campo">Hasta <input class="e-input" type="date" value="@(Modelo.To?.ToString("yyyy-MM-dd"))" @onchange="@(e => Modelo.To = Fecha(e))" /></label>
+            }
+        }
+        @ControlesFijos
+        <SfButton CssClass="e-outline" IconCss="@(_abierto ? "e-icons e-chevron-up" : "e-icons e-filter")" type="button" OnClick="@(() => _abierto = !_abierto)">
+            Filtros@(Modelo.Cantidad > 0 ? $" ({Modelo.Cantidad})" : "")
+        </SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@Ocupado" OnClick="@AplicarAsync">@TextoAplicar</SfButton>
+    </div>
+
+    @if (_abierto)
+    {
+        <div class="info-card filtros-plegados">
+            <div class="toolbar">
+                @if (MostrarCuenta)
+                {
+                    <label class="campo campo-largo">Rama del plan (cuenta y lo que cuelga)
+                        <BuscadorDeCuenta Cuenta="@_cuenta" CuentaChanged="@CuentaElegida" Placeholder="Código o nombre" />
+                    </label>
+                    <label class="campo">Cuenta desde <input class="e-input" type="text" value="@Modelo.AccountFrom" @onchange="@(e => Modelo.AccountFrom = e.Value?.ToString())" placeholder="1105" /></label>
+                    <label class="campo">Cuenta hasta <input class="e-input" type="text" value="@Modelo.AccountTo" @onchange="@(e => Modelo.AccountTo = e.Value?.ToString())" placeholder="1110" /></label>
+                }
+                @if (MostrarTercero)
+                {
+                    <label class="campo campo-largo">Tercero
+                        <PersonSearchPicker Selected="@_tercero" SelectedChanged="@TerceroElegido" ShowHelpText="false" Compacto="true" Placeholder="Documento o nombre" />
+                    </label>
+                }
+                @if (MostrarDocumentoCruce)
+                {
+                    <label class="campo">Documento cruce
+                        <select class="e-input" value="@(Modelo.CrossDocumentType ?? "")" @onchange="@(e => Modelo.CrossDocumentType = Vacio(e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tiposDeCruce) { <option value="@t.Code">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Número <input class="e-input" type="text" value="@Modelo.CrossDocumentNumber" @onchange="@(e => Modelo.CrossDocumentNumber = Vacio(e.Value?.ToString()))" disabled="@(Modelo.CrossDocumentType is null)" /></label>
+                }
+                <label class="campo">Sucursal
+                    <select class="e-input" value="@(Modelo.Branch?.ToString() ?? "")" @onchange="@(e => Modelo.Branch = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Todas</option>
+                        @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Centro de costo
+                    <select class="e-input" value="@(Modelo.CostCenter?.ToString() ?? "")" @onchange="@(e => Modelo.CostCenter = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Todos</option>
+                        @foreach (var c in _centros) { <option value="@c.PublicId">@c.Name</option> }
+                    </select>
+                </label>
+                @if (MostrarComprobante)
+                {
+                    <label class="campo">Tipo de comprobante
+                        <select class="e-input" value="@(Modelo.VoucherType ?? "")" @onchange="@(e => Modelo.VoucherType = Vacio(e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tiposDeComprobante) { <option value="@t.Code">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Origen
+                        <select class="e-input" value="@(Modelo.Origin ?? "")" @onchange="@(e => Modelo.Origin = Vacio(e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var (codigo, nombre) in Modulos) { <option value="@codigo">@nombre</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Usuario <input class="e-input" type="text" value="@Modelo.User" @onchange="@(e => Modelo.User = Vacio(e.Value?.ToString()))" placeholder="Registró o contabilizó" /></label>
+                }
+                @if (MostrarNivel)
+                {
+                    <label class="campo">Nivel
+                        <select class="e-input" value="@(Modelo.Level?.ToString() ?? "")" @onchange="@(e => Modelo.Level = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                            <option value="">De movimiento</option>
+                            @for (var n = 1; n <= 6; n++) { <option value="@n">@n · @NombreDeNivel(n)</option> }
+                        </select>
+                    </label>
+                }
+                @if (MostrarConTerceros)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@Modelo.WithThirdParties" @onchange="@(e => Modelo.WithThirdParties = e.Value is true)" /> Con terceros</label>
+                }
+                @if (MostrarIncluirCierre)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@Modelo.IncludeClosing" @onchange="@(e => Modelo.IncludeClosing = e.Value is true)" /> Incluir cierre</label>
+                }
+                <SfButton CssClass="e-flat" IconCss="e-icons e-close" type="button" OnClick="@LimpiarAsync">Limpiar</SfButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Módulos que originan comprobantes (<c>AccountingDocument.OriginModule</c>).</summary>
+    public static readonly (string, string)[] Modulos = [("CNT", "Contabilidad"), ("NOM", "Nómina"), ("CAR", "Cartera"), ("INV", "Inventario"), ("TES", "Tesorería"), ("AHO", "Ahorros"), ("CDT", "CDT"), ("ACT", "Activos fijos")];
+
+    [Parameter, EditorRequired] public FiltrosDeInformeModelo Modelo { get; set; } = new();
+    /// <summary>Recibe una copia del modelo al pulsar «Aplicar».</summary>
+    [Parameter] public EventCallback<FiltrosDeInformeModelo> Aplicar { get; set; }
+    [Parameter] public bool Ocupado { get; set; }
+    [Parameter] public string TextoAplicar { get; set; } = "Consultar";
+    /// <summary>Controles propios de la pantalla (vista, mes…) que van en la misma barra, antes del botón.</summary>
+    [Parameter] public RenderFragment? ControlesFijos { get; set; }
+    [Parameter] public bool MostrarFechas { get; set; } = true;
+    /// <summary>Los estados de situación: una sola fecha de corte («Al»).</summary>
+    [Parameter] public bool SoloFechaDeCorte { get; set; }
+    [Parameter] public bool MostrarCuenta { get; set; } = true;
+    [Parameter] public bool MostrarTercero { get; set; } = true;
+    [Parameter] public bool MostrarDocumentoCruce { get; set; } = true;
+    [Parameter] public bool MostrarComprobante { get; set; } = true;
+    [Parameter] public bool MostrarNivel { get; set; } = true;
+    [Parameter] public bool MostrarConTerceros { get; set; }
+    [Parameter] public bool MostrarIncluirCierre { get; set; } = true;
+    /// <summary>Empieza abierto (cuando llegó con filtros desde otra pantalla conviene verlos).</summary>
+    [Parameter] public bool Abierto { get; set; }
+
+    private bool _abierto;
+    private CuentaBuscadaDto? _cuenta;
+    private PersonSearchPicker.PersonSearchItem? _tercero;
+    private List<ItemCrudo> _sucursales = [], _centros = [];
+    private List<TipoComprobanteDto> _tiposDeComprobante = [];
+    private List<TipoCruceDto> _tiposDeCruce = [];
+    private bool _catalogosCargados;
+
+    protected override void OnInitialized() => _abierto = Abierto || Modelo.Cantidad > 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // La cuenta y el tercero llegan del modelo como PublicId (desde otra pantalla): el buscador
+        // los muestra con el texto que el modelo trae, sin volver a consultar.
+        if (Modelo.AccountPublicId is { } c && _cuenta?.PublicId != c)
+            _cuenta = new CuentaBuscadaDto(c, Modelo.AccountTexto ?? c.ToString(), string.Empty, string.Empty, false, false, false, false, false);
+        else if (Modelo.AccountPublicId is null) _cuenta = null;
+        if (Modelo.Person is { } p && _tercero?.PublicId != p)
+            _tercero = new PersonSearchPicker.PersonSearchItem { PublicId = p, FullName = Modelo.PersonTexto ?? "Tercero", IdentificationNumber = string.Empty };
+        else if (Modelo.Person is null) _tercero = null;
+
+        if (_catalogosCargados) return;
+        _catalogosCargados = true;
+        var sucursales = Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        var tipos = Contabilidad.ListarTiposDeComprobanteAsync(incluirInactivos: true);
+        var cruces = Contabilidad.ListarTiposDeCruceAsync(incluirInactivos: true);
+        await Task.WhenAll(sucursales, centros, tipos, cruces);
+        _sucursales = sucursales.Result;
+        _centros = centros.Result;
+        _tiposDeComprobante = tipos.Result.IsSuccess ? [.. tipos.Result.Value!] : [];
+        _tiposDeCruce = cruces.Result.IsSuccess ? [.. cruces.Result.Value!] : [];
+    }
+
+    private void CuentaElegida(CuentaBuscadaDto? c)
+    {
+        _cuenta = c;
+        Modelo.AccountPublicId = c?.PublicId;
+        Modelo.AccountTexto = c is null ? null : $"{c.Code} {c.Name}";
+    }
+
+    private void TerceroElegido(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _tercero = p;
+        Modelo.Person = p?.PublicId;
+        Modelo.PersonTexto = p is null ? null : $"{p.FullName} · {p.IdentificationNumber}";
+    }
+
+    private Task AplicarAsync() => Aplicar.InvokeAsync(Modelo.Copia());
+
+    private Task LimpiarAsync()
+    {
+        var desde = Modelo.From; var hasta = Modelo.To;
+        var limpio = new FiltrosDeInformeModelo { From = desde, To = hasta };
+        CuentaElegida(null);
+        TerceroElegido(null);
+        Modelo.AccountFrom = limpio.AccountFrom; Modelo.AccountTo = limpio.AccountTo;
+        Modelo.CrossDocumentType = null; Modelo.CrossDocumentNumber = null;
+        Modelo.CostCenter = null; Modelo.Branch = null; Modelo.VoucherType = null; Modelo.Origin = null; Modelo.User = null;
+        Modelo.Level = null; Modelo.WithThirdParties = false; Modelo.IncludeClosing = false;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Nombre de cada nivel del plan (regla fija por longitud de código, ver <c>LongitudDeAuxiliar</c>).</summary>
+    public static string NombreDeNivel(int n) => n switch { 1 => "Clase", 2 => "Grupo", 3 => "Cuenta", 4 => "Subcuenta", 5 => "Auxiliar", 6 => "Subauxiliar", _ => $"Nivel {n}" };
+
+    private static DateOnly? Fecha(Microsoft.AspNetCore.Components.ChangeEventArgs e) => DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null;
+    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

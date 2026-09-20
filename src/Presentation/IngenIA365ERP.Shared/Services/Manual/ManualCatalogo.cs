@@ -506,22 +506,44 @@ public static class ManualCatalogo
         t.Add(Proceso("cierre-de-periodo", "Cierre de período", Modulos.Contabilidad, "/contabilidad/cierre-periodo",
             "Cerrar un mes (o el año) para que nadie contabilice en él, con las verificaciones previas. El cierre anual además traslada resultados.",
             [
-                P("Antes", "Todos los módulos deben haber contabilizado el mes: causación de intereses, liquidación de nómina, movimientos de inventario. Revisá el balance de prueba: debe cuadrar.", "/contabilidad/balance-prueba", "Abrir Balance de Prueba"),
+                P("Antes", "Todos los módulos deben haber contabilizado el mes: causación de intereses, liquidación de nómina, movimientos de inventario. Revisá el balance de prueba: debe cuadrar.", "/contabilidad/informes?vista=trial-balance", "Abrir Balance de Prueba"),
                 P("Contabilidad → Cierre Periodo", "Elegí el período. La pantalla lista comprobantes en borrador y otras alertas; no cierra con pendientes.", "/contabilidad/cierre-periodo", "Abrir Cierre de Período"),
                 P("Cerrar", "El período pasa a cerrado. Un comprobante con fecha en un período cerrado es rechazado. Reabrir requiere permiso y queda en auditoría."),
                 P("Cierre anual", "Además genera el comprobante de cierre de ingresos y gastos contra la cuenta de resultados. Hacelo una vez conciliados los doce meses."),
             ],
             ["cierre", "periodo", "mes", "año", "reabrir", "cierre anual", "resultados"], ["Cooperativa activa.", "Permiso de cierre."],
-            ["periodos-contables", "comprobante-contable", "balance-prueba"], [], TipoDeTema.Proceso));
+            ["periodos-contables", "comprobante-contable", "contabilidad-informes"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("presupuestos", "Presupuestos", Modulos.Contabilidad, "/contabilidad/presupuestos",
-            "Registrar el presupuesto anual por cuenta y centro de costo, y seguir la ejecución contra lo contabilizado.",
+        // Feature 009 E2 (US9): la ruta es /contabilidad/presupuesto (singular, la de T140); hasta el
+        // 2026-09-20 el manual anunciaba /contabilidad/presupuestos, que nunca existió.
+        t.Add(Proceso("presupuesto", "Presupuesto y ejecución presupuestal", Modulos.Contabilidad, "/contabilidad/presupuesto",
+            "Registrar el presupuesto anual por cuenta de movimiento —y si se quiere por sucursal y centro de costo— con doce cuotas, aprobarlo, versionarlo con motivo y seguir la ejecución contra lo contabilizado.",
             [
-                P("Contabilidad → Presupuestos", null, "/contabilidad/presupuestos", "Abrir Presupuestos"),
-                P("Nuevo Presupuesto", "Año, y por cada cuenta de ingreso o gasto el valor mensual o anual distribuido."),
-                P("Seguir la ejecución", "La pantalla compara presupuestado contra ejecutado y muestra la variación. Los ajustes quedan como versiones."),
+                P("Contabilidad → Presupuesto", "Elegí el año. Se ve la versión vigente y su estado (borrador, aprobado).", "/contabilidad/presupuesto", "Abrir Presupuesto"),
+                P("Cargar las cuentas", "«Agregar cuenta de movimiento» (sólo cuentas de último nivel; opcionalmente sucursal y centro) y escribí las doce cuotas. «Distribuir» reparte un total por igual, por porcentajes o con valores a mano. «Copiar del año anterior» trae el vigente del año pasado ajustado en un porcentaje."),
+                P("Guardar y aprobar", "El borrador se corrige en su sitio. «Aprobar» lo fija; desde entonces cada cambio pide un motivo y crea la versión siguiente, y la anterior queda como reemplazada. «Versiones» muestra el historial y permite ver cualquiera."),
+                P("Seguir la ejecución", "Pestaña «Ejecución»: mes, nivel y filtros. Presupuestado, ejecutado, variación y porcentaje del mes y acumulado por cuenta, comparado con la versión vigente y con la inicial. Un clic en la cuenta abre su libro auxiliar del mes.", "/contabilidad/presupuesto?pestana=ejecucion", "Abrir Ejecución"),
             ],
-            ["presupuesto", "ejecucion", "variacion", "anual"], ["Cooperativa activa."], ["plan-de-cuentas", "centros-de-costo"], [], TipoDeTema.Proceso));
+            ["presupuesto", "ejecucion", "variacion", "anual", "version", "aprobar", "distribuir", "copiar"], ["Cooperativa activa.", "Contabilidad iniciada y el ejercicio abierto en Períodos.", "Permiso Budget.View (consultar) o Budget.Manage (guardar, aprobar)."],
+            ["plan-de-cuentas", "periodos-contables", "libro-auxiliar"], ["/contabilidad/presupuesto"], TipoDeTema.Proceso));
+
+        // Feature 009 E2 (US5): las consultas e informes contables, en su módulo. El Centro de Reportes sólo enlaza.
+        t.Add(Consulta("/contabilidad/libro-auxiliar", "Libro auxiliar", Modulos.Contabilidad,
+            "La consulta dinámica del libro: se baja de la clase al grupo, la cuenta, la subcuenta y el auxiliar; de ahí al tercero, al documento cruce, al comprobante y a sus líneas, con saldo inicial, débitos, créditos y saldo final en cada nivel. Cada nivel se exporta a Excel, PDF o Word tal como se ve.",
+            "Rango de fechas y, plegados bajo «Filtros», rama del plan o rango de cuentas, tercero, documento cruce, sucursal, centro de costo, tipo de comprobante, origen, usuario e «incluir cierre». Todos se combinan y valen en cada nivel.",
+            "libro auxiliar", "auxiliar", "profundizar", "tercero", "documento cruce", "comprobante", "movimientos", "saldos"));
+        t.Add(Reporte("/contabilidad/informes", "Informes contables", Modulos.Contabilidad,
+            "Balance de prueba, libro diario, libro mayor y balances, relación de comprobantes, documentos cruce con saldo pendiente y saldo diario promedio, con los mismos filtros combinables y exportación a Excel, PDF y Word. En el balance de prueba y el libro mayor, un clic en la cuenta abre su libro auxiliar.",
+            "El informe, el rango de fechas, el nivel de detalle (balance y mayor), «con terceros» (balance) y los filtros comunes; el saldo diario promedio exige una cuenta.",
+            "balance de prueba", "sumas y saldos", "libro diario", "libro mayor", "relacion de comprobantes", "documentos pendientes", "saldo promedio", "cuadrar"));
+        t.Add(Reporte("/contabilidad/estados-financieros", "Estados financieros", Modulos.Contabilidad,
+            "Los cuatro estados por rubro NIIF: situación financiera a una fecha (con comparativo al mismo día del año anterior), resultados del período (con el mismo período un año antes), cambios en el patrimonio y flujo de efectivo por el método indirecto. Salen siempre de los movimientos contabilizados; el cierre entra sólo si se pide.",
+            "El estado, la fecha de corte o el rango, sucursal, centro de costo e «incluir cierre».",
+            "estados financieros", "situacion financiera", "balance general", "estado de resultados", "pyg", "excedente", "patrimonio", "flujo de efectivo", "niif", "rubro"));
+        t.Add(Consulta("/contabilidad/terceros", "Estado de cuenta del tercero", Modulos.Contabilidad,
+            "Todo lo de un tercero en un rango, en una sola pantalla: débitos, créditos y neto; saldos por cuenta; documentos cruce con saldo pendiente; y los movimientos con saldo corrido. Desde cada tabla se baja al libro auxiliar de esa cuenta filtrado por el tercero, o al comprobante. Cada tabla se exporta aparte.",
+            "El tercero (por documento o nombre), el rango de fechas e «incluir cierre».",
+            "tercero", "estado de cuenta", "extracto", "saldo por tercero", "documentos cruce", "pendientes", "cartera del tercero"));
 
         t.Add(Maestro("/contabilidad/tipos-comprobante", "Tipos de comprobante", Modulos.Contabilidad, "un tipo de comprobante", "Cada tipo lleva su propio numerador.", "tipo", "numerador", "consecutivo"));
         t.Add(Maestro("/contabilidad/periodos", "Períodos contables", Modulos.Contabilidad, "un período", "Se crean por año y se abren o cierran por mes; ver «Cierre de período».", "periodos", "meses", "abierto", "cerrado"));
@@ -536,8 +558,7 @@ public static class ManualCatalogo
         t.Add(Maestro("/contabilidad/formatos-dian", "Formatos DIAN", Modulos.Contabilidad, "un formato", "Medios magnéticos: qué conceptos y cuentas alimentan cada formato.", "dian", "medios magneticos", "exogena"));
         t.Add(Maestro("/contabilidad/codigos-impuestos", "Códigos de impuestos", Modulos.Contabilidad, "un código de impuesto", null, "impuestos", "codigos"));
 
-        t.Add(Reporte("/contabilidad/balance-prueba", "Balance de prueba", Modulos.Contabilidad,
-            "Sumas y saldos de todas las cuentas: debe cuadrar antes de cerrar el período.", "Fecha de corte o período, y nivel de cuentas.", "balance de prueba", "sumas y saldos", "cuadrar"));
+        // El balance de prueba es una vista de «Informes contables» (/contabilidad/informes?vista=trial-balance).
         t.Add(Reporte("/contabilidad/certificados-retencion", "Certificados de retención", Modulos.Contabilidad,
             "Certificados de retención en la fuente, ICA e IVA por tercero y año.", "Tercero (o todos), año gravable y tipo de retención.", "certificado", "retencion", "tercero", "año gravable"));
 
@@ -936,9 +957,10 @@ public static class ManualCatalogo
             ],
             ["reportes", "informes", "imprimir", "pdf", "exportar", "centro"], ["Cooperativa activa."], [], [], TipoDeTema.Consulta));
 
-        t.Add(Reporte("/reportes/balance-general", "Balance general", Modulos.Reportes, "Estado de situación financiera: activos, pasivos y patrimonio a una fecha de corte.", "Fecha de corte y nivel de detalle de cuentas.", "balance general", "situacion financiera", "activos", "pasivos", "patrimonio"));
-        t.Add(Reporte("/reportes/estado-resultados", "Estado de resultados", Modulos.Reportes, "Ingresos, gastos y excedente o pérdida del período.", "Período (desde, hasta) y nivel de cuentas.", "estado de resultados", "pyg", "excedente", "ingresos", "gastos"));
-        t.Add(Reporte("/reportes/libro-mayor", "Libro mayor", Modulos.Reportes, "Movimientos detallados por cuenta con saldo acumulado.", "Rango de cuentas y período.", "libro mayor", "mayor y balances", "auxiliar"));
+        // Los informes contables (balance general, estado de resultados, libro mayor) viven en el módulo
+        // de Contabilidad desde la feature 009 E2 («Estados financieros» e «Informes contables», arriba);
+        // las rutas /reportes/balance-general, /reportes/estado-resultados y /reportes/libro-mayor nunca
+        // tuvieron página.
         t.Add(Reporte("/reportes/extracto-credito", "Extracto de crédito", Modulos.Reportes, "Estado de cuenta de un crédito para el asociado: cuotas pagadas, pendientes, intereses y saldo.", "Asociado y crédito, y período.", "extracto", "credito", "estado de cuenta"));
         t.Add(Reporte("/reportes/cartera-edades", "Cartera por edades", Modulos.Reportes, "La cartera agrupada por tramos de días de mora: base de la provisión y del seguimiento de cobro.", "Fecha de corte, línea y agencia.", "cartera por edades", "mora", "tramos", "provision"));
         t.Add(Reporte("/reportes/nomina", "Reportes de nómina", Modulos.Reportes, "Cinco vistas sobre la liquidación: comprobante por empleado, resumen de la corrida por concepto, detalle empleado × concepto, novedades del período e histórico por empleado entre fechas. Todas se exportan a Excel, PDF y Word.", "Período (y su corrida) o empleado y rango de fechas.", "comprobante", "desprendible", "nomina", "pago", "excel", "word", "pdf", "reporte"));
@@ -992,7 +1014,7 @@ public static class ManualCatalogo
                 P("Abrir el reporte", "Desde el Centro de Reportes o desde el menú del módulo, bajo «Reportes».", ruta, "Abrir " + titulo),
                 P("Elegir los parámetros", parametros + " Un reporte a una fecha de corte muestra saldos; uno por período muestra movimientos."),
                 P("Generar", "El resultado aparece en pantalla. Si tarda, es por el volumen del período elegido: acotalo."),
-                P("Leer con criterio", "Un reporte contable sólo es confiable si el período está contabilizado y cuadrado: revisá el balance de prueba ante cualquier duda.", "/contabilidad/balance-prueba", "Abrir Balance de Prueba"),
+                P("Leer con criterio", "Un reporte contable sólo es confiable si el período está contabilizado y cuadrado: revisá el balance de prueba ante cualquier duda.", "/contabilidad/informes?vista=trial-balance", "Abrir Balance de Prueba"),
                 P("Exportar o imprimir", "PDF cuando la pantalla lo ofrece; si no, la impresión del navegador (Ctrl+P)."),
             ],
             [.. claves, "reporte", "informe", "imprimir", "pdf", titulo.ToLowerInvariant()],

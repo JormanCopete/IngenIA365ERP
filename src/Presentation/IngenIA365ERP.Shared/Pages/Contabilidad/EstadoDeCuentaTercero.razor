@@ -1,0 +1,252 @@
+@page "/contabilidad/terceros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Estado de cuenta del tercero - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US5 (FR-044 «estado de cuenta por tercero» y «documentos cruce pendientes»):
+   todo lo que le pasó a UN tercero en el rango, en una sola pantalla —cifras, saldo por cuenta,
+   documentos cruce con saldo y los movimientos con saldo corrido— y desde cada tabla se baja al
+   libro auxiliar de esa cuenta filtrado por el tercero, o al comprobante. Son tres consultas de la
+   API (`trial-balance?person=`, `pending-documents?person=`, `third-party-statement?person=`):
+   cada tabla se exporta por separado y cada una tiene su propio indicador de carga. *@
+<PermissionGate Required="Accounting.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Estado de cuenta del tercero</h3>
+        <div class="toolbar">
+            @if (_tercero is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-list-unordered" OnClick="@(() => AbrirAuxiliar(null))">Ver en el libro auxiliar</SfButton>
+            }
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo campo-largo">Tercero
+            <PersonSearchPicker Selected="@_tercero" SelectedChanged="@TerceroElegidoAsync" ShowHelpText="false" Placeholder="Documento o nombre del tercero" />
+        </label>
+        <label class="campo">Desde <input class="e-input" type="date" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = Fecha(e))" /></label>
+        <label class="campo">Hasta <input class="e-input" type="date" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = Fecha(e))" /></label>
+        <label class="campo-check"><input type="checkbox" @bind="_incluirCierre" /> Incluir cierre</label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_tercero is null || Ocupado)" OnClick="@ConsultarAsync">Consultar</SfButton>
+    </div>
+
+    @if (_tercero is null)
+    {
+        <p class="texto-tenue">Elija un tercero: se muestran sus saldos por cuenta, los documentos cruce con saldo pendiente y todos sus movimientos del rango.</p>
+    }
+    else
+    {
+        <div class="kpi-grid">
+            <div class="kpi-card"><span class="kpi-value">@Moneda(_debitos)</span><span class="kpi-label">Débitos del rango</span></div>
+            <div class="kpi-card"><span class="kpi-value">@Moneda(_creditos)</span><span class="kpi-label">Créditos del rango</span></div>
+            <div class="kpi-card"><span class="kpi-value">@Moneda(_debitos - _creditos)</span><span class="kpi-label">Neto (débitos − créditos)</span></div>
+            <div class="kpi-card"><span class="kpi-value">@(_pendientes?.Filas.Count ?? 0)</span><span class="kpi-label">Documentos con saldo pendiente</span></div>
+        </div>
+
+        <div class="page-header">
+            <h4>Saldos por cuenta</h4>
+            <div class="toolbar">
+                @if (_saldos is not null)
+                {
+                    <PermissionGate Required="Accounting.Reports.Export">
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaSaldos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.BalanceDePrueba, "xlsx", _cargaSaldos))">Excel</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaSaldos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.BalanceDePrueba, "pdf", _cargaSaldos))">PDF</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaSaldos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.BalanceDePrueba, "docx", _cargaSaldos))">Word</SfButton>
+                    </PermissionGate>
+                }
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaSaldos.Activa">
+            <TablaDeReporte Tabla="@_saldos" MostrarTitulo="false" MostrarNotas="false" FilasClicables="true"
+                            EsClicable="@(f => _saldos is not null && TablaDeReporte.Oculto(_saldos, f, "_nodo") is not null)"
+                            FilaElegida="@(f => AbrirAuxiliarDesde(_saldos, f))"
+                            TextoSinTabla="Pulse «Consultar»." TextoSinFilas="El tercero no tiene movimientos contabilizados en el rango." />
+        </IndicadorDeCarga>
+
+        <div class="page-header">
+            <h4>Documentos cruce con saldo pendiente</h4>
+            <div class="toolbar">
+                @if (_pendientes is not null)
+                {
+                    <PermissionGate Required="Accounting.Reports.Export">
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaPendientes.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.DocumentosPendientes, "xlsx", _cargaPendientes))">Excel</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaPendientes.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.DocumentosPendientes, "pdf", _cargaPendientes))">PDF</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaPendientes.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.DocumentosPendientes, "docx", _cargaPendientes))">Word</SfButton>
+                    </PermissionGate>
+                }
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaPendientes.Activa">
+            <TablaDeReporte Tabla="@_pendientes" MostrarTitulo="false" MostrarNotas="false" FilasClicables="true"
+                            EsClicable="@(f => _pendientes is not null && TablaDeReporte.Oculto(_pendientes, f, "_nodo") is not null)"
+                            FilaElegida="@(f => AbrirAuxiliarDesde(_pendientes, f))"
+                            TextoSinTabla="Pulse «Consultar»." TextoSinFilas="Ningún documento cruce con saldo pendiente a la fecha «Hasta»." />
+        </IndicadorDeCarga>
+
+        <div class="page-header">
+            <h4>Movimientos</h4>
+            <div class="toolbar">
+                @if (_movimientos is not null)
+                {
+                    <PermissionGate Required="Accounting.Reports.Export">
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaMovimientos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.EstadoDeCuentaTercero, "xlsx", _cargaMovimientos))">Excel</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaMovimientos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.EstadoDeCuentaTercero, "pdf", _cargaMovimientos))">PDF</SfButton>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-download" Disabled="@_cargaMovimientos.Activa" OnClick="@(() => DescargarAsync(ContabilidadClient.Vistas.EstadoDeCuentaTercero, "docx", _cargaMovimientos))">Word</SfButton>
+                    </PermissionGate>
+                }
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaMovimientos.Activa">
+            <TablaDeReporte Tabla="@_movimientos" MostrarTitulo="false" FilasClicables="true"
+                            EsClicable="@(f => _movimientos is not null && TablaDeReporte.Oculto(_movimientos, f, "_comprobante") is not null)"
+                            FilaElegida="@AbrirComprobanteAsync"
+                            TextoSinTabla="Pulse «Consultar»." TextoSinFilas="Sin movimientos contabilizados del tercero en el rango." />
+            @if (_movimientos is { Filas.Count: > 0 })
+            {
+                <p class="hint">Un clic en un movimiento abre su comprobante. El saldo corre por cuenta; una reversa aparece como dos movimientos que se netean.</p>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _cargaSaldos = new(), _cargaPendientes = new(), _cargaMovimientos = new();
+    private PersonSearchPicker.PersonSearchItem? _tercero;
+    private DateOnly? _desde = new(DateTime.Today.Year, 1, 1), _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private bool _incluirCierre;
+    private TablaReporteDto? _saldos, _pendientes, _movimientos;
+    private decimal _debitos, _creditos;
+    private bool _iniciado;
+
+    /// <summary>Para llegar desde otra pantalla con el tercero ya elegido (<c>?person=</c>).</summary>
+    [SupplyParameterFromQuery(Name = "person")] public Guid? Person { get; set; }
+
+    private bool Ocupado => _cargaSaldos.Activa || _cargaPendientes.Activa || _cargaMovimientos.Activa;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        var f = FiltrosDeInformeModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
+        if (f.From is not null) _desde = f.From;
+        if (f.To is not null) _hasta = f.To;
+        _incluirCierre = f.IncludeClosing;
+        if (Person is { } p)
+        {
+            // El nombre lo trae la primera consulta en el subtítulo de la tabla; hasta entonces se muestra el identificador.
+            _tercero = new PersonSearchPicker.PersonSearchItem { PublicId = p, FullName = "Tercero", IdentificationNumber = string.Empty };
+            await ConsultarAsync();
+        }
+    }
+
+    private async Task TerceroElegidoAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _tercero = p;
+        _saldos = _pendientes = _movimientos = null;
+        _debitos = _creditos = 0;
+        if (p is not null) await ConsultarAsync();
+    }
+
+    private FiltrosDeInformeModelo Filtros() => new() { From = _desde, To = _hasta, Person = _tercero?.PublicId, IncludeClosing = _incluirCierre };
+
+    private async Task ConsultarAsync()
+    {
+        if (_tercero is null) return;
+        var query = Filtros().ToQuery();
+        // Las tres a la vez: son independientes y cada zona destapa la suya al llegar.
+        await Task.WhenAll(
+            CargarAsync(ContabilidadClient.Vistas.BalanceDePrueba, query, _cargaSaldos, t => _saldos = t),
+            CargarAsync(ContabilidadClient.Vistas.DocumentosPendientes, query, _cargaPendientes, t => _pendientes = t),
+            CargarAsync(ContabilidadClient.Vistas.EstadoDeCuentaTercero, query, _cargaMovimientos, t => { _movimientos = t; Resumir(t); }));
+    }
+
+    private async Task CargarAsync(string vista, string query, EstadoDeCarga estado, Action<TablaReporteDto?> asignar)
+    {
+        using var carga = estado.Iniciar();
+        var r = await Contabilidad.InformeAsync(vista, query);
+        if (!r.IsSuccess)
+        {
+            asignar(null);
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar al tercero.");
+            return;
+        }
+        asignar(r.Value);
+        StateHasChanged();
+    }
+
+    /// <summary>Las cifras de arriba salen de la fila de totales del estado de cuenta (columnas Débito y Crédito).</summary>
+    private void Resumir(TablaReporteDto? t)
+    {
+        _debitos = _creditos = 0;
+        if (t is null) return;
+        var fuente = t.Totales;
+        if (fuente is null)
+        {
+            // Sin totales: se suman las filas.
+            var iD = IndiceDe(t, "Débito"); var iC = IndiceDe(t, "Crédito");
+            foreach (var f in t.Filas)
+            {
+                if (iD >= 0 && iD < f.Valores.Count && f.Valores[iD].ValueKind == System.Text.Json.JsonValueKind.Number) _debitos += f.Valores[iD].GetDecimal();
+                if (iC >= 0 && iC < f.Valores.Count && f.Valores[iC].ValueKind == System.Text.Json.JsonValueKind.Number) _creditos += f.Valores[iC].GetDecimal();
+            }
+            return;
+        }
+        _debitos = Numero(t, fuente, "Débito");
+        _creditos = Numero(t, fuente, "Crédito");
+    }
+
+    private static int IndiceDe(TablaReporteDto t, string nombre)
+    {
+        for (var i = 0; i < t.Columnas.Count; i++)
+            if (string.Equals(t.Columnas[i].Nombre, nombre, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Columnas[i].Nombre, nombre + "s", StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    private static decimal Numero(TablaReporteDto t, FilaReporteDto f, string columna)
+    {
+        var i = IndiceDe(t, columna);
+        return i >= 0 && i < f.Valores.Count && f.Valores[i].ValueKind == System.Text.Json.JsonValueKind.Number ? f.Valores[i].GetDecimal() : 0m;
+    }
+
+    private async Task DescargarAsync(string vista, string formato, EstadoDeCarga estado)
+    {
+        using var carga = estado.Iniciar();
+        var r = await Contabilidad.DescargarInformeAsync(vista, Filtros().ToQuery(), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private Task AbrirAuxiliarDesde(TablaReporteDto? tabla, FilaReporteDto fila)
+    {
+        if (tabla is not null && TablaDeReporte.Oculto(tabla, fila, "_nodo") is { } nodo) AbrirAuxiliar(nodo);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>El libro auxiliar del tercero: en la cuenta pedida, o desde las clases si no hay nodo.</summary>
+    private void AbrirAuxiliar(string? nodo)
+    {
+        var query = Filtros().ToQuery();
+        if (nodo is not null) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
+        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{query}");
+    }
+
+    private Task AbrirComprobanteAsync(FilaReporteDto fila)
+    {
+        if (_movimientos is not null && TablaDeReporte.Oculto(_movimientos, fila, "_comprobante") is { } id && Guid.TryParse(id, out var publicId))
+            Navigation.NavigateTo($"/contabilidad/comprobantes/{publicId}");
+        return Task.CompletedTask;
+    }
+
+    private static string Moneda(decimal v) => v.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-CO"));
+    private static DateOnly? Fecha(Microsoft.AspNetCore.Components.ChangeEventArgs e) => DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null;
+}
