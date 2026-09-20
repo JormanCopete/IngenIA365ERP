@@ -106,7 +106,7 @@ public static class ExportadorDeTablas
             case null: celda.Value = Blank.Value; break;
             case decimal d:
                 celda.Value = d;
-                celda.Style.NumberFormat.Format = tipo switch { TipoDeColumna.Moneda => "#,##0", TipoDeColumna.Porcentaje => "#,##0.00\ \"%\"", _ => "#,##0.##" };
+                celda.Style.NumberFormat.Format = tipo switch { TipoDeColumna.Moneda => "#,##0", TipoDeColumna.Porcentaje => @"#,##0.00 ""%""", _ => "#,##0.##" };
                 break;
             case int i: celda.Value = i; break;
             case long l: celda.Value = l; break;
