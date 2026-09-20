@@ -1,0 +1,143 @@
+@using IngenIA365ERP.Shared.Services.Reportes
+
+@* Pinta un TablaReporteDto (feature 009 E2): la misma tabla que ReportesNomina.razor arma inline,
+   pero como componente porque contabilidad tiene cinco pantallas que la necesitan. Las columnas
+   cuya Clave empieza con «_» son ocultas: llevan las claves de profundización (_nodo,
+   _comprobante, _tipo, _rubro, _cuenta) y no se muestran; se leen con Oculto(). Cuando
+   FilasClicables está puesto, la fila entera es un botón y FilaElegida recibe la fila. Nómina
+   sigue con su tabla inline: no se toca. *@
+@if (Tabla is null)
+{
+    <p class="texto-tenue">@TextoSinTabla</p>
+}
+else
+{
+    <div class="info-card">
+        @if (MostrarTitulo)
+        {
+            <h4>@Tabla.Titulo</h4>
+            @if (!string.IsNullOrWhiteSpace(Tabla.Subtitulo)) { <p class="texto-tenue">@Tabla.Subtitulo</p> }
+        }
+        @if (Tabla.Filas.Count == 0)
+        {
+            <p class="texto-tenue">@TextoSinFilas</p>
+        }
+        else
+        {
+            var visibles = Visibles(Tabla);
+            var conSeccion = Tabla.Filas.Any(f => f.Seccion is not null);
+            <div class="tabla-desplazable">
+                <table class="data-grid @(FilasClicables ? "filas-clicables" : "")">
+                    <thead>
+                        <tr>
+                            @if (conSeccion) { <th>Sección</th> }
+                            @foreach (var (col, _) in visibles) { <th class="@(col.EsNumerica ? "numero" : "")">@col.Nombre</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ string? seccionAnterior = null; }
+                        @foreach (var f in Tabla.Filas)
+                        {
+                            var fila = f;
+                            var clicable = FilasClicables && (EsClicable is null || EsClicable(fila));
+                            <tr class="@(fila.Resaltada ? "resaltada" : "") @(clicable ? "clicable" : "")"
+                                @onclick="@(() => ElegirAsync(fila, clicable))"
+                                role="@(clicable ? "button" : null)" tabindex="@(clicable ? 0 : null)"
+                                @onkeydown="@((KeyboardEventArgs e) => TeclaAsync(e, fila, clicable))">
+                                @if (conSeccion)
+                                {
+                                    <td class="texto-tenue">@(fila.Seccion == seccionAnterior ? "" : fila.Seccion)</td>
+                                    seccionAnterior = fila.Seccion;
+                                }
+                                @foreach (var (col, i) in visibles)
+                                {
+                                    <td class="@(col.EsNumerica ? "numero" : "")">@(i < fila.Valores.Count ? TablaReporteDto.Texto(fila.Valores[i], col.Tipo) : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    @if (Tabla.Totales is { } t)
+                    {
+                        <tfoot>
+                            <tr class="resaltada">
+                                @if (conSeccion) { <td>@TextoTotales</td> }
+                                @foreach (var (col, i) in visibles)
+                                {
+                                    <td class="@(col.EsNumerica ? "numero" : "")">@(i < t.Valores.Count ? TablaReporteDto.Texto(t.Valores[i], col.Tipo) : "")</td>
+                                }
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+        }
+        @if (MostrarNotas)
+        {
+            @foreach (var nota in Tabla.Notas) { <p class="hint">@nota</p> }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public TablaReporteDto? Tabla { get; set; }
+    /// <summary>La fila entera responde al clic (y a Enter) y dispara <see cref="FilaElegida"/>.</summary>
+    [Parameter] public bool FilasClicables { get; set; }
+    /// <summary>Con <see cref="FilasClicables"/>: cuáles filas lo son (por defecto todas). Sirve para dejar quietas las que no tienen a dónde ir.</summary>
+    [Parameter] public Func<FilaReporteDto, bool>? EsClicable { get; set; }
+    [Parameter] public EventCallback<FilaReporteDto> FilaElegida { get; set; }
+    [Parameter] public bool MostrarTitulo { get; set; } = true;
+    [Parameter] public bool MostrarNotas { get; set; } = true;
+    [Parameter] public string TextoSinTabla { get; set; } = "Elija los filtros y pulse «Consultar».";
+    [Parameter] public string TextoSinFilas { get; set; } = "Sin filas para estos filtros.";
+    [Parameter] public string TextoTotales { get; set; } = "Totales";
+
+    /// <summary>Las columnas que se pintan, con su índice real en <c>Valores</c> (las ocultas corren los índices).</summary>
+    private static List<(ColumnaReporteDto Col, int Indice)> Visibles(TablaReporteDto tabla)
+    {
+        var lista = new List<(ColumnaReporteDto, int)>(tabla.Columnas.Count);
+        for (var i = 0; i < tabla.Columnas.Count; i++)
+            if (!tabla.Columnas[i].EsOculta) lista.Add((tabla.Columnas[i], i));
+        return lista;
+    }
+
+    /// <summary>
+    /// El texto de una columna oculta de la fila (<c>_nodo</c>, <c>_comprobante</c>, <c>_tipo</c>,
+    /// <c>_rubro</c>, <c>_cuenta</c>), o nulo si la tabla no la trae o la celda está vacía. Se
+    /// busca por clave, no por posición: el orden de las columnas es del servidor.
+    /// </summary>
+    public static string? Oculto(TablaReporteDto tabla, FilaReporteDto fila, string clave)
+    {
+        for (var i = 0; i < tabla.Columnas.Count; i++)
+        {
+            if (!string.Equals(tabla.Columnas[i].Clave, clave, StringComparison.Ordinal)) continue;
+            if (i >= fila.Valores.Count) return null;
+            var v = fila.Valores[i];
+            var texto = v.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => v.GetString(),
+                System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined => null,
+                _ => v.GetRawText(),
+            };
+            return string.IsNullOrWhiteSpace(texto) ? null : texto;
+        }
+        return null;
+    }
+
+    /// <summary>El texto visible de una columna por clave o, si no tiene clave, por nombre; nulo si no está.</summary>
+    public static string? Valor(TablaReporteDto tabla, FilaReporteDto fila, string claveONombre)
+    {
+        for (var i = 0; i < tabla.Columnas.Count; i++)
+        {
+            var c = tabla.Columnas[i];
+            if (!string.Equals(c.Clave, claveONombre, StringComparison.Ordinal) && !string.Equals(c.Nombre, claveONombre, StringComparison.OrdinalIgnoreCase)) continue;
+            return i < fila.Valores.Count ? TablaReporteDto.Texto(fila.Valores[i], c.Tipo) : null;
+        }
+        return null;
+    }
+
+    private Task ElegirAsync(FilaReporteDto fila, bool clicable) =>
+        clicable ? FilaElegida.InvokeAsync(fila) : Task.CompletedTask;
+
+    private Task TeclaAsync(KeyboardEventArgs e, FilaReporteDto fila, bool clicable) =>
+        clicable && (e.Key is "Enter" or " ") ? FilaElegida.InvokeAsync(fila) : Task.CompletedTask;
+}

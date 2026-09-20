@@ -10,6 +10,12 @@
     </div>
 
     <!-- Contabilidad -->
+    @* Feature 009 E2 (US5, US9): los informes contables viven en su modulo (/contabilidad/...) y
+       aqui solo se enlazan con la vista preseleccionada por query string. Hasta el 2026-09-20
+       estas cinco tarjetas apuntaban a rutas sin pagina (/reportes/balance-general,
+       /reportes/estado-resultados, /reportes/libro-mayor, /contabilidad/balance-prueba) y
+       mostraban "Pagina no encontrada"; la prueba TodoEnlaceDelMenuTieneSuPagina ahora revisa
+       tambien los NavigateTo de esta pantalla. *@
     <div class="report-section">
         <h4 class="report-section-title">
             <span class="e-icons e-money"></span>Contabilidad
@@ -18,43 +24,61 @@
             <div class="report-card">
                 <div class="report-card-icon"><span class="e-icons e-description"></span></div>
                 <div class="report-card-body">
-                    <h5>Balance General</h5>
-                    <p>Estado de situacion financiera: activos, pasivos y patrimonio a una fecha de corte.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/balance-general")'>Generar</SfButton>
+                    <h5>Estado de situacion financiera</h5>
+                    <p>Activo, pasivo y patrimonio por rubro NIIF a una fecha de corte, con comparativo del año anterior.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/estados-financieros?estado=esf")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
                 <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
                 <div class="report-card-body">
-                    <h5>Estado de Resultados</h5>
-                    <p>Ingresos, gastos y utilidad o perdida neta del periodo seleccionado.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/estado-resultados")'>Generar</SfButton>
+                    <h5>Estado de resultados</h5>
+                    <p>Ingresos, costos y gastos del periodo por rubro NIIF, con subtotales y comparativo.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/estados-financieros?estado=eri")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
                 <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
                 <div class="report-card-body">
-                    <h5>Libro Mayor</h5>
-                    <p>Movimientos detallados por cuenta contable con saldos acumulados.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/libro-mayor")'>Generar</SfButton>
+                    <h5>Libro mayor y balances</h5>
+                    <p>Saldo anterior, movimientos y nuevo saldo por cuenta al nivel elegido.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/informes?vista=general-ledger")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
                 <div class="report-card-icon"><span class="e-icons e-table"></span></div>
                 <div class="report-card-body">
-                    <h5>Balance de Prueba</h5>
-                    <p>Sumas y saldos de todas las cuentas del plan contable.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/balance-prueba")'>Generar</SfButton>
+                    <h5>Balance de prueba</h5>
+                    <p>Sumas y saldos de todas las cuentas del plan, con terceros si se pide.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/informes?vista=trial-balance")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-file-document"></span></div>
                 <div class="report-card-body">
-                    <h5>Certificados de Retencion</h5>
-                    <p>Certificados de retencion en la fuente, ICA e IVA para terceros.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/certificados-retencion")'>Generar</SfButton>
+                    <h5>Libro auxiliar</h5>
+                    <p>Consulta dinamica del libro: de la clase al comprobante y sus lineas, pasando por tercero y documento cruce.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/libro-auxiliar")'>Abrir</SfButton>
                 </div>
             </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-user"></span></div>
+                <div class="report-card-body">
+                    <h5>Estado de cuenta del tercero</h5>
+                    <p>Todo lo de un tercero en un rango: saldos por cuenta, documentos cruce pendientes y movimientos con saldo corrido.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/terceros")'>Abrir</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Presupuesto y ejecucion</h5>
+                    <p>Presupuestado contra ejecutado del mes y acumulado, con variacion y porcentaje por cuenta.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/contabilidad/presupuesto?pestana=ejecucion")'>Abrir</SfButton>
+                </div>
+            </div>
+            @* «Certificados de retencion» apuntaba a /contabilidad/certificados-retencion, que no
+               existe: es de la entrega E4 (US10, impuestos). La tarjeta vuelve con la pantalla. *@
         </div>
     </div>
 
