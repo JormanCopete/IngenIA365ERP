@@ -24,7 +24,9 @@ public static class ExportadorDeTablas
 {
     private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-CO");
 
-    public static ArchivoExportado Exportar(TablaExportable tabla, string formato, string nombreBase) => formato.ToLowerInvariant() switch
+    public static ArchivoExportado Exportar(TablaExportable tabla, string formato, string nombreBase) => Exportar2(tabla.SinOcultas(), formato, nombreBase);
+
+    private static ArchivoExportado Exportar2(TablaExportable tabla, string formato, string nombreBase) => formato.ToLowerInvariant() switch
     {
         "xlsx" => new(Excel(tabla), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", nombreBase + ".xlsx"),
         "docx" => new(Word(tabla), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", nombreBase + ".docx"),
