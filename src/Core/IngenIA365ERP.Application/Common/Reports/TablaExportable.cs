@@ -16,6 +16,8 @@ public enum TipoDeColumna
     Moneda = 2,
     Decimal = 3,
     Fecha = 4,
+    /// <summary>Un porcentaje ya expresado en puntos (12,5 = 12,5 %); dos decimales y el signo «%» al pintar (feature 009 E2, FR-063).</summary>
+    Porcentaje = 5,
 }
 
 public sealed record ColumnaExportable(string Nombre, TipoDeColumna Tipo = TipoDeColumna.Texto, string? Clave = null)

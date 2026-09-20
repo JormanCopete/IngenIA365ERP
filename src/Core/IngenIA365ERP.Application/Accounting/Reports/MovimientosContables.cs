@@ -41,12 +41,15 @@ public static class MovimientosContables
         public string PeriodoTexto => $"{Desde:dd/MM/yyyy} – {Hasta:dd/MM/yyyy}";
     }
 
+    // Los códigos que ya existen en AccountingErrors se reutilizan; los de tercero, centro, sucursal y rango son propios de las consultas.
     public static readonly Error CuentaNoEncontrada = new("Accounting.Account.NotFound", "La cuenta indicada no existe en el plan.");
     public static readonly Error TerceroNoEncontrado = new("Accounting.Person.NotFound", "El tercero indicado no existe.");
     public static readonly Error CentroNoEncontrado = new("Accounting.CostCenter.NotFound", "El centro de costo indicado no existe.");
     public static readonly Error SucursalNoEncontrada = new("Accounting.Branch.NotFound", "La sucursal indicada no existe.");
-    public static readonly Error CruceNoEncontrado = new("Accounting.CrossDocumentType.NotFound", "El tipo de documento cruce indicado no existe.");
+    public static readonly Error CruceNoEncontrado = Posting.AccountingErrors.CrossDocumentTypeNotFound;
     public static readonly Error RangoInvalido = new("Accounting.Report.InvalidRange", "La fecha final no puede ser anterior a la inicial.");
+    public static readonly Error TerceroRequerido = new("Accounting.Report.PersonRequired", "Esta consulta necesita un tercero.");
+    public static readonly Error CuentaRequerida = new("Accounting.Report.AccountRequired", "Esta consulta necesita una cuenta.");
 
     /// <summary>Resuelve los filtros una sola vez (PublicId → Id, nombres para el encabezado) y el alcance de sucursal.</summary>
     public static async Task<Result<Contexto>> PrepararAsync(
