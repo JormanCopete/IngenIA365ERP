@@ -436,6 +436,45 @@ Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de l
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
+**E2 consultas e informes + presupuesto — hecha en la rama `009-e2-consultas-presupuesto`
+(2026-09-20), sin merge a develop ni despliegue hasta que el dueño lo pida.** Pedido del dueño
+tras revisar el módulo: los reportes contables de `/reportes` no funcionaban (cinco tarjetas a
+rutas sin página), no había presupuesto ni consulta consolidada del tercero. Entrega: US5
+completa (T097–T107) y US9 (T137–T140): trece vistas en `/api/reports/accounting/{vista}`
+sobre `MovimientosContables` (único punto de lectura del libro), libro auxiliar con
+profundización hasta la línea, balance de prueba, libros diario y mayor, relación de
+comprobantes, estado de cuenta del tercero, documentos cruce pendientes, saldo diario promedio,
+ESF/ERI/ECP/EFE por rubro NIIF con comparativo, presupuesto versionado en pesos con ejecución;
+pantallas `/contabilidad/libro-auxiliar`, `/informes`, `/estados-financieros`, `/terceros`,
+`/presupuesto`; Centro de Reportes y manual apuntando a rutas reales (la prueba de arquitectura
+ahora también revisa los `NavigateTo` del centro y `ManualCatalogoTests` cada ruta y slug del
+manual, que destapó 16 temas contables heredados rotos). Revisión adversarial de tres lentes con
+19 hallazgos confirmados y corregidos (los graves: el cierre de años anteriores no formaba el
+saldo inicial; los rubros se medían por la naturaleza de la cuenta y 3510/1899/6220 descuadraban
+el ESF; el EFE anual restaba el resultado del año anterior; rangos de fecha sin tope; el
+presupuesto sin alcance de sucursal). Pruebas: 1.231 sin contenedores (+166) y 21 e2e nuevas en la
+colección «Contabilidad e2e» (191 de integración con Docker: 190 pasan, 1 omitida), que
+destaparon dos defectos ajenos al módulo, ya corregidos: los emisores explícitos de auditoría
+(contabilidad y nómina) escribían con el Id interno de la cooperativa en vez del PublicId y sus
+eventos nunca llegaban a la consola; y el vínculo sucursal contable → oficina
+(`COR_Branches.TenantBranchPublicId`), del que depende el alcance de sucursal, no lo escribía
+ningún comando (ya lo aceptan `POST/PUT /api/core/branches`; falta el campo en la pantalla de
+Agencias). Receta:
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7b y §7c.
+
+Queda pendiente de E2: **US6 cierre y reapertura del ejercicio** (T109–T112; el comprobante `CI`
+por `AccountingPoster` con `Kind = Closing`; las consultas ya lo tratan bien) y **US13 apertura
+importada** (T113–T117; las consultas ya tratan el `AP` como saldo inicial; el dueño decidió
+saldos digitados para COOFLOPAL, así que la importación baja de prioridad). También: el campo
+`tenantBranchPublicId` en la pantalla Maestros › Agencias; los eventos de auditoría explícitos ya
+escritos en producción quedaron en bases Mongo `…_Audit_<id interno>` (p. ej. `…_Audit_1`) y no
+se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-008, un millón de
+líneas) sin escribir; MAUI no
+registra los clientes contables (pantallas contables inertes en la app de escritorio, ya desde
+E1); validar con el contador que en el CUIF las contras de activo (1408, 1499…) y los gastos
+por deterioro/depreciación (5115, 5120, 5415, 5420) estén alineados para que la «Diferencia» del
+EFE sea cero.
+
 ### 🟡 Prioridad media
 
 #### P4 — Sellado mensual regulatorio suspendido

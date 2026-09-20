@@ -104,16 +104,37 @@ tipoDocumento, numeroDocumento, centroCosto, sucursal, debito, credito, detalle`
 
 ## 8. Informes — `/api/reports/accounting/{vista}?format=json|xlsx|pdf|docx&…filtros`
 
-Vistas: `ledger` (libro auxiliar, con `node=` para profundizar: `class|group|account|subaccount|
-auxiliary|person|document|voucher`), `trial-balance`, `journal`, `general-ledger`,
-`third-party-statement`, `pending-documents`, `voucher-list`, `financial-position`,
-`income-statement` (`includeClosing=`), `equity-changes`, `cash-flow`, `daily-average`,
-`budget-execution`, `withholdings`, `vat`, `ica`, `gmf`, `tax-form/{code}`, `reconciliation`,
-`assets`. Filtros comunes: `from`, `to`, `accountFrom`, `accountTo`, `accountPublicId`, `person`,
-`crossDocument`, `costCenter`, `branch`, `voucherType`, `origin`, `user`, `level`,
-`withThirdParties`. `Reports.View` para `json`; `Reports.Export` para los demás (emite
-`Accounting.Report.Exported`). Encabezado obligatorio en toda tabla: empresa, NIT, filtros,
-período, usuario, fecha (FR-045).
+Vistas entregadas en E2 (2026-09-20): `ledger` (libro auxiliar interactivo), `trial-balance`,
+`journal`, `general-ledger`, `voucher-list`, `third-party-statement` (`person` obligatorio),
+`pending-documents`, `daily-average` (`accountPublicId` obligatorio; rango de un año como
+máximo), `financial-position`, `income-statement`, `equity-changes`, `cash-flow`,
+`budget-execution` (`year`, `month`; también servida como `GET /api/accounting/budgets/execution`
+con `Budget.View`). Pendientes de E4: `withholdings`, `vat`, `ica`, `gmf`, `tax-form/{code}`,
+`reconciliation`, `assets`.
+
+Filtros comunes a todas (`FiltrosDeInforme`, camelCase en la query): `from`, `to`
+(`yyyy-MM-dd`; por defecto el 1 de enero del año de `to` y hoy; rango máximo 5 años; fechas
+entre 1970-01-01 y hoy + 1 año), `accountFrom`, `accountTo` (por prefijo), `accountPublicId`
+(rama), `niifItem` (rubro NIIF y sus hijos), `person`, `crossDocument` (`TIPO|NÚMERO` o `TIPO`),
+`costCenter`, `branch`, `voucherType`, `origin`, `user` (contiene en quien registró o
+contabilizó), `level` (1..6), `withThirdParties`, `includeClosing` (el cierre del ejercicio
+consultado; los de ejercicios anteriores siempre cuentan). Todas aplican a la vez sobre la
+vista y sobre su exportación, y respetan el alcance de sucursal de quien consulta.
+
+`ledger` profundiza con `node=`: sin nodo → clases; `account:<código>` → cuentas hijas del plan
+o, si la cuenta no tiene hijas, sus terceros; `person:<código>|<personPublicId|none>` →
+documentos cruce; `document:<código>|<tercero>|<tipo|none>|<número|none>` → comprobantes;
+`voucher:<documentPublicId>` → las líneas del comprobante. Un nodo mal formado responde 422
+`Accounting.Report.InvalidNode`. Cada fila trae columnas **ocultas** (`clave` que empieza con
+`_`: `_nodo`, `_tipo`, `_cuenta`, `_comprobante`, `_rubro`) que la pantalla usa para navegar y los
+exportadores omiten.
+
+`Reports.View` para `json`; `Reports.Export` para los demás formatos (mismo 404 si falta) y se
+audita `Accounting.Report.Exported` con la vista, los filtros, el formato y las filas. Encabezado
+obligatorio en toda tabla (empresa, NIT, filtros, período, usuario, fecha; FR-045) en las notas.
+Errores: `*.NotFound` → 404, `Validation.*` → 400, resto → 422 (`Accounting.Report.InvalidRange`,
+`.RangeTooLong`, `.DateOutOfRange`, `.PersonRequired`, `.AccountRequired`, `.InvalidNode`,
+`.NiifItemNotFound`).
 
 ## 9. Conciliación — `/api/accounting/reconciliations`
 
@@ -128,11 +149,20 @@ Permisos `Reconciliation.View/Manage`. 422 `Accounting.Reconciliation.MapMissing
 
 ## 10. Presupuesto — `/api/accounting/budgets`
 
-`GET /?year=` · `POST /` `{ year, lines: [{ accountPublicId, branchPublicId?, costCenterPublicId?,
-amounts[12] }] }` · `POST /{year}/copy-from/{previousYear}?adjustPercent=` · `POST /{year}/distribute`
-`{ accountPublicId, total, mode: equal|manual|percent, values? }` · `PUT /{year}` (crea versión con
-`reason` si está aprobado) · `POST /{year}/approve` · ejecución por `/api/reports/accounting/budget-execution`.
-`Budget.View/Manage`. 422 `Accounting.Budget.AccountNotMovement`.
+`GET /?year=&version=` (sin presupuesto → `{ year, version: 0, status: "None", lines: [] }`) ·
+`POST /` `{ year, lines: [{ accountPublicId, branchPublicId?, costCenterPublicId?, amounts[12] }] }`
+→ 201 (versión 1 en `Draft`) · `PUT /{year}` `{ lines, reason? }` (borrador: en su sitio;
+aprobado: exige `reason` y crea la versión siguiente aprobada, la anterior queda `Superseded`) ·
+`POST /{year}/approve` · `POST /{year}/copy-from/{previousYear}?adjustPercent=` (vigente del
+anterior × (1 + %), redondeo a pesos) · `POST /{year}/distribute` `{ accountPublicId,
+branchPublicId?, costCenterPublicId?, total, mode: equal|manual|percent, values?[12], reason? }` ·
+`GET /execution?year=&month=&format=&…filtros` (la misma vista `budget-execution` bajo
+`Budget.View`). Permisos `Budget.View/Manage`. Los montos van en **pesos** (sin decimales) y sólo
+sobre cuentas de movimiento; el alcance de sucursal aplica a las líneas con sucursal. 422
+`Accounting.Budget.AccountNotMovement` (`data.accountCode`), `.FiscalYearNotFound`,
+`.AlreadyExists`, `.NotFound`, `.ReasonRequired`, `.NotDraft`, `.SourceNotFound`,
+`.InvalidDistribution`, `.LineDuplicate`, `.NegativeAmount`, `.AmountTooLarge`, `.BranchOutOfScope`,
+`.AccountNotFound`, `.BranchNotFound`, `.CostCenterNotFound`.
 
 ## 11. Impuestos y certificados — `/api/accounting/taxes`
 

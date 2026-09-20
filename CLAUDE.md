@@ -212,6 +212,44 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   conciliación, impuestos, exógena, activos. Recetas:
   `docs/manual/contabilidad-contrato-de-contabilizacion.md` y
   `docs/operaciones/contabilidad-primer-ejercicio.md`.
+  **E2 consultas e informes + presupuesto (rama `009-e2-consultas-presupuesto`, 2026-09-20; US5
+  completa y US9 adelantada de E4; US6 cierre de ejercicio y US13 apertura importada siguen
+  pendientes)**: todo saldo es una suma sobre `ACC_JournalEntries` con `IsPosted` por **un solo
+  punto de lectura**, `MovimientosContables` (`Application/Accounting/Reports`): alcance de
+  sucursal, todos los filtros combinables (`FiltrosDeInforme`), la **apertura siempre es saldo
+  inicial**, el **cierre del ejercicio consultado queda fuera salvo `includeClosing`** (los de años
+  anteriores siempre cuentan), y la reversa muestra original y espejo. `JerarquiaDelPlan` agrega
+  hacia arriba en memoria (no hay saldos guardados, FR-046); los signos van **por naturaleza de la
+  cuenta** y el encabezado lo dice. Trece vistas en `/api/reports/accounting/{vista}?format=`
+  (`ledger` con `node=` para clase → … → auxiliar → tercero → documento cruce → comprobante →
+  línea; `trial-balance`, `journal`, `general-ledger`, `voucher-list`, `third-party-statement`,
+  `pending-documents`, `daily-average`, `financial-position`, `income-statement`,
+  `equity-changes`, `cash-flow`, `budget-execution`; filtro `niifItem` para llegar del rubro del ESF/ERI al
+  libro; rango de hasta 5 años), todas `TablaExportable` con **columnas
+  ocultas** (`Clave` que empieza con `_`: `_nodo`, `_cuenta`, `_comprobante`, `_tipo`, `_rubro`)
+  que la pantalla y los exportadores omiten; `Accounting.Reports.View` para json y
+  `Accounting.Reports.Export` para archivo (`RequirePermissionWhenExporting`, mismo 404), cada
+  exportación audita `Accounting.Report.Exported`. Los estados financieros salen del rubro NIIF
+  de cada cuenta de movimiento (`SaldosPorRubro`, que mide cada cuenta **por el lado que el rubro
+  espera** —clase del código, invertida si `Sign < 0`—, no por la naturaleza de la cuenta: 3510,
+  1899 o 6220 descuadraban); el ESF inyecta el resultado del ejercicio en
+  `ESF-PT-REJ` y deja las cuentas de orden como memorando; ECP y EFE indirecto se derivan del ESF
+  con mapeos fijos (`RubrosNiif`). Presupuesto (`/api/accounting/budgets`, `ACC_Budgets` por
+  versión: modificar uno aprobado exige motivo y crea otra versión) sobre cuentas de movimiento, en
+  pesos, con alcance de sucursal; la ejecución compara con la vigente y muestra la inicial, y se
+  sirve también bajo `Accounting.Budget.View` (`/api/accounting/budgets/execution`). Pantallas en el módulo
+  (`/contabilidad/libro-auxiliar` con migas de pan, `/informes?vista=`, `/estados-financieros?estado=`,
+  `/terceros?person=` —la vista consolidada del tercero—, `/presupuesto`), enlazadas desde
+  `/reportes`; `TodoEnlaceDelMenuTieneSuPagina` ahora también revisa los `NavigateTo` del Centro
+  de Reportes (hasta esa fecha cinco tarjetas contables llevaban a «Página no encontrada»). Dos
+  defectos que las e2e destaparon fuera del módulo: **`ICurrentUserService.TenantId` es el Id
+  interno** de la cooperativa («3»); la auditoría se escribe y se lee por el **PublicId** de
+  `ICurrentTenantService`, así que `AccountingAuditEmitter` y `PayrollAuditEmitter` usaban la base
+  Mongo equivocada y ninguna exportación ni evento explícito de nómina aparecía en la consola; y
+  `COR_Branches.TenantBranchPublicId` (el vínculo sucursal contable → oficina, del que depende el
+  alcance de sucursal FR-035) no lo escribía ningún comando: `CreateBranch`/`UpdateBranch` ya lo
+  aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`); la pantalla de Agencias
+  todavía no lo ofrece.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -276,11 +314,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | 662 (2026-09-20; E2 sumó 13 vistas de informes contables y 6 de presupuesto) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 170 con `@page` (2026-09-20; E2 sumó libro auxiliar, informes, estados financieros, tercero y presupuesto; medir con `git ls-files`, hay `.fuse_hidden*` fantasma en disco) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.065 el 2026-09-19 (165 Domain, 768 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 153 el 2026-09-19 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.231 el 2026-09-20 (165 Domain, 900 Application, 80 Architecture, 84 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 191 el 2026-09-20 con Docker: 190 pasan, 1 omitida (17 de la API de informes no necesitan Docker; 21 de la colección «Contabilidad e2e») | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop

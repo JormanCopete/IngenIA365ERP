@@ -106,8 +106,59 @@ WHERE v."Code" = 'NM' GROUP BY d."Id", d."Number", d."Date", d."Status", d."Orig
 
 `Contabilidad › Períodos`: cerrar exige que no queden borradores fechados en el mes (la
 respuesta los lista); reabrir pide motivo, queda en la auditoría y deja «desactualizadas»
-las conciliaciones cerradas del mes. El cierre del ejercicio (`CI`) y la apertura (`AP`)
-llegan en E2.
+las conciliaciones cerradas del mes. El cierre del ejercicio (`CI`) y la apertura importada
+(`AP`) **siguen pendientes** (US6 y US13; el cliente ya tiene los métodos, la API no).
+
+## 7b. Consultas e informes (E2, 2026-09-20)
+
+Todo saldo es una suma sobre `ACC_JournalEntries` con `IsPosted` (FR-046): no hay tabla de
+saldos. Reglas que aplican a todas las vistas y a sus archivos:
+
+- **Signo por naturaleza**: un saldo positivo va con la naturaleza de la cuenta (débito en
+  activos, costos y gastos; crédito en pasivos, patrimonio e ingresos). El encabezado de cada
+  informe lo repite.
+- **Reversas**: el original y su espejo se muestran los dos (el espejo con la fecha de la
+  reversa) y se netean; a una fecha intermedia el saldo muestra el original.
+- **Cierre**: el comprobante `CI` del ejercicio consultado queda fuera salvo «incluir cierre»; los
+  cierres de ejercicios anteriores siempre cuentan (si no, el balance del segundo año no cuadra).
+- **Apertura**: las líneas del `AP` son siempre saldo inicial, caiga o no su fecha en el rango.
+- **Alcance de sucursal**: quien tenga sucursales asignadas ve sólo esas, en todas las vistas.
+- **Permisos**: `Accounting.Reports.View` para ver; `Accounting.Reports.Export` para Excel, PDF y
+  Word (Operador y Auditor lo tienen; Sólo lectura no). Cada exportación queda en la auditoría
+  como `Accounting.Report.Exported` con la vista, los filtros y el formato.
+- **Encabezado** (FR-045): empresa, NIT, filtros aplicados, período, quién y cuándo; el archivo
+  trae los mismos totales que la pantalla.
+
+| Pantalla | Ruta | Qué trae |
+|---|---|---|
+| Libro auxiliar | `/contabilidad/libro-auxiliar` | Profundización por migas de pan: clases → grupos → cuentas → subcuentas → auxiliares → terceros → documentos cruce → comprobantes → líneas, con saldo inicial, débitos, créditos y saldo final en cada nivel; cada nivel se exporta; «Abrir comprobante» desde el último nivel. Acepta `?node=` y los filtros por query string. |
+| Informes | `/contabilidad/informes?vista=` | Balance de prueba (`trial-balance`: nivel, con terceros, con cierre), libro diario (`journal`), libro mayor y balances (`general-ledger`), relación de comprobantes (`voucher-list`), documentos cruce pendientes (`pending-documents`), saldo diario promedio (`daily-average`). Un clic en una cuenta abre el libro auxiliar con los mismos filtros. |
+| Estados financieros | `/contabilidad/estados-financieros?estado=` (esf, eri, ecp, efe) | Situación financiera a una fecha con comparativo al mismo día del año anterior (resultado del ejercicio inyectado en el patrimonio; cuentas de orden como memorando), resultado integral del rango con subtotales y comparativo, cambios en el patrimonio, flujo de efectivo indirecto (fila «Diferencia» que debe ser 0). Los rubros salen de `ACC_FinancialStatementItems` por el `NiifItemCode` de cada cuenta de movimiento, medida por el lado que el rubro espera (una pérdida en 3510 resta al patrimonio; un deterioro en 1408 resta al activo); un clic en un rubro del ESF o del ERI abre el libro auxiliar filtrado por ese rubro (`niifItem=`). ECP y EFE también traen comparativo. |
+| Estado de cuenta del tercero | `/contabilidad/terceros?person=` | Vista consolidada de una persona: tarjetas (débitos, créditos, saldo, pendientes), saldos por cuenta (clic → libro auxiliar filtrado por el tercero), documentos cruce con saldo pendiente y movimientos con saldo corrido y enlace al comprobante. |
+
+API: `GET /api/reports/accounting/{vista}?format=json|xlsx|pdf|docx&from=&to=&accountFrom=&accountTo=&accountPublicId=&niifItem=&person=&crossDocument=TIPO|NÚMERO&costCenter=&branch=&voucherType=&origin=&user=&level=&withThirdParties=&includeClosing=` (rango de hasta 5 años, 1 en `daily-average`)
+(`ledger` además `node=`; `budget-execution` además `year=&month=`). Sin permiso responde 404.
+
+El Centro de Reportes (`/reportes`) enlaza a estas pantallas con la vista preseleccionada; las
+cinco tarjetas contables que hasta el 2026-09-20 llevaban a «Página no encontrada» ya no existen.
+
+## 7c. Presupuesto y ejecución (E2, 2026-09-20)
+
+`Contabilidad › Presupuesto` (`/contabilidad/presupuesto`). El ejercicio debe existir en
+Períodos (`Accounting.Budget.FiscalYearNotFound` si no). Se presupuestan **cuentas de
+movimiento** (una de agrupación responde `Accounting.Budget.AccountNotMovement`), opcionalmente
+por sucursal y centro de costo (dentro del alcance de quien digita), doce meses por línea **en pesos** (sin decimales; tope 9.999.999.999.999). Acciones: copiar del año anterior con un
+porcentaje (redondeo a pesos), distribuir un total por cuenta (igual: la diferencia de redondeo
+cae en diciembre; porcentual: los porcentajes suman 100; manual: los doce valores suman el
+total), guardar, aprobar. **Después de aprobado**, cada guardado exige motivo y crea otra
+versión (`ACC_Budgets.Version`, la anterior queda `Superseded`); la pestaña Ejecución compara
+contra la versión vigente y muestra también el presupuesto inicial acumulado. Ejecución:
+presupuestado, ejecutado (movimiento neto por naturaleza), variación y % del mes y acumulado,
+por cuenta y agregado hacia arriba por niveles; un clic abre el libro auxiliar del mes. Permisos
+`Accounting.Budget.View` / `Accounting.Budget.Manage`. API en `/api/accounting/budgets`
+(`GET ?year=&version=`, `POST /`, `PUT /{year}`, `POST /{year}/approve`,
+`POST /{year}/copy-from/{previousYear}?adjustPercent=`, `POST /{year}/distribute`,
+`GET /execution?year=&month=` —la ejecución bajo el permiso del presupuesto—).
 
 ## 8. Qué mirar si algo falla
 
