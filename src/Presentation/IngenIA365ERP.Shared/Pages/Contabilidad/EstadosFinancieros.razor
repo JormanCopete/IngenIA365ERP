@@ -51,7 +51,7 @@
                         TextoSinTabla="Elija la fecha y pulse «Consultar»." TextoSinFilas="Sin movimientos contabilizados para estos filtros." />
         @if (_tabla is not null && _tabla.Filas.Count > 0)
         {
-            <p class="hint">Los subtotales van resaltados. Las cifras salen de los movimientos contabilizados: un borrador no cuenta y una reversa neta su original.</p>
+            <p class="hint">Los subtotales van resaltados. Las cifras salen de los movimientos contabilizados: un borrador no cuenta y una reversa neta su original.@(_estado is "esf" or "eri" ? " Un clic en un rubro abre el libro auxiliar con sus cuentas." : "")</p>
         }
     </IndicadorDeCarga>
 </div>
@@ -127,25 +127,27 @@
 
     /// <summary>
     /// Un rubro es una suma de cuentas y el libro auxiliar se recorre por cuenta: la fila abre el
-    /// auxiliar cuando la API trae con qué (<c>_nodo</c> o <c>_cuenta</c>); los rubros sin ese dato
-    /// sólo se leen. Filtrar el libro por rubro pediría un filtro que el contrato no tiene.
+    /// auxiliar con el filtro <c>niifItem</c> (el rubro y sus descendientes), que resuelve la API.
+    /// Sólo en el ESF y el ERI: las cuentas del plan apuntan a rubros de esos dos estados; los del
+    /// ECP y el EFE se derivan de los del ESF y ninguna cuenta los lleva, así que un libro filtrado
+    /// por «ECP-CAP» saldría vacío. Las filas sin rubro («Sin rubro NIIF», totales) sólo se leen.
     /// </summary>
     private string? Destino(FilaReporteDto fila)
     {
-        if (_tabla is null) return null;
-        if (TablaDeReporte.Oculto(_tabla, fila, "_nodo") is { } nodo) return $"node={Uri.EscapeDataString(nodo)}";
-        if (TablaDeReporte.Oculto(_tabla, fila, "_cuenta") is { } cuenta && Guid.TryParse(cuenta, out var id)) return $"accountPublicId={id}";
-        return null;
+        if (_tabla is null || _estado is not ("esf" or "eri")) return null;
+        var rubro = TablaDeReporte.Oculto(_tabla, fila, "_rubro");
+        return string.IsNullOrWhiteSpace(rubro) ? null : rubro;
     }
 
     private Task AbrirAuxiliarAsync(FilaReporteDto fila)
     {
-        if (Destino(fila) is not { } destino) return Task.CompletedTask;
+        if (Destino(fila) is not { } rubro) return Task.CompletedTask;
         var f = _aplicados.Copia();
-        f.AccountPublicId = null;
-        // El ESF es acumulado desde el inicio: el auxiliar arranca en enero del año de corte.
+        f.NiifItem = rubro;
+        // El ESF es acumulado desde el inicio: el auxiliar arranca en enero del año de corte. El ERI
+        // es del rango, y el rango se conserva.
         if (_estado == "esf") f.From = new DateOnly((f.To ?? DateOnly.FromDateTime(DateTime.Today)).Year, 1, 1);
-        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{FiltrosDeInformeModelo.Unir(f.ToQuery(), destino)}");
+        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{f.ToQuery()}");
         return Task.CompletedTask;
     }
 

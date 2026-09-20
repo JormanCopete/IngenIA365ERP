@@ -284,5 +284,28 @@
         public bool ReceivesInvoice { get; set; }
         public string? CityName { get; set; }
         public string? Status { get; set; }
+
+        /// <summary>
+        /// La persona completa (<c>GET /api/core/people/{id}</c>) como elemento del buscador, para las
+        /// pantallas que llegan con el tercero ya elegido por URL (<c>?person=</c>) y tienen que
+        /// mostrarlo con su nombre y documento sin que nadie lo busque. El nombre visible es la razón
+        /// social si la hay, si no nombres y apellidos; así lo muestra también el resultado de búsqueda.
+        /// </summary>
+        public static PersonSearchItem Desde(PersonaDto persona) => new()
+        {
+            PublicId = persona.PublicId,
+            IdentificationNumber = persona.TaxId,
+            FullName = persona.NombreVisible,
+            IsAssociate = persona.IsAssociate,
+            IsEmployee = persona.IsEmployee,
+            IsSalesperson = persona.IsSalesperson,
+            IsCustomer = persona.IsCustomer,
+            IsSupplier = persona.IsSupplier,
+            IsAdvisor = persona.IsAdvisor,
+            IsThirdParty = persona.IsThirdParty,
+            ReceivesInvoice = persona.ReceivesInvoice,
+            CityName = persona.CityName,
+            Status = persona.Status,
+        };
     }
 }

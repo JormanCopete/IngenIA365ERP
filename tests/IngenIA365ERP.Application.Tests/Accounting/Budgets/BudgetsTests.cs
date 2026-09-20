@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Budgets;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Tests.Accounting.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
@@ -16,7 +17,9 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Budgets;
 /// T137–T139 — US9: el presupuesto sólo admite cuentas de movimiento, no repite filas, nace en
 /// borrador, se aprueba y desde ahí todo cambio exige motivo y crea una versión (la anterior queda
 /// <c>Superseded</c>); la copia de otro año se ajusta y redondea a pesos; la distribución reparte
-/// el total en doce cuotas y deja el resto donde el contrato dice.
+/// el total en doce cuotas y deja el resto donde el contrato dice. Desde el 2026-09-20: todo va en
+/// pesos enteros y bajo un tope (un 400 con sobre, nunca un 500 de la base), y el alcance de
+/// sucursal (FR-035) recorta lo que se ve y lo que se escribe, sin tocar lo que no se ve.
 /// </summary>
 public class BudgetsTests
 {
@@ -36,12 +39,16 @@ public class BudgetsTests
             Ingreso = D.Cuenta("4135051", AccountNature.Credit);
         }
 
-        public CreateBudgetCommandHandler Creador() => new(D.Db, D.Clock, D.User, Emisor);
-        public UpdateBudgetCommandHandler Modificador() => new(D.Db, D.Clock, D.User, Emisor);
-        public ApproveBudgetCommandHandler Aprobador() => new(D.Db, D.Clock, D.User, Emisor);
-        public CopyBudgetCommandHandler Copiador() => new(D.Db, D.Clock, D.User, Emisor);
-        public DistributeBudgetCommandHandler Distribuidor() => new(D.Db, D.Clock, D.User, Emisor);
-        public GetBudgetQueryHandler Consulta() => new(D.Db);
+        public CreateBudgetCommandHandler Creador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public UpdateBudgetCommandHandler Modificador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public ApproveBudgetCommandHandler Aprobador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public CopyBudgetCommandHandler Copiador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public DistributeBudgetCommandHandler Distribuidor() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public GetBudgetQueryHandler Consulta() => new(D.Db, D.Alcance);
+
+        /// <summary>Vuelve a ver todas las sucursales (para comprobar, desde fuera, qué dejó un usuario restringido).</summary>
+        public void SinRestriccion() =>
+            D.Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));
 
         public async Task<FiscalYear> AbrirEjercicioAsync(int year)
         {
@@ -388,5 +395,159 @@ public class BudgetsTests
         r.IsSuccess.Should().BeTrue(r.Error?.Message);
         r.Value.Should().Match<BudgetDto>(b => b.Version == 1 && b.Status == "Draft");
         r.Value.Lines.Should().ContainSingle().Which.Total.Should().Be(1200m);
+    }
+
+    // ------------------------------------------------------------------- pesos, tope y ajuste --
+
+    [Fact]
+    public async Task Un_monto_con_decimales_se_rechaza_al_crear_y_al_modificar_porque_el_presupuesto_va_en_pesos()
+    {
+        var e = new Escenario();
+
+        // 33,333 × 3 suma 100 exacto, pero la columna es numeric(18,2): guardaba 33,33 tres veces y el total quedaba en 99,99.
+        var crear = await e.Creador().Handle(new CreateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, 33.333m), (2, 33.333m), (3, 33.334m))]), CancellationToken.None);
+        crear.Error.Code.Should().Be("Accounting.Budget.InvalidDistribution");
+        crear.Error.Message.Should().Contain("pesos, sin decimales");
+        (await e.D.Db.Budgets.CountAsync()).Should().Be(0);
+
+        await e.Creador().Handle(new CreateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, 100m))]), CancellationToken.None);
+        var modificar = await e.Modificador().Handle(new UpdateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, 100.5m))], null), CancellationToken.None);
+        modificar.Error.Code.Should().Be("Accounting.Budget.InvalidDistribution");
+        (await e.Consulta().Handle(new GetBudgetQuery(2026, null), CancellationToken.None)).Value.Lines.Single().Amounts[0].Should().Be(100m, "el borrador sigue como estaba");
+    }
+
+    [Fact]
+    public void Distribuir_en_manual_o_con_un_total_con_centavos_se_rechaza_y_en_porcentual_los_porcentajes_si_admiten_decimales()
+    {
+        DistribucionDeCuotas.Calcular(100m, "manual", [33.333m, 33.333m, 33.334m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m])
+            .Error.Should().Match<Error>(x => x.Code == "Accounting.Budget.InvalidDistribution" && x.Message.Contains("pesos, sin decimales"));
+        DistribucionDeCuotas.Calcular(100.5m, "equal", null).Error.Code.Should().Be("Accounting.Budget.InvalidDistribution");
+        DistribucionDeCuotas.Calcular(100.5m, "percent", [100m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m]).Error.Code.Should().Be("Accounting.Budget.InvalidDistribution");
+
+        // Los porcentajes con decimales son la manera normal de repartir: la cuota sale en pesos y la diferencia va al último mes con porcentaje.
+        var porcentual = DistribucionDeCuotas.Calcular(100m, "percent", [33.33m, 33.33m, 33.33m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m]);
+        porcentual.IsSuccess.Should().BeTrue(porcentual.Error?.Message);
+        porcentual.Value.Take(3).Should().Equal(33m, 33m, 34m);
+        porcentual.Value.Should().OnlyContain(c => LineasDePresupuesto.EsEnPesos(c));
+    }
+
+    [Fact]
+    public async Task Un_monto_por_encima_del_tope_responde_AmountTooLarge_y_no_una_excepcion()
+    {
+        var e = new Escenario();
+        var enorme = 100_000_000_000_000_000m; // 1e17: cabía en el decimal, no en numeric(18,2), y terminaba en 500.
+
+        var crear = await e.Creador().Handle(new CreateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, enorme))]), CancellationToken.None);
+        crear.Error.Code.Should().Be("Accounting.Budget.AmountTooLarge");
+        crear.Error.Message.Should().Contain("no puede pasar de");
+
+        var distribuir = await e.Distribuidor().Handle(new DistributeBudgetCommand(2026, e.Gasto.PublicId, null, null, enorme, "equal", null, null), CancellationToken.None);
+        distribuir.Error.Code.Should().Be("Accounting.Budget.AmountTooLarge");
+
+        // Doce valores gigantes: antes la suma misma desbordaba el decimal antes de comparar con el total.
+        var doce = Enumerable.Repeat(decimal.MaxValue / 2m, 12).ToArray();
+        DistribucionDeCuotas.Calcular(LineasDePresupuesto.TopeDeMonto, "manual", doce).Error.Code.Should().Be("Accounting.Budget.AmountTooLarge");
+
+        // El tope mismo pasa.
+        var justo = await e.Creador().Handle(new CreateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, LineasDePresupuesto.TopeDeMonto))]), CancellationToken.None);
+        justo.IsSuccess.Should().BeTrue(justo.Error?.Message);
+    }
+
+    [Fact]
+    public async Task Copiar_con_un_ajuste_que_pasa_el_tope_se_rechaza_y_el_validador_acota_el_porcentaje()
+    {
+        var e = new Escenario();
+        await e.AbrirEjercicioAsync(2027);
+        await e.Creador().Handle(new CreateBudgetCommand(2026, [Escenario.Linea(e.Gasto, (1, LineasDePresupuesto.TopeDeMonto))]), CancellationToken.None);
+
+        var r = await e.Copiador().Handle(new CopyBudgetCommand(2027, 2026, 1000m), CancellationToken.None);
+        r.Error.Code.Should().Be("Accounting.Budget.AmountTooLarge");
+
+        var validador = new CopyBudgetCommandValidator();
+        validador.Validate(new CopyBudgetCommand(2027, 2026, 1000m)).IsValid.Should().BeTrue("1.000 % es el máximo, inclusive");
+        validador.Validate(new CopyBudgetCommand(2027, 2026, 1000.01m)).IsValid.Should().BeFalse();
+        validador.Validate(new CopyBudgetCommand(2027, 2026, -100m)).IsValid.Should().BeFalse("−100 % borra el presupuesto");
+        validador.Validate(new CopyBudgetCommand(2027, 2026, 1e27m)).IsValid.Should().BeFalse("con este ajuste Amount × factor desbordaba el decimal y salía un 500");
+
+        var distribuir = new DistributeBudgetCommandValidator();
+        distribuir.Validate(new DistributeBudgetCommand(2026, e.Gasto.PublicId, null, null, 0m, "equal", null, null)).IsValid.Should().BeFalse();
+        distribuir.Validate(new DistributeBudgetCommand(2026, e.Gasto.PublicId, null, null, LineasDePresupuesto.TopeDeMonto + 1m, "equal", null, null)).IsValid.Should().BeFalse();
+        distribuir.Validate(new DistributeBudgetCommand(2026, e.Gasto.PublicId, null, null, LineasDePresupuesto.TopeDeMonto, "equal", null, null)).IsValid.Should().BeTrue();
+    }
+
+    // ------------------------------------------------------------------- alcance de sucursal --
+
+    [Fact]
+    public async Task Con_sucursales_asignadas_la_consulta_oculta_las_lineas_de_otras_sucursales_y_muestra_las_de_la_empresa()
+    {
+        var e = new Escenario();
+        await e.Creador().Handle(new CreateBudgetCommand(2026,
+        [
+            new BudgetLineInput(e.Gasto.PublicId, null, null, Escenario.Meses((1, 100m))),
+            new BudgetLineInput(e.Gasto.PublicId, e.D.Norte.PublicId, null, Escenario.Meses((1, 40m))),
+            new BudgetLineInput(e.Gasto.PublicId, e.D.Principal.PublicId, null, Escenario.Meses((1, 60m))),
+        ]), CancellationToken.None);
+        e.D.RestringirA(e.D.Norte);
+
+        var r = await e.Consulta().Handle(new GetBudgetQuery(2026, null), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        r.Value.Lines.Select(l => l.BranchName).Should().BeEquivalentTo([null, "Norte"], "la de la empresa y la de Norte; la de la Principal no se ve");
+    }
+
+    [Fact]
+    public async Task Escribir_una_linea_de_una_sucursal_fuera_del_alcance_se_rechaza_con_la_sucursal_en_el_mensaje()
+    {
+        var e = new Escenario();
+        e.D.RestringirA(e.D.Norte);
+
+        var crear = await e.Creador().Handle(new CreateBudgetCommand(2026, [new BudgetLineInput(e.Gasto.PublicId, e.D.Principal.PublicId, null, Escenario.Meses((1, 60m)))]), CancellationToken.None);
+        crear.Error.Code.Should().Be("Accounting.Budget.BranchOutOfScope");
+        crear.Error.Message.Should().Contain("Principal");
+        crear.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { branchName = "Principal" });
+        (await e.D.Db.Budgets.CountAsync()).Should().Be(0);
+
+        var distribuir = await e.Distribuidor().Handle(new DistributeBudgetCommand(2026, e.Gasto.PublicId, e.D.Principal.PublicId, null, 1200m, "equal", null, null), CancellationToken.None);
+        distribuir.Error.Code.Should().Be("Accounting.Budget.BranchOutOfScope");
+
+        var propia = await e.Creador().Handle(new CreateBudgetCommand(2026, [new BudgetLineInput(e.Gasto.PublicId, e.D.Norte.PublicId, null, Escenario.Meses((1, 40m)))]), CancellationToken.None);
+        propia.IsSuccess.Should().BeTrue(propia.Error?.Message);
+    }
+
+    [Fact]
+    public async Task Modificar_con_alcance_reemplaza_solo_lo_propio_y_conserva_intactas_las_lineas_que_no_ve()
+    {
+        var e = new Escenario();
+        await e.Creador().Handle(new CreateBudgetCommand(2026,
+        [
+            new BudgetLineInput(e.Gasto.PublicId, e.D.Norte.PublicId, null, Escenario.Meses((1, 40m))),
+            new BudgetLineInput(e.Gasto.PublicId, e.D.Principal.PublicId, null, Escenario.Meses((1, 60m))),
+        ]), CancellationToken.None);
+        e.D.RestringirA(e.D.Norte);
+
+        // El usuario de Norte manda su presupuesto completo (una sola fila): sin el alcance, el PUT retiraba también la de la Principal.
+        var r = await e.Modificador().Handle(new UpdateBudgetCommand(2026, [new BudgetLineInput(e.Gasto.PublicId, e.D.Norte.PublicId, null, Escenario.Meses((1, 45m)))], null), CancellationToken.None);
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        r.Value.Lines.Should().ContainSingle().Which.Amounts[0].Should().Be(45m);
+
+        e.SinRestriccion();
+        var todo = await e.Consulta().Handle(new GetBudgetQuery(2026, null), CancellationToken.None);
+        todo.Value.Lines.Should().HaveCount(2);
+        todo.Value.Lines.Single(l => l.BranchName == "Principal").Amounts[0].Should().Be(60m, "la línea que el usuario de Norte no veía sigue ahí");
+    }
+
+    [Fact]
+    public async Task Copiar_con_alcance_se_niega_si_el_origen_tiene_sucursales_que_no_son_suyas()
+    {
+        var e = new Escenario();
+        await e.AbrirEjercicioAsync(2027);
+        await e.Creador().Handle(new CreateBudgetCommand(2026, [new BudgetLineInput(e.Gasto.PublicId, e.D.Principal.PublicId, null, Escenario.Meses((1, 60m)))]), CancellationToken.None);
+        e.D.RestringirA(e.D.Norte);
+
+        var r = await e.Copiador().Handle(new CopyBudgetCommand(2027, 2026, 0m), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Budget.BranchOutOfScope");
+        r.Error.Message.Should().Contain("2026");
+        (await e.D.Db.Budgets.CountAsync()).Should().Be(1, "no nace el borrador de 2027");
     }
 }

@@ -1,6 +1,10 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Reports;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.API.Reports;
 using IngenIA365ERP.Application.Accounting.Budgets;
+using IngenIA365ERP.Application.Accounting.Reports;
+using IngenIA365ERP.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,9 +12,10 @@ namespace IngenIA365ERP.API.Endpoints.Accounting;
 
 /// <summary>
 /// Presupuesto por año (feature 009 E2 / US9, contracts/api.md §10): consulta, alta, versiones,
-/// aprobación, copia del año anterior y distribución mensual. La ejecución no vive aquí sino en
-/// <c>/api/reports/accounting/budget-execution</c>, porque es un informe con los mismos filtros
-/// que los demás. Los cuerpos no llevan el año: lo trae la ruta, y aquí se arma el comando.
+/// aprobación, copia del año anterior y distribución mensual, y la ejecución (<c>GET /execution</c>)
+/// bajo el permiso del presupuesto —la misma vista que <c>/api/reports/accounting/budget-execution</c>
+/// sirve al centro de informes con <c>Accounting.Reports.View</c>—. Los cuerpos no llevan el año: lo
+/// trae la ruta, y aquí se arma el comando.
 /// </summary>
 public class BudgetsEndpoints : ICarterModule
 {
@@ -71,5 +76,21 @@ public class BudgetsEndpoints : ICarterModule
             .WithName("Accounting_Budgets_Distribute")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Budget.Manage");
+
+        // La ejecución bajo el permiso del presupuesto: el catálogo describe Accounting.Budget.View
+        // como «ver el presupuesto y su ejecución» y la pestaña de la pantalla se abre con él, pero
+        // hasta el 2026-09-20 sólo existía la ruta del centro de informes con Accounting.Reports.View,
+        // y un rol con sólo Budget.View recibía 404 sin saber por qué. Misma consulta, mismos filtros
+        // y misma entrega que /api/reports/accounting/budget-execution, que se conserva para el
+        // centro de informes; exportar sigue exigiendo Accounting.Reports.Export.
+        group.MapGet("/execution", async ([AsParameters] AccountingReportsEndpoints.FiltrosQuery q, int? year, int? month, ISender sender, IDateTimeService clock, CancellationToken ct) =>
+            {
+                var hoy = DateOnly.FromDateTime(clock.UtcNow);
+                var consulta = new BudgetExecutionQuery(year ?? hoy.Year, month ?? hoy.Month, q.ToFiltros());
+                return await EntregaDeInformes.EntregarAsync(await sender.Send(consulta, ct), q.Format, "ejecucion-presupuestal");
+            })
+            .WithName("Accounting_Budgets_Execution")
+            .RequirePermission("Accounting.Budget.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
     }
 }

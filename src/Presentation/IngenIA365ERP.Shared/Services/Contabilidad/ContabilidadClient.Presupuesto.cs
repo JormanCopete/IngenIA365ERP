@@ -1,13 +1,17 @@
 using System.Globalization;
+using IngenIA365ERP.Shared.Services.Nomina;
+using IngenIA365ERP.Shared.Services.Reportes;
 using IngenIA365ERP.Shared.Services.Security;
 
 namespace IngenIA365ERP.Shared.Services.Contabilidad;
 
 /// <summary>
 /// Presupuesto y ejecución presupuestal (feature 009 E2, US9, FR-061..FR-064) sobre
-/// <c>/api/accounting/budgets</c>. La ejecución no está aquí: es la vista
-/// <c>budget-execution</c> de <see cref="InformeAsync"/>, porque es un informe más y se exporta
-/// como los demás.
+/// <c>/api/accounting/budgets</c>. La ejecución de la pantalla de presupuesto va por
+/// <c>/api/accounting/budgets/execution</c>, que exige <c>Accounting.Budget.View</c> como el resto de
+/// la pantalla; la misma vista existe como <c>budget-execution</c> en <see cref="InformeAsync"/> para el
+/// centro de informes, con <c>Accounting.Reports.View</c>. Hasta el 2026-09-20 la pestaña pedía la del
+/// centro de informes y un rol con sólo <c>Budget.View</c> veía «No se pudo consultar la ejecución».
 /// </summary>
 public sealed partial class ContabilidadClient
 {
@@ -35,4 +39,22 @@ public sealed partial class ContabilidadClient
 
     public Task<InvitationApiResult<PresupuestoDto>> DistribuirPresupuestoAsync(int year, DistribucionInput input, CancellationToken ct = default) =>
         EnviarAsync<PresupuestoDto>(HttpMethod.Post, $"{BasePresupuesto}/{year}/distribute", input, ct);
+
+    // ---------------------------------------------------------------------------------- ejecución --
+
+    /// <summary>La tabla de la ejecución presupuestal con <paramref name="query"/> (<c>year</c>, <c>month</c> y los filtros de informe, sin «?»).</summary>
+    public Task<InvitationApiResult<TablaReporteDto>> EjecucionPresupuestalAsync(string query, CancellationToken ct = default) =>
+        EnviarAsync<TablaReporteDto>(HttpMethod.Get, RutaDeEjecucionPresupuestal(query, null), null, ct);
+
+    /// <summary>La misma ejecución como archivo (<paramref name="formato"/> xlsx, pdf o docx); exige además <c>Accounting.Reports.Export</c>.</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> DescargarEjecucionPresupuestalAsync(string query, string formato, CancellationToken ct = default) =>
+        DescargarAsync(RutaDeEjecucionPresupuestal(query, formato), ct);
+
+    /// <summary>La ruta de la ejecución bajo el presupuesto; pública para que la prueba fije que la pantalla no vuelve a la del centro de informes.</summary>
+    public static string RutaDeEjecucionPresupuestal(string query, string? formato)
+    {
+        var q = query.TrimStart('?');
+        if (!string.IsNullOrEmpty(formato)) q = FiltrosDeInformeModelo.Unir(q, $"format={Uri.EscapeDataString(formato)}");
+        return string.IsNullOrEmpty(q) ? $"{BasePresupuesto}/execution" : $"{BasePresupuesto}/execution?{q}";
+    }
 }

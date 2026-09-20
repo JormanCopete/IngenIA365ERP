@@ -21,6 +21,12 @@ public sealed class FiltrosDeInformeModelo
     public Guid? AccountPublicId { get; set; }
     /// <summary>Sólo para mostrar la cuenta elegida; no viaja a la API.</summary>
     public string? AccountTexto { get; set; }
+    /// <summary>
+    /// Código de rubro NIIF («ESF-A-EFE»): las cuentas del rubro y de sus descendientes. No tiene
+    /// control propio en el panel —llega desde los estados financieros, con el clic en una fila—;
+    /// el panel lo muestra y deja quitarlo.
+    /// </summary>
+    public string? NiifItem { get; set; }
     public Guid? Person { get; set; }
     /// <summary>Sólo para mostrar al tercero elegido; no viaja a la API.</summary>
     public string? PersonTexto { get; set; }
@@ -55,6 +61,7 @@ public sealed class FiltrosDeInformeModelo
     public int Cantidad =>
         (Limpio(AccountFrom) is not null || Limpio(AccountTo) is not null ? 1 : 0)
         + (AccountPublicId is not null ? 1 : 0)
+        + (Limpio(NiifItem) is not null ? 1 : 0)
         + (Person is not null ? 1 : 0)
         + (CrossDocument is not null ? 1 : 0)
         + (CostCenter is not null ? 1 : 0)
@@ -75,6 +82,7 @@ public sealed class FiltrosDeInformeModelo
         Agregar(sb, "accountFrom", Limpio(AccountFrom));
         Agregar(sb, "accountTo", Limpio(AccountTo));
         Agregar(sb, "accountPublicId", AccountPublicId?.ToString());
+        Agregar(sb, "niifItem", Limpio(NiifItem)?.ToUpperInvariant());
         Agregar(sb, "person", Person?.ToString());
         Agregar(sb, "crossDocument", CrossDocument);
         Agregar(sb, "costCenter", CostCenter?.ToString());
@@ -112,6 +120,7 @@ public sealed class FiltrosDeInformeModelo
                 case "accountfrom": m.AccountFrom = valor; break;
                 case "accountto": m.AccountTo = valor; break;
                 case "accountpublicid": if (Guid.TryParse(valor, out var c)) m.AccountPublicId = c; break;
+                case "niifitem": m.NiifItem = valor.ToUpperInvariant(); break;
                 case "person": if (Guid.TryParse(valor, out var p)) m.Person = p; break;
                 case "crossdocument":
                     var partes = valor.Split('|', 2, StringSplitOptions.TrimEntries);
@@ -135,7 +144,7 @@ public sealed class FiltrosDeInformeModelo
     public FiltrosDeInformeModelo Copia() => new()
     {
         From = From, To = To, AccountFrom = AccountFrom, AccountTo = AccountTo,
-        AccountPublicId = AccountPublicId, AccountTexto = AccountTexto, Person = Person, PersonTexto = PersonTexto,
+        AccountPublicId = AccountPublicId, AccountTexto = AccountTexto, NiifItem = NiifItem, Person = Person, PersonTexto = PersonTexto,
         CrossDocumentType = CrossDocumentType, CrossDocumentNumber = CrossDocumentNumber,
         CostCenter = CostCenter, Branch = Branch, VoucherType = VoucherType, Origin = Origin, User = User,
         Level = Level, WithThirdParties = WithThirdParties, IncludeClosing = IncludeClosing,

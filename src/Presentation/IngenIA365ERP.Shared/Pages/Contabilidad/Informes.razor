@@ -32,10 +32,11 @@
         </div>
     </div>
 
+    @* Qué filtros propios muestra cada vista lo decide FiltrosPorVista; «incluir cierre» se muestra en
+       todas porque la API lo honra en todas (hasta el 2026-09-20 se escondía en dos y viajaba igual). *@
     <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa"
-                      MostrarNivel="@(_vista is "trial-balance" or "general-ledger")"
-                      MostrarConTerceros="@(_vista == "trial-balance")"
-                      MostrarIncluirCierre="@(_vista is "trial-balance" or "journal" or "general-ledger" or "voucher-list")">
+                      MostrarNivel="@FiltrosPorVista.MuestraNivel(_vista)"
+                      MostrarConTerceros="@FiltrosPorVista.MuestraConTerceros(_vista)">
         <ControlesFijos>
             <label class="campo">Informe
                 <select class="e-input" value="@_vista" @onchange="@(e => CambiarVista(e.Value?.ToString()))">
@@ -97,6 +98,10 @@
         if (string.IsNullOrWhiteSpace(vista) || vista == _vista) return;
         _vista = vista;
         _tabla = null;
+        // Lo que la vista nueva no muestra se apaga en los dos modelos: en el que se edita y en el
+        // aplicado, que es el que arma la query de la consulta y de la exportación.
+        FiltrosPorVista.AjustarAlCambiarVista(_filtros, vista);
+        FiltrosPorVista.AjustarAlCambiarVista(_aplicados, vista);
     }
 
     private async Task AplicarAsync(FiltrosDeInformeModelo f)

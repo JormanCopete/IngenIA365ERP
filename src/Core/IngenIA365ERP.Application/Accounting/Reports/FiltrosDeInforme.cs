@@ -20,6 +20,13 @@ public sealed record FiltrosDeInforme
     public string? AccountTo { get; init; }
     /// <summary>Rama del plan: la cuenta y todo lo que cuelga de ella (prefijo del código).</summary>
     public Guid? AccountPublicId { get; init; }
+    /// <summary>
+    /// Código de rubro NIIF (<c>FinancialStatementItem.Code</c>: «ESF-A-EFE», «ERI-ING»…): las
+    /// cuentas del rubro y de todos sus descendientes por <c>ParentCode</c>. Es el puente entre
+    /// los estados financieros, que se leen por rubro, y el libro auxiliar, que se recorre por
+    /// cuenta: un clic en una fila del ESF o del ERI abre el libro con este filtro.
+    /// </summary>
+    public string? NiifItem { get; init; }
     public Guid? Person { get; init; }
     /// <summary>«TIPO|NÚMERO», o sólo «TIPO» para todos los documentos de ese tipo.</summary>
     public string? CrossDocument { get; init; }
@@ -40,7 +47,13 @@ public sealed record FiltrosDeInforme
 
     public DateOnly Hasta(DateOnly hoy) => To ?? hoy;
     public DateOnly Desde(DateOnly hoy) => From ?? new DateOnly(Hasta(hoy).Year, 1, 1);
-    public bool EsExportacion => !string.IsNullOrWhiteSpace(Format) && !Format.Equals("json", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// El formato con la regla única de <see cref="FormatosDeInforme"/> («json» si no vino; si no,
+    /// sin espacios y en minúsculas). Es lo que se audita: la API decide con la misma regla si
+    /// entrega archivo y si exige el permiso de exportar, así que los tres no pueden divergir.
+    /// </summary>
+    public string FormatoNormalizado => FormatosDeInforme.Normalizar(Format);
+    public bool EsExportacion => FormatosDeInforme.EsExportacion(Format);
 
     /// <summary>Tipo y número del documento cruce, si vinieron.</summary>
     public (string? Tipo, string? Numero) Cruce()
@@ -85,6 +98,7 @@ public static class EncabezadoDeInforme
     {
         var partes = new List<string>();
         if (c.Cuenta is { } cuenta) partes.Add($"rama {cuenta.Code} {cuenta.Name}");
+        if (c.Rubro is { } rubro) partes.Add($"rubro {rubro.Code} {rubro.Name}");
         if (!string.IsNullOrWhiteSpace(f.AccountFrom) || !string.IsNullOrWhiteSpace(f.AccountTo)) partes.Add($"cuentas {f.AccountFrom ?? "…"} a {f.AccountTo ?? "…"}");
         if (c.Tercero is { } t) partes.Add($"tercero {t.Nombre} ({t.TaxId})");
         var (tipo, numero) = f.Cruce();

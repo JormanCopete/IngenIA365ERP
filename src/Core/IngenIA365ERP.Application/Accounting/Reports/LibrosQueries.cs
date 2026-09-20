@@ -252,7 +252,7 @@ public sealed class TrialBalanceQueryHandler(
             LibrosQueries.Totales(porMovimiento, Columnas.Count), notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 
@@ -336,7 +336,7 @@ public sealed class GeneralLedgerQueryHandler(
             LibrosQueries.Totales(porMovimiento, Columnas.Count), notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }
@@ -409,7 +409,7 @@ public sealed class JournalQueryHandler(
 
         var tabla = new TablaExportable("Libro diario", c.PeriodoTexto, Columnas, filas, totales, notas);
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }
@@ -477,7 +477,7 @@ public sealed class VoucherListQueryHandler(
 
         var tabla = new TablaExportable("Relación de comprobantes", c.PeriodoTexto, Columnas, filas, totales, notas);
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }

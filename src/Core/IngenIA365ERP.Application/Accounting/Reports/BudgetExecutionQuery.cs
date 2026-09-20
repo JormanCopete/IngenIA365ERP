@@ -181,14 +181,25 @@ public sealed class BudgetExecutionQueryHandler(IApplicationDbContext db, IUserB
             $"{cultura.TextInfo.ToTitleCase(nombreMes)} de {request.Year} · acumulado enero–{nombreMes}", Columnas, filas, null, notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, new { request.Year, request.Month, filtros = request.Filtros }, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, new { request.Year, request.Month, filtros = request.Filtros }, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 
-    /// <summary>Las líneas vivas de una versión, restringidas a la sucursal y al centro del filtro cuando vienen.</summary>
+    /// <summary>
+    /// Las líneas vivas de una versión, restringidas a la sucursal y al centro del filtro cuando
+    /// vienen y siempre al alcance de quien consulta (FR-035): una línea sin sucursal es de la
+    /// empresa y se ve; una de otra sucursal, no. El ejecutado ya venía recortado por
+    /// <see cref="MovimientosContables.Base"/>; sin este recorte el usuario de Norte veía el
+    /// presupuesto de Sur con ejecución cero, un informe falso además de filtrado.
+    /// </summary>
     private async Task<List<LineaPresupuestada>> LineasAsync(int budgetId, MovimientosContables.Contexto c, CancellationToken ct)
     {
         var q = db.BudgetLines.AsNoTracking().Where(l => l.BudgetId == budgetId && !l.IsDeleted);
+        if (c.Alcance.Restringido)
+        {
+            var permitidas = c.Alcance.Sucursales.ToList();
+            q = q.Where(l => l.BranchId == null || permitidas.Contains(l.BranchId.Value));
+        }
         if (c.SucursalId is { } sucursal) q = q.Where(l => l.BranchId == sucursal);
         if (c.CentroDeCostoId is { } centro) q = q.Where(l => l.CostCenterId == centro);
         return await q.Select(l => new LineaPresupuestada(l.AccountId, l.BranchId, l.CostCenterId, l.Month, l.Amount)).ToListAsync(ct);

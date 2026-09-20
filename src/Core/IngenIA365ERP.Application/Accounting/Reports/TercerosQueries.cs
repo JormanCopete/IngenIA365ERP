@@ -156,7 +156,7 @@ public sealed class ThirdPartyStatementQueryHandler(
         var tabla = new TablaExportable($"Estado de cuenta · {tercero.Nombre} ({tercero.TaxId})", c.PeriodoTexto, Columnas, filas, totales, notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 
@@ -263,7 +263,7 @@ public sealed class PendingDocumentsQueryHandler(
         var tabla = new TablaExportable(titulo, $"Al {c.Hasta:dd/MM/yyyy}", Columnas, filas, totales, notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }
@@ -342,7 +342,7 @@ public sealed class DailyAverageBalanceQueryHandler(
         var tabla = new TablaExportable($"Saldo diario promedio · {TextosDeInforme.Cuenta(cuenta.Code, cuenta.Name)}", c.PeriodoTexto, Columnas, filas, totales, notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Vista, request.Filtros, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }

@@ -28,6 +28,13 @@ public static class MovimientosContables
 {
     public sealed record TerceroResuelto(int Id, Guid PublicId, string Nombre, string TaxId);
 
+    /// <summary>
+    /// El rubro NIIF pedido y los códigos que abarca: el suyo y los de todos sus descendientes por
+    /// <c>ParentCode</c>. Las cuentas apuntan a un rubro por código, así que filtrar por «Activo»
+    /// (ESF-A) es filtrar por todos los códigos que cuelgan de él.
+    /// </summary>
+    public sealed record RubroResuelto(string Code, string Name, IReadOnlyList<string> Codigos);
+
     /// <summary>Los filtros ya resueltos a identificadores internos y nombres para el encabezado.</summary>
     public sealed record Contexto(
         FiltrosDeInforme Filtros,
@@ -38,7 +45,8 @@ public static class MovimientosContables
         TerceroResuelto? Tercero,
         int? CentroDeCostoId, string? CentroDeCosto,
         int? SucursalId, string? Sucursal,
-        int? TipoDeCruceId, string? NumeroDeCruce)
+        int? TipoDeCruceId, string? NumeroDeCruce,
+        RubroResuelto? Rubro = null)
     {
         public string PeriodoTexto => $"{Desde:dd/MM/yyyy} – {Hasta:dd/MM/yyyy}";
     }
@@ -52,6 +60,7 @@ public static class MovimientosContables
     public static readonly Error RangoInvalido = new("Accounting.Report.InvalidRange", "La fecha final no puede ser anterior a la inicial.");
     public static readonly Error TerceroRequerido = new("Accounting.Report.PersonRequired", "Esta consulta necesita un tercero.");
     public static readonly Error CuentaRequerida = new("Accounting.Report.AccountRequired", "Esta consulta necesita una cuenta.");
+    public static readonly Error RubroNoEncontrado = new("Accounting.Report.NiifItemNotFound", "El rubro NIIF indicado no existe para el grupo de la empresa.");
 
     // El rango de fechas se acota aquí, una sola vez, y no en cada validador (hay cuatro y ninguno
     // lo hacía). Sin tope, `from=0001-01-01&to=9999-12-31` era válido: el saldo diario promedio
@@ -131,8 +140,46 @@ public static class MovimientosContables
             cruceId = t;
         }
 
+        RubroResuelto? rubro = null;
+        if (!string.IsNullOrWhiteSpace(f.NiifItem))
+        {
+            var resuelto = await ResolverRubroAsync(db, f.NiifItem, ct);
+            if (resuelto.IsFailure) return Result.Failure<Contexto>(resuelto.Error);
+            rubro = resuelto.Value;
+        }
+
         var scope = await alcance.ObtenerAsync(ct);
-        return Result.Success(new Contexto(f, desde, hasta, scope, cuenta, tercero, centroId, centro, sucursalId, sucursal, cruceId, numeroCruce));
+        return Result.Success(new Contexto(f, desde, hasta, scope, cuenta, tercero, centroId, centro, sucursalId, sucursal, cruceId, numeroCruce, rubro));
+    }
+
+    /// <summary>
+    /// El rubro por código dentro del grupo NIIF de la empresa, con todos sus descendientes. La
+    /// jerarquía se arma en memoria sobre los rubros del grupo (son decenas, no miles), igual que
+    /// hace <see cref="SaldosPorRubro"/>; un rubro de otro grupo o un código inventado no existen.
+    /// </summary>
+    private static async Task<Result<RubroResuelto>> ResolverRubroAsync(IApplicationDbContext db, string codigo, CancellationToken ct)
+    {
+        var grupo = await db.AccountingSetups.AsNoTracking().Where(s => !s.IsDeleted).Select(s => (byte?)s.NiifGroup).FirstOrDefaultAsync(ct);
+        if (grupo is null) return Result.Failure<RubroResuelto>(Posting.AccountingErrors.NotInitialized);
+        var rubros = await db.FinancialStatementItems.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.NiifGroup == grupo.Value)
+            .Select(r => new { r.Code, r.Name, r.ParentCode })
+            .ToListAsync(ct);
+        var buscado = codigo.Trim();
+        var raiz = rubros.FirstOrDefault(r => r.Code.Equals(buscado, StringComparison.OrdinalIgnoreCase));
+        if (raiz is null) return Result.Failure<RubroResuelto>(RubroNoEncontrado);
+
+        var hijosDe = rubros.Where(r => r.ParentCode is not null).ToLookup(r => r.ParentCode!, r => r.Code, StringComparer.Ordinal);
+        var codigos = new List<string> { raiz.Code };
+        var pendientes = new Queue<string>([raiz.Code]);
+        while (pendientes.TryDequeue(out var actual))
+            foreach (var hijo in hijosDe[actual])
+            {
+                if (codigos.Contains(hijo, StringComparer.Ordinal)) continue; // un ciclo en la semilla no debe colgar la consulta
+                codigos.Add(hijo);
+                pendientes.Enqueue(hijo);
+            }
+        return Result.Success(new RubroResuelto(raiz.Code, raiz.Name, codigos));
     }
 
     /// <summary>
@@ -159,6 +206,11 @@ public static class MovimientosContables
             q = q.Where(e => permitidas.Contains(e.BranchId));
         }
         if (c.Cuenta is { } cuenta) q = q.Where(e => e.Account!.Code.StartsWith(cuenta.Code));
+        if (c.Rubro is { } rubro)
+        {
+            var codigos = rubro.Codigos.ToList();
+            q = q.Where(e => codigos.Contains(e.Account!.NiifItemCode));
+        }
         if (!string.IsNullOrWhiteSpace(c.Filtros.AccountFrom))
         {
             var desde = c.Filtros.AccountFrom.Trim();

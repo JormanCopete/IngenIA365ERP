@@ -32,6 +32,8 @@ public class AccountingReportsEndpoints : ICarterModule
         public string? AccountFrom { get; set; }
         public string? AccountTo { get; set; }
         public Guid? AccountPublicId { get; set; }
+        /// <summary>Código de rubro NIIF: las cuentas del rubro y de sus descendientes (el clic en un estado financiero llega con esto).</summary>
+        public string? NiifItem { get; set; }
         public Guid? Person { get; set; }
         public Guid? CostCenter { get; set; }
         public Guid? Branch { get; set; }
@@ -51,6 +53,7 @@ public class AccountingReportsEndpoints : ICarterModule
             AccountFrom = AccountFrom,
             AccountTo = AccountTo,
             AccountPublicId = AccountPublicId,
+            NiifItem = NiifItem,
             Person = Person,
             CrossDocument = CrossDocument,
             CostCenter = CostCenter,

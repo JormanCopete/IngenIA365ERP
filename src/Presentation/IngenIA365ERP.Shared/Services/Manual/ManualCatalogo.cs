@@ -453,66 +453,76 @@ public static class ManualCatalogo
                 P("Asociados → Registro", null, "/asociados/registro", "Abrir Registro de asociados"),
                 P("Buscar la persona", "«Buscar Persona» abre el buscador del registro único. Si no existe, se crea desde ahí mismo."),
                 P("Datos de vinculación", "Fecha de ingreso, agencia, tipo de asociado y la información socioeconómica que pida la cooperativa."),
-                P("Beneficiarios", "Quiénes reciben en caso de fallecimiento, con parentesco y porcentaje; deben sumar cien.", "/asociados/beneficiarios", "Abrir Beneficiarios"),
+                // Sin botón: la pantalla de beneficiarios no existe todavía (tampoco tiene enlace en el menú).
+                P("Beneficiarios", "Quiénes reciben en caso de fallecimiento, con parentesco y porcentaje; deben sumar cien."),
                 P("Guardar", "El asociado queda activo y puede abrir productos (ahorros, créditos, aportes)."),
             ],
             ["asociado", "afiliar", "vincular", "ingreso", "beneficiarios", "socio"], ["Cooperativa activa.", "La persona en el registro único."],
             ["personas", "aportes", "retiro-de-asociado"], [], TipoDeTema.Proceso));
 
-        t.Add(Maestro("/asociados/beneficiarios", "Beneficiarios", Modulos.Asociados, "un beneficiario", "Se registran por asociado; los porcentajes deben sumar cien.", "beneficiarios", "herederos", "parentesco"));
+        // Beneficiarios: la ruta /asociados/beneficiarios no tiene página (el menú tampoco la enlaza, ver
+        // TodoEnlaceDelMenuTieneSuPagina). El tema se destapa cuando exista la pantalla:
+        // t.Add(Maestro("/asociados/beneficiarios", "Beneficiarios", Modulos.Asociados, "un beneficiario", "Se registran por asociado; los porcentajes deben sumar cien.", "beneficiarios", "herederos", "parentesco"));
 
         // ---------------------------------------------------------- Contabilidad --
-        t.Add(Proceso("plan-de-cuentas", "Plan de cuentas", Modulos.Contabilidad, "/contabilidad/plan-cuentas",
+        // Feature 009: las rutas del capítulo son las de la contabilidad NIIF (E1/E2). Hasta el 2026-09-20 el manual
+        // seguía anunciando las pantallas heredadas (/contabilidad/plan-cuentas, /movimientos, /saldos, /conciliacion,
+        // /cierre-periodo, /tipos-comprobante, grupos, subgrupos, impuestos, DIAN…), retiradas con la migración
+        // ContabilidadNiif: cada botón «Abrir …» llevaba a «Página no encontrada». Lo vigila ManualCatalogoTests.
+        t.Add(Proceso("plan-de-cuentas", "Plan de cuentas", Modulos.Contabilidad, "/contabilidad/plan-de-cuentas",
             "El catálogo contable (PUC) de la cooperativa: clases, grupos, cuentas y subcuentas con su naturaleza y nivel.",
             [
-                P("Contabilidad → Plan de Cuentas", "Se ve como árbol o lista. «Buscar» por código o nombre.", "/contabilidad/plan-cuentas", "Abrir Plan de Cuentas"),
+                P("Contabilidad → Plan de Cuentas", "Se ve como árbol o lista. «Buscar» por código o nombre.", "/contabilidad/plan-de-cuentas", "Abrir Plan de Cuentas"),
                 P("Crear una cuenta", "«Nuevo»: código (el nivel lo da la longitud), nombre, naturaleza (débito o crédito) y si admite movimientos. Sólo las de último nivel reciben movimientos."),
                 P("Editar", "El nombre y las marcas se pueden cambiar; el código de una cuenta con movimientos no."),
                 P("Cuentas de los módulos", "Cartera, inventario y nómina necesitan saber contra qué cuentas contabilizan: eso se define en las pantallas «Cuentas …» de cada módulo, no aquí."),
             ],
             ["plan de cuentas", "puc", "cuenta contable", "codigo", "naturaleza", "catalogo contable"], ["Cooperativa activa.", "Permiso de contabilidad."],
-            ["comprobante-contable", "grupos-cuenta"], [], TipoDeTema.Proceso));
+            ["comprobante-contable", "contabilidad-libro-auxiliar"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("comprobante-contable", "Comprobante contable", Modulos.Contabilidad, "/contabilidad/comprobantes/lista",
+        t.Add(Proceso("comprobante-contable", "Comprobante contable", Modulos.Contabilidad, "/contabilidad/comprobantes",
             "Registrar un asiento manual: fecha, tipo de comprobante, terceros y las líneas débito/crédito, que deben cuadrar.",
             [
-                P("Contabilidad → Comprobantes Contables", "La lista muestra los del período. Filtrá por fecha, tipo o número.", "/contabilidad/comprobantes/lista", "Abrir Comprobantes"),
-                P("Nuevo Comprobante", "Tipo (el numerador es por tipo), fecha dentro de un período abierto, y descripción.", "/contabilidad/comprobantes", "Abrir Nuevo Comprobante"),
+                P("Contabilidad → Comprobantes Contables", "La lista muestra los del período. Filtrá por fecha, tipo o número.", "/contabilidad/comprobantes", "Abrir Comprobantes"),
+                P("Nuevo Comprobante", "Tipo (el numerador es por tipo), fecha dentro de un período abierto, y descripción.", "/contabilidad/comprobantes/nuevo", "Abrir Nuevo Comprobante"),
                 P("Agregar líneas", "«Agregar Línea»: cuenta de último nivel, tercero si la cuenta lo exige, centro de costo si aplica, y el valor en débito o en crédito."),
                 P("Cuadrar", "Débitos y créditos deben ser iguales al centavo. El pie del comprobante muestra la diferencia hasta que sea cero."),
                 P("Guardar", "Queda en borrador o contabilizado según la política de la cooperativa. Contabilizado no se edita: se anula con un comprobante de reversión."),
             ],
             ["comprobante", "asiento", "contabilizar", "debito", "credito", "cuadrar", "nota contable"], ["Cooperativa activa.", "Un período contable abierto."],
-            ["plan-de-cuentas", "movimientos-contables", "cierre-de-periodo"], ["/contabilidad/comprobantes"], TipoDeTema.Proceso));
+            ["plan-de-cuentas", "contabilidad-libro-auxiliar", "cierre-de-periodo"], ["/contabilidad/comprobantes/nuevo", "/contabilidad/comprobantes/{Id}", "/contabilidad/borradores"], TipoDeTema.Proceso));
 
-        t.Add(Consulta("/contabilidad/movimientos", "Movimientos contables", Modulos.Contabilidad,
-            "Todas las líneas contabilizadas, por cuenta, tercero, fecha o comprobante. Es la vista de detalle detrás de cualquier saldo.",
-            "Cuenta, rango de fechas, tercero y tipo de comprobante.", "movimientos", "auxiliar", "detalle contable"));
-        t.Add(Consulta("/contabilidad/saldos", "Saldos por cuenta", Modulos.Contabilidad,
-            "Saldo inicial, débitos, créditos y saldo final de cada cuenta a una fecha.",
-            "Fecha de corte y, si se quiere, un rango de cuentas.", "saldos", "balance", "cuenta"));
+        // «Movimientos contables» y «Saldos por cuenta» eran consultas heredadas; hoy son el libro auxiliar
+        // (/contabilidad/libro-auxiliar) y los informes (/contabilidad/informes), que tienen su tema más abajo.
+        // t.Add(Consulta("/contabilidad/movimientos", "Movimientos contables", Modulos.Contabilidad,
+        //     "Todas las líneas contabilizadas, por cuenta, tercero, fecha o comprobante. Es la vista de detalle detrás de cualquier saldo.",
+        //     "Cuenta, rango de fechas, tercero y tipo de comprobante.", "movimientos", "auxiliar", "detalle contable"));
+        // t.Add(Consulta("/contabilidad/saldos", "Saldos por cuenta", Modulos.Contabilidad,
+        //     "Saldo inicial, débitos, créditos y saldo final de cada cuenta a una fecha.",
+        //     "Fecha de corte y, si se quiere, un rango de cuentas.", "saldos", "balance", "cuenta"));
 
-        t.Add(Proceso("conciliacion-bancaria", "Conciliación bancaria", Modulos.Contabilidad, "/contabilidad/conciliacion",
-            "Cruzar el extracto del banco con los movimientos de la cuenta contable del banco y dejar explicadas las diferencias.",
-            [
-                P("Contabilidad → Conciliación Bancaria", "Elegí la cuenta bancaria y el mes.", "/contabilidad/conciliacion", "Abrir Conciliación"),
-                P("Cargar el extracto", "Importá el archivo del banco o registrá sus movimientos. El sistema propone coincidencias por valor y fecha."),
-                P("Marcar conciliados", "Cada movimiento tiene una casilla. Lo que coincide se marca; lo que no, queda como partida pendiente con su explicación (cheque no cobrado, consignación no identificada)."),
-                P("Cerrar la conciliación", "Cuando el saldo del extracto y el contable, ajustados por las partidas pendientes, coinciden. Queda el informe para la revisoría."),
-            ],
-            ["conciliacion", "banco", "extracto", "partidas pendientes", "cheques no cobrados"], ["Cooperativa activa.", "La cuenta bancaria creada en Maestros → Bancos."],
-            ["comprobante-contable", "cheques"], [], TipoDeTema.Proceso));
+        // Conciliación bancaria: llega con E4 (feature 009). Sin pantalla no se ofrece el tema; destapar al crearla:
+        // t.Add(Proceso("conciliacion-bancaria", "Conciliación bancaria", Modulos.Contabilidad, "/contabilidad/conciliacion",
+        //     "Cruzar el extracto del banco con los movimientos de la cuenta contable del banco y dejar explicadas las diferencias.",
+        //     [
+        //         P("Contabilidad → Conciliación Bancaria", "Elegí la cuenta bancaria y el mes.", "/contabilidad/conciliacion", "Abrir Conciliación"),
+        //         P("Cargar el extracto", "Importá el archivo del banco o registrá sus movimientos. El sistema propone coincidencias por valor y fecha."),
+        //         P("Marcar conciliados", "Cada movimiento tiene una casilla. Lo que coincide se marca; lo que no, queda como partida pendiente con su explicación (cheque no cobrado, consignación no identificada)."),
+        //         P("Cerrar la conciliación", "Cuando el saldo del extracto y el contable, ajustados por las partidas pendientes, coinciden. Queda el informe para la revisoría."),
+        //     ],
+        //     ["conciliacion", "banco", "extracto", "partidas pendientes", "cheques no cobrados"], ["Cooperativa activa.", "La cuenta bancaria creada en Maestros → Bancos."],
+        //     ["comprobante-contable", "cheques"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("cierre-de-periodo", "Cierre de período", Modulos.Contabilidad, "/contabilidad/cierre-periodo",
+        t.Add(Proceso("cierre-de-periodo", "Cierre de período", Modulos.Contabilidad, "/contabilidad/periodos",
             "Cerrar un mes (o el año) para que nadie contabilice en él, con las verificaciones previas. El cierre anual además traslada resultados.",
             [
                 P("Antes", "Todos los módulos deben haber contabilizado el mes: causación de intereses, liquidación de nómina, movimientos de inventario. Revisá el balance de prueba: debe cuadrar.", "/contabilidad/informes?vista=trial-balance", "Abrir Balance de Prueba"),
-                P("Contabilidad → Cierre Periodo", "Elegí el período. La pantalla lista comprobantes en borrador y otras alertas; no cierra con pendientes.", "/contabilidad/cierre-periodo", "Abrir Cierre de Período"),
+                P("Contabilidad → Períodos", "Cada mes tiene su botón «Cerrar». La pantalla cuenta los comprobantes en borrador fechados en el mes; no cierra con pendientes.", "/contabilidad/periodos", "Abrir Períodos contables"),
                 P("Cerrar", "El período pasa a cerrado. Un comprobante con fecha en un período cerrado es rechazado. Reabrir requiere permiso y queda en auditoría."),
                 P("Cierre anual", "Además genera el comprobante de cierre de ingresos y gastos contra la cuenta de resultados. Hacelo una vez conciliados los doce meses."),
             ],
             ["cierre", "periodo", "mes", "año", "reabrir", "cierre anual", "resultados"], ["Cooperativa activa.", "Permiso de cierre."],
-            ["periodos-contables", "comprobante-contable", "contabilidad-informes"], [], TipoDeTema.Proceso));
+            ["contabilidad-periodos", "comprobante-contable", "contabilidad-informes"], [], TipoDeTema.Proceso));
 
         // Feature 009 E2 (US9): la ruta es /contabilidad/presupuesto (singular, la de T140); hasta el
         // 2026-09-20 el manual anunciaba /contabilidad/presupuestos, que nunca existió.
@@ -525,7 +535,9 @@ public static class ManualCatalogo
                 P("Seguir la ejecución", "Pestaña «Ejecución»: mes, nivel y filtros. Presupuestado, ejecutado, variación y porcentaje del mes y acumulado por cuenta, comparado con la versión vigente y con la inicial. Un clic en la cuenta abre su libro auxiliar del mes.", "/contabilidad/presupuesto?pestana=ejecucion", "Abrir Ejecución"),
             ],
             ["presupuesto", "ejecucion", "variacion", "anual", "version", "aprobar", "distribuir", "copiar"], ["Cooperativa activa.", "Contabilidad iniciada y el ejercicio abierto en Períodos.", "Permiso Budget.View (consultar) o Budget.Manage (guardar, aprobar)."],
-            ["plan-de-cuentas", "periodos-contables", "libro-auxiliar"], ["/contabilidad/presupuesto"], TipoDeTema.Proceso));
+            // El slug del auxiliar es el de su ruta («contabilidad-libro-auxiliar»); «libro-auxiliar» a secas
+            // no existía y Tema.razor descartaba el enlace en silencio hasta el 2026-09-20.
+            ["plan-de-cuentas", "contabilidad-periodos", "contabilidad-libro-auxiliar"], ["/contabilidad/presupuesto"], TipoDeTema.Proceso));
 
         // Feature 009 E2 (US5): las consultas e informes contables, en su módulo. El Centro de Reportes sólo enlaza.
         t.Add(Consulta("/contabilidad/libro-auxiliar", "Libro auxiliar", Modulos.Contabilidad,
@@ -545,22 +557,28 @@ public static class ManualCatalogo
             "El tercero (por documento o nombre), el rango de fechas e «incluir cierre».",
             "tercero", "estado de cuenta", "extracto", "saldo por tercero", "documentos cruce", "pendientes", "cartera del tercero"));
 
-        t.Add(Maestro("/contabilidad/tipos-comprobante", "Tipos de comprobante", Modulos.Contabilidad, "un tipo de comprobante", "Cada tipo lleva su propio numerador.", "tipo", "numerador", "consecutivo"));
+        t.Add(Maestro("/contabilidad/tipos-de-comprobante", "Tipos de comprobante", Modulos.Contabilidad, "un tipo de comprobante", "Cada tipo lleva su propio numerador.", "tipo", "numerador", "consecutivo"));
         t.Add(Maestro("/contabilidad/periodos", "Períodos contables", Modulos.Contabilidad, "un período", "Se crean por año y se abren o cierran por mes; ver «Cierre de período».", "periodos", "meses", "abierto", "cerrado"));
-        t.Add(Maestro("/contabilidad/grupos-cuenta", "Grupos de cuenta", Modulos.Contabilidad, "un grupo de cuenta", null, "grupos", "agrupacion", "estados financieros"));
-        t.Add(Maestro("/contabilidad/subgrupos-cuenta", "Subgrupos de cuenta", Modulos.Contabilidad, "un subgrupo", null, "subgrupos"));
-        t.Add(Maestro("/contabilidad/categorias-riesgo", "Categorías de riesgo", Modulos.Contabilidad, "una categoría de riesgo", "Las usa la calificación de cartera para provisionar.", "riesgo", "calificacion", "provision", "a b c d e"));
-        t.Add(Maestro("/contabilidad/impuestos/iva", "Líneas de IVA", Modulos.Contabilidad, "una línea de IVA", "Tarifa, cuenta y base mínima.", "iva", "impuesto", "tarifa"));
-        t.Add(Maestro("/contabilidad/impuestos/ica", "Líneas de ICA", Modulos.Contabilidad, "una línea de ICA", null, "ica", "industria y comercio", "tarifa por mil"));
-        t.Add(Maestro("/contabilidad/impuestos/gmf", "Líneas de GMF", Modulos.Contabilidad, "una línea de GMF", null, "gmf", "cuatro por mil"));
-        t.Add(Maestro("/contabilidad/impuestos/renta", "Líneas de renta", Modulos.Contabilidad, "una línea de renta", null, "renta", "retencion"));
-        t.Add(Maestro("/contabilidad/impuestos/retefuente", "Líneas de retefuente", Modulos.Contabilidad, "una línea de retención en la fuente", "Concepto, tarifa, base y cuenta; alimentan los certificados.", "retefuente", "retencion en la fuente", "certificado"));
-        t.Add(Maestro("/contabilidad/formatos-dian", "Formatos DIAN", Modulos.Contabilidad, "un formato", "Medios magnéticos: qué conceptos y cuentas alimentan cada formato.", "dian", "medios magneticos", "exogena"));
-        t.Add(Maestro("/contabilidad/codigos-impuestos", "Códigos de impuestos", Modulos.Contabilidad, "un código de impuesto", null, "impuestos", "codigos"));
+        // Grupos, subgrupos y categorías de riesgo eran maestros heredados retirados con la 009 (los rubros NIIF
+        // van en el plan de cuentas); las líneas de impuestos, los formatos DIAN y los códigos de impuestos llegan
+        // con E4. Sin pantalla no se ofrecen; se destapan al crear cada una:
+        // t.Add(Maestro("/contabilidad/grupos-cuenta", "Grupos de cuenta", Modulos.Contabilidad, "un grupo de cuenta", null, "grupos", "agrupacion", "estados financieros"));
+        // t.Add(Maestro("/contabilidad/subgrupos-cuenta", "Subgrupos de cuenta", Modulos.Contabilidad, "un subgrupo", null, "subgrupos"));
+        // t.Add(Maestro("/contabilidad/categorias-riesgo", "Categorías de riesgo", Modulos.Contabilidad, "una categoría de riesgo", "Las usa la calificación de cartera para provisionar.", "riesgo", "calificacion", "provision", "a b c d e"));
+        // t.Add(Maestro("/contabilidad/impuestos/iva", "Líneas de IVA", Modulos.Contabilidad, "una línea de IVA", "Tarifa, cuenta y base mínima.", "iva", "impuesto", "tarifa"));
+        // t.Add(Maestro("/contabilidad/impuestos/ica", "Líneas de ICA", Modulos.Contabilidad, "una línea de ICA", null, "ica", "industria y comercio", "tarifa por mil"));
+        // t.Add(Maestro("/contabilidad/impuestos/gmf", "Líneas de GMF", Modulos.Contabilidad, "una línea de GMF", null, "gmf", "cuatro por mil"));
+        // t.Add(Maestro("/contabilidad/impuestos/renta", "Líneas de renta", Modulos.Contabilidad, "una línea de renta", null, "renta", "retencion"));
+        // t.Add(Maestro("/contabilidad/impuestos/retefuente", "Líneas de retefuente", Modulos.Contabilidad, "una línea de retención en la fuente", "Concepto, tarifa, base y cuenta; alimentan los certificados.", "retefuente", "retencion en la fuente", "certificado"));
+        // t.Add(Maestro("/contabilidad/formatos-dian", "Formatos DIAN", Modulos.Contabilidad, "un formato", "Medios magnéticos: qué conceptos y cuentas alimentan cada formato.", "dian", "medios magneticos", "exogena"));
+        // t.Add(Maestro("/contabilidad/codigos-impuestos", "Códigos de impuestos", Modulos.Contabilidad, "un código de impuesto", null, "impuestos", "codigos"));
 
         // El balance de prueba es una vista de «Informes contables» (/contabilidad/informes?vista=trial-balance).
-        t.Add(Reporte("/contabilidad/certificados-retencion", "Certificados de retención", Modulos.Contabilidad,
-            "Certificados de retención en la fuente, ICA e IVA por tercero y año.", "Tercero (o todos), año gravable y tipo de retención.", "certificado", "retencion", "tercero", "año gravable"));
+        // Certificados de retención: la pantalla llega con E4 (feature 009, impuestos y exógena). Hasta entonces el
+        // tema no se ofrece —igual que se retiró su tarjeta del Centro de Reportes—, porque «Abrir Certificados de
+        // retención» llevaba a «Página no encontrada». Al crear /contabilidad/certificados-retencion, destapar:
+        // t.Add(Reporte("/contabilidad/certificados-retencion", "Certificados de retención", Modulos.Contabilidad,
+        //     "Certificados de retención en la fuente, ICA e IVA por tercero y año.", "Tercero (o todos), año gravable y tipo de retención.", "certificado", "retencion", "tercero", "año gravable"));
 
         // ---------------------------------------------------- Cartera Financiera --
         t.Add(Proceso("solicitud-de-credito", "Solicitud de crédito", Modulos.Cartera, "/cartera/solicitudes",
@@ -574,7 +592,7 @@ public static class ManualCatalogo
             ],
             ["solicitud", "credito", "prestamo", "scoring", "aprobar", "rechazar", "plan de pagos", "codeudor", "garantia"],
             ["Cooperativa activa.", "El asociado registrado y activo.", "Líneas de crédito y tasas configuradas."],
-            ["cartera-de-creditos", "lineas-de-credito", "scoring"], ["/cartera/solicitudes/nueva"], TipoDeTema.Proceso));
+            ["cartera-de-creditos", "cartera-lineas-credito", "cartera-scoring"], ["/cartera/solicitudes/nueva"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-de-creditos", "Cartera de créditos", Modulos.Cartera, "/cartera/creditos",
             "Los créditos vigentes y su estado: saldo, cuotas, mora, calificación. Desde aquí se desembolsa, se consulta el plan de pagos y se ve el detalle de cada crédito.",
@@ -618,7 +636,7 @@ public static class ManualCatalogo
                 P("Detalle y extracto", "Desde la fila: movimientos, saldos y el extracto para el asociado.", "/cartera/extractos", "Abrir Extractos"),
             ],
             ["ahorro", "cuenta de ahorro", "consignar", "depositar", "retirar", "intereses", "a la vista", "programado"], ["Cooperativa activa.", "Parámetros de ahorro configurados."],
-            ["parametros-de-ahorro", "liquidacion-intereses-ahorros"], ["/cartera/ahorros/{AccountId}", "/cartera/depositos", "/cartera/retiros"], TipoDeTema.Proceso));
+            ["cartera-parametros-ahorro", "liquidacion-intereses-ahorros"], ["/cartera/ahorros/{AccountId}", "/cartera/depositos", "/cartera/retiros"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cdt", "CDT: certificados de depósito a término", Modulos.Cartera, "/cartera/cdt",
             "Constituir un CDT, seguirlo hasta el vencimiento, renovarlo o cancelarlo, y liquidar sus intereses.",
@@ -630,7 +648,7 @@ public static class ManualCatalogo
                 P("Liquidar intereses", "Proceso periódico para los CDT con pago de intereses periódico.", "/cartera/cdt/liquidacion", "Abrir Liquidación de Intereses CDT"),
             ],
             ["cdt", "certificado", "deposito a termino", "renovar", "cancelar", "plazo", "tasa"], ["Cooperativa activa.", "Parámetros y tasas de CDT configurados."],
-            ["parametros-cdt", "tasas-por-plazo-cdt"], ["/cartera/cdt/nuevo", "/cartera/cdt/{CertificateId}"], TipoDeTema.Proceso));
+            ["cdt-parametros", "cdt-tasas-plazo"], ["/cartera/cdt/nuevo", "/cartera/cdt/{CertificateId}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("aportes", "Aportes sociales", Modulos.Cartera, "/cartera/aportes",
             "Registrar los aportes de los asociados, obligatorios o extraordinarios, y consultar su acumulado.",
@@ -650,7 +668,7 @@ public static class ManualCatalogo
                 P("Confirmar Retiro", "Genera los comprobantes y deja al asociado inactivo. El estado del trámite se sigue en Estados de Retiro."),
             ],
             ["retiro", "desvincular", "asociado", "devolucion", "cruce", "paz y salvo"], ["Cooperativa activa.", "Permiso de retiro."],
-            ["aportes", "registro-de-asociados", "estados-de-retiro"], [], TipoDeTema.Proceso));
+            ["aportes", "registro-de-asociados", "cartera-estados-retiro"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("causacion-de-intereses", "Causación de intereses", Modulos.Cartera, "/cartera/causacion",
             "Proceso de cierre de mes que reconoce contablemente los intereses devengados y no cobrados de toda la cartera.",
@@ -660,7 +678,7 @@ public static class ManualCatalogo
                 P("Contabilizar", "Genera el comprobante. Se corre una vez por período; correrlo de nuevo no duplica: reemplaza."),
             ],
             ["causacion", "intereses", "devengado", "cierre de mes", "contabilizar cartera"], ["Cooperativa activa.", "Cuentas de cartera configuradas."],
-            ["cierre-de-periodo", "calificacion-de-cartera", "cuentas-de-cartera"], [], TipoDeTema.Proceso));
+            ["cierre-de-periodo", "calificacion-de-cartera", "cartera-cuentas-cartera"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("calificacion-de-cartera", "Calificación de cartera y provisión", Modulos.Cartera, "/cartera/calificacion",
             "Asignar a cada crédito su categoría de riesgo según días de mora y otros criterios, y calcular la provisión.",
@@ -670,7 +688,7 @@ public static class ManualCatalogo
                 P("Contabilizar la provisión", "Genera el comprobante de provisión o su reversión. Es insumo del cierre y de los reportes a la Supersolidaria."),
             ],
             ["calificacion", "provision", "categoria de riesgo", "supersolidaria", "mora"], ["Cooperativa activa.", "Categorías y parámetros de provisión configurados."],
-            ["mora-y-cobro", "causacion-de-intereses", "parametros-de-provision"], [], TipoDeTema.Proceso));
+            ["mora-y-cobro", "causacion-de-intereses", "cartera-parametros-provision"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("descuento-de-nomina", "Descuento por nómina", Modulos.Cartera, "/cartera/descuento-nomina",
             "Generar el archivo de descuentos para las empresas pagadoras y aplicar lo que devuelven pagado.",
@@ -680,7 +698,7 @@ public static class ManualCatalogo
                 P("Aplicar el pago", "Cuando la empresa gira, cargá el archivo de respuesta o marcá lo pagado: se aplican los recaudos uno a uno y quedan las novedades (no descontado, descontado parcial)."),
             ],
             ["descuento de nomina", "libranza", "empresa", "convenio", "archivo", "pagaduria"], ["Cooperativa activa.", "Empresas y convenios en Maestros."],
-            ["recaudos-y-pagos", "convenios"], [], TipoDeTema.Proceso));
+            ["recaudos-y-pagos", "maestros-convenios"], [], TipoDeTema.Proceso));
 
         t.Add(Consulta("/cartera/extractos", "Extractos", Modulos.Cartera,
             "Estados de cuenta de ahorros y créditos por asociado y período, para entregar o enviar.",
@@ -732,7 +750,7 @@ public static class ManualCatalogo
                 P("Existencias", "Se ven por bodega en el detalle y en el Kardex; no se editan a mano: se ajustan con un movimiento de inventario.", "/inventario/kardex", "Abrir Kardex"),
             ],
             ["productos", "articulos", "catalogo", "precio", "existencias", "codigo de barras"], ["Cooperativa activa.", "Grupos de producto creados."],
-            ["movimiento-de-inventario", "facturacion", "grupos-de-producto"], [], TipoDeTema.Proceso));
+            ["movimiento-de-inventario", "facturacion", "inventario-grupos"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("movimiento-de-inventario", "Movimiento de inventario", Modulos.Inventario, "/inventario/movimientos",
             "Entradas, salidas, traslados entre bodegas y ajustes. Cada movimiento actualiza existencias y contabiliza según su tipo.",
@@ -743,7 +761,7 @@ public static class ManualCatalogo
                 P("Guardar", "Actualiza el Kardex y genera el comprobante. Un movimiento guardado se reversa con otro de signo contrario."),
             ],
             ["movimiento", "entrada", "salida", "traslado", "ajuste", "bodega", "kardex", "existencias"], ["Cooperativa activa.", "Tipos de movimiento y bodegas creados."],
-            ["productos", "kardex", "tipos-de-movimiento"], ["/inventario/movimientos/nuevo"], TipoDeTema.Proceso));
+            ["productos", "inventario-kardex", "inventario-tipos-movimiento"], ["/inventario/movimientos/nuevo"], TipoDeTema.Proceso));
 
         t.Add(Proceso("facturacion", "Facturación", Modulos.Inventario, "/inventario/facturacion",
             "Vender: factura con productos, impuestos, forma de pago y vendedor. Descarga inventario y contabiliza.",
@@ -755,7 +773,7 @@ public static class ManualCatalogo
                 P("Turnos y comisiones", "Si la cooperativa usa turnos de caja, la factura queda en el turno abierto; las comisiones se liquidan con los parámetros de comisiones.", "/inventario/turnos", "Abrir Turnos"),
             ],
             ["factura", "venta", "cobrar", "punto de venta", "vendedor", "iva", "descuento"], ["Cooperativa activa.", "Productos con precio e impuestos.", "Punto de venta y, si aplica, turno abierto."],
-            ["productos", "movimiento-de-inventario", "puntos-de-venta"], [], TipoDeTema.Proceso));
+            ["productos", "movimiento-de-inventario", "inventario-puntos-venta"], [], TipoDeTema.Proceso));
 
         t.Add(Consulta("/inventario/kardex", "Kardex", Modulos.Inventario,
             "Entradas, salidas y saldo de un producto en una bodega, con costo promedio, movimiento a movimiento.",
@@ -802,7 +820,7 @@ public static class ManualCatalogo
             ],
             ["novedades", "horas extra", "recargo", "incapacidad", "vacaciones", "licencia", "descuento", "prestamo", "libranza", "cambio de salario", "traslado", "corregir", "anular", "retroactivo", "importar", "csv", "plantilla", "recurrente", "cuotas"],
             ["Cooperativa activa.", "Un período de pago abierto del plan del empleado.", "Permiso Payroll.Novelties.Create para registrar; Update para corregir; Cancel para anular; Import para importar archivos."],
-            ["liquidacion-de-nomina", "conceptos-de-nomina", "periodos-de-pago", "empleados"], [], TipoDeTema.Proceso));
+            ["liquidacion-de-nomina", "conceptos-de-nomina", "nomina-periodos-pago", "empleados"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("liquidacion-de-nomina", "Liquidación de nómina", Modulos.Nomina, "/nomina/liquidacion",
             "Calcular el período en borrador para todos los empleados del plan —salario por los días vinculados, auxilio de transporte, novedades, deducciones de ley, aportes del empleador y provisiones—, revisarlo empleado por empleado con la explicación de cada valor, recalcular las veces que haga falta y aprobar: el período se cierra y el comprobante contable NM se genera en la misma operación.",
@@ -825,7 +843,7 @@ public static class ManualCatalogo
             ],
             ["liquidacion", "nomina", "calcular", "recalcular", "borrador", "aprobar", "comprobante", "asiento", "devengado", "deduccion", "aportes", "provisiones", "neto", "bloqueo", "excepcion", "explicacion", "relacion de pago", "pagado", "banco", "cuenta", "comprobante de pago", "desprendible", "correo"],
             ["Cooperativa activa.", "Conceptos con cuentas contables, parámetros legales vigentes y período contable abierto.", "Permiso Payroll.Runs.Calculate para calcular y Payroll.Runs.Approve para aprobar; Payroll.Payments.Mark para marcar pagos; Payroll.Payslips.View y Payroll.Payslips.Send para comprobantes y su envío."],
-            ["novedades-de-nomina", "parametros-legales", "conceptos-de-nomina", "periodos-de-pago"], [], TipoDeTema.Proceso));
+            ["novedades-de-nomina", "parametros-legales", "conceptos-de-nomina", "nomina-periodos-pago"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("conceptos-de-nomina", "Conceptos de nómina", Modulos.Nomina, "/nomina/conceptos",
             "Cada concepto dice qué es (devengo, deducción, aporte del empleador, provisión o informativo), cómo se calcula con una de cinco formas predefinidas (valor fijo, porcentaje sobre base, cantidad × unidad, tabla por rangos, suma de conceptos), qué bases alimenta y a qué clases de empleado aplica. Cambiarlo crea una versión con fecha: las liquidaciones aprobadas siguen mostrando la versión con la que se calcularon. No hay fórmulas libres: si ninguna forma cubre el caso, es una forma nueva del programa, no una expresión escrita a mano.",
@@ -874,7 +892,7 @@ public static class ManualCatalogo
                 P("Entregar y anular", "Entregado cambia el estado; anulado pide motivo y deja el número inutilizable. Cobrado se marca desde la conciliación bancaria."),
             ],
             ["cheque", "girar", "anular", "chequera", "banco", "beneficiario"], ["Cooperativa activa.", "Cuenta bancaria y chequera registradas."],
-            ["conciliacion-bancaria", "facturas-de-tesoreria"], [], TipoDeTema.Proceso));
+            ["facturas-de-tesoreria", "maestros-bancos"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("facturas-de-tesoreria", "Facturas por pagar y por cobrar", Modulos.Tesoreria, "/tesoreria/facturas",
             "Registrar las obligaciones con proveedores y las cuentas por cobrar a terceros, y aplicarles pagos.",
@@ -884,7 +902,7 @@ public static class ManualCatalogo
                 P("Pagar o cobrar", "Desde la fila: valor, forma de pago y fecha. Parcial o total; el saldo se sigue en la misma pantalla."),
             ],
             ["facturas", "proveedores", "cuentas por pagar", "cuentas por cobrar", "cxp", "cxc", "vencimiento"], ["Cooperativa activa."],
-            ["cheques", "flujo-de-caja"], [], TipoDeTema.Proceso));
+            ["cheques", "tesoreria-flujo-caja"], [], TipoDeTema.Proceso));
 
         t.Add(Consulta("/tesoreria/flujo-caja", "Flujo de caja", Modulos.Tesoreria,
             "Entradas y salidas de efectivo reales y proyectadas por período, a partir de vencimientos de cartera, facturas y nómina.",
@@ -901,7 +919,7 @@ public static class ManualCatalogo
                 P("Movimientos", "Compras, retiros y comisiones que llegan del convenio, por tarjeta y período.", "/debito/movimientos-tarjeta", "Abrir Movimientos de Tarjeta"),
             ],
             ["tarjeta", "debito", "bloquear", "activar", "convenio", "cajero"], ["Cooperativa activa.", "Convenio configurado."],
-            ["cuentas-de-ahorro", "parametros-de-convenio"], ["/debito/tarjetas/{CardId}"], TipoDeTema.Proceso));
+            ["cuentas-de-ahorro", "debito-parametros-convenio"], ["/debito/tarjetas/{CardId}"], TipoDeTema.Proceso));
         t.Add(Consulta("/debito/movimientos-tarjeta", "Movimientos de tarjeta débito", Modulos.Debito,
             "Compras, retiros y comisiones por tarjeta, con su estado de conciliación contra el convenio.",
             "Tarjeta o asociado y rango de fechas.", "movimientos", "tarjeta", "compras", "retiros"));

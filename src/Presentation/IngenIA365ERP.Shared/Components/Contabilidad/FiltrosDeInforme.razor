@@ -40,6 +40,17 @@
                     <label class="campo">Cuenta desde <input class="e-input" type="text" value="@Modelo.AccountFrom" @onchange="@(e => Modelo.AccountFrom = e.Value?.ToString())" placeholder="1105" /></label>
                     <label class="campo">Cuenta hasta <input class="e-input" type="text" value="@Modelo.AccountTo" @onchange="@(e => Modelo.AccountTo = e.Value?.ToString())" placeholder="1110" /></label>
                 }
+                @if (Modelo.NiifItem is { } rubro)
+                {
+                    @* El rubro no se elige aquí: llega con el clic en una fila de los estados financieros.
+                       Se muestra para que se sepa por qué el libro está acotado, y se puede quitar. *@
+                    <label class="campo">Rubro NIIF
+                        <span class="toolbar">
+                            <input class="e-input" type="text" value="@rubro" readonly aria-label="Rubro NIIF aplicado" />
+                            <SfButton CssClass="e-flat" IconCss="e-icons e-close" type="button" aria-label="Quitar el rubro" OnClick="@(() => Modelo.NiifItem = null)" />
+                        </span>
+                    </label>
+                }
                 @if (MostrarTercero)
                 {
                     <label class="campo campo-largo">Tercero
@@ -187,7 +198,7 @@
         var limpio = new FiltrosDeInformeModelo { From = desde, To = hasta };
         CuentaElegida(null);
         TerceroElegido(null);
-        Modelo.AccountFrom = limpio.AccountFrom; Modelo.AccountTo = limpio.AccountTo;
+        Modelo.AccountFrom = limpio.AccountFrom; Modelo.AccountTo = limpio.AccountTo; Modelo.NiifItem = null;
         Modelo.CrossDocumentType = null; Modelo.CrossDocumentNumber = null;
         Modelo.CostCenter = null; Modelo.Branch = null; Modelo.VoucherType = null; Modelo.Origin = null; Modelo.User = null;
         Modelo.Level = null; Modelo.WithThirdParties = false; Modelo.IncludeClosing = false;

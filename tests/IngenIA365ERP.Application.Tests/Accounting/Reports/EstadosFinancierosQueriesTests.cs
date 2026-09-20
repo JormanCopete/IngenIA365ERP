@@ -14,9 +14,10 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Reports;
 /// <summary>
 /// T101 (feature 009 E2, FR-047): los cuatro estados financieros se arman sobre los rubros NIIF
 /// del grupo de la empresa. El ESF cuadra con el resultado del ejercicio inyectado, el ERI
-/// subtotaliza por rubros, los comparativos miran un año atrás, el ECP y el EFE se alimentan del
+/// subtotaliza por rubros, los cuatro comparan con un año atrás, el ECP y el EFE se alimentan del
 /// ESF con mapeos fijos y la «Diferencia» del EFE es cero; las cuentas de orden quedan fuera del
-/// cuadre, una cuenta sin rubro no se pierde y el alcance de sucursal se respeta.
+/// cuadre, una cuenta sin rubro no se pierde, cada cuenta se mide por el lado que su rubro espera
+/// y el alcance de sucursal se respeta.
 /// </summary>
 public class EstadosFinancierosQueriesTests
 {
@@ -440,6 +441,159 @@ public class EstadosFinancierosQueriesTests
         Valor("EFE-FIN-CAP").Should().Be(250m);
         Valor("EFE-EFE").Should().Be(500m - 200m + 250m - 400m);
         t.Filas.Last().Valores[1].Should().Be(0m, "Σ actividades = Δ efectivo");
+    }
+
+    // ------------------------------------------------- naturaleza esperada por el rubro (h9) --
+
+    [Fact]
+    public async Task Esf_mide_cada_cuenta_por_el_lado_que_su_rubro_espera_y_cuadra_con_perdida_en_3510_y_deterioro_en_1408()
+    {
+        var e = new Escenario();
+        e.AbrirEjercicio2025();
+        // 3510 «Pérdida del ejercicio» es débito dentro del patrimonio (rubro +1); 1408 es crédito dentro del activo (rubro −1).
+        var perdida = e.Cuenta("351005", AccountNature.Debit, "ESF-PT-REJ");
+        var cartera = e.Cuenta("140405", AccountNature.Debit, "ESF-A-CAR");
+        var deterioro = e.Cuenta("140805", AccountNature.Credit, "ESF-A-CAR-DET");
+        var gastoDeterioro = e.Cuenta("519905", AccountNature.Debit, "ERI-DET");
+        // 2025 cierra con pérdida de 100: el cierre la deja como débito en 3510.
+        await e.Contabilizar(new DateOnly(2025, 3, 5), [(e.Caja, 1000m, 0m), (e.Capital, 0m, 1000m)]);
+        await e.Contabilizar(new DateOnly(2025, 3, 15), [(e.Gasto, 100m, 0m), (e.Caja, 0m, 100m)]);
+        await e.Contabilizar(new DateOnly(2025, 12, 31), [(perdida, 100m, 0m), (e.Gasto, 0m, 100m)], kind: DocumentKind.Closing, tipo: "CI");
+        await e.DatosBase();
+        await e.Contabilizar(Marzo15, [(cartera, 1000m, 0m), (e.Caja, 0m, 1000m)]);
+        await e.Contabilizar(Marzo15, [(gastoDeterioro, 50m, 0m), (deterioro, 0m, 50m)]);
+
+        var t = await e.Esf();
+
+        Saldo(t, "ESF-A-CAR-DET").Should().Be(-50m, "la contra resta al activo");
+        Saldo(t, "ESF-A-CAR").Should().Be(950m, "cartera bruta 1000 menos el deterioro");
+        Saldo(t, "ESF-A").Should().Be(1200m + 300m + 950m);
+        // La pérdida cerrada resta al patrimonio (−100) y el resultado de 2026 (500 − 50) se inyecta.
+        Saldo(t, "ESF-PT-REJ").Should().Be(-100m + 450m, "una pérdida en 3510 baja el patrimonio, no lo sube");
+        Saldo(t, "ESF-PT").Should().Be(2000m - 100m + 450m);
+        Saldo(t, "ESF-A").Should().Be(Saldo(t, "ESF-P") + Saldo(t, "ESF-PT"), "Activo = Pasivo + Patrimonio con cuentas de naturaleza contraria a su clase");
+        t.Notas.Should().NotContain(n => n.Contains("no cuadra"));
+        // El comparativo (20/03/2025) también cuadra con la pérdida aún abierta e inyectada.
+        Comparativo(t, "ESF-PT-REJ").Should().Be(-100m);
+        Comparativo(t, "ESF-A").Should().Be(Comparativo(t, "ESF-P") + Comparativo(t, "ESF-PT"));
+    }
+
+    [Fact]
+    public async Task Eri_un_credito_en_una_cuenta_de_costos_resta_a_los_costos_y_el_resultado_por_rubros_coincide_con_el_contable()
+    {
+        var e = new Escenario();
+        // 6220 es crédito dentro de los costos (rubro +1): un saldo crédito de 30 tiene que bajar los costos, no subirlos.
+        var costo = e.Cuenta("620505", AccountNature.Debit, "ERI-COS");
+        var ajusteDeCosto = e.Cuenta("622005", AccountNature.Credit, "ERI-COS");
+        await e.DatosBase();
+        await e.Contabilizar(Marzo15, [(costo, 120m, 0m), (e.Caja, 0m, 120m)]);
+        await e.Contabilizar(Marzo15, [(e.Caja, 30m, 0m), (ajusteDeCosto, 0m, 30m)]);
+
+        var t = await e.Eri();
+
+        Saldo(t, "ERI-COS").Should().Be(90m, "120 de costo menos 30 de ajuste");
+        FilaLlamada(t, "Utilidad bruta").Valores[2].Should().Be(800m - 90m);
+        FilaLlamada(t, "Resultado del ejercicio").Valores[2].Should().Be(800m - 90m - 300m);
+        t.Notas.Should().NotContain(n => n.Contains("difiere"), "el resultado por rubros y el contable coinciden");
+        var esf = await e.Esf();
+        Saldo(esf, "ESF-PT-REJ").Should().Be(410m);
+        Saldo(esf, "ESF-A").Should().Be(Saldo(esf, "ESF-P") + Saldo(esf, "ESF-PT"));
+    }
+
+    // ------------------------------------------------------- EFE a través de un cierre (h7) --
+
+    [Fact]
+    public async Task Efe_del_segundo_ejercicio_trae_el_resultado_del_rango_y_no_traslada_el_excedente_cerrado_a_financiacion()
+    {
+        var e = new Escenario();
+        e.AbrirEjercicio2025();
+        await e.Contabilizar(new DateOnly(2025, 3, 5), [(e.Caja, 1000m, 0m), (e.Capital, 0m, 1000m)]);
+        await e.Contabilizar(new DateOnly(2025, 3, 15), [(e.Caja, 100m, 0m), (e.Ingreso, 0m, 100m)]);
+        // El cierre de 2025 lleva el excedente (100) a la 35.
+        await e.Contabilizar(new DateOnly(2025, 12, 31), [(e.Ingreso, 100m, 0m), (e.Excedente, 0m, 100m)], kind: DocumentKind.Closing, tipo: "CI");
+        await e.DatosBase();
+        // En 2026 se distribuyen 40 del excedente anterior: eso sí es un flujo de financiación.
+        await e.Contabilizar(Marzo15, [(e.Excedente, 40m, 0m), (e.Caja, 0m, 40m)]);
+
+        var t = await e.Efe(Escenario.Rango(new DateOnly(2026, 1, 1), Marzo20));
+
+        decimal Valor(string rubro) => (decimal)FilaDeRubro(t, rubro).Valores[1]!;
+        Valor("EFE-OPE-RES").Should().Be(500m, "el resultado del rango es el de 2026, no 2026 menos 2025");
+        Valor("EFE-FIN-CAP").Should().Be(1000m - 40m, "aporte de 2026 menos la distribución; el excedente cerrado de 2025 no es un flujo");
+        Valor("EFE-OPE-CAR").Should().Be(-300m);
+        Valor("EFE-OPE-CXP").Should().Be(100m);
+        FilaLlamada(t, "Efectivo y equivalentes al inicio").Valores[1].Should().Be(1100m);
+        FilaLlamada(t, "Efectivo y equivalentes al final").Valores[1].Should().Be(1100m + 1000m + 500m - 200m - 40m);
+        Valor("EFE-EFE").Should().Be(1260m);
+        t.Filas.Last().Valores[1].Should().Be(0m, "Σ actividades = Δ efectivo");
+        t.Notas.Should().Contain(n => n.Contains("cierres de ejercicios anteriores"));
+    }
+
+    // ------------------------------------------------ comparativo del ECP y del EFE (h11) --
+
+    [Fact]
+    public async Task Ecp_y_efe_comparan_con_el_mismo_rango_un_ano_antes()
+    {
+        var e = new Escenario();
+        e.AbrirEjercicio2025();
+        await e.Contabilizar(new DateOnly(2025, 3, 12), [(e.Caja, 100m, 0m), (e.Capital, 0m, 100m)]);
+        await e.Contabilizar(new DateOnly(2025, 3, 15), [(e.Caja, 50m, 0m), (e.Ingreso, 0m, 50m)]);
+        await e.Contabilizar(new DateOnly(2025, 12, 31), [(e.Ingreso, 50m, 0m), (e.Excedente, 0m, 50m)], kind: DocumentKind.Closing, tipo: "CI");
+        await e.DatosBase();
+
+        var ecp = await e.Ecp();
+
+        ecp.Columnas.Select(c => c.Nombre).Should().ContainInOrder("Saldo final", "Comparativo", "Variación", "_rubro");
+        ecp.Columnas[^1].EsOculta.Should().BeTrue("la columna oculta sigue al final");
+        var capital = FilaDeRubro(ecp, "ECP-CAP");
+        capital.Valores[5].Should().Be(1100m, "saldo final al 20/03/2026: 100 de 2025 más 1000 de 2026");
+        capital.Valores[6].Should().Be(100m, "saldo final al 20/03/2025");
+        capital.Valores[7].Should().Be(1000m);
+        var resultado = FilaDeRubro(ecp, "ECP-REJ");
+        resultado.Valores[2].Should().Be(50m, "el excedente cerrado de 2025 ya está en la 35");
+        resultado.Valores[5].Should().Be(550m);
+        resultado.Valores[6].Should().Be(50m, "al 20/03/2025 el resultado acumulado era 50");
+        resultado.Valores[7].Should().Be(500m);
+        ecp.Totales!.Valores[6].Should().Be(150m);
+        ecp.Totales.Valores[7].Should().Be(1650m - 150m);
+        ecp.Notas.Should().Contain(n => n.Contains("Comparativo del 10/03/2025 al 20/03/2025") && n.Contains("saldo final"));
+        ecp.Subtitulo.Should().Contain("comparativo del 10/03/2025 al 20/03/2025");
+
+        var efe = await e.Efe();
+
+        efe.Columnas.Select(c => c.Nombre).Should().Equal("Concepto", "Valor", "Comparativo", "Variación", "_rubro");
+        var res = FilaDeRubro(efe, "EFE-OPE-RES");
+        res.Valores[1].Should().Be(500m);
+        res.Valores[2].Should().Be(50m, "el resultado del 10 al 20 de marzo de 2025");
+        res.Valores[3].Should().Be(450m);
+        var aportes = FilaDeRubro(efe, "EFE-FIN-CAP");
+        aportes.Valores[1].Should().Be(0m, "el aporte de 2026 fue antes del rango");
+        aportes.Valores[2].Should().Be(100m, "el de 2025 cayó dentro del rango comparativo");
+        FilaLlamada(efe, "Efectivo y equivalentes al inicio").Valores[2].Should().Be(0m);
+        FilaLlamada(efe, "Efectivo y equivalentes al final").Valores[2].Should().Be(150m);
+        efe.Filas.Last().Valores[2].Should().Be(0m, "la diferencia del comparativo también es cero");
+        efe.Notas.Should().Contain(n => n.Contains("Comparativo del 10/03/2025 al 20/03/2025") && n.Contains("valor"));
+    }
+
+    [Fact]
+    public async Task Ecp_y_efe_dejan_el_comparativo_vacio_cuando_el_rango_anterior_cae_antes_de_la_fecha_minima()
+    {
+        var e = new Escenario();
+        await e.DatosBase();
+        var f = Escenario.Rango(MovimientosContables.FechaMinima.AddDays(4), MovimientosContables.FechaMinima.AddDays(19));
+
+        var ecp = await e.Ecp(f);
+        var efe = await e.Efe(f);
+
+        FilaDeRubro(ecp, "ECP-CAP").Valores[6].Should().BeNull();
+        FilaDeRubro(ecp, "ECP-CAP").Valores[7].Should().BeNull();
+        ecp.Totales!.Valores[6].Should().BeNull();
+        ecp.Notas.Should().Contain(n => n.StartsWith("Sin comparativo"));
+        ecp.Subtitulo.Should().NotContain("comparativo");
+        FilaDeRubro(efe, "EFE-OPE-RES").Valores[2].Should().BeNull();
+        FilaDeRubro(efe, "EFE-OPE-RES").Valores[3].Should().BeNull();
+        efe.Filas.Last().Valores[2].Should().BeNull();
+        efe.Notas.Should().Contain(n => n.StartsWith("Sin comparativo"));
     }
 
     // ----------------------------------------------------------------------- exportación --

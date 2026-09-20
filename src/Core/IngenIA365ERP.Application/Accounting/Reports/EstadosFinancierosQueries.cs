@@ -101,8 +101,10 @@ internal static class RubrosNiif
     /// antes del inicio) de las cuentas <b>propias</b> de estos rubros del ESF, multiplicada por el
     /// signo del rubro del EFE (−1 en activos: crecer consume efectivo). Los dos rubros que no son
     /// variación del ESF —el resultado y los ajustes— se calculan aparte. Las cuentas del
-    /// resultado (35) entran en financiación por su movimiento propio (la distribución del
-    /// excedente anterior); el resultado del período va en EFE-OPE-RES.
+    /// resultado (35) entran en financiación por su movimiento propio, que es sólo la distribución
+    /// del excedente anterior porque los dos extremos se miden con los mismos cierres
+    /// (<see cref="ArmadoDeEstados.SituacionParaVariacionAsync"/>); el resultado del período va en
+    /// EFE-OPE-RES.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> EfeDesdeEsf = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
@@ -180,6 +182,38 @@ internal static class ArmadoDeEstados
     public static async Task<SituacionFinanciera> SituacionAsync(SaldosPorRubro rubros, DateOnly fecha, CancellationToken ct) =>
         new(rubros, await rubros.ALaFechaAsync(fecha, ct), await rubros.ResultadoALaFechaAsync(fecha, ct));
 
+    /// <summary>
+    /// El ESF a una fecha como extremo de una variación (EFE): los cierres que entran son los
+    /// fechados antes de <paramref name="desde"/>, el inicio del rango, para que los dos extremos
+    /// vean los mismos. El resultado que se inyecta es el que sigue abierto en las cuentas del ERI
+    /// bajo esa misma regla (<see cref="SaldosPorRubro.Saldos.ResultadoContable"/>): cero tras un
+    /// cierre incluido, el acumulado del ejercicio si no lo hay. Con el resultado «1 de enero →
+    /// fecha» del ESF corriente se contaría dos veces al 31/12 cuando el cierre de ese año entra.
+    /// </summary>
+    public static async Task<SituacionFinanciera> SituacionParaVariacionAsync(SaldosPorRubro rubros, DateOnly fecha, DateOnly desde, CancellationToken ct)
+    {
+        var saldos = await rubros.ALaFechaConCierresAnterioresAAsync(fecha, desde, ct);
+        return new SituacionFinanciera(rubros, saldos, saldos.ResultadoContable);
+    }
+
+    /// <summary>
+    /// El mismo rango un año antes (FR-044), o nulo si cae antes de la fecha mínima de las
+    /// consultas: entonces el comparativo va vacío en vez de fallar la consulta.
+    /// </summary>
+    public static (DateOnly Desde, DateOnly Hasta)? RangoComparativo(MovimientosContables.Contexto c)
+    {
+        var desde = c.Desde.AddYears(-1);
+        return desde < MovimientosContables.FechaMinima ? null : (desde, c.Hasta.AddYears(-1));
+    }
+
+    public static string NotaDeComparativo((DateOnly Desde, DateOnly Hasta)? comparativo, string queSeCompara) =>
+        comparativo is { } rc
+            ? $"Comparativo del {rc.Desde:dd/MM/yyyy} al {rc.Hasta:dd/MM/yyyy}; Variación = {queSeCompara} − comparativo."
+            : $"Sin comparativo: el mismo rango un año antes cae antes del {MovimientosContables.FechaMinima:dd/MM/yyyy}.";
+
+    public static string SubtituloDeComparativo((DateOnly Desde, DateOnly Hasta)? comparativo) =>
+        comparativo is { } rc ? $" · comparativo del {rc.Desde:dd/MM/yyyy} al {rc.Hasta:dd/MM/yyyy}" : string.Empty;
+
     /// <summary>La raíz (rubro sin padre) de la cadena de un rubro.</summary>
     public static SaldosPorRubro.Rubro Raiz(SaldosPorRubro rubros, SaldosPorRubro.Rubro r)
     {
@@ -210,7 +244,7 @@ internal static class ArmadoDeEstados
     public static async Task<Result<TablaExportable>> EntregarAsync(
         AccountingAuditEmitter audit, string informe, FiltrosDeInforme filtros, TablaExportable tabla, CancellationToken ct)
     {
-        if (filtros.EsExportacion) await audit.EmitirExportacionAsync(informe, filtros, filtros.Format!, tabla.Filas.Count, ct);
+        if (filtros.EsExportacion) await audit.EmitirExportacionAsync(informe, filtros, filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 }
@@ -408,7 +442,8 @@ public sealed class IncomeStatementQueryHandler(IApplicationDbContext db, IUserB
 /// patrimonio en el ESF (<see cref="RubrosNiif.EcpDesdeEsf"/>). Saldo inicial al día antes de
 /// <c>From</c> (con el resultado acumulado a esa fecha en el rubro del resultado), aumentos =
 /// créditos del rango, disminuciones = débitos del rango; en el rubro del resultado, además, el
-/// resultado del rango entra como aumento (excedente) o disminución (pérdida).
+/// resultado del rango entra como aumento (excedente) o disminución (pérdida). El comparativo
+/// (FR-044) es el saldo final del mismo rango un año antes.
 /// </summary>
 public sealed class EquityChangesQueryHandler(IApplicationDbContext db, IUserBranchScope alcance, IDateTimeService clock,
     ICurrentUserService user, AccountingAuditEmitter audit) : IRequestHandler<EquityChangesQuery, Result<TablaExportable>>
@@ -421,8 +456,19 @@ public sealed class EquityChangesQueryHandler(IApplicationDbContext db, IUserBra
         new("Aumentos", TipoDeColumna.Moneda, "aumentos"),
         new("Disminuciones", TipoDeColumna.Moneda, "disminuciones"),
         new("Saldo final", TipoDeColumna.Moneda, "saldoFinal"),
+        new("Comparativo", TipoDeColumna.Moneda, "comparativo"),
+        new("Variación", TipoDeColumna.Moneda, "variacion"),
         new("_rubro", TipoDeColumna.Texto, "_rubro"),
     ];
+
+    /// <summary>Una fila del ECP ya calculada para un rango; <c>Origen</c> nulo cuando el rubro no tiene de dónde alimentarse.</summary>
+    private sealed record Movimiento(string? Origen, decimal SaldoInicial, decimal Aumentos, decimal Disminuciones)
+    {
+        public decimal SaldoFinal => SaldoInicial + Aumentos - Disminuciones;
+    }
+
+    /// <summary>El ECP de un rango: los movimientos por rubro, el ESF al día antes y el resultado del rango.</summary>
+    private sealed record Calculo(IReadOnlyDictionary<string, Movimiento> PorRubro, ArmadoDeEstados.SituacionFinanciera Inicial, decimal ResultadoDelRango);
 
     public async Task<Result<TablaExportable>> Handle(EquityChangesQuery request, CancellationToken ct)
     {
@@ -434,22 +480,53 @@ public sealed class EquityChangesQueryHandler(IApplicationDbContext db, IUserBra
         var rubros = carga.Value;
 
         var diaAntes = c.Desde.AddDays(-1);
-        var inicial = await ArmadoDeEstados.SituacionAsync(rubros, diaAntes, ct);
-        var rango = await rubros.DelRangoAsync(c.Desde, c.Hasta, ct);
-        var resultadoDelRango = rango.ResultadoContable;
+        var comparativo = ArmadoDeEstados.RangoComparativo(c);
+        var actual = await CalcularAsync(rubros, c.Desde, c.Hasta, ct);
+        var anterior = comparativo is { } rc ? await CalcularAsync(rubros, rc.Desde, rc.Hasta, ct) : null;
 
         var filas = new List<FilaExportable>();
-        decimal tInicial = 0m, tAumentos = 0m, tDisminuciones = 0m, tFinal = 0m;
+        decimal tInicial = 0m, tAumentos = 0m, tDisminuciones = 0m, tFinal = 0m, tComparativo = 0m;
         var sinOrigen = new List<string>();
+        foreach (var r in rubros.DelEstado(FinancialStatementKind.EquityChanges))
+        {
+            var m = actual.PorRubro[r.Code];
+            if (m.Origen is null) sinOrigen.Add(r.Code); // queda en cero, como su comparativo
+            var saldoComparativo = anterior?.PorRubro[r.Code].SaldoFinal;
+            filas.Add(new FilaExportable([r.Code, r.Name, m.SaldoInicial, m.Aumentos, m.Disminuciones, m.SaldoFinal,
+                saldoComparativo, saldoComparativo is { } sc ? m.SaldoFinal - sc : null, r.Code], r.Section));
+            tInicial += m.SaldoInicial; tAumentos += m.Aumentos; tDisminuciones += m.Disminuciones; tFinal += m.SaldoFinal; tComparativo += saldoComparativo ?? 0m;
+        }
+        var totales = new FilaExportable(["", "Total patrimonio", tInicial, tAumentos, tDisminuciones, tFinal,
+            anterior is null ? null : tComparativo, anterior is null ? null : tFinal - tComparativo, null], null, Resaltada: true);
+
+        var notas = new List<string>(await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct))
+        {
+            $"Saldo inicial al {diaAntes:dd/MM/yyyy}; aumentos = créditos del período, disminuciones = débitos del período; saldo final = inicial + aumentos − disminuciones.",
+            ArmadoDeEstados.NotaDeComparativo(comparativo, "saldo final"),
+            "Cada rubro se alimenta de su rubro del patrimonio en el estado de situación financiera: " +
+            string.Join(", ", RubrosNiif.EcpDesdeEsf.Where(kv => rubros.Existe(kv.Key)).Select(kv => $"{kv.Key} ← {kv.Value}")) + ".",
+            $"«Resultado del ejercicio»: el saldo inicial trae el resultado acumulado al {diaAntes:dd/MM/yyyy} ({actual.Inicial.Resultado:N2}) y el resultado del período ({actual.ResultadoDelRango:N2}) entra como {(actual.ResultadoDelRango >= 0m ? "aumento" : "disminución")}.",
+        };
+        if (sinOrigen.Count > 0) notas.Add($"Rubros sin origen en el ESF para el grupo {rubros.Grupo}, en cero: {string.Join(", ", sinOrigen)}.");
+
+        var tabla = new TablaExportable("Estado de cambios en el patrimonio", $"Del {c.Desde:dd/MM/yyyy} al {c.Hasta:dd/MM/yyyy}{ArmadoDeEstados.SubtituloDeComparativo(comparativo)}", Columnas, filas, totales, notas);
+        return await ArmadoDeEstados.EntregarAsync(audit, "equity-changes", request.Filtros, tabla, ct);
+    }
+
+    private static async Task<Calculo> CalcularAsync(SaldosPorRubro rubros, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        var inicial = await ArmadoDeEstados.SituacionAsync(rubros, desde.AddDays(-1), ct);
+        var rango = await rubros.DelRangoAsync(desde, hasta, ct);
+        var resultadoDelRango = rango.ResultadoContable;
+
+        var porRubro = new Dictionary<string, Movimiento>(StringComparer.Ordinal);
         foreach (var r in rubros.DelEstado(FinancialStatementKind.EquityChanges))
         {
             if (!RubrosNiif.EcpDesdeEsf.TryGetValue(r.Code, out var origen) || !rubros.Existe(origen))
             {
-                sinOrigen.Add(r.Code);
-                filas.Add(new FilaExportable([r.Code, r.Name, 0m, 0m, 0m, 0m, r.Code], r.Section));
+                porRubro[r.Code] = new Movimiento(null, 0m, 0m, 0m);
                 continue;
             }
-            var saldoInicial = inicial.Valor(origen);
             var sumas = rango.Sumas(origen);
             var aumentos = sumas.Creditos;
             var disminuciones = sumas.Debitos;
@@ -457,23 +534,9 @@ public sealed class EquityChangesQueryHandler(IApplicationDbContext db, IUserBra
             {
                 if (resultadoDelRango >= 0m) aumentos += resultadoDelRango; else disminuciones += -resultadoDelRango;
             }
-            var saldoFinal = saldoInicial + aumentos - disminuciones;
-            filas.Add(new FilaExportable([r.Code, r.Name, saldoInicial, aumentos, disminuciones, saldoFinal, r.Code], r.Section));
-            tInicial += saldoInicial; tAumentos += aumentos; tDisminuciones += disminuciones; tFinal += saldoFinal;
+            porRubro[r.Code] = new Movimiento(origen, inicial.Valor(origen), aumentos, disminuciones);
         }
-        var totales = new FilaExportable(["", "Total patrimonio", tInicial, tAumentos, tDisminuciones, tFinal, null], null, Resaltada: true);
-
-        var notas = new List<string>(await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct))
-        {
-            $"Saldo inicial al {diaAntes:dd/MM/yyyy}; aumentos = créditos del período, disminuciones = débitos del período; saldo final = inicial + aumentos − disminuciones.",
-            "Cada rubro se alimenta de su rubro del patrimonio en el estado de situación financiera: " +
-            string.Join(", ", RubrosNiif.EcpDesdeEsf.Where(kv => rubros.Existe(kv.Key)).Select(kv => $"{kv.Key} ← {kv.Value}")) + ".",
-            $"«Resultado del ejercicio»: el saldo inicial trae el resultado acumulado al {diaAntes:dd/MM/yyyy} ({inicial.Resultado:N2}) y el resultado del período ({resultadoDelRango:N2}) entra como {(resultadoDelRango >= 0m ? "aumento" : "disminución")}.",
-        };
-        if (sinOrigen.Count > 0) notas.Add($"Rubros sin origen en el ESF para el grupo {rubros.Grupo}, en cero: {string.Join(", ", sinOrigen)}.");
-
-        var tabla = new TablaExportable("Estado de cambios en el patrimonio", $"Del {c.Desde:dd/MM/yyyy} al {c.Hasta:dd/MM/yyyy}", Columnas, filas, totales, notas);
-        return await ArmadoDeEstados.EntregarAsync(audit, "equity-changes", request.Filtros, tabla, ct);
+        return new Calculo(porRubro, inicial, resultadoDelRango);
     }
 }
 
@@ -484,7 +547,17 @@ public sealed class EquityChangesQueryHandler(IApplicationDbContext db, IUserBra
 /// efectivo + variaciones de activos y pasivos por actividad, que deben explicar la variación del
 /// efectivo. La fila final «Diferencia» = Σ actividades − Δ efectivo tiene que ser cero; si no lo
 /// es, hay un rubro del ESF fuera del mapeo o una baja/castigo que separa el gasto por deterioro
-/// y depreciación de la variación de sus contra-cuentas, y la nota lo dice.
+/// y depreciación de la variación de sus contra-cuentas, y la nota lo dice. El comparativo
+/// (FR-044) es el mismo rango un año antes.
+///
+/// <para>
+/// Los dos extremos de la variación se miden con la <b>misma regla de cierres</b>
+/// (<see cref="SaldosPorRubro.ALaFechaConCierresAnterioresAAsync"/>): entran los cierres
+/// fechados antes del inicio del rango y ninguno posterior salvo la bandera. Si el saldo inicial
+/// excluyera el cierre del año anterior y el final lo incluyera, la variación del rubro del
+/// resultado sería el traslado del excedente al patrimonio, que no es un flujo de efectivo, y
+/// «Resultado del ejercicio» restaba el resultado del año anterior.
+/// </para>
 /// </summary>
 public sealed class CashFlowQueryHandler(IApplicationDbContext db, IUserBranchScope alcance, IDateTimeService clock,
     ICurrentUserService user, AccountingAuditEmitter audit) : IRequestHandler<CashFlowQuery, Result<TablaExportable>>
@@ -493,8 +566,16 @@ public sealed class CashFlowQueryHandler(IApplicationDbContext db, IUserBranchSc
     [
         new("Concepto", TipoDeColumna.Texto, "concepto"),
         new("Valor", TipoDeColumna.Moneda, "valor"),
+        new("Comparativo", TipoDeColumna.Moneda, "comparativo"),
+        new("Variación", TipoDeColumna.Moneda, "variacion"),
         new("_rubro", TipoDeColumna.Texto, "_rubro"),
     ];
+
+    /// <summary>El EFE de un rango: valor por rubro (con signo), efectivo en los extremos, la diferencia y lo que quedó fuera del mapeo.</summary>
+    private sealed record Calculo(
+        IReadOnlyDictionary<string, decimal> Valor,
+        decimal EfectivoInicial, decimal EfectivoFinal, decimal Diferencia,
+        IReadOnlyList<string> FueraDelMapeo, IReadOnlyList<JerarquiaDelPlan.Cuenta> SinRubro);
 
     public async Task<Result<TablaExportable>> Handle(CashFlowQuery request, CancellationToken ct)
     {
@@ -506,9 +587,51 @@ public sealed class CashFlowQueryHandler(IApplicationDbContext db, IUserBranchSc
         var rubros = carga.Value;
 
         var diaAntes = c.Desde.AddDays(-1);
-        var inicio = await ArmadoDeEstados.SituacionAsync(rubros, diaAntes, ct);
-        var fin = await ArmadoDeEstados.SituacionAsync(rubros, c.Hasta, ct);
-        var rango = await rubros.DelRangoAsync(c.Desde, c.Hasta, ct);
+        var comparativo = ArmadoDeEstados.RangoComparativo(c);
+        var actual = await CalcularAsync(rubros, c.Desde, c.Hasta, ct);
+        var anterior = comparativo is { } rc ? await CalcularAsync(rubros, rc.Desde, rc.Hasta, ct) : null;
+
+        // Cada fila lleva valor, comparativo y variación; sin comparativo, las dos últimas van vacías.
+        FilaExportable Fila(string concepto, decimal valor, decimal? valorAnterior, string? rubro, string seccion, bool resaltada = false) =>
+            new([concepto, valor, valorAnterior, valorAnterior is { } va ? valor - va : null, rubro], seccion, resaltada);
+
+        var efe = rubros.DelEstado(FinancialStatementKind.CashFlow);
+        var filas = new List<FilaExportable>();
+        foreach (var seccion in efe.Select(r => r.Section).Distinct(StringComparer.Ordinal))
+        {
+            var deLaSeccion = efe.Where(x => x.Section == seccion).ToList();
+            if (deLaSeccion.Any(r => r.Code == RubrosNiif.EfeEfectivo))
+            {
+                filas.Add(Fila("Efectivo y equivalentes al inicio", actual.EfectivoInicial, anterior?.EfectivoInicial, null, seccion));
+                filas.Add(Fila("Efectivo y equivalentes al final", actual.EfectivoFinal, anterior?.EfectivoFinal, null, seccion));
+            }
+            foreach (var r in ArmadoDeEstados.EnOrdenDePresentacion(deLaSeccion))
+                filas.Add(Fila(r.Name, actual.Valor[r.Code], anterior?.Valor[r.Code], r.Code, seccion, ArmadoDeEstados.Resaltado(rubros, r)));
+        }
+        filas.Add(Fila("Diferencia (Σ actividades − variación del efectivo)", actual.Diferencia, anterior?.Diferencia, null, "Comprobación", resaltada: true));
+
+        var notas = new List<string>(await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct))
+        {
+            $"Método indirecto. Variaciones entre el {diaAntes:dd/MM/yyyy} y el {c.Hasta:dd/MM/yyyy} de los rubros del estado de situación financiera; positivo = entra efectivo.",
+            ArmadoDeEstados.NotaDeComparativo(comparativo, "valor"),
+            "Mapeo desde el ESF: " + string.Join("; ", RubrosNiif.EfeDesdeEsf.Where(kv => rubros.Existe(kv.Key)).Select(kv => $"{kv.Key} ← {string.Join(" + ", kv.Value)}")) +
+            $". {RubrosNiif.EfeResultado} = resultado del período; {RubrosNiif.EfeAjustes} = gasto por deterioro, depreciación y amortización ({RubrosNiif.Deterioro}); las contra-cuentas ({string.Join(", ", RubrosNiif.ContrasYaEnAjustes)}) no se toman como variación porque su movimiento es ese gasto.",
+            "Los saldos inicial y final cuentan los cierres de ejercicios anteriores al inicio del período y ninguno posterior, así el traslado del excedente al patrimonio no aparece como flujo.",
+            "La fila «Diferencia» debe ser cero. Si no lo es, hubo bajas o castigos (el gasto del período no coincide con la variación de las contra-cuentas) o el rango cruza un cierre de ejercicio.",
+        };
+        if (actual.FueraDelMapeo.Count > 0) notas.Add($"Rubros del ESF fuera del mapeo, sumados a {RubrosNiif.EfeCuentasPorPagar}: {string.Join(", ", actual.FueraDelMapeo)}.");
+        if (actual.SinRubro.Count > 0) notas.Add($"{actual.SinRubro.Count} cuenta(s) sin rubro NIIF sumadas a {RubrosNiif.EfeCuentasPorPagar} por su clase: {string.Join(", ", actual.SinRubro.Select(x => x.Code))}.");
+
+        var tabla = new TablaExportable("Estado de flujos de efectivo", $"Del {c.Desde:dd/MM/yyyy} al {c.Hasta:dd/MM/yyyy} · método indirecto{ArmadoDeEstados.SubtituloDeComparativo(comparativo)}", Columnas, filas, null, notas);
+        return await ArmadoDeEstados.EntregarAsync(audit, "cash-flow", request.Filtros, tabla, ct);
+    }
+
+    private static async Task<Calculo> CalcularAsync(SaldosPorRubro rubros, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        var diaAntes = desde.AddDays(-1);
+        var inicio = await ArmadoDeEstados.SituacionParaVariacionAsync(rubros, diaAntes, desde, ct);
+        var fin = await ArmadoDeEstados.SituacionParaVariacionAsync(rubros, hasta, desde, ct);
+        var rango = await rubros.DelRangoAsync(desde, hasta, ct);
 
         // Variación de las cuentas propias de un rubro del ESF (sin hijos: cada rubro se mapea por separado).
         decimal Delta(string esf) => fin.Saldos.Propio(esf) - inicio.Saldos.Propio(esf);
@@ -516,9 +639,9 @@ public sealed class CashFlowQueryHandler(IApplicationDbContext db, IUserBranchSc
         // Valor crudo de cada rubro del EFE antes de aplicar su signo (decisión 14).
         var crudo = new Dictionary<string, decimal>(StringComparer.Ordinal);
         foreach (var (codigoEfe, origenes) in RubrosNiif.EfeDesdeEsf) crudo[codigoEfe] = origenes.Sum(Delta);
-        // El resultado del período: la variación del resultado acumulado que el ESF inyecta. En un
-        // rango dentro del mismo ejercicio es exactamente el resultado del rango.
-        crudo[RubrosNiif.EfeResultado] = fin.Resultado - inicio.Resultado;
+        // El resultado del período es el del rango (decisión 14), no una diferencia entre dos
+        // resultados acumulados: para el EFE anual de 2027 es R2027, no R2027 − R2026.
+        crudo[RubrosNiif.EfeResultado] = rango.ResultadoContable;
         // Los ajustes: el gasto del período por deterioro, depreciación y amortización (no mueve efectivo).
         crudo[RubrosNiif.EfeAjustes] = rango.Total(RubrosNiif.Deterioro);
 
@@ -555,34 +678,8 @@ public sealed class CashFlowQueryHandler(IApplicationDbContext db, IUserBranchSc
 
         var variacionDelEfectivo = valor.GetValueOrDefault(RubrosNiif.EfeEfectivo);
         var actividades = efe.Where(r => r.ParentCode is null && r.Code != RubrosNiif.EfeEfectivo).Sum(r => valor[r.Code]);
-        var diferencia = actividades - variacionDelEfectivo;
 
-        var filas = new List<FilaExportable>();
-        foreach (var seccion in efe.Select(r => r.Section).Distinct(StringComparer.Ordinal))
-        {
-            var deLaSeccion = efe.Where(x => x.Section == seccion).ToList();
-            if (deLaSeccion.Any(r => r.Code == RubrosNiif.EfeEfectivo))
-            {
-                filas.Add(new FilaExportable(["Efectivo y equivalentes al inicio", inicio.Valor(RubrosNiif.Efectivo), null], seccion));
-                filas.Add(new FilaExportable(["Efectivo y equivalentes al final", fin.Valor(RubrosNiif.Efectivo), null], seccion));
-            }
-            foreach (var r in ArmadoDeEstados.EnOrdenDePresentacion(deLaSeccion))
-                filas.Add(new FilaExportable([r.Name, valor[r.Code], r.Code], seccion, ArmadoDeEstados.Resaltado(rubros, r)));
-        }
-        filas.Add(new FilaExportable(["Diferencia (Σ actividades − variación del efectivo)", diferencia, null], "Comprobación", Resaltada: true));
-
-        var notas = new List<string>(await EncabezadoDeInforme.NotasAsync(db, user, clock, request.Filtros, c.PeriodoTexto, c, ct))
-        {
-            $"Método indirecto. Variaciones entre el {diaAntes:dd/MM/yyyy} y el {c.Hasta:dd/MM/yyyy} de los rubros del estado de situación financiera; positivo = entra efectivo.",
-            "Mapeo desde el ESF: " + string.Join("; ", RubrosNiif.EfeDesdeEsf.Where(kv => rubros.Existe(kv.Key)).Select(kv => $"{kv.Key} ← {string.Join(" + ", kv.Value)}")) +
-            $". {RubrosNiif.EfeResultado} = resultado del período; {RubrosNiif.EfeAjustes} = gasto por deterioro, depreciación y amortización ({RubrosNiif.Deterioro}); las contra-cuentas ({string.Join(", ", RubrosNiif.ContrasYaEnAjustes)}) no se toman como variación porque su movimiento es ese gasto.",
-            "La fila «Diferencia» debe ser cero. Si no lo es, hubo bajas o castigos (el gasto del período no coincide con la variación de las contra-cuentas) o el rango cruza un cierre de ejercicio.",
-        };
-        if (fueraDelMapeo.Count > 0) notas.Add($"Rubros del ESF fuera del mapeo, sumados a {RubrosNiif.EfeCuentasPorPagar}: {string.Join(", ", fueraDelMapeo)}.");
-        if (sinRubro.Count > 0) notas.Add($"{sinRubro.Count} cuenta(s) sin rubro NIIF sumadas a {RubrosNiif.EfeCuentasPorPagar} por su clase: {string.Join(", ", sinRubro.Select(x => x.Code))}.");
-
-        var tabla = new TablaExportable("Estado de flujos de efectivo", $"Del {c.Desde:dd/MM/yyyy} al {c.Hasta:dd/MM/yyyy} · método indirecto", Columnas, filas, null, notas);
-        return await ArmadoDeEstados.EntregarAsync(audit, "cash-flow", request.Filtros, tabla, ct);
+        return new Calculo(valor, inicio.Valor(RubrosNiif.Efectivo), fin.Valor(RubrosNiif.Efectivo), actividades - variacionDelEfectivo, fueraDelMapeo, sinRubro);
     }
 
     private static decimal SaldoSinRubro(SaldosPorRubro.Saldos saldos, JerarquiaDelPlan.Cuenta cuenta) =>

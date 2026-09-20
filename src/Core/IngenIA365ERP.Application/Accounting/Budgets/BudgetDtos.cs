@@ -43,6 +43,32 @@ public static class BudgetErrors
     public static readonly Error SourceNotFound = new("Accounting.Budget.SourceNotFound", "El año anterior no tiene presupuesto del que copiar.");
     public static readonly Error NegativeAmount = new("Accounting.Budget.NegativeAmount", "Los valores presupuestados no pueden ser negativos.");
 
+    /// <summary>
+    /// El presupuesto va en pesos (§10): un monto con centavos no se redondea a escondidas —la
+    /// columna es <c>numeric(18,2)</c> y hasta el 2026-09-20 recortaba las milésimas al guardar, con
+    /// lo que los meses dejaban de sumar el total—, se devuelve para que quien digita lo corrija.
+    /// </summary>
+    public static readonly Error DecimalsNotAllowed = InvalidDistribution("el presupuesto se registra en pesos, sin decimales.");
+
+    /// <summary>
+    /// Tope de un valor presupuestado. Sin él, un monto de 1e17 pasaba validador y handler y
+    /// reventaba en la base (<c>numeric(18,2)</c>) como un 500 sin sobre; con él, la respuesta dice
+    /// cuánto es lo máximo (Principio VIII).
+    /// </summary>
+    public static readonly Error AmountTooLarge = new("Accounting.Budget.AmountTooLarge",
+        $"Un valor presupuestado no puede pasar de {LineasDePresupuesto.TopeDeMonto:N0} pesos.");
+
+    /// <summary>FR-035: quien tiene sucursales asignadas sólo presupuesta sobre ellas; <c>data.branchName</c> dice cuál se rechazó.</summary>
+    public static Error BranchOutOfScope(string branchName) =>
+        new ErrorConDatos("Accounting.Budget.BranchOutOfScope",
+            $"La sucursal {branchName} no está entre las asignadas a su usuario: presupueste sobre sus sucursales o pida que se la asignen.",
+            new { branchName });
+
+    /// <summary>Copiar trae TODAS las líneas del año origen; si alguna es de una sucursal fuera del alcance, la copia la hace quien no tiene restricción.</summary>
+    public static Error SourceOutOfScope(int previousYear) =>
+        new("Accounting.Budget.BranchOutOfScope",
+            $"El presupuesto de {previousYear} tiene líneas de sucursales que no están asignadas a su usuario: la copia la debe hacer un usuario sin restricción de sucursal.");
+
     /// <summary>Sólo se presupuestan cuentas de movimiento activas (FR-061); <c>data.accountCode</c> dice cuál falló.</summary>
     public static Error AccountNotMovement(string accountCode) =>
         new ErrorConDatos("Accounting.Budget.AccountNotMovement",

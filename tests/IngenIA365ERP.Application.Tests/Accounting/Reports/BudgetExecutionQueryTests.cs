@@ -73,9 +73,9 @@ public class BudgetExecutionQueryTests
         }
 
         public BudgetExecutionQueryHandler Consulta() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
-        public CreateBudgetCommandHandler Creador() => new(D.Db, D.Clock, D.User, Emisor);
-        public ApproveBudgetCommandHandler Aprobador() => new(D.Db, D.Clock, D.User, Emisor);
-        public UpdateBudgetCommandHandler Modificador() => new(D.Db, D.Clock, D.User, Emisor);
+        public CreateBudgetCommandHandler Creador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public ApproveBudgetCommandHandler Aprobador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
+        public UpdateBudgetCommandHandler Modificador() => new(D.Db, D.Alcance, D.Clock, D.User, Emisor);
 
         public static decimal[] Meses(params (int Mes, decimal Valor)[] porMes)
         {
@@ -304,5 +304,31 @@ public class BudgetExecutionQueryTests
         json.Value.Filas.Should().BeEmpty();
         await e.Auditoria.DidNotReceive().AppendAsync(Arg.Any<AuditEventDocument>(), Arg.Any<CancellationToken>());
         mala.Error.Code.Should().Be("Accounting.Branch.NotFound");
+    }
+
+    [Fact]
+    public async Task El_alcance_de_sucursal_tambien_recorta_el_presupuestado_y_deja_ver_el_de_la_empresa()
+    {
+        var e = new Escenario();
+        // Gasto2 presupuestado en Norte (50) y en la Principal (70); Gasto1 sin sucursal (de la empresa).
+        var r0 = await e.Creador().Handle(new CreateBudgetCommand(2026,
+        [
+            new BudgetLineInput(e.Gasto1.PublicId, null, null, Escenario.Meses((3, 100m))),
+            new BudgetLineInput(e.Gasto2.PublicId, e.D.Norte.PublicId, null, Escenario.Meses((3, 50m))),
+            new BudgetLineInput(e.Gasto2.PublicId, e.D.Principal.PublicId, null, Escenario.Meses((3, 70m))),
+        ]), CancellationToken.None);
+        r0.IsSuccess.Should().BeTrue(r0.Error?.Message);
+        await e.MovimientosAsync();
+        e.D.RestringirA(e.D.Norte);
+
+        var r = await e.Consulta().Handle(new BudgetExecutionQuery(2026, 3, new FiltrosDeInforme()), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        // Antes del 2026-09-20 «Ppto. mes» de Gasto2 salía 120 (Norte + Principal) con ejecución sólo de Norte: un informe falso.
+        Celda(r.Value, "5105062", "Ppto. mes").Should().Be(50m, "sólo la línea de Norte; la de la Principal no es de este usuario");
+        Celda(r.Value, "5105062", "Ejec. mes").Should().Be(5m);
+        Celda(r.Value, "5105061", "Ppto. mes").Should().Be(100m, "la línea de la empresa (sin sucursal) se sigue viendo");
+        Celda(r.Value, "5105061", "Ejec. mes").Should().Be(30m);
+        Celda(r.Value, "510506", "Ppto. mes").Should().Be(150m, "hacia arriba se suma sólo lo que se ve");
     }
 }

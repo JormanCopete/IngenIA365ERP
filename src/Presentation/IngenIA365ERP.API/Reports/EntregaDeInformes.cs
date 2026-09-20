@@ -21,25 +21,21 @@ namespace IngenIA365ERP.API.Reports;
 /// </summary>
 public static class EntregaDeInformes
 {
-    public const string Json = "json";
-    public static readonly string[] FormatosDeArchivo = ["xlsx", "pdf", "docx"];
+    public const string Json = FormatosDeInforme.Json;
+    public static readonly string[] FormatosDeArchivo = FormatosDeInforme.DeArchivo;
 
     /// <summary>
-    /// Formato normalizado (<c>json</c> si viene nulo o vacío). El vacío cuenta como ausente porque
-    /// así llega <c>format</c> cuando el filtro de exportación lo lee de la query string sin que
-    /// nadie lo haya mandado: tratarlo como «otro formato» habría exigido el permiso de exportar
-    /// a toda pantalla que consulta.
+    /// Formato normalizado (<c>json</c> si viene nulo o vacío). Es la regla de
+    /// <see cref="FormatosDeInforme"/>, la misma con la que los handlers deciden si auditan una
+    /// exportación: aquí se entrega y se exige el permiso, allá se deja el rastro, y los dos lados
+    /// tienen que ver el mismo formato o la auditoría miente (hallazgo 8 de la revisión E2).
     /// </summary>
-    public static string Normalizar(string? formato) => string.IsNullOrWhiteSpace(formato) ? Json : formato.Trim().ToLowerInvariant();
+    public static string Normalizar(string? formato) => FormatosDeInforme.Normalizar(formato);
 
     /// <summary>Verdadero cuando el formato pide un archivo (y por tanto es una exportación auditable).</summary>
-    public static bool EsExportacion(string? formato) => Normalizar(formato) != Json;
+    public static bool EsExportacion(string? formato) => FormatosDeInforme.EsExportacion(formato);
 
-    public static bool EsFormatoValido(string? formato)
-    {
-        var f = Normalizar(formato);
-        return f == Json || FormatosDeArchivo.Contains(f);
-    }
+    public static bool EsFormatoValido(string? formato) => FormatosDeInforme.EsValido(formato);
 
     public static Task<IResult> EntregarAsync(Result<TablaExportable> resultado, string? formato, string nombreBase)
     {

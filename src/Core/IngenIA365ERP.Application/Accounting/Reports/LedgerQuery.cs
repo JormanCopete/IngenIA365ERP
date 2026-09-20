@@ -107,7 +107,7 @@ public sealed class LedgerQueryHandler(
             Columnas, n.Filas, Totales(n), notas);
 
         if (request.Filtros.EsExportacion)
-            await audit.EmitirExportacionAsync(Informe, new { filtros = request.Filtros, node = request.Node }, request.Filtros.Format!, tabla.Filas.Count, ct);
+            await audit.EmitirExportacionAsync(Informe, new { filtros = request.Filtros, node = request.Node }, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
         return Result.Success(tabla);
     }
 

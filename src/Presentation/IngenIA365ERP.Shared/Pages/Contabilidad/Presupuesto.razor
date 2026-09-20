@@ -549,7 +549,7 @@
     private async Task CargarEjecucionAsync()
     {
         using var carga = _cargaEjecucion.Iniciar();
-        var r = await Contabilidad.InformeAsync(ContabilidadClient.Vistas.EjecucionPresupuestal, QueryEjecucion());
+        var r = await Contabilidad.EjecucionPresupuestalAsync(QueryEjecucion());
         if (!r.IsSuccess) { _ejecucion = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la ejecución."); return; }
         _ejecucion = r.Value;
     }
@@ -557,7 +557,7 @@
     private async Task DescargarEjecucionAsync(string formato)
     {
         using var carga = _cargaEjecucion.Iniciar();
-        var r = await Contabilidad.DescargarInformeAsync(ContabilidadClient.Vistas.EjecucionPresupuestal, QueryEjecucion(), formato);
+        var r = await Contabilidad.DescargarEjecucionPresupuestalAsync(QueryEjecucion(), formato);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }

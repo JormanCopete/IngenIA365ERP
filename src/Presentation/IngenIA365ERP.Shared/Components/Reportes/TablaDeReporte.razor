@@ -60,7 +60,10 @@ else
                     {
                         <tfoot>
                             <tr class="resaltada">
-                                @if (conSeccion) { <td>@TextoTotales</td> }
+                                @* La celda de sección del pie va vacía, como en ReportesNomina.razor y en los
+                                   exportadores: el texto «Totales» ya lo trae la primera celda de la fila que
+                                   arma el servidor, y hasta el 2026-09-20 aquí se leía «Totales | Totales». *@
+                                @if (conSeccion) { <td></td> }
                                 @foreach (var (col, i) in visibles)
                                 {
                                     <td class="@(col.EsNumerica ? "numero" : "")">@(i < t.Valores.Count ? TablaReporteDto.Texto(t.Valores[i], col.Tipo) : "")</td>
@@ -89,7 +92,6 @@ else
     [Parameter] public bool MostrarNotas { get; set; } = true;
     [Parameter] public string TextoSinTabla { get; set; } = "Elija los filtros y pulse «Consultar».";
     [Parameter] public string TextoSinFilas { get; set; } = "Sin filas para estos filtros.";
-    [Parameter] public string TextoTotales { get; set; } = "Totales";
 
     /// <summary>Las columnas que se pintan, con su índice real en <c>Valores</c> (las ocultas corren los índices).</summary>
     private static List<(ColumnaReporteDto Col, int Indice)> Visibles(TablaReporteDto tabla)

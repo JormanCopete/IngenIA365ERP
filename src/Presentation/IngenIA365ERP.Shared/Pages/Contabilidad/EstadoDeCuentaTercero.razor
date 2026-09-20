@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Reportes
 @using IngenIA365ERP.Shared.Components.Reportes
 @inject ContabilidadClient Contabilidad
+@inject PersonasClient Personas
 @inject INotificationService Notification
 @inject NavigationManager Navigation
 @inject DescargaDeArchivos Descargas
@@ -45,6 +46,14 @@
     }
     else
     {
+        @* El título lo arma la API con el nombre y el documento del tercero («Estado de cuenta —
+           Nombre (NIT)»): se pinta aquí, sobre las cifras, porque las tres tablas van sin título y
+           hasta el 2026-09-20 quien llegaba por ?person= veía cifras sin saber de quién eran. *@
+        @if (_movimientos is not null)
+        {
+            <h4>@_movimientos.Titulo</h4>
+            @if (!string.IsNullOrWhiteSpace(_movimientos.Subtitulo)) { <p class="texto-tenue">@_movimientos.Subtitulo</p> }
+        }
         <div class="kpi-grid">
             <div class="kpi-card"><span class="kpi-value">@Moneda(_debitos)</span><span class="kpi-label">Débitos del rango</span></div>
             <div class="kpi-card"><span class="kpi-value">@Moneda(_creditos)</span><span class="kpi-label">Créditos del rango</span></div>
@@ -143,10 +152,25 @@
         _incluirCierre = f.IncludeClosing;
         if (Person is { } p)
         {
-            // El nombre lo trae la primera consulta en el subtítulo de la tabla; hasta entonces se muestra el identificador.
-            _tercero = new PersonSearchPicker.PersonSearchItem { PublicId = p, FullName = "Tercero", IdentificationNumber = string.Empty };
-            await ConsultarAsync();
+            _tercero = await ResolverTerceroAsync(p);
+            if (_tercero is not null) await ConsultarAsync();
         }
+    }
+
+    /// <summary>
+    /// Quien llega por <c>?person=</c> (desde el auxiliar o desde «Documentos pendientes») trae sólo el
+    /// identificador: la persona se pide al maestro antes de consultar, para que el buscador muestre su
+    /// nombre y documento. Hasta el 2026-09-20 se ponía el literal «Tercero» confiando en que el
+    /// título de la tabla lo diría, y las tres tablas van sin título. Si la persona no existe o no
+    /// hay permiso de leerla, se avisa y la pantalla queda para elegir otro tercero.
+    /// </summary>
+    private async Task<PersonSearchPicker.PersonSearchItem?> ResolverTerceroAsync(Guid publicId)
+    {
+        using var carga = _cargaMovimientos.Iniciar();
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } persona) return PersonSearchPicker.PersonSearchItem.Desde(persona);
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el tercero indicado en la dirección.");
+        return null;
     }
 
     private async Task TerceroElegidoAsync(PersonSearchPicker.PersonSearchItem? p)

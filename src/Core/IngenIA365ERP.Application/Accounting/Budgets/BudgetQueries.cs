@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -24,10 +25,10 @@ public sealed class GetBudgetQueryValidator : AbstractValidator<GetBudgetQuery>
     }
 }
 
-public sealed class GetBudgetQueryHandler(IApplicationDbContext db) : IRequestHandler<GetBudgetQuery, Result<BudgetDto>>
+public sealed class GetBudgetQueryHandler(IApplicationDbContext db, IUserBranchScope alcance) : IRequestHandler<GetBudgetQuery, Result<BudgetDto>>
 {
-    public Task<Result<BudgetDto>> Handle(GetBudgetQuery request, CancellationToken ct) =>
-        ArmadoDePresupuesto.ArmarAsync(db, request.Year, request.Version, ct);
+    public async Task<Result<BudgetDto>> Handle(GetBudgetQuery request, CancellationToken ct) =>
+        await ArmadoDePresupuesto.ArmarAsync(db, request.Year, request.Version, await alcance.ObtenerAsync(ct), ct);
 }
 
 /// <summary>
@@ -40,7 +41,7 @@ public static class ArmadoDePresupuesto
 {
     public const int Meses = 12;
 
-    public static async Task<Result<BudgetDto>> ArmarAsync(IApplicationDbContext db, int year, int? version, CancellationToken ct)
+    public static async Task<Result<BudgetDto>> ArmarAsync(IApplicationDbContext db, int year, int? version, AlcanceDeSucursales alcance, CancellationToken ct)
     {
         var ejercicioId = await db.FiscalYears.AsNoTracking().Where(f => f.Year == year && !f.IsDeleted).Select(f => (int?)f.Id).FirstOrDefaultAsync(ct);
         if (ejercicioId is null) return Result.Success(BudgetDto.Ninguno(year));
@@ -57,7 +58,7 @@ public static class ArmadoDePresupuesto
             : versiones.Where(x => x.Status != BudgetStatus.Superseded).OrderByDescending(x => x.Version).FirstOrDefault();
         if (elegida is null) return Result.Failure<BudgetDto>(BudgetErrors.NotFound);
 
-        var lineas = await LineasAsync(db, elegida.Id, ct);
+        var lineas = await LineasAsync(db, elegida.Id, alcance, ct);
         var dto = new BudgetDto(year, elegida.Version, elegida.Status.ToString(), elegida.ApprovedAt, elegida.ApprovedBy, elegida.ChangeReason,
             versiones.Select(x => new BudgetVersionDto(x.Version, x.Status.ToString(), x.ApprovedAt, x.ApprovedBy, x.ChangeReason, x.CreatedAt, x.CreatedBy)).ToList(),
             lineas);
@@ -65,10 +66,17 @@ public static class ArmadoDePresupuesto
     }
 
     /// <summary>Las filas de una versión, agrupadas por (cuenta, sucursal, centro) con los doce meses (cero donde no hay fila).</summary>
-    public static async Task<IReadOnlyList<BudgetLineDto>> LineasAsync(IApplicationDbContext db, int budgetId, CancellationToken ct)
+    public static async Task<IReadOnlyList<BudgetLineDto>> LineasAsync(IApplicationDbContext db, int budgetId, AlcanceDeSucursales alcance, CancellationToken ct)
     {
-        var filas = await db.BudgetLines.AsNoTracking()
-            .Where(l => l.BudgetId == budgetId && !l.IsDeleted)
+        var q = db.BudgetLines.AsNoTracking().Where(l => l.BudgetId == budgetId && !l.IsDeleted);
+        // FR-035: con sucursales asignadas se ven las líneas de la empresa (sin sucursal) y las de esas
+        // sucursales; las demás no salen. Hasta el 2026-09-20 el usuario de Norte veía lo presupuestado para Sur.
+        if (alcance.Restringido)
+        {
+            var permitidas = alcance.Sucursales.ToList();
+            q = q.Where(l => l.BranchId == null || permitidas.Contains(l.BranchId.Value));
+        }
+        var filas = await q
             .Select(l => new
             {
                 l.AccountId, AccountPublicId = l.Account!.PublicId, AccountCode = l.Account!.Code, AccountName = l.Account!.Name,

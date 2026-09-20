@@ -13,11 +13,12 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// de <c>ACC_FinancialStatementItems</c> y la jerarquía (<c>ParentCode</c>) se arma en memoria.
 ///
 /// <para>
-/// El valor de un rubro es la suma de los saldos <b>por naturaleza</b> de las cuentas con
-/// movimiento cuyo <c>NiifItemCode</c> es su código, multiplicada por el <c>Sign</c> del rubro
-/// (−1 en las contra: deterioros, depreciaciones, devoluciones), más el valor de sus hijos, que
-/// ya llegan con su propio signo. Una cuenta cuyo rubro no existe para el grupo no se pierde: va
-/// a <see cref="Saldos.SinRubro"/> y el estado la muestra en una fila «Sin rubro NIIF».
+/// El valor de un rubro es la suma de los saldos de las cuentas con movimiento cuyo
+/// <c>NiifItemCode</c> es su código, medidos por la naturaleza <b>que el rubro espera</b> —no por
+/// la de la cuenta— y multiplicados por el <c>Sign</c> del rubro (−1 en las contra: deterioros,
+/// depreciaciones, devoluciones), más el valor de sus hijos, que ya llegan con su propio signo
+/// (<see cref="Saldos.NaturalezaEsperada"/>). Una cuenta cuyo rubro no existe para el grupo no se
+/// pierde: va a <see cref="Saldos.SinRubro"/> y el estado la muestra en una fila «Sin rubro NIIF».
 /// </para>
 ///
 /// <para>
@@ -97,6 +98,24 @@ public sealed class SaldosPorRubro
         return MedirAsync(q, ct);
     }
 
+    /// <summary>
+    /// Saldos acumulados hasta una fecha inclusive, contando los cierres fechados <b>antes de
+    /// <paramref name="desde"/></b> (el inicio del rango consultado) y ninguno posterior, salvo la
+    /// bandera. Es la medición de los dos extremos de una variación (EFE): los dos tienen que ver
+    /// los mismos cierres o la variación se los atribuye al período. Con <see cref="ALaFechaAsync"/>
+    /// el saldo al 31/12/2026 no veía el cierre de 2026 (es «su» ejercicio) y el del 31/12/2027 sí,
+    /// así que el EFE de 2027 restaba el resultado de 2026 a «Resultado del ejercicio» y lo mandaba
+    /// entero a financiación como si se hubiera distribuido; la fila «Diferencia» daba cero porque
+    /// los dos errores se compensaban.
+    /// </summary>
+    public Task<Saldos> ALaFechaConCierresAnterioresAAsync(DateOnly fecha, DateOnly desde, CancellationToken ct)
+    {
+        var incluirCierre = IncluirCierre;
+        var q = _libro.Where(e => e.Date <= fecha
+                                  && (incluirCierre || e.Document!.Kind != DocumentKind.Closing || e.Date < desde));
+        return MedirAsync(q, ct);
+    }
+
     /// <summary>Movimientos de un rango, sin la apertura (que es saldo inicial) y sin cierre salvo la bandera.</summary>
     public Task<Saldos> DelRangoAsync(DateOnly desde, DateOnly hasta, CancellationToken ct)
     {
@@ -150,19 +169,42 @@ public sealed class SaldosPorRubro
             {
                 var cuenta = rubros.Plan.PorId(id);
                 if (cuenta is null) continue; // el asiento la referencia; no debería pasar
-                var saldo = sumas.SaldoFinal(cuenta.Nature);
                 var rubro = rubros.PorCodigo(cuenta.NiifItemCode);
                 if (rubro is null)
                 {
-                    sinRubro.Add((cuenta, saldo));
+                    sinRubro.Add((cuenta, sumas.SaldoFinal(cuenta.Nature)));
                     continue;
                 }
+                var saldo = sumas.SaldoFinal(NaturalezaEsperada(cuenta, rubro));
                 _propio[rubro.Code] = _propio.GetValueOrDefault(rubro.Code) + saldo * rubro.Sign;
                 _sumasPropias[rubro.Code] = _sumasPropias.GetValueOrDefault(rubro.Code, SumasDeCuenta.Cero).Mas(sumas);
                 if (rubro.Statement == FinancialStatementKind.IncomeStatement) resultado += sumas.Creditos - sumas.Debitos;
             }
             SinRubro = sinRubro.OrderBy(x => x.Cuenta.Code, StringComparer.Ordinal).ToList();
             ResultadoContable = resultado;
+        }
+
+        /// <summary>
+        /// El lado por el que se mide una cuenta dentro de su rubro: la naturaleza de su <b>clase</b>
+        /// (1 débito, 2 y 3 crédito…), invertida cuando el rubro es una contra (<c>Sign</c> −1).
+        /// No es la naturaleza de la cuenta, a propósito: el CUIF trae cuentas de naturaleza contraria
+        /// a su clase dentro de rubros normales —3510 «Pérdida del ejercicio» es débito y está en el
+        /// patrimonio, 6220 es crédito y está en costos, los deterioros de inversiones (1203xx) son
+        /// crédito y están en el activo— y medirlas por su propia naturaleza las hacía sumar donde
+        /// deben restar: con una pérdida de 100 en 3510 el patrimonio subía 100 y el ESF descuadraba
+        /// 200. Con el lado del rubro, los cuatro casos salen bien: 1408 (crédito, deterioro de cartera,
+        /// rubro −1) → esperada crédito, saldo +X, × −1 = −X; 3510 (débito, rubro +1) → esperada crédito,
+        /// saldo C − D = −100, resta del patrimonio; 4175 devoluciones (débito, rubro −1) → esperada
+        /// débito, saldo +X, × −1 = −X; 6220 (crédito, rubro +1) → esperada débito, saldo D − C negativo,
+        /// resta de los costos. Y como cada clase queda medida por un solo lado, la suma de los rubros
+        /// de una raíz es Σ (débitos − créditos) o Σ (créditos − débitos) de toda la clase, que es lo
+        /// que hace cuadrar Activo = Pasivo + Patrimonio.
+        /// </summary>
+        public static AccountNature NaturalezaEsperada(JerarquiaDelPlan.Cuenta cuenta, Rubro rubro)
+        {
+            var esperada = JerarquiaDelPlan.NaturalezaDeClase(cuenta.Code);
+            if (rubro.Sign >= 0) return esperada;
+            return esperada == AccountNature.Debit ? AccountNature.Credit : AccountNature.Debit;
         }
 
         /// <summary>Débitos y créditos por cuenta (en <see cref="SumasDeCuenta.Debitos"/> y <see cref="SumasDeCuenta.Creditos"/>).</summary>
@@ -174,7 +216,7 @@ public sealed class SaldosPorRubro
         /// <summary>Ingresos menos costos y gastos de la medición: Σ (créditos − débitos) de las cuentas con rubro del ERI.</summary>
         public decimal ResultadoContable { get; }
 
-        /// <summary>Valor de las cuentas directas del rubro (saldo por naturaleza × signo), sin sus hijos.</summary>
+        /// <summary>Valor de las cuentas directas del rubro (saldo por el lado que el rubro espera × signo), sin sus hijos.</summary>
         public decimal Propio(string code) => _propio.GetValueOrDefault(code);
 
         /// <summary>Valor del rubro con sus hijos (cada hijo ya trae su signo).</summary>
