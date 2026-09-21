@@ -209,6 +209,7 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TerminationReasonsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.HolidaysSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CompanyPoliciesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.BankFileFormatsSeeder>();
         // Contabilidad (feature 009): tipos de comprobante (reemplaza al NM de nomina) y tipos de documento cruce, desde JSON incrustado.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AccountCatalogsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.FinancialStatementItemsSeeder>();

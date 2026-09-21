@@ -21,6 +21,8 @@
   <ItemGroup>
     <!-- Feature 010: calendarios de festivos esperados (Ley 51 de 1983) que lee FestivosLey51Tests. -->
     <None Include="Infrastructure\Festivos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 010 (US8): el formato ficticio de ancho fijo de contracts/archivos.md §2.2 que FlatFileWriterTests compara byte a byte. -->
+    <None Include="Payroll\Dispersion\Formatos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />

@@ -22,7 +22,7 @@ public sealed class PayrollSeedApplier(ApplicationDbContext tenantDb, IHostEnvir
         [
             new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new VoucherTypesSeeder(),
             // Feature 010: motivos de retiro, festivos y políticas por empresa entran por el mismo botón «Reaplicar semilla».
-            new TerminationReasonsSeeder(), new HolidaysSeeder(), new CompanyPoliciesSeeder(),
+            new TerminationReasonsSeeder(), new HolidaysSeeder(), new CompanyPoliciesSeeder(), new BankFileFormatsSeeder(),
         ];
 
         var resultado = new List<(string, int)>();

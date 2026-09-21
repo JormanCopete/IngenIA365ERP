@@ -1,4 +1,6 @@
 using FluentValidation;
+using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Application.Common.BankFiles;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
@@ -143,7 +145,7 @@ public sealed class GetFundDepositFileQueryValidator : AbstractValidator<GetFund
     }
 }
 
-public sealed class GetFundDepositFileQueryHandler(IApplicationDbContext db) : IRequestHandler<GetFundDepositFileQuery, Result<FundDepositFileDto>>
+public sealed class GetFundDepositFileQueryHandler(IApplicationDbContext db, IDateTimeService clock) : IRequestHandler<GetFundDepositFileQuery, Result<FundDepositFileDto>>
 {
     public async Task<Result<FundDepositFileDto>> Handle(GetFundDepositFileQuery request, CancellationToken ct)
     {
@@ -152,7 +154,52 @@ public sealed class GetFundDepositFileQueryHandler(IApplicationDbContext db) : I
         if (run.Kind != PayrollRunKind.Severance) return Result.Failure<FundDepositFileDto>(SettlementErrors.KindMismatch(run.Kind, PayrollRunKind.Severance));
         if (!await db.SeveranceProviders.AsNoTracking().AnyAsync(f => f.PublicId == request.FundPublicId, ct))
             return Result.Failure<FundDepositFileDto>(SeveranceErrors.FundNotFound);
-        // N4 (T139): aquí entra FlatFileWriter con el formato vigente del fondo (scope = SeveranceDeposit).
-        return Result.Failure<FundDepositFileDto>(SettlementErrors.SeveranceFundFormatMissing);
+
+        // N4 (feature 010, D-42): el mismo motor de la dispersión con un formato de ámbito
+        // SeveranceDeposit —el indicado, o el vigente al corte— y el fondo en el contexto.
+        var corte = run.CutoffDate ?? clock.TodayUtc;
+        Domain.Entities.Core.BankFileFormat? formato = request.FormatPublicId is { } fid
+            ? await db.BankFileFormats.AsNoTracking().Include(f => f.Bank).Include(f => f.Fields).FirstOrDefaultAsync(f => f.PublicId == fid && f.Scope == BankFileScope.SeveranceDeposit, ct)
+            : (await db.BankFileFormats.AsNoTracking().Include(f => f.Bank).Include(f => f.Fields)
+                .Where(f => f.Scope == BankFileScope.SeveranceDeposit && f.IsActive && f.ValidFrom <= corte && (f.ValidTo == null || f.ValidTo >= corte))
+                .ToListAsync(ct)).OrderByDescending(f => f.ValidFrom).FirstOrDefault();
+        if (formato is null) return Result.Failure<FundDepositFileDto>(SettlementErrors.SeveranceFundFormatMissing);
+
+        var relacion = await new DepositScheduleBuilder(db).BuildAsync(run, ct);
+        var bloque = relacion.Funds.FirstOrDefault(f => f.FundPublicId == request.FundPublicId);
+        if (bloque is null || bloque.Lines.Count == 0)
+            return Result.Failure<FundDepositFileDto>(new Error("Payroll.Severance.FundWithoutLines", "Ese fondo no tiene empleados en esta liquidación."));
+
+        var empresa = await db.Companies.AsNoTracking().Where(c => !c.IsDeleted).OrderBy(c => c.Id).FirstOrDefaultAsync(ct);
+        var contexto = new BankFileContext
+        {
+            CompanyNit = empresa?.TaxId ?? string.Empty, CompanyNitDv = empresa?.TaxIdCheckDigit, CompanyName = empresa?.Name ?? string.Empty,
+            SourceAgreementCode = formato.AgreementCode, SourceBankCode = formato.Bank?.TransferCode,
+            PaymentDate = relacion.DueDate ?? corte, GeneratedAt = clock.UtcNow, Sequence = 1,
+            BatchReference = $"CESANTIAS {run.Year}", Year = run.Year, FundNit = bloque.FundNit, FundPilaCode = bloque.PilaCode,
+        };
+        var lineas = bloque.Lines.Select(l =>
+        {
+            var v = new BankFileLineValues();
+            v[BankFieldSource.PayeeDocumentType] = Dispersion.PayrollDisbursementLines.TipoDeDocumento(l.DocumentType);
+            v[BankFieldSource.PayeeDocument] = l.Document;
+            v[BankFieldSource.PayeeFullName] = l.Name;
+            v[BankFieldSource.Amount] = l.Amount;
+            v[BankFieldSource.SeveranceDays] = l.Days;
+            v[BankFieldSource.SeveranceBaseSalary] = l.BaseSalary;
+            v[BankFieldSource.PayeeHireDate] = l.HireDate;
+            v[BankFieldSource.Concept] = $"CESANTIAS {run.Year}";
+            return v;
+        }).ToList();
+        try
+        {
+            var salida = FlatFileWriter.Escribir(formato, contexto, lineas);
+            return Result.Success(new FundDepositFileDto(salida.FileName, salida.ContentType, salida.Content));
+        }
+        catch (BankFileWriteException ex)
+        {
+            return Result.Failure<FundDepositFileDto>(new ErrorConDatos("Payroll.Severance.FundFileLineTooLong",
+                $"La línea {ex.LineNumber} no cabe en el formato {formato.Code}: campo «{ex.Field}».", new { ex.LineNumber, ex.Field, format = formato.Code }));
+        }
     }
 }

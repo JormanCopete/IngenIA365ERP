@@ -25,6 +25,8 @@ public interface IApplicationDbContext
     DbSet<CostCenter> CostCenters { get; }
     DbSet<City> Cities { get; }
     DbSet<Bank> Banks { get; }
+    DbSet<BankFileFormat> BankFileFormats { get; }
+    DbSet<BankFileFormatField> BankFileFormatFields { get; }
     DbSet<Company> Companies { get; }
     DbSet<Committee> Committees { get; }
     DbSet<Beneficiary> Beneficiaries { get; }
@@ -173,6 +175,8 @@ public interface IApplicationDbContext
     DbSet<WithholdingRateCalculation> WithholdingRateCalculations { get; }
     DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths { get; }
     DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines { get; }
 
     // Inventory
     DbSet<Product> Products { get; }

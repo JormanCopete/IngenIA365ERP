@@ -50,6 +50,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
+    public DbSet<BankFileFormat> BankFileFormats => Set<BankFileFormat>();
+    public DbSet<BankFileFormatField> BankFileFormatFields => Set<BankFileFormatField>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Committee> Committees => Set<Committee>();
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
@@ -273,6 +275,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
+    public DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles => Set<Domain.Entities.Payroll.Transactions.BankDisbursementFile>();
+    public DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines => Set<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine>();
 
     // === Inventory (24) ===
     public DbSet<Product> Products => Set<Product>();

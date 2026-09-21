@@ -22,6 +22,7 @@ public static class AdjuntosDeModulo
     private static readonly IReadOnlyDictionary<string, Regla> Reglas = new Dictionary<string, Regla>(StringComparer.Ordinal)
     {
         ["EmploymentTermination"] = new("Payroll.Settlements.View", Borrable: false, "el documento para firma de la liquidación definitiva"),
+        ["BankDisbursementFile"] = new("Payroll.Disbursement.View", Borrable: false, "el archivo de dispersión bancaria que se entregó al banco"),
     };
 
     /// <summary>La regla del tipo de dueño, o nula si el adjunto es de una persona y lo gobierna <c>Attachments.*</c>.</summary>

@@ -38,7 +38,7 @@ cooperativa pueda dar prima y PILA a una persona sin darle definitivas.
 | `Payroll.WithholdingRate` | View, Calculate, Approve | porcentaje fijo del procedimiento 2 |
 | `Payroll.Pila` | View, Generate, MarkUploaded, Manage | `Manage` = datos del aportante; la descarga del archivo es `View` |
 | `Payroll.ElectronicPayroll` | View, Generate, Transmit, Manage | `Manage` = habilitación, rangos, set de pruebas |
-| `Payroll.Disbursement` | View, Generate, MarkSent, Manage | `Manage` = formatos por banco |
+| `Payroll.Disbursement` | View, Generate, MarkSent, Manage | archivos de dispersión; los **formatos** son de Core: `Core.BankFileFormats.View\|Manage` (D-42) |
 | `Payroll.CompanyPolicies` | View, Manage | políticas por empresa con vigencia |
 | `Payroll.Holidays` | View, Manage | calendario de festivos |
 
@@ -358,27 +358,53 @@ Errores: `Payroll.ElectronicPayroll.SettingsIncomplete` (`data: { missing[] }`, 
 `Generated` si no), `.ServiceRejected` (el servicio devolvió 4xx: `data: { serviceCode, message }`,
 p. ej. XSD inválido), `.CertificateExpired`, `.SecretNotFound`.
 
-## 9. Dispersión bancaria — `/api/payroll/disbursements`
+## 9. Dispersión bancaria — `/api/payroll/disbursements` y formatos en `/api/core/bank-file-formats`
+
+**D-42 (implementado el 2026-09-21):** el formato de archivo plano es **dato de Core ligado al banco**
+(`COR_BankFileFormats`/`COR_BankFileFormatFields`, con `scope`: `PayrollDisbursement`, `SeveranceDeposit`,
+`SupplierPayments` reservado para tesorería) y lo escribe **un solo motor**
+(`Application/Common/BankFiles/FlatFileWriter`, puro) que nómina, tesorería y contabilidad
+comparten; cada módulo decide qué va en cada origen. Los archivos generados por nómina son de
+nómina (`PAY_BankDisbursementFiles`/`…FileLines`). Un formato **genérico** (sin banco) sirve con
+cualquier banco; uno del banco manda sobre el genérico cuando la cuenta origen es de ese banco.
+Los orígenes se guardan con su nombre genérico (`PayeeDocument`, `Amount`, `Concept`…) y el JSON
+admite los sinónimos de nómina de `archivos.md` §2.1 (`EmployeeDocument`, `NetAmount`, `PaymentConcept`).
+
+### 9.1 Formatos — `/api/core/bank-file-formats` (permiso `Core.BankFileFormats.*`)
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /formats?bankId=&asOf=` | Disbursement.View | `[{ formatPublicId, code, name, bankPublicId, bankName, kind: FixedWidth (0) \| Delimited (1), validFrom, validTo?, isActive, usedBy }]` |
-| `GET /formats/{id}` | Disbursement.View | la definición completa (`archivos.md` §2) |
-| `POST /formats` | Disbursement.Manage | definición completa → 201; 422 `Payroll.Disbursement.FormatInvalid` (`data: { errors: [{ record, order, field, message }] }`), `.FormatOverlaps` (mismo banco y vigencia cruzada) |
-| `PUT /formats/{id}` | Disbursement.Manage | si el formato ya generó archivos, sólo `name`, `validTo` e `isActive` (422 `.FormatInUse`: cree uno nuevo con `validFrom` posterior; los archivos anteriores conservan el suyo, Edge Cases) |
-| `POST /formats/{id}/preview` | Disbursement.Manage | `{ runPublicId }` → `{ fileName, sample: [líneas 1-5], lineCount, total }` sin persistir |
-| `POST /` | Disbursement.Generate | `{ runPublicId, formatPublicId?, paymentDate, sourceAccountPublicId?, reference?, employeePublicIds?: [] }` → 201 `{ filePublicId, fileName, formatCode, lines, total, excluded: [{ employeePublicId, name, reasonCode: NoBankAccount \| AlreadyPaid \| BankCodeMissing \| ZeroNet, net }], sha256 }`. `formatPublicId` por defecto el vigente del banco pagador de la empresa; `sourceAccountPublicId` la cuenta bancaria de la empresa (`ACC_*` bancaria de la 009) si el formato la exige |
-| `GET /?runId=&status=&from=&to=` | Disbursement.View | `[{ filePublicId, runPublicId, runKind, runLabel, bankName, formatCode, lines, total, status: Generated (0) \| Sent (1) \| Cancelled (2), generatedAt, generatedBy, sentAt?, bankReference? }]` |
-| `GET /{id}` | Disbursement.View | cabecera + `lines: [{ lineNumber, employeePublicId, name, document, bankCode, accountType, accountNumber, amount, paid }]` + `excluded[]` |
-| `GET /{id}/file` | Disbursement.View | el archivo con `Content-Type` y codificación del formato (`text/plain; charset=…`), nombre según el formato |
-| `POST /{id}/mark-sent` | Disbursement.MarkSent | `{ sentAt, bankReference, paidAt? }` → marca pagados a **todos** los empleados del archivo con `MarkPaymentsCommand(run, empleados, paidAt ?? sentAt, Transfer, reference = bankReference)` (FR-033; bloquea la reversión); → `{ marked, alreadyPaid: [] }` |
-| `POST /{id}/cancel` | Disbursement.Generate | `{ reason }`; sólo `Generated` |
+| `GET /?scope=&bankId=&onlyActive=` | BankFileFormats.View | `[{ formatPublicId, code, name, bankPublicId?, bankName?, scope, validFrom, validTo?, kind: FixedWidth (1) \| Delimited (2), isActive, isSeeded, vigenteHoy, fieldCount, filesGenerated, notes? }]`; con `bankId` salen los del banco **y** los genéricos |
+| `GET /sources` | BankFileFormats.View | catálogo de orígenes `[{ code, description, dataType, header, detail, trailer, scope? }]` para el editor |
+| `GET /{id}` | BankFileFormats.View | `{ summary, definition }` con la definición completa (`archivos.md` §2.1) |
+| `POST /` | BankFileFormats.Manage | definición completa → 201 `{ formatPublicId }`; 422 `Core.BankFileFormat.Invalid` (`data: { errors: [{ record, order, field, message }] }`), `.CodeDuplicate`, `.Overlaps` (mismo banco, ámbito y vigencia cruzada; `data: { code, validFrom, validTo }`), 404 `.BankNotFound` |
+| `PUT /{id}` | BankFileFormats.Manage | si ya generó archivos sólo `name`, `validTo`, `notes` e `isActive` (422 `Core.BankFileFormat.InUse` `data: { files }`: cree una versión nueva con `validFrom` posterior; los archivos anteriores conservan la suya) |
+| `DELETE /{id}` | BankFileFormats.Manage | retiro suave de un formato propio sin archivos; 422 `.Seeded` (los sembrados se desactivan), `.InUse` |
 
-Errores: `Payroll.Disbursement.RunNotApproved`, `.NoFormat` (`data: { bankPublicId }`),
-`.NoEmployeesWithAccount`, `.AllPaid`, `.AlreadySent` (`data: { filePublicId }`; regenerar exige
-cancelar el anterior si no fue enviado), `.PaymentsAlreadyMarked` (`data: { employeePublicIds[] }`:
-alguien fue marcado a mano entre generar y enviar; se excluyen y se avisa), `.SourceAccountRequired`,
-`.LineTooLong` (`data: { lineNumber, field }`, ancho fijo desbordado), `.NotGenerated`.
+### 9.2 Archivos — `/api/payroll/disbursements` (permiso `Payroll.Disbursement.*`)
+
+| Ruta | Permiso | Cuerpo / respuesta |
+|---|---|---|
+| `POST /preview` | Disbursement.Generate | `{ runPublicId, formatPublicId?, paymentDate, sourceAccountPublicId?, reference?, definition? }` → `{ fileName, contentType, lines: [cabecera, hasta 5 detalles, totales], lineCount, totalAmount, excluded[], formatErrors[] }` sin persistir; `definition` prueba un formato **todavía no guardado** (el editor) |
+| `POST /` | Disbursement.Generate | `{ runPublicId, formatPublicId?, paymentDate, sourceAccountPublicId?, reference?, employeePublicIds?: [] }` → 201 `{ filePublicId, fileName, lineCount, totalAmount, excluded: [{ employeePublicId, name, reasonCode: NoBankAccount \| AlreadyPaid \| AlreadySent \| BankCodeMissing \| ZeroNet \| RequiredFieldEmpty, reason, netPay }], warnings[] }`. `formatPublicId` por defecto el vigente a `paymentDate` del banco de la cuenta origen, o el genérico; `sourceAccountPublicId` es una cuenta **bancaria del plan** (feature 009, `BankId` + `BankAccountNumber`) y es obligatoria si el formato escribe `SourceAccountNumber`/`SourceAccountType`; el archivo queda en `COR_Attachments` (`OwnerEntityType = BankDisbursementFile`, lectura por `Payroll.Disbursement.View`, no borrable) |
+| `GET /?runId=&year=&status=` | Disbursement.View | `[{ filePublicId, runPublicId, runLabel, runKind, status: Generated \| Sent \| Voided, formatCode, formatName, bankPublicId?, bankName?, paymentDate, sequence, reference?, lineCount, totalAmount, excludedCount, fileName, fileSha256, generatedAt, generatedBy, sentAt?, sentBy?, bankReference?, voidedAt?, voidedBy?, voidReason? }]` |
+| `GET /{id}` | Disbursement.View | `{ summary, lines: [{ lineNumber, employeePublicId, name, document, bankName, accountType, accountNumber, amount, recordText, paid, paymentPublicId? }], excluded[], sourceAccountNumber?, fileAttachmentPublicId? }` |
+| `GET /{id}/file` | Disbursement.View | el archivo tal cual se generó, `Content-Type` del formato con `charset` de su codificación y el nombre del formato; se comprueba la huella SHA-256 antes de servirlo |
+| `POST /{id}/mark-sent` | Disbursement.MarkSent | `{ sentAt, bankReference?, paidAt?, notes? }` → marca pagados a **todos** los de sus líneas en la misma transacción (medio `Transfer`, `paidAt ?? paymentDate`, referencia del banco o del lote; `PayrollPayment.BankDisbursementFileId`) y bloquea la reversión de la corrida (FR-033); → `{ filePublicId, markedPaid, alreadyMarked: [employeePublicId], paidAt, reference }` (quien ya tenía marca se deja como estaba) |
+| `POST /{id}/cancel` | Disbursement.Generate | `{ reason }`; sólo `Generated` → `Voided`; sus empleados vuelven a poder ir a otro archivo. Un `Sent` no se anula: cada marca se retira una a una (`/runs/{runId}/payments/{employeeId}/revert`) |
+
+Errores: `Payroll.Disbursement.RunNotApproved`, `.FileNotFound`, `.FormatNotFound`,
+`.FormatScopeMismatch`, `.NoFormat` (`data: { bank }`), `.FormatNotCurrent` (`data: { code, validFrom, validTo }`),
+`.SourceAccountRequired`, `.SourceAccountNotFound`, `.SourceAccountBankMismatch` (`data: { account, accountBank, formatBank }`),
+`.NothingToPay` (todos pagados, en otro archivo o sin datos: la lista está en `excluded`),
+`.LineTooLong` (`data: { lineNumber, field, employee }`), `.NotGenerated` (`data: { status }`),
+`.CompanyMissing` (sin empresa con NIT para la cabecera), `.FileMissing`, `.FileTampered` (la huella no
+coincide), aviso `.Excluded` (`data: { count }`), `.PaymentsAlreadyMarked` (`data: { employeePublicIds[] }`).
+D-10 resuelto: `COR_Banks.TransferCode` **es** el código de transferencia (ACH) —SOLIDO lo escribía
+como `codtras` en su plano de dispersión—; sin él el empleado queda en pendientes con `BankCodeMissing`.
+La consignación por fondo (`/settlements/severance/{runId}/deposit-schedule/{fundId}/file?formatId=`)
+usa el mismo motor con `scope = SeveranceDeposit` (el indicado o el vigente al corte); sin formato,
+`Payroll.Severance.FundFormatMissing`; `.FundWithoutLines`, `.FundFileLineTooLong`.
 
 ## 10. Políticas por empresa y festivos
 
@@ -433,7 +459,7 @@ misma tabla del `ErrorEnvelopeFilter` (`EstadoDe`). Hasta la revisión de N1 res
 | `pila-cuadre` | `generationId` | Pila.View | totales del archivo vs comprobantes `NM` por subsistema (FR-027) |
 | `pila-inconsistencias` | `generationId` \| `year`,`month` | Pila.View | |
 | `nomina-electronica-estado` | `year`, `month`, `status?` | ElectronicPayroll.View | documento por empleado: número, tipo, estado, CUNE, fecha, errores |
-| `dispersion` | `fileId` | Disbursement.View | líneas del archivo y excluidos |
+| `dispersion` | `fileId` | Disbursement.View | líneas del archivo y excluidos con motivo |
 
 PDF propios (no `TablaExportable`): documento de liquidación definitiva (§3.4), representación
 gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).

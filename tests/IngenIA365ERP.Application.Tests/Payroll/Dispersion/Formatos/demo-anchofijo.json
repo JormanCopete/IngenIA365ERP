@@ -1,0 +1,25 @@
+{ "code": "DEMO-ANCHOFIJO", "name": "Demostración ancho fijo", "bankPublicId": null,
+  "validFrom": "2026-12-01", "kind": "FixedWidth", "encoding": "us-ascii", "lineEnding": "CRLF",
+  "uppercase": true, "stripAccents": true, "amountFormat": "ImplicitCents",
+  "fileName": "DEMO{PaymentDate:yyyyMMdd}.txt",
+  "records": {
+    "header": { "enabled": true, "fields": [
+      { "order": 1, "name": "Tipo", "source": "Constant", "value": "1", "length": 1 },
+      { "order": 2, "name": "NIT", "source": "CompanyNit", "length": 10, "align": "Right", "pad": "0" },
+      { "order": 3, "name": "Cuenta origen", "source": "SourceAccountNumber", "length": 17, "align": "Right", "pad": "0" },
+      { "order": 4, "name": "Fecha de pago", "source": "PaymentDate", "format": "yyyyMMdd", "length": 8 },
+      { "order": 5, "name": "Referencia", "source": "BatchReference", "length": 12, "align": "Left", "pad": " ", "truncate": true } ] },
+    "detail": { "enabled": true, "fields": [
+      { "order": 1, "name": "Tipo", "source": "Constant", "value": "2", "length": 1 },
+      { "order": 2, "name": "Tipo doc.", "source": "EmployeeDocumentType", "length": 1, "map": { "CC": "1", "CE": "2", "PA": "4", "PE": "5" } },
+      { "order": 3, "name": "Documento", "source": "EmployeeDocument", "length": 15, "align": "Right", "pad": "0", "required": true },
+      { "order": 4, "name": "Nombre", "source": "EmployeeFullName", "length": 40, "align": "Left", "pad": " ", "truncate": true },
+      { "order": 5, "name": "Banco destino", "source": "EmployeeBankCode", "length": 4, "align": "Right", "pad": "0", "required": true },
+      { "order": 6, "name": "Tipo cuenta", "source": "EmployeeAccountType", "length": 1, "map": { "1": "S", "2": "D" } },
+      { "order": 7, "name": "Cuenta", "source": "EmployeeAccountNumber", "length": 17, "align": "Right", "pad": "0", "required": true },
+      { "order": 8, "name": "Valor", "source": "NetAmount", "length": 15, "align": "Right", "pad": "0" },
+      { "order": 9, "name": "Concepto", "source": "PaymentConcept", "length": 20, "align": "Left", "pad": " ", "truncate": true } ] },
+    "trailer": { "enabled": true, "fields": [
+      { "order": 1, "name": "Tipo", "source": "Constant", "value": "3", "length": 1 },
+      { "order": 2, "name": "Registros", "source": "LineCount", "length": 6, "align": "Right", "pad": "0" },
+      { "order": 3, "name": "Total", "source": "TotalAmount", "length": 17, "align": "Right", "pad": "0" } ] } } }
