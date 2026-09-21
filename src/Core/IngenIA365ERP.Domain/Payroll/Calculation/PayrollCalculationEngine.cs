@@ -319,7 +319,9 @@ public sealed class PayrollCalculationEngine
             .Where(c => c.IsAutomatic && c.Nature == nature && c.AppliesTo(clase)
                         && c.CalculationKind != CalculationKind.CompositeOfConcepts
                         && !excluir.Contains(c.Code, StringComparer.OrdinalIgnoreCase)
-                        && !c.Code.Equals(WellKnownConceptCodes.RoundingAdjustment, StringComparison.OrdinalIgnoreCase))
+                        && !c.Code.Equals(WellKnownConceptCodes.RoundingAdjustment, StringComparison.OrdinalIgnoreCase)
+                        // Feature 010: los de las liquidaciones especiales son del otro motor.
+                        && !WellKnownConceptCodes.SettlementOnly.Contains(c.Code, StringComparer.OrdinalIgnoreCase))
             .OrderBy(c => c.Code, StringComparer.Ordinal);
 
     private static int Posicion(string[] orden, string code)

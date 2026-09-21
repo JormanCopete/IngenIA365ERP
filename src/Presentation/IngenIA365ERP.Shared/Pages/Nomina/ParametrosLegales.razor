@@ -75,7 +75,7 @@ else if (_resumen is not null)
                         <p><strong>@v.ValorTexto</strong> · @v.Source <span class="texto-tenue">· registrado por @v.CreatedBy</span></p>
                         @if (v.EsTabla)
                         {
-                            <TablaDeRangos Tramos="@v.Ranges" Unidad="@(v.RangeUnitParameterCode ?? "pesos")" SoloLectura="true" />
+                            <TablaDeRangos Tramos="@v.Ranges" Unidad="@(v.RangeUnitParameterCode ?? "pesos")" EtiquetaTarifa="@v.EtiquetaTarifa" EtiquetaFijo="@v.EtiquetaFijo" SoloLectura="true" />
                             <p class="texto-tenue">@(v.RangeIsMarginal ? "Tarifa marginal sobre el exceso del tramo más el fijo." : "Tarifa del tramo sobre toda la base.")</p>
                         }
                     </div>
@@ -105,6 +105,7 @@ else if (_resumen is not null)
                                 <option value="Amount">Valor</option>
                                 <option value="Percent">Porcentaje</option>
                                 <option value="RangeTable">Tabla por rangos</option>
+                                <option value="DateInYear">Fecha del año (MMDD)</option>
                             </select>
                         </label>
                     }
@@ -118,7 +119,7 @@ else if (_resumen is not null)
                     <SfDatePicker TValue="DateTime" @bind-Value="_nueva.ValidFrom" Placeholder="Rige desde" FloatLabelType="FloatLabelType.Always" />
                     @if (_nueva.Kind != "RangeTable")
                     {
-                        <SfNumericTextBox TValue="decimal?" @bind-Value="_nueva.Value" Placeholder="@(_nueva.Kind == "Percent" ? "Porcentaje" : "Valor")" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_nueva.Value" Placeholder="@(_nueva.Kind == "Percent" ? "Porcentaje" : _nueva.Kind == "DateInYear" ? "Fecha como MMDD (1220 = 20 de diciembre)" : "Valor")" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
                         <ValidationMessage For="() => _nueva.Value" />
                     }
                     else
@@ -128,7 +129,7 @@ else if (_resumen is not null)
                             <SfTextBox @bind-Value="_nueva.RangeUnitParameterCode" MaxLength="40" Placeholder="Unidad de los tramos (código de parámetro: UVT, SMMLV; vacío = pesos)" FloatLabelType="FloatLabelType.Always" />
                             <label class="campo-check"><input type="checkbox" @bind="_nueva.RangeIsMarginal" /> Tarifa marginal sobre el exceso del tramo (retención); sin marcar, la tarifa aplica a toda la base (fondo de solidaridad)</label>
                         }
-                        <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" />
+                        <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" EtiquetaTarifa="@_base?.EtiquetaTarifa" EtiquetaFijo="@_base?.EtiquetaFijo" />
                     }
                     <SfTextBox @bind-Value="_nueva.Source" MaxLength="200" Placeholder="Norma que lo fija (decreto, resolución, ley)" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _nueva.Source" />

@@ -75,6 +75,22 @@ public class PayrollConceptDefinition : AuditableEntity
     /// <summary>Prestacional.</summary>
     public bool IsBenefitRelated { get; set; }
 
+    /// <summary>
+    /// Feature 010 (R6, CST art. 192): entra a la base de vacaciones e indemnización —salario
+    /// ordinario sin auxilio de transporte, sin extras ni trabajo en descanso obligatorio—. Es
+    /// una bandera aparte de <see cref="AffectsBenefitsBase"/> porque el auxilio SÍ es
+    /// prestacional (Ley 1 de 1963 art. 7) y NO entra a vacaciones.
+    /// </summary>
+    public bool AffectsVacationBase { get; set; }
+
+    /// <summary>
+    /// Feature 010 (R10): ruta del concepto en el XML de nómina electrónica de la DIAN (anexo
+    /// técnico 3.1), como <c>Devengados/Basico</c> o <c>Deducciones/Salud</c>. Nulo = el
+    /// concepto no va al documento (provisiones, aportes del empleador, informativos).
+    /// </summary>
+    [MaxLength(60)]
+    public string? DianElement { get; set; }
+
     // --- Reglas de la novedad ---
 
     public bool AllowsRepeatInPeriod { get; set; }

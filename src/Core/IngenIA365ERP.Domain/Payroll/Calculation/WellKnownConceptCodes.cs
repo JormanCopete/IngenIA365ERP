@@ -28,6 +28,44 @@ public static class WellKnownConceptCodes
     /// <summary>Aportes del empleador exonerados por debajo del tope de la Ley 1607 (parámetro).</summary>
     public static readonly IReadOnlyList<string> EmployerExemptionApplies = [HealthEmployer, Sena, Icbf];
 
+    // --- Feature 010: conceptos de las liquidaciones especiales (data-model §1.7). ---
+    // Los pone el motor de liquidaciones (prima, cesantías, vacaciones, definitiva) por lo que
+    // son; la nómina ordinaria no los evalúa aunque sean automáticos (SettlementOnly).
+
+    public const string ServiceBonus = "PRIMA";
+    public const string Severance = "CESANTIAS";
+    public const string SeveranceInterest = "INT_CESANTIAS";
+    public const string VacationPayout = "VACACIONES_LIQ";
+    public const string VacationCompensation = "VACACIONES_COMP";
+    public const string Indemnity = "INDEMNIZACION";
+    public const string RetirementBonus = "BONIF_RETIRO";
+    public const string PendingSalary = "SALARIO_PENDIENTE";
+    public const string ServiceBonusProvisionAdjustment = "PRIMA_AJUSTE_PROV";
+    public const string SeveranceProvisionAdjustment = "CESANTIAS_AJUSTE_PROV";
+    public const string SeveranceInterestProvisionAdjustment = "INT_CESANTIAS_AJUSTE_PROV";
+    public const string VacationProvisionAdjustment = "VACACIONES_AJUSTE_PROV";
+    public const string WithholdingOnServiceBonus = "RETEFTE_PRIMA";
+    public const string WithholdingOnSeverance = "RETEFTE_CESANTIAS";
+    public const string WithholdingOnIndemnity = "RETEFTE_INDEMNIZACION";
+
+    /// <summary>La novedad de ausencia que deja el disfrute de vacaciones ya pagado por la liquidación (D-01).</summary>
+    public const string VacationLeave = "AUSENCIA_VACACIONES";
+
+    /// <summary>La novedad de vacaciones de la semilla 005: la ordinaria paga los días cuando la política es «paga la nómina».</summary>
+    public const string Vacation = "VACACIONES";
+
+    /// <summary>
+    /// Automáticos que sólo produce el motor de liquidaciones. La nómina ordinaria los salta en
+    /// vez de evaluarlos en cero: sin esto cada empleado de cada corrida quedaría con quince
+    /// «valor cero» en sus notas y la pantalla lo marcaría como empleado con observaciones.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SettlementOnly =
+    [
+        ServiceBonus, Severance, SeveranceInterest, VacationPayout, VacationCompensation, Indemnity, PendingSalary,
+        ServiceBonusProvisionAdjustment, SeveranceProvisionAdjustment, SeveranceInterestProvisionAdjustment, VacationProvisionAdjustment,
+        WithholdingOnServiceBonus, WithholdingOnSeverance, WithholdingOnIndemnity,
+    ];
+
     /// <summary>Marcador dentro de un código de parámetro que el motor sustituye por la clase de riesgo ARL (I..V).</summary>
     public const string WorkRiskClassPlaceholder = "{CLASE}";
 }
