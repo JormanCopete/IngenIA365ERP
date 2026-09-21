@@ -705,7 +705,7 @@ else if (_lista.Count > 0)
     {
         using var carga = _cargaLista.Iniciar();
         var res = await Nomina.ListarCesantiasAnualesAsync(_anio);
-        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las liquidaciones de cesantías."); return; }
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las liquidaciones de cesantías."); return; }
         _lista = res.Value!.ToList();
         var vigente = SeleccionDeCesantias.Elegir(_lista, elegir, _seleccion?.RunPublicId, _corridaDelEnlace);
         _corridaDelEnlace = null;

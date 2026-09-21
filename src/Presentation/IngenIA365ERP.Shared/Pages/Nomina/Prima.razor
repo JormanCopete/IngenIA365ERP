@@ -604,7 +604,7 @@
         using var carga = _cargaLista.Iniciar();
         var res = await Nomina.ListarPrimasAsync(_anio);
         if (res.IsSuccess) _primas = res.Value!.ToList();
-        else { _primas = []; await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las primas del año."); }
+        else { _primas = []; await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las primas del año."); }
         // Si la corrida elegida ya no está en el año, se suelta; si sigue, se refresca.
         if (_corrida is not null)
         {
