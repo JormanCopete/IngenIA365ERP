@@ -50,8 +50,9 @@ public class RegisterTerminationCommandHandlerTests
         terminacion.Deductions.Should().HaveCount(3);
         p.Descuento(t, 1001).Proposed.Should().Be(1_500_000m);
         p.Descuento(t, 1001).Applied.Should().Be(1_500_000m);
-        p.Descuento(t, 1001).CapitalBalance.Should().Be(1_400_000m);
-        p.Descuento(t, 1001).InterestBalance.Should().Be(100_000m);
+        // En Cartera el saldo del crédito es capital (el recaudo sólo le resta el capital pagado); el desglose lo dice.
+        p.Descuento(t, 1001).CapitalBalance.Should().Be(1_500_000m);
+        p.Descuento(t, 1001).InterestBalance.Should().Be(0m);
         p.Descuento(t, 1001).RemainingAfter.Should().Be(0m, "aplicado el saldo total no queda nada en Cartera");
         p.Descuento(t, 1002).Proposed.Should().Be(300_000m);
         p.LibranzaDe(t).Proposed.Should().Be(100_000m, "cuatro cuotas causadas de junio a septiembre menos dos descontadas");

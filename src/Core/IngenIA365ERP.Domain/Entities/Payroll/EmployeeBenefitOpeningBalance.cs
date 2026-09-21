@@ -13,9 +13,11 @@ namespace IngenIA365ERP.Domain.Entities.Payroll;
 /// migración: la provisión por empleado no existe en el libro.
 ///
 /// <para>
-/// Se edita sólo mientras <see cref="ConsumedByRunId"/> es nulo; después, corregir es una fila
-/// <see cref="OpeningBalanceKind.Adjustment"/> con motivo que apunta a ésta. La reversión de la
-/// liquidación consumidora vuelve <see cref="ConsumedByRunId"/> a nulo. El motor lo recibe como
+/// Se edita sólo mientras ninguna liquidación aprobada lo usa; después, corregir es una fila
+/// <see cref="OpeningBalanceKind.Adjustment"/> con motivo que apunta a ésta. <see cref="ConsumedByRunId"/>
+/// señala a la liquidación aprobada más antigua que lo usa; al reversarla pasa a la siguiente que
+/// también lo usó (toda liquidación especial aprobada del empleado con corte igual o posterior al
+/// saldo lo lee), y sólo vuelve a nulo cuando no queda ninguna. El motor lo recibe como
 /// «tramo inicial» y lo explica como paso propio («Saldo inicial al … digitado por … el …»).
 /// </para>
 /// </summary>
@@ -55,7 +57,11 @@ public class EmployeeBenefitOpeningBalance : AuditableEntity
     [MaxLength(300)]
     public string? AdjustmentReason { get; set; }
 
-    /// <summary>La primera liquidación <b>aprobada</b> que lo usó; lo escribe la aprobación y lo limpia la reversión.</summary>
+    /// <summary>
+    /// La liquidación <b>aprobada</b> más antigua que lo usa; lo escribe la aprobación y la reversión lo pasa a la
+    /// siguiente que también lo usó, o lo limpia si no queda ninguna (revisión N1 de la feature 010: hasta entonces
+    /// sólo la primera dejaba rastro, y reversarla liberaba el saldo aunque otra liquidación aprobada lo hubiera leído).
+    /// </summary>
     public int? ConsumedByRunId { get; set; }
 
     public Employee? Employee { get; set; }

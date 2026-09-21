@@ -41,7 +41,7 @@ public class ReversePayrollRunCommandHandlerTests
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit)
+        var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
             .Handle(new ApprovePayrollRunCommand(calc.Value.RunPublicId, Confirm: true), CancellationToken.None);
         apr.IsSuccess.Should().BeTrue(apr.Error.Message);
         return calc.Value.RunPublicId;
@@ -49,7 +49,7 @@ public class ReversePayrollRunCommandHandlerTests
 
     private static ReversePayrollRunCommandHandler Reversor(NominaTestData d) =>
         new(d.Db, d.Contabilizador(Gerente), d.Clock, Gerente,
-            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker);
 
     [Fact]
     public async Task Reversar_deja_asiento_espejo_corrida_reversada_periodo_abierto_y_novedades_intactas()

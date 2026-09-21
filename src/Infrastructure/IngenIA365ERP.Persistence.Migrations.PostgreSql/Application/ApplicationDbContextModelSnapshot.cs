@@ -30302,12 +30302,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("TerminationId", "LoanPortfolioId")
                         .IsUnique()
                         .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
-                        .HasFilter("\"LoanPortfolioId\" IS NOT NULL");
+                        .HasFilter("\"LoanPortfolioId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
 
                     b.HasIndex("TerminationId", "RecurringNoveltyId")
                         .IsUnique()
                         .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Libranza")
-                        .HasFilter("\"RecurringNoveltyId\" IS NOT NULL");
+                        .HasFilter("\"RecurringNoveltyId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
 
                     b.ToTable("PAY_SettlementDeductions", "dbo");
                 });

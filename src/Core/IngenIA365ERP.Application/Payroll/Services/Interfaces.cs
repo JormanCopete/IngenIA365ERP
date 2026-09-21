@@ -15,6 +15,17 @@ public interface IPayrollRunStaleMarker
 
     /// <summary>Toda corrida <c>Draft</c> viva pasa a <c>Stale</c> (cambió un concepto o un parámetro legal).</summary>
     Task<int> MarkAllDraftsStaleAsync(string reason, CancellationToken ct);
+
+    /// <summary>
+    /// Feature 010 (revisión N1): los borradores de las liquidaciones especiales (prima, cesantías,
+    /// vacaciones, definitiva) no tienen período, así que <see cref="MarkStaleAsync"/> nunca los alcanza.
+    /// Pasan a <c>Stale</c> los borradores que incluyen a alguno de los empleados y cuyo corte es igual o
+    /// posterior a la fecha desde la que cambió el insumo: se aprobó o reversó una ordinaria de su rango
+    /// (sus provisiones y bases cambian), cambió un salario con efecto dentro del rango, o cambió el saldo
+    /// inicial del empleado. Aprobar un borrador así contabilizaría un ajuste de provisión viejo y el
+    /// saldo de la provisión no volvería a cero.
+    /// </summary>
+    Task<int> MarkSettlementDraftsStaleAsync(IReadOnlyCollection<int> employeeIds, DateOnly affectsFrom, string reason, CancellationToken ct);
 }
 
 /// <summary>

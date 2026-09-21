@@ -47,7 +47,7 @@ public class SendPayslipsCommandHandlerTests
         {
             var poster = d.Contabilizador(Contadora);
             var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit)
+            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
                 .Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
             a.IsSuccess.Should().BeTrue(a.Error.Message);
         }

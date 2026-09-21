@@ -58,7 +58,8 @@ public sealed class ApprovePayrollRunCommandHandler(
     IPermissionChecker permissions,
     IDateTimeService clock,
     ICurrentUserService user,
-    PayrollAuditEmitter audit)
+    PayrollAuditEmitter audit,
+    IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<ApprovePayrollRunCommand, Result<ApproveRunResultDto>>
 {
     public const string AuthorizeExceptionPermission = "Payroll.Runs.AuthorizeException";
@@ -182,22 +183,10 @@ public sealed class ApprovePayrollRunCommandHandler(
             }
         }
 
-        // Feature 010 (D-29): una definitiva en borrador cuyo retiro cae en este período traía el salario
-        // pendiente y las novedades del período; esta aprobación acaba de pagarlos con la ordinaria, así que
-        // el borrador queda desactualizado y al recalcularlo sale sin ese tramo («la última nómina ya lo pagó»).
-        var inicioDt = DateOnly.FromDateTime(period.StartDate);
-        var finDt = DateOnly.FromDateTime(period.EndDate);
-        var definitivasDelPeriodo = await db.PayrollRuns
-            .Where(r => r.Kind == PayrollRunKind.Settlement && r.Status == PayrollRunStatus.Draft
-                        && r.CutoffDate >= inicioDt && r.CutoffDate <= finDt && r.EmployeeId != null
-                        && db.Employees.Any(e => e.Id == r.EmployeeId && e.PayrollPlanId == period.PayrollPlanId))
-            .ToListAsync(ct);
-        foreach (var definitiva in definitivasDelPeriodo)
-        {
-            definitiva.Status = PayrollRunStatus.Stale;
-            definitiva.UpdatedAt = ahora;
-            definitiva.UpdatedBy = yo;
-        }
+        // Feature 010 (revisión N1): las provisiones y bases de un borrador de prima, cesantías, vacaciones o
+        // definitiva de estos empleados con corte desde este período cambian con esta aprobación: quedan Stale.
+        await staleMarker.MarkSettlementDraftsStaleAsync(idsEmpleados, DateOnly.FromDateTime(period.StartDate),
+            $"aprobación de la nómina ordinaria {period.StartDate:yyyy-MM-dd} a {period.EndDate:yyyy-MM-dd}", ct);
 
         await db.SaveChangesAsync(ct);
 

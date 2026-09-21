@@ -39,9 +39,9 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         LiquidacionDePrueba.ConContabilidad(d);
         var run = await LiquidacionDePrueba.PrimaAsync(d);
 
-        var aprobar = await new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Policies, d.Permissions, d.Clock, Contadora, Auditor(d, Contadora))
+        var aprobar = await new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Policies, d.Permissions, d.Clock, Contadora, Auditor(d, Contadora), d.StaleMarker)
             .Handle(new ApprovePayrollRunCommand(run.PublicId, Confirm: true), CancellationToken.None);
-        var reversar = await new ReversePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Clock, Contadora, Auditor(d, Contadora))
+        var reversar = await new ReversePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Clock, Contadora, Auditor(d, Contadora), d.StaleMarker)
             .Handle(new ReversePayrollRunCommand(run.PublicId, "x"), CancellationToken.None);
         var descartar = await new DiscardPayrollRunCommandHandler(d.Db, d.Lock, d.Clock, Contadora, Auditor(d, Contadora))
             .Handle(new DiscardPayrollRunCommand(run.PublicId, "x"), CancellationToken.None);

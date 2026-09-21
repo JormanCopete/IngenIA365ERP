@@ -163,4 +163,24 @@ public class SettlementAccountingPosterTests
         SettlementAccountingPoster.TerceroPara(PayrollRunKind.Severance)(intereses).Should().Be(EntidadInstitucional.Ninguna);
         SettlementAccountingPoster.TerceroPara(PayrollRunKind.Settlement)(cesantias).Should().Be(EntidadInstitucional.Ninguna, "en la definitiva las cesantías se pagan al empleado");
     }
+
+    /// <summary>
+    /// Revisión N1 (2026-09-21): los cuatro ajustes de provisión son gasto contra pasivo estimado y van sin
+    /// tercero, como la provisión que corrigen. <c>CESANTIAS_AJUSTE_PROV</c> caía en el prefijo «CESANT» y
+    /// salía con el fondo de cesantías como tercero en la anual y en la definitiva.
+    /// </summary>
+    [Theory]
+    [InlineData("PRIMA_AJUSTE_PROV")]
+    [InlineData("CESANTIAS_AJUSTE_PROV")]
+    [InlineData("INT_CESANTIAS_AJUSTE_PROV")]
+    [InlineData("VACACIONES_AJUSTE_PROV")]
+    [InlineData("PROV_CESANTIAS")]
+    public void Los_ajustes_de_provision_van_sin_tercero_en_toda_liquidacion(string codigo)
+    {
+        var linea = new Domain.Entities.Payroll.Transactions.PayrollRunLine { ConceptCode = codigo, Nature = ConceptNature.Provision };
+
+        TercerosDeNomina.EntidadDe(codigo, ConceptNature.Provision).Should().Be(EntidadInstitucional.Ninguna);
+        SettlementAccountingPoster.TerceroPara(PayrollRunKind.Severance)(linea).Should().Be(EntidadInstitucional.Ninguna);
+        SettlementAccountingPoster.TerceroPara(PayrollRunKind.Settlement)(linea).Should().Be(EntidadInstitucional.Ninguna);
+    }
 }

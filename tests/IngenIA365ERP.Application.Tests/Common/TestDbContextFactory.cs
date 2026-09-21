@@ -149,11 +149,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
     DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
-    // Feature 010: la definitiva lee Cartera por persona (FR-018a).
+    // Feature 010: la definitiva lee Cartera por persona (FR-018a) y, al aprobar, recauda de verdad
+    // (RecaudoDeCredito: cuotas pendientes, transacción RC y comprobante por el contrato).
     public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
-    DbSet<LendingTransaction> IApplicationDbContext.LendingTransactions => throw new NotImplementedException();
-    DbSet<PendingInstallment> IApplicationDbContext.PendingInstallments => throw new NotImplementedException();
-    DbSet<CreditLineParameter> IApplicationDbContext.CreditLineParameters => throw new NotImplementedException();
+    public DbSet<LendingTransaction> LendingTransactions => Set<LendingTransaction>();
+    public DbSet<PendingInstallment> PendingInstallments => Set<PendingInstallment>();
+    public DbSet<CreditLineParameter> CreditLineParameters => Set<CreditLineParameter>();
     DbSet<TransactionCode> IApplicationDbContext.TransactionCodes => throw new NotImplementedException();
     DbSet<SavingsParameter> IApplicationDbContext.SavingsParameters => throw new NotImplementedException();
     DbSet<InterestRate> IApplicationDbContext.InterestRates => throw new NotImplementedException();
@@ -362,9 +363,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<SeveranceFundDeposit>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<LoanPortfolio>(b =>
         {
-            b.Ignore(l => l.Person); b.Ignore(l => l.CreditLine); b.Ignore(l => l.Transactions); b.Ignore(l => l.PendingInstallments);
+            b.Ignore(l => l.Transactions); b.Ignore(l => l.PendingInstallments);
             b.Ignore(l => l.ExtraPayments); b.Ignore(l => l.Guarantees); b.Ignore(l => l.DefaultRecords); b.Ignore("RowVersion");
+            // El recaudo real incluye la persona y la línea del crédito (ProcessPayment / RecaudoDeCredito).
+            b.HasOne(l => l.Person).WithMany().HasForeignKey(l => l.PersonId);
+            b.HasOne(l => l.CreditLine).WithMany(c => c.LoanPortfolios).HasForeignKey(l => l.CreditLineId);
         });
+        modelBuilder.Entity<CreditLineParameter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<LendingTransaction>(b => { b.Ignore("RowVersion"); b.HasOne(t => t.CreditLine).WithMany().HasForeignKey(t => t.CreditLineId); });
+        modelBuilder.Entity<PendingInstallment>(b => { b.Ignore("RowVersion"); b.HasOne(i => i.CreditLine).WithMany().HasForeignKey(i => i.CreditLineId); });
     }
 }
 

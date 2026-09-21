@@ -183,11 +183,15 @@ public class CesantiasAnualesTests(CentralIdentityApiFixture fx)
         item.GetProperty("postedDocumentNumber").GetString().Should().StartWith("NM-");
         item.GetProperty("funds").EnumerateArray().Should().OnlyContain(x => x.GetProperty("depositedAt").ValueKind == JsonValueKind.Null);
 
-        // --- relación de pago de los INTERESES: es la de la corrida; el neto es intereses menos retención ---
+        // --- relación de pago de los INTERESES: es la de la corrida; el neto es intereses menos retención, NUNCA las
+        //     cesantías del fondo (revisión N1: hasta el 2026-09-21 netPay las incluía y «pagado» dejaba al empleado cobrado por ellas) ---
         var pagos = await NominaE2E.GetAsync(http, admin, $"/api/payroll/runs/{runId}/payments");
         pagos.GetProperty("employees").GetInt32().Should().Be(3);
         pagos.GetProperty("paidCount").GetInt32().Should().Be(0);
         pagos.GetProperty("totalNet").GetDecimal().Should().Be(resumen.GetProperty("totals").GetProperty("net").GetDecimal());
+        pagos.GetProperty("totalNet").GetDecimal().Should().Be(item.GetProperty("interestTotal").GetDecimal() - resumen.GetProperty("totals").GetProperty("deductions").GetDecimal(),
+            "lo pagadero al empleado son los intereses menos la retención");
+        pagos.GetProperty("totalNet").GetDecimal().Should().BeLessThan(totalCesantias, "las cesantías no están en la relación de pago");
 
         // --- consignación por fondo en JSON y en tres formatos con los mismos totales; en Excel, una hoja por fondo ---
         var tabla = await NominaE2E.GetAsync(http, admin, $"/api/reports/payroll/consignacion-cesantias?runId={runId}");

@@ -29,13 +29,25 @@ public sealed class PayrollRunStaleMarker(IApplicationDbContext db, ILogger<Payr
         return Marcar(borradores, reason);
     }
 
+    public async Task<int> MarkSettlementDraftsStaleAsync(IReadOnlyCollection<int> employeeIds, DateOnly affectsFrom, string reason, CancellationToken ct)
+    {
+        if (employeeIds.Count == 0) return 0;
+        var ids = employeeIds.Distinct().ToList();
+        var borradores = await db.PayrollRuns
+            .Where(r => r.Kind != PayrollRunKind.Ordinary && r.Status == PayrollRunStatus.Draft
+                        && r.CutoffDate != null && r.CutoffDate >= affectsFrom
+                        && db.PayrollRunEmployees.Any(re => re.PayrollRunId == r.Id && ids.Contains(re.EmployeeId)))
+            .ToListAsync(ct);
+        return Marcar(borradores, reason);
+    }
+
     private int Marcar(List<Domain.Entities.Payroll.Transactions.PayrollRun> borradores, string reason)
     {
         foreach (var run in borradores)
         {
             run.Status = PayrollRunStatus.Stale;
-            logger.LogInformation("Corrida {Run} (período {Period}, v{Version}) marcada Stale: {Reason}",
-                run.PublicId, run.PayPeriodId, run.Version, reason);
+            logger.LogInformation("Corrida {Run} ({Kind}, período {Period}, corte {Cutoff}, v{Version}) marcada Stale: {Reason}",
+                run.PublicId, run.Kind, run.PayPeriodId, run.CutoffDate, run.Version, reason);
         }
         return borradores.Count;
     }

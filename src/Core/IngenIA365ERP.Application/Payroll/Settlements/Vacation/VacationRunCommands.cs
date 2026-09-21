@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -95,6 +96,7 @@ public sealed class RecalculateVacationCommandHandler(
 /// Un disfrute con días que ningún período del plan cubre —ni por traslado del último existente
 /// (FR-003)— no se aprueba: <c>Payroll.Vacation.PeriodMissing</c> con los tramos (D-33), porque
 /// nadie crearía después esa novedad y la ordinaria pagaría los días como salario. Registrar sólo avisa.
+/// Reintentable ante concurrencia como la prima (R3): el handler relee todo dentro de sí mismo.
 /// </summary>
 public sealed record ApproveVacationCommand(
     Guid RunPublicId,
@@ -102,7 +104,7 @@ public sealed record ApproveVacationCommand(
     DateOnly? PostingDate = null,
     bool ConfirmEmpty = false,
     bool ConfirmWithoutSegregation = false,
-    bool AcceptRetroactive = false) : IRequest<Result<SettlementApprovedDto>>;
+    bool AcceptRetroactive = false) : IRequest<Result<SettlementApprovedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApproveVacationCommandValidator : AbstractValidator<ApproveVacationCommand>
 {
@@ -163,7 +165,7 @@ public sealed class ApproveVacationCommandHandler(
 /// disfrute quedaría con la novedad viva en un período inmutable y sin salida (no se puede anular,
 /// recalcular ni registrar de nuevo). El camino es reversar antes esa nómina, que reabre el período.
 /// </summary>
-public sealed record ReverseVacationCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>;
+public sealed record ReverseVacationCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ReverseVacationCommandValidator : AbstractValidator<ReverseVacationCommand>
 {

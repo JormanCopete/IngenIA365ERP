@@ -145,7 +145,7 @@ public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeSe
                 TotalDeductions = resultado.Totals.Deductions,
                 TotalEmployerContributions = resultado.Totals.EmployerContributions,
                 TotalProvisions = resultado.Totals.Provisions,
-                NetPay = resultado.Totals.Net,
+                NetPay = NetoPagadero(key.Kind, resultado),
                 Flags = (RunEmployeeFlag)(int)resultado.Flags,
                 BasesJson = JsonSerializer.Serialize(resultado.BaseSteps, RunJson.Options),
                 NotesJson = JsonSerializer.Serialize(new RunEmployeeNotes(resultado.Refusals, resultado.Skips.Select(s => s.Text).ToList(), resultado.Warnings), RunJson.Options),
@@ -181,7 +181,7 @@ public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeSe
             deducciones += resultado.Totals.Deductions;
             aportes += resultado.Totals.EmployerContributions;
             provisiones += resultado.Totals.Provisions;
-            neto += resultado.Totals.Net;
+            neto += runEmployee.NetPay;
             run.Employees.Add(runEmployee);
         }
 
@@ -220,6 +220,19 @@ public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeSe
         calculados.Where(c => c.Result.Excluded)
             .Select(c => new ExcludedEmployeeDto(c.Loaded.Employee.PublicId, c.Loaded.FullName, c.Result.ExclusionReasonCode!, c.Result.ExclusionReason ?? c.Result.ExclusionReasonCode!))
             .ToList();
+
+    /// <summary>
+    /// Lo que se le <b>paga al empleado</b> (<c>NetPay</c>, <c>TotalNet</c>): el neto del motor, salvo en las
+    /// cesantías anuales, donde las cesantías van al fondo (FR-011; el tercero de la CxP lo decide
+    /// <c>SettlementAccountingPoster.TerceroPara</c>) y al empleado sólo le llegan los intereses menos la
+    /// retención. La relación de pago, la marca de pago, el comprobante y la dispersión leen este valor;
+    /// hasta la revisión N1 (2026-09-21) incluía las cesantías del fondo y «pagado» dejaba al empleado
+    /// cobrado por un valor que nunca recibió. Los devengos (<c>TotalEarnings</c>) sí las incluyen: son suyas.
+    /// </summary>
+    public static decimal NetoPagadero(PayrollRunKind kind, SettlementResult r) =>
+        kind == PayrollRunKind.Severance
+            ? r.Totals.Net - r.Lines.Where(l => l.Nature == ConceptNature.Earning && l.Code.Equals(WellKnownConceptCodes.Severance, StringComparison.OrdinalIgnoreCase)).Sum(l => l.Amount)
+            : r.Totals.Net;
 
     private static int DiasDe(PayrollRunKind kind, SettlementResult r)
     {

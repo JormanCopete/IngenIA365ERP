@@ -61,6 +61,45 @@ public class ReverseSettlementCommandHandlerTests
         otra.Value.Version.Should().Be(2, "misma llave (empleado y corte): versión siguiente");
     }
 
+    /// <summary>
+    /// Revisión N1 (2026-09-21): el reingreso es una ficha nueva (feature 008) y sólo hay una viva por persona; con la
+    /// nueva registrada, reintegrar la vieja violaba <c>UK_PAY_Employees_PersonId</c> y la API respondía 500.
+    /// </summary>
+    [Fact]
+    public async Task Reversar_con_la_persona_ya_reingresada_en_una_ficha_nueva_se_rechaza_con_la_ficha_nueva_y_no_toca_nada()
+    {
+        var p = new DefinitivaDePrueba(conCartera: false);
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        (await p.Aprobar().Handle(new ApproveSettlementCommand(t.RunPublicId, true), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        // Reingreso: ficha nueva de la misma persona, viva.
+        var reingreso = new Domain.Entities.Payroll.Employee
+        {
+            PersonId = p.D.Ana.PersonId, PayrollCompanyId = 1, PayrollPlanId = p.D.Plan.Id, Salary = 2_500_000m, JoinDate = new DateTime(2026, 10, 1),
+            TerminationDate = DateTime.MaxValue.Date, Status = 1, HealthInsuranceId = 1, PensionFundId = 1, WorkRiskRateId = p.D.TarifaArl(1), FamilySubsidyId = 1, CostCenterId = "01", CreatedBy = "test",
+        };
+        p.D.Db.Employees.Add(reingreso);
+        await p.D.Db.SaveChangesAsync();
+
+        var r = await p.Reversar().Handle(new ReverseSettlementCommand(t.RunPublicId, "Se equivocó la fecha de retiro"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Payroll.Settlement.EmployeeRehired");
+        r.Error.Message.Should().Contain("01/10/2026");
+        r.Error.Should().BeOfType<Application.Common.Models.ErrorConDatos>().Which.Data.Should().BeEquivalentTo(
+            new { employeePublicId = p.D.Ana.PublicId, rehiredEmployeePublicId = reingreso.PublicId, rehiredOn = new DateOnly(2026, 10, 1) });
+        p.D.Db.ChangeTracker.Clear();
+        (await p.D.Db.PayrollRuns.SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Approved);
+        (await p.D.Db.Employees.SingleAsync(e => e.Id == p.D.Ana.Id)).Status.Should().Be(-1, "la ficha vieja sigue retirada");
+        (await p.D.Db.EmploymentTerminations.SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Settled);
+
+        // Retirada la ficha nueva, la reversión entra.
+        var nueva = await p.D.Db.Employees.SingleAsync(e => e.Id == reingreso.Id);
+        nueva.Status = -1;
+        await p.D.Db.SaveChangesAsync();
+        p.D.Db.ChangeTracker.Clear();
+        (await p.Reversar().Handle(new ReverseSettlementCommand(t.RunPublicId, "Se equivocó la fecha de retiro"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Reversar_un_borrador_o_sin_motivo_se_rechaza()
     {

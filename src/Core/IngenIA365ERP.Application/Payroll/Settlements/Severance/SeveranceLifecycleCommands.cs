@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -14,7 +15,9 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Severance;
 /// por <c>INT_CESANTIAS</c> (FR-011); eso lo decide <c>SettlementAccountingPoster.TerceroPara</c>.
 /// <see cref="PayDate"/> es la fecha en que se pagan los intereses al empleado (la ley da hasta el
 /// 31 de enero siguiente); por defecto la del comprobante. Las cesantías no se «pagan» aquí: se
-/// consignan al fondo y eso se registra por fondo con <c>mark-deposited</c>.
+/// consignan al fondo y eso se registra por fondo con <c>mark-deposited</c>. Reintentable ante concurrencia
+/// como la prima (feature 009, R3): el consecutivo <c>NM</c> se toma en la misma escritura y una carrera con
+/// otra aprobación se repite entera en vez de salir 409.
 /// </summary>
 public sealed record ApproveSeveranceCommand(
     Guid RunPublicId,
@@ -22,7 +25,7 @@ public sealed record ApproveSeveranceCommand(
     DateOnly? PostingDate = null,
     DateOnly? PayDate = null,
     bool ConfirmEmpty = false,
-    bool ConfirmWithoutSegregation = false) : IRequest<Result<SettlementApprovedDto>>;
+    bool ConfirmWithoutSegregation = false) : IRequest<Result<SettlementApprovedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApproveSeveranceCommandValidator : AbstractValidator<ApproveSeveranceCommand>
 {
@@ -52,7 +55,7 @@ public sealed class ApproveSeveranceCommandHandler(SettlementRunWorkflow workflo
 }
 
 /// <summary>Reversa la liquidación aprobada con asiento espejo (FR-032); la consignación ya marcada a un fondo se conserva como historial (data-model §2.7a).</summary>
-public sealed record ReverseSeveranceCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>;
+public sealed record ReverseSeveranceCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ReverseSeveranceCommandValidator : AbstractValidator<ReverseSeveranceCommand>
 {

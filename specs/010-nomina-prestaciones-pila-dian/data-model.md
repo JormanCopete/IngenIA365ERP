@@ -399,8 +399,11 @@ recaudos de Cartera se reversan por el comando de Cartera, nunca a mano); `Regis
 | `CarteraTransactionPublicId` | uniqueidentifier, nullable | el recaudo que dejó `ProcessPaymentCommand` al aprobar |
 | `RemainingBalanceAfter` | 18,2, nullable | `PaymentResultDto.Remaining` |
 
-Único `(TerminationId, LoanPortfolioId)` filtrado `[LoanPortfolioId] IS NOT NULL` y
-`(TerminationId, RecurringNoveltyId)` filtrado `[RecurringNoveltyId] IS NOT NULL`. **Invariantes**:
+Único `(TerminationId, LoanPortfolioId)` filtrado `[LoanPortfolioId] IS NOT NULL AND [IsDeleted] = 0` y
+`(TerminationId, RecurringNoveltyId)` filtrado `[RecurringNoveltyId] IS NOT NULL AND [IsDeleted] = 0`
+(revisión N1, migración `SettlementDeductionsUnicosEntreVivas`: el recálculo retira en blando la deuda
+que Cartera ya no trae y, si la obligación vuelve, crea otra fila con la misma llave; sin excluir las
+eliminadas ese INSERT respondía 500). **Invariantes**:
 Σ `AppliedAmount` ≤ neto antes de descuentos (si no, `RunEmployeeFlag.DeductionOverNet` y la
 responsable baja alguno); sólo se **baja**, nunca se sube sobre lo propuesto; recalcular la
 definitiva **no** repropone lo ya ajustado (respeta `Adjusted`) salvo que el saldo en Cartera haya
@@ -748,7 +751,7 @@ bloquea la reversión como la marca manual (`Payroll.PaymentBlocksReversal`); `G
 | `PAY_VacationMovements` | `VacationMovement` | — (cruce de fechas: regla del comando) |
 | `PAY_TerminationReasons` | `TerminationReason` | `(Code)` · `[IsDeleted] = 0` |
 | `PAY_EmploymentTerminations` | `EmploymentTermination` | `(EmployeeId)` · `[Status] = 0` y `(EmployeeId)` · `[Status] = 1` |
-| `PAY_SettlementDeductions` | `SettlementDeduction` | `(TerminationId, LoanPortfolioId)` · not null; `(TerminationId, RecurringNoveltyId)` · not null |
+| `PAY_SettlementDeductions` | `SettlementDeduction` | `(TerminationId, LoanPortfolioId)` · not null y `[IsDeleted] = 0`; `(TerminationId, RecurringNoveltyId)` · not null y `[IsDeleted] = 0` |
 | `PAY_WithholdingRateCalculations` | `WithholdingRateCalculation` | `(EmployeeId, TargetYear, TargetSemester, Version)` |
 | `PAY_WithholdingRateCalculationMonths` | `WithholdingRateCalculationMonth` | `(CalculationId, Year, Month)` |
 | `PAY_SeveranceFundDeposits` | `SeveranceFundDeposit` | `(PayrollRunId, SeveranceFundId)` |

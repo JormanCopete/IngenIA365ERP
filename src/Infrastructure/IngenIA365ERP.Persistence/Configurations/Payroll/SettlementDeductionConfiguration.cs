@@ -30,12 +30,15 @@ public class SettlementDeductionConfiguration : IEntityTypeConfiguration<Settlem
         builder.Property(e => e.AdjustmentReason).HasMaxLength(300);
         builder.Property(e => e.AdjustedBy).HasMaxLength(100);
 
+        // Únicos sólo entre filas vivas: el recálculo retira en blando la deuda que Cartera ya no trae y, si la misma
+        // obligación vuelve (un pago reversado en Cartera), crea otra fila con la misma llave. Hasta la revisión N1
+        // (2026-09-21) el filtro no excluía las eliminadas y ese INSERT respondía 500 (migración SettlementDeductionsUnicosEntreVivas).
         builder.HasIndex(e => new { e.TerminationId, e.LoanPortfolioId }).IsUnique()
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
-            .HasFilter("[LoanPortfolioId] IS NOT NULL");
+            .HasFilter("[LoanPortfolioId] IS NOT NULL AND [IsDeleted] = 0");
         builder.HasIndex(e => new { e.TerminationId, e.RecurringNoveltyId }).IsUnique()
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Libranza")
-            .HasFilter("[RecurringNoveltyId] IS NOT NULL");
+            .HasFilter("[RecurringNoveltyId] IS NOT NULL AND [IsDeleted] = 0");
 
         builder.HasOne<LoanPortfolio>().WithMany().HasForeignKey(e => e.LoanPortfolioId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PayrollRecurringNovelty>().WithMany().HasForeignKey(e => e.RecurringNoveltyId).OnDelete(DeleteBehavior.Restrict);

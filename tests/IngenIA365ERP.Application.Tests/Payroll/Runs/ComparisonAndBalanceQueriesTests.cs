@@ -24,7 +24,7 @@ public class ComparisonAndBalanceQueriesTests
     {
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
         var h = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker);
         var r = await h.Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
     }

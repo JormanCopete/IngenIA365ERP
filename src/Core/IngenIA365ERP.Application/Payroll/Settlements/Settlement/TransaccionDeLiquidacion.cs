@@ -8,9 +8,11 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// Una transacción de base de datos alrededor de un trabajo que hace más de un <c>SaveChanges</c>
 /// (feature 010, US3). La definitiva lo necesita dos veces: al registrar la terminación —la fila
 /// tiene que existir para que el cargador la lea y los descuentos tengan Id antes de enlazar las
-/// líneas— y al aprobar, porque cada recaudo en Cartera pasa por <c>ProcessPaymentCommand</c>, que
+/// líneas— y al aprobar, porque cada recaudo en Cartera pasa por <c>RecaudoDeCredito</c>, que
 /// guarda por su cuenta. Sin esto, un fallo a mitad de camino dejaría la ficha cerrada sin recaudo o
-/// un recaudo sin liquidación aprobada.
+/// un recaudo sin liquidación aprobada. El recaudo se llama <b>directo</b>, nunca por <c>ISender</c>:
+/// un comando reintentable anidado aquí vaciaba el <c>ChangeTracker</c> al reintentar y la corrida
+/// aprobada se quedaba fuera del <c>SaveChanges</c> mientras el recaudo sí se confirmaba.
 ///
 /// <para>
 /// El contexto de Application es una interfaz; la transacción sólo existe cuando detrás hay un
