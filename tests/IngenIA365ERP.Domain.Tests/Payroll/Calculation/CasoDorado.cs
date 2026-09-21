@@ -94,7 +94,7 @@ public sealed class CasoDorado
             }).ToList(),
             Concepts = conceptos,
             Parameters = parametros,
-            Policies = new CalculationPolicies { Rounding = Politicas.Redondeo, ApplyEmployerExemption = Politicas.Exoneracion },
+            Policies = new CalculationPolicies { Rounding = Politicas.Redondeo, ApplyEmployerExemption = Politicas.Exoneracion, CotizaArlEnVacaciones = Politicas.CotizaArlEnVacaciones },
         };
     }
 
@@ -156,6 +156,9 @@ public sealed class CasoDorado
     {
         public PayrollRounding Redondeo { get; set; } = PayrollRounding.Peso;
         public bool Exoneracion { get; set; }
+
+        /// <summary>Feature 010 (R6): la ARL también sobre los días de vacaciones pagados por la liquidación; «no» por defecto.</summary>
+        public bool CotizaArlEnVacaciones { get; set; }
     }
 
     public sealed class EsperadoJson

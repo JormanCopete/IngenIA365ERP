@@ -343,7 +343,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<CompanyPolicy>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Holiday>(b => { b.Ignore(h => h.EsSembrado); b.Ignore("RowVersion"); });
         modelBuilder.Entity<EmployeeBenefitOpeningBalance>(b => { b.Ignore(x => x.EsEditable); b.Ignore("RowVersion"); });
-        modelBuilder.Entity<VacationMovement>(b => { b.Ignore(x => x.EstaVivo); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<VacationMovement>(b =>
+        {
+            b.Ignore(x => x.EstaVivo); b.Ignore("RowVersion");
+            // Como en VacationMovementConfiguration (US4): la corrida navega al movimiento que la originó y el
+            // movimiento apunta a la corrida que lo liquidó SIN navegación. Por convención, con una FK candidata a
+            // cada lado, EF emparejaba PayrollRun.VacationMovement con VacationMovement.PayrollRunId y al guardar
+            // la corrida nueva dejaba VacationMovementId en nulo.
+            b.HasOne<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>().WithMany().HasForeignKey(x => x.PayrollRunId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b =>
+            b.HasOne(r => r.VacationMovement).WithMany().HasForeignKey(r => r.VacationMovementId));
         modelBuilder.Entity<TerminationReason>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<EmploymentTermination>(b => { b.Ignore(x => x.EstaViva); b.Ignore("RowVersion"); });
         modelBuilder.Entity<SettlementDeduction>(b => { b.Ignore(x => x.FueAjustado); b.Ignore("RowVersion"); });

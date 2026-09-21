@@ -202,6 +202,9 @@ public class FichaPilaDianTests
         dto.CurrentWithholdingRate.Origin.Should().Be(WithholdingRateOrigin.Calculated);
         dto.Termination!.ReasonName.Should().Be("Renuncia voluntaria");
         dto.Termination.Status.Should().Be(TerminationStatus.Registered);
-        dto.VacationBalance.Should().BeNull("lo suma la US4");
+        // US4: saldo derivado al día de hoy (20-03-2026): 7,5 del saldo inicial al 31-12-2025 + 80 días comerciales de 2026 × 15 / 360.
+        dto.VacationBalance.Should().NotBeNull();
+        dto.VacationBalance!.AsOf.Should().Be(new DateOnly(2026, 3, 20));
+        dto.VacationBalance.PendingDays.Should().BeApproximately(7.5m + 80m * 15m / 360m, 0.0001m);
     }
 }

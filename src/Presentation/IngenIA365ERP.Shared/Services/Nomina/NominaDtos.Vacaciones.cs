@@ -1,0 +1,153 @@
+namespace IngenIA365ERP.Shared.Services.Nomina;
+
+// Feature 010 US4 — vacaciones (contracts/api.md §5 y §3.3). Los enums viajan como número:
+// VacationMovementKind (1 disfrute, 2 compensación, 3 ajuste, 4 pago al retiro),
+// VacationMovementStatus (0 registrado, 1 liquidado, 2 anulado), SemanaLaboral (0 L–S, 1 L–V).
+
+public sealed record SaldoVacacionesDto(
+    Guid EmployeePublicId,
+    string Name,
+    string Document,
+    DateTime HireDate,
+    DateOnly AsOf,
+    decimal AccruedDays,
+    decimal OpeningDays,
+    decimal EnjoyedDays,
+    decimal CompensatedDays,
+    decimal AdjustedDays,
+    decimal SettlementPaidDays,
+    decimal PendingDays,
+    DateOnly? LastEnjoymentTo,
+    int WorkedDays,
+    int SuspensionDays);
+
+public sealed record SaldoVacacionesDetalleDto(
+    SaldoVacacionesDto Balance,
+    IReadOnlyList<PasoDto> Explanation,
+    decimal? MaxCompensableDays,
+    decimal? CompensablePercent);
+
+public sealed record DiaSaltadoDto(DateOnly Date, string Reason, string Text);
+
+public sealed record MovimientoVacacionesDto(
+    Guid MovementPublicId,
+    Guid EmployeePublicId,
+    int Kind,
+    DateOnly StartDate,
+    DateOnly? EndDate,
+    decimal BusinessDays,
+    int CalendarDays,
+    string WeekPolicyUsed,
+    IReadOnlyList<DiaSaltadoDto> Skipped,
+    int Status,
+    Guid? RunPublicId,
+    string? RunStatus,
+    decimal? Amount,
+    string? Notes,
+    string? CancelReason,
+    string CreatedBy,
+    DateTime CreatedAt)
+{
+    public string TipoTexto => TipoDeMovimiento(Kind);
+    public string EstadoTexto => EstadoDeMovimiento(Status);
+    public bool EsAnulable => Status == 0;
+
+    public static string TipoDeMovimiento(int kind) => kind switch
+    {
+        1 => "Disfrute", 2 => "Compensación en dinero", 3 => "Ajuste", 4 => "Pago al retiro", _ => kind.ToString(),
+    };
+
+    public static string EstadoDeMovimiento(int status) => status switch
+    {
+        0 => "Registrado", 1 => "Liquidado", 2 => "Anulado", _ => status.ToString(),
+    };
+}
+
+public sealed record VistaPreviaHabilesDto(
+    DateOnly From,
+    DateOnly To,
+    int WorkingDays,
+    int CalendarDays,
+    int WorkWeek,
+    IReadOnlyList<DiaSaltadoDto> Skipped)
+{
+    public string SemanaTexto => WorkWeek == 1 ? "lunes a viernes" : "lunes a sábado";
+}
+
+public sealed record NovedadDeVacacionesDto(Guid PeriodPublicId, string PeriodLabel, DateOnly From, DateOnly To, int Days, bool Retroactive, Guid? RetroactiveOfPeriodPublicId, string ConceptCode);
+
+public sealed record VacacionesCalculadasDto(
+    Guid RunPublicId,
+    Guid MovementPublicId,
+    int Version,
+    int MovementKind,
+    DateOnly CutoffDate,
+    DateOnly? From,
+    DateOnly? To,
+    decimal WorkingDays,
+    int CalendarDays,
+    IReadOnlyList<DiaSaltadoDto> Skipped,
+    decimal Amount,
+    TotalesCorridaDto Totals,
+    IReadOnlyList<NovedadDeVacacionesDto> Novelties,
+    IReadOnlyList<BloqueoDto> Blockers,
+    IReadOnlyList<ExcluidoDto> Excluded,
+    IReadOnlyList<AvisoCorridaDto> Warnings);
+
+public sealed record ExcluidoDto(Guid EmployeePublicId, string Name, string ReasonCode, string Reason);
+
+public sealed record LiquidacionVacacionesDto(
+    Guid RunPublicId,
+    Guid? MovementPublicId,
+    Guid EmployeePublicId,
+    string EmployeeName,
+    string Document,
+    int? Kind,
+    DateOnly? From,
+    DateOnly? To,
+    decimal WorkingDays,
+    int CalendarDays,
+    decimal? CompensatedDays,
+    decimal Amount,
+    string Status,
+    int Version,
+    DateOnly CutoffDate,
+    DateOnly? PayDate,
+    DateTime CalculatedAt,
+    string CalculatedBy,
+    DateTime? ApprovedAt,
+    string? ApprovedBy,
+    Guid? AccountingDocumentPublicId,
+    string? AccountingDocumentNumber,
+    IReadOnlyList<AvisoCorridaDto> Warnings)
+{
+    public string TipoTexto => Kind is { } k ? MovimientoVacacionesDto.TipoDeMovimiento(k) : "—";
+    public bool EsBorrador => Status is "Draft" or "Stale";
+    public bool EstaAprobada => Status == "Approved";
+
+    public string EstadoTexto => Status switch
+    {
+        "Draft" => "Borrador", "Stale" => "Desactualizado", "Superseded" => "Reemplazado/descartado",
+        "Approved" => "Aprobado", "Reversed" => "Reversado", _ => Status,
+    };
+
+    public string FechasTexto => From is { } f ? (To is { } t ? $"{f:dd/MM/yyyy} – {t:dd/MM/yyyy}" : f.ToString("dd/MM/yyyy")) : "—";
+}
+
+public sealed record RegistrarVacacionesRequest(
+    Guid EmployeePublicId,
+    string Kind,
+    DateOnly? From = null,
+    DateOnly? To = null,
+    decimal? CompensationDays = null,
+    DateOnly? PaymentDate = null,
+    string? Notes = null,
+    bool AcceptRetroactive = false);
+
+public sealed record AprobarVacacionesRequest(bool Confirm, DateOnly? PostingDate = null, bool ConfirmEmpty = false, bool ConfirmWithoutSegregation = false, bool AcceptRetroactive = false);
+
+public sealed record LiquidacionAprobadaDto(Guid RunPublicId, Guid DocumentPublicId, string Number, decimal Total, DateOnly PostingDate, bool ApprovedWithoutSegregation);
+
+public sealed record LiquidacionReversadaDto(Guid RunPublicId, Guid ReversalDocumentPublicId, string ReversalNumber);
+
+public sealed record MovimientoCreadoDto(Guid MovementPublicId);
