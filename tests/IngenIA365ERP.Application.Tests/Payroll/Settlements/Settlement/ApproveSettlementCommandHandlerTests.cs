@@ -235,7 +235,7 @@ public class ApproveSettlementCommandHandlerTests
         var calculada = await ordinaria.Handle(new CalculatePayrollRunCommand(p.Septiembre.PublicId), CancellationToken.None);
         calculada.IsSuccess.Should().BeTrue(calculada.Error.Message);
         var audit = new PayrollAuditEmitter(p.D.Audit, DefinitivaDePrueba.Contadora, p.D.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit);
+        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit, p.D.StaleMarker);
 
         var aprobada = await aprobador.Handle(new ApprovePayrollRunCommand(calculada.Value.RunPublicId, Confirm: true), CancellationToken.None);
 
