@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -91,7 +92,8 @@ public sealed class RecalculateVacationCommandHandler(
 /// Aprueba la liquidación de vacaciones por el ciclo común (<see cref="SettlementRunWorkflow"/>):
 /// comprobante <c>VacationRun</c> contra <c>PROV_VACACIONES</c> fechado al corte (D-04), y en la
 /// misma transacción el movimiento pasa a <c>Liquidated</c> y queda la novedad en cada período que
-/// cubre el disfrute (<c>AUSENCIA_VACACIONES</c> o <c>VACACIONES</c> según la política, D-01).
+/// cubre el disfrute (<c>AUSENCIA_VACACIONES</c> o <c>VACACIONES</c> según la política, D-01). Reintentable
+/// ante concurrencia como la prima (R3): el handler relee todo dentro de sí mismo.
 /// </summary>
 public sealed record ApproveVacationCommand(
     Guid RunPublicId,
@@ -99,7 +101,7 @@ public sealed record ApproveVacationCommand(
     DateOnly? PostingDate = null,
     bool ConfirmEmpty = false,
     bool ConfirmWithoutSegregation = false,
-    bool AcceptRetroactive = false) : IRequest<Result<SettlementApprovedDto>>;
+    bool AcceptRetroactive = false) : IRequest<Result<SettlementApprovedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApproveVacationCommandValidator : AbstractValidator<ApproveVacationCommand>
 {
@@ -152,7 +154,7 @@ public sealed class ApproveVacationCommandHandler(
 // ---------------------------------------------------------------- reversar --
 
 /// <summary>Asiento espejo por el ciclo común; el movimiento vuelve a <c>Registered</c> y las novedades no consumidas (períodos aún abiertos) se anulan.</summary>
-public sealed record ReverseVacationCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>;
+public sealed record ReverseVacationCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ReverseVacationCommandValidator : AbstractValidator<ReverseVacationCommand>
 {

@@ -15,17 +15,19 @@ using NSubstitute;
 namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Settlement;
 
 /// <summary>
-/// Feature 010, US3 (FR-020, T065): aprobar la definitiva contabiliza por el ciclo común, aplica
-/// cada descuento de Cartera por <c>ProcessPaymentCommand</c> con el valor aplicado, cierra la ficha,
-/// apaga la bandera de empleado, deja el movimiento de vacaciones y adjunta el PDF; la ordinaria
-/// siguiente excluye al retirado y la prima del semestre sabe lo que ya se pagó aquí.
+/// Feature 010, US3 (FR-020, T065; research R14): aprobar la definitiva contabiliza por el ciclo común,
+/// aplica cada descuento de Cartera con el <b>recaudo real</b> (<c>RecaudoDeCredito</c>: cuotas, transacción
+/// RC y comprobante RC por el contrato) con el valor aplicado, cierra la ficha, apaga la bandera de
+/// empleado, deja el movimiento de vacaciones y adjunta el PDF; la ordinaria siguiente excluye al
+/// retirado y la prima del semestre sabe lo que ya se pagó aquí. El recaudo corre dentro de la misma
+/// unidad de trabajo sin reintento anidado: si Cartera falla, nada queda aprobado.
 /// </summary>
 public class ApproveSettlementCommandHandlerTests
 {
     private static ApproveSettlementCommand Aprobar(Guid runId) => new(runId, Confirm: true);
 
     [Fact]
-    public async Task Aprobar_contabiliza_paga_en_Cartera_por_obligacion_con_lo_aplicado_cierra_la_ficha_y_adjunta_el_documento()
+    public async Task Aprobar_contabiliza_recauda_en_Cartera_por_obligacion_con_lo_aplicado_cierra_la_ficha_y_adjunta_el_documento()
     {
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
@@ -43,17 +45,32 @@ public class ApproveSettlementCommandHandlerTests
         r.Value.PortfolioPayments.Should().HaveCount(2, "dos créditos con valor aplicado; la libranza no pasa por Cartera");
         r.Value.SettlementDocumentAttachmentPublicId.Should().NotBeNull();
 
-        // Cartera recibió un ProcessPaymentCommand por obligación, con lo APLICADO (no lo propuesto), forma NM y la referencia de la liquidación.
-        p.PagosEnCartera.Should().HaveCount(2);
-        var pago1001 = p.PagosEnCartera.Single(c => c.PortfolioPublicId == p.Credito1001.PublicId);
-        pago1001.Amount.Should().Be(1_000_000m);
-        pago1001.PaymentMethod.Should().Be(ApproveSettlementCommandHandler.FormaDePagoNomina);
-        pago1001.PaymentDate.Should().Be(DefinitivaDePrueba.Retiro);
-        pago1001.Reference.Should().Contain(r.Value.Number);
+        // Cartera recaudó de verdad, una transacción RC por obligación con lo APLICADO (no lo propuesto), a la fecha de retiro.
+        var recaudos = await p.D.Db.LendingTransactions.AsNoTracking().Where(x => x.VoucherType == "RC").ToListAsync();
+        recaudos.Should().HaveCount(2, "dos créditos con valor aplicado; la libranza no pasa por Cartera");
+        var recaudo1001 = recaudos.Single(x => x.PortfolioNumber == 1001);
+        recaudo1001.CreditAmount.Should().Be(1_000_000m);
+        recaudo1001.TransactionDate.Should().Be(DefinitivaDePrueba.Retiro);
+        recaudos.Single(x => x.PortfolioNumber == 1002).CreditAmount.Should().Be(300_000m);
+        // Cuatro cuotas de 1001 quedaron en cero y dos siguen vivas; las tres de 1002 se saldaron.
+        var cuotas1001 = await p.D.Db.PendingInstallments.AsNoTracking().Where(x => x.PortfolioNumber == 1001).ToListAsync();
+        cuotas1001.Count(x => x.BalanceCapital == 0m).Should().Be(4);
+        cuotas1001.Sum(x => x.BalanceCapital).Should().Be(500_000m);
+        (await p.D.Db.PendingInstallments.AsNoTracking().Where(x => x.PortfolioNumber == 1002).SumAsync(x => x.BalanceCapital)).Should().Be(0m);
+
+        // El comprobante RC lo hizo Cartera por el contrato: la «caja» es la cuenta débito parametrizada de DESC_CARTERA y el
+        // crédito va a la cuenta de cartera de la línea, con Ana como tercera; la nómina no duplica ese asiento (D-08).
         var cuentaDescuento = await (from a in p.D.Db.PayrollConceptDefinitionAccounts join c in p.D.Db.ChartOfAccounts on a.DebitAccountId equals c.Id
-                                     where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c.Code).SingleAsync();
-        pago1001.CashAccountCode.Should().Be(cuentaDescuento, "el recaudo entra por la cuenta débito parametrizada de DESC_CARTERA");
-        p.PagosEnCartera.Single(c => c.PortfolioPublicId == p.Credito1002.PublicId).Amount.Should().Be(300_000m);
+                                     where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c).SingleAsync();
+        var cuentaCartera = await p.D.Db.ChartOfAccounts.SingleAsync(c => c.Code == DefinitivaDePrueba.CuentaCartera);
+        var comprobantesRc = await p.D.Db.AccountingDocuments.AsNoTracking().Include(d => d.VoucherType).Where(d => d.SourceType == "LoanPayment").ToListAsync();
+        comprobantesRc.Should().HaveCount(2);
+        comprobantesRc.Should().OnlyContain(d => d.VoucherType!.Code == "RC" && d.Date == DefinitivaDePrueba.Retiro);
+        var rc1001 = comprobantesRc.Single(d => d.SourcePublicId == recaudo1001.PublicId);
+        var lineasRc = await p.D.Db.JournalEntries.AsNoTracking().Where(j => j.DocumentId == rc1001.Id).ToListAsync();
+        lineasRc.Single(j => j.Debit > 0m).Should().Match<Domain.Entities.Accounting.Transactions.JournalEntry>(j => j.AccountId == cuentaDescuento.Id && j.Debit == 1_000_000m && j.PersonId == p.D.Ana.PersonId);
+        lineasRc.Single(j => j.Credit > 0m).Should().Match<Domain.Entities.Accounting.Transactions.JournalEntry>(j => j.AccountId == cuentaCartera.Id && j.Credit == 1_000_000m && j.PersonId == p.D.Ana.PersonId);
+        (await p.D.Db.JournalEntries.AsNoTracking().CountAsync(j => j.AccountId == cuentaDescuento.Id && j.Document!.SourceType == "SettlementRun")).Should().Be(0, "DESC_CARTERA no lleva asiento en el comprobante de la definitiva");
 
         // El descuento guarda el recaudo y el saldo que quedó; el saldo bajó exactamente lo aplicado.
         var terminacion = await p.D.Db.EmploymentTerminations.Include(x => x.Deductions).SingleAsync(x => x.PublicId == t.TerminationPublicId);
@@ -61,9 +78,13 @@ public class ApproveSettlementCommandHandlerTests
         terminacion.SettlementDocumentAttachmentPublicId.Should().Be(r.Value.SettlementDocumentAttachmentPublicId);
         terminacion.Deductions.Should().OnlyContain(d => d.Status == SettlementDeductionStatus.Applied);
         var d1001 = terminacion.Deductions.Single(d => d.LoanPortfolioId == p.Credito1001.Id);
-        d1001.CarteraTransactionPublicId.Should().NotBeNull();
+        d1001.CarteraTransactionPublicId.Should().Be(recaudo1001.PublicId);
         d1001.RemainingBalanceAfter.Should().Be(500_000m);
-        (await p.D.Db.LoanPortfolios.SingleAsync(l => l.Id == p.Credito1001.Id)).CurrentBalance.Should().Be(500_000m);
+        var credito1001 = await p.D.Db.LoanPortfolios.AsNoTracking().SingleAsync(l => l.Id == p.Credito1001.Id);
+        credito1001.CurrentBalance.Should().Be(500_000m, "Cartera bajó exactamente lo aplicado");
+        credito1001.PaidInstallments.Should().Be(4);
+        credito1001.ClosingDate.Should().BeNull();
+        (await p.D.Db.LoanPortfolios.AsNoTracking().SingleAsync(l => l.Id == p.Credito1002.Id)).ClosingDate.Should().Be(DefinitivaDePrueba.Retiro, "el crédito 1002 quedó cancelado");
         r.Value.PortfolioPayments.Single(x => x.ObligationPublicId == d1001.PublicId).Remaining.Should().Be(500_000m);
 
         // La ficha se cerró y la persona dejó de ser empleada.
@@ -93,8 +114,9 @@ public class ApproveSettlementCommandHandlerTests
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
         var t = await p.RegistrarAnaAsync();
-        p.Sender.Send(Arg.Any<Application.Lending.Payments.Commands.ProcessPayment.ProcessPaymentCommand>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Result.Failure<Application.Lending.Payments.Commands.ProcessPayment.PaymentResultDto>(new Error("Payment.NoInstallments", "No hay cuotas pendientes de pago."))));
+        // El crédito 1001 tiene saldo pero Cartera no tiene sus cuotas: el recaudo real responde Payment.NoInstallments.
+        foreach (var cuota in await p.D.Db.PendingInstallments.Where(x => x.PortfolioNumber == 1001).ToListAsync()) cuota.IsDeleted = true;
+        await p.D.Db.SaveChangesAsync();
 
         var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
 
@@ -104,6 +126,26 @@ public class ApproveSettlementCommandHandlerTests
         // Sin transacción real (InMemory) el contexto queda con los cambios en memoria, pero nada se guardó como aprobado antes del fallo.
         (await p.D.Db.EmploymentTerminations.AsNoTracking().SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Registered);
         (await p.D.Db.Employees.AsNoTracking().SingleAsync(e => e.Id == p.D.Ana.Id)).Status.Should().Be(1, "la ficha sigue vigente");
+        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0, "el recaudo no se guarda por su cuenta: va en la transacción de la aprobación");
+    }
+
+    [Fact]
+    public async Task Si_la_cuenta_del_recaudo_no_esta_habilitada_para_Cartera_la_aprobacion_lo_dice_y_no_recauda()
+    {
+        var p = new DefinitivaDePrueba();
+        p.ConContabilidad();
+        var cuenta = await (from a in p.D.Db.PayrollConceptDefinitionAccounts join c in p.D.Db.ChartOfAccounts on a.DebitAccountId equals c.Id
+                            where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c).SingleAsync();
+        cuenta.EnabledModules &= ~Domain.Enums.Accounting.AccountingModules.Lending;
+        await p.D.Db.SaveChangesAsync();
+        var t = await p.RegistrarAnaAsync();
+
+        var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Account.NotEligible");
+        r.Error.Message.Should().Contain(cuenta.Code).And.Contain("Crédito 1001");
+        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0);
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
     }
 
     [Fact]
@@ -120,7 +162,7 @@ public class ApproveSettlementCommandHandlerTests
 
         r.Error.Code.Should().Be("Payroll.Settlement.ConceptAccountsMissing");
         r.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { conceptCodes = new[] { WellKnownConceptCodes.LoanDeduction } });
-        p.PagosEnCartera.Should().BeEmpty();
+        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -21,7 +22,7 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// definitiva anulado. Los recaudos de Cartera <b>no</b> se reversan solos: la respuesta los lista para
 /// que Cartera los reverse por su propio flujo (FR-020, R7). Auditoría <c>Payroll.Employee.Reinstated</c>.
 /// </summary>
-public sealed record ReverseSettlementCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedWithPortfolioDto>>;
+public sealed record ReverseSettlementCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedWithPortfolioDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ReverseSettlementCommandValidator : AbstractValidator<ReverseSettlementCommand>
 {

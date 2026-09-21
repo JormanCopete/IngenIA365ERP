@@ -2,9 +2,11 @@ using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment;
+using IngenIA365ERP.Application.Lending.Payments.Services;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -22,10 +24,14 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// <c>POST /{runId}/approve</c>) sobre el ciclo común <see cref="SettlementRunWorkflow"/>, con lo
 /// propio de la definitiva en el gancho <c>antesDeGuardar</c> y todo dentro de una transacción:
 /// <list type="bullet">
-/// <item>cada descuento de Cartera con valor aplicado se paga por <c>ProcessPaymentCommand</c> (forma
-/// de pago <c>NM</c>, referencia = número de la liquidación, la cuenta del recaudo es la cuenta débito
-/// del concepto <c>DESC_CARTERA</c>): Cartera contabiliza el recaudo y la nómina no lo duplica (D-08);
-/// el descuento guarda el recaudo y el saldo que quedó;</item>
+/// <item>cada descuento de Cartera con valor aplicado se paga por <see cref="RecaudoDeCredito"/> —el cuerpo
+/// de <c>ProcessPaymentCommand</c>, llamado <b>directo</b> y no por <c>ISender</c>— (forma de pago <c>NM</c>,
+/// referencia = número de la liquidación, la cuenta del recaudo es la cuenta débito del concepto
+/// <c>DESC_CARTERA</c>): Cartera contabiliza el recaudo y la nómina no lo duplica (D-08); el descuento
+/// guarda el recaudo y el saldo que quedó. Anidar el comando era un defecto: es reintentable, y su
+/// reintento vaciaba el <c>ChangeTracker</c> compartido dejando el recaudo guardado con la corrida en
+/// borrador. Hoy un conflicto de concurrencia deshace la transacción entera y este comando —también
+/// reintentable— se repite entero;</item>
 /// <item>la ficha se cierra (<c>Status = -1</c>, <c>TerminationDate</c>, <c>TerminationCause</c> = nombre
 /// del motivo) y la persona deja de ser empleada;</item>
 /// <item>las vacaciones pagadas quedan como movimiento <c>SettlementPayout</c> liquidado;</item>
@@ -40,7 +46,7 @@ public sealed record ApproveSettlementCommand(
     Guid RunPublicId,
     bool Confirm,
     DateOnly? PostingDate = null,
-    bool ConfirmWithoutSegregation = false) : IRequest<Result<SettlementApprovedWithPortfolioDto>>;
+    bool ConfirmWithoutSegregation = false) : IRequest<Result<SettlementApprovedWithPortfolioDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApproveSettlementCommandValidator : AbstractValidator<ApproveSettlementCommand>
 {
@@ -50,6 +56,7 @@ public sealed class ApproveSettlementCommandValidator : AbstractValidator<Approv
 public sealed class ApproveSettlementCommandHandler(
     IApplicationDbContext db,
     SettlementRunWorkflow workflow,
+    RecaudoDeCredito recaudo,
     ISender sender,
     IDateTimeService clock,
     ICurrentUserService user,
@@ -127,7 +134,7 @@ public sealed class ApproveSettlementCommandHandler(
             if (credito is null)
                 return Result.Failure(new Error("Payroll.Settlement.PortfolioUnavailable", $"El crédito del descuento «{d.Description}» ya no existe en Cartera. Recalcule la liquidación antes de aprobar."));
 
-            var pago = await sender.Send(new ProcessPaymentCommand
+            var pago = await recaudo.AplicarAsync(new ProcessPaymentCommand
             {
                 PortfolioPublicId = credito.PublicId,
                 Amount = d.AppliedAmount,

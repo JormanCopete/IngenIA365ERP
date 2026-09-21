@@ -93,6 +93,9 @@ public static class DependencyInjection
         // de cuentas que parametrizan los demas modulos (FR-016).
         services.AddScoped<Accounting.Posting.AccountingPoster>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
+        // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
+        // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.
+        services.AddScoped<Lending.Payments.Services.RecaudoDeCredito>();
         services.AddScoped<Payroll.Novelties.CarryOverNoveltiesService>();
         services.AddScoped<Payroll.Novelties.RecurringNovelties.RecurringNoveltiesMaterializer>();
         services.AddScoped<Payroll.Runs.Queries.RunSummaryBuilder>();
