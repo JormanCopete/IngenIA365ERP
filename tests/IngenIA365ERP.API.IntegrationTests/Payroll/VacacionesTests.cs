@@ -109,9 +109,15 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
         if (resumen.TryGetProperty("periodPublicId", out var periodo)) periodo.ValueKind.Should().Be(JsonValueKind.Null, "una liquidación especial no tiene período");
 
         var detalle = await NominaE2E.GetAsync(http, admin, $"/api/payroll/runs/{runId}/employees/{empleadoId}");
-        var codigos = detalle.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("conceptCode").GetString()).ToList();
+        var lineas = detalle.GetProperty("lines").EnumerateArray().ToList();
+        var codigos = lineas.Select(l => l.GetProperty("conceptCode").GetString()).ToList();
         codigos.Should().Contain("VACACIONES_LIQ");
-        codigos.Should().NotContain("VACACIONES_AJUSTE_PROV", "Inés no tiene nóminas aprobadas: sin provisión acumulada no hay diferencia que ajustar (el ajuste se prueba en Application.Tests)");
+        // Inés no tiene nóminas aprobadas: su provisión acumulada es cero de verdad, así que el ajuste
+        // lleva TODA la liquidación al gasto (nada queda debitado en la provisión; SC-003). Hasta el
+        // 2026-09-21 el lector no informaba la provisión en cero y el motor omitía el ajuste.
+        var liquidado = lineas.Single(l => l.GetProperty("conceptCode").GetString() == "VACACIONES_LIQ").GetProperty("amount").GetDecimal();
+        var ajuste = lineas.Should().ContainSingle(l => l.GetProperty("conceptCode").GetString() == "VACACIONES_AJUSTE_PROV").Subject;
+        ajuste.GetProperty("amount").GetDecimal().Should().Be(liquidado, "sin provisión acumulada, la diferencia al gasto es todo lo liquidado");
 
         var movimientos = await NominaE2E.GetAsync(http, admin, $"/api/payroll/vacations/employees/{empleadoId}/movements");
         var movimiento = movimientos.EnumerateArray().Single(m => m.GetProperty("movementPublicId").GetGuid() == movimientoId);
