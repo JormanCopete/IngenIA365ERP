@@ -51,7 +51,16 @@ public record UpdateEmployeeCommand : IRequest<Result>, IFichaPilaDian
     // pantallas anteriores a la feature mandan sólo lo de arriba y no deben borrar el DIVIPOLA.
     public PilaEmployeeInput? Pila { get; init; }
     public DianEmployeeInput? Dian { get; init; }
+    /// <summary>Etapa del aprendiz. Nula = no cambia; <see cref="ClearApprenticeStage"/> la quita (D-41).</summary>
     public ApprenticeStage? ApprenticeStage { get; init; }
+    /// <summary>
+    /// Deja la etapa en nulo (D-41): para quien pasó de aprendiz o pasante a otra clase y ya no la
+    /// tiene. Con clase <c>Apprentice</c> o <c>Intern</c> se rechaza igual que faltar
+    /// (<c>Payroll.Employee.ApprenticeStageRequired</c>). Hasta el 2026-09-21 no había forma de
+    /// quitarla: la ficha mandaba nulo, el nulo no toca lo que había y la X del desplegable
+    /// notificaba éxito sin borrar nada.
+    /// </summary>
+    public bool ClearApprenticeStage { get; init; }
     /// <summary>Banco de dispersión. Nulo = no cambia; <see cref="ClearDisbursementBank"/> lo quita.</summary>
     public Guid? DisbursementBankPublicId { get; init; }
     public bool ClearDisbursementBank { get; init; }
@@ -161,7 +170,7 @@ public class UpdateEmployeeCommandHandler(
         employee.PayrollBankId = payrollBankId;
         employee.PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "";
         employee.PayrollBankAccountType = request.PayrollBankAccountType;
-        var reparoDeFicha = FichaPilaDian.Aplicar(employee, request, disbursementBankId);
+        var reparoDeFicha = FichaPilaDian.Aplicar(employee, request, disbursementBankId, request.ClearApprenticeStage);
         if (reparoDeFicha is not null) return Result.Failure(reparoDeFicha);
         employee.UpdatedAt = dateTime.UtcNow;
         employee.UpdatedBy = currentUser.UserName;

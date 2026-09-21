@@ -38,9 +38,12 @@
                     <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@RecalcularAsync" Title="Versión nueva con los datos de hoy; la anterior queda reemplazada">Recalcular</SfButton>
                     <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" Disabled="@_ocupado" OnClick="@(() => { _motivoDescarte = string.Empty; _mostrarDescartar = true; })" Title="Deja este borrador como descartado, sin contabilidad">Descartar borrador</SfButton>
                 </PermissionGate>
-                <PermissionGate Required="Payroll.ServiceBonus.Approve">
-                    <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_ocupado || _corrida.Blockers.Count > 0)" OnClick="@AbrirAprobacion" Title="@(_corrida.Blockers.Count > 0 ? "Hay bloqueos: corregí la causa y recalculá" : "Contabiliza contra la provisión y deja la cuenta por pagar al empleado")">Aprobar</SfButton>
-                </PermissionGate>
+                @if (_corrida.SePuedeAprobar)
+                {
+                    <PermissionGate Required="Payroll.ServiceBonus.Approve">
+                        <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_ocupado || _corrida.Blockers.Count > 0)" OnClick="@AbrirAprobacion" Title="@(_corrida.Blockers.Count > 0 ? "Hay bloqueos: corregí la causa y recalculá" : "Contabiliza contra la provisión y deja la cuenta por pagar al empleado")">Aprobar</SfButton>
+                    </PermissionGate>
+                }
             }
             @if (_corrida.Status == "Approved")
             {
@@ -110,8 +113,9 @@
         <span class="label">@_corrida.TipoTexto · v@_corrida.Version · corte @_corrida.CutoffDate?.ToString("dd/MM/yyyy")</span>
         @if (_corrida.EsBorrador)
         {
-            <p><strong>Borrador</strong> calculado por @_corrida.CalculatedBy el @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"). @_corrida.EmployeeCount empleado(s), neto @_corrida.Totals.Net.ToString("N0").
-               @(_corrida.Blockers.Count > 0 ? $"{_corrida.Blockers.Count} bloqueo(s): corregí la causa y recalculá antes de aprobar." : "Sin bloqueos: se puede aprobar.")</p>
+            <p><strong>@(_corrida.EstaDesactualizada ? "Borrador desactualizado" : "Borrador")</strong> calculado por @_corrida.CalculatedBy el @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"). @_corrida.EmployeeCount empleado(s), neto @_corrida.Totals.Net.ToString("N0").
+               @(_corrida.EstaDesactualizada ? "Cambió una política, un parámetro legal o un concepto después de calcularlo: recalculá antes de aprobar."
+                 : _corrida.Blockers.Count > 0 ? $"{_corrida.Blockers.Count} bloqueo(s): corregí la causa y recalculá antes de aprobar." : "Sin bloqueos: se puede aprobar.")</p>
         }
         else if (_corrida.Status == "Approved")
         {
@@ -600,7 +604,7 @@
         using var carga = _cargaLista.Iniciar();
         var res = await Nomina.ListarPrimasAsync(_anio);
         if (res.IsSuccess) _primas = res.Value!.ToList();
-        else { _primas = []; await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las primas del año."); }
+        else { _primas = []; await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las primas del año."); }
         // Si la corrida elegida ya no está en el año, se suelta; si sigue, se refresca.
         if (_corrida is not null)
         {

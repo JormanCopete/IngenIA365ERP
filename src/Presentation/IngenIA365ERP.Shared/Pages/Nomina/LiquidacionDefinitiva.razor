@@ -108,7 +108,7 @@
             </p>
             @if (_corrida.EsBorrador)
             {
-                <p class="texto-tenue">La ficha del empleado sigue vigente: se cierra al aprobar. Revisá los rubros y los descuentos antes.</p>
+                <p class="texto-tenue">La ficha del empleado sigue vigente: se cierra al aprobar. Revisá los rubros y los descuentos antes.@(_corrida.EstaDesactualizada ? " Cambió una política, un parámetro legal o un concepto después de calcularla: recalculá antes de aprobar." : "")</p>
             }
             @if (_corrida.Status == "Reversed")
             {
@@ -130,9 +130,12 @@
                 <PermissionGate Required="Payroll.Settlements.Calculate">
                     <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@RecalcularAsync" Title="Versión nueva: vuelve a leer Cartera y conserva los ajustes cuyo saldo no cambió">Recalcular</SfButton>
                 </PermissionGate>
-                <PermissionGate Required="Payroll.Settlements.Approve">
-                    <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_ocupado || _corrida.Blockers.Count > 0)" OnClick="@AbrirAprobacion" Title="Contabiliza, aplica los descuentos en Cartera y cierra la ficha">Aprobar</SfButton>
-                </PermissionGate>
+                @if (_corrida.SePuedeAprobar)
+                {
+                    <PermissionGate Required="Payroll.Settlements.Approve">
+                        <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_ocupado || _corrida.Blockers.Count > 0)" OnClick="@AbrirAprobacion" Title="Contabiliza, aplica los descuentos en Cartera y cierra la ficha">Aprobar</SfButton>
+                    </PermissionGate>
+                }
                 <PermissionGate Required="Payroll.Settlements.Calculate">
                     <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarDescartar = true; })" Title="Anula la terminación; la ficha nunca se tocó">Descartar</SfButton>
                 </PermissionGate>

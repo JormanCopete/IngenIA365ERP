@@ -232,7 +232,9 @@
                                     <span class="texto-tenue">@_relacion.PaidCount de @_relacion.Employees pagados · neto total @_relacion.TotalNet.ToString("N0") · pagado @_relacion.PaidNet.ToString("N0")</span>
                                     @if (_corrida.Status == "Approved" && _relacion.PaidCount < _relacion.Employees)
                                     {
-                                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirMarcarPago">Marcar pagados</SfButton>
+                                        <PermissionGate Required="Payroll.Payments.Mark">
+                                            <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@AbrirMarcarPago">Marcar pagados</SfButton>
+                                        </PermissionGate>
                                     }
                                     <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@DescargarTodosLosComprobantes" Title="Todos los comprobantes en un PDF">Comprobantes PDF</SfButton>
                                     <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@_ocupado" OnClick="@EnviarComprobantes" Title="Envía cada comprobante al correo registrado del empleado. Nunca es automático.">Enviar por correo</SfButton>

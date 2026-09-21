@@ -127,6 +127,14 @@ public sealed record LiquidacionVacacionesDto(
     public string TipoTexto => Kind is { } k ? MovimientoVacacionesDto.TipoDeMovimiento(k) : "—";
     public bool EsBorrador => Status is "Draft" or "Stale";
     public bool EstaAprobada => Status == "Approved";
+    /// <summary>
+    /// Sólo <c>Draft</c> se aprueba: el servidor rechaza <c>Stale</c> con <c>Payroll.Settlement.NotDraft</c>
+    /// (toda vigencia nueva de política, parámetro legal o concepto deja los borradores desactualizados,
+    /// D-19). Hasta el 2026-09-21 las pantallas ofrecían «Aprobar» con <see cref="EsBorrador"/>, que
+    /// incluye <c>Stale</c>, y la persona recibía el rechazo con el nombre del estado en inglés.
+    /// </summary>
+    public bool SePuedeAprobar => Status == "Draft";
+    public bool EstaDesactualizada => Status == "Stale";
 
     public string EstadoTexto => Status switch
     {

@@ -29,8 +29,13 @@
         <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarTodoAsync">Ver</SfButton>
         <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@(() => DescargarSaldosAsync("xlsx"))" Title="Saldos en Excel">Excel</SfButton>
         <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" OnClick="@(() => DescargarSaldosAsync("pdf"))" Title="Saldos en PDF">PDF</SfButton>
-        <PermissionGate Required="Payroll.Vacations.Calculate">
-            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirRegistro(null))">Registrar disfrute o compensación</SfButton>
+        @* Registrar cruza dos endpoints: la vista previa obligatoria de hábiles es Register y el registro
+           que crea la liquidación es Calculate. El botón exige los dos (D-40): hasta el 2026-09-21 iba
+           sólo detrás de Calculate y un rol sin Register abría el diálogo y nunca podía terminar. *@
+        <PermissionGate Required="Payroll.Vacations.Register">
+            <PermissionGate Required="Payroll.Vacations.Calculate">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirRegistro(null))">Registrar disfrute o compensación</SfButton>
+            </PermissionGate>
         </PermissionGate>
     </div>
 </div>
@@ -73,8 +78,10 @@
                                 @{
                                     var s = (SaldoVacacionesDto)context;
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-description" Title="Saldo explicado y movimientos" OnClick="@(() => AbrirFichaAsync(s))" />
-                                    <PermissionGate Required="Payroll.Vacations.Calculate">
-                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Registrar disfrute o compensación" OnClick="@(() => AbrirRegistro(s))" />
+                                    <PermissionGate Required="Payroll.Vacations.Register">
+                                        <PermissionGate Required="Payroll.Vacations.Calculate">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Registrar disfrute o compensación" OnClick="@(() => AbrirRegistro(s))" />
+                                        </PermissionGate>
                                     </PermissionGate>
                                     <PermissionGate Required="Payroll.Vacations.Register">
                                         <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Ajuste con motivo" OnClick="@(() => AbrirAjuste(s))" />
@@ -129,13 +136,16 @@
                                 @{
                                     var l = (LiquidacionVacacionesDto)context;
                                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-description" Title="Detalle con explicación" OnClick="@(() => AbrirDetalleAsync(l))" />
-                                    @if (l.EsBorrador)
+                                    @if (l.SePuedeAprobar)
                                     {
                                         <PermissionGate Required="Payroll.Vacations.Approve">
                                             <SfButton CssClass="e-flat e-small" IconCss="e-icons e-check" Title="Aprobar" OnClick="@(() => AbrirAprobacion(l))" />
                                         </PermissionGate>
+                                    }
+                                    @if (l.EsBorrador)
+                                    {
                                         <PermissionGate Required="Payroll.Vacations.Calculate">
-                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-repeat" Title="Recalcular (versión nueva)" OnClick="@(() => RecalcularAsync(l))" />
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-repeat" Title="@(l.EstaDesactualizada ? "Desactualizado: recalcular antes de aprobar" : "Recalcular (versión nueva)")" OnClick="@(() => RecalcularAsync(l))" />
                                             <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" Title="Descartar el borrador y anular el movimiento" OnClick="@(() => AbrirMotivo(l, descartar: true))" />
                                         </PermissionGate>
                                     }
@@ -436,6 +446,30 @@
     </DialogTemplates>
 </SfDialog>
 
+@* ------------------------------------------------------ recalcular con ajuste retroactivo --- *@
+<SfDialog @bind-Visible="_mostrarRecalculoRetroactivo" Header="Recalcular la liquidación de vacaciones" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Recalculando…">
+            @if (_recalculando is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card alerta">
+                        <span class="label">Un período cubierto ya está aprobado</span>
+                        <p><strong>@_recalculando.EmployeeName</strong> · @_recalculando.TipoTexto @_recalculando.FechasTexto. La nómina de ese período es inmutable: la versión nueva deja la novedad de esos días como ajuste retroactivo en el período abierto siguiente, igual que al registrar o aprobar.</p>
+                        <label class="campo-check"><input type="checkbox" @bind="_aceptaRetroactivoRecalcular" /> Acepto el ajuste retroactivo.</label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarRecalculoRetroactivo = false)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" type="button" OnClick="@(() => RecalcularAsync(_recalculando, aceptarRetroactivo: true))" Disabled="@(!_aceptaRetroactivoRecalcular || _guardado.Activa)">Recalcular</SfButton>
+                    </div>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 @* ------------------------------------------------------- motivo (reversar, descartar, anular) --- *@
 <SfDialog @bind-Visible="_mostrarMotivo" Header="@_tituloMotivo" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -552,6 +586,10 @@
     private bool _mostrarAprobacion, _confirmar, _pideSegundaConfirmacion, _confirmarSinSegregacion, _pideRetroactivoAprobar, _aceptaRetroactivoAprobar;
     private LiquidacionVacacionesDto? _aprobando;
     private DateTime? _fechaComprobante;
+
+    // recálculo con ajuste retroactivo (mismo aviso que registro y aprobación)
+    private bool _mostrarRecalculoRetroactivo, _aceptaRetroactivoRecalcular;
+    private LiquidacionVacacionesDto? _recalculando;
 
     // motivo
     private bool _mostrarMotivo;
@@ -787,11 +825,27 @@
         await CargarTodoAsync();
     }
 
-    private async Task RecalcularAsync(LiquidacionVacacionesDto l)
+    private async Task RecalcularAsync(LiquidacionVacacionesDto l, bool aceptarRetroactivo = false)
     {
-        using var guardado = _cargaLiquidaciones.Iniciar();
-        var res = await Nomina.RecalcularVacacionesAsync(l.RunPublicId);
-        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo recalcular."); return; }
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.RecalcularVacacionesAsync(l.RunPublicId, aceptarRetroactivo);
+        if (!res.IsSuccess)
+        {
+            // Entre el registro y el recálculo se aprobó la nómina de un período que cubre el disfrute:
+            // la API lo dice con PeriodApproved y admite AcceptRetroactive, como al registrar y al
+            // aprobar. Hasta el 2026-09-21 la pantalla sólo mostraba el mensaje y la única salida era
+            // descartar el borrador y registrar de nuevo, perdiendo la versión.
+            if (res.ErrorCode == "Payroll.Vacation.PeriodApproved" && !aceptarRetroactivo)
+            {
+                _recalculando = l;
+                _aceptaRetroactivoRecalcular = false;
+                _mostrarRecalculoRetroactivo = true;
+            }
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo recalcular.");
+            return;
+        }
+        _mostrarRecalculoRetroactivo = false;
         _resultado = res.Value;
         _mostrarResultado = true;
         await CargarLiquidacionesAsync();
