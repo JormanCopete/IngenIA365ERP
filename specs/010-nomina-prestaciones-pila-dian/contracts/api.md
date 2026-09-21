@@ -201,7 +201,7 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 | `GET /balances?asOf=&search=` | Vacations.View | `[{ employeePublicId, name, hireDate, accruedDays, openingDays, enjoyedDays, compensatedDays, adjustedDays, pendingDays, lastEnjoymentTo? }]` (saldo **derivado**, nunca almacenado) |
 | `GET /employees/{employeeId}/balance?asOf=` | Vacations.View | lo anterior + `explanation[]` (días trabajados, suspensiones descontadas, parámetro `VACACIONES_DIAS_ANIO` con vigencia, saldo inicial digitado por quién y cuándo) |
 | `GET /employees/{employeeId}/movements` | Vacations.View | `[{ movementPublicId, kind: Enjoyment (0) \| Compensation (1) \| Adjustment (2), from?, to?, workingDays, calendarDays, amount?, runPublicId?, status: Pending (0) \| Confirmed (1) \| Cancelled (2), createdBy, createdAt }]` |
-| `POST /working-days` | Vacations.Register | `{ from, to, employeePublicId? }` → `{ workingDays, calendarDays, workWeek: MondayToSaturday (0) \| MondayToFriday (1), skipped: [{ date, reason: Sunday \| Holiday:<nombre> \| Saturday }] }` — la vista previa obligatoria antes de guardar (FR-015) |
+| `POST /working-days` | Vacations.Register | `{ from, to, employeePublicId? }` → `{ workingDays, calendarDays, workWeek: MondayToSaturday (0) \| MondayToFriday (1), skipped: [{ date, reason: Sunday \| Holiday:<nombre> \| Saturday }], warnings: [{ code, message, data }] }` — la vista previa obligatoria antes de guardar (FR-015). Si el rango toca un año sin ningún festivo en `PAY_Holidays`, cuenta igual (los festivos de ese año saldrían como hábiles) y avisa con `Payroll.Holiday.YearNotLoaded` (`data: { years[] }`); el mismo aviso sale en `warnings[]` de `POST /api/payroll/settlements/vacations` |
 | `POST /employees/{employeeId}/adjustments` | Vacations.Register | `{ days (±), reason }` → movimiento `Adjustment` (p. ej. días reconocidos por acuerdo); auditado |
 | `POST /movements/{movementPublicId}/cancel` | Vacations.Register | `{ reason }`; sólo `Pending` sin corrida aprobada (422 `Payroll.Vacation.MovementConfirmed`: reverse la corrida) |
 
@@ -340,7 +340,8 @@ tres de la semilla—, `Decreed` (4), `Manual` (5). `POST /` `{ date, name, orig
 → 201 `{ holidayPublicId }` (Manage; por defecto `Manual`; otro origen → 422
 `Payroll.Holiday.OriginInvalid`; fecha repetida → `.DateDuplicate`) · `DELETE /{id}` soft, sólo
 `Manual`/`Decreed` (Manage; 422 `Payroll.Holiday.Seeded`; `.NotFound`). Semilla 2026-2028 por la
-Ley 51/1983. Auditoría `Payroll.Holiday.Changed`.
+Ley 51/1983; el conteo de hábiles (§5) avisa con `Payroll.Holiday.YearNotLoaded` cuando el rango toca
+un año sin festivos cargados. Auditoría `Payroll.Holiday.Changed`.
 
 ### 10.3 Parámetros legales (existente, `/api/payroll/legal-parameters`)
 

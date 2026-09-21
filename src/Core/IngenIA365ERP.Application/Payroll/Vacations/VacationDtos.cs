@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -103,7 +104,8 @@ public sealed record WorkingDaysPreviewDto(
     int WorkingDays,
     int CalendarDays,
     SemanaLaboral WorkWeek,
-    IReadOnlyList<SkippedDayDto> Skipped);
+    IReadOnlyList<SkippedDayDto> Skipped,
+    IReadOnlyList<WarningDto> Warnings);
 
 /// <summary>Una novedad que la aprobación dejará (o dejó) en un período cubierto por el disfrute.</summary>
 public sealed record VacationNoveltyDto(Guid PeriodPublicId, string PeriodLabel, DateOnly From, DateOnly To, int Days, bool Retroactive, Guid? RetroactiveOfPeriodPublicId, string ConceptCode);

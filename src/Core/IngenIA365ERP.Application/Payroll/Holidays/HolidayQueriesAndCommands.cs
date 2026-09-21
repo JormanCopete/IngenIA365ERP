@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -31,6 +32,18 @@ public static class HolidayErrors
 
     public static readonly Error OriginInvalid = new("Payroll.Holiday.OriginInvalid",
         "Desde la pantalla sólo se registran festivos decretados (Decreed) o manuales (Manual); los de la Ley 51 los pone la semilla.");
+
+    /// <summary>
+    /// Aviso, no error: el rango pedido toca un año sin ningún festivo en <c>PAY_Holidays</c>. La cuenta de
+    /// hábiles sigue, pero cada festivo de ese año se cuenta como hábil hasta que se carguen (la semilla suma un
+    /// año cada diciembre; la cooperativa puede registrarlos en Festivos).
+    /// </summary>
+    public static WarningDto YearNotLoaded(IReadOnlyList<int> years) =>
+        new("Payroll.Holiday.YearNotLoaded",
+            years.Count == 1
+                ? $"No hay festivos cargados para {years[0]}: los de ese año se contarían como hábiles. Registrelos en Festivos (o espere la semilla) antes de guardar."
+                : $"No hay festivos cargados para {string.Join(", ", years)}: los de esos años se contarían como hábiles. Registrelos en Festivos (o espere la semilla) antes de guardar.",
+            new { years });
 }
 
 // ------------------------------------------------------------------ listado --

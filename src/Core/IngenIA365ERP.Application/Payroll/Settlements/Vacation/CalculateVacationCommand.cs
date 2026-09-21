@@ -109,6 +109,7 @@ public sealed class CalculateVacationCommandHandler(
             var conteo = await VacationQueriesSupport.ContarHabilesAsync(db, policies, desde, hasta, ct);
             if (conteo.WorkingDays == 0) return Result.Failure<VacationCalculatedDto>(SettlementErrors.VacationNoWorkingDays);
             saltados = conteo.Skipped;
+            avisos.AddRange(conteo.Warnings); // un año sin festivos cargados (Payroll.Holiday.YearNotLoaded)
 
             var vispera = desde.AddDays(-1);
             corte = vispera < hoy ? vispera : hoy;
