@@ -29,8 +29,9 @@
         <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarTodoAsync">Ver</SfButton>
         <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@(() => DescargarSaldosAsync("xlsx"))" Title="Saldos en Excel">Excel</SfButton>
         <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" OnClick="@(() => DescargarSaldosAsync("pdf"))" Title="Saldos en PDF">PDF</SfButton>
-        @* Registrar crea el movimiento (Register) y la liquidación (Calculate) en una acción, y la
-           vista previa obligatoria de hábiles es Register: el botón exige los dos, como el endpoint. *@
+        @* Registrar cruza dos endpoints: la vista previa obligatoria de hábiles es Register y el registro
+           que crea la liquidación es Calculate. El botón exige los dos (D-28): hasta el 2026-09-21 iba
+           sólo detrás de Calculate y un rol sin Register abría el diálogo y nunca podía terminar. *@
         <PermissionGate Required="Payroll.Vacations.Register">
             <PermissionGate Required="Payroll.Vacations.Calculate">
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirRegistro(null))">Registrar disfrute o compensación</SfButton>

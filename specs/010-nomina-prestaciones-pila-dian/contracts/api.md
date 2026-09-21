@@ -32,7 +32,7 @@ cooperativa pueda dar prima y PILA a una persona sin darle definitivas.
 |---|---|---|
 | `Payroll.ServiceBonus` | View, Calculate, Approve, Reverse | prima de servicios |
 | `Payroll.Severance` | View, Calculate, Approve, Reverse, MarkDeposited | cesantías e intereses anuales; `MarkDeposited` registra la consignación por fondo |
-| `Payroll.Vacations` | View, Register, Calculate, Approve, Reverse | saldo, movimientos y liquidación; `Register` = preview, ajustes, anulación y el registro del disfrute/compensación, que además exige `Calculate` porque crea la liquidación (D-28) |
+| `Payroll.Vacations` | View, Register, Calculate, Approve, Reverse | saldo, movimientos y liquidación; `Register` = vista previa de hábiles, ajustes y anulación; el registro del disfrute/compensación crea la liquidación y es `Calculate`, y como la vista previa es obligatoria la pantalla exige los dos (D-28) |
 | `Payroll.Settlements` | View, Calculate, Approve, Reverse, AdjustDeduction, Manage | definitiva y terminación del contrato; `AdjustDeduction` baja el descuento de Cartera; `Manage` = catálogo de motivos de retiro |
 | `Payroll.BenefitBalances` | View, Manage | saldos iniciales de prestaciones (FR-007) |
 | `Payroll.WithholdingRate` | View, Calculate, Approve | porcentaje fijo del procedimiento 2 |
@@ -121,7 +121,7 @@ novedades no consumidas. El saldo y la vista previa de días viven en `/api/payr
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?employeeId=&year=&status=` | Vacations.View | `[{ runPublicId, movementPublicId, employee…, kind, from?, to?, workingDays, calendarDays, compensatedDays?, amount, status }]` |
-| `POST /` | Vacations.Register **y** Vacations.Calculate (D-28) | `{ employeePublicId, kind: Enjoyment (0) \| Compensation (1), from?, to?, compensationDays?, paymentDate? }` → 201 `{ runPublicId, movementPublicId, workingDays, calendarDays, skipped: [{ date, reason }], amount, novelties: [{ periodPublicId, days, retroactive }] }`. `Enjoyment` exige `from`/`to`; `Compensation` exige `compensationDays` |
+| `POST /` | Vacations.Calculate (la pantalla exige además Register por la vista previa obligatoria, D-28) | `{ employeePublicId, kind: Enjoyment (0) \| Compensation (1), from?, to?, compensationDays?, paymentDate? }` → 201 `{ runPublicId, movementPublicId, workingDays, calendarDays, skipped: [{ date, reason }], amount, novelties: [{ periodPublicId, days, retroactive }] }`. `Enjoyment` exige `from`/`to`; `Compensation` exige `compensationDays` |
 | `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Vacations.* | como 3.1; `approve` acepta `postingDate?` (por defecto la fecha de corte de la corrida, D-04; rango [corte, hoy]) |
 
 Errores propios: `Payroll.Vacation.DatesInvalid`, `.NoWorkingDays` (todo festivo o domingo),

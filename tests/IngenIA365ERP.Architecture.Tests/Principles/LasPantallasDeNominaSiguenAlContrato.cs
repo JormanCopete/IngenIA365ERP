@@ -8,8 +8,8 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// tiene que ser lo que la API acepta. Cuatro desajustes se colaron en la entrega y ninguna prueba
 /// los vio porque el repositorio no tiene pruebas de navegador: un botón «Aprobar» sobre un borrador
 /// <c>Stale</c> que el servidor rechaza con <c>NotDraft</c>; «Marcar pagados» sin el gate de
-/// <c>Payroll.Payments.Mark</c> que el Operador no tiene; «Registrar disfrute» detrás de un permiso
-/// mientras la vista previa obligatoria pedía otro; y tres pantallas sin gate de lectura, que ante
+/// <c>Payroll.Payments.Mark</c> que el Operador no tiene; «Registrar disfrute» detrás de un solo permiso
+/// mientras la vista previa obligatoria que cruza pedía otro; y tres pantallas sin gate de lectura, que ante
 /// el 404 indistinguible (FR-017) decían «no se pudieron cargar» en vez de «sin permiso».
 /// Es una prueba sobre el fuente, como <see cref="LasPantallasDicenQueEstanCargando"/>.
 /// </summary>
@@ -116,19 +116,20 @@ public class LasPantallasDeNominaSiguenAlContrato
     }
 
     [Fact]
-    public void Registrar_vacaciones_exige_en_la_pantalla_los_mismos_permisos_que_el_endpoint()
+    public void Registrar_vacaciones_exige_en_la_pantalla_los_permisos_de_los_dos_endpoints_que_cruza()
     {
-        // D-28: registrar crea el movimiento y la liquidación en una acción y exige Register Y Calculate;
-        // la vista previa obligatoria de hábiles (FR-015) no puede pedir un permiso que el registro no pida.
+        // D-28: «Registrar disfrute o compensación» cruza dos endpoints con permisos distintos —la vista
+        // previa obligatoria de hábiles (FR-015, Register) y el registro que crea la liquidación
+        // (Calculate)— y el botón lleva la unión de los dos: un botón que se ve y no se puede terminar
+        // es peor que uno que no se ve. Los permisos se leen del endpoint, no se escriben aquí, para que
+        // un cambio en la API mueva la exigencia de la pantalla en vez de dejarla desalineada en silencio.
         var endpoints = File.ReadAllText(Path.Combine(Raiz, "src", "Presentation", "IngenIA365ERP.API", "Endpoints", "Payroll", "VacationsEndpoints.cs"));
         var tramos = LosEndpointsProtegidosExigenPermiso.Tramos(endpoints);
         var registro = Permisos(tramos.Single(t => t.Contains("Payroll_Settlements_Vacations_Calculate", StringComparison.Ordinal)));
         var vistaPrevia = Permisos(tramos.Single(t => t.Contains("Payroll_Vacations_WorkingDays", StringComparison.Ordinal)));
+        var exigidos = registro.Union(vistaPrevia).ToHashSet(StringComparer.Ordinal);
 
-        Assert.True(registro.SetEquals(["Payroll.Vacations.Register", "Payroll.Vacations.Calculate"]),
-            "POST /api/payroll/settlements/vacations exige Register y Calculate (D-28); tiene: " + string.Join(", ", registro));
-        Assert.True(vistaPrevia.IsSubsetOf(registro),
-            "La vista previa de hábiles pide un permiso que el registro no pide: " + string.Join(", ", vistaPrevia.Except(registro)));
+        Assert.True(exigidos.Count > 0, "Ni el registro ni la vista previa de hábiles exigen permiso: ¿cambió el nombre de los endpoints?");
 
         var pantalla = Leer("Vacaciones.razor");
         var patron = new Regex(@"OnClick=""@\(\(\)\s*=>\s*AbrirRegistro\(", RegexOptions.Compiled);
@@ -137,14 +138,41 @@ public class LasPantallasDeNominaSiguenAlContrato
         foreach (var (linea, antes) in Contextos(pantalla, patron, 700))
         {
             vistos++;
-            var faltan = registro.Where(p => !antes.Contains($"Required=\"{p}\"", StringComparison.Ordinal)).ToList();
+            var faltan = exigidos.Where(p => !antes.Contains($"Required=\"{p}\"", StringComparison.Ordinal)).ToList();
             if (faltan.Count > 0) incompletos.Add($"Vacaciones.razor:{linea} sin {string.Join(", ", faltan)}");
         }
 
         Assert.True(vistos > 0, "No se encontró el botón «Registrar disfrute o compensación» en Vacaciones.razor.");
-        Assert.True(incompletos.Count == 0, "Botones de registro sin todos los gates del endpoint:\n  " + string.Join("\n  ", incompletos));
+        Assert.True(incompletos.Count == 0, "Botones de registro sin todos los gates de los endpoints que cruza (D-28):\n  " + string.Join("\n  ", incompletos));
 
         static HashSet<string> Permisos(string tramo) =>
             Regex.Matches(tramo, @"\.RequirePermission\(""([^""]+)""\)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void Toda_accion_de_vacaciones_que_puede_caer_en_un_periodo_aprobado_ofrece_el_ajuste_retroactivo()
+    {
+        // Registrar, aprobar y recalcular pasan por VacationNoveltyPlanner y las tres responden
+        // Payroll.Vacation.PeriodApproved cuando un período del disfrute ya se aprobó; las tres admiten
+        // AcceptRetroactive. Hasta el 2026-09-21 «Recalcular» sólo mostraba el mensaje y la única salida
+        // era descartar el borrador y registrar de nuevo, perdiendo la versión.
+        var pantalla = Leer("Vacaciones.razor");
+        var llamadas = new Regex(@"Nomina\.(Registrar|Aprobar|Recalcular)VacacionesAsync\(", RegexOptions.Compiled);
+        var sinSalida = new List<string>();
+        var vistas = 0;
+        foreach (Match m in llamadas.Matches(pantalla))
+        {
+            vistas++;
+            var despues = pantalla[m.Index..Math.Min(pantalla.Length, m.Index + 900)];
+            if (!despues.Contains("\"Payroll.Vacation.PeriodApproved\"", StringComparison.Ordinal))
+                sinSalida.Add($"Vacaciones.razor:{pantalla[..m.Index].Count(c => c == '\n') + 1} ({m.Groups[1].Value})");
+        }
+
+        Assert.True(vistas >= 3, $"Se esperaban las llamadas de registrar, aprobar y recalcular; se vieron {vistas}.");
+        Assert.True(sinSalida.Count == 0,
+            "Llamadas que pueden responder PeriodApproved sin ofrecer el ajuste retroactivo:\n  " + string.Join("\n  ", sinSalida));
+
+        Assert.True(Regex.IsMatch(pantalla, @"RecalcularVacacionesAsync\([^,\)]+,\s*aceptarRetroactivo\)"),
+            "RecalcularVacacionesAsync se llama sin el segundo argumento: AcceptRetroactive viaja siempre en false y el reintento aceptando el ajuste es imposible.");
     }
 }
