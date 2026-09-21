@@ -376,11 +376,13 @@ else
                                 @if (_employee.VacationBalance is { } sv)
                                 {
                                     <p><strong>@sv.PendingDays.ToString("N2")</strong> días hábiles pendientes al @sv.AsOf.ToString("dd/MM/yyyy")</p>
+                                    <p class="texto-tenue">Se deriva de los días causados, el saldo inicial, los disfrutes, compensaciones y ajustes registrados; el detalle paso a paso y los movimientos están en Vacaciones.</p>
                                 }
                                 else
                                 {
-                                    <p class="texto-tenue">Se deriva de los días causados, el saldo inicial y los disfrutes registrados; lo muestra la pantalla de Vacaciones cuando esté disponible.</p>
+                                    <p class="texto-tenue">Sin saldo calculado todavía: se deriva de los días causados, el saldo inicial y los disfrutes registrados.</p>
                                 }
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-calendar" OnClick='@(() => Nav.NavigateTo("/nomina/vacaciones"))'>Ir a Vacaciones</SfButton>
                             </div>
                             <div class="info-card">
                                 <span class="label">Retención en la fuente</span>

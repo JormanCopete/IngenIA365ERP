@@ -52,14 +52,14 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<VacacionesCalculadasDto>> RecalcularVacacionesAsync(Guid corridaId, bool aceptarRetroactivo = false, CancellationToken ct = default) =>
         EnviarAsync<VacacionesCalculadasDto>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/recalculate", new { AcceptRetroactive = aceptarRetroactivo }, ct);
 
-    public Task<InvitationApiResult<LiquidacionAprobadaDto>> AprobarVacacionesAsync(Guid corridaId, AprobarVacacionesRequest request, CancellationToken ct = default) =>
+    public Task<InvitationApiResult<LiquidacionAprobadaDto>> AprobarVacacionesAsync(Guid corridaId, AprobarLiquidacionRequest request, CancellationToken ct = default) =>
         EnviarAsync<LiquidacionAprobadaDto>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/approve", request, ct);
 
     public Task<InvitationApiResult<LiquidacionReversadaDto>> ReversarVacacionesAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<LiquidacionReversadaDto>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/reverse", new { Reason = motivo }, ct);
+        EnviarAsync<LiquidacionReversadaDto>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/reverse", new MotivoDeLiquidacionRequest(motivo), ct);
 
-    public Task<InvitationApiResult<EmptyResponse>> DescartarVacacionesAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<EmptyResponse>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/discard", new { Reason = motivo }, ct);
+    public Task<InvitationApiResult<LiquidacionDescartadaDto>> DescartarVacacionesAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionDescartadaDto>(HttpMethod.Post, $"/api/payroll/settlements/vacations/{corridaId}/discard", new MotivoDeLiquidacionRequest(motivo), ct);
 
     // --------------------------------------------------------------------- reportes --
 

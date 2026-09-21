@@ -2,7 +2,8 @@ namespace IngenIA365ERP.Shared.Services.Nomina;
 
 // Feature 010, US1 — prima de servicios (contracts/api.md §3.1). Espejo de lo que responde
 // /api/payroll/settlements/service-bonus; el detalle por empleado, la relación de pago y los
-// comprobantes son los DTOs de la 005 sobre /api/payroll/runs/{runId}.
+// comprobantes son los DTOs de la 005 sobre /api/payroll/runs/{runId}, y calcular, aprobar,
+// reversar y descartar usan el juego común de NominaDtos.Liquidaciones.cs.
 
 /// <summary>Una fila de la lista de primas: cada versión con su estado.</summary>
 public sealed record PrimaResumenDto(
@@ -43,39 +44,3 @@ public sealed record PrimaResumenDto(
 }
 
 public sealed record CalcularPrimaRequest(int Year, int Semester, IReadOnlyList<Guid>? EmployeePublicIds = null);
-
-/// <summary>Quien quedó fuera de la liquidación y por qué (<c>SettlementReasonCodes</c>).</summary>
-public sealed record ExcluidoDePrimaDto(Guid EmployeePublicId, string Name, string ReasonCode, string Reason)
-{
-    public string RazonTexto => ReasonCode switch
-    {
-        "SalarioIntegral" => "Salario integral",
-        "AprendizLectiva" => "Aprendiz en etapa lectiva",
-        "Pasante" => "Pasante sin contrato de aprendizaje",
-        "YaPagadaEnDefinitiva" => "Prima ya pagada en la definitiva",
-        "SinDiasEnElSemestre" => "Sin días en el semestre",
-        "RetiradoConDefinitiva" => "Retirado con definitiva aprobada",
-        _ => ReasonCode,
-    };
-}
-
-/// <summary>Lo que responde calcular o recalcular: la corrida nueva, sus totales, bloqueos, excluidos y avisos.</summary>
-public sealed record ResultadoPrimaDto(
-    Guid RunPublicId,
-    int Version,
-    string Kind,
-    DateOnly CutoffDate,
-    int Employees,
-    TotalesCorridaDto Totals,
-    IReadOnlyList<BloqueoDto> Blockers,
-    IReadOnlyList<ExcluidoDePrimaDto> Excluded,
-    IReadOnlyList<AvisoCorridaDto> Warnings);
-
-/// <summary>Aprobar: confirmación explícita, fecha del comprobante (por defecto el corte, D-04) y las dos confirmaciones opcionales.</summary>
-public sealed record AprobarPrimaRequest(bool Confirm, DateOnly? PostingDate = null, bool ConfirmEmpty = false, bool ConfirmWithoutSegregation = false);
-
-public sealed record PrimaAprobadaDto(Guid RunPublicId, Guid DocumentPublicId, string Number, decimal Total, DateOnly PostingDate, bool ApprovedWithoutSegregation);
-
-public sealed record PrimaReversadaDto(Guid RunPublicId, Guid ReversalDocumentPublicId, string ReversalNumber);
-
-public sealed record PrimaDescartadaDto(Guid RunPublicId, string Reason);

@@ -1,7 +1,9 @@
 namespace IngenIA365ERP.Shared.Services.Nomina;
 
 // Feature 010, US3: espejo de contracts/api.md §3.4 (terminación y liquidación definitiva) y §11.
-// Los enums entran por nombre al enviar y se leen como int (EnumPorNombreONumero).
+// Los enums entran por nombre al enviar y se leen como int (EnumPorNombreONumero). Los cuerpos de
+// aprobar, reversar y descartar son los comunes de NominaDtos.Liquidaciones.cs; la respuesta de aprobar
+// y reversar es propia porque trae los pagos aplicados en Cartera y el documento para firma.
 
 /// <summary>Un motivo de retiro del catálogo (<c>GET /reasons</c>).</summary>
 public sealed record MotivoDeRetiroDto(
@@ -121,8 +123,6 @@ public sealed record TerminacionRegistradaDto(
     IReadOnlyList<string> Refusals,
     TotalesCorridaDto Totals);
 
-public sealed record AprobarDefinitivaRequest(bool Confirm, DateOnly? PostingDate = null, bool ConfirmWithoutSegregation = false);
-
 public sealed record PagoCarteraDto(Guid ObligationPublicId, Guid? PaymentPublicId, decimal Applied, decimal? Remaining, string Description);
 
 public sealed record DefinitivaAprobadaDto(
@@ -143,8 +143,6 @@ public sealed record DefinitivaReversadaDto(
     string ReversalNumber,
     IReadOnlyList<PagoCarteraDto> PortfolioPayments,
     string Message);
-
-public sealed record MotivoRequest(string Reason);
 
 /// <summary>Sanción moratoria informativa (CST art. 65): nunca una línea.</summary>
 public sealed record SancionMoratoriaDto(

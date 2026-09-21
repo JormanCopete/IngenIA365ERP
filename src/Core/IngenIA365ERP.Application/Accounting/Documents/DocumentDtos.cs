@@ -116,6 +116,11 @@ public static class EnlacesDeOrigen
     public static string? Ruta(string? sourceType, Guid? sourcePublicId) => sourcePublicId is null ? null : sourceType switch
     {
         "PayrollRun" => $"/nomina/liquidacion?corrida={sourcePublicId}",
+        // Feature 010: una liquidación especial es una corrida con Kind (PayrollRun.SourceTypeNameDe); cada pantalla toma la corrida por query o por ruta.
+        "ServiceBonusRun" => $"/nomina/prima?corrida={sourcePublicId}",
+        "SeveranceRun" => $"/nomina/cesantias-anuales?corrida={sourcePublicId}",
+        "VacationRun" => $"/nomina/vacaciones?corrida={sourcePublicId}",
+        "SettlementRun" => $"/nomina/liquidacion-definitiva/{sourcePublicId}",
         _ => null,
     };
 }

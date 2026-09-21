@@ -210,7 +210,7 @@ else if (_lista.Count > 0)
                                 <tbody>
                                     @foreach (var x in _excluidos)
                                     {
-                                        <tr><td>@x.Name</td><td><span class="e-badge">@Razon(x.ReasonCode)</span></td><td class="texto-tenue">@x.Reason</td></tr>
+                                        <tr><td>@x.Name</td><td><span class="e-badge">@x.RazonTexto</span></td><td class="texto-tenue">@x.Reason</td></tr>
                                     }
                                 </tbody>
                             </table>
@@ -613,6 +613,9 @@ else if (_lista.Count > 0)
 </SfDialog>
 
 @code {
+    /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») elige esa corrida al cargar y se para en su año.</summary>
+    [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
+
     // Indicadores por zona (docs/manual/indicador-de-carga.md): la lista del año, la corrida elegida y el
     // detalle del empleado cargan por separado; _ocupado es la bandera de las acciones.
     private readonly EstadoDeCarga _cargaLista = new();
@@ -626,7 +629,7 @@ else if (_lista.Count > 0)
     private List<EmpleadoDeCorridaDto> _empleados = [];
     private RelacionDeConsignacionDto? _relacion;
     private RelacionDePagoDto? _relacionPago;
-    private List<CesantiasExcluidoDto> _excluidos = [];
+    private List<ExcluidoDeLiquidacionDto> _excluidos = [];
     private bool _excluidosConocidos;
     private List<string> _avisos = [];
     private DetalleEmpleadoCorridaDto? _detalle;
@@ -671,7 +674,15 @@ else if (_lista.Count > 0)
         public string? Referencia { get; set; }
     }
 
-    protected override async Task OnInitializedAsync() => await CargarListaAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (Corrida is { } id)
+        {
+            var r = await Nomina.ResumenAsync(id);
+            if (r.IsSuccess && r.Value!.Year is { } anio) _anio = anio;
+        }
+        await CargarListaAsync();
+    }
 
     private static string Insignia(string status) => status switch
     {
@@ -682,16 +693,6 @@ else if (_lista.Count > 0)
         _ => "e-badge",
     };
 
-    private static string Razon(string code) => code switch
-    {
-        "SalarioIntegral" => "Salario integral",
-        "AprendizLectiva" => "Aprendiz en etapa lectiva",
-        "Pasante" => "Pasante",
-        "RetiradoConDefinitiva" => "Retirado con definitiva",
-        "SinDiasEnElAnio" => "Sin días en el año",
-        _ => code,
-    };
-
     private async Task CargarListaAsync()
     {
         using var carga = _cargaLista.Iniciar();
@@ -700,6 +701,7 @@ else if (_lista.Count > 0)
         _lista = res.Value!.ToList();
         // Se mantiene la elegida si sigue en la lista; si no, la vigente (borrador o aprobada) o la más reciente.
         var vigente = _lista.FirstOrDefault(l => _seleccion is not null && l.RunPublicId == _seleccion.RunPublicId)
+                      ?? _lista.FirstOrDefault(l => _seleccion is null && Corrida is { } c && l.RunPublicId == c)
                       ?? _lista.FirstOrDefault(l => l.EsBorrador || l.EstaAprobada)
                       ?? _lista.FirstOrDefault();
         if (vigente is null) { _seleccion = null; _corrida = null; _relacion = null; return; }
@@ -753,14 +755,12 @@ else if (_lista.Count > 0)
         _mostrarNueva = true;
     }
 
-    private void RecibirCalculo(CesantiasCalculadaDto r, string verbo)
+    private void RecibirCalculo(LiquidacionCalculadaDto r, string verbo)
     {
         _excluidos = r.Excluded.ToList();
         _excluidosConocidos = true;
         _avisos = r.Warnings.Select(w => w.Message).ToList();
-        _ = Notification.SuccessAsync($"{verbo} v{r.Version}: {r.Employees} empleado(s), total {r.Totals.Net:N0}" +
-                                      (r.Excluded.Count > 0 ? $", {r.Excluded.Count} excluido(s)" : string.Empty) +
-                                      (r.Blockers.Count > 0 ? $", {r.Blockers.Count} bloqueo(s)" : string.Empty) + ".");
+        _ = Notification.SuccessAsync(r.Resumen(verbo));
     }
 
     private async Task CalcularAsync()
@@ -826,7 +826,7 @@ else if (_lista.Count > 0)
         _ocupado = true;
         try
         {
-            var res = await Nomina.AprobarCesantiasAsync(_seleccion.RunPublicId, new AprobarCesantiasRequest(
+            var res = await Nomina.AprobarCesantiasAsync(_seleccion.RunPublicId, new AprobarLiquidacionRequest(
                 Confirm: true,
                 PostingDate: DateOnly.FromDateTime(_aprobacion.FechaComprobante),
                 PayDate: DateOnly.FromDateTime(_aprobacion.FechaPagoIntereses),

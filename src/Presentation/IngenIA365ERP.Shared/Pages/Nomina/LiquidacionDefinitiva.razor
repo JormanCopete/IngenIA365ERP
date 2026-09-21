@@ -651,7 +651,7 @@
     {
         if (RunId is not { } runId || _guardado.Activa) return;
         using var guardado = _guardado.Iniciar();
-        var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarDefinitivaRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null, _confirmarSinSegregacion));
+        var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarLiquidacionRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null, ConfirmWithoutSegregation: _confirmarSinSegregacion));
         if (!res.IsSuccess)
         {
             if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && !_pideSegundaConfirmacion)

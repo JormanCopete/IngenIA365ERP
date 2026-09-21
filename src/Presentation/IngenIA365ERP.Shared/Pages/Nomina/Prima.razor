@@ -532,6 +532,9 @@
 </SfDialog>
 
 @code {
+    /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») elige esa corrida al cargar y se para en su año.</summary>
+    [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
+
     // Indicador de carga por zona (docs/manual/indicador-de-carga.md): la lista del año, la corrida
     // elegida y el detalle del empleado cargan por separado; _ocupado es la bandera de las acciones.
     private readonly EstadoDeCarga _cargaLista = new();
@@ -543,7 +546,7 @@
     private List<PrimaResumenDto> _primas = [];
     private ResumenCorridaDto? _corrida;
     private List<EmpleadoDeCorridaDto> _empleados = [];
-    private List<ExcluidoDePrimaDto> _excluidos = [];
+    private List<ExcluidoDeLiquidacionDto> _excluidos = [];
     private RelacionDePagoDto? _relacion;
     private DetalleEmpleadoCorridaDto? _detalle;
     private Guid? _lineaAbierta;
@@ -581,7 +584,13 @@
     {
         var hoy = DateTime.Today.Year;
         _anios = Enumerable.Range(hoy - 5, 7).Reverse().ToList();
+        if (Corrida is { } id)
+        {
+            var r = await Nomina.ResumenAsync(id);
+            if (r.IsSuccess && r.Value!.Year is { } anio) { _anio = anio; if (!_anios.Contains(anio)) _anios.Add(anio); }
+        }
         await CargarListaAsync();
+        if (Corrida is { } c && _primas.Any(p => p.RunPublicId == c)) await CargarCorridaAsync(c);
     }
 
     // ------------------------------------------------------------------ carga --
@@ -691,11 +700,9 @@
         finally { _ocupado = false; }
     }
 
-    private async Task AvisarResultadoAsync(ResultadoPrimaDto r, string prefijo)
+    private async Task AvisarResultadoAsync(LiquidacionCalculadaDto r, string prefijo)
     {
-        var texto = $"{prefijo} v{r.Version}: {r.Employees} empleado(s), neto {r.Totals.Net:N0}"
-                    + (r.Excluded.Count > 0 ? $", {r.Excluded.Count} excluido(s)" : string.Empty)
-                    + (r.Blockers.Count > 0 ? $", {r.Blockers.Count} bloqueo(s)" : string.Empty) + ".";
+        var texto = r.Resumen(prefijo);
         if (r.Blockers.Count > 0) await Notification.WarningAsync(texto); else await Notification.SuccessAsync(texto);
         foreach (var w in r.Warnings) await Notification.WarningAsync(w.Message);
     }
@@ -715,7 +722,7 @@
         try
         {
             var fecha = _aprobacion.FechaContable is { } f ? DateOnly.FromDateTime(f) : (DateOnly?)null;
-            var res = await Nomina.AprobarPrimaAsync(_corrida.PublicId, new AprobarPrimaRequest(true, fecha, _aprobacion.ConfirmarVacia, _aprobacion.ConfirmarSinSegregacion));
+            var res = await Nomina.AprobarPrimaAsync(_corrida.PublicId, new AprobarLiquidacionRequest(true, fecha, _aprobacion.ConfirmarVacia, _aprobacion.ConfirmarSinSegregacion));
             if (!res.IsSuccess)
             {
                 if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && (res.ErrorMessage ?? string.Empty).Contains("segregaci", StringComparison.OrdinalIgnoreCase))

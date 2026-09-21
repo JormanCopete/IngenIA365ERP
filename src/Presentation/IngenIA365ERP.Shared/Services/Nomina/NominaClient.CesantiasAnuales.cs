@@ -21,20 +21,20 @@ public sealed partial class NominaClient
         return EnviarAsync<IReadOnlyList<LiquidacionCesantiasDto>>(HttpMethod.Get, RutaCesantias + (q.Count > 0 ? "?" + string.Join("&", q) : string.Empty), null, ct);
     }
 
-    public Task<InvitationApiResult<CesantiasCalculadaDto>> CalcularCesantiasAsync(CalcularCesantiasRequest request, CancellationToken ct = default) =>
-        EnviarAsync<CesantiasCalculadaDto>(HttpMethod.Post, RutaCesantias, request, ct);
+    public Task<InvitationApiResult<LiquidacionCalculadaDto>> CalcularCesantiasAsync(CalcularCesantiasRequest request, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionCalculadaDto>(HttpMethod.Post, RutaCesantias, request, ct);
 
-    public Task<InvitationApiResult<CesantiasCalculadaDto>> RecalcularCesantiasAsync(Guid corridaId, CancellationToken ct = default) =>
-        EnviarAsync<CesantiasCalculadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/recalculate", new { }, ct);
+    public Task<InvitationApiResult<LiquidacionCalculadaDto>> RecalcularCesantiasAsync(Guid corridaId, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionCalculadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/recalculate", new { }, ct);
 
-    public Task<InvitationApiResult<CesantiasAprobadaDto>> AprobarCesantiasAsync(Guid corridaId, AprobarCesantiasRequest request, CancellationToken ct = default) =>
-        EnviarAsync<CesantiasAprobadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/approve", request, ct);
+    public Task<InvitationApiResult<LiquidacionAprobadaDto>> AprobarCesantiasAsync(Guid corridaId, AprobarLiquidacionRequest request, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionAprobadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/approve", request, ct);
 
-    public Task<InvitationApiResult<CesantiasReversadaDto>> ReversarCesantiasAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<CesantiasReversadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/reverse", new CesantiasMotivoRequest(motivo), ct);
+    public Task<InvitationApiResult<LiquidacionReversadaDto>> ReversarCesantiasAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionReversadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/reverse", new MotivoDeLiquidacionRequest(motivo), ct);
 
-    public Task<InvitationApiResult<CesantiasDescartadaDto>> DescartarCesantiasAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<CesantiasDescartadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/discard", new CesantiasMotivoRequest(motivo), ct);
+    public Task<InvitationApiResult<LiquidacionDescartadaDto>> DescartarCesantiasAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionDescartadaDto>(HttpMethod.Post, $"{RutaCesantias}/{corridaId}/discard", new MotivoDeLiquidacionRequest(motivo), ct);
 
     public Task<InvitationApiResult<RelacionDeConsignacionDto>> RelacionDeConsignacionAsync(Guid corridaId, CancellationToken ct = default) =>
         EnviarAsync<RelacionDeConsignacionDto>(HttpMethod.Get, $"{RutaCesantias}/{corridaId}/deposit-schedule", null, ct);

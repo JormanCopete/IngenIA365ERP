@@ -40,7 +40,7 @@
     <p>Días hábiles causados (días trabajados por el calendario comercial, menos suspensiones del contrato, por los días de vacaciones por año del parámetro legal, sobre 360), más el saldo inicial, menos lo disfrutado, compensado y pagado al retiro, más o menos los ajustes con motivo. Los hábiles de un disfrute se cuentan con la semana laboral de la empresa (Nómina › Políticas) y el calendario de festivos, y quedan congelados en el movimiento.</p>
 </div>
 
-<SfTab>
+<SfTab @bind-SelectedItem="_pestana">
     <TabItems>
         <TabItem>
             <ChildContent><TabHeader Text="Saldos por empleado" IconCss="e-icons e-people" /></ChildContent>
@@ -505,6 +505,11 @@
 </SfDialog>
 
 @code {
+    /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») abre la pestaña Liquidaciones en el año del corte y el detalle de esa corrida.</summary>
+    [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
+
+    private int _pestana;
+
     // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
     private readonly EstadoDeCarga _carga = new(), _cargaLiquidaciones = new(), _cargaFicha = new(), _cargaVista = new(), _cargaDetalle = new(), _guardado = new();
 
@@ -554,7 +559,17 @@
     private DetalleEmpleadoCorridaDto? _detalle;
     private Guid? _lineaAbierta;
 
-    protected override async Task OnInitializedAsync() => await CargarTodoAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        ResumenCorridaDto? desdeEnlace = null;
+        if (Corrida is { } id)
+        {
+            var r = await Nomina.ResumenAsync(id);
+            if (r.IsSuccess) { desdeEnlace = r.Value; _anio = desdeEnlace!.CutoffDate?.Year; _pestana = 1; }
+        }
+        await CargarTodoAsync();
+        if (desdeEnlace is { EmployeePublicId: { } empleado }) await AbrirDetalleAsync(desdeEnlace.PublicId, empleado);
+    }
 
     private async Task CargarTodoAsync()
     {
@@ -751,7 +766,7 @@
     {
         if (_aprobando is null || !_confirmar) return;
         using var guardado = _guardado.Iniciar();
-        var res = await Nomina.AprobarVacacionesAsync(_aprobando.RunPublicId, new AprobarVacacionesRequest(
+        var res = await Nomina.AprobarVacacionesAsync(_aprobando.RunPublicId, new AprobarLiquidacionRequest(
             true, _fechaComprobante is { } f ? DateOnly.FromDateTime(f) : null, ConfirmEmpty: false,
             ConfirmWithoutSegregation: _confirmarSinSegregacion, AcceptRetroactive: _aceptaRetroactivoAprobar));
         if (!res.IsSuccess)
@@ -787,12 +802,15 @@
             : "Se genera el asiento espejo, el movimiento vuelve a registrado y las novedades de ausencia de los períodos aún abiertos se anulan. Si hay pagos marcados, retírelos primero.";
         _accionConMotivo = async motivo =>
         {
-            if (descartar) return await Nomina.DescartarVacacionesAsync(l.RunPublicId, motivo);
-            var r = await Nomina.ReversarVacacionesAsync(l.RunPublicId, motivo);
-            return r.IsSuccess ? InvitationApiResult<EmptyResponse>.Success(new EmptyResponse()) : InvitationApiResult<EmptyResponse>.Failure(r.ErrorCode ?? "Error", r.ErrorMessage ?? "No se pudo reversar.", r.StatusCode ?? 0);
+            if (descartar) return SinCuerpo(await Nomina.DescartarVacacionesAsync(l.RunPublicId, motivo));
+            return SinCuerpo(await Nomina.ReversarVacacionesAsync(l.RunPublicId, motivo));
         };
         _mostrarMotivo = true;
     }
+
+    /// <summary>Reversar y descartar responden cuerpos distintos; el diálogo de motivo sólo necesita saber si salió bien.</summary>
+    private static InvitationApiResult<EmptyResponse> SinCuerpo<T>(InvitationApiResult<T> r) =>
+        r.IsSuccess ? InvitationApiResult<EmptyResponse>.Success(new EmptyResponse()) : InvitationApiResult<EmptyResponse>.Failure(r.ErrorCode ?? "Error", r.ErrorMessage ?? "No se pudo completar.", r.StatusCode ?? 0);
 
     private async Task ConfirmarMotivoAsync()
     {
@@ -807,12 +825,14 @@
 
     // ----------------------------------------------------------------- detalle --
 
-    private async Task AbrirDetalleAsync(LiquidacionVacacionesDto l)
+    private Task AbrirDetalleAsync(LiquidacionVacacionesDto l) => AbrirDetalleAsync(l.RunPublicId, l.EmployeePublicId);
+
+    private async Task AbrirDetalleAsync(Guid corridaId, Guid empleadoId)
     {
         _detalle = null; _lineaAbierta = null;
         _mostrarDetalle = true;
         using var carga = _cargaDetalle.Iniciar();
-        var res = await Nomina.DetalleEmpleadoAsync(l.RunPublicId, l.EmployeePublicId);
+        var res = await Nomina.DetalleEmpleadoAsync(corridaId, empleadoId);
         if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el detalle."); return; }
         _detalle = res.Value;
     }

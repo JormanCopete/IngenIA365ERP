@@ -13,6 +13,14 @@
     Feature 006 US5. Reemplaza a «Comprobante Nómina» (Fase 1), que llamaba a una ruta que no
     existía. Cinco vistas sobre las mismas consultas de Liquidación, con Excel, PDF y Word.
     La ruta vieja sigue llegando aquí.
+
+    Feature 010 N1 (contracts/api.md §11): siete vistas más sobre las liquidaciones especiales.
+    «Liquidación especial» resumen y detalle reciben el runId de una prima, unas cesantías, unas
+    vacaciones o una definitiva: la pantalla pide el tipo y lista las corridas del año con el cliente
+    de cada historia. Consignación de cesantías (runId y fondo opcional), saldos de vacaciones (a una
+    fecha), movimientos de vacaciones (entre fechas, empleado opcional), terminaciones (entre fechas)
+    y saldos iniciales de prestaciones (vigentes a una fecha). Todas salen por la misma ruta
+    /api/reports/payroll/{vista} en JSON para pintar y con ?format= para exportar.
 *@
 
 <div class="page-header">
@@ -20,25 +28,37 @@
     @if (_tabla is not null)
     {
         <div class="toolbar">
-            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
-            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
-            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@Ocupado" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@Ocupado" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@Ocupado" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
         </div>
     }
 </div>
 
 <div class="toolbar">
     <label class="campo">Vista
-        <select class="e-input" value="@_vista" @onchange="@(async e => { _vista = e.Value?.ToString() ?? "resumen"; _tabla = null; await CargarSiSePuedeAsync(); })">
-            <option value="comprobante">Comprobante por empleado</option>
-            <option value="resumen">Resumen de la corrida por concepto</option>
-            <option value="detalle">Detalle por empleado y concepto</option>
-            <option value="novedades">Novedades del período</option>
-            <option value="historico">Histórico por empleado entre fechas</option>
+        <select class="e-input" value="@_vista" @onchange="@(async e => await CambiarVistaAsync(e.Value?.ToString() ?? "resumen"))">
+            <optgroup label="Nómina ordinaria">
+                <option value="comprobante">Comprobante por empleado</option>
+                <option value="resumen">Resumen de la corrida por concepto</option>
+                <option value="detalle">Detalle por empleado y concepto</option>
+                <option value="novedades">Novedades del período</option>
+                <option value="historico">Histórico por empleado entre fechas</option>
+            </optgroup>
+            <optgroup label="Liquidaciones especiales">
+                <option value="liquidacion-especial-resumen">Liquidación especial: resumen por concepto</option>
+                <option value="liquidacion-especial-detalle">Liquidación especial: detalle por empleado</option>
+                <option value="consignacion-cesantias">Consignación de cesantías por fondo</option>
+                <option value="saldos-vacaciones">Saldos de vacaciones a una fecha</option>
+                <option value="movimientos-vacaciones">Movimientos de vacaciones entre fechas</option>
+                <option value="terminaciones">Terminaciones entre fechas</option>
+                <option value="saldos-iniciales-prestaciones">Saldos iniciales de prestaciones</option>
+            </optgroup>
         </select>
     </label>
 </div>
 
+@* ------------------------------------------------------- nómina ordinaria: período y corrida --- *@
 @if (_vista is "comprobante" or "resumen" or "detalle" or "novedades")
 {
     <SelectorDePeriodo @ref="_selector" PeriodoCambiado="OnPeriodoCambiado" />
@@ -51,10 +71,55 @@
     }
 }
 
-@if (_vista is "comprobante" or "historico")
+@* ------------------------------------------------ liquidaciones especiales: tipo y corrida --- *@
+@if (PideCorridaEspecial)
+{
+    <IndicadorDeCarga Cargando="@_cargaCorridas.Activa" Compacto="true">
+    <div class="toolbar">
+        @if (_vista != "consignacion-cesantias")
+        {
+            <label class="campo">Tipo
+                <select class="e-input" value="@_tipo" @onchange="@(async e => { _tipo = e.Value?.ToString() ?? "ServiceBonus"; await CargarCorridasEspecialesAsync(); })">
+                    <option value="ServiceBonus">Prima de servicios</option>
+                    <option value="Severance">Cesantías e intereses</option>
+                    <option value="Vacation">Vacaciones</option>
+                    <option value="Settlement">Liquidación definitiva</option>
+                </select>
+            </label>
+        }
+        <label class="campo">Año
+            <SfNumericTextBox TValue="int" Value="_anioCorridas" ValueChanged="@(async (int v) => { _anioCorridas = v; await CargarCorridasEspecialesAsync(); })" Format="0" ShowSpinButton="true" Min="2000" Max="2100" Width="110px" />
+        </label>
+        <label class="campo">Corrida
+            <select class="e-input" value="@(_corridaEspecial?.ToString() ?? string.Empty)" @onchange="@(async e => await ElegirCorridaEspecialAsync(e.Value?.ToString()))" disabled="@(_corridasEspeciales.Count == 0)">
+                <option value="">@(_corridasEspeciales.Count == 0 ? "Sin liquidaciones en el año" : "Elegí una liquidación…")</option>
+                @foreach (var c in _corridasEspeciales)
+                {
+                    <option value="@c.RunId">@c.Etiqueta</option>
+                }
+            </select>
+        </label>
+        @if (_vista == "consignacion-cesantias" && _fondos.Count > 0)
+        {
+            <label class="campo">Fondo
+                <select class="e-input" value="@(_fondo?.ToString() ?? string.Empty)" @onchange="@(async e => { _fondo = Guid.TryParse(e.Value?.ToString(), out var f) ? f : null; await CargarSiSePuedeAsync(); })">
+                    <option value="">Todos los fondos (una hoja por fondo en Excel)</option>
+                    @foreach (var f in _fondos)
+                    {
+                        <option value="@f.FundPublicId">@f.Name · @f.Employees empleado(s)</option>
+                    }
+                </select>
+            </label>
+        }
+    </div>
+    </IndicadorDeCarga>
+}
+
+@* -------------------------------------------------------------- empleado (buscador) --- *@
+@if (_vista is "comprobante" or "historico" or "movimientos-vacaciones")
 {
     <div class="toolbar">
-        <label class="campo">Empleado
+        <label class="campo">Empleado@(_vista == "movimientos-vacaciones" ? " (opcional)" : "")
             <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Nombre o documento" ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs _) => await BuscarEmpleadosAsync())" Width="260px" />
         </label>
         @if (_empleado is null && _candidatos.Count > 0)
@@ -69,13 +134,34 @@
         @if (_empleado is not null)
         {
             <span class="persona-chip"><strong>@_empleado.FullName</strong> · @_empleado.IdentificationNumber
-                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => { _empleado = null; _tabla = null; })" Title="Cambiar" /></span>
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(async () => { _empleado = null; _tabla = null; if (_vista == "movimientos-vacaciones") await CargarSiSePuedeAsync(); })" Title="Cambiar" /></span>
         }
         @if (_vista == "historico")
         {
             <SfDatePicker TValue="DateTime" @bind-Value="_desde" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" Width="160px" />
             <SfDatePicker TValue="DateTime" @bind-Value="_hasta" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" Width="160px" />
-            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_ocupado || _empleado is null)" OnClick="@CargarSiSePuedeAsync">Ver</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(Ocupado || _empleado is null)" OnClick="@CargarSiSePuedeAsync">Ver</SfButton>
+        }
+    </div>
+}
+
+@* ------------------------------------------------------------- rangos y fechas de corte --- *@
+@if (_vista is "movimientos-vacaciones" or "terminaciones")
+{
+    <div class="toolbar">
+        <SfDatePicker TValue="DateTime" @bind-Value="_desde" Placeholder="Desde" FloatLabelType="FloatLabelType.Always" Width="160px" />
+        <SfDatePicker TValue="DateTime" @bind-Value="_hasta" Placeholder="Hasta" FloatLabelType="FloatLabelType.Always" Width="160px" />
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@Ocupado" OnClick="@CargarSiSePuedeAsync">Ver</SfButton>
+    </div>
+}
+@if (_vista is "saldos-vacaciones" or "saldos-iniciales-prestaciones")
+{
+    <div class="toolbar">
+        <SfDatePicker TValue="DateTime" @bind-Value="_alDia" Placeholder="@(_vista == "saldos-vacaciones" ? "Saldo al día" : "Vigentes a")" FloatLabelType="FloatLabelType.Always" Width="160px" />
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@Ocupado" OnClick="@CargarSiSePuedeAsync">Ver</SfButton>
+        @if (_vista == "saldos-vacaciones")
+        {
+            <span class="texto-tenue">El saldo se deriva a la fecha: causado, más saldo inicial, menos disfrutes, compensaciones y pagos al retiro, más o menos ajustes.</span>
         }
     </div>
 }
@@ -85,11 +171,9 @@
     <label class="campo-check"><input type="checkbox" @bind="_incluirAnuladas" @bind:after="CargarSiSePuedeAsync" /> Incluir corregidas y anuladas</label>
 }
 
-@if (_ocupado)
-{
-    <p class="texto-tenue">Cargando…</p>
-}
-else if (_tabla is not null)
+@* --------------------------------------------------------------------------- la tabla --- *@
+<IndicadorDeCarga Cargando="@_cargaTabla.Activa" Texto="@(_descarga.Activa ? "Exportando…" : "Cargando…")">
+@if (_tabla is not null)
 {
     <div class="info-card">
         <h4>@_tabla.Titulo</h4>
@@ -146,18 +230,60 @@ else if (_tabla is not null)
         @foreach (var nota in _tabla.Notas) { <p class="hint">@nota</p> }
     </div>
 }
+else if (!_cargaTabla.Activa && Ruta() is null)
+{
+    <p class="texto-tenue">@Pista</p>
+}
+</IndicadorDeCarga>
 
 @code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md): la tabla del reporte, la
+    // lista de corridas especiales del selector y la exportación, que comparte el velo de la tabla.
+    private readonly EstadoDeCarga _cargaTabla = new(), _cargaCorridas = new(), _descarga = new();
+    private bool Ocupado => _cargaTabla.Activa || _descarga.Activa;
+
     private string _vista = "resumen";
     private SelectorDePeriodo? _selector;
     private PeriodoPagoDto? _periodo;
     private ResumenCorridaDto? _corrida;
     private TablaReporteDto? _tabla;
-    private bool _ocupado, _incluirAnuladas = true;
+    private bool _incluirAnuladas = true;
     private string _buscarEmpleado = string.Empty;
     private EmpleadoResumenDto? _empleado;
     private readonly List<EmpleadoResumenDto> _candidatos = [];
-    private DateTime _desde = new(DateTime.Today.Year, 1, 1), _hasta = DateTime.Today;
+    private DateTime _desde = new(DateTime.Today.Year, 1, 1), _hasta = DateTime.Today, _alDia = DateTime.Today;
+
+    // Liquidaciones especiales: el tipo elige el cliente con el que se listan las corridas del año.
+    private string _tipo = "ServiceBonus";
+    private int _anioCorridas = DateTime.Today.Year;
+    private Guid? _corridaEspecial, _fondo;
+    private List<CorridaEspecial> _corridasEspeciales = [];
+    private List<FondoEnLiquidacionDto> _fondos = [];
+
+    private sealed record CorridaEspecial(Guid RunId, string Etiqueta, IReadOnlyList<FondoEnLiquidacionDto> Fondos);
+
+    private bool PideCorridaEspecial => _vista is "liquidacion-especial-resumen" or "liquidacion-especial-detalle" or "consignacion-cesantias";
+
+    private string Pista => _vista switch
+    {
+        "comprobante" => "Elegí el período y buscá al empleado.",
+        "resumen" or "detalle" => "Elegí un período con corrida calculada.",
+        "novedades" => "Elegí el período.",
+        "historico" => "Buscá al empleado, elegí el rango de fechas y presioná «Ver».",
+        "liquidacion-especial-resumen" or "liquidacion-especial-detalle" => "Elegí el tipo de liquidación, el año y la corrida.",
+        "consignacion-cesantias" => "Elegí la liquidación de cesantías del año; el fondo es opcional.",
+        _ => "Elegí los parámetros y presioná «Ver».",
+    };
+
+    private async Task CambiarVistaAsync(string vista)
+    {
+        _vista = vista;
+        _tabla = null;
+        _corridaEspecial = null; _fondo = null; _fondos = [];
+        if (_vista == "consignacion-cesantias") _tipo = "Severance";
+        if (PideCorridaEspecial) await CargarCorridasEspecialesAsync();
+        else await CargarSiSePuedeAsync();
+    }
 
     private async Task OnPeriodoCambiado(PeriodoPagoDto? periodo)
     {
@@ -180,6 +306,70 @@ else if (_tabla is not null)
         if (r.IsSuccess) _candidatos.AddRange(r.Value!.Items);
     }
 
+    // ------------------------------------------------------ corridas de liquidaciones especiales --
+
+    /// <summary>Lista las corridas del año del tipo elegido con el cliente de su historia; todas las versiones, con su estado, porque un reporte también sirve sobre una reversada.</summary>
+    private async Task CargarCorridasEspecialesAsync()
+    {
+        using var carga = _cargaCorridas.Iniciar();
+        _corridaEspecial = null; _fondo = null; _fondos = []; _tabla = null;
+        _corridasEspeciales = [];
+        switch (_tipo)
+        {
+            case "ServiceBonus":
+            {
+                var r = await Nomina.ListarPrimasAsync(_anioCorridas);
+                if (!await OkAsync(r, "las primas")) return;
+                _corridasEspeciales = r.Value!.OrderByDescending(p => p.Semester).ThenByDescending(p => p.Version)
+                    .Select(p => new CorridaEspecial(p.RunPublicId, $"Prima {p.Etiqueta} · v{p.Version} · {p.EstadoTexto} · {p.Employees} empleado(s) · {p.Total:N0}", [])).ToList();
+                break;
+            }
+            case "Severance":
+            {
+                var r = await Nomina.ListarCesantiasAnualesAsync(_anioCorridas);
+                if (!await OkAsync(r, "las cesantías")) return;
+                _corridasEspeciales = r.Value!.OrderByDescending(c => c.Version)
+                    .Select(c => new CorridaEspecial(c.RunPublicId, $"Cesantías {c.Year} · v{c.Version} · {c.EstadoTexto} · {c.Employees} empleado(s) · {c.Total:N0}", c.Funds)).ToList();
+                break;
+            }
+            case "Vacation":
+            {
+                var r = await Nomina.LiquidacionesDeVacacionesAsync(null, _anioCorridas, null, incluirReemplazadas: true);
+                if (!await OkAsync(r, "las liquidaciones de vacaciones")) return;
+                _corridasEspeciales = r.Value!.OrderByDescending(v => v.CutoffDate).ThenByDescending(v => v.Version)
+                    .Select(v => new CorridaEspecial(v.RunPublicId, $"{v.EmployeeName} · {v.TipoTexto} {v.FechasTexto} · v{v.Version} · {v.EstadoTexto} · {v.Amount:N0}", [])).ToList();
+                break;
+            }
+            case "Settlement":
+            {
+                var r = await Nomina.ListarTerminacionesAsync(_anioCorridas);
+                if (!await OkAsync(r, "las terminaciones")) return;
+                _corridasEspeciales = r.Value!.Where(t => t.RunPublicId is not null).OrderByDescending(t => t.TerminationDate)
+                    .Select(t => new CorridaEspecial(t.RunPublicId!.Value, $"{t.EmployeeName} · retiro {t.TerminationDate:dd/MM/yyyy} · {t.ReasonName} · v{t.RunVersion} · {t.EstadoTexto} · {t.Net:N0}", [])).ToList();
+                break;
+            }
+        }
+        // Con una sola corrida en el año no hace falta elegirla.
+        if (_corridasEspeciales.Count == 1) await ElegirCorridaEspecialAsync(_corridasEspeciales[0].RunId.ToString());
+    }
+
+    private async Task ElegirCorridaEspecialAsync(string? valor)
+    {
+        _corridaEspecial = Guid.TryParse(valor, out var id) ? id : null;
+        _fondo = null;
+        _fondos = _corridasEspeciales.FirstOrDefault(c => c.RunId == _corridaEspecial)?.Fondos.Where(f => f.FundPublicId is not null).ToList() ?? [];
+        await CargarSiSePuedeAsync();
+    }
+
+    private async Task<bool> OkAsync<T>(IngenIA365ERP.Shared.Services.Security.InvitationApiResult<T> r, string que)
+    {
+        if (r.IsSuccess) return true;
+        await Notification.ErrorAsync(r.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : r.ErrorMessage ?? $"No se pudieron cargar {que}.");
+        return false;
+    }
+
+    // ------------------------------------------------------------------------------- la ruta --
+
     private string? Ruta() => _vista switch
     {
         "comprobante" when _corrida is not null && _empleado is not null => $"comprobante?runId={_corrida.PublicId}&employeeId={_empleado.PublicId}",
@@ -187,6 +377,14 @@ else if (_tabla is not null)
         "detalle" when _corrida is not null => $"detalle?runId={_corrida.PublicId}",
         "novedades" when _periodo is not null => $"novedades?periodId={_periodo.PublicId}&incluirAnuladas={_incluirAnuladas}",
         "historico" when _empleado is not null => $"historico?employeeId={_empleado.PublicId}&desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}",
+        // Feature 010 (contracts/api.md §11)
+        "liquidacion-especial-resumen" when _corridaEspecial is { } r1 => $"liquidacion-especial-resumen?runId={r1}",
+        "liquidacion-especial-detalle" when _corridaEspecial is { } r2 => $"liquidacion-especial-detalle?runId={r2}",
+        "consignacion-cesantias" when _corridaEspecial is { } r3 => $"consignacion-cesantias?runId={r3}" + (_fondo is { } f ? $"&fundId={f}" : string.Empty),
+        "saldos-vacaciones" => $"saldos-vacaciones?asOf={_alDia:yyyy-MM-dd}",
+        "movimientos-vacaciones" => $"movimientos-vacaciones?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}" + (_empleado is { } e ? $"&employeeId={e.PublicId}" : string.Empty),
+        "terminaciones" => $"terminaciones?desde={_desde:yyyy-MM-dd}&hasta={_hasta:yyyy-MM-dd}",
+        "saldos-iniciales-prestaciones" => $"saldos-iniciales-prestaciones?asOf={_alDia:yyyy-MM-dd}",
         _ => null,
     };
 
@@ -194,27 +392,20 @@ else if (_tabla is not null)
     {
         var ruta = Ruta();
         if (ruta is null) { _tabla = null; return; }
-        _ocupado = true;
-        try
-        {
-            var r = await Nomina.ReporteAsync(ruta);
-            if (r.IsSuccess) _tabla = r.Value;
-            else { _tabla = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el reporte."); }
-        }
-        finally { _ocupado = false; }
+        using var carga = _cargaTabla.Iniciar();
+        var r = await Nomina.ReporteAsync(ruta);
+        if (r.IsSuccess) _tabla = r.Value;
+        else { _tabla = null; await Notification.ErrorAsync(r.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : r.ErrorMessage ?? "No se pudo generar el reporte."); }
     }
 
     private async Task DescargarAsync(string formato)
     {
         var ruta = Ruta();
-        if (ruta is null || _ocupado) return;
-        _ocupado = true;
-        try
-        {
-            var r = await Nomina.DescargarReporteAsync(ruta, formato);
-            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
-            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
-        }
-        finally { _ocupado = false; }
+        if (ruta is null || Ocupado) return;
+        using var carga = _cargaTabla.Iniciar();
+        using var descarga = _descarga.Iniciar();
+        var r = await Nomina.DescargarReporteAsync(ruta, formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 }

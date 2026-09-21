@@ -27,14 +27,14 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<TerminacionRegistradaDto>> RecalcularDefinitivaAsync(Guid runId, CancellationToken ct = default) =>
         EnviarAsync<TerminacionRegistradaDto>(HttpMethod.Post, $"{Terminaciones}/{runId}/recalculate", new { }, ct);
 
-    public Task<InvitationApiResult<DefinitivaAprobadaDto>> AprobarDefinitivaAsync(Guid runId, AprobarDefinitivaRequest request, CancellationToken ct = default) =>
+    public Task<InvitationApiResult<DefinitivaAprobadaDto>> AprobarDefinitivaAsync(Guid runId, AprobarLiquidacionRequest request, CancellationToken ct = default) =>
         EnviarAsync<DefinitivaAprobadaDto>(HttpMethod.Post, $"{Terminaciones}/{runId}/approve", request, ct);
 
     public Task<InvitationApiResult<DefinitivaReversadaDto>> ReversarDefinitivaAsync(Guid runId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<DefinitivaReversadaDto>(HttpMethod.Post, $"{Terminaciones}/{runId}/reverse", new MotivoRequest(motivo), ct);
+        EnviarAsync<DefinitivaReversadaDto>(HttpMethod.Post, $"{Terminaciones}/{runId}/reverse", new MotivoDeLiquidacionRequest(motivo), ct);
 
-    public Task<InvitationApiResult<EmptyResponse>> DescartarDefinitivaAsync(Guid runId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Terminaciones}/{runId}/discard", new MotivoRequest(motivo), ct);
+    public Task<InvitationApiResult<LiquidacionDescartadaDto>> DescartarDefinitivaAsync(Guid runId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionDescartadaDto>(HttpMethod.Post, $"{Terminaciones}/{runId}/discard", new MotivoDeLiquidacionRequest(motivo), ct);
 
     // ---------------------------------------------------------------- descuentos --
 

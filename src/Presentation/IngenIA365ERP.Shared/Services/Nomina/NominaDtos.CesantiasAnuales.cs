@@ -1,7 +1,8 @@
 namespace IngenIA365ERP.Shared.Services.Nomina;
 
 // Feature 010 US2: cesantías e intereses del año y la consignación por fondo (contracts/api.md §3.2).
-// Espejo de Application/Payroll/Settlements/Severance/SeveranceDtos.cs y del común §3.1.
+// Espejo de Application/Payroll/Settlements/Severance/SeveranceDtos.cs; lo común del §3.1 (calcular,
+// aprobar, reversar, descartar, excluidos y avisos) está en NominaDtos.Liquidaciones.cs.
 
 public sealed record FondoEnLiquidacionDto(Guid? FundPublicId, string Name, int Employees, decimal Amount, DateOnly? DepositedAt, string? DepositedBy, string? Reference)
 {
@@ -44,32 +45,7 @@ public sealed record LiquidacionCesantiasDto(
     public int FondosPorConsignar => Funds.Count(f => !f.Consignado && f.FundPublicId is not null);
 }
 
-public sealed record CesantiasExcluidoDto(Guid EmployeePublicId, string Name, string ReasonCode, string Reason);
-
-public sealed record CesantiasAvisoDto(string Code, string Message, System.Text.Json.JsonElement? Data);
-
-public sealed record CesantiasCalculadaDto(
-    Guid RunPublicId,
-    int Version,
-    string Kind,
-    DateOnly CutoffDate,
-    int Employees,
-    TotalesCorridaDto Totals,
-    IReadOnlyList<BloqueoDto> Blockers,
-    IReadOnlyList<CesantiasExcluidoDto> Excluded,
-    IReadOnlyList<CesantiasAvisoDto> Warnings);
-
-public sealed record CesantiasAprobadaDto(Guid RunPublicId, Guid DocumentPublicId, string Number, decimal Total, DateOnly PostingDate, bool ApprovedWithoutSegregation);
-
-public sealed record CesantiasReversadaDto(Guid RunPublicId, Guid ReversalDocumentPublicId, string ReversalNumber);
-
-public sealed record CesantiasDescartadaDto(Guid RunPublicId, string Reason);
-
 public sealed record CalcularCesantiasRequest(int Year, DateOnly? CutoffDate = null, IReadOnlyList<Guid>? EmployeePublicIds = null);
-
-public sealed record AprobarCesantiasRequest(bool Confirm, DateOnly? PostingDate = null, DateOnly? PayDate = null, bool ConfirmEmpty = false, bool ConfirmWithoutSegregation = false);
-
-public sealed record CesantiasMotivoRequest(string Reason);
 
 public sealed record MarcarConsignadoRequest(DateOnly DepositedAt, string? Reference);
 

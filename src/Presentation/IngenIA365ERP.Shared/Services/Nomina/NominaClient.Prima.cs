@@ -22,23 +22,23 @@ public sealed partial class NominaClient
         return EnviarAsync<IReadOnlyList<PrimaResumenDto>>(HttpMethod.Get, url, null, ct);
     }
 
-    public Task<InvitationApiResult<ResultadoPrimaDto>> CalcularPrimaAsync(CalcularPrimaRequest request, CancellationToken ct = default) =>
-        EnviarAsync<ResultadoPrimaDto>(HttpMethod.Post, RutaPrima, request, ct);
+    public Task<InvitationApiResult<LiquidacionCalculadaDto>> CalcularPrimaAsync(CalcularPrimaRequest request, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionCalculadaDto>(HttpMethod.Post, RutaPrima, request, ct);
 
-    public Task<InvitationApiResult<ResultadoPrimaDto>> RecalcularPrimaAsync(Guid corridaId, CancellationToken ct = default) =>
-        EnviarAsync<ResultadoPrimaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/recalculate", new { }, ct);
+    public Task<InvitationApiResult<LiquidacionCalculadaDto>> RecalcularPrimaAsync(Guid corridaId, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionCalculadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/recalculate", new { }, ct);
 
-    public Task<InvitationApiResult<IReadOnlyList<ExcluidoDePrimaDto>>> ExcluidosDePrimaAsync(Guid corridaId, CancellationToken ct = default) =>
-        EnviarAsync<IReadOnlyList<ExcluidoDePrimaDto>>(HttpMethod.Get, $"{RutaPrima}/{corridaId}/excluded", null, ct);
+    public Task<InvitationApiResult<IReadOnlyList<ExcluidoDeLiquidacionDto>>> ExcluidosDePrimaAsync(Guid corridaId, CancellationToken ct = default) =>
+        EnviarAsync<IReadOnlyList<ExcluidoDeLiquidacionDto>>(HttpMethod.Get, $"{RutaPrima}/{corridaId}/excluded", null, ct);
 
-    public Task<InvitationApiResult<PrimaAprobadaDto>> AprobarPrimaAsync(Guid corridaId, AprobarPrimaRequest request, CancellationToken ct = default) =>
-        EnviarAsync<PrimaAprobadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/approve", request, ct);
+    public Task<InvitationApiResult<LiquidacionAprobadaDto>> AprobarPrimaAsync(Guid corridaId, AprobarLiquidacionRequest request, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionAprobadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/approve", request, ct);
 
-    public Task<InvitationApiResult<PrimaReversadaDto>> ReversarPrimaAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<PrimaReversadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/reverse", new { Reason = motivo }, ct);
+    public Task<InvitationApiResult<LiquidacionReversadaDto>> ReversarPrimaAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionReversadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/reverse", new MotivoDeLiquidacionRequest(motivo), ct);
 
-    public Task<InvitationApiResult<PrimaDescartadaDto>> DescartarPrimaAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<PrimaDescartadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/discard", new { Reason = motivo }, ct);
+    public Task<InvitationApiResult<LiquidacionDescartadaDto>> DescartarPrimaAsync(Guid corridaId, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<LiquidacionDescartadaDto>(HttpMethod.Post, $"{RutaPrima}/{corridaId}/discard", new MotivoDeLiquidacionRequest(motivo), ct);
 
     // ------------------------------------------- centro de reportes de liquidaciones especiales --
 
