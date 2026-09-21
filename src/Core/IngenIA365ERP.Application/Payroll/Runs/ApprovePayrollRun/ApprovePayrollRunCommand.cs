@@ -182,6 +182,23 @@ public sealed class ApprovePayrollRunCommandHandler(
             }
         }
 
+        // Feature 010 (D-28): una definitiva en borrador cuyo retiro cae en este período traía el salario
+        // pendiente y las novedades del período; esta aprobación acaba de pagarlos con la ordinaria, así que
+        // el borrador queda desactualizado y al recalcularlo sale sin ese tramo («la última nómina ya lo pagó»).
+        var inicioDt = DateOnly.FromDateTime(period.StartDate);
+        var finDt = DateOnly.FromDateTime(period.EndDate);
+        var definitivasDelPeriodo = await db.PayrollRuns
+            .Where(r => r.Kind == PayrollRunKind.Settlement && r.Status == PayrollRunStatus.Draft
+                        && r.CutoffDate >= inicioDt && r.CutoffDate <= finDt && r.EmployeeId != null
+                        && db.Employees.Any(e => e.Id == r.EmployeeId && e.PayrollPlanId == period.PayrollPlanId))
+            .ToListAsync(ct);
+        foreach (var definitiva in definitivasDelPeriodo)
+        {
+            definitiva.Status = PayrollRunStatus.Stale;
+            definitiva.UpdatedAt = ahora;
+            definitiva.UpdatedBy = yo;
+        }
+
         await db.SaveChangesAsync(ct);
 
         var totales = new RunTotalsDto(run.TotalEarnings, run.TotalDeductions, run.TotalEmployerContributions, run.TotalProvisions, run.TotalNet, run.RoundingAdjustment);

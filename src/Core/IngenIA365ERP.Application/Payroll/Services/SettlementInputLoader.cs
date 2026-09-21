@@ -97,6 +97,9 @@ public sealed class SettlementBatch
     public EmploymentTermination? Termination { get; init; }
     public VacationMovement? Movement { get; init; }
 
+    /// <summary>Id interno de cada novedad del período pendiente por su PublicId, para <c>PayrollRunLine.NoveltyId</c> (D-28).</summary>
+    public IReadOnlyDictionary<Guid, int> NoveltyIds { get; init; } = new Dictionary<Guid, int>();
+
     public IReadOnlyList<string> MissingRequiredParameters =>
         SettlementCalculationEngine.MissingRequiredParameters(Parameters, CutoffDate.ToDateTime(TimeOnly.MinValue));
 }
@@ -108,8 +111,9 @@ public sealed class SettlementBatch
 /// imputación (variables prestacionales, variables de vacaciones e ingreso laboral); la
 /// <b>provisión acumulada</b> por concepto (<see cref="ProvisionBalanceReader"/>); el saldo
 /// inicial de prestaciones; los movimientos de vacaciones; las ausencias y suspensiones (las
-/// novedades con fechas que reducen días); la prima ya pagada en definitivas del semestre; el
-/// salario pendiente del período abierto donde cae el retiro; el acumulado anual de retención
+/// novedades con fechas que reducen días); la prima ya pagada en definitivas o en la semestral del
+/// semestre y las cesantías pagadas en la anual del año (D-28); el salario pendiente del período
+/// abierto donde cae el retiro con las novedades activas del empleado en él; el acumulado anual de retención
 /// cuando la política es «acumulado»; y, en la definitiva, las deudas propuestas desde Cartera
 /// por persona y las libranzas recurrentes según <c>DeduccionAlRetiroModo</c>. Las políticas se
 /// leen a la fecha de corte por <see cref="PayrollPolicyReader"/>. No calcula nada: el motor es
@@ -163,26 +167,43 @@ public sealed class SettlementInputLoader(
         var idsEmpleados = empleados.Select(x => x.Employee.Id).ToList();
         var idsPersonas = empleados.Select(x => x.Employee.PersonId).ToList();
 
-        // --- terminaciones liquidadas (FR-005, exclusión «RetiradoConDefinitiva») ---
-        var liquidadas = await db.EmploymentTerminations.AsNoTracking()
-            .Where(t => idsEmpleados.Contains(t.EmployeeId) && t.Status == TerminationStatus.Settled)
+        // --- terminaciones vivas (FR-005, FR-013, exclusión «RetiradoConDefinitiva») ---
+        // Una definitiva aprobada (Settled) retiró al empleado; una registrada (Registered) tiene su
+        // borrador vivo y va a pagar el tramo, la prima y las cesantías del retiro (D-28): la corrida
+        // colectiva no lo incluye en ninguno de los dos casos, para no pagarle dos veces.
+        var vivas = await db.EmploymentTerminations.AsNoTracking()
+            .Where(t => idsEmpleados.Contains(t.EmployeeId) && (t.Status == TerminationStatus.Settled || t.Status == TerminationStatus.Registered))
             .ToListAsync(ct);
-        var liquidadaPorEmpleado = liquidadas.GroupBy(t => t.EmployeeId).ToDictionary(g => g.Key, g => g.Max(t => t.TerminationDate));
+        var liquidadaPorEmpleado = vivas.GroupBy(t => t.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.TerminationDate).ThenByDescending(t => t.Id).First());
         if (request.Kind is SettlementKind.ServiceBonus or SettlementKind.Severance)
         {
             foreach (var x in empleados.ToList())
             {
-                if (!liquidadaPorEmpleado.TryGetValue(x.Employee.Id, out var fecha)) continue;
+                if (!liquidadaPorEmpleado.TryGetValue(x.Employee.Id, out var terminacionViva)) continue;
+                var fecha = terminacionViva.TerminationDate;
+                var nombre = $"{x.FirstName} {x.LastName}".Trim();
                 if (fecha < inicioPeriodo)
                 {
                     empleados.Remove(x);
                     continue;
                 }
-                if (request.Kind == SettlementKind.Severance && fecha <= corte)
+                if (fecha > corte) continue;
+                var enBorrador = terminacionViva.Status == TerminationStatus.Registered;
+                if (request.Kind == SettlementKind.Severance)
                 {
                     empleados.Remove(x);
-                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, $"{x.FirstName} {x.LastName}".Trim(), "RetiradoConDefinitiva",
-                        $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva aprobada: sus cesantías e intereses del año ya se pagaron allí."));
+                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, nombre, "RetiradoConDefinitiva", enBorrador
+                        ? $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva registrada (borrador pendiente de aprobar): sus cesantías e intereses del año se pagan allí."
+                        : $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva aprobada: sus cesantías e intereses del año ya se pagaron allí."));
+                }
+                else if (enBorrador)
+                {
+                    // Con la definitiva aprobada, la prima pagada allí viaja al motor (FR-009) y él decide; con la
+                    // definitiva en borrador todavía no hay prima pagada que informar, así que se excluye aquí.
+                    empleados.Remove(x);
+                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, nombre, SettlementReasonCodes.YaPagadaEnDefinitiva,
+                        $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva registrada (borrador pendiente de aprobar): la prima proporcional del semestre se paga allí (FR-009)."));
                 }
             }
             idsEmpleados = empleados.Select(x => x.Employee.Id).ToList();
@@ -264,18 +285,35 @@ public sealed class SettlementInputLoader(
         var movimientosPorEmpleado = movimientos.ToLookup(m => m.EmployeeId);
         var saldosProvision = await provisiones.LeerAsync(idsEmpleados, corte, excludeRunId: null, ct);
 
-        // --- prima pagada en definitivas aprobadas del semestre del corte (FR-009) ---
+        // --- prima pagada en corridas aprobadas del semestre del corte: definitivas (FR-009) y la semestral (D-28) ---
         var (semInicio, semFin) = SemestreDe(corte);
         var primasPagadas = await (
             from l in db.PayrollRunLines.AsNoTracking()
             join re in db.PayrollRunEmployees.AsNoTracking() on l.PayrollRunEmployeeId equals re.Id
             join r in db.PayrollRuns.AsNoTracking() on re.PayrollRunId equals r.Id
-            where idsEmpleados.Contains(re.EmployeeId) && r.Kind == PayrollRunKind.Settlement && r.Status == PayrollRunStatus.Approved
+            where idsEmpleados.Contains(re.EmployeeId) && (r.Kind == PayrollRunKind.Settlement || r.Kind == PayrollRunKind.ServiceBonus)
+                  && r.Status == PayrollRunStatus.Approved
                   && r.CutoffDate >= semInicio && r.CutoffDate <= semFin
                   && l.ConceptCode == WellKnownConceptCodes.ServiceBonus
-            select new { re.EmployeeId, r.PublicId, r.CutoffDate, l.Amount, l.Quantity })
+            select new { re.EmployeeId, r.PublicId, r.CutoffDate, r.Kind, l.Amount, l.Quantity })
             .ToListAsync(ct);
         var primasPorEmpleado = primasPagadas.ToLookup(x => x.EmployeeId);
+
+        // --- cesantías pagadas en la corrida anual aprobada del año del retiro (definitiva, D-28) ---
+        var anioInicio = new DateOnly(corte.Year, 1, 1);
+        var anioFin = new DateOnly(corte.Year, 12, 31);
+        var cesantiasPagadas = request.Kind == SettlementKind.Settlement
+            ? await (
+                from l in db.PayrollRunLines.AsNoTracking()
+                join re in db.PayrollRunEmployees.AsNoTracking() on l.PayrollRunEmployeeId equals re.Id
+                join r in db.PayrollRuns.AsNoTracking() on re.PayrollRunId equals r.Id
+                where idsEmpleados.Contains(re.EmployeeId) && r.Kind == PayrollRunKind.Severance && r.Status == PayrollRunStatus.Approved
+                      && r.CutoffDate >= anioInicio && r.CutoffDate <= anioFin
+                      && l.ConceptCode == WellKnownConceptCodes.Severance
+                select new { re.EmployeeId, r.PublicId, r.CutoffDate, l.Amount })
+                .ToListAsync(ct)
+            : [];
+        var cesantiasPorEmpleado = cesantiasPagadas.ToLookup(x => x.EmployeeId);
 
         // --- salario pendiente: el período abierto del plan donde cae el retiro (definitiva) ---
         var periodosAbiertos = request.Kind == SettlementKind.Settlement
@@ -284,14 +322,26 @@ public sealed class SettlementInputLoader(
                 .ToListAsync(ct)
             : [];
 
-        // --- bonificación por retiro pactada: novedad BONIF_RETIRO del período abierto (definitiva) ---
+        // --- novedades activas del empleado en ese período (definitiva, D-28): la bonificación por retiro
+        // pactada viaja en la terminación; las demás devengadas y deducciones se liquidan con su concepto
+        // porque la ordinaria del período ya no lo incluye. Las informativas ya entraron como ausencias y
+        // la cuota de una libranza recurrente ya viene propuesta como deuda (FR-018a).
         var idsAbiertos = periodosAbiertos.Select(p => p.Id).ToList();
-        var bonificaciones = request.Kind == SettlementKind.Settlement && idsAbiertos.Count > 0
+        var novedadesPendientes = request.Kind == SettlementKind.Settlement && idsAbiertos.Count > 0
             ? await db.PayrollNovelties.AsNoTracking()
-                .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active
-                            && n.ConceptCode == WellKnownConceptCodes.RetirementBonus && idsAbiertos.Contains(n.PayPeriodId))
+                .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active && idsAbiertos.Contains(n.PayPeriodId))
+                .Join(db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters(), n => n.ConceptDefinitionId, c => c.Id,
+                    (n, c) => new { Novelty = n, ConceptName = c.Name, c.Nature })
+                .OrderBy(x => x.Novelty.Id)
                 .ToListAsync(ct)
             : [];
+        var bonificaciones = novedadesPendientes.Where(x => x.Novelty.ConceptCode == WellKnownConceptCodes.RetirementBonus).Select(x => x.Novelty).ToList();
+        var novedadesPorEmpleado = novedadesPendientes
+            .Where(x => x.Nature is ConceptNature.Earning or ConceptNature.Deduction
+                        && !x.Novelty.ConceptCode.Equals(WellKnownConceptCodes.RetirementBonus, StringComparison.OrdinalIgnoreCase)
+                        && !(x.Novelty.ConceptCode.Equals(LibranzaCode, StringComparison.OrdinalIgnoreCase) && x.Novelty.RecurringNoveltyId != null))
+            .ToLookup(x => x.Novelty.EmployeeId);
+        var idsNovedades = novedadesPorEmpleado.SelectMany(g => g).ToDictionary(x => x.Novelty.PublicId, x => x.Novelty.Id);
 
         // --- deudas (definitiva) ---
         var deudasPorEmpleado = new Dictionary<int, IReadOnlyList<DeudaPropuesta>>();
@@ -317,7 +367,7 @@ public sealed class SettlementInputLoader(
             // aprobada o la de la ficha; nula si sigue vinculado al corte.
             DateTime? retiro = request.Kind == SettlementKind.Settlement && terminacion is not null && terminacion.EmployeeId == e.Id
                 ? terminacion.TerminationDate.ToDateTime(TimeOnly.MinValue)
-                : liquidadaPorEmpleado.TryGetValue(e.Id, out var liq) ? liq.ToDateTime(TimeOnly.MinValue)
+                : liquidadaPorEmpleado.TryGetValue(e.Id, out var liq) ? liq.TerminationDate.ToDateTime(TimeOnly.MinValue)
                 : e.TerminationDate < DateTime.MaxValue.Date && e.Status < 0 ? e.TerminationDate.Date : null;
 
             var basesMensuales = BasesPorMes(lineasPorEmpleado[e.Id].Select(l => (l.ImputationYear, l.ImputationMonth, l.ConceptDefinitionId, l.ConceptCode, l.Nature, l.Amount)), definicionesDeLineas);
@@ -375,10 +425,27 @@ public sealed class SettlementInputLoader(
                     : null,
                 ProposedDeductions = deudas.Select(d => d.ComoEntrada()).ToList(),
                 ServiceBonusPaidInSettlements = primasPorEmpleado[e.Id]
-                    .Select(p => new PaidServiceBonusInput(p.PublicId, p.CutoffDate!.Value.ToDateTime(TimeOnly.MinValue), p.Amount, (int)(p.Quantity ?? 0m))).ToList(),
+                    .Select(p => new PaidServiceBonusInput(p.PublicId, p.CutoffDate!.Value.ToDateTime(TimeOnly.MinValue), p.Amount, (int)(p.Quantity ?? 0m), (SettlementKind)(int)p.Kind)).ToList(),
+                SeverancePaidInRuns = cesantiasPorEmpleado[e.Id]
+                    .Select(p => new PaidSeveranceInput(p.PublicId, p.CutoffDate!.Value.ToDateTime(TimeOnly.MinValue), p.Amount)).ToList(),
                 PendingSalary = esLaTerminacion
                     ? periodosAbiertos.Where(p => p.PayrollPlanId == e.PayrollPlanId).Select(p => new PendingSalaryInput(p.StartDate.Date, p.EndDate.Date)).FirstOrDefault()
                     : null,
+                PendingNovelties = esLaTerminacion
+                    ? novedadesPorEmpleado[e.Id]
+                        .Where(x => periodosAbiertos.Any(p => p.Id == x.Novelty.PayPeriodId && p.PayrollPlanId == e.PayrollPlanId))
+                        .Select(x => new NoveltyInput
+                        {
+                            PublicId = x.Novelty.PublicId,
+                            ConceptCode = x.Novelty.ConceptCode,
+                            Quantity = x.Novelty.Quantity,
+                            Amount = x.Novelty.Amount,
+                            StartDate = x.Novelty.StartDate,
+                            EndDate = x.Novelty.EndDate,
+                            Origin = x.Novelty.Origin,
+                            Description = string.IsNullOrWhiteSpace(x.Novelty.Notes) ? x.ConceptName : $"{x.ConceptName}: {x.Novelty.Notes}",
+                        }).ToList()
+                    : [],
                 WithholdingYearToDate = acumuladoRetencion,
                 Policies = politicas.ForSettlement(),
                 Parameters = parametros,
@@ -401,6 +468,7 @@ public sealed class SettlementInputLoader(
             Warnings = avisos,
             Termination = terminacion,
             Movement = movimiento,
+            NoveltyIds = idsNovedades,
         };
     }
 

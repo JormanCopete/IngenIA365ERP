@@ -56,7 +56,11 @@ public sealed class CasoDoradoLiquidacion
     public TerminacionJson? Terminacion { get; set; }
     public List<DeudaJson> Deudas { get; set; } = [];
     public List<PrimaPagadaJson> PrimaPagadaEnDefinitiva { get; set; } = [];
+    public List<CesantiasPagadasJson> CesantiasPagadasEnAnual { get; set; } = [];
     public SalarioPendienteJson? SalarioPendiente { get; set; }
+
+    /// <summary>D-28: novedades activas del período pendiente que la definitiva liquida con su concepto.</summary>
+    public List<CasoDorado.NovedadJson> NovedadesPendientes { get; set; } = [];
     public AcumuladoJson? AcumuladoRetencion { get; set; }
     public PoliticasJson Politicas { get; set; } = new();
     public Dictionary<string, decimal> Parametros { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -154,8 +158,21 @@ public sealed class CasoDoradoLiquidacion
                 AccountedByOtherModule = d.ContabilizadaPorOtroModulo,
             }).ToList(),
             ServiceBonusPaidInSettlements = PrimaPagadaEnDefinitiva
-                .Select((p, i) => new PaidServiceBonusInput(p.Corrida ?? new Guid(i + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), p.Hasta, p.Valor, p.Dias)).ToList(),
+                .Select((p, i) => new PaidServiceBonusInput(p.Corrida ?? new Guid(i + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), p.Hasta, p.Valor, p.Dias, p.PagadaPor)).ToList(),
+            SeverancePaidInRuns = CesantiasPagadasEnAnual
+                .Select((p, i) => new PaidSeveranceInput(p.Corrida ?? new Guid(i + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), p.Hasta, p.Valor)).ToList(),
             PendingSalary = SalarioPendiente is null ? null : new PendingSalaryInput(SalarioPendiente.Inicio, SalarioPendiente.Fin),
+            PendingNovelties = NovedadesPendientes.Select((n, i) => new NoveltyInput
+            {
+                PublicId = n.Id ?? new Guid(i + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                ConceptCode = n.Concepto,
+                Quantity = n.Cantidad,
+                Amount = n.Valor,
+                StartDate = n.Desde,
+                EndDate = n.Hasta,
+                Origin = n.Origen,
+                Description = n.Descripcion,
+            }).ToList(),
             WithholdingYearToDate = AcumuladoRetencion is null ? null : new AcumuladoAnualDeRetencion(AcumuladoRetencion.RentaExentaUsada, AcumuladoRetencion.DeduccionesUsadas),
             Policies = new SettlementPolicies
             {
@@ -268,6 +285,17 @@ public sealed class CasoDoradoLiquidacion
         public DateTime Hasta { get; set; }
         public decimal Valor { get; set; }
         public int Dias { get; set; }
+
+        /// <summary>Quién la pagó: la definitiva (por defecto, FR-009) o la corrida semestral (D-28).</summary>
+        public SettlementKind PagadaPor { get; set; } = SettlementKind.Settlement;
+    }
+
+    /// <summary>Cesantías pagadas en una corrida anual aprobada hasta su corte (D-28).</summary>
+    public sealed class CesantiasPagadasJson
+    {
+        public Guid? Corrida { get; set; }
+        public DateTime Hasta { get; set; }
+        public decimal Valor { get; set; }
     }
 
     public sealed class SalarioPendienteJson

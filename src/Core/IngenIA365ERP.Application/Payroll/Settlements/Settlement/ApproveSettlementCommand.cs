@@ -29,7 +29,9 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// <item>la ficha se cierra (<c>Status = -1</c>, <c>TerminationDate</c>, <c>TerminationCause</c> = nombre
 /// del motivo) y la persona deja de ser empleada;</item>
 /// <item>las vacaciones pagadas quedan como movimiento <c>SettlementPayout</c> liquidado;</item>
-/// <item>la terminación pasa a <c>Settled</c>.</item>
+/// <item>la terminación pasa a <c>Settled</c>;</item>
+/// <item>el borrador de la nómina ordinaria del período donde cae el retiro, si existe, queda <c>Stale</c>
+/// (D-28): al recalcularlo el empleado ya no entra, porque su último tramo lo pagó esta definitiva.</item>
 /// </list>
 /// Tras confirmar, el PDF para firma se guarda en <c>COR_Attachments</c> (<c>OwnerEntityType =
 /// "EmploymentTermination"</c>); si eso falla la aprobación no se deshace —el documento se vuelve a
@@ -56,6 +58,7 @@ public sealed class ApproveSettlementCommandHandler(
     ICurrentTenantService tenant,
     ISettlementDocumentRenderer renderer,
     PayrollAuditEmitter audit,
+    IPayrollRunStaleMarker staleMarker,
     ILogger<ApproveSettlementCommandHandler> logger)
     : IRequestHandler<ApproveSettlementCommand, Result<SettlementApprovedWithPortfolioDto>>
 {
@@ -191,6 +194,16 @@ public sealed class ApproveSettlementCommandHandler(
         terminacion.Status = TerminationStatus.Settled;
         terminacion.UpdatedAt = ahora;
         terminacion.UpdatedBy = quien;
+
+        // --- la ordinaria del período donde cae el retiro ya no lo incluye (D-28): su borrador, si lo hay, se recalcula ---
+        var fechaDt = fecha.ToDateTime(TimeOnly.MinValue);
+        var periodosDelRetiro = await db.PayPeriods.AsNoTracking()
+            .Where(p => p.PayrollPlanId == empleado.PayrollPlanId && p.Status == PayPeriodStatus.Calculated && p.StartDate <= fechaDt && p.EndDate >= fechaDt)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        foreach (var periodoId in periodosDelRetiro)
+            await staleMarker.MarkStaleAsync(periodoId, $"Se aprobó la liquidación definitiva ({referencia}) del empleado retirado el {fecha:dd/MM/yyyy}: ya no entra a la nómina ordinaria de este período (D-28).", ct);
+
         return Result.Success();
     }
 

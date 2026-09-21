@@ -53,7 +53,9 @@ public sealed class PayrollCalculationBatch
 /// <para>
 /// Un empleado está en el período si pertenece al plan, su fecha de efecto en el plan no
 /// es posterior al fin del período, ingresó antes del fin y no se retiró antes del
-/// inicio. El retiro dentro del período se liquida por los días hasta el retiro.
+/// inicio. Una ficha cerrada dentro del período sin definitiva se liquida por los días hasta
+/// el retiro; con definitiva aprobada dentro del período (o antes) el empleado no entra: ese
+/// tramo lo pagó la definitiva (D-28).
 /// </para>
 /// </summary>
 public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPolicyReader policies)
@@ -79,16 +81,18 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email }
         ).ToListAsync(ct);
 
-        // Feature 010 (FR-005): la verdad del retiro es PAY_EmploymentTerminations. Una definitiva
-        // aprobada (Settled) con fecha anterior al período saca al empleado aunque la ficha no se
-        // hubiera cerrado; una con fecha dentro del período lo liquida por los días hasta el retiro.
+        // Feature 010 (FR-005, FR-020, D-28): la verdad del retiro es PAY_EmploymentTerminations. Una
+        // definitiva aprobada (Settled) con fecha anterior al período o DENTRO de él saca al empleado
+        // aunque la ficha no se hubiera cerrado: el último tramo —salario, auxilio y novedades hasta el
+        // retiro— lo pagó la definitiva (SALARIO_PENDIENTE), y liquidarlo aquí por días lo pagaba dos veces.
+        // Sólo una definitiva con fecha posterior al fin del período deja al empleado en éste, completo.
         var candidatos = empleados.Select(x => x.Employee.Id).ToList();
         var retiros = await db.EmploymentTerminations.AsNoTracking()
             .Where(t => candidatos.Contains(t.EmployeeId) && t.Status == TerminationStatus.Settled)
             .GroupBy(t => t.EmployeeId)
             .Select(g => new { EmployeeId = g.Key, Fecha = g.Max(t => t.TerminationDate) })
             .ToDictionaryAsync(x => x.EmployeeId, x => x.Fecha.ToDateTime(TimeOnly.MinValue), ct);
-        empleados = empleados.Where(x => !retiros.TryGetValue(x.Employee.Id, out var f) || f >= start).ToList();
+        empleados = empleados.Where(x => !retiros.TryGetValue(x.Employee.Id, out var f) || f > end).ToList();
 
         var ids = empleados.Select(x => x.Employee.Id).ToList();
         var documentos = empleados.Select(x => x.TaxId).ToList();
@@ -204,7 +208,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                 // Un cambio de plan con fecha de efecto dentro del período: el empleado
                 // entra al plan desde esa fecha, nunca se le liquidan días dos veces.
                 JoinDate = e.PayrollPlanEffectiveFrom is { } ef && ef > e.JoinDate ? ef.Date : e.JoinDate.Date,
-                TerminationDate = FechaDeRetiro(e, retiros.TryGetValue(e.Id, out var liquidado) ? liquidado : null, end),
+                TerminationDate = FechaDeRetiro(e, end),
                 SalaryHistory = historial,
                 Affiliations = new AffiliationsInput
                 {
@@ -237,11 +241,11 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
         };
     }
 
-    /// <summary>La fecha de retiro que manda dentro del período: la de la definitiva aprobada o la de la ficha, la menor; nula si el retiro no cae antes del fin.</summary>
-    private static DateTime? FechaDeRetiro(Employee e, DateTime? liquidado, DateTime end)
-    {
-        var ficha = e.TerminationDate < end ? e.TerminationDate.Date : (DateTime?)null;
-        if (liquidado is { } l && l.Date < end && (ficha is null || l.Date < ficha)) return l.Date;
-        return ficha;
-    }
+    /// <summary>
+    /// La fecha de retiro de la ficha cuando cae antes del fin del período (una ficha cerrada por el camino
+    /// anterior, sin definitiva): el motor liquida por días hasta ella. Con definitiva aprobada el empleado
+    /// ya no llega aquí (D-28). Nula si el retiro no cae antes del fin.
+    /// </summary>
+    private static DateTime? FechaDeRetiro(Employee e, DateTime end) =>
+        e.TerminationDate < end ? e.TerminationDate.Date : null;
 }

@@ -96,7 +96,7 @@ public sealed class DefinitivaDePrueba
     {
         quien ??= Contadora;
         return new(D.Db, D.Flujo(quien), Sender, D.Clock, quien, Tenant, Renderer,
-            new PayrollAuditEmitter(D.Audit, quien, D.Clock, NullLogger<PayrollAuditEmitter>.Instance), NullLogger<ApproveSettlementCommandHandler>.Instance);
+            new PayrollAuditEmitter(D.Audit, quien, D.Clock, NullLogger<PayrollAuditEmitter>.Instance), D.StaleMarker, NullLogger<ApproveSettlementCommandHandler>.Instance);
     }
 
     public ReverseSettlementCommandHandler Reversar(ICurrentUserService? quien = null)

@@ -90,6 +90,17 @@ public sealed class SettlementInput
     /// <summary>Días del último período ordinario que la definitiva paga como salario (el período abierto donde cae el retiro).</summary>
     public PendingSalaryInput? PendingSalary { get; init; }
 
+    /// <summary>
+    /// Novedades activas del empleado en ese mismo período abierto (extras, recargos, incapacidades,
+    /// comisiones, descuentos autorizados) que la definitiva liquida con su concepto porque la nómina
+    /// ordinaria del período ya no lo incluye (D-28). Sin las informativas —ya vienen como ausencias— ni
+    /// la bonificación por retiro, que viaja en <see cref="TerminationInput"/>.
+    /// </summary>
+    public IReadOnlyList<NoveltyInput> PendingNovelties { get; init; } = [];
+
+    /// <summary>Cesantías ya pagadas al empleado en una corrida anual aprobada del año del retiro (D-28): la definitiva liquida sólo los días posteriores al corte de aquélla.</summary>
+    public IReadOnlyList<PaidSeveranceInput> SeverancePaidInRuns { get; init; } = [];
+
     /// <summary>Lo consumido en el año de los cupos anuales de retención, cuando la política es «acumulado».</summary>
     public AcumuladoAnualDeRetencion? WithholdingYearToDate { get; init; }
 
@@ -211,8 +222,15 @@ public sealed record ProposedDeductionInput
     public bool AccountedByOtherModule { get; init; }
 }
 
-/// <summary>Prima pagada en una definitiva aprobada del mismo semestre (FR-009).</summary>
-public sealed record PaidServiceBonusInput(Guid RunPublicId, DateTime PaidThrough, decimal Amount, int Days);
+/// <summary>
+/// Prima pagada al empleado en una corrida aprobada del mismo semestre: una definitiva (FR-009, la
+/// semestral la descuenta) o la corrida semestral (D-28, la definitiva registrada después omite el rubro).
+/// <paramref name="PaidBy"/> dice cuál de las dos.
+/// </summary>
+public sealed record PaidServiceBonusInput(Guid RunPublicId, DateTime PaidThrough, decimal Amount, int Days, SettlementKind PaidBy = SettlementKind.Settlement);
+
+/// <summary>Cesantías pagadas en una corrida anual aprobada, hasta su corte (D-28).</summary>
+public sealed record PaidSeveranceInput(Guid RunPublicId, DateTime PaidThrough, decimal Amount);
 
 /// <summary>El período ordinario abierto donde cae el retiro: la definitiva paga los días desde su inicio hasta el retiro.</summary>
 public sealed record PendingSalaryInput(DateTime PeriodStart, DateTime PeriodEnd);
