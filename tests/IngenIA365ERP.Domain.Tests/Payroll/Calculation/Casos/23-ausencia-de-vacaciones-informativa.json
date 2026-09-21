@@ -1,0 +1,23 @@
+{
+  "nombre": "Ausencia por vacaciones ya pagadas en la liquidación: del 16 al 31 de marzo con salario de 2.400.000",
+  "descripcion": "Feature 010, D-01. La liquidación de vacaciones pagó el descanso; la ordinaria recibe AUSENCIA_VACACIONES (informativa, reduce días) y NO paga esos días como salario: SALARIO 2.400.000 × 15/30 = 1.200.000 (del 16 al 31 son 15 días comerciales). El auxilio se proporciona a los 15 días pagados: 249.095 × 15/30 = 124.547,50 → 124.548. Los aportes se causan COMPLETOS: el IBC recupera los 15 días de vacaciones sobre el salario vigente al iniciar el descanso (15 × 80.000 = 1.200.000) y queda en 2.400.000: salud y pensión del empleado 4 % = 96.000 cada una; salud del empleador 8,5 % = 204.000; pensión 12 % = 288.000; SENA 2 % = 48.000; ICBF 3 % = 72.000; caja 4 % = 96.000. La ARL, con la política CotizaArlEnVacaciones en «no», va sólo sobre el IBC sin vacaciones: 1.200.000 × 0,522 % = 6.264. Provisiones sobre la base prestacional del período (1.324.548): cesantías 8,33 % = 110.334,85 → 110.335; intereses 1 % = 13.245,48 → 13.245; prima 110.335; vacaciones 4,17 % del salario devengado (1.200.000) = 50.040.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Inés Vargas", "clase": "Standard", "ingreso": "2024-09-01",
+    "salarios": [ { "desde": "2024-09-01", "mensual": 2400000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [ { "concepto": "AUSENCIA_VACACIONES", "desde": "2026-03-16", "hasta": "2026-03-31", "origen": "VacationLeave", "descripcion": "Disfrute pagado en la liquidación de vacaciones" } ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false, "cotizaArlEnVacaciones": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 1200000, "AUX_TRANSPORTE": 124548, "AUSENCIA_VACACIONES": 0,
+      "SALUD_EMP": 96000, "PENSION_EMP": 96000, "FSP": 0, "RETEFTE": 0,
+      "SALUD_EMPLEADOR": 204000, "PENSION_EMPLEADOR": 288000, "ARL": 6264, "SENA": 48000, "ICBF": 72000, "CAJA": 96000,
+      "PROV_CESANTIAS": 110335, "PROV_INT_CESANTIAS": 13245, "PROV_PRIMA": 110335, "PROV_VACACIONES": 50040
+    },
+    "totales": { "devengos": 1324548, "deducciones": 192000, "aportesEmpleador": 714264, "provisiones": 283955, "neto": 1132548, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 15, "diasAusencia": 15
+  }
+}

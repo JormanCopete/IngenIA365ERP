@@ -84,6 +84,9 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Services.SettlementAccountingPoster>();
         services.AddScoped<Payroll.Settlements.Common.SettlementRunPersister>();
         services.AddScoped<Payroll.Settlements.Common.SettlementRunWorkflow>();
+        // Feature 010 US4 — vacaciones: saldo derivado y la novedad que el disfrute deja en la ordinaria (T054-T055).
+        services.AddScoped<Payroll.Vacations.VacationBalanceCalculator>();
+        services.AddScoped<Payroll.Vacations.VacationNoveltyPlanner>();
         // Feature 009: mismo molde para contabilidad (exportaciones, envios, configuracion).
         services.AddScoped<Accounting.Reports.AccountingAuditEmitter>();
         // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad

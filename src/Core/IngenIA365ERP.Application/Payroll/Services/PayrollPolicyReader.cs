@@ -215,7 +215,7 @@ public sealed record PoliticasDeNomina(
     public bool ApplyEmployerExemption => Exonerada114_1;
 
     /// <summary>Lo que el motor ordinario recibe.</summary>
-    public CalculationPolicies ForCalculation() => new() { Rounding = Rounding, ApplyEmployerExemption = Exonerada114_1 };
+    public CalculationPolicies ForCalculation() => new() { Rounding = Rounding, ApplyEmployerExemption = Exonerada114_1, CotizaArlEnVacaciones = CotizaArlEnVacaciones };
 
     /// <summary>Lo que el motor de liquidaciones recibe (Domain no conoce esta clase).</summary>
     public SettlementPolicies ForSettlement() => new()

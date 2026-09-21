@@ -19,7 +19,8 @@ public sealed record SettlementLoadRequest(
     DateOnly? PeriodStart = null,
     IReadOnlyList<int>? EmployeeIds = null,
     int? TerminationId = null,
-    int? VacationMovementId = null)
+    int? VacationMovementId = null,
+    VacationMovement? Movement = null)
 {
     public static SettlementLoadRequest Prima(int year, int semester, IReadOnlyList<int>? employeeIds = null) =>
         new(SettlementKind.ServiceBonus, semester == 1 ? new DateOnly(year, 6, 30) : new DateOnly(year, 12, 31),
@@ -30,6 +31,13 @@ public sealed record SettlementLoadRequest(
 
     public static SettlementLoadRequest Vacaciones(int employeeId, int vacationMovementId, DateOnly cutoff) =>
         new(SettlementKind.Vacation, cutoff, null, [employeeId], VacationMovementId: vacationMovementId);
+
+    /// <summary>
+    /// US4: el movimiento recién armado, todavía sin guardar (registrar el disfrute crea el
+    /// movimiento y la corrida en UN <c>SaveChanges</c>, así que al cargar aún no tiene Id).
+    /// </summary>
+    public static SettlementLoadRequest Vacaciones(int employeeId, VacationMovement movimiento, DateOnly cutoff) =>
+        new(SettlementKind.Vacation, cutoff, null, [employeeId], VacationMovementId: movimiento.Id == 0 ? null : movimiento.Id, Movement: movimiento);
 
     public static SettlementLoadRequest Definitiva(int employeeId, int terminationId, DateOnly terminationDate) =>
         new(SettlementKind.Settlement, terminationDate, null, [employeeId], TerminationId: terminationId);
@@ -136,7 +144,8 @@ public sealed class SettlementInputLoader(
         }
         if (request.Kind == SettlementKind.Vacation)
         {
-            movimiento = await db.VacationMovements.FirstOrDefaultAsync(m => m.Id == request.VacationMovementId, ct)
+            movimiento = request.Movement
+                ?? await db.VacationMovements.FirstOrDefaultAsync(m => m.Id == request.VacationMovementId, ct)
                 ?? throw new InvalidOperationException("La liquidación de vacaciones necesita el movimiento registrado.");
         }
 

@@ -43,6 +43,15 @@ public sealed record CalculationPolicies
     /// normalmente NO. Por eso es política, no parámetro legal.
     /// </summary>
     public bool ApplyEmployerExemption { get; init; }
+
+    /// <summary>
+    /// Feature 010 (R6, D-01): si el aporte a riesgos laborales se causa también sobre los
+    /// días de vacaciones que la liquidación ya pagó (<c>AUSENCIA_VACACIONES</c>). Los
+    /// operadores no cotizan ARL durante el descanso (Decreto 1772/1994 art. 19) y Mintrabajo
+    /// opina lo contrario, así que lo decide la cooperativa (<c>CotizaArlEnVacaciones</c>,
+    /// «no» por defecto). Salud, pensión y parafiscales se causan completos en todo caso.
+    /// </summary>
+    public bool CotizaArlEnVacaciones { get; init; }
 }
 
 public sealed record EmployeeInput

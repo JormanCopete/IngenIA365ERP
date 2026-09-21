@@ -18,7 +18,8 @@ public sealed record SettlementApprovalRequest(
     bool Confirm,
     DateOnly? PostingDate = null,
     bool ConfirmEmpty = false,
-    bool ConfirmWithoutSegregation = false);
+    bool ConfirmWithoutSegregation = false,
+    bool AllowNothingToPost = false);
 
 /// <summary>
 /// El ciclo de vida común a las cuatro liquidaciones especiales (feature 010, T028): aprobar,
@@ -88,8 +89,11 @@ public sealed class SettlementRunWorkflow(
             var posting = await poster.PostAsync(run,
                 empleados.Select(e => (e, e.Employee!, (IReadOnlyList<PayrollRunLine>)e.Lines.ToList())).ToList(),
                 fecha.Value, detalle, ct);
-            if (posting.IsFailure) return Result.Failure<SettlementApprovedDto>(posting.Error);
-            documento = posting.Value;
+            // US4 (D-01): una liquidación de vacaciones con la política «paga la nómina ordinaria» sólo
+            // registra el disfrute y no tiene nada que contabilizar; su comando lo declara y se aprueba sin comprobante.
+            if (posting.IsFailure && !(request.AllowNothingToPost && posting.Error.Code == SettlementErrors.NothingToPost.Code))
+                return Result.Failure<SettlementApprovedDto>(posting.Error);
+            documento = posting.IsSuccess ? posting.Value : null;
         }
 
         var ahora = clock.UtcNow;

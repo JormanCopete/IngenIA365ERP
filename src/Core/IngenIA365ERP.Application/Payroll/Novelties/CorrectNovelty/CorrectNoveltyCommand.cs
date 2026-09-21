@@ -59,6 +59,9 @@ public sealed class CorrectNoveltyCommandHandler(
         if (anterior.Origin is NoveltyOrigin.CarryOver or NoveltyOrigin.LoanDeduction)
             return Result.Failure<Guid>(new Error("Payroll.NoveltyNotActive",
                 "Esta novedad la generó el sistema (traslado o Cartera): corrija la novedad origen."));
+        if (anterior.Origin == NoveltyOrigin.VacationLeave)
+            return Result.Failure<Guid>(new Error("Payroll.NoveltyNotActive",
+                "Esta novedad la generó la liquidación de vacaciones: las fechas se corrigen reversando esa liquidación y registrando el disfrute de nuevo."));
 
         var period = anterior.PayPeriod!;
         var editable = await NoveltyRules.EnsureEditableAsync(db, period, ct);

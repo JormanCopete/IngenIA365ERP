@@ -230,7 +230,7 @@ public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context, ID
 
 public record GetEmployeeByIdQuery(Guid PublicId) : IRequest<Result<EmployeeDetailDto>>;
 
-public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTimeService clock)
+public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTimeService clock, Vacations.VacationBalanceCalculator? vacaciones = null)
     : IRequestHandler<GetEmployeeByIdQuery, Result<EmployeeDetailDto>>
 {
     public async Task<Result<EmployeeDetailDto>> Handle(
@@ -341,6 +341,13 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTim
             terminacion.PublicId, terminacion.TerminationDate, terminacion.TerminationReason?.Code ?? "", terminacion.TerminationReason?.Name ?? "",
             terminacion.TerminationReason?.GeneratesSeverancePay ?? false, terminacion.Status);
 
+        // US4: el saldo de vacaciones es derivado (causado + inicial − disfrutado − compensado ± ajustes) y lo
+        // calcula el mismo servicio de la pantalla de Vacaciones; sin el parámetro de días por año, queda nulo.
+        EmployeeVacationBalanceDto? vacationBalance = null;
+        var saldoVacaciones = await (vacaciones ?? new Vacations.VacationBalanceCalculator(context)).CalcularAsync(employee, DateOnly.FromDateTime(hoy), ct);
+        if (saldoVacaciones.IsSuccess)
+            vacationBalance = new EmployeeVacationBalanceDto(saldoVacaciones.Value.PendingDays, saldoVacaciones.Value.AsOf);
+
         var (divipolaDepto, divipolaMun) = FichaPilaDian.Divipola(employee.WorkMunicipalityDaneCode);
         var pila = new EmployeePilaDto(employee.PilaContributorType, employee.PilaContributorSubType, divipolaDepto, divipolaMun,
             employee.EconomicActivityCode, employee.WorkCenterCode, FichaPilaDian.SalaryTypeCode(employee),
@@ -402,8 +409,7 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTim
             dispersionPublicId,
             dispersionName,
             dispersionAch,
-            // El saldo de vacaciones es derivado (causado + inicial - disfrutado - compensado) y lo suma la US4.
-            null,
+            vacationBalance,
             openingBalance,
             currentRate,
             termination));
