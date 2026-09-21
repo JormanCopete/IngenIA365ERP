@@ -81,6 +81,7 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
 
         // --- registrar el disfrute: movimiento + corrida Vacation en borrador, en una acción ---
         // 27-01 a 09-02-2027: 14 calendario, 12 hábiles de lunes a sábado (saltan los domingos 31-01 y 07-02), cubre enero y febrero.
+        // Se pagan 13 días: los del calendario comercial (27 al 30 de enero = 4, más 9 de febrero), los mismos que la ordinaria descuenta (D-29).
         var ejercicio2027 = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/accounting/periods/years", new { year = 2027 });
         ejercicio2027.StatusCode.Should().BeOneOf([HttpStatusCode.OK, HttpStatusCode.Created, HttpStatusCode.UnprocessableEntity, HttpStatusCode.Conflict], $"ejercicio 2027: «{await ejercicio2027.Content.ReadAsStringAsync()}»");
         var enero = await NominaE2E.CrearPeriodoAsync(http, admin, new DateTime(2027, 1, 1), new DateTime(2027, 1, 31));
@@ -94,7 +95,7 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
         var movimientoId = calculo.GetProperty("movementPublicId").GetGuid();
         calculo.GetProperty("workingDays").GetDecimal().Should().Be(12m);
         calculo.GetProperty("calendarDays").GetInt32().Should().Be(14);
-        calculo.GetProperty("amount").GetDecimal().Should().Be(14m * 80_000m, "D-01: la liquidación paga los días calendario a 2.400.000 / 30");
+        calculo.GetProperty("amount").GetDecimal().Should().Be(13m * 80_000m, "D-01 y D-29: la liquidación paga los 13 días comerciales del descanso a 2.400.000 / 30 (4 de enero + 9 de febrero, los que la ordinaria descuenta)");
         calculo.GetProperty("blockers").GetArrayLength().Should().Be(0);
         var novedades = calculo.GetProperty("novelties").EnumerateArray().ToList();
         novedades.Should().HaveCount(2);
@@ -139,7 +140,7 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
 
         var cuadre = await NominaE2E.GetAsync(http, admin, $"/api/payroll/runs/{runId}/balance-check");
         var provision = cuadre.GetProperty("provision").EnumerateArray().Single(p => p.GetProperty("provisionCode").GetString() == "PROV_VACACIONES");
-        provision.GetProperty("consumed").GetDecimal().Should().Be(14m * 80_000m, "SC-003: lo liquidado consume PROV_VACACIONES");
+        provision.GetProperty("consumed").GetDecimal().Should().Be(13m * 80_000m, "SC-003: lo liquidado consume PROV_VACACIONES");
 
         (await NominaE2E.GetAsync(http, admin, $"/api/payroll/vacations/employees/{empleadoId}/movements")).EnumerateArray()
             .Single(m => m.GetProperty("movementPublicId").GetGuid() == movimientoId).GetProperty("status").GetInt32().Should().Be(1, "Liquidated");

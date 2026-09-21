@@ -1,0 +1,74 @@
+{
+  "casos": [
+    {
+      "nombre": "Disfrute del 14 al 28 de febrero: se pagan 17 días comerciales (los que la ordinaria descuenta), no los 15 calendario reales",
+      "descripcion": "D-01 y D-29. La nómina ordinaria descuenta la ausencia por el calendario comercial de 30 días (el 28 de febrero es el día 30), así que la liquidación paga los mismos 17 días; con los 15 reales el empleado recibía 13 + 15 = 28 días de un mes de 30 y perdía 200.000. Los días calendario reales (15) quedan en el movimiento para la explicación y la nómina electrónica.",
+      "derivacion": "Día = 3.000.000 / 30 = 100.000. Días comerciales del 14-02 al 28-02-2027 = 30 − 14 + 1 = 17 (el último día del mes vale 30). VACACIONES_LIQ = 17 × 100.000 = 1.700.000. Hábiles congelados: 12 (domingos 14, 21 y 28). Sin provisión informada: el ajuste se omite y se dice.",
+      "tipo": "Vacation",
+      "corte": "2027-02-13",
+      "empleado": {
+        "nombre": "Febrero",
+        "ingreso": "2025-01-01",
+        "salarios": [
+          {
+            "desde": "2025-01-01",
+            "mensual": 3000000
+          }
+        ]
+      },
+      "movimientoALiquidar": {
+        "tipo": "Enjoyment",
+        "desde": "2027-02-14",
+        "hasta": "2027-02-28",
+        "diasHabiles": 12,
+        "diasCalendario": 15
+      },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "VACACIONES_LIQ": 1700000
+        },
+        "omitidos": [
+          "VACACIONES_AJUSTE_PROV:SinProvisionInformada"
+        ],
+        "explicaciones": [
+          "VACACIONES_LIQ: 17 días del descanso (calendario comercial)",
+          "VACACIONES_LIQ: 15 calendario"
+        ]
+      }
+    },
+    {
+      "nombre": "Disfrute del 17 al 31 de octubre: se pagan 14 días comerciales, no los 15 calendario reales",
+      "descripcion": "El 31 no existe en el calendario comercial: la ordinaria paga 16 días de salario (del 1 al 16) y descuenta 14; si la liquidación pagara 15 el empleado cobraría 31 días del mes.",
+      "derivacion": "Día = 100.000. Días comerciales del 17-10 al 31-10-2027 = 30 − 17 + 1 = 14. VACACIONES_LIQ = 14 × 100.000 = 1.400.000. Hábiles congelados: 11 (domingos 17, 24 y 31; festivo trasladado del lunes 18).",
+      "tipo": "Vacation",
+      "corte": "2027-10-16",
+      "empleado": {
+        "nombre": "Octubre",
+        "ingreso": "2025-01-01",
+        "salarios": [
+          {
+            "desde": "2025-01-01",
+            "mensual": 3000000
+          }
+        ]
+      },
+      "movimientoALiquidar": {
+        "tipo": "Enjoyment",
+        "desde": "2027-10-17",
+        "hasta": "2027-10-31",
+        "diasHabiles": 11,
+        "diasCalendario": 15
+      },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "VACACIONES_LIQ": 1400000
+        },
+        "explicaciones": [
+          "VACACIONES_LIQ: 14 días del descanso (calendario comercial)"
+        ]
+      }
+    }
+  ]
+}
