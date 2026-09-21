@@ -128,7 +128,10 @@ Errores propios: `Payroll.Vacation.DatesInvalid`, `.NoWorkingDays` (todo festivo
 `.NoBalance` (`data: { pendingDays }`), `.CompensationOverMax` (`data: { requestedDays, maxDays,
 accruedDays, policyCode: "VACACIONES_COMPENSABLE_PCT" }`, FR-016), `.PeriodApproved` (`data:
 { periodPublicId, retroactiveTargetPeriodPublicId }` — la novedad se ofrece como ajuste
-retroactivo, Edge Cases), `.Overlaps` (`data: { movementPublicId }`), `.EmployeeTerminated`.
+retroactivo, Edge Cases), `.Overlaps` (`data: { movementPublicId }`), `.EmployeeTerminated`,
+`.PeriodMissing` (sólo en `approve`, D-31: días del disfrute que ningún período del plan cubre ni
+cubrirá por traslado, `data: { missing: [{ from, to }] }`; al registrar es un `warning` con el
+mismo código).
 
 ### 3.4 Terminación y liquidación definitiva — `/terminations`
 

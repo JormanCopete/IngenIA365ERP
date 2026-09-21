@@ -17,9 +17,19 @@ public sealed record TramoDeNovedad(PayPeriod Periodo, DateOnly From, DateOnly T
     public PayPeriod PeriodoDestino => Destino ?? Periodo;
 }
 
-/// <summary>Lo que salió de planear: los tramos por período, los que caen en período aprobado sin salida y los avisos.</summary>
-public sealed record PlanDeNovedades(IReadOnlyList<TramoDeNovedad> Tramos, IReadOnlyList<WarningDto> Warnings, string ConceptCode)
+/// <summary>Un rango de días del disfrute que ningún período del plan cubre ni cubrirá por traslado.</summary>
+public sealed record DiasSinPeriodo(DateOnly From, DateOnly To);
+
+/// <summary>
+/// Lo que salió de planear: los tramos por período, los avisos y los días que quedarían sin novedad
+/// (<see cref="SinPeriodo"/>): ningún período existe para ellos y no los cubre el traslado del último
+/// período. Aprobar con días sin período es un rechazo (D-31), porque la ordinaria volvería a pagarlos.
+/// </summary>
+public sealed record PlanDeNovedades(IReadOnlyList<TramoDeNovedad> Tramos, IReadOnlyList<WarningDto> Warnings, string ConceptCode, IReadOnlyList<DiasSinPeriodo> SinPeriodo)
 {
+    public PlanDeNovedades(IReadOnlyList<TramoDeNovedad> tramos, IReadOnlyList<WarningDto> warnings, string conceptCode)
+        : this(tramos, warnings, conceptCode, []) { }
+
     public IReadOnlyList<VacationNoveltyDto> ComoDto() => Tramos
         .Select(t => new VacationNoveltyDto(t.PeriodoDestino.PublicId, Etiqueta(t.PeriodoDestino), t.From, t.To, t.Days, t.Retroactive,
             t.Retroactive ? t.Periodo.PublicId : null, ConceptCode))
@@ -69,6 +79,7 @@ public sealed class VacationNoveltyPlanner(
     /// Reparte el disfrute entre los períodos del plan del empleado. Con <paramref name="aceptarRetroactivo"/>
     /// en falso, un período aprobado es un rechazo (<c>PeriodApproved</c>); en verdadero, la novedad va al
     /// período abierto siguiente como ajuste retroactivo; sin período abierto siguiente, rechazo igual.
+    /// Los días sin ningún período y sin traslado salen en <see cref="PlanDeNovedades.SinPeriodo"/>.
     /// </summary>
     public async Task<Result<PlanDeNovedades>> PlanearAsync(Employee employee, DateOnly from, DateOnly to, DateOnly asOf, bool aceptarRetroactivo, CancellationToken ct)
     {
@@ -82,6 +93,8 @@ public sealed class VacationNoveltyPlanner(
 
         var tramos = new List<TramoDeNovedad>();
         var avisos = new List<WarningDto>();
+        var sinPeriodo = new List<DiasSinPeriodo>();
+        var cursor = desde;
         for (var i = 0; i < periodos.Count; i++)
         {
             var p = periodos[i];
@@ -91,6 +104,10 @@ public sealed class VacationNoveltyPlanner(
             // El último período existente carga con lo que sigue: el traslado lo crea al abrir el próximo.
             var finNovedad = esElUltimo && hasta > p.EndDate.Date ? hasta : tramoHasta;
             var dias = CalendarConventions.Days(tramoDesde, tramoHasta);
+
+            if (p.StartDate.Date > cursor)
+                sinPeriodo.Add(new DiasSinPeriodo(DateOnly.FromDateTime(cursor), DateOnly.FromDateTime(p.StartDate.Date.AddDays(-1))));
+            cursor = p.EndDate.Date.AddDays(1);
 
             if (p.Status is PayPeriodStatus.Open or PayPeriodStatus.Calculated)
             {
@@ -107,21 +124,25 @@ public sealed class VacationNoveltyPlanner(
             tramos.Add(new TramoDeNovedad(p, DateOnly.FromDateTime(tramoDesde), DateOnly.FromDateTime(finNovedad), dias, Retroactive: true, Destino: destino));
         }
 
-        var cubiertoHasta = periodos.Count == 0 ? (DateTime?)null : periodos[^1].EndDate.Date;
         if (periodos.Count == 0)
+        {
+            sinPeriodo.Add(new DiasSinPeriodo(from, to));
             avisos.Add(new WarningDto(PeriodMissingCode,
-                $"El plan del empleado no tiene períodos de nómina entre el {from:dd/MM/yyyy} y el {to:dd/MM/yyyy}: la novedad de ausencia se registrará cuando existan. Cree los períodos antes de aprobar.",
+                $"El plan del empleado no tiene períodos de nómina entre el {from:dd/MM/yyyy} y el {to:dd/MM/yyyy}: sin ellos no queda la novedad de ausencia y la nómina pagaría esos días como salario. Cree los períodos antes de aprobar.",
                 new { from, to }));
-        else if (cubiertoHasta < hasta)
+        }
+        else if (cursor <= hasta)
+        {
             avisos.Add(new WarningDto(PeriodMissingCode,
-                $"El último período existente termina el {cubiertoHasta:dd/MM/yyyy}: los días del disfrute posteriores quedan como traslado y entrarán al período siguiente cuando se cree (FR-003).",
-                new { from = DateOnly.FromDateTime(cubiertoHasta.Value.AddDays(1)), to }));
-        if (periodos.Count > 0 && periodos[0].StartDate.Date > desde)
+                $"El último período existente termina el {cursor.AddDays(-1):dd/MM/yyyy}: los días del disfrute posteriores quedan como traslado y entrarán al período siguiente cuando se cree (FR-003).",
+                new { from = DateOnly.FromDateTime(cursor), to }));
+        }
+        foreach (var hueco in sinPeriodo.Where(h => periodos.Count > 0))
             avisos.Add(new WarningDto(PeriodMissingCode,
-                $"No hay período de nómina del plan que cubra del {from:dd/MM/yyyy} al {periodos[0].StartDate.AddDays(-1):dd/MM/yyyy}: esos días no tendrán novedad de ausencia.",
-                new { from, to = DateOnly.FromDateTime(periodos[0].StartDate.Date.AddDays(-1)) }));
+                $"No hay período de nómina del plan que cubra del {hueco.From:dd/MM/yyyy} al {hueco.To:dd/MM/yyyy}: esos días no tendrían novedad de ausencia. Cree el período antes de aprobar.",
+                new { from = hueco.From, to = hueco.To }));
 
-        return Result.Success(new PlanDeNovedades(tramos, avisos, concepto));
+        return Result.Success(new PlanDeNovedades(tramos, avisos, concepto, sinPeriodo));
     }
 
     /// <summary>

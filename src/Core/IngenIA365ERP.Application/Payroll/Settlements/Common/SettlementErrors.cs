@@ -127,6 +127,15 @@ public static class SettlementErrors
         new ErrorConDatos("Payroll.Vacation.PeriodApproved",
             "El disfrute cae en un período de nómina ya aprobado: la novedad se ofrece como ajuste retroactivo en el período abierto.",
             new { periodPublicId, retroactiveTargetPeriodPublicId });
+    /// <summary>D-31: aprobar un disfrute con días que ningún período del plan cubre dejaría esos días sin novedad y la ordinaria los pagaría como salario.</summary>
+    public static Error VacationPeriodMissing(IEnumerable<(DateOnly From, DateOnly To)> missing)
+    {
+        var tramos = missing.Select(m => new { from = m.From, to = m.To }).ToList();
+        var texto = string.Join("; ", tramos.Select(t => $"del {t.from:dd/MM/yyyy} al {t.to:dd/MM/yyyy}"));
+        return new ErrorConDatos("Payroll.Vacation.PeriodMissing",
+            $"El plan del empleado no tiene período de nómina para los días {texto}: sin período no queda la novedad de ausencia y la nómina pagaría esos días como salario. Cree los períodos y apruebe de nuevo.",
+            new { missing = tramos });
+    }
     public static Error VacationOverlaps(Guid movementPublicId) =>
         new ErrorConDatos("Payroll.Vacation.Overlaps", "Las fechas se cruzan con otro disfrute registrado del mismo empleado.", new { movementPublicId });
     public static readonly Error VacationEmployeeTerminated = new("Payroll.Vacation.EmployeeTerminated", "El empleado está retirado: las vacaciones pendientes se pagan en la liquidación definitiva.");

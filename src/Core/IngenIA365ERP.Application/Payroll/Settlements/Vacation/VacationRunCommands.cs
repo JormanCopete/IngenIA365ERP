@@ -92,6 +92,9 @@ public sealed class RecalculateVacationCommandHandler(
 /// comprobante <c>VacationRun</c> contra <c>PROV_VACACIONES</c> fechado al corte (D-04), y en la
 /// misma transacción el movimiento pasa a <c>Liquidated</c> y queda la novedad en cada período que
 /// cubre el disfrute (<c>AUSENCIA_VACACIONES</c> o <c>VACACIONES</c> según la política, D-01).
+/// Un disfrute con días que ningún período del plan cubre —ni por traslado del último existente
+/// (FR-003)— no se aprueba: <c>Payroll.Vacation.PeriodMissing</c> con los tramos (D-31), porque
+/// nadie crearía después esa novedad y la ordinaria pagaría los días como salario. Registrar sólo avisa.
 /// </summary>
 public sealed record ApproveVacationCommand(
     Guid RunPublicId,
@@ -137,6 +140,8 @@ public sealed class ApproveVacationCommandHandler(
                 {
                     var plan = await planner.PlanearAsync(empleado, movimiento.StartDate, movimiento.EndDate!.Value, corrida.CutoffDate!.Value, request.AcceptRetroactive, token);
                     if (plan.IsFailure) return Result.Failure(plan.Error);
+                    if (plan.Value.SinPeriodo.Count > 0)
+                        return Result.Failure(SettlementErrors.VacationPeriodMissing(plan.Value.SinPeriodo.Select(h => (h.From, h.To))));
                     var creadas = await planner.CrearAsync(empleado, movimiento, plan.Value, token);
                     if (creadas.IsFailure) return Result.Failure(creadas.Error);
                 }

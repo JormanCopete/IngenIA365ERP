@@ -1,6 +1,8 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Settlements.Vacation;
+using IngenIA365ERP.Application.Payroll.Vacations;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
 using IngenIA365ERP.Application.Tests.Payroll.Settlements.Common;
 using IngenIA365ERP.Application.Tests.Payroll.Vacations;
@@ -116,6 +118,47 @@ public class ApproveVacationCommandHandlerTests
         var novedades = await d.Db.PayrollNovelties.Include(n => n.PayPeriod).Where(n => n.Origin == NoveltyOrigin.VacationLeave).ToListAsync();
         novedades.Should().HaveCount(2).And.OnlyContain(n => n.PayPeriod!.StartDate == new DateTime(2026, 8, 1), "ambas quedan en agosto: la de julio como retroactiva");
         novedades.Should().ContainSingle(n => n.RetroactiveOfPeriodId == julio.Id && n.Quantity == 4m);
+    }
+
+    [Fact]
+    public async Task Sin_periodo_de_nomina_que_cubra_el_disfrute_registrar_avisa_y_aprobar_se_rechaza_con_los_tramos()
+    {
+        // D-31. Registrar y pagar por anticipado antes de abrir el período del mes es la operación normal; hasta el
+        // 2026-09-21 la aprobación pasaba con el aviso, nadie creaba después la novedad y la ordinaria pagaba los días.
+        var d = VacacionesDePrueba.Escenario(hoy: new DateTime(2026, 7, 26, 12, 0, 0));
+        for (var mes = 1; mes <= 6; mes++)
+            d.MesAprobado(2026, mes, d.Ana, 2_000_000m, 249_095m, provPrima: 187_424m, provCesantias: 187_424m, provIntereses: 22_491m, provVacaciones: 83_333m);
+        LiquidacionDePrueba.ConContabilidad(d);
+        d.PeriodoContable(2026, 7);
+        d.PeriodoContable(2026, 8);
+        var calculo = await VacacionesDePrueba.Registrar(d).Handle(VacacionesDePrueba.Disfrute(d.Ana, Desde, Hasta), CancellationToken.None);
+        calculo.IsSuccess.Should().BeTrue(calculo.Error.Message);
+        calculo.Value.Novelties.Should().BeEmpty();
+        calculo.Value.Warnings.Should().Contain(w => w.Code == VacationNoveltyPlanner.PeriodMissingCode);
+
+        var rechazo = await VacacionesDePrueba.Aprobar(d, Contadora).Handle(new ApproveVacationCommand(calculo.Value.RunPublicId, Confirm: true), CancellationToken.None);
+
+        rechazo.Error.Code.Should().Be("Payroll.Vacation.PeriodMissing");
+        rechazo.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { missing = new[] { new { from = Desde, to = Hasta } } });
+        d.Db.ChangeTracker.Clear();
+        (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == calculo.Value.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft, "nada se guardó");
+        (await d.Db.VacationMovements.SingleAsync()).Status.Should().Be(VacationMovementStatus.Registered);
+        (await d.Db.PayrollNovelties.AnyAsync(n => n.Origin == NoveltyOrigin.VacationLeave)).Should().BeFalse();
+
+        // Sólo agosto: los días de julio quedarían sin novedad (un hueco antes del primer período también se rechaza).
+        var agosto = d.Periodo(new DateTime(2026, 8, 1), new DateTime(2026, 8, 31), PayPeriodStatus.Open);
+        var huecoAntes = await VacacionesDePrueba.Aprobar(d, Contadora).Handle(new ApproveVacationCommand(calculo.Value.RunPublicId, Confirm: true), CancellationToken.None);
+        huecoAntes.Error.Code.Should().Be("Payroll.Vacation.PeriodMissing");
+        huecoAntes.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { missing = new[] { new { from = Desde, to = new DateOnly(2026, 7, 31) } } });
+        d.Db.ChangeTracker.Clear();
+
+        // Con julio creado se aprueba: los días de agosto viajan como traslado si agosto no existiera (FR-003), y aquí van a su período.
+        d.Periodo(new DateTime(2026, 7, 1), new DateTime(2026, 7, 31), PayPeriodStatus.Open);
+        var aprobada = await VacacionesDePrueba.Aprobar(d, Contadora).Handle(new ApproveVacationCommand(calculo.Value.RunPublicId, Confirm: true), CancellationToken.None);
+        aprobada.IsSuccess.Should().BeTrue(aprobada.Error.Message);
+        var novedades = await d.Db.PayrollNovelties.Include(n => n.PayPeriod).Where(n => n.Origin == NoveltyOrigin.VacationLeave).OrderBy(n => n.StartDate).ToListAsync();
+        novedades.Should().HaveCount(2);
+        novedades[1].PayPeriodId.Should().Be(agosto.Id);
     }
 
     [Fact]
