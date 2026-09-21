@@ -194,6 +194,7 @@ public class RegisterTerminationCommandHandlerTests
         db.TerminationReasons.Returns(real.TerminationReasons);
         db.SettlementDeductions.Returns(real.SettlementDeductions);
         db.PayPeriods.Returns(real.PayPeriods);
+        db.PayrollPlans.Returns(real.PayrollPlans);
         db.PayrollRuns.Returns(real.PayrollRuns);
         db.PayrollRunEmployees.Returns(real.PayrollRunEmployees);
         db.PayrollRunLines.Returns(real.PayrollRunLines);

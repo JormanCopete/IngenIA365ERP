@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Payroll.OpeningBalances;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +14,9 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// hasta el corte), más lo que las liquidaciones aprobadas ajustaron (<c>*_AJUSTE_PROV</c>, con
 /// signo), menos lo que esas liquidaciones consumieron (el rubro pagado: <c>PRIMA</c>,
 /// <c>CESANTIAS</c>, <c>INT_CESANTIAS</c>, <c>VACACIONES_LIQ</c>/<c>_COMP</c>), más el saldo
-/// inicial digitado (R3). Tras cada liquidación aprobada el saldo de su rubro vuelve a cero,
-/// que es lo que el ajuste garantiza. Nada se guarda: es una suma (Principio XI).
+/// inicial digitado (R3: la fila vigente, nunca la suma de apertura y ajustes). Tras cada
+/// liquidación aprobada el saldo de su rubro vuelve a cero, que es lo que el ajuste garantiza.
+/// Nada se guarda: es una suma (Principio XI).
 /// </summary>
 public sealed class ProvisionBalanceReader(IApplicationDbContext db)
 {
@@ -66,7 +68,7 @@ public sealed class ProvisionBalanceReader(IApplicationDbContext db)
             select new { g.Key.EmployeeId, g.Key.ConceptCode, g.Key.Nature, Total = g.Sum(x => x.Amount) })
             .ToListAsync(ct);
 
-        // --- saldo inicial (R3): la fila Opening más los ajustes, del corte más reciente ≤ cutoff ---
+        // --- saldo inicial (R3): la fila vigente con corte ≤ cutoff (la apertura, o el ajuste que la reemplaza) ---
         var saldos = await db.EmployeeBenefitOpeningBalances.AsNoTracking()
             .Where(b => employeeIds.Contains(b.EmployeeId) && b.AsOfDate <= cutoff)
             .ToListAsync(ct);
@@ -100,19 +102,19 @@ public sealed class ProvisionBalanceReader(IApplicationDbContext db)
                 }
             }
 
-            var apertura = saldos.Where(b => b.EmployeeId == empleado).OrderBy(b => b.AsOfDate).ThenBy(b => b.Kind).ToList();
-            foreach (var b in apertura)
+            // Una sola fila: la vigente (BenefitBalanceRules.Vigente). El ajuste es el saldo completo
+            // corregido y reemplaza a la apertura; sumarlos doblaba la provisión inicial (2026-09-21).
+            if (BenefitBalanceRules.Vigente(saldos.Where(b => b.EmployeeId == empleado)) is { } b)
             {
-                inicial[WellKnownConceptCodes.ServiceBonusProvision] = inicial.GetValueOrDefault(WellKnownConceptCodes.ServiceBonusProvision) + b.AccruedServiceBonus;
-                inicial[WellKnownConceptCodes.SeveranceProvision] = inicial.GetValueOrDefault(WellKnownConceptCodes.SeveranceProvision) + b.AccruedSeverance;
-                inicial[WellKnownConceptCodes.SeveranceInterestProvision] = inicial.GetValueOrDefault(WellKnownConceptCodes.SeveranceInterestProvision) + b.AccruedSeveranceInterest;
+                inicial[WellKnownConceptCodes.ServiceBonusProvision] = b.AccruedServiceBonus;
+                inicial[WellKnownConceptCodes.SeveranceProvision] = b.AccruedSeverance;
+                inicial[WellKnownConceptCodes.SeveranceInterestProvision] = b.AccruedSeveranceInterest;
                 // El saldo de vacaciones viene en días hábiles; en pesos vale el salario vigente a la
                 // fecha del saldo por día comercial. Es el mismo valor con que la apertura contable pudo
                 // provisionarlas; la diferencia, si la hay, la absorbe el ajuste al liquidar.
                 var salario = salarios.Where(s => s.EmployeeId == empleado && s.EffectiveDate.Date <= b.AsOfDate.ToDateTime(TimeOnly.MinValue))
                     .Select(s => (decimal?)s.NewSalary).LastOrDefault() ?? fichas.GetValueOrDefault(empleado);
-                inicial[WellKnownConceptCodes.VacationProvision] = inicial.GetValueOrDefault(WellKnownConceptCodes.VacationProvision)
-                    + b.PendingVacationDays * salario / CalendarConventions.DaysPerMonth;
+                inicial[WellKnownConceptCodes.VacationProvision] = b.PendingVacationDays * salario / CalendarConventions.DaysPerMonth;
             }
 
             // Las cuatro provisiones con rubro par van SIEMPRE, con cero si no hay historia: el

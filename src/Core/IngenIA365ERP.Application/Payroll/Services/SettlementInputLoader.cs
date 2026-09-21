@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Payroll.OpeningBalances;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -239,6 +240,26 @@ public sealed class SettlementInputLoader(
             : await db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters().Where(c => idsConcepto.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
         var lineasPorEmpleado = lineasMensuales.ToLookup(l => l.EmployeeId);
 
+        // --- retención practicada en el año en liquidaciones especiales aprobadas (modo Acumulado) ---
+        // El cupo anual lo consumen también la prima, las vacaciones, la indemnización y la definitiva
+        // (RETEFTE_PRIMA, RETEFTE_INDEMNIZACION, RETEFTE de esas corridas); esas corridas no tienen
+        // período, así que su año es el del corte. Hasta el 2026-09-21 sólo se sumaba la ordinaria y
+        // cada liquidación siguiente volvía a partir de un «usado» corto: se retenía de menos.
+        var inicioAnio = new DateOnly(corte.Year, 1, 1);
+        var retencionesEspeciales = politicas.RetefteTopesAnualesModo == ModoDeTopesAnuales.Acumulado
+            ? await (
+                from l in db.PayrollRunLines.AsNoTracking()
+                join re in db.PayrollRunEmployees.AsNoTracking() on l.PayrollRunEmployeeId equals re.Id
+                join r in db.PayrollRuns.AsNoTracking() on re.PayrollRunId equals r.Id
+                where idsEmpleados.Contains(re.EmployeeId)
+                      && r.Kind != PayrollRunKind.Ordinary && r.Status == PayrollRunStatus.Approved
+                      && r.CutoffDate >= inicioAnio && r.CutoffDate <= corte
+                      && l.Nature == ConceptNature.Deduction && l.ConceptCode.StartsWith(WellKnownConceptCodes.Withholding)
+                select new { re.EmployeeId, l.ExplanationJson })
+                .ToListAsync(ct)
+            : [];
+        var retencionesEspecialesPorEmpleado = retencionesEspeciales.ToLookup(l => l.EmployeeId, l => l.ExplanationJson);
+
         // --- ausencias: novedades con fechas que reducen días (aprobadas o del período abierto), del año hacia atrás ---
         var conceptosQueReducen = await db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters()
             .Where(c => c.ReducesWorkedDays).Select(c => new { c.Id, c.Code, c.Nature }).ToListAsync(ct);
@@ -322,7 +343,10 @@ public sealed class SettlementInputLoader(
 
             var basesMensuales = BasesPorMes(lineasPorEmpleado[e.Id].Select(l => (l.ImputationYear, l.ImputationMonth, l.ConceptDefinitionId, l.ConceptCode, l.Nature, l.Amount)), definicionesDeLineas);
             var acumuladoRetencion = politicas.RetefteTopesAnualesModo == ModoDeTopesAnuales.Acumulado
-                ? AcumuladoDeRetencion(lineasPorEmpleado[e.Id].Where(l => l.ImputationYear == corte.Year && l.Nature == ConceptNature.Deduction && l.ConceptCode.StartsWith(WellKnownConceptCodes.Withholding, StringComparison.OrdinalIgnoreCase)).Select(l => l.ExplanationJson))
+                ? AcumuladoDeRetencion(lineasPorEmpleado[e.Id]
+                    .Where(l => l.ImputationYear == corte.Year && l.Nature == ConceptNature.Deduction && l.ConceptCode.StartsWith(WellKnownConceptCodes.Withholding, StringComparison.OrdinalIgnoreCase))
+                    .Select(l => l.ExplanationJson)
+                    .Concat(retencionesEspecialesPorEmpleado[e.Id]))
                 : null;
 
             var deudas = deudasPorEmpleado.GetValueOrDefault(e.Id) ?? [];
@@ -448,23 +472,31 @@ public sealed class SettlementInputLoader(
             .ToList();
     }
 
-    /// <summary>El saldo inicial vigente: la fila Opening más sus ajustes, con la fecha y el autor de la apertura.</summary>
+    /// <summary>
+    /// El saldo inicial vigente: <b>una sola fila</b>, la que manda según
+    /// <see cref="BenefitBalanceRules.Vigente"/> (corte más reciente y, a igual corte, la última
+    /// registrada). Un ajuste se digita como el saldo <b>completo</b> corregido —así lo dicen el
+    /// comando, la pantalla y `contracts/api.md` §4—, de modo que reemplaza a la apertura y no se le
+    /// suma: hasta el 2026-09-21 esto sumaba apertura más ajustes y la prima, las cesantías y los
+    /// días de vacaciones salían doblados tras corregir un saldo. Los «días ya contados», opcionales
+    /// en el ajuste, se heredan de la apertura cuando el ajuste no los trae.
+    /// </summary>
     public static OpeningBalanceInput? SaldoInicial(IReadOnlyList<EmployeeBenefitOpeningBalance> filas)
     {
-        if (filas.Count == 0) return null;
-        var apertura = filas.Where(f => f.Kind == OpeningBalanceKind.Opening).OrderByDescending(f => f.AsOfDate).FirstOrDefault() ?? filas[0];
-        var todas = filas.Where(f => f.Kind == OpeningBalanceKind.Adjustment || f.Id == apertura.Id).ToList();
+        var vigente = BenefitBalanceRules.Vigente(filas);
+        if (vigente is null) return null;
+        var apertura = filas.Where(f => f.Kind == OpeningBalanceKind.Opening).OrderByDescending(f => f.AsOfDate).ThenByDescending(f => f.Id).FirstOrDefault() ?? vigente;
         return new OpeningBalanceInput
         {
-            AsOfDate = apertura.AsOfDate.ToDateTime(TimeOnly.MinValue),
-            PendingVacationDays = todas.Sum(f => f.PendingVacationDays),
-            AccruedSeverance = todas.Sum(f => f.AccruedSeverance),
-            AccruedSeveranceInterest = todas.Sum(f => f.AccruedSeveranceInterest),
-            AccruedServiceBonus = todas.Sum(f => f.AccruedServiceBonus),
-            ServiceBonusDaysAccrued = apertura.ServiceBonusDaysAccrued,
-            SeveranceDaysAccrued = apertura.SeveranceDaysAccrued,
-            EnteredBy = apertura.CreatedBy ?? string.Empty,
-            EnteredAt = apertura.CreatedAt,
+            AsOfDate = vigente.AsOfDate.ToDateTime(TimeOnly.MinValue),
+            PendingVacationDays = vigente.PendingVacationDays,
+            AccruedSeverance = vigente.AccruedSeverance,
+            AccruedSeveranceInterest = vigente.AccruedSeveranceInterest,
+            AccruedServiceBonus = vigente.AccruedServiceBonus,
+            ServiceBonusDaysAccrued = vigente.ServiceBonusDaysAccrued ?? apertura.ServiceBonusDaysAccrued,
+            SeveranceDaysAccrued = vigente.SeveranceDaysAccrued ?? apertura.SeveranceDaysAccrued,
+            EnteredBy = vigente.CreatedBy ?? string.Empty,
+            EnteredAt = vigente.CreatedAt,
         };
     }
 
@@ -482,9 +514,11 @@ public sealed class SettlementInputLoader(
 
     /// <summary>
     /// Lo consumido en el año de los cupos anuales de retención, leído de la explicación de las líneas
-    /// de retención de las corridas aprobadas del año: el último paso «Renta exenta…» es la exenta que se
-    /// aplicó y el de «Total de deducciones y rentas exentas» (o su versión limitada) el total depurado.
-    /// Sólo se usa con la política <c>RetefteTopesAnualesModo = Acumulado</c>.
+    /// de retención de las corridas aprobadas del año —ordinarias y especiales, de cualquier tipo—: el
+    /// último paso «Renta exenta…» es la exenta que se aplicó y el de «Total de deducciones y rentas
+    /// exentas» (o su versión limitada) el total depurado; una retención sin ese total (la de la
+    /// indemnización, ET art. 401-3, que sólo resta la exenta) consume del cupo global lo mismo que de
+    /// la exenta. Sólo se usa con la política <c>RetefteTopesAnualesModo = Acumulado</c>.
     /// </summary>
     public static AcumuladoAnualDeRetencion AcumuladoDeRetencion(IEnumerable<string> explicacionesDeRetencion)
     {
@@ -500,7 +534,7 @@ public sealed class SettlementInputLoader(
                 && (s.Label.StartsWith("Total de deducciones y rentas exentas", StringComparison.OrdinalIgnoreCase)
                     || s.Label.StartsWith("Deducciones y rentas exentas limitadas", StringComparison.OrdinalIgnoreCase)));
             exenta += pasoExenta?.Value ?? 0m;
-            total += pasoTotal?.Value ?? 0m;
+            total += pasoTotal?.Value ?? pasoExenta?.Value ?? 0m;
         }
         return new AcumuladoAnualDeRetencion(exenta, total);
     }
@@ -562,14 +596,31 @@ public sealed class SettlementInputLoader(
         if (libranzas.Count > 0)
         {
             // Cuotas causadas: los períodos del plan que empezaron antes del retiro, incluido el que lo
-            // contiene (la definitiva paga su salario pendiente, así que su cuota también se causa).
-            var periodos = await db.PayPeriods.AsNoTracking()
-                .Where(p => p.PayrollPlanId == e.PayrollPlanId && p.StartDate <= corte.ToDateTime(TimeOnly.MinValue))
-                .Select(p => new { p.StartDate, p.EndDate })
+            // contiene (la definitiva paga su salario pendiente, así que su cuota también se causa),
+            // contados con la MISMA regla con que el materializador genera la recurrente (feature 006,
+            // RecurringNoveltiesMaterializer): `ApplyOn` decide si la cuota cae en cada período, en el
+            // primero del mes o en el último. Hasta el 2026-09-21 se contaba todo período del plan y una
+            // libranza mensual en un plan quincenal proponía una cuota de más por cada mes transcurrido.
+            var periodicidad = await db.PayrollPlans.AsNoTracking().Where(p => p.Id == e.PayrollPlanId).Select(p => p.Periodicity).FirstAsync(ct);
+            var periodosDelPlan = await db.PayPeriods.AsNoTracking()
+                .Where(p => p.PayrollPlanId == e.PayrollPlanId)
+                .Select(p => new { p.StartDate, p.EndDate, p.SubPeriodNumber, p.ImputationYear, p.ImputationMonth })
                 .ToListAsync(ct);
+            // En semanal el último del mes es la mayor semana creada para ese mes (como en el materializador).
+            var mayorSemanaPorMes = periodicidad == PayrollPeriodicity.Weekly
+                ? periodosDelPlan.GroupBy(p => (p.ImputationYear, p.ImputationMonth)).ToDictionary(g => g.Key, g => (byte?)g.Max(p => p.SubPeriodNumber))
+                : null;
+            var periodos = periodosDelPlan.Where(p => p.StartDate <= corte.ToDateTime(TimeOnly.MinValue)).ToList();
             foreach (var r in libranzas)
             {
-                var causadas = periodos.Count(p => r.StartDate <= p.EndDate && (r.EndDate is null || r.EndDate >= p.StartDate));
+                var causadas = periodos.Count(p =>
+                    r.StartDate <= p.EndDate && (r.EndDate is null || r.EndDate >= p.StartDate)
+                    && r.ApplyOn switch
+                    {
+                        RecurringApplyRule.FirstOfMonth => p.SubPeriodNumber == 1,
+                        RecurringApplyRule.LastOfMonth => PeriodCalendar.EsUltimoDelMes(periodicidad, p.SubPeriodNumber, mayorSemanaPorMes?.GetValueOrDefault((p.ImputationYear, p.ImputationMonth))),
+                        _ => true,
+                    });
                 if (r.TotalInstallments is { } total) causadas = Math.Min(causadas, total);
                 var pendientes = Math.Max(0, causadas - r.InstallmentsIssued);
                 var cuota = r.Amount ?? 0m;
