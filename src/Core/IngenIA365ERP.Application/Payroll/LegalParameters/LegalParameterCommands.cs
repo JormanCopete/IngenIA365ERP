@@ -64,7 +64,7 @@ public sealed class AddLegalParameterVersionCommandHandler(IApplicationDbContext
         if (actual is null)
         {
             if (request.Kind is null || string.IsNullOrWhiteSpace(request.Name))
-                return Result.Failure<Guid>(new Error("Payroll.LegalParameterNew", $"El parámetro {code} no existe: indique nombre y tipo (Amount, Percent o RangeTable) para crearlo."));
+                return Result.Failure<Guid>(new Error("Payroll.LegalParameterNew", $"El parámetro {code} no existe: indique nombre y tipo (Amount, Percent, RangeTable o DateInYear) para crearlo."));
             kind = request.Kind.Value;
             name = request.Name.Trim();
         }

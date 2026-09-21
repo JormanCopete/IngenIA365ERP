@@ -28,7 +28,10 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
         if (run.Status is not (PayrollRunStatus.Approved or PayrollRunStatus.Reversed))
             return Result.Failure<IReadOnlyList<PayslipBundle>>(new Error("Payroll.RunNotApproved", "El comprobante de pago se emite sobre una liquidación aprobada, no sobre un borrador."));
 
-        var period = run.PayPeriod!;
+        // Feature 010 (R2, FR-011a): una liquidación especial no tiene período; el comprobante lleva la
+        // etiqueta del tipo («Prima de servicios 2026-II», «Intereses a las cesantías 2026», «Vacaciones»,
+        // «Liquidación definitiva») y, como fechas, el inicio del período liquidado y el corte.
+        var period = run.PayPeriod;
         var empleados = await (
             from re in db.PayrollRunEmployees.AsNoTracking()
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
@@ -50,7 +53,11 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
         var posiciones = await db.Positions.AsNoTracking().Where(p => empleados.Select(x => x.PositionId).Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
 
         var cooperativa = tenant.TenantName ?? "Cooperativa";
-        var etiqueta = string.IsNullOrWhiteSpace(period.Description) ? $"{period.StartDate:dd/MM/yyyy} – {period.EndDate:dd/MM/yyyy}" : period.Description!;
+        var etiqueta = run.EsEspecial
+            ? Settlements.Common.SettlementLabels.EtiquetaDelComprobante(run)
+            : string.IsNullOrWhiteSpace(period!.Description) ? $"{period.StartDate:dd/MM/yyyy} – {period.EndDate:dd/MM/yyyy}" : period.Description!;
+        var (inicio, fin) = run.EsEspecial ? VentanaDe(run) : (period!.StartDate, period.EndDate);
+        var plan = period?.PayrollPlan?.Name ?? (run.EsEspecial ? Settlements.Common.SettlementErrors.Nombre(run.Kind) : string.Empty);
         var ahora = clock.UtcNow;
 
         var bundles = new List<PayslipBundle>(empleados.Count);
@@ -69,10 +76,10 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
                 EmployeeName: x.Nombre.Trim(),
                 EmployeeDocument: x.TaxId,
                 EmployeePosition: posiciones.GetValueOrDefault(x.PositionId),
-                PlanName: period.PayrollPlan?.Name ?? string.Empty,
+                PlanName: plan,
                 PeriodLabel: etiqueta,
-                PeriodStart: period.StartDate,
-                PeriodEnd: period.EndDate,
+                PeriodStart: inicio,
+                PeriodEnd: fin,
                 RunVersion: run.Version,
                 ApprovedAt: run.ApprovedAt,
                 DaysWorked: x.re.DaysWorked,
@@ -91,6 +98,18 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
         }
 
         return Result.Success<IReadOnlyList<PayslipBundle>>(bundles);
+    }
+
+    /// <summary>El tramo que la liquidación cubre: el semestre, el año, o el corte mismo en vacaciones y definitiva.</summary>
+    private static (DateTime Start, DateTime End) VentanaDe(Domain.Entities.Payroll.Transactions.PayrollRun run)
+    {
+        var corte = (run.CutoffDate ?? DateOnly.MinValue).ToDateTime(TimeOnly.MinValue);
+        return run.Kind switch
+        {
+            PayrollRunKind.ServiceBonus => (new DateTime(corte.Year, run.Semester == 1 ? 1 : 7, 1), corte),
+            PayrollRunKind.Severance => (new DateTime(corte.Year, 1, 1), corte),
+            _ => (corte, corte),
+        };
     }
 
     private static string Resumen(string explanationJson)

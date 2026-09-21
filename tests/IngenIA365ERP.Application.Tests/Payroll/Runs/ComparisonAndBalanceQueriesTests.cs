@@ -24,7 +24,7 @@ public class ComparisonAndBalanceQueriesTests
     {
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
         var h = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker);
         var r = await h.Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
     }
@@ -82,14 +82,14 @@ public class ComparisonAndBalanceQueriesTests
         d.ConfigurarContabilidad();
         var runId = await Calcular(d, d.Marzo);
 
-        var antes = await new GetRunBalanceCheckQueryHandler(d.Db).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
+        var antes = await new GetRunBalanceCheckQueryHandler(d.Db, d.SaldosDeProvision).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
         antes.Value.EarningsMinusDeductionsEqualsNet.Should().BeTrue();
         antes.Value.EmployerAndProvisionsOutsideNet.Should().BeTrue();
         antes.Value.LinesMatchEmployeeTotals.Should().BeTrue();
         antes.Value.AccountingDocumentBalanced.Should().BeNull("todavía no hay comprobante");
 
         await Aprobar(d, runId);
-        var despues = await new GetRunBalanceCheckQueryHandler(d.Db).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
+        var despues = await new GetRunBalanceCheckQueryHandler(d.Db, d.SaldosDeProvision).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
         despues.Value.AccountingDocumentBalanced.Should().BeTrue();
         despues.Value.Details.Should().Contain(x => x.Contains("NM-"));
     }

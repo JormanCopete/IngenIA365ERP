@@ -1,0 +1,26 @@
+// Festivos de Colombia 2028 (Ley 51 de 1983), calculados a mano y contrastados con el calendario
+// publicado: 18 festivos. Año bisiesto; Pascua: domingo 16 de abril. San José cae domingo → lunes 20 de marzo.
+{
+  "anio": 2028,
+  "pascua": "2028-04-16",
+  "festivos": [
+    { "fecha": "2028-01-01", "nombre": "Año Nuevo", "origen": "Fijo" },
+    { "fecha": "2028-01-10", "nombre": "Reyes Magos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-03-20", "nombre": "San José", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-04-13", "nombre": "Jueves Santo", "origen": "Pascua" },
+    { "fecha": "2028-04-14", "nombre": "Viernes Santo", "origen": "Pascua" },
+    { "fecha": "2028-05-01", "nombre": "Día del Trabajo", "origen": "Fijo" },
+    { "fecha": "2028-05-29", "nombre": "Ascensión del Señor", "origen": "Pascua" },
+    { "fecha": "2028-06-19", "nombre": "Corpus Christi", "origen": "Pascua" },
+    { "fecha": "2028-06-26", "nombre": "Sagrado Corazón de Jesús", "origen": "Pascua" },
+    { "fecha": "2028-07-03", "nombre": "San Pedro y San Pablo", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-07-20", "nombre": "Día de la Independencia", "origen": "Fijo" },
+    { "fecha": "2028-08-07", "nombre": "Batalla de Boyacá", "origen": "Fijo" },
+    { "fecha": "2028-08-21", "nombre": "Asunción de la Virgen", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-10-16", "nombre": "Día de la Raza", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-11-06", "nombre": "Todos los Santos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-11-13", "nombre": "Independencia de Cartagena", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2028-12-08", "nombre": "Inmaculada Concepción", "origen": "Fijo" },
+    { "fecha": "2028-12-25", "nombre": "Navidad", "origen": "Fijo" }
+  ]
+}

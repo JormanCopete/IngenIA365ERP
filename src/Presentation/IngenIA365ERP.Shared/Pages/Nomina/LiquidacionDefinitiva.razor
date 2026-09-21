@@ -1,0 +1,818 @@
+@page "/nomina/liquidacion-definitiva"
+@page "/nomina/liquidacion-definitiva/{RunId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
+
+@*
+    Feature 010, US3 (FR-018 a FR-021; contracts/api.md §3.4): terminación del contrato y liquidación
+    definitiva. Lista de terminaciones por año y estado; «Registrar terminación» crea la definitiva en
+    borrador; el detalle muestra cada rubro con su explicación, los descuentos propuestos desde
+    Cartera —que sólo se bajan, con motivo—, la aprobación (cierra la ficha y aplica los recaudos),
+    el documento para firma, la sanción moratoria informativa, la reversión y el descarte. El catálogo
+    de motivos de retiro se administra aquí con Payroll.Settlements.Manage.
+*@
+
+<PageTitle>Liquidación definitiva - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.Settlements.View" MostrarAviso="true">
+
+<div class="page-header">
+    <h3>Liquidación definitiva por retiro</h3>
+    <div>
+        <PermissionGate Required="Payroll.Settlements.Calculate">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar terminación</SfButton>
+        </PermissionGate>
+        <PermissionGate Required="Payroll.Settlements.Manage">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-settings" OnClick="@AbrirMotivosAsync">Motivos de retiro</SfButton>
+        </PermissionGate>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_ocupado" OnClick="@(() => ExportarTerminacionesAsync("xlsx"))" Title="Reporte de terminaciones del año en Excel">Excel</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" Disabled="@_ocupado" OnClick="@(() => ExportarTerminacionesAsync("pdf"))" Title="Reporte de terminaciones del año en PDF">PDF</SfButton>
+    </div>
+</div>
+
+@* ------------------------------------------------------------------- lista --- *@
+<div class="toolbar">
+    <label>Año
+        <SfNumericTextBox TValue="int" @bind-Value="_anio" Min="2000" Max="2200" Format="0" Decimals="0" ShowSpinButton="true" Width="110px" ValueChange="@((Syncfusion.Blazor.Inputs.ChangeEventArgs<int> _) => CargarListaAsync())" />
+    </label>
+    <label>Estado
+        <select class="e-input" value="@_estado" @onchange="@(async e => { _estado = e.Value?.ToString() ?? string.Empty; await CargarListaAsync(); })">
+            <option value="">Todos</option>
+            <option value="0">Registradas (borrador)</option>
+            <option value="1">Liquidadas</option>
+            <option value="2">Reintegrados</option>
+            <option value="3">Anuladas</option>
+        </select>
+    </label>
+    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarListaAsync">Ver</SfButton>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="TerminacionDto" DataSource="@_terminaciones" AllowSorting="true" AllowPaging="true">
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="200" />
+        <GridColumn Field="Document" HeaderText="Documento" Width="110" />
+        <GridColumn HeaderText="Retiro" Width="105">
+            <Template>@(((TerminacionDto)context).TerminationDate.ToString("dd/MM/yyyy"))</Template>
+        </GridColumn>
+        <GridColumn Field="ReasonName" HeaderText="Motivo" Width="180" />
+        <GridColumn HeaderText="Contrato" Width="130">
+            <Template>@(((TerminacionDto)context).ContratoTexto)</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Estado" Width="120" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var t = (TerminacionDto)context;
+                    var css = t.Status switch { 1 => "e-badge e-badge-success", 0 => "e-badge e-badge-warning", 2 => "e-badge e-badge-info", _ => "e-badge" };
+                    <span class="@css">@t.EstadoTexto</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Neto" Width="130" TextAlign="TextAlign.Right">
+            <Template>@(((TerminacionDto)context).Net.ToString("N0"))</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="120" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var t = (TerminacionDto)context;
+                    if (t.RunPublicId is { } rid)
+                    {
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye" Title="Abrir la liquidación" OnClick="@(() => Nav.NavigateTo($"/nomina/liquidacion-definitiva/{rid}"))" />
+                    }
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-user" Title="Abrir la ficha" OnClick="@(() => Nav.NavigateTo($"/nomina/empleados/{t.EmployeePublicId}"))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+</IndicadorDeCarga>
+
+@* ----------------------------------------------------------------- detalle --- *@
+@if (RunId is not null)
+{
+    <IndicadorDeCarga Cargando="@_cargaDetalle.Activa" Texto="Cargando la liquidación…">
+    @if (_corrida is not null && _terminacion is not null)
+    {
+        <div class="info-card @(_corrida.Status == "Approved" ? "exito" : _corrida.EsBorrador ? "alerta" : string.Empty)">
+            <span class="label">@_corrida.TipoTexto · @_terminacion.EmployeeName (@_terminacion.Document) · v@_corrida.Version · <strong>@_corrida.EstadoTexto</strong></span>
+            <p>
+                Retiro el <strong>@_terminacion.TerminationDate.ToString("dd/MM/yyyy")</strong> por <strong>@_terminacion.ReasonName</strong>@(_terminacion.GeneratesSeverancePay ? " (genera indemnización)" : "") · contrato @_terminacion.ContratoTexto@(_terminacion.ContractEndDate is { } fin ? $" hasta {fin:dd/MM/yyyy}" : "").
+                Devengos <strong>@_corrida.Totals.Earnings.ToString("N0")</strong> · deducciones @_corrida.Totals.Deductions.ToString("N0") · neto a pagar <strong>@_corrida.Totals.Net.ToString("N0")</strong>.
+                Calculada por @_corrida.CalculatedBy el @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(_corrida.ApprovedAt is { } ap ? $"; aprobada por {_corrida.ApprovedBy} el {ap.ToLocalTime():dd/MM/yyyy HH:mm}" : "")@(_corrida.AccountingDocumentNumber is { } n ? $"; comprobante {n}" : "").
+            </p>
+            @if (_corrida.EsBorrador)
+            {
+                <p class="texto-tenue">La ficha del empleado sigue vigente: se cierra al aprobar. Revisá los rubros y los descuentos antes.@(_corrida.EstaDesactualizada ? " Cambió una política, un parámetro legal o un concepto después de calcularla: recalculá antes de aprobar." : "")</p>
+            }
+            @if (_corrida.Status == "Reversed")
+            {
+                <p class="texto-tenue">Reversada por @_corrida.ReversedBy: @_corrida.ReversalReason. La ficha volvió a estar vigente; los recaudos de Cartera se reversan por su propio flujo.</p>
+            }
+            @if (_corrida.Blockers.Count > 0)
+            {
+                <p><strong>Bloqueos:</strong> @string.Join(" · ", _corrida.Blockers.Select(b => $"{b.BanderaTexto}: {b.Detail}"))</p>
+            }
+            @if (_corrida.Warnings is { Count: > 0 })
+            {
+                <ul class="texto-tenue">@foreach (var w in _corrida.Warnings) { <li>@w.Message</li> }</ul>
+            }
+        </div>
+
+        <div class="toolbar">
+            @if (_corrida.EsBorrador)
+            {
+                <PermissionGate Required="Payroll.Settlements.Calculate">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_ocupado" OnClick="@RecalcularAsync" Title="Versión nueva: vuelve a leer Cartera y conserva los ajustes cuyo saldo no cambió">Recalcular</SfButton>
+                </PermissionGate>
+                @if (_corrida.SePuedeAprobar)
+                {
+                    <PermissionGate Required="Payroll.Settlements.Approve">
+                        <SfButton CssClass="e-success" IconCss="e-icons e-check" Disabled="@(_ocupado || _corrida.Blockers.Count > 0)" OnClick="@AbrirAprobacion" Title="Contabiliza, aplica los descuentos en Cartera y cierra la ficha">Aprobar</SfButton>
+                    </PermissionGate>
+                }
+                <PermissionGate Required="Payroll.Settlements.Calculate">
+                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-trash" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarDescartar = true; })" Title="Anula la terminación; la ficha nunca se tocó">Descartar</SfButton>
+                </PermissionGate>
+            }
+            @if (_corrida.Status == "Approved")
+            {
+                <PermissionGate Required="Payroll.Settlements.Reverse">
+                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarReversar = true; })" Title="Asiento espejo y ficha reabierta; los recaudos de Cartera se reversan aparte">Reversar</SfButton>
+                </PermissionGate>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-file-document" Disabled="@_ocupado" OnClick="@DescargarComprobanteAsync">Comprobante del empleado</SfButton>
+            }
+            <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_ocupado" OnClick="@DescargarDocumentoAsync" Title="@(_corrida.EsBorrador ? "Sale con la marca BORRADOR hasta aprobar" : "Documento de liquidación para firma")">Documento para firma</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-clock" Disabled="@_ocupado" OnClick="@AbrirSancionAsync" Title="Cálculo informativo del CST art. 65; nunca una línea">Sanción moratoria si pagara hoy</SfButton>
+        </div>
+
+        <SfTab>
+            <TabItems>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Rubros" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="panel-pestana">
+                            @if (_detalle is null)
+                            {
+                                <div class="sin-datos">Sin detalle: la liquidación no tiene líneas.</div>
+                            }
+                            else
+                            {
+                                <table class="data-grid">
+                                    <thead><tr><th></th><th>Concepto</th><th>Naturaleza</th><th class="monto">Días / cant.</th><th class="monto">Base</th><th class="monto">Valor</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var l in _detalle.Lines.OrderBy(l => l.Order))
+                                        {
+                                            <tr>
+                                                <td><SfButton CssClass="e-flat e-small" IconCss="@(_lineaAbierta == l.PublicId ? "e-icons e-chevron-up" : "e-icons e-chevron-down")" OnClick="@(() => _lineaAbierta = _lineaAbierta == l.PublicId ? null : l.PublicId)" /></td>
+                                                <td>@l.ConceptCode · @l.ConceptName @(l.AffectsAccounting ? string.Empty : " (sin asiento: lo contabiliza Cartera)")</td>
+                                                <td>@l.NaturalezaTexto</td>
+                                                <td class="monto">@(l.Quantity?.ToString("0.##"))</td>
+                                                <td class="monto">@(l.BaseAmount?.ToString("N2"))</td>
+                                                <td class="monto"><strong>@l.Amount.ToString("N0")</strong></td>
+                                            </tr>
+                                            @if (_lineaAbierta == l.PublicId)
+                                            {
+                                                <tr><td colspan="6"><ExplicacionDeLinea Explicacion="@l.Explanation" /></td></tr>
+                                            }
+                                        }
+                                    </tbody>
+                                    <tfoot>
+                                        <tr><th colspan="5">Devengos</th><th class="monto">@_detalle.Totals.Earnings.ToString("N0")</th></tr>
+                                        <tr><th colspan="5">Deducciones</th><th class="monto">@_detalle.Totals.Deductions.ToString("N0")</th></tr>
+                                        <tr><th colspan="5">Neto a pagar</th><th class="monto">@_detalle.Totals.Net.ToString("N0")</th></tr>
+                                    </tfoot>
+                                </table>
+                                @if (_detalle.Skips.Count > 0)
+                                {
+                                    <details open>
+                                        <summary class="texto-tenue">Rubros que no aplican y por qué (@_detalle.Skips.Count)</summary>
+                                        <ul class="texto-tenue">@foreach (var s in _detalle.Skips) { <li>@s</li> }</ul>
+                                    </details>
+                                }
+                                @if (_detalle.Refusals.Count > 0)
+                                {
+                                    <div class="info-card alerta"><span class="label">El motor se negó</span><ul>@foreach (var r in _detalle.Refusals) { <li>@r</li> }</ul></div>
+                                }
+                            }
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Descuentos" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="panel-pestana">
+                            <IndicadorDeCarga Cargando="@_cargaDescuentos.Activa">
+                            @if (_descuentos is null || _descuentos.Items.Count == 0)
+                            {
+                                <div class="sin-datos">Sin obligaciones que descontar: Cartera no trae créditos con saldo ni hay libranzas con cuotas causadas sin descontar.</div>
+                            }
+                            else
+                            {
+                                <div class="info-card @(_descuentos.DeductionOverNet ? "alerta" : string.Empty)">
+                                    <span class="label">Neto antes de descuentos <strong>@_descuentos.Net.ToString("N0")</strong> · propuesto @_descuentos.TotalProposed.ToString("N0") · aplicado <strong>@_descuentos.TotalApplied.ToString("N0")</strong> · neto a pagar <strong>@_descuentos.NetAfterDeductions.ToString("N0")</strong></span>
+                                    <p>Se propone el saldo total de cada crédito de la cooperativa (según la política <em>DeduccionAlRetiroModo</em>) y sólo las cuotas causadas y no descontadas de las libranzas. Un descuento sólo se <strong>baja</strong>, con motivo; propuesto, aplicado, motivo, quién y cuándo quedan en la auditoría. Al aprobar, cada crédito recibe su recaudo en Cartera con referencia a esta liquidación.</p>
+                                    @if (_descuentos.DeductionOverNet)
+                                    {
+                                        <p><strong>Los descuentos superan el neto:</strong> bajá alguno antes de aprobar.</p>
+                                    }
+                                </div>
+                                <table class="data-grid">
+                                    <thead><tr><th>Obligación</th><th>Tipo</th><th class="monto">Capital</th><th class="monto">Intereses</th><th class="monto">Mora</th><th class="monto">Cuotas</th><th class="monto">Propuesto</th><th class="monto">Aplicado</th><th>Motivo</th><th class="monto">Saldo que queda</th><th>Estado</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var d in _descuentos.Items)
+                                        {
+                                            <tr>
+                                                <td>@d.Description</td>
+                                                <td>@d.TipoTexto</td>
+                                                <td class="monto">@(d.CapitalBalance?.ToString("N0"))</td>
+                                                <td class="monto">@(d.InterestBalance?.ToString("N0"))</td>
+                                                <td class="monto">@(d.DefaultBalance?.ToString("N0"))</td>
+                                                <td class="monto">@(d.EsCredito ? d.PendingInstallments?.ToString() : d.CausedNotDeducted is { } c ? $"{c} causada(s)" : d.PendingInstallments?.ToString())</td>
+                                                <td class="monto">@d.Proposed.ToString("N0")</td>
+                                                <td class="monto"><strong>@d.Applied.ToString("N0")</strong></td>
+                                                <td>
+                                                    @if (d.FueAjustado)
+                                                    {
+                                                        <span>@d.Reason</span> <small class="texto-tenue">— @d.AdjustedBy, @d.AdjustedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                                                    }
+                                                </td>
+                                                <td class="monto">@(d.RemainingAfter?.ToString("N0") ?? "—")</td>
+                                                <td>@d.EstadoTexto</td>
+                                                <td>
+                                                    @if (_corrida.EsBorrador)
+                                                    {
+                                                        <PermissionGate Required="Payroll.Settlements.AdjustDeduction">
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Bajar el descuento con motivo" OnClick="@(() => AbrirAjuste(d))" />
+                                                        </PermissionGate>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            </IndicadorDeCarga>
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+                <TabItem>
+                    <ChildContent><TabHeader Text="Historial" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="panel-pestana">
+                            <p class="texto-tenue">Versiones de la definitiva de este empleado con esta fecha de retiro. Recalcular crea una versión nueva y deja la anterior como reemplazada; aprobar y reversar quedan en el comprobante y en la auditoría.</p>
+                            <table class="data-grid">
+                                <thead><tr><th>Versión</th><th>Estado</th><th>Calculada</th><th>Aprobada</th><th>Comprobante</th></tr></thead>
+                                <tbody>
+                                    <tr>
+                                        <td>v@_corrida.Version</td>
+                                        <td>@_corrida.EstadoTexto</td>
+                                        <td>@_corrida.CalculatedBy · @_corrida.CalculatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@(_corrida.ApprovedAt is { } a ? $"{_corrida.ApprovedBy} · {a.ToLocalTime():dd/MM/yyyy HH:mm}" : "—")</td>
+                                        <td>@(_corrida.AccountingDocumentNumber ?? "—")</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            @if (_terminacion.SettlementDocumentAttachmentPublicId is not null)
+                            {
+                                <p class="texto-tenue">El documento para firma quedó adjunto a la terminación al aprobar (adjunto @_terminacion.SettlementDocumentAttachmentPublicId).</p>
+                            }
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+            </TabItems>
+        </SfTab>
+    }
+    else if (!_cargaDetalle.Activa)
+    {
+        <div class="sin-datos">No se encontró la liquidación @RunId.</div>
+    }
+    </IndicadorDeCarga>
+}
+
+@* ------------------------------------------------------- registrar terminación --- *@
+<DialogoDeTerminacion @ref="_registro" @bind-Visible="_mostrarRegistro" OnRegistrada="@TerminacionRegistradaAsync" />
+
+@* --------------------------------------------------------- ajustar descuento --- *@
+<SfDialog @bind-Visible="_mostrarAjuste" Header="Bajar el descuento" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            @if (_ajustando is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card">
+                        <span class="label">@_ajustando.Description</span>
+                        <p>Propuesto <strong>@_ajustando.Proposed.ToString("N0")</strong>@(_ajustando.EsCredito ? $" (capital {_ajustando.CapitalBalance:N0}, intereses {_ajustando.InterestBalance:N0}, mora {_ajustando.DefaultBalance:N0})" : ""). Sólo se puede bajar; subirlo sobre lo propuesto se rechaza. Bajarlo exige motivo y queda en la auditoría con quién y cuándo.</p>
+                    </div>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_aplicado" Placeholder="Valor a aplicar" FloatLabelType="FloatLabelType.Always" Min="0" Max="@_ajustando.Proposed" Format="N0" Decimals="0" />
+                    <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo del ajuste *" FloatLabelType="FloatLabelType.Always" />
+                    @if (_ajustando.EsCredito)
+                    {
+                        <p class="hint">Saldo que quedará en Cartera: <strong>@(Math.Max(0m, (_ajustando.CapitalBalance ?? 0m) + (_ajustando.InterestBalance ?? 0m) + (_ajustando.DefaultBalance ?? 0m) - _aplicado).ToString("N0"))</strong> (aproximado: Cartera aplica primero mora, luego intereses y luego capital).</p>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAjuste = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@(_guardado.Activa || (_aplicado < _ajustando.Proposed && string.IsNullOrWhiteSpace(_motivo)))" OnClick="@GuardarAjusteAsync">Guardar</SfButton>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------ aprobar --- *@
+<SfDialog @bind-Visible="_mostrarAprobacion" Header="Aprobar la liquidación definitiva" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Aprobando, contabilizando y aplicando los recaudos…">
+            @if (_corrida is not null && _terminacion is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card">
+                        <span class="label">Qué se aprueba</span>
+                        <p>La definitiva de <strong>@_terminacion.EmployeeName</strong> con retiro el @_terminacion.TerminationDate.ToString("dd/MM/yyyy"), v@_corrida.Version, neto a pagar <strong>@_corrida.Totals.Net.ToString("N0")</strong>@(_descuentos is { TotalApplied: > 0 } ? $" tras descontar {_descuentos.TotalApplied:N0} en obligaciones" : "").</p>
+                        <p class="texto-tenue">Al aprobar: comprobante contable contra las provisiones (por defecto con la fecha de retiro), cada descuento se aplica como recaudo en Cartera, la ficha queda retirada y se genera el documento para firma. Lo aprobado no se edita: se reversa.</p>
+                    </div>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_fechaContable" Placeholder="Fecha del comprobante (vacía = fecha de retiro)" FloatLabelType="FloatLabelType.Always" Format="dd/MM/yyyy" Min="@_terminacion.TerminationDate.ToDateTime(TimeOnly.MinValue)" Max="DateTime.Today" />
+                    <label class="campo-check"><input type="checkbox" @bind="_confirmar" /> Confirmo aprobar la liquidación definitiva y cerrar la ficha de @_terminacion.EmployeeName.</label>
+                    @if (_pideSegundaConfirmacion)
+                    {
+                        <div class="info-card">
+                            <span class="label">Segunda confirmación</span>
+                            <p>Vos calculaste esta liquidación. La cooperativa permite aprobarla igual, pero queda registrado como aprobada sin segregación de funciones.</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_confirmarSinSegregacion" /> Confirmo aprobar sin segregación de funciones.</label>
+                        </div>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAprobacion = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-success" type="button" Disabled="@(_guardado.Activa || !_confirmar || (_pideSegundaConfirmacion && !_confirmarSinSegregacion))" OnClick="@AprobarAsync">Aprobar</SfButton>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* --------------------------------------------------------- reversar / descartar --- *@
+<SfDialog @bind-Visible="_mostrarReversar" Header="Reversar la liquidación definitiva" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Reversando…">
+            <div class="pagina">
+                <p>Se deja un asiento espejo, la ficha vuelve a estar vigente y la terminación queda como reintegro. Los recaudos que la definitiva dejó en Cartera <strong>no se reversan solos</strong>: la respuesta los lista para reversarlos en Cartera.</p>
+                <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo de la reversión *" FloatLabelType="FloatLabelType.Always" />
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarReversar = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-danger" type="button" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReversarAsync">Reversar</SfButton>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDescartar" Header="Descartar el borrador" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Descartando…">
+            <div class="pagina">
+                <p>El borrador queda descartado con su motivo y la terminación anulada. La ficha nunca se tocó; se puede registrar otra terminación después.</p>
+                <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarDescartar = false)">Cancelar</SfButton>
+                <SfButton CssClass="e-danger" type="button" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@DescartarAsync">Descartar</SfButton>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------ sanción --- *@
+<SfDialog @bind-Visible="_mostrarSancion" Header="Sanción moratoria (CST art. 65) — informativo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaSancion.Activa">
+            @if (_sancion is not null)
+            {
+                <div class="pagina">
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-value">@_sancion.DaysLate</span><span class="kpi-label">días desde el retiro (@_sancion.TerminationDate.ToString("dd/MM/yyyy") → @_sancion.AsOf.ToString("dd/MM/yyyy"))</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@_sancion.DailyRate.ToString("N0")</span><span class="kpi-label">un día de salario (@_sancion.MonthlySalary.ToString("N0") / 30)</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@_sancion.Penalty.ToString("N0")</span><span class="kpi-label">sanción si pagara ese día (@_sancion.DaysCharged de máximo @(_sancion.CapMonths * 30) días)</span></div>
+                    </div>
+                    <p class="hint">@_sancion.Note</p>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------ motivos de retiro --- *@
+<SfDialog @bind-Visible="_mostrarMotivos" Header="Motivos de retiro" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaMotivos.Activa || _guardado.Activa)">
+            <div class="pagina">
+                <p class="texto-tenue">Los nueve motivos del programa traen la marca legal de indemnización (CST art. 64) y no cambian de código ni de marca. La cooperativa agrega los suyos —siempre sin indemnización— y edita nombre y base legal; un motivo se desactiva, no se borra.</p>
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Indemniza</th><th>Exige fecha fin</th><th>Base legal</th><th>Origen</th><th>Activo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _motivos)
+                        {
+                            <tr>
+                                <td>@m.Code</td><td>@m.Name</td><td>@(m.GeneratesSeverancePay ? "Sí" : "No")</td><td>@(m.RequiresContractEndDate ? "Sí" : "No")</td>
+                                <td class="texto-tenue">@m.LegalBasis</td><td>@(m.IsSeeded ? "Programa" : "Cooperativa")</td><td>@(m.IsActive ? "Sí" : "No")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => EditarMotivo(m))" />
+                                    @if (m.IsActive)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" Title="Desactivar" OnClick="@(() => DesactivarMotivoAsync(m))" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="info-card">
+                    <span class="label">@(_motivoEditando is null ? "Nuevo motivo propio" : $"Editar «{_motivoEditando.Name}»")</span>
+                    <div class="rejilla-campos">
+                        <div><SfTextBox @bind-Value="_formMotivo.Code" MaxLength="10" Placeholder="Código (hasta 10, sin espacios)" FloatLabelType="FloatLabelType.Always" Enabled="@(_motivoEditando is not { IsSeeded: true })" /></div>
+                        <div><SfTextBox @bind-Value="_formMotivo.Name" MaxLength="120" Placeholder="Nombre" FloatLabelType="FloatLabelType.Always" /></div>
+                        <div><SfTextBox @bind-Value="_formMotivo.LegalBasis" MaxLength="120" Placeholder="Base legal (opcional)" FloatLabelType="FloatLabelType.Always" /></div>
+                        <div>
+                            <label class="campo-check"><input type="checkbox" @bind="_formMotivo.RequiresContractEndDate" /> Exige fecha de fin del contrato</label>
+                            @if (_motivoEditando is { IsSeeded: true })
+                            {
+                                <label class="campo-check"><input type="checkbox" checked="@_motivoEditando.GeneratesSeverancePay" disabled /> Genera indemnización (marca legal, no se edita)</label>
+                            }
+                            <label class="campo-check"><input type="checkbox" @bind="_formMotivo.IsActive" /> Activo</label>
+                        </div>
+                    </div>
+                    <div class="toolbar">
+                        @if (_motivoEditando is not null)
+                        {
+                            <SfButton CssClass="e-flat" type="button" OnClick="@(() => { _motivoEditando = null; _formMotivo = new(); })">Nuevo</SfButton>
+                        }
+                        <SfButton CssClass="e-primary" type="button" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_formMotivo.Code) || string.IsNullOrWhiteSpace(_formMotivo.Name))" OnClick="@GuardarMotivoAsync">@(_motivoEditando is null ? "Crear" : "Guardar")</SfButton>
+                    </div>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid? RunId { get; set; }
+
+    /// <summary>Llegar con <c>?empleado=</c> (desde la ficha) filtra por ese empleado y abre su terminación viva si la tiene.</summary>
+    [SupplyParameterFromQuery(Name = "empleado")] public Guid? EmpleadoFiltro { get; set; }
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _cargaDescuentos = new(), _cargaSancion = new(), _cargaMotivos = new(), _guardado = new();
+    private List<TerminacionDto> _terminaciones = [];
+    private int _anio = DateTime.Today.Year;
+    private string _estado = string.Empty;
+    private bool _ocupado;
+
+    private ResumenCorridaDto? _corrida;
+    private TerminacionDto? _terminacion;
+    private DetalleEmpleadoCorridaDto? _detalle;
+    private DescuentosDefinitivaDto? _descuentos;
+    private Guid? _lineaAbierta;
+
+    private DialogoDeTerminacion? _registro;
+    private bool _mostrarRegistro, _mostrarAjuste, _mostrarAprobacion, _mostrarReversar, _mostrarDescartar, _mostrarSancion, _mostrarMotivos;
+    private DescuentoDefinitivaDto? _ajustando;
+    private decimal _aplicado;
+    private string _motivo = string.Empty;
+    private DateTime? _fechaContable;
+    private bool _confirmar, _confirmarSinSegregacion, _pideSegundaConfirmacion;
+    private SancionMoratoriaDto? _sancion;
+    private List<MotivoDeRetiroDto> _motivos = [];
+    private MotivoDeRetiroDto? _motivoEditando;
+    private FormMotivo _formMotivo = new();
+    private Guid? _cargadoPara;
+
+    protected override async Task OnInitializedAsync() => await CargarListaAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RunId != _cargadoPara)
+        {
+            _cargadoPara = RunId;
+            if (RunId is not null) await CargarDetalleAsync();
+            else { _corrida = null; _terminacion = null; _detalle = null; _descuentos = null; }
+        }
+    }
+
+    // ----------------------------------------------------------------- lista --
+
+    private async Task CargarListaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = EmpleadoFiltro is { } emp
+            ? await Nomina.ListarTerminacionesAsync(null, int.TryParse(_estado, out var e1) ? e1 : null, emp)
+            : await Nomina.ListarTerminacionesAsync(_anio, int.TryParse(_estado, out var e2) ? e2 : null);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las terminaciones.");
+            return;
+        }
+        _terminaciones = (res.Value ?? []).ToList();
+
+        // Desde la ficha: si el empleado tiene una terminación viva con liquidación, se abre directo.
+        if (EmpleadoFiltro is not null && RunId is null && _terminaciones.FirstOrDefault(t => t.Status is 0 or 1 && t.RunPublicId is not null) is { RunPublicId: { } viva })
+            Nav.NavigateTo($"/nomina/liquidacion-definitiva/{viva}");
+    }
+
+    private void AbrirRegistro() { _registro?.Reiniciar(); _mostrarRegistro = true; }
+
+    private async Task TerminacionRegistradaAsync(TerminacionRegistradaDto creada)
+    {
+        await CargarListaAsync();
+        Nav.NavigateTo($"/nomina/liquidacion-definitiva/{creada.RunPublicId}");
+    }
+
+    private async Task ExportarTerminacionesAsync(string formato)
+    {
+        if (_ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.DescargarReporteDeTerminacionesAsync(new DateOnly(_anio, 1, 1), new DateOnly(_anio, 12, 31), formato);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar el reporte."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    // --------------------------------------------------------------- detalle --
+
+    private async Task CargarDetalleAsync()
+    {
+        if (RunId is not { } runId) return;
+        using var carga = _cargaDetalle.Iniciar();
+        _lineaAbierta = null;
+        var resumen = await Nomina.ResumenAsync(runId);
+        if (!resumen.IsSuccess)
+        {
+            _corrida = null;
+            await Notification.ErrorAsync(resumen.ErrorMessage ?? "No se pudo cargar la liquidación.");
+            return;
+        }
+        _corrida = resumen.Value;
+
+        // La terminación de esta corrida: por la lista del año del corte (la corrida sabe su empleado y su corte).
+        _terminacion = _terminaciones.FirstOrDefault(t => t.RunPublicId == runId);
+        if (_terminacion is null && _corrida!.EmployeePublicId is { } emp)
+        {
+            var lista = await Nomina.ListarTerminacionesAsync(null, null, emp);
+            _terminacion = lista.IsSuccess ? (lista.Value ?? []).FirstOrDefault(t => t.RunPublicId == runId) : null;
+        }
+        if (_corrida!.EmployeePublicId is { } empleadoId)
+        {
+            var detalle = await Nomina.DetalleEmpleadoAsync(runId, empleadoId);
+            _detalle = detalle.IsSuccess ? detalle.Value : null;
+            if (!detalle.IsSuccess) await Notification.WarningAsync(detalle.ErrorMessage ?? "No se pudo cargar el detalle del empleado.");
+        }
+        await CargarDescuentosAsync();
+    }
+
+    private async Task CargarDescuentosAsync()
+    {
+        if (RunId is not { } runId) return;
+        using var carga = _cargaDescuentos.Iniciar();
+        var res = await Nomina.DescuentosDeDefinitivaAsync(runId);
+        _descuentos = res.IsSuccess ? res.Value : null;
+        if (!res.IsSuccess) await Notification.WarningAsync(res.ErrorMessage ?? "No se pudieron cargar los descuentos.");
+    }
+
+    private async Task RecalcularAsync()
+    {
+        if (RunId is not { } runId || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.RecalcularDefinitivaAsync(runId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo recalcular."); return; }
+            foreach (var w in res.Value!.Warnings) await Notification.WarningAsync(w.Message);
+            await Notification.SuccessAsync($"Liquidación recalculada: versión {res.Value.Version}.");
+            await CargarListaAsync();
+            Nav.NavigateTo($"/nomina/liquidacion-definitiva/{res.Value.RunPublicId}");
+        }
+        finally { _ocupado = false; }
+    }
+
+    // ------------------------------------------------------------ descuentos --
+
+    private void AbrirAjuste(DescuentoDefinitivaDto d)
+    {
+        _ajustando = d;
+        _aplicado = d.Applied;
+        _motivo = d.Reason ?? string.Empty;
+        _mostrarAjuste = true;
+    }
+
+    private async Task GuardarAjusteAsync()
+    {
+        if (RunId is not { } runId || _ajustando is null || _guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.AjustarDescuentoAsync(runId, _ajustando.ObligationPublicId, new AjustarDescuentoRequest(_aplicado, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim()));
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo ajustar el descuento.");
+            return;
+        }
+        await Notification.SuccessAsync(res.Value!.FueAjustado ? $"Descuento bajado a {res.Value.Applied:N0}; queda en la auditoría." : "Descuento restablecido al valor propuesto.");
+        _mostrarAjuste = false;
+        await CargarDetalleAsync();
+    }
+
+    // -------------------------------------------------------------- aprobar --
+
+    private void AbrirAprobacion()
+    {
+        _confirmar = _confirmarSinSegregacion = _pideSegundaConfirmacion = false;
+        _fechaContable = null;
+        _mostrarAprobacion = true;
+    }
+
+    private async Task AprobarAsync()
+    {
+        if (RunId is not { } runId || _guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarLiquidacionRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null, ConfirmWithoutSegregation: _confirmarSinSegregacion));
+        if (!res.IsSuccess)
+        {
+            if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && !_pideSegundaConfirmacion)
+            {
+                _pideSegundaConfirmacion = true;
+                await Notification.WarningAsync(res.ErrorMessage ?? "Hace falta la segunda confirmación.");
+                return;
+            }
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo aprobar.");
+            return;
+        }
+        var r = res.Value!;
+        await Notification.SuccessAsync($"Definitiva aprobada: comprobante {r.Number}, neto {r.Net:N0}" + (r.PortfolioPayments.Count > 0 ? $", {r.PortfolioPayments.Count} recaudo(s) en Cartera." : "."));
+        _mostrarAprobacion = false;
+        await CargarListaAsync();
+        await CargarDetalleAsync();
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (RunId is not { } runId || _guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.ReversarDefinitivaAsync(runId, _motivo.Trim());
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo reversar.");
+            return;
+        }
+        await Notification.SuccessAsync($"Reversada con el comprobante {res.Value!.ReversalNumber}. {res.Value.Message}");
+        _mostrarReversar = false;
+        await CargarListaAsync();
+        await CargarDetalleAsync();
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (RunId is not { } runId || _guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.DescartarDefinitivaAsync(runId, _motivo.Trim());
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo descartar.");
+            return;
+        }
+        await Notification.SuccessAsync("Borrador descartado y terminación anulada; la ficha sigue vigente.");
+        _mostrarDescartar = false;
+        await CargarListaAsync();
+        await CargarDetalleAsync();
+    }
+
+    // ------------------------------------------------- documento, comprobante, sanción --
+
+    private async Task DescargarDocumentoAsync()
+    {
+        if (RunId is not { } runId || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.DocumentoDeDefinitivaAsync(runId);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo generar el documento."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DescargarComprobanteAsync()
+    {
+        if (RunId is not { } runId || _corrida?.EmployeePublicId is not { } emp || _ocupado) return;
+        _ocupado = true;
+        try
+        {
+            var res = await Nomina.ComprobanteAsync(runId, emp);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo generar el comprobante."); return; }
+            await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task AbrirSancionAsync()
+    {
+        if (RunId is not { } runId) return;
+        _sancion = null;
+        _mostrarSancion = true;
+        using var carga = _cargaSancion.Iniciar();
+        var res = await Nomina.SancionMoratoriaAsync(runId);
+        if (res.IsSuccess) _sancion = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo calcular la sanción informativa.");
+    }
+
+    // ---------------------------------------------------------------- motivos --
+
+    private async Task AbrirMotivosAsync()
+    {
+        _mostrarMotivos = true;
+        _motivoEditando = null;
+        _formMotivo = new();
+        await CargarMotivosAsync();
+    }
+
+    private async Task CargarMotivosAsync()
+    {
+        using var carga = _cargaMotivos.Iniciar();
+        var res = await Nomina.ListarMotivosDeRetiroAsync(incluirInactivos: true);
+        if (res.IsSuccess) _motivos = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los motivos.");
+    }
+
+    private void EditarMotivo(MotivoDeRetiroDto m)
+    {
+        _motivoEditando = m;
+        _formMotivo = new FormMotivo { Code = m.Code, Name = m.Name, LegalBasis = m.LegalBasis, RequiresContractEndDate = m.RequiresContractEndDate, IsActive = m.IsActive };
+    }
+
+    private async Task GuardarMotivoAsync()
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new GuardarMotivoDeRetiroRequest(_formMotivo.Code.Trim().ToUpperInvariant(), _formMotivo.Name.Trim(),
+            _motivoEditando?.GeneratesSeverancePay ?? false, _formMotivo.RequiresContractEndDate,
+            string.IsNullOrWhiteSpace(_formMotivo.LegalBasis) ? null : _formMotivo.LegalBasis.Trim(), _formMotivo.IsActive);
+        string? codigoDeError = null, mensajeDeError = null;
+        if (_motivoEditando is null)
+        {
+            var res = await Nomina.CrearMotivoDeRetiroAsync(request);
+            if (!res.IsSuccess) (codigoDeError, mensajeDeError) = (res.ErrorCode, res.ErrorMessage);
+        }
+        else
+        {
+            var res = await Nomina.ActualizarMotivoDeRetiroAsync(_motivoEditando.PublicId, request);
+            if (!res.IsSuccess) (codigoDeError, mensajeDeError) = (res.ErrorCode, res.ErrorMessage);
+        }
+        if (codigoDeError is not null || mensajeDeError is not null)
+        {
+            await Notification.ErrorAsync(codigoDeError == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : mensajeDeError ?? "No se pudo guardar el motivo.");
+            return;
+        }
+        await Notification.SuccessAsync(_motivoEditando is null ? "Motivo creado." : "Motivo guardado.");
+        _motivoEditando = null;
+        _formMotivo = new();
+        await CargarMotivosAsync();
+    }
+
+    private async Task DesactivarMotivoAsync(MotivoDeRetiroDto m)
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.DesactivarMotivoDeRetiroAsync(m.PublicId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo desactivar."); return; }
+        await Notification.SuccessAsync($"Motivo «{m.Name}» desactivado.");
+        await CargarMotivosAsync();
+    }
+
+    private sealed class FormMotivo
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? LegalBasis { get; set; }
+        public bool RequiresContractEndDate { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

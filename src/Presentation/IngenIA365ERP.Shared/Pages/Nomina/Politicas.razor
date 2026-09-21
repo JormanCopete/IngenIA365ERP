@@ -1,0 +1,237 @@
+@page "/nomina/politicas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+@*
+    Feature 010 (R4, contracts/api.md §10.1): las decisiones de la cooperativa con vigencia —
+    semana laboral, exoneración 114-1, cómo propone los descuentos al retiro—. No son valores
+    legales (esos van en Parámetros legales): son lo que la contadora decidió y desde cuándo.
+*@
+
+<PageTitle>Políticas de nómina - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.CompanyPolicies.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Políticas de nómina de la empresa</h3>
+    <div>
+        <SfDatePicker TValue="DateTime" @bind-Value="_vigenteA" Placeholder="Vigentes a" FloatLabelType="FloatLabelType.Always" Width="160px" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Qué es una política</span>
+    <p>Una decisión de la cooperativa con fecha desde la que rige: qué días cuentan como hábiles, si goza de la exoneración del art. 114-1, si las vacaciones se pagan por anticipado. Cada cambio queda con su motivo y su historial; una vigencia anterior a una nómina ya aprobada se avisa, y en la exoneración se bloquea porque cambia aportes contabilizados.</p>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="PoliticaEmpresaDto" DataSource="@_politicas" AllowSorting="true">
+    <GridColumns>
+        <GridColumn Field="Key" HeaderText="Clave" Width="200" />
+        <GridColumn Field="Description" HeaderText="Qué decide" Width="360" />
+        <GridColumn HeaderText="Valor vigente" Width="180">
+            <Template>
+                @{
+                    var p = (PoliticaEmpresaDto)context;
+                    <strong>@p.ValorTexto</strong>
+                    @if (!p.TieneVigenciaRegistrada)
+                    {
+                        <span class="texto-tenue"> (defecto)</span>
+                    }
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn Field="VigenciaTexto" HeaderText="Vigencia" Width="200" />
+        <GridColumn HeaderText="Acciones" Width="140" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var p = (PoliticaEmpresaDto)context;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Historial de vigencias" OnClick="@(() => AbrirHistorialAsync(p))" />
+                    <PermissionGate Required="Payroll.CompanyPolicies.Manage">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Nueva vigencia" OnClick="@(() => AbrirNuevaVigencia(p))" />
+                    </PermissionGate>
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+</IndicadorDeCarga>
+
+@* --------------------------------------------------------------- historial --- *@
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarHistorial" Header="@($"Vigencias de {_historialDe?.Key}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaHistorial.Activa">
+            <div class="pagina">
+                @if (_historialDe is not null)
+                {
+                    <p class="texto-tenue">@_historialDe.Description · Fuente del valor vigente: @_historialDe.Source</p>
+                }
+                @if (_historial.Count == 0)
+                {
+                    <div class="sin-datos">Sin vigencias registradas: rige el valor por defecto del catálogo.</div>
+                }
+                @foreach (var v in _historial)
+                {
+                    <div class="info-card">
+                        <span class="label">@v.VigenciaTexto @(v.IsCurrent ? "· vigente" : "")</span>
+                        <p><strong>@v.ValorTexto</strong> <span class="texto-tenue">(@v.Value)</span></p>
+                        @if (!string.IsNullOrWhiteSpace(v.Notes))
+                        {
+                            <p>@v.Notes</p>
+                        }
+                        <p class="texto-tenue">Registrada por @v.CreatedBy el @v.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                    </div>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ----------------------------------------------------------- nueva vigencia --- *@
+<SfDialog @bind-Visible="_mostrarNueva" Header="@($"Nueva vigencia de {_base?.Key}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <EditForm Model="_nueva" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_base is not null)
+                    {
+                        <div class="info-card">
+                            <span class="label">@_base.Key</span>
+                            <p>@_base.Description</p>
+                            <p>Hoy: <strong>@_base.ValorTexto</strong> (@_base.VigenciaTexto)</p>
+                        </div>
+                        @if (_base.EsBooleana)
+                        {
+                            <label class="campo">
+                                Valor nuevo
+                                <select class="e-input" @bind="_nueva.Value">
+                                    <option value="true">Sí</option>
+                                    <option value="false">No</option>
+                                </select>
+                            </label>
+                        }
+                        else if (!_base.EsTextoLibre)
+                        {
+                            <label class="campo">
+                                Valor nuevo
+                                <select class="e-input" @bind="_nueva.Value">
+                                    @foreach (var a in _base.Allowed)
+                                    {
+                                        <option value="@a">@PoliticaEmpresaDto.TraducirValor(a)</option>
+                                    }
+                                </select>
+                            </label>
+                        }
+                        else
+                        {
+                            <SfTextBox @bind-Value="_nueva.Value" MaxLength="400" Placeholder="@($"Valor ({_base.Format})")" FloatLabelType="FloatLabelType.Always" />
+                            <ValidationMessage For="() => _nueva.Value" />
+                        }
+                    }
+                    <SfDatePicker TValue="DateTime" @bind-Value="_nueva.ValidFrom" Placeholder="Rige desde" FloatLabelType="FloatLabelType.Always" />
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_nueva.ValidTo" Placeholder="Rige hasta (vacío = abierta)" FloatLabelType="FloatLabelType.Always" />
+                    <label class="campo-check"><input type="checkbox" @bind="_nueva.ClosePrevious" /> Cerrar la vigencia anterior el día antes si se cruza</label>
+                    <SfTextBox @bind-Value="_nueva.Reason" MaxLength="300" Multiline="true" Placeholder="Motivo: quién lo decidió y por qué *" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _nueva.Reason" />
+                    @if (_base is not null && _nueva.ValidFrom.Date < DateTime.Today)
+                    {
+                        <div class="info-card alerta">
+                            <span class="label">Vigencia retroactiva</span>
+                            <p>Las nóminas ya aprobadas desde esa fecha leyeron el valor anterior y no se recalculan. @(_base.Key == "Exonerada114_1" ? "En la exoneración el cambio se bloquea si hay corridas aprobadas desde entonces: reversalas primero." : "Se registrará con un aviso.")</p>
+                        </div>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardado.Activa">Guardar vigencia</SfButton>
+                </div>
+            </EditForm>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _cargaHistorial = new(), _guardado = new();
+    private IReadOnlyList<PoliticaEmpresaDto> _politicas = [];
+    private DateTime _vigenteA = DateTime.Today;
+    private bool _mostrarHistorial, _mostrarNueva;
+    private PoliticaEmpresaDto? _historialDe, _base;
+    private List<VigenciaPoliticaDto> _historial = [];
+    private FormVigencia _nueva = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarPoliticasAsync(DateOnly.FromDateTime(_vigenteA));
+        if (res.IsSuccess) _politicas = res.Value ?? [];
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las políticas.");
+    }
+
+    private async Task AbrirHistorialAsync(PoliticaEmpresaDto p)
+    {
+        _historialDe = p;
+        _historial = [];
+        _mostrarHistorial = true;
+        using var carga = _cargaHistorial.Iniciar();
+        var res = await Nomina.VigenciasDePoliticaAsync(p.Key);
+        if (res.IsSuccess) _historial = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial.");
+    }
+
+    private void AbrirNuevaVigencia(PoliticaEmpresaDto p)
+    {
+        _base = p;
+        _nueva = new FormVigencia
+        {
+            Value = p.Value ?? (p.Allowed.Count > 0 ? p.Allowed[0] : string.Empty),
+            ValidFrom = DateTime.Today,
+            ClosePrevious = true,
+        };
+        _mostrarNueva = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_base is null || _guardado.Activa) return;
+        if (string.IsNullOrWhiteSpace(_nueva.Value)) { await Notification.WarningAsync("Indicá el valor."); return; }
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.NuevaVigenciaDePoliticaAsync(_base.Key, new NuevaVigenciaPoliticaRequest(
+            _nueva.Value.Trim(), DateOnly.FromDateTime(_nueva.ValidFrom), _nueva.ValidTo is { } h ? DateOnly.FromDateTime(h) : null,
+            _nueva.Reason.Trim(), _nueva.ClosePrevious));
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo registrar la vigencia.");
+            return;
+        }
+        foreach (var aviso in res.Value?.Warnings ?? [])
+            await Notification.WarningAsync(aviso);
+        await Notification.SuccessAsync("Vigencia registrada. Los borradores de liquidación quedaron desactualizados.");
+        _mostrarNueva = false;
+        await CargarAsync();
+    }
+
+    private sealed class FormVigencia
+    {
+        [Required(ErrorMessage = "El valor es obligatorio.")]
+        [StringLength(400)]
+        public string Value { get; set; } = string.Empty;
+        public DateTime ValidFrom { get; set; } = DateTime.Today;
+        public DateTime? ValidTo { get; set; }
+        public bool ClosePrevious { get; set; } = true;
+        [Required(ErrorMessage = "Indicá el motivo del cambio.")]
+        [StringLength(300)]
+        public string Reason { get; set; } = string.Empty;
+    }
+}

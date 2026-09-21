@@ -72,7 +72,17 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
     private static (int Status, string Code, string Message) MapFailure(Error error)
     {
         var code = string.IsNullOrEmpty(error.Code) ? "Generic.Failure" : error.Code;
-        var status = code switch
+        return (EstadoDe(code), code, error.Message);
+    }
+
+    /// <summary>
+    /// El estado HTTP que le toca a un código de error, la misma tabla que usa el filtro. Público para
+    /// quien entrega un <c>IResult</c> propio (la descarga de informes, <c>EntregaDeInformes</c>) y aun
+    /// así tiene que respetar el contrato: <c>*.NotFound</c> 404, negocio 422, <c>Validation.*</c> 400.
+    /// </summary>
+    public static int EstadoDe(string code)
+    {
+        return code switch
         {
             // Feature 002 — códigos específicos con semántica HTTP distinta del default.
             "Identity.Unauthenticated" => StatusCodes.Status401Unauthorized,
@@ -133,6 +143,5 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             _ when code.EndsWith(".Conflict", StringComparison.Ordinal) => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status422UnprocessableEntity
         };
-        return (status, code, error.Message);
     }
 }

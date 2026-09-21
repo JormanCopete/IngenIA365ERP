@@ -162,6 +162,18 @@ public interface IApplicationDbContext
     DbSet<PayrollPayment> PayrollPayments { get; }
     DbSet<PayslipDelivery> PayslipDeliveries { get; }
 
+    // Payroll — feature 010 (prestaciones, retiro, procedimiento 2; entrega N1)
+    DbSet<CompanyPolicy> CompanyPolicies { get; }
+    DbSet<Holiday> Holidays { get; }
+    DbSet<EmployeeBenefitOpeningBalance> EmployeeBenefitOpeningBalances { get; }
+    DbSet<VacationMovement> VacationMovements { get; }
+    DbSet<TerminationReason> TerminationReasons { get; }
+    DbSet<EmploymentTermination> EmploymentTerminations { get; }
+    DbSet<SettlementDeduction> SettlementDeductions { get; }
+    DbSet<WithholdingRateCalculation> WithholdingRateCalculations { get; }
+    DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths { get; }
+    DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }
+
     // Inventory
     DbSet<Product> Products { get; }
     DbSet<ProductGroup> ProductGroups { get; }

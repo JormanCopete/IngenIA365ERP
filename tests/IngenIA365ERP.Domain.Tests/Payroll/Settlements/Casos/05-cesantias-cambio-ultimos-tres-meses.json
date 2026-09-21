@@ -1,0 +1,21 @@
+{
+  "nombre": "Cesantías 2026 con cambio de salario en los últimos tres meses: promedio del año",
+  "descripcion": "Research R1: 2.000.000 hasta 31-10 y 2.400.000 desde 01-11 → promedio 2.066.666,67 + 249.095 → 2.315.761,67; intereses 277.891,40 (CST art. 253).",
+  "derivacion": "El cambio del 01-11 cae dentro de los 3 meses anteriores al 31-12 (CESANTIAS_VENTANA_ESTABILIDAD_MESES): se promedia el año ponderando por días. Salario: (2.000.000 × 300 + 2.400.000 × 60) / 360 = 744.000.000 / 360 = 2.066.666,67. Auxilio en ambos tramos (ambos salarios ≤ 3.501.810): 249.095. Base = 2.315.761,67. Cesantías = base × 360 / 360 = 2.315.761,67. Intereses = 2.315.761,67 × 12 % × 360 / 360 = 277.891,40. Retención: ingreso 2.400.000 + 249.095 = 50,58 UVT ≤ 350 → 0.",
+  "tipo": "Severance",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-01-01",
+  "empleado": {
+    "nombre": "Aumento en noviembre",
+    "ingreso": "2024-01-01",
+    "salarios": [
+      { "desde": "2024-01-01", "mensual": 2000000 },
+      { "desde": "2026-11-01", "mensual": 2400000 }
+    ]
+  },
+  "esperado": {
+    "lineas": { "CESANTIAS": 2315761.67, "INT_CESANTIAS": 277891.40, "RETEFTE_CESANTIAS": 0 },
+    "totales": { "devengos": 2593653.07, "deducciones": 0, "provisiones": 0, "neto": 2593653.07 },
+    "explicaciones": [ "CESANTIAS: promedio ponderado" ]
+  }
+}

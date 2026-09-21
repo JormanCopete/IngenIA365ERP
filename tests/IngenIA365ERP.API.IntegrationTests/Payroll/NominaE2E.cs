@@ -119,6 +119,15 @@ public static class NominaE2E
         politica.ValueKind.Should().Be(JsonValueKind.Object, "la semilla deja la política Payroll.AllowSameUserApproval");
         var cambio = await EnviarAsync(http, tokenAdmin, HttpMethod.Put, $"/api/admin/parametros/{politica.GetProperty("publicId").GetGuid()}", new { valor = "true" });
         cambio.IsSuccessStatusCode.Should().BeTrue($"política de aprobación: «{await cambio.Content.ReadAsStringAsync()}»");
+        // Feature 010: la misma política vive ahora en PAY_CompanyPolicies con vigencia (PayrollPolicyReader la lee
+        // de allí y sólo cae a COR_SystemSettings si la clave no existe). El seeder la deja en «false» desde 1900 en la
+        // cooperativa nueva, así que hay que abrir una vigencia en «true»; sin esto, quien calcula no aprueba (422
+        // Payroll.SegregationOfDuties) y ninguna prueba e2e de nómina llega a la aprobación.
+        var vigencia = await EnviarAsync(http, tokenAdmin, HttpMethod.Post, "/api/payroll/company-policies/AllowSameUserApproval/versions", new
+        {
+            value = "true", validFrom = new DateOnly(2000, 1, 1), reason = "Pruebas e2e: quien calcula aprueba con segunda confirmación", closePrevious = true,
+        });
+        vigencia.IsSuccessStatusCode.Should().BeTrue($"vigencia de AllowSameUserApproval: «{await vigencia.Content.ReadAsStringAsync()}»");
 
         return new Contexto { TokenAdmin = tokenAdmin, TokenSoloLectura = tokenSoloLectura, TenantPublicId = tenantPublicId };
     }

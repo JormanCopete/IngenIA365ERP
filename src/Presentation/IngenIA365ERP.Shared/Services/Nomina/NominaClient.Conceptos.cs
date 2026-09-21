@@ -63,7 +63,9 @@ public sealed record ConceptoDto(
     DateTime? ValidTo,
     bool IsActive,
     bool HasAccounts,
-    bool RegistrableComoNovedad)
+    bool RegistrableComoNovedad,
+    bool AffectsVacationBase = false,
+    string? DianElement = null)
 {
     public string NaturalezaTexto => Nature switch
     {

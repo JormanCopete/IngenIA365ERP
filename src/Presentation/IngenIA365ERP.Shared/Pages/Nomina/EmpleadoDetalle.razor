@@ -1,7 +1,10 @@
 @page "/nomina/empleados/{EmployeeId:guid}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
 @inject HttpClient Http
+@inject NominaClient Nomina
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
@@ -17,8 +20,18 @@
             <SfButton CssClass="e-primary" IconCss="e-icons e-save"
                       Disabled="@(!_hasChanges || _saving)"
                       OnClick="SaveLaborData">Guardar Cambios</SfButton>
-            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
-                      OnClick="@(() => _showTerminateConfirm = true)">Terminar Contrato</SfButton>
+            @if (_employee.Termination is { Status: 0 })
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-eye"
+                          OnClick="@AbrirDefinitiva">Ver liquidación definitiva</SfButton>
+            }
+            else
+            {
+                <PermissionGate Required="Payroll.Settlements.Calculate">
+                    <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                              OnClick="@(() => { _registroDeTerminacion?.Reiniciar(); _mostrarTerminacion = true; })">Terminar contrato</SfButton>
+                </PermissionGate>
+            }
         }
     </div>
 </div>
@@ -206,6 +219,200 @@ else
                 </ContentTemplate>
             </TabItem>
 
+            @* ===== Tab: PILA y DIAN (feature 010, contracts/api.md §12) ===== *@
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="PILA y DIAN" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div class="panel-pestana">
+                        <div class="info-card">
+                            <span class="label">Clase: @_employee.ClaseTexto</span>
+                            <p>Lo que la planilla PILA y el documento de nómina electrónica leen de la ficha. Lo que quede vacío se deriva: el tipo de cotizante desde la clase y la etapa, el lugar de trabajo y la actividad económica desde los datos de la empresa, el medio de pago desde la forma de pago.</p>
+                        </div>
+
+                        <h4>Aprendiz</h4>
+                        <div class="rejilla-campos">
+                            <div>
+                                <label>Etapa del contrato de aprendizaje @(_employee.EsAprendizOPasante ? "*" : "")</label>
+                                <SfDropDownList TValue="int?" TItem="OpcionEntera" @bind-Value="_labor.ApprenticeStage"
+                                                DataSource="@_etapas" Placeholder="@(_employee.EsAprendizOPasante ? "Obligatoria para aprendiz o pasante" : "No aplica a esta clase")" ShowClearButton="true">
+                                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                                    <DropDownListEvents TValue="int?" TItem="OpcionEntera"
+                                                        ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<int?, OpcionEntera> e) => MarkChanged())" />
+                                </SfDropDownList>
+                                <span class="hint">Lectiva: sin prestaciones y apoyo parcial. Práctica: cotiza como dependiente. La clase se cambia en «Retención y plan».</span>
+                            </div>
+                        </div>
+
+                        <h4>PILA</h4>
+                        <div class="rejilla-campos">
+                            <div>
+                                <label>Tipo de cotizante (campo 5)</label>
+                                <SfTextBox @bind-Value="_labor.PilaContributorType" Placeholder="Vacío = derivado (01, 12, 19, 51…)" HtmlAttributes="@Largo(2)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Subtipo de cotizante (campo 6)</label>
+                                <SfTextBox @bind-Value="_labor.PilaContributorSubtype" Placeholder="00 no aplica, 01 pensionado activo…" HtmlAttributes="@Largo(2)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Departamento DIVIPOLA del lugar de trabajo</label>
+                                <SfTextBox @bind-Value="_labor.DivipolaDepartment" Placeholder="2 dígitos; vacío = el de la empresa" HtmlAttributes="@Largo(2)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Municipio DIVIPOLA del lugar de trabajo</label>
+                                <SfTextBox @bind-Value="_labor.DivipolaMunicipality" Placeholder="3 dígitos" HtmlAttributes="@Largo(3)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Actividad económica (Decreto 768/2022)</label>
+                                <SfTextBox @bind-Value="_labor.EconomicActivityCode" Placeholder="Hasta 7 dígitos; vacío = la de la empresa" HtmlAttributes="@Largo(7)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Centro de trabajo (campo 62)</label>
+                                <SfTextBox @bind-Value="_labor.WorkCenter" Placeholder="Código del centro de trabajo" HtmlAttributes="@Largo(9)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div>
+                                <label>Tipo de salario</label>
+                                <SfDropDownList TValue="string" TItem="OpcionTexto" @bind-Value="_labor.SalaryTypeCode" DataSource="@_tiposSalario" Placeholder="Seleccione">
+                                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                                    <DropDownListEvents TValue="string" TItem="OpcionTexto"
+                                                        ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, OpcionTexto> e) => MarkChanged())" />
+                                </SfDropDownList>
+                            </div>
+                            <div>
+                                <label>Régimen de transición (Ley 2381/2024)</label>
+                                <SfDropDownList TValue="int" TItem="OpcionEntera" @bind-Value="_labor.PensionTransitionRegime" DataSource="@_regimenes" Placeholder="Seleccione">
+                                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                                    <DropDownListEvents TValue="int" TItem="OpcionEntera"
+                                                        ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<int, OpcionEntera> e) => MarkChanged())" />
+                                </SfDropDownList>
+                                <span class="hint">«No consta» es alerta en la PILA desde abril de 2027.</span>
+                            </div>
+                            <div class="campo-ancho">
+                                <label class="campo-check"><input type="checkbox" @bind="_labor.HighRiskPension" @bind:after="MarkChanged" /> Alto riesgo para pensión (campo 79; DIAN AltoRiesgoPension)</label>
+                                <label class="campo-check"><input type="checkbox" @bind="_labor.ForeignNotPensionObligated" @bind:after="MarkChanged" /> Extranjero no obligado a cotizar pensión (campo 8)</label>
+                                <label class="campo-check"><input type="checkbox" @bind="_labor.ColombianAbroad" @bind:after="MarkChanged" /> Colombiano en el exterior (campo 9)</label>
+                            </div>
+                        </div>
+
+                        <h4>DIAN (nómina electrónica)</h4>
+                        <div class="rejilla-campos">
+                            <div>
+                                <label>Tipo y subtipo de trabajador</label>
+                                <SfTextBox Value="@($"{(_labor.PilaContributorType ?? "derivado")} / {(_labor.PilaContributorSubtype ?? "00")}")" Readonly="true" CssClass="e-disabled" />
+                                <span class="hint">Son los mismos códigos del cotizante PILA (tabla 5.5.1 del anexo DIAN).</span>
+                            </div>
+                            <div>
+                                <label>Tipo de contrato DIAN</label>
+                                <SfDropDownList TValue="int?" TItem="OpcionEntera" @bind-Value="_labor.ContractTypeDian" DataSource="@_contratosDian" Placeholder="Seleccione" ShowClearButton="true">
+                                    <DropDownListFieldSettings Text="Name" Value="Value" />
+                                    <DropDownListEvents TValue="int?" TItem="OpcionEntera"
+                                                        ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<int?, OpcionEntera> e) => MarkChanged())" />
+                                </SfDropDownList>
+                                <span class="hint">El «Tipo de contrato» de Datos laborales es el código del legado y no se reinterpreta.</span>
+                            </div>
+                            <div>
+                                <label>Medio de pago DIAN (tabla 5.3.3.2)</label>
+                                <SfTextBox @bind-Value="_labor.DianPaymentMethodCode" Placeholder="Vacío = derivado (47 transferencia, 20 cheque, 10 efectivo)" HtmlAttributes="@Largo(3)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                            <div class="campo-ancho">
+                                <label>Dirección del lugar de trabajo</label>
+                                <SfTextBox @bind-Value="_labor.WorkAddress" Placeholder="Vacío = dirección de la empresa" HtmlAttributes="@Largo(120)"
+                                           ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => MarkChanged())" />
+                            </div>
+                        </div>
+
+                        <h4>Dispersión bancaria</h4>
+                        <div class="rejilla-campos">
+                            <div>
+                                <label>Banco de dispersión</label>
+                                <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_labor.DisbursementBankPublicId" DataSource="@_banks"
+                                                Placeholder="Vacío = el banco de la cuenta de nómina" AllowFiltering="true" ShowClearButton="true">
+                                    <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                    <DropDownListEvents TValue="Guid?" TItem="LookupOption"
+                                                        ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => MarkChanged())" />
+                                </SfDropDownList>
+                            </div>
+                            <div>
+                                <label>Código ACH del banco</label>
+                                <SfTextBox Value="@(_employee.DisbursementBankTransferCode ?? "—")" Readonly="true" CssClass="e-disabled" />
+                                <span class="hint">Viene del catálogo de bancos (Maestros › Bancos, «Código de transferencia»).</span>
+                            </div>
+                        </div>
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
+            @* ===== Tab: Prestaciones (feature 010: saldos y porcentaje vigente) ===== *@
+            <TabItem>
+                <ChildContent>
+                    <TabHeader Text="Prestaciones" />
+                </ChildContent>
+                <ContentTemplate>
+                    <div class="panel-pestana">
+                        <div class="rejilla-campos">
+                            <div class="info-card">
+                                <span class="label">Saldo inicial de prestaciones</span>
+                                @if (_employee.OpeningBalance is { } sb)
+                                {
+                                    <p>Al @sb.AsOfDate.ToString("dd/MM/yyyy") (@(sb.Kind == 2 ? "ajuste" : "apertura")): vacaciones <strong>@sb.PendingVacationDays.ToString("N2")</strong> días · cesantías <strong>@sb.AccruedSeverance.ToString("N2")</strong> · intereses <strong>@sb.AccruedSeveranceInterest.ToString("N2")</strong> · prima <strong>@sb.AccruedServiceBonus.ToString("N2")</strong></p>
+                                    <p class="texto-tenue">Digitado por @sb.EnteredBy el @sb.EnteredAt.ToLocalTime().ToString("dd/MM/yyyy")@(sb.ConsumedByRunPublicId is null ? "" : " · ya consumido por una liquidación aprobada")</p>
+                                }
+                                else
+                                {
+                                    <p>Sin saldo inicial digitado. Si ingresó antes del arranque de la nómina, la prima y las cesantías saldrían cortas.</p>
+                                }
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick='@(() => Nav.NavigateTo("/nomina/saldos-iniciales"))'>Ir a Saldos iniciales</SfButton>
+                            </div>
+                            <div class="info-card">
+                                <span class="label">Saldo de vacaciones</span>
+                                @if (_employee.VacationBalance is { } sv)
+                                {
+                                    <p><strong>@sv.PendingDays.ToString("N2")</strong> días hábiles pendientes al @sv.AsOf.ToString("dd/MM/yyyy")</p>
+                                    <p class="texto-tenue">Se deriva de los días causados, el saldo inicial, los disfrutes, compensaciones y ajustes registrados; el detalle paso a paso y los movimientos están en Vacaciones.</p>
+                                }
+                                else
+                                {
+                                    <p class="texto-tenue">Sin saldo calculado todavía: se deriva de los días causados, el saldo inicial y los disfrutes registrados.</p>
+                                }
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-calendar" OnClick='@(() => Nav.NavigateTo("/nomina/vacaciones"))'>Ir a Vacaciones</SfButton>
+                            </div>
+                            <div class="info-card">
+                                <span class="label">Retención en la fuente</span>
+                                @if (_employee.CurrentWithholdingRate is { } tasa)
+                                {
+                                    <p>Procedimiento @tasa.Procedure · porcentaje fijo vigente <strong>@tasa.RatePercent.ToString("0.##") %</strong> (@tasa.OrigenTexto), desde @tasa.ValidFrom.ToString("dd/MM/yyyy")@(tasa.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</p>
+                                }
+                                else
+                                {
+                                    <p class="texto-tenue">Sin porcentaje fijo vigente: en procedimiento 1 se aplica la tabla cada período; en procedimiento 2 la liquidación se bloquea hasta registrarlo en «Retención y plan».</p>
+                                }
+                            </div>
+                            <div class="info-card">
+                                <span class="label">Terminación del contrato</span>
+                                @if (_employee.Termination is { } t)
+                                {
+                                    <p>@t.EstadoTexto el @t.TerminationDate.ToString("dd/MM/yyyy") · motivo <strong>@t.ReasonName</strong>@(t.GeneratesSeverancePay ? " (genera indemnización)" : "")</p>
+                                    <p class="texto-tenue">@(t.Status == 0 ? "La liquidación definitiva está en borrador: la ficha sigue vigente hasta aprobarla." : t.Status == 1 ? "Liquidada y aprobada: la ficha quedó retirada; un reingreso es una ficha nueva." : "")</p>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye" OnClick="@AbrirDefinitiva">Ver la liquidación definitiva</SfButton>
+                                }
+                                else
+                                {
+                                    <p class="texto-tenue">Sin terminación registrada. El retiro se registra con «Terminar contrato»: crea la liquidación definitiva en borrador y la ficha se cierra al aprobarla.</p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </ContentTemplate>
+            </TabItem>
+
             @* ===== Tab 3: Historial Salarial ===== *@
             <TabItem>
                 <ChildContent>
@@ -213,15 +420,15 @@ else
                 </ChildContent>
                 <ContentTemplate>
                     <div class="panel-pestana">
-                        <SfGrid TValue="SalaryHistoryItem" DataSource="@_employee.SalaryHistory"
+                        <SfGrid TValue="HistorialSalarialFichaDto" DataSource="@_employee.SalaryHistory"
                                 AllowPaging="true" AllowSorting="true">
                             <GridPageSettings PageSize="15" />
                             <GridColumns>
-                                <GridColumn Field="@nameof(SalaryHistoryItem.EffectiveDate)" HeaderText="Fecha Vigencia" Width="160"
+                                <GridColumn Field="@nameof(HistorialSalarialFichaDto.EffectiveDate)" HeaderText="Fecha Vigencia" Width="160"
                                             Format="dd/MM/yyyy" Type="ColumnType.Date" />
-                                <GridColumn Field="@nameof(SalaryHistoryItem.NewSalary)" HeaderText="Nuevo Salario" Width="180"
+                                <GridColumn Field="@nameof(HistorialSalarialFichaDto.NewSalary)" HeaderText="Nuevo Salario" Width="180"
                                             Format="N2" TextAlign="TextAlign.Right" />
-                                <GridColumn Field="@nameof(SalaryHistoryItem.UserName)" HeaderText="Modificado Por" Width="200" />
+                                <GridColumn Field="@nameof(HistorialSalarialFichaDto.UserName)" HeaderText="Modificado Por" Width="200" />
                             </GridColumns>
                         </SfGrid>
                         @if (_employee.SalaryHistory.Count == 0)
@@ -239,13 +446,13 @@ else
                 </ChildContent>
                 <ContentTemplate>
                     <div class="panel-pestana">
-                        <SfGrid TValue="RecentEntryItem" DataSource="@_employee.RecentEntries"
+                        <SfGrid TValue="MovimientoRecienteFichaDto" DataSource="@_employee.RecentEntries"
                                 AllowPaging="true" AllowSorting="true">
                             <GridPageSettings PageSize="15" />
                             <GridColumns>
-                                <GridColumn Field="@nameof(RecentEntryItem.PeriodDescription)" HeaderText="Periodo" Width="200" />
-                                <GridColumn Field="@nameof(RecentEntryItem.ConceptName)" HeaderText="Concepto" Width="300" />
-                                <GridColumn Field="@nameof(RecentEntryItem.Amount)" HeaderText="Valor" Width="160"
+                                <GridColumn Field="@nameof(MovimientoRecienteFichaDto.PeriodDescription)" HeaderText="Periodo" Width="200" />
+                                <GridColumn Field="@nameof(MovimientoRecienteFichaDto.ConceptName)" HeaderText="Concepto" Width="300" />
+                                <GridColumn Field="@nameof(MovimientoRecienteFichaDto.Amount)" HeaderText="Valor" Width="160"
                                             Format="N2" TextAlign="TextAlign.Right" />
                             </GridColumns>
                         </SfGrid>
@@ -271,37 +478,11 @@ else
     </IndicadorDeCarga>
 }
 
-@* ===== Dialogo Terminar Contrato ===== *@
-<SfDialog @bind-Visible="_showTerminateConfirm" Header="Terminar Contrato" Width="450px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <IndicadorDeCarga Cargando="@_saving" Texto="Guardando…">
-            <div class="panel-pestana">
-                <p style="margin-bottom:var(--pad-lg);">
-                    ¿Seguro que desea terminar el contrato de
-                    <strong>@_employee?.FirstName @_employee?.LastName</strong>?
-                </p>
-                <div style="display:flex;flex-direction:column;gap:var(--gap-md);">
-                    <div>
-                        <label>Fecha de Terminacion <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />
-                    </div>
-                    <div>
-                        <label>Motivo</label>
-                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional, hasta 120 caracteres)" Multiline="true"
-                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
-                    </div>
-                </div>
-            </div>
-        </IndicadorDeCarga>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showTerminateConfirm = false)" />
-        <DialogButton Content="Terminar Contrato" CssClass="e-danger" IsPrimary="true"
-                      OnClick="TerminateContract" Disabled="@_saving" />
-    </DialogButtons>
-</SfDialog>
+@* ===== Terminar contrato (feature 010, US3): registra la terminación y abre la definitiva ===== *@
+<DialogoDeTerminacion @ref="_registroDeTerminacion" @bind-Visible="_mostrarTerminacion"
+                      EmpleadoPublicId="@EmployeeId" EmpleadoNombre="@($"{_employee?.FirstName} {_employee?.LastName}".Trim())"
+                      ContratoDeLaFicha="@_employee?.Dian?.ContractTypeDian"
+                      OnRegistrada="@(t => Nav.NavigateTo($"/nomina/liquidacion-definitiva/{t.RunPublicId}"))" />
 
 @code {
     [Parameter] public Guid EmployeeId { get; set; }
@@ -309,7 +490,7 @@ else
     private bool _loading = true;
     private bool _hasChanges;
     private bool _saving;
-    private EmployeeDetailDto? _employee;
+    private FichaEmpleadoDto? _employee;
     private LaborData _labor = new();
 
     // Lookups
@@ -336,10 +517,9 @@ else
         new(2, "Corriente")
     };
 
-    // Terminate dialog
-    private bool _showTerminateConfirm;
-    private DateTime _terminationDate = DateTime.Today;
-    private string _terminationCause = "";
+    // Terminar contrato (feature 010): el diálogo compartido registra la terminación y navega a la definitiva.
+    private bool _mostrarTerminacion;
+    private DialogoDeTerminacion? _registroDeTerminacion;
 
     protected override async Task OnInitializedAsync()
     {
@@ -357,29 +537,47 @@ else
 
     private async Task LoadEmployee()
     {
-        try
+        var res = await Nomina.FichaDeEmpleadoAsync(EmployeeId);
+        if (!res.IsSuccess || res.Value is null)
         {
-            _employee = await Http.GetFromJsonAsync<EmployeeDetailDto>($"/api/payroll/employees/{EmployeeId}");
-            if (_employee is null) return;
+            _employee = null;
+            await Notification.ErrorAsync($"Error al cargar empleado: {res.ErrorMessage}");
+            return;
+        }
+        _employee = res.Value;
 
-            // Sincroniza el modelo editable con la respuesta del backend.
-            _labor = new LaborData
-            {
-                BaseSalary = _employee.Salary,
-                ContractType = _employee.ContractType,
-                HealthInsurancePublicId = _employee.HealthInsurancePublicId,
-                PensionProviderPublicId = _employee.PensionProviderPublicId,
-                WorkRiskProviderPublicId = _employee.WorkRiskProviderPublicId,
-                BankPublicId = _employee.PayrollBankPublicId,
-                BankAccountNumber = _employee.PayrollBankAccountNumber ?? "",
-                AccountType = _employee.PayrollBankAccountType
-            };
-            _hasChanges = false;
-        }
-        catch (Exception ex)
+        // Sincroniza el modelo editable con la respuesta del backend.
+        var pila = _employee.Pila;
+        var dian = _employee.Dian;
+        _labor = new LaborData
         {
-            await Notification.ErrorAsync($"Error al cargar empleado: {ex.Message}");
-        }
+            BaseSalary = _employee.Salary,
+            ContractType = _employee.ContractType,
+            HealthInsurancePublicId = _employee.HealthInsurancePublicId,
+            PensionProviderPublicId = _employee.PensionProviderPublicId,
+            WorkRiskProviderPublicId = _employee.WorkRiskProviderPublicId,
+            BankPublicId = _employee.PayrollBankPublicId,
+            BankAccountNumber = _employee.PayrollBankAccountNumber ?? "",
+            AccountType = _employee.PayrollBankAccountType,
+            // Feature 010
+            ApprenticeStage = _employee.ApprenticeStage,
+            DisbursementBankPublicId = _employee.DisbursementBankPublicId,
+            PilaContributorType = pila?.ContributorType,
+            PilaContributorSubtype = pila?.ContributorSubtype,
+            DivipolaDepartment = pila?.DivipolaDepartment,
+            DivipolaMunicipality = pila?.DivipolaMunicipality,
+            EconomicActivityCode = pila?.EconomicActivityCode,
+            WorkCenter = pila?.WorkCenter,
+            SalaryTypeCode = pila?.SalaryTypeCode ?? "F",
+            ForeignNotPensionObligated = pila?.ForeignNotPensionObligated ?? false,
+            ColombianAbroad = pila?.ColombianAbroad ?? false,
+            PensionTransitionRegime = pila?.PensionTransitionRegime ?? 0,
+            HighRiskPension = pila?.HighRiskPension ?? false,
+            ContractTypeDian = dian?.ContractTypeDian,
+            DianPaymentMethodCode = dian?.PaymentMethodCode,
+            WorkAddress = dian?.WorkAddress,
+        };
+        _hasChanges = false;
     }
 
     private async Task LoadEps()
@@ -435,13 +633,25 @@ else
             await Notification.WarningAsync("El salario base debe ser mayor a 0.");
             return;
         }
+        // Validación del lado del cliente alineada con PilaEmployeeInputValidator (Principio VIII).
+        if (_employee.EsAprendizOPasante && _labor.ApprenticeStage is null)
+        {
+            await Notification.WarningAsync("Un aprendiz o pasante necesita la etapa (lectiva o práctica) en la pestaña «PILA y DIAN».");
+            return;
+        }
+        if (string.IsNullOrEmpty(_labor.DivipolaDepartment) != string.IsNullOrEmpty(_labor.DivipolaMunicipality))
+        {
+            await Notification.WarningAsync("Departamento y municipio DIVIPOLA van juntos: los dos o ninguno.");
+            return;
+        }
 
         _saving = true;
         try
         {
             // Payload alineado a UpdateEmployeeCommand (banca renombrada a Payroll*). El comando
             // reemplaza la ficha entera: lo que esta pantalla no edita (clase ARL, fondo de
-            // cesantías, caja, fecha de ingreso) va tal como llegó, o el PUT lo borraría.
+            // cesantías, caja, fecha de ingreso) va tal como llegó, o el PUT lo borraría. Los
+            // bloques PILA/DIAN (feature 010) viajan completos; los enums, por nombre.
             var payload = new
             {
                 BaseSalary = _labor.BaseSalary,
@@ -455,7 +665,36 @@ else
                 FamilyCompensationFundPublicId = _employee.FamilyCompensationFundPublicId,
                 PayrollBankPublicId = _labor.BankPublicId,
                 PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_labor.BankAccountNumber) ? null : _labor.BankAccountNumber,
-                PayrollBankAccountType = _labor.AccountType
+                PayrollBankAccountType = _labor.AccountType,
+                Pila = new
+                {
+                    ContributorType = Vacio(_labor.PilaContributorType),
+                    ContributorSubtype = Vacio(_labor.PilaContributorSubtype),
+                    DivipolaDepartment = Vacio(_labor.DivipolaDepartment),
+                    DivipolaMunicipality = Vacio(_labor.DivipolaMunicipality),
+                    EconomicActivityCode = Vacio(_labor.EconomicActivityCode),
+                    WorkCenter = Vacio(_labor.WorkCenter),
+                    SalaryTypeCode = _labor.SalaryTypeCode,
+                    ForeignNotPensionObligated = _labor.ForeignNotPensionObligated,
+                    ColombianAbroad = _labor.ColombianAbroad,
+                    PensionTransitionRegime = _labor.PensionTransitionRegime switch { 1 => "Yes", 2 => "No", _ => "Unknown" },
+                    HighRiskPension = _labor.HighRiskPension,
+                },
+                Dian = new
+                {
+                    ContractTypeDian = _labor.ContractTypeDian switch
+                    {
+                        1 => "FixedTerm", 2 => "Indefinite", 3 => "WorkOrLabor", 4 => "Apprenticeship", 5 => "Internship", _ => (string?)null,
+                    },
+                    HighRiskPension = _labor.HighRiskPension,
+                    PaymentMethodCode = Vacio(_labor.DianPaymentMethodCode),
+                    WorkAddress = Vacio(_labor.WorkAddress),
+                },
+                ApprenticeStage = _labor.ApprenticeStage switch { 1 => "Lective", 2 => "Practical", _ => (string?)null },
+                // Nulo = no cambia (contracts/api.md §12): limpiar el desplegable manda la orden de quitarla (D-41).
+                ClearApprenticeStage = _labor.ApprenticeStage is null && _employee.ApprenticeStage is not null,
+                DisbursementBankPublicId = _labor.DisbursementBankPublicId,
+                ClearDisbursementBank = _labor.DisbursementBankPublicId is null && _employee.DisbursementBankPublicId is not null,
             };
 
             var res = await Http.PutAsJsonAsync($"/api/payroll/employees/{EmployeeId}", payload);
@@ -482,76 +721,11 @@ else
 
     // --- Terminar contrato ---
 
-    private async Task TerminateContract()
-    {
-        if (_saving) return;
-
-        _saving = true;
-        try
-        {
-            var payload = new
-            {
-                TerminationDate = _terminationDate,
-                TerminationCause = _terminationCause
-            };
-            var res = await Http.PostAsJsonAsync($"/api/payroll/employees/{EmployeeId}/terminate", payload);
-            if (res.IsSuccessStatusCode)
-            {
-                await Notification.SuccessAsync("Contrato terminado correctamente.");
-                _showTerminateConfirm = false;
-                _terminationCause = "";
-                await LoadEmployee();
-            }
-            else
-            {
-                await Notification.ShowErrorAsync(res, "Error al terminar contrato");
-            }
-        }
-        catch (Exception ex)
-        {
-            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
+    /// <summary>La pantalla de la definitiva filtrada por este empleado: si tiene una terminación viva, abre su liquidación.</summary>
+    private void AbrirDefinitiva() => Nav.NavigateTo($"/nomina/liquidacion-definitiva?empleado={EmployeeId}");
 
     // --- Modelos ---
 
-    /// <summary>Coincide con EmployeeDetailDto del backend (modelo actualizado).</summary>
-    private class EmployeeDetailDto
-    {
-        public Guid PublicId { get; set; }
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string IdentificationNumber { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string Phone { get; set; } = "";
-        public string Mobile { get; set; } = "";
-        public string Address { get; set; } = "";
-        public decimal Salary { get; set; }
-        public int ContractType { get; set; }
-        public DateTime HireDate { get; set; }
-        public DateTime? TerminationDate { get; set; }
-        public string TerminationCause { get; set; } = "";
-        public int Status { get; set; }
-        public string HealthInsuranceName { get; set; } = "";
-        public string PensionProviderName { get; set; } = "";
-        public string WorkRiskProviderName { get; set; } = "";
-        public string PayrollBankAccountNumber { get; set; } = "";
-        public int PayrollBankAccountType { get; set; }
-        public Guid? HealthInsurancePublicId { get; set; }
-        public Guid? PensionProviderPublicId { get; set; }
-        public Guid? WorkRiskProviderPublicId { get; set; }
-        public Guid? WorkRiskRatePublicId { get; set; }
-        public Guid? SeveranceProviderPublicId { get; set; }
-        public Guid? FamilyCompensationFundPublicId { get; set; }
-        public Guid? PayrollBankPublicId { get; set; }
-        public string? PayrollBankName { get; set; }
-        public List<SalaryHistoryItem> SalaryHistory { get; set; } = new();
-        public List<RecentEntryItem> RecentEntries { get; set; } = new();
-    }
 
     private class LaborData
     {
@@ -563,21 +737,41 @@ else
         public Guid? BankPublicId { get; set; }
         public string BankAccountNumber { get; set; } = "";
         public int AccountType { get; set; }
+
+        // Feature 010 (contracts/api.md §12)
+        public int? ApprenticeStage { get; set; }
+        public Guid? DisbursementBankPublicId { get; set; }
+        public string? PilaContributorType { get; set; }
+        public string? PilaContributorSubtype { get; set; }
+        public string? DivipolaDepartment { get; set; }
+        public string? DivipolaMunicipality { get; set; }
+        public string? EconomicActivityCode { get; set; }
+        public string? WorkCenter { get; set; }
+        public string SalaryTypeCode { get; set; } = "F";
+        public bool ForeignNotPensionObligated { get; set; }
+        public bool ColombianAbroad { get; set; }
+        public int PensionTransitionRegime { get; set; }
+        public bool HighRiskPension { get; set; }
+        public int? ContractTypeDian { get; set; }
+        public string? DianPaymentMethodCode { get; set; }
+        public string? WorkAddress { get; set; }
     }
 
-    private class SalaryHistoryItem
-    {
-        public DateTime EffectiveDate { get; set; }
-        public decimal NewSalary { get; set; }
-        public string? UserName { get; set; }
-    }
+    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private static Dictionary<string, object> Largo(int max) => new() { { "maxlength", max.ToString() } };
 
-    private class RecentEntryItem
-    {
-        public string ConceptName { get; set; } = "";
-        public decimal? Amount { get; set; }
-        public string PeriodDescription { get; set; } = "";
-    }
+    private record OpcionEntera(int? Value, string Name);
+    private record OpcionTexto(string Value, string Name);
+
+    private readonly List<OpcionEntera> _etapas = [new(1, "Lectiva"), new(2, "Práctica")];
+    private readonly List<OpcionEntera> _regimenes = [new(0, "No consta"), new(1, "Sí, en transición"), new(2, "No")];
+    private readonly List<OpcionEntera> _contratosDian =
+    [
+        new(1, "1 · Término fijo"), new(2, "2 · Indefinido"), new(3, "3 · Obra o labor"), new(4, "4 · Aprendizaje"), new(5, "5 · Prácticas o pasantías"),
+    ];
+    private readonly List<OpcionTexto> _tiposSalario = [new("F", "F · Fijo"), new("V", "V · Variable"), new("X", "X · Integral")];
+
+
 
     private class LookupRaw
     {

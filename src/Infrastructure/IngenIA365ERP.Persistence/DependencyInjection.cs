@@ -205,6 +205,10 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.WorkRiskClassesSeeder>();
+        // Feature 010: motivos de retiro, festivos de la Ley 51 y políticas por empresa (T017).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TerminationReasonsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.HolidaysSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CompanyPoliciesSeeder>();
         // Contabilidad (feature 009): tipos de comprobante (reemplaza al NM de nomina) y tipos de documento cruce, desde JSON incrustado.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AccountCatalogsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.FinancialStatementItemsSeeder>();

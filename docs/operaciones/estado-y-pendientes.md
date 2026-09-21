@@ -1,6 +1,6 @@
 # Estado de la plataforma y pendientes
 
-> Corte: **2026-09-15**. Actualizar al cerrar cada pendiente.
+> Corte: **2026-09-21**. Actualizar al cerrar cada pendiente.
 > Complementa [despliegue-infraestructura.md](despliegue-infraestructura.md) (diseño e
 > instalación) y, en el repositorio GitOps, `docs/backups.md` y
 > `docs/mongo-replica-set.md`.
@@ -435,6 +435,52 @@ Lo que sigue exigiendo al dueño (memoria del proyecto y `specs/009-contabilidad
 Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de libros vacíos.
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
+
+#### P16 — Feature 010 (nómina completa): N1 terminada en su rama; N2–N4 pendientes; sin merge ni despliegue
+
+La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
+definitiva, con políticas por empresa, festivos, saldos iniciales y ficha PILA/DIAN— está
+**completa en la rama `010-nomina-prestaciones-pila-dian`** (desde `develop` `5ccb695`; spec-kit
+completo: spec, clarify, plan con D-01..D-41, 153 tareas; T001–T075 cerradas el 2026-09-21).
+Se construyó por olas en worktrees, se revisó con seis lentes adversariales y dos refutadores
+por hallazgo (49 hallazgos únicos, 44 confirmados y corregidos en seis lotes —entre ellos
+salario del último tramo pagado dos veces por la definitiva y la ordinaria, saldo inicial
+sumado en vez de reemplazado, ajuste de provisión de vacaciones sobre toda la provisión,
+recaudo de Cartera anidado en la transacción, AccountingAuditEmitter con el Id interno del
+tenant—) y quedó verde: 200 Domain, 1.035 Application, 106 Architecture, 70 Shared y 161 de integración (160 pasan, 1 omitida)
+con Docker (colección «Nomina e2e» con las cuatro e2e nuevas). La e2e completa atrapó además
+un defecto que las aisladas no veían (empleado sin provisión acumulada dejaba la provisión en
+negativo). Manual: [liquidaciones-especiales.md](../manual/liquidaciones-especiales.md); runbook:
+[nomina-primer-periodo.md](nomina-primer-periodo.md) §4d. **`develop` y los ambientes no se han tocado.**
+
+Lo que sigue y a quién le toca:
+
+1. **Usuario**: confirmar la rama y autorizar el merge a `develop` (T076); el pipeline la lleva
+   a DEV/QA y allí se verifica contra la base (`PAY_PayrollRuns.Kind = 0` en las previas y el
+   mismo conteo, tablas nuevas, 19 recursos `Payroll.*` en `SEC_Permissions` —los siembra la
+   API al arrancar, no el DbMigrator—, semillas 72–75, `legal-parameters/missing?process=Settlements`
+   vacío). Nota: `NominaPrestacionesYDian` se corrigió en la rama antes de salir; sólo las bases
+   locales la aplicaron con la versión anterior y ya se alinearon a mano.
+2. **QA manual por rol** (`quickstart.md` §4) y **validación de la contadora** (SC-001: prima,
+   cesantías e indemnización reconstruidas desde la explicación; confirmaciones 8a, 8b, 8d, 8e,
+   8i, 8j de `research.md`, más D-31: días del disfrute por calendario comercial). Bloqueante
+   para producción (T077).
+3. **Producción** (T078) sólo con «sí, empujalo»: `pg_dump -Fc` por cooperativa y de
+   `ingenia365erp_admin`, segundo revisor de las dos migraciones (aditivas) en su cabecera, y
+   en `cooflopal` digitar antes lo de §4d del runbook (cuentas de los 16 conceptos, políticas,
+   festivos, saldos iniciales al 30-11-2026 validados).
+4. **N2** (PILA por Aportes en Línea planilla E y retención procedimiento 2, T079–T107),
+   **N3** (nómina electrónica DIAN con el servicio central sin estado, modo «software propio»
+   primero, T108–T135) y **N4** (dispersión bancaria, T136–T153) siguen en la misma rama o en
+   ramas hijas; cada una con su migración par (`NominaPilaYNominaElectronica`, `NominaDispersionBancaria`).
+   Lo que el dueño debe aportar antes: layout del archivo de AV Villas, registro de cada
+   cooperativa en el catálogo DIAN (SoftwareID, PIN, TestSetId) con su certificado y set de
+   pruebas aceptado, acceso al validador de Aportes en Línea, SMMLV/UVT 2027.
+5. Deuda conocida de N1 (en `plan.md` D-29 y el manual §9): los aportes patronales y
+   provisiones del último tramo de una definitiva no los calcula ninguna corrida (N2 los toma
+   de la corrida `Settlement`); los devengos variables de la definitiva no entran al promedio
+   de su propia prima/cesantías; archivo plano de consignación por fondo en N4; recaudo en
+   Cartera probado sólo en Application.Tests hasta que exista desembolso por HTTP.
 
 ### 🟡 Prioridad media
 

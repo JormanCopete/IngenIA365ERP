@@ -1,0 +1,25 @@
+{
+  "nombre": "Cesantías 2026 con la provisión acumulada mayor que lo liquidado: liberación negativa; intereses con provisión corta: gasto",
+  "descripcion": "FR-004 y edge case de la spec: provisión mayor → se libera (ajuste negativo, el poster invierte débito y crédito); menor → la diferencia va al gasto.",
+  "derivacion": "Cesantías = (2.500.000 + 249.095) × 360/360 = 2.749.095; intereses = 2.749.095 × 12 % = 329.891,40. Provisión acumulada de cesantías 2.800.000 → ajuste = 2.749.095 − 2.800.000 = −50.905 (liberación). Provisión de intereses 320.000 → ajuste = 329.891,40 − 320.000 = 9.891,40 (gasto). Total de ajustes (provisiones) = −50.905 + 9.891,40 = −41.013,60. Devengos 3.078.986,40; retención sobre intereses 0 (52,49 UVT ≤ 350).",
+  "tipo": "Severance",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-01-01",
+  "empleado": {
+    "nombre": "Provisionado de más",
+    "ingreso": "2024-01-01",
+    "salarios": [ { "desde": "2024-01-01", "mensual": 2500000 } ]
+  },
+  "provisiones": { "PROV_CESANTIAS": 2800000, "PROV_INT_CESANTIAS": 320000 },
+  "esperado": {
+    "lineas": {
+      "CESANTIAS": 2749095,
+      "INT_CESANTIAS": 329891.40,
+      "RETEFTE_CESANTIAS": 0,
+      "CESANTIAS_AJUSTE_PROV": -50905,
+      "INT_CESANTIAS_AJUSTE_PROV": 9891.40
+    },
+    "totales": { "devengos": 3078986.40, "deducciones": 0, "provisiones": -41013.60, "neto": 3078986.40 },
+    "explicaciones": [ "CESANTIAS_AJUSTE_PROV: Liberación", "INT_CESANTIAS_AJUSTE_PROV: Gasto adicional" ]
+  }
+}

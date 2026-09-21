@@ -28,6 +28,9 @@ public class PayrollNoveltyConfiguration : IEntityTypeConfiguration<PayrollNovel
         builder.HasOne(e => e.PayPeriod).WithMany().HasForeignKey(e => e.PayPeriodId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Employee).WithMany().HasForeignKey(e => e.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.ConceptDefinition).WithMany().HasForeignKey(e => e.ConceptDefinitionId).OnDelete(DeleteBehavior.Restrict);
+        // Feature 010 (R6): la novedad que dejó un disfrute de vacaciones apunta a su movimiento.
+        builder.HasOne<VacationMovement>().WithMany().HasForeignKey(e => e.VacationMovementId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.VacationMovementId).HasDatabaseName("IX_PAY_Novelties_VacationMovement");
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

@@ -1,0 +1,54 @@
+{
+  "casos": [
+    {
+      "nombre": "Cesantías 2026 con saldo inicial al 30-11 digitado: tramo inicial explicado",
+      "descripcion": "Research R3 (FR-007): el saldo inicial entra como tramo propio, la proporción sigue desde el día siguiente y la explicación dice quién lo digitó y cuándo. Los intereses se liquidan sobre el total del año.",
+      "derivacion": "Saldo inicial al 30-11-2026: 2.428.337,08 por 330 días (= 2.649.095 × 330/360, lo que el sistema anterior tenía causado). Tramo 01-12 a 31-12 = 30 días: (2.400.000 + 249.095) / 30 × 30 × 30 / 360 = 220.757,9167. Cesantías = 2.428.337,08 + 220.757,9167 = 2.649.094,9967 → 2.649.095,00 (coincide con el año completo 2.649.095 × 360/360). Intereses = 2.649.095 × 12 % × (330 + 30) / 360 = 317.891,40; los 267.117,08 de intereses del saldo no se suman (se informan). Retención: 50,58 UVT ≤ 350 → 0.",
+      "tipo": "Severance",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-01-01",
+      "empleado": {
+        "nombre": "Antiguo con saldo",
+        "ingreso": "2020-01-15",
+        "salarios": [ { "desde": "2020-01-15", "mensual": 2400000 } ]
+      },
+      "saldoInicial": {
+        "fecha": "2026-11-30",
+        "cesantias": 2428337.08,
+        "diasCesantias": 330,
+        "interesesCesantias": 267117.08,
+        "digitadoPor": "Rafaela Lastra",
+        "digitadoEl": "2026-12-01"
+      },
+      "politicas": { "arranqueNomina": "2026-12-01" },
+      "esperado": {
+        "lineas": { "CESANTIAS": 2649095.00, "INT_CESANTIAS": 317891.40, "RETEFTE_CESANTIAS": 0 },
+        "totales": { "devengos": 2966986.40, "deducciones": 0, "provisiones": 0, "neto": 2966986.40 },
+        "explicaciones": [
+          "CESANTIAS: Saldo inicial de cesantías al 30/11/2026 digitado por Rafaela Lastra el 01/12/2026",
+          "INT_CESANTIAS: 360/360"
+        ]
+      }
+    },
+    {
+      "nombre": "Mismo empleado sin saldo inicial: se calcula desde el historial y se advierte",
+      "descripcion": "Edge case de la spec: ingreso anterior al arranque de la nómina y sin saldo inicial registrado → advertencia y bandera OpeningBalanceMissing; el año completo sale del historial de salarios.",
+      "derivacion": "Sin saldo: cesantías 01-01 a 31-12 = 360 días × 2.649.095 / 360 = 2.649.095; intereses 317.891,40. Bandera OpeningBalanceMissing porque el ingreso (15-01-2020) es anterior al arranque (01-12-2026).",
+      "tipo": "Severance",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-01-01",
+      "empleado": {
+        "nombre": "Antiguo sin saldo",
+        "ingreso": "2020-01-15",
+        "salarios": [ { "desde": "2020-01-15", "mensual": 2400000 } ]
+      },
+      "politicas": { "arranqueNomina": "2026-12-01" },
+      "esperado": {
+        "lineas": { "CESANTIAS": 2649095, "INT_CESANTIAS": 317891.40, "RETEFTE_CESANTIAS": 0 },
+        "totales": { "devengos": 2966986.40, "deducciones": 0, "provisiones": 0, "neto": 2966986.40 },
+        "banderas": "OpeningBalanceMissing",
+        "advertencias": [ "no tiene saldo inicial de prestaciones registrado" ]
+      }
+    }
+  ]
+}

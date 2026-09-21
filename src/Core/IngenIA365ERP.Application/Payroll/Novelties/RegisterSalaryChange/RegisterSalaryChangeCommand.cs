@@ -120,6 +120,10 @@ public sealed class RegisterSalaryChangeCommandHandler(
             .ToListAsync(ct);
         foreach (var periodId in periodosAfectados)
             await staleMarker.MarkStaleAsync(periodId, $"cambio de salario de {employee.PublicId} con efecto {efecto:yyyy-MM-dd}", ct);
+        // Feature 010 (revisión N1): también los borradores de prima, cesantías, vacaciones o definitiva del empleado
+        // cuyo corte alcanza la fecha de efecto, porque su base cambia.
+        await staleMarker.MarkSettlementDraftsStaleAsync([employee.Id], DateOnly.FromDateTime(efecto),
+            $"cambio de salario de {employee.PublicId} con efecto {efecto:yyyy-MM-dd}", ct);
 
         await db.SaveChangesAsync(ct);
 

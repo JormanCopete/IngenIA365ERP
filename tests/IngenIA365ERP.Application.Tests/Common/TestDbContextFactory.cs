@@ -71,6 +71,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine>();
     public DbSet<PayrollPayment> PayrollPayments => Set<PayrollPayment>();
     public DbSet<PayslipDelivery> PayslipDeliveries => Set<PayslipDelivery>();
+    // === Nomina (feature 010, entrega N1): liquidaciones especiales y su parametrizacion ===
+    public DbSet<CompanyPolicy> CompanyPolicies => Set<CompanyPolicy>();
+    public DbSet<Holiday> Holidays => Set<Holiday>();
+    public DbSet<EmployeeBenefitOpeningBalance> EmployeeBenefitOpeningBalances => Set<EmployeeBenefitOpeningBalance>();
+    public DbSet<VacationMovement> VacationMovements => Set<VacationMovement>();
+    public DbSet<TerminationReason> TerminationReasons => Set<TerminationReason>();
+    public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
+    public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
+    public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
+    public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
+    public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
     // TenantBranches salio de IApplicationDbContext: es del plano de control.
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===
@@ -138,10 +149,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
     DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
-    DbSet<LoanPortfolio> IApplicationDbContext.LoanPortfolios => throw new NotImplementedException();
-    DbSet<LendingTransaction> IApplicationDbContext.LendingTransactions => throw new NotImplementedException();
-    DbSet<PendingInstallment> IApplicationDbContext.PendingInstallments => throw new NotImplementedException();
-    DbSet<CreditLineParameter> IApplicationDbContext.CreditLineParameters => throw new NotImplementedException();
+    // Feature 010: la definitiva lee Cartera por persona (FR-018a) y, al aprobar, recauda de verdad
+    // (RecaudoDeCredito: cuotas pendientes, transacción RC y comprobante por el contrato).
+    public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
+    public DbSet<LendingTransaction> LendingTransactions => Set<LendingTransaction>();
+    public DbSet<PendingInstallment> PendingInstallments => Set<PendingInstallment>();
+    public DbSet<CreditLineParameter> CreditLineParameters => Set<CreditLineParameter>();
     DbSet<TransactionCode> IApplicationDbContext.TransactionCodes => throw new NotImplementedException();
     DbSet<SavingsParameter> IApplicationDbContext.SavingsParameters => throw new NotImplementedException();
     DbSet<InterestRate> IApplicationDbContext.InterestRates => throw new NotImplementedException();
@@ -320,6 +333,45 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollPayment>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayslipDelivery>(b => b.Ignore("RowVersion"));
+
+        // Feature 010: corridas con Kind y las tablas de N1. BankAccountType es el alias en Domain de
+        // PayrollBankAccountType (misma columna en la base); aqui tambien se ignora para no duplicarla.
+        modelBuilder.Entity<Employee>(b => b.Ignore(e => e.BankAccountType));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b =>
+        {
+            b.Ignore(r => r.EsEspecial); b.Ignore(r => r.EsCoherente); b.Ignore(r => r.SourceTypeName);
+        });
+        modelBuilder.Entity<CompanyPolicy>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Holiday>(b => { b.Ignore(h => h.EsSembrado); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<EmployeeBenefitOpeningBalance>(b => { b.Ignore(x => x.EsEditable); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<VacationMovement>(b =>
+        {
+            b.Ignore(x => x.EstaVivo); b.Ignore("RowVersion");
+            // Como en VacationMovementConfiguration (US4): la corrida navega al movimiento que la originó y el
+            // movimiento apunta a la corrida que lo liquidó SIN navegación. Por convención, con una FK candidata a
+            // cada lado, EF emparejaba PayrollRun.VacationMovement con VacationMovement.PayrollRunId y al guardar
+            // la corrida nueva dejaba VacationMovementId en nulo.
+            b.HasOne<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>().WithMany().HasForeignKey(x => x.PayrollRunId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b =>
+            b.HasOne(r => r.VacationMovement).WithMany().HasForeignKey(r => r.VacationMovementId));
+        modelBuilder.Entity<TerminationReason>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<EmploymentTermination>(b => { b.Ignore(x => x.EstaViva); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<SettlementDeduction>(b => { b.Ignore(x => x.FueAjustado); b.Ignore("RowVersion"); });
+        modelBuilder.Entity<WithholdingRateCalculation>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<WithholdingRateCalculationMonth>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<SeveranceFundDeposit>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<LoanPortfolio>(b =>
+        {
+            b.Ignore(l => l.Transactions); b.Ignore(l => l.PendingInstallments);
+            b.Ignore(l => l.ExtraPayments); b.Ignore(l => l.Guarantees); b.Ignore(l => l.DefaultRecords); b.Ignore("RowVersion");
+            // El recaudo real incluye la persona y la línea del crédito (ProcessPayment / RecaudoDeCredito).
+            b.HasOne(l => l.Person).WithMany().HasForeignKey(l => l.PersonId);
+            b.HasOne(l => l.CreditLine).WithMany(c => c.LoanPortfolios).HasForeignKey(l => l.CreditLineId);
+        });
+        modelBuilder.Entity<CreditLineParameter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<LendingTransaction>(b => { b.Ignore("RowVersion"); b.HasOne(t => t.CreditLine).WithMany().HasForeignKey(t => t.CreditLineId); });
+        modelBuilder.Entity<PendingInstallment>(b => { b.Ignore("RowVersion"); b.HasOne(i => i.CreditLine).WithMany().HasForeignKey(i => i.CreditLineId); });
     }
 }
 

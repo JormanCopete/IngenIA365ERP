@@ -1,0 +1,17 @@
+{
+  "nombre": "Cesantías e intereses 2026 con ingreso el 01-09 y salario mínimo",
+  "descripcion": "Research R1: 666.666,67 de cesantías y 26.666,67 de intereses (120 días).",
+  "derivacion": "Base = SMMLV 1.750.905 + auxilio 249.095 = 2.000.000. Días 01-09 a 31-12 = 4 × 30 = 120. Cesantías = 2.000.000 / 30 × 30 × 120 / 360 = 666.666,6667 → 666.666,67. Intereses = 666.666,67 × 12 % × 120 / 360 = 666.666,67 × 0,04 = 26.666,6668 → 26.666,67. Retención: ingreso 2.000.000 = 38,19 UVT ≤ 350 → 0.",
+  "tipo": "Severance",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-01-01",
+  "empleado": {
+    "nombre": "Ingreso en septiembre",
+    "ingreso": "2026-09-01",
+    "salarios": [ { "desde": "2026-09-01", "mensual": 1750905 } ]
+  },
+  "esperado": {
+    "lineas": { "CESANTIAS": 666666.67, "INT_CESANTIAS": 26666.67, "RETEFTE_CESANTIAS": 0 },
+    "totales": { "devengos": 693333.34, "deducciones": 0, "provisiones": 0, "neto": 693333.34 }
+  }
+}

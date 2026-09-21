@@ -180,6 +180,88 @@ public class RepartoDePermisosTests
         }
     }
 
+    // ------------------------------------------------------------ feature 010: nómina completa --
+
+    /// <summary>Los once recursos de contracts/api.md §1 (feature 010).</summary>
+    private static readonly string[] RecursosNomina010 =
+    [
+        "Payroll.ServiceBonus", "Payroll.Severance", "Payroll.Vacations", "Payroll.Settlements",
+        "Payroll.BenefitBalances", "Payroll.WithholdingRate", "Payroll.Pila", "Payroll.ElectronicPayroll",
+        "Payroll.Disbursement", "Payroll.CompanyPolicies", "Payroll.Holidays",
+    ];
+
+    private static List<string> Del010(IEnumerable<string> codigos) =>
+        codigos.Where(c => RecursosNomina010.Any(r => c.StartsWith(r + ".", StringComparison.Ordinal))).ToList();
+
+    [Fact]
+    public void ElCatalogoDeNominaTieneLosOnceRecursosDelContrato()
+    {
+        // Se cuenta contra el seeder, no contra un número fijo: cada recurso tiene sus acciones
+        // (§1) y todas tienen View.
+        var recursos = PayrollPermissionCatalogSeeder.Catalog.Select(p => p.Resource).Distinct().ToList();
+        recursos.Should().Contain(RecursosNomina010);
+
+        foreach (var recurso in RecursosNomina010)
+        {
+            PayrollPermissionCatalogSeeder.Catalog.Should().Contain(p => p.Resource == recurso && p.Action == "View",
+                $"«{recurso}» tiene que poder verse");
+        }
+
+        var acciones = PayrollPermissionCatalogSeeder.Catalog.ToLookup(p => p.Resource, p => p.Action);
+        acciones["Payroll.ServiceBonus"].Should().BeEquivalentTo(["View", "Calculate", "Approve", "Reverse"]);
+        acciones["Payroll.Severance"].Should().BeEquivalentTo(["View", "Calculate", "Approve", "Reverse", "MarkDeposited"]);
+        acciones["Payroll.Vacations"].Should().BeEquivalentTo(["View", "Register", "Calculate", "Approve", "Reverse"]);
+        acciones["Payroll.Settlements"].Should().BeEquivalentTo(["View", "Calculate", "Approve", "Reverse", "AdjustDeduction", "Manage"]);
+        acciones["Payroll.BenefitBalances"].Should().BeEquivalentTo(["View", "Manage"]);
+        acciones["Payroll.WithholdingRate"].Should().BeEquivalentTo(["View", "Calculate", "Approve"]);
+        acciones["Payroll.Pila"].Should().BeEquivalentTo(["View", "Generate", "MarkUploaded", "Manage"]);
+        acciones["Payroll.ElectronicPayroll"].Should().BeEquivalentTo(["View", "Generate", "Transmit", "Manage"]);
+        acciones["Payroll.Disbursement"].Should().BeEquivalentTo(["View", "Generate", "MarkSent", "Manage"]);
+        acciones["Payroll.CompanyPolicies"].Should().BeEquivalentTo(["View", "Manage"]);
+        acciones["Payroll.Holidays"].Should().BeEquivalentTo(["View", "Manage"]);
+    }
+
+    [Fact]
+    public void Operator_CalculaRegistraYGenera_PeroNoApruebaReversaTransmiteMarcaNiAdministra()
+    {
+        var concedidos = Del010(BuiltInRolesSeeder.CodigosParaRol("Operator", Catalogo));
+
+        concedidos.Should().Contain([
+            "Payroll.ServiceBonus.Calculate", "Payroll.Severance.Calculate",
+            "Payroll.Vacations.Register", "Payroll.Vacations.Calculate",
+            "Payroll.Settlements.Calculate", "Payroll.BenefitBalances.Manage",
+            "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
+            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate"]);
+
+        // Segregación (FR-006): lo que decide, marca o parametriza es de otra persona.
+        var prohibidas = new[] { ".Approve", ".Reverse", ".Transmit", ".MarkDeposited", ".MarkUploaded", ".MarkSent", ".AdjustDeduction" };
+        concedidos.Should().NotContain(c => prohibidas.Any(p => c.EndsWith(p, StringComparison.Ordinal)),
+            "quien calcula no aprueba, reversa, transmite, marca ni ajusta descuentos");
+        concedidos.Should().NotContain(["Payroll.Settlements.Manage", "Payroll.Pila.Manage", "Payroll.ElectronicPayroll.Manage",
+                                        "Payroll.Disbursement.Manage", "Payroll.CompanyPolicies.Manage", "Payroll.Holidays.Manage"],
+            "administrar políticas, festivos, formatos, habilitación, aportante y motivos es del administrador; el único Manage del operador es el de saldos iniciales");
+    }
+
+    [Theory]
+    [InlineData("Auditor")]
+    [InlineData("ReadOnly")]
+    public void AuditorYReadOnly_SoloVenLaNominaCompleta(string rol)
+    {
+        var concedidos = Del010(BuiltInRolesSeeder.CodigosParaRol(rol, Catalogo));
+
+        concedidos.Should().NotBeEmpty().And.OnlyContain(c => c.EndsWith(".View"));
+        concedidos.Should().HaveCount(RecursosNomina010.Length, "una lectura por recurso");
+    }
+
+    [Fact]
+    public void CompanyAdmin_RecibeTodaLaNominaCompleta()
+    {
+        var todos = Del010(PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"));
+        var concedidos = Del010(BuiltInRolesSeeder.CodigosParaRol("CompanyAdmin", Catalogo));
+
+        concedidos.Should().BeEquivalentTo(todos);
+    }
+
     [Fact]
     public void LosCatalogosNoSePisan()
     {

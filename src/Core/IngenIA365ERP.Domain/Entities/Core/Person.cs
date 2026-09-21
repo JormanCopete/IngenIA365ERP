@@ -31,11 +31,26 @@ public class Person : AuditableEntity
     [MaxLength(20)]
     public string? LegacyCode { get; set; }
 
+    /// <summary>Primer apellido. Feature 010 (D-06): el segundo va en <see cref="SecondLastName"/>; nada parte esta columna por dato.</summary>
     [MaxLength(150)]
     public string LastName { get; set; } = string.Empty;
 
+    /// <summary>Primer nombre. Los demás van en <see cref="OtherNames"/>.</summary>
     [MaxLength(150)]
     public string FirstName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Feature 010 (D-06): DIAN <c>SegundoApellido</c>, PILA campo 11. Nullable y sin migración
+    /// de datos: partir «De la Hoz Mejía» por el espacio se equivoca, así que la ficha de persona
+    /// lo propone y alguien lo confirma. La validación previa de PILA y DIAN marca como
+    /// inconsistencia al empleado cuyo <see cref="LastName"/> tiene más de una palabra y esto vacío.
+    /// </summary>
+    [MaxLength(150)]
+    public string? SecondLastName { get; set; }
+
+    /// <summary>Feature 010 (D-06): DIAN <c>OtrosNombres</c>, PILA campo 13.</summary>
+    [MaxLength(150)]
+    public string? OtherNames { get; set; }
 
     [MaxLength(20)]
     public string TaxId { get; set; } = string.Empty;

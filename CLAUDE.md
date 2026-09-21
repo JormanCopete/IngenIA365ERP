@@ -261,6 +261,44 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   ClosedXML, OpenXML y QuestPDF desde `API/Reports/Exportadores`. El **cálculo preliminar** anterior
   (`POST /api/payroll/process`, salud y pensión fijas al 4 %) se retiró sin alias.
 
+- **Nómina (feature 010, entrega N1, rama `010-nomina-prestaciones-pila-dian`, 2026-09-21)**: prima
+  de servicios, cesantías e intereses del año, vacaciones y liquidación definitiva por retiro. Las
+  corridas llevan **`Kind`** (`Ordinary`, `ServiceBonus`, `Severance`, `Vacation`, `Settlement`),
+  `CutoffDate`, `PayDate` y período nulo en las especiales; el cálculo es **otro motor puro**,
+  `Domain/Payroll/Settlements/SettlementCalculationEngine` (casos dorados en
+  `Domain.Tests/Payroll/Settlements/Casos/`), sobre el mismo `Explanation` y las mismas listas
+  `Required` de parámetros por proceso (`GET /api/payroll/legal-parameters/missing?process=`).
+  **Un ciclo común** en `Application/Payroll/Settlements/Common` (`SettlementRunPersister`,
+  `SettlementRunWorkflow` con gancho `antesDeGuardar`; `SettlementAccountingPoster` con
+  `SourceType` por tipo, comprobante fechado al **corte**, D-04) y una ruta, un permiso y una
+  pantalla por tipo (`/nomina/prima`, `/nomina/cesantias-anuales`, `/nomina/vacaciones`,
+  `/nomina/liquidacion-definitiva`); las rutas ordinarias `approve/reverse/discard` rechazan
+  `Kind != Ordinary` (`Payroll.Settlement.UseSettlementRoute`). Reglas que no se negocian:
+  las **políticas de la empresa** viven en `PAY_CompanyPolicies` **con vigencia** (11 claves de
+  `CompanyPolicyKeys`; `PayrollPolicyReader` es el único lector y la fila sembrada manda sobre
+  `COR_SystemSettings`, por eso `NominaE2E` abre la vigencia `AllowSameUserApproval`); toda
+  liquidación se contabiliza **contra la provisión acumulada** del empleado y la diferencia va
+  al gasto o se libera (`*_AJUSTE_PROV`; `ProvisionBalanceReader` informa siempre las cuatro
+  provisiones, en cero si no hay historia: si no, la provisión quedaba en negativo); el
+  **saldo inicial** de prestaciones es la **fila vigente**, no la suma de ajustes; **un solo
+  pagador del último tramo** (D-29): el retirado con definitiva aprobada dentro del período no
+  entra a la ordinaria, la definitiva liquida el tramo con las novedades del período abierto y
+  los dos borradores se marcan `Stale` entre sí; las vacaciones se pagan anticipadas por
+  **días del calendario comercial** (D-01, D-31) y la ordinaria recibe `AUSENCIA_VACACIONES`
+  informativa (sin período que la cubra, aprobar responde `PeriodMissing`); la definitiva
+  propone los **descuentos de Cartera** (crédito y libranza por `DeduccionAlRetiroModo`; cuotas
+  causadas con la regla `ApplyOn`) que sólo se bajan con motivo auditado, recauda por
+  obligación dentro de la misma unidad de trabajo, cierra la ficha y genera el documento para
+  firma; `POST /api/payroll/employees/{id}/terminate` **se retiró sin alias**. Semillas:
+  16 conceptos (`WellKnownConceptCodes.SettlementOnly`, sin cuentas), ~40 parámetros con
+  `Source`, 9 motivos de retiro (Order 72), festivos Ley 51 2026–2028 (74), políticas (75);
+  los permisos (`Payroll.ServiceBonus/Severance/Vacations/Settlements/BenefitBalances/CompanyPolicies/Holidays`
+  y los de N2–N4) los siembra la API al arrancar, **no el DbMigrator**. Dos migraciones
+  aditivas (`NominaPrestacionesYDian`, `SettlementDeductionsUnicosEntreVivas`). Receta:
+  `docs/manual/liquidaciones-especiales.md`; runbook `docs/operaciones/nomina-primer-periodo.md` §4d.
+  N2 (PILA + procedimiento 2), N3 (nómina electrónica: servicio central **sin estado**, modo
+  «software propio» de cada cooperativa primero) y N4 (dispersión AV Villas) siguen pendientes.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -269,18 +307,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-15 (cierre de E1 de la feature 009, en su rama), remedida. **Son cifras que
+Instantánea del 2026-09-21 (cierre de N1 de la feature 010, en su rama), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 643 (2026-09-15; bajó porque la 009 retiró los 16 endpoints contables heredados y sumó 45 nuevos) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 165 con `@page` (2026-09-15; la 009 retiró 25 pantallas contables heredadas y sumó 9) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 12 clases `*Report` (2026-09-15; los informes contables heredados se rehacen en E2) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.065 el 2026-09-19 (165 Domain, 768 Application, 77 Architecture, 53 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 153 el 2026-09-19 con Docker: 152 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 702 (2026-09-21; la 010 N1 sumó 52 rutas de liquidaciones, políticas, festivos, saldos iniciales y 7 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 172 con `@page` (2026-09-21; la 010 N1 sumó 7) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 1.413 el 2026-09-21 (200 Domain, 1.035 Application, 106 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 161 el 2026-09-21 con Docker: 160 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -325,11 +363,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/009-contabilidad-niif/plan.md](specs/009-contabilidad-niif/plan.md)
+[specs/010-nomina-prestaciones-pila-dian/plan.md](specs/010-nomina-prestaciones-pila-dian/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/009-contabilidad-niif/spec.md)
-- [research.md](specs/009-contabilidad-niif/research.md)
-- [data-model.md](specs/009-contabilidad-niif/data-model.md)
-- [quickstart.md](specs/009-contabilidad-niif/quickstart.md)
-- [contracts/](specs/009-contabilidad-niif/contracts/)
+- [spec.md](specs/010-nomina-prestaciones-pila-dian/spec.md)
+- [research.md](specs/010-nomina-prestaciones-pila-dian/research.md)
+- [data-model.md](specs/010-nomina-prestaciones-pila-dian/data-model.md)
+- [quickstart.md](specs/010-nomina-prestaciones-pila-dian/quickstart.md)
+- [contracts/](specs/010-nomina-prestaciones-pila-dian/contracts/)
 <!-- SPECKIT END -->

@@ -21,6 +21,12 @@ public static class AttachmentErrorCodes
 
     /// <summary>El blob existe en BD pero ha sido removido del store (state inconsistente).</summary>
     public const string BlobMissing = "Attachments.BlobMissing";
+
+    /// <summary>
+    /// El adjunto lo generó un módulo que lo declara inmutable (<see cref="AdjuntosDeModulo"/>): no se
+    /// borra por la ruta genérica. 422.
+    /// </summary>
+    public const string OwnedByModule = "Attachments.OwnedByModule";
 }
 
 /// <summary>

@@ -21,6 +21,13 @@ public sealed class PayrollLegalParametersEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.LegalParameters.View");
 
+        // Feature 010 (T006): qué le falta a cada proceso (prestaciones, PILA, procedimiento 2, DIAN) a una fecha.
+        group.MapGet("/missing", async (LegalParameterProcess process, DateTime? asOf, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetMissingLegalParametersQuery(process, asOf), ct))
+            .WithName("Payroll_LegalParameters_Missing")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.LegalParameters.View");
+
         group.MapGet("/{code}/versions", async (string code, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListLegalParameterVersionsQuery(code), ct))
             .WithName("Payroll_LegalParameters_Versions")

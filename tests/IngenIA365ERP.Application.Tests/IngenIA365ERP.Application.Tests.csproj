@@ -19,6 +19,10 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Feature 010: calendarios de festivos esperados (Ley 51 de 1983) que lee FestivosLey51Tests. -->
+    <None Include="Infrastructure\Festivos\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
     <!-- Feature 004: tests unitarios de piezas de infraestructura pura

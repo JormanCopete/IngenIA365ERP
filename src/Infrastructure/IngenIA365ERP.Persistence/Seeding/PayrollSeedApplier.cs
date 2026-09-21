@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace IngenIA365ERP.Persistence.Seeding;
 
 /// <summary>
-/// Reaplica la semilla de nómina (conceptos, parámetros legales, clases ARL, comprobante NM) sobre la
+/// Reaplica la semilla de nómina (conceptos, parámetros legales, clases ARL, comprobante NM, motivos de retiro, festivos, políticas) sobre la
 /// base de la cooperativa ACTIVA —el <see cref="ApplicationDbContext"/> ya resuelto al
 /// tenant de la petición—, con los mismos seeders idempotentes del arranque. Sólo inserta
 /// lo que falta; nunca actualiza lo existente (D-10). Es lo que dispara
@@ -18,7 +18,12 @@ public sealed class PayrollSeedApplier(ApplicationDbContext tenantDb, IHostEnvir
     public async Task<IReadOnlyList<(string Seeder, int Inserted)>> ReapplyAsync(CancellationToken ct)
     {
         var context = new SeedContext { TenantDb = tenantDb, EnvironmentName = environment.EnvironmentName, Logger = logger };
-        IDataSeeder[] seeders = [new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new VoucherTypesSeeder()];
+        IDataSeeder[] seeders =
+        [
+            new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new VoucherTypesSeeder(),
+            // Feature 010: motivos de retiro, festivos y políticas por empresa entran por el mismo botón «Reaplicar semilla».
+            new TerminationReasonsSeeder(), new HolidaysSeeder(), new CompanyPoliciesSeeder(),
+        ];
 
         var resultado = new List<(string, int)>();
         foreach (var seeder in seeders.OrderBy(s => s.Order))

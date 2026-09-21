@@ -98,6 +98,49 @@ public class PersonaFormularioModeloTests
         entrada.BusinessName.Should().BeNull();
     }
 
+    // ---- Feature 010 (D-06): segundo apellido y otros nombres ----
+
+    [Fact]
+    public void Segundo_apellido_y_otros_nombres_van_y_vuelven_y_los_blancos_viajan_como_nulos()
+    {
+        var modelo = PersonaFormularioModelo.DesdeDto(Dto() with { SecondLastName = "Gómez", OtherNames = "María" });
+        modelo.SecondLastName.Should().Be("Gómez");
+        modelo.OtherNames.Should().Be("María");
+
+        modelo.OtherNames = "   ";
+        var entrada = modelo.AInput();
+        entrada.SecondLastName.Should().Be("Gómez");
+        entrada.OtherNames.Should().BeNull();
+    }
+
+    [Fact]
+    public void La_particion_se_propone_por_el_primer_espacio_y_solo_llena_lo_vacio()
+    {
+        var modelo = PersonaFormularioModelo.Nuevo("1");
+        modelo.FirstName = "Ana María José"; modelo.LastName = "Pérez Gómez";
+
+        modelo.PuedeProponerParticion.Should().BeTrue();
+        modelo.ProponerParticion().Should().BeTrue();
+
+        modelo.FirstName.Should().Be("Ana");
+        modelo.OtherNames.Should().Be("María José");
+        modelo.LastName.Should().Be("Pérez");
+        modelo.SecondLastName.Should().Be("Gómez");
+        modelo.PuedeProponerParticion.Should().BeFalse("ya no queda nada que proponer");
+    }
+
+    [Fact]
+    public void La_particion_no_toca_lo_que_la_persona_ya_escribio_y_no_hace_nada_con_una_sola_palabra()
+    {
+        var modelo = PersonaFormularioModelo.Nuevo("1");
+        modelo.FirstName = "Ana"; modelo.LastName = "De la Hoz Mejía"; modelo.SecondLastName = "Mejía";
+
+        modelo.PuedeProponerParticion.Should().BeFalse("el segundo apellido ya está y el nombre es una palabra");
+        modelo.ProponerParticion().Should().BeFalse();
+        modelo.LastName.Should().Be("De la Hoz Mejía", "un apellido compuesto no se parte solo: eso lo decide la persona");
+        modelo.SecondLastName.Should().Be("Mejía");
+    }
+
     [Fact]
     public void Los_catalogos_tienen_los_codigos_que_guarda_la_base()
     {
