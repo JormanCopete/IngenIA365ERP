@@ -121,6 +121,17 @@ public sealed record ResumenCorridaDto(
     };
 
     public bool EsBorrador => Status is "Draft" or "Stale";
+
+    /// <summary>
+    /// Sólo <c>Draft</c> se aprueba: el servidor rechaza <c>Stale</c> con <c>Payroll.Settlement.NotDraft</c>
+    /// (toda vigencia nueva de política, parámetro legal o concepto deja los borradores desactualizados,
+    /// D-19). Hasta el 2026-09-21 las pantallas ofrecían «Aprobar» con <see cref="EsBorrador"/>, que
+    /// incluye <c>Stale</c>, y la persona recibía el rechazo con el nombre del estado en inglés.
+    /// </summary>
+    public bool SePuedeAprobar => Status == "Draft";
+
+    /// <summary>Borrador que hay que recalcular antes de aprobar.</summary>
+    public bool EstaDesactualizada => Status == "Stale";
 }
 
 /// <summary>Aviso de una corrida especial con su código (feature 010, contracts/api.md §3.5).</summary>

@@ -12,6 +12,7 @@
 
 <PageTitle>Políticas de nómina - IngenIA365ERP</PageTitle>
 
+<PermissionGate Required="Payroll.CompanyPolicies.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Políticas de nómina de la empresa</h3>
     <div>
@@ -59,6 +60,8 @@
 </IndicadorDeCarga>
 
 @* --------------------------------------------------------------- historial --- *@
+</PermissionGate>
+
 <SfDialog @bind-Visible="_mostrarHistorial" Header="@($"Vigencias de {_historialDe?.Key}")" Width="720px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -173,7 +176,7 @@
         using var carga = _carga.Iniciar();
         var res = await Nomina.ListarPoliticasAsync(DateOnly.FromDateTime(_vigenteA));
         if (res.IsSuccess) _politicas = res.Value ?? [];
-        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las políticas.");
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las políticas.");
     }
 
     private async Task AbrirHistorialAsync(PoliticaEmpresaDto p)

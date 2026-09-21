@@ -121,6 +121,36 @@ public class FichaPilaDianTests
     }
 
     [Fact]
+    public async Task La_etapa_se_quita_con_ClearApprenticeStage_y_no_con_el_nulo_a_secas()
+    {
+        // D-29 (revisión de N1, pantallas #7): «un bloque que no viene no toca lo que había» vale también
+        // para la etapa, así que la ficha necesita una orden explícita para dejarla en blanco cuando la
+        // persona dejó de ser aprendiz. Hasta entonces la X del desplegable notificaba éxito sin borrar nada.
+        var exAprendiz = _d.Empleado("ExAprendiz", 1_000_000m, new DateTime(2026, 1, 15), EmployeeClass.Apprentice);
+        var comando = new UpdateEmployeeCommand { EmployeePublicId = exAprendiz.PublicId, BaseSalary = 1_000_000m, ContractType = 5 };
+        (await ActualizarAsync(comando with { ApprenticeStage = ApprenticeStage.Lective })).IsSuccess.Should().BeTrue();
+
+        // Sigue siendo aprendiz: quitarla se rechaza igual que faltar.
+        var todaviaAprendiz = await ActualizarAsync(comando with { ClearApprenticeStage = true });
+        todaviaAprendiz.Error.Code.Should().Be("Payroll.Employee.ApprenticeStageRequired");
+        (await _d.Db.Employees.AsNoTracking().SingleAsync(x => x.Id == exAprendiz.Id)).ApprenticeStage.Should().Be(ApprenticeStage.Lective);
+
+        // Pasó a estándar («Retención y plan» cambia la clase sin tocar la etapa).
+        var e = await _d.Db.Employees.SingleAsync(x => x.Id == exAprendiz.Id);
+        e.EmployeeClass = EmployeeClass.Standard;
+        await _d.Db.SaveChangesAsync();
+
+        var nuloASecas = await ActualizarAsync(comando);
+        nuloASecas.IsSuccess.Should().BeTrue(nuloASecas.Error.Message);
+        (await _d.Db.Employees.AsNoTracking().SingleAsync(x => x.Id == exAprendiz.Id)).ApprenticeStage
+            .Should().Be(ApprenticeStage.Lective, "el nulo no toca lo que había (contracts/api.md §12)");
+
+        var quitar = await ActualizarAsync(comando with { ClearApprenticeStage = true });
+        quitar.IsSuccess.Should().BeTrue(quitar.Error.Message);
+        (await _d.Db.Employees.AsNoTracking().SingleAsync(x => x.Id == exAprendiz.Id)).ApprenticeStage.Should().BeNull();
+    }
+
+    [Fact]
     public void El_validador_exige_el_formato_de_cada_codigo_y_el_DIVIPOLA_completo()
     {
         var v = new UpdateEmployeeCommandValidator();

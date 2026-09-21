@@ -32,7 +32,7 @@ cooperativa pueda dar prima y PILA a una persona sin darle definitivas.
 |---|---|---|
 | `Payroll.ServiceBonus` | View, Calculate, Approve, Reverse | prima de servicios |
 | `Payroll.Severance` | View, Calculate, Approve, Reverse, MarkDeposited | cesantías e intereses anuales; `MarkDeposited` registra la consignación por fondo |
-| `Payroll.Vacations` | View, Register, Calculate, Approve, Reverse | saldo, movimientos y liquidación; `Register` = preview y disfrute/compensación |
+| `Payroll.Vacations` | View, Register, Calculate, Approve, Reverse | saldo, movimientos y liquidación; `Register` = preview, ajustes, anulación y el registro del disfrute/compensación, que además exige `Calculate` porque crea la liquidación (D-28) |
 | `Payroll.Settlements` | View, Calculate, Approve, Reverse, AdjustDeduction, Manage | definitiva y terminación del contrato; `AdjustDeduction` baja el descuento de Cartera; `Manage` = catálogo de motivos de retiro |
 | `Payroll.BenefitBalances` | View, Manage | saldos iniciales de prestaciones (FR-007) |
 | `Payroll.WithholdingRate` | View, Calculate, Approve | porcentaje fijo del procedimiento 2 |
@@ -121,7 +121,7 @@ novedades no consumidas. El saldo y la vista previa de días viven en `/api/payr
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?employeeId=&year=&status=` | Vacations.View | `[{ runPublicId, movementPublicId, employee…, kind, from?, to?, workingDays, calendarDays, compensatedDays?, amount, status }]` |
-| `POST /` | Vacations.Calculate | `{ employeePublicId, kind: Enjoyment (0) \| Compensation (1), from?, to?, compensationDays?, paymentDate? }` → 201 `{ runPublicId, movementPublicId, workingDays, calendarDays, skipped: [{ date, reason }], amount, novelties: [{ periodPublicId, days, retroactive }] }`. `Enjoyment` exige `from`/`to`; `Compensation` exige `compensationDays` |
+| `POST /` | Vacations.Register **y** Vacations.Calculate (D-28) | `{ employeePublicId, kind: Enjoyment (0) \| Compensation (1), from?, to?, compensationDays?, paymentDate? }` → 201 `{ runPublicId, movementPublicId, workingDays, calendarDays, skipped: [{ date, reason }], amount, novelties: [{ periodPublicId, days, retroactive }] }`. `Enjoyment` exige `from`/`to`; `Compensation` exige `compensationDays` |
 | `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Vacations.* | como 3.1; `approve` acepta `postingDate?` (por defecto la fecha de corte de la corrida, D-04; rango [corte, hoy]) |
 
 Errores propios: `Payroll.Vacation.DatesInvalid`, `.NoWorkingDays` (todo festivo o domingo),
@@ -390,7 +390,7 @@ gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).
   (D-05): si vienen en los dos bloques manda `pila`. `paymentMethodCode` vacío se deriva de la
   forma de pago por la política `DianMedioPagoMapa`. `apprenticeStage` es **obligatoria** si la
   clase es `Apprentice` o `Intern` (422 `Payroll.Employee.ApprenticeStageRequired`). En el `PUT`,
-  `disbursementBankPublicId` nulo = no cambia y `clearDisbursementBank: true` lo quita. El `GET`
+  `disbursementBankPublicId` nulo = no cambia y `clearDisbursementBank: true` lo quita. `apprenticeStage` nulo = no cambia y `clearApprenticeStage: true` la quita (D-29; con clase `Apprentice` o `Intern` responde 422 `Payroll.Employee.ApprenticeStageRequired`). El `GET`
   devuelve además `disbursementBankName`, `disbursementBankTransferCode`, `vacationBalance?`,
   `openingBalance?`, `currentWithholdingRate?`, `termination?`. La cuenta bancaria de nómina
   (`payrollBankId`, `payrollBankAccountType`, `payrollBankAccountNumber`) ya existe y no cambia.

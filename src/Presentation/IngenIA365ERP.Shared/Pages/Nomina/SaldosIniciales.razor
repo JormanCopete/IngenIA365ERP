@@ -1,6 +1,7 @@
 @page "/nomina/saldos-iniciales"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Models.Nomina
 @inject NominaClient Nomina
 @inject INotificationService Notification
 @inject NavigationManager Nav
@@ -15,6 +16,7 @@
 
 <PageTitle>Saldos iniciales de prestaciones - IngenIA365ERP</PageTitle>
 
+<PermissionGate Required="Payroll.BenefitBalances.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Saldos iniciales de prestaciones</h3>
     <div>
@@ -69,11 +71,11 @@
                     <PermissionGate Required="Payroll.BenefitBalances.Manage">
                         @if (s.IsEditable)
                         {
-                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="@(s.TieneSaldo ? "Editar saldo" : "Digitar saldo")" OnClick="@(() => AbrirEdicion(s, ajuste: false))" />
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="@(s.TieneSaldo ? "Editar saldo" : "Digitar saldo")" OnClick="@(() => AbrirEdicionAsync(s, ajuste: false))" />
                         }
                         else
                         {
-                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Ajustar con motivo" OnClick="@(() => AbrirEdicion(s, ajuste: true))" />
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Ajustar con motivo" OnClick="@(() => AbrirEdicionAsync(s, ajuste: true))" />
                         }
                     </PermissionGate>
                     <SfButton CssClass="e-flat e-small" IconCss="e-icons e-user" Title="Abrir la ficha" OnClick="@(() => Nav.NavigateTo($"/nomina/empleados/{s.EmployeePublicId}"))" />
@@ -85,10 +87,12 @@
 </IndicadorDeCarga>
 
 @* ------------------------------------------------------------- edición/ajuste --- *@
+</PermissionGate>
+
 <SfDialog @bind-Visible="_mostrarEdicion" Header="@_tituloEdicion" Width="640px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaEdicion.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
             <EditForm Model="_form" OnValidSubmit="GuardarAsync">
                 <DataAnnotationsValidator />
                 <div class="pagina">
@@ -188,14 +192,14 @@
 
 @code {
     // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
-    private readonly EstadoDeCarga _carga = new(), _cargaHistorial = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _cargaHistorial = new(), _cargaEdicion = new(), _guardado = new();
     private List<SaldoInicialResumenDto> _saldos = [];
     private int _faltantes;
     private string? _buscar;
     private bool _soloFaltantes, _mostrarEdicion, _mostrarHistorial, _esAjuste;
     private SaldoInicialResumenDto? _editando;
     private SaldoInicialDetalleDto? _detalle;
-    private FormSaldo _form = new();
+    private SaldoInicialFormulario _form = new();
     private string _tituloEdicion = string.Empty;
 
     protected override async Task OnInitializedAsync() => await CargarAsync();
@@ -206,27 +210,34 @@
         var res = await Nomina.ListarSaldosInicialesAsync(null, _soloFaltantes, _buscar);
         if (!res.IsSuccess)
         {
-            await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los saldos iniciales.");
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los saldos iniciales.");
             return;
         }
         _saldos = (res.Value ?? []).ToList();
         _faltantes = _saldos.Count(s => s.Falta);
     }
 
-    private void AbrirEdicion(SaldoInicialResumenDto s, bool ajuste)
+    private async Task AbrirEdicionAsync(SaldoInicialResumenDto s, bool ajuste)
     {
         _editando = s;
         _esAjuste = ajuste;
-        _form = new FormSaldo
-        {
-            AsOfDate = s.AsOfDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today,
-            PendingVacationDays = s.PendingVacationDays ?? 0m,
-            AccruedSeverance = s.AccruedSeverance ?? 0m,
-            AccruedSeveranceInterest = s.AccruedSeveranceInterest ?? 0m,
-            AccruedServiceBonus = s.AccruedServiceBonus ?? 0m,
-        };
+        _form = SaldoInicialFormulario.Desde(s, vigente: null);
         _tituloEdicion = ajuste ? "Ajustar saldo inicial" : s.TieneSaldo ? "Editar saldo inicial" : "Digitar saldo inicial";
         _mostrarEdicion = true;
+        if (!s.TieneSaldo) return;
+
+        // El resumen de la grilla no trae los «días ya contados» ni las notas, y el PUT reemplaza la
+        // fila entera (contracts/api.md §4): el formulario arranca desde la fila vigente del detalle
+        // o no se abre, porque guardar sin ella los borraría sin que nadie lo viera.
+        using var carga = _cargaEdicion.Iniciar();
+        var res = await Nomina.SaldoInicialDeAsync(s.EmployeePublicId);
+        if (!res.IsSuccess || res.Value?.Current is not { } vigente)
+        {
+            _mostrarEdicion = false;
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo leer el saldo vigente para editarlo.");
+            return;
+        }
+        _form = SaldoInicialFormulario.Desde(s, vigente);
     }
 
     private async Task GuardarAsync()
@@ -234,14 +245,9 @@
         if (_editando is null || _guardado.Activa) return;
         if (_esAjuste && string.IsNullOrWhiteSpace(_form.Reason)) { await Notification.WarningAsync("El ajuste exige un motivo."); return; }
         using var guardado = _guardado.Iniciar();
-        var corte = DateOnly.FromDateTime(_form.AsOfDate);
         var res = _esAjuste
-            ? await Nomina.AjustarSaldoInicialAsync(_editando.EmployeePublicId, new AjustarSaldoInicialRequest(
-                corte, _form.PendingVacationDays, _form.AccruedSeverance, _form.AccruedSeveranceInterest, _form.AccruedServiceBonus,
-                _form.Reason.Trim(), _form.ServiceBonusDaysAccrued, _form.SeveranceDaysAccrued, Vacio(_form.Notes)))
-            : await Nomina.GuardarSaldoInicialAsync(_editando.EmployeePublicId, new GuardarSaldoInicialRequest(
-                corte, _form.PendingVacationDays, _form.AccruedSeverance, _form.AccruedSeveranceInterest, _form.AccruedServiceBonus,
-                _form.ServiceBonusDaysAccrued, _form.SeveranceDaysAccrued, Vacio(_form.Notes)));
+            ? await Nomina.AjustarSaldoInicialAsync(_editando.EmployeePublicId, _form.AAjustar())
+            : await Nomina.GuardarSaldoInicialAsync(_editando.EmployeePublicId, _form.AGuardar());
         if (!res.IsSuccess)
         {
             await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo guardar el saldo.");
@@ -260,20 +266,5 @@
         var res = await Nomina.SaldoInicialDeAsync(s.EmployeePublicId);
         if (res.IsSuccess) _detalle = res.Value;
         else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial.");
-    }
-
-    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-
-    private sealed class FormSaldo
-    {
-        public DateTime AsOfDate { get; set; } = DateTime.Today;
-        [Range(0, double.MaxValue, ErrorMessage = "No puede ser negativo.")] public decimal PendingVacationDays { get; set; }
-        [Range(0, double.MaxValue, ErrorMessage = "No puede ser negativo.")] public decimal AccruedSeverance { get; set; }
-        [Range(0, double.MaxValue, ErrorMessage = "No puede ser negativo.")] public decimal AccruedSeveranceInterest { get; set; }
-        [Range(0, double.MaxValue, ErrorMessage = "No puede ser negativo.")] public decimal AccruedServiceBonus { get; set; }
-        public int? ServiceBonusDaysAccrued { get; set; }
-        public int? SeveranceDaysAccrued { get; set; }
-        [StringLength(300)] public string Reason { get; set; } = string.Empty;
-        [StringLength(500)] public string? Notes { get; set; }
     }
 }

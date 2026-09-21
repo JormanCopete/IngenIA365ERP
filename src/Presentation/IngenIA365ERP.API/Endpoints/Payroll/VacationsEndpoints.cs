@@ -10,8 +10,9 @@ namespace IngenIA365ERP.API.Endpoints.Payroll;
 /// Feature 010 US4. Dos grupos (contracts/api.md §5 y §3.3): el saldo derivado, los movimientos,
 /// la vista previa de hábiles, los ajustes y la anulación viven en <c>/api/payroll/vacations</c>
 /// (<c>Payroll.Vacations.View|Register</c>); la liquidación —registrar el disfrute o la
-/// compensación crea el movimiento y la corrida <c>Vacation</c> en una acción— en
-/// <c>/api/payroll/settlements/vacations</c> (<c>Payroll.Vacations.Calculate|Approve|Reverse</c>).
+/// compensación crea el movimiento y la corrida <c>Vacation</c> en una acción, y por eso exige
+/// <c>Register</c> y <c>Calculate</c>— en <c>/api/payroll/settlements/vacations</c>
+/// (<c>Payroll.Vacations.Calculate|Approve|Reverse</c>).
 /// Los endpoints sólo reenvían al <c>ISender</c> (Principio III).
 /// </summary>
 public sealed class VacationsEndpoints : ICarterModule
@@ -82,6 +83,12 @@ public sealed class VacationsEndpoints : ICarterModule
             })
             .WithName("Payroll_Settlements_Vacations_Calculate")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
+            // Registrar crea el movimiento Y la liquidación en una acción (§3.3), y la vista previa
+            // obligatoria de hábiles (§5) es Register: exige los dos (AND). Hasta el 2026-09-21 pedía
+            // sólo Calculate y un rol con Calculate sin Register abría el diálogo y nunca podía pasar
+            // la vista previa; uno con Register sin Calculate podía registrar movimientos pero no
+            // el disfrute que el catálogo de permisos le promete.
+            .RequirePermission("Payroll.Vacations.Register")
             .RequirePermission("Payroll.Vacations.Calculate");
 
         liquidaciones.MapPost("/{runId:guid}/recalculate", async (Guid runId, RecalculateBody? body, ISender sender, CancellationToken ct) =>

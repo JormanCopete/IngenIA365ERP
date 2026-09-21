@@ -31,9 +31,10 @@ public static class FichaPilaDian
 
     /// <summary>
     /// Aplica los bloques que vengan y comprueba la regla del aprendiz. <paramref name="disbursementBankId"/>
-    /// ya resuelto por quien llama (nulo = no se toca; 0 = se quita).
+    /// ya resuelto por quien llama (nulo = no se toca; 0 = se quita). <paramref name="clearApprenticeStage"/>
+    /// deja la etapa en nulo (D-29): el nulo a secas no la toca, así que quitarla es una orden aparte.
     /// </summary>
-    public static Error? Aplicar(Employee e, IFichaPilaDian input, int? disbursementBankId)
+    public static Error? Aplicar(Employee e, IFichaPilaDian input, int? disbursementBankId, bool clearApprenticeStage = false)
     {
         if (input.Pila is { } pila)
         {
@@ -62,7 +63,8 @@ public static class FichaPilaDian
             if (input.Pila is null) e.HighRiskPension = dian.HighRiskPension;
         }
 
-        if (input.ApprenticeStage is { } etapa) e.ApprenticeStage = etapa;
+        if (clearApprenticeStage) e.ApprenticeStage = null;
+        else if (input.ApprenticeStage is { } etapa) e.ApprenticeStage = etapa;
         if (disbursementBankId is { } banco) e.DisbursementBankId = banco == 0 ? null : banco;
 
         if (e.EmployeeClass is EmployeeClass.Apprentice or EmployeeClass.Intern && e.ApprenticeStage is null)

@@ -12,6 +12,7 @@
 
 <PageTitle>Festivos - IngenIA365ERP</PageTitle>
 
+<PermissionGate Required="Payroll.Holidays.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Calendario de festivos</h3>
     <div>
@@ -63,6 +64,8 @@
 </IndicadorDeCarga>
 
 @* ------------------------------------------------------------- nuevo festivo --- *@
+</PermissionGate>
+
 <SfDialog @bind-Visible="_mostrarNuevo" Header="Nuevo festivo" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -111,7 +114,7 @@
         using var carga = _carga.Iniciar();
         var res = await Nomina.ListarFestivosAsync(_anio);
         if (res.IsSuccess) _festivos = (res.Value ?? []).ToList();
-        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los festivos.");
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los festivos.");
     }
 
     private void AbrirNuevo()

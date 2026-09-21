@@ -691,6 +691,8 @@ else
                     WorkAddress = Vacio(_labor.WorkAddress),
                 },
                 ApprenticeStage = _labor.ApprenticeStage switch { 1 => "Lective", 2 => "Practical", _ => (string?)null },
+                // Nulo = no cambia (contracts/api.md §12): limpiar el desplegable manda la orden de quitarla (D-29).
+                ClearApprenticeStage = _labor.ApprenticeStage is null && _employee.ApprenticeStage is not null,
                 DisbursementBankPublicId = _labor.DisbursementBankPublicId,
                 ClearDisbursementBank = _labor.DisbursementBankPublicId is null && _employee.DisbursementBankPublicId is not null,
             };
