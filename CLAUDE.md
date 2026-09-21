@@ -325,11 +325,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/009-contabilidad-niif/plan.md](specs/009-contabilidad-niif/plan.md)
+[specs/010-nomina-prestaciones-pila-dian/plan.md](specs/010-nomina-prestaciones-pila-dian/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/009-contabilidad-niif/spec.md)
-- [research.md](specs/009-contabilidad-niif/research.md)
-- [data-model.md](specs/009-contabilidad-niif/data-model.md)
-- [quickstart.md](specs/009-contabilidad-niif/quickstart.md)
-- [contracts/](specs/009-contabilidad-niif/contracts/)
+- [spec.md](specs/010-nomina-prestaciones-pila-dian/spec.md)
+- [research.md](specs/010-nomina-prestaciones-pila-dian/research.md)
+- [data-model.md](specs/010-nomina-prestaciones-pila-dian/data-model.md)
+- [quickstart.md](specs/010-nomina-prestaciones-pila-dian/quickstart.md)
+- [contracts/](specs/010-nomina-prestaciones-pila-dian/contracts/)
 <!-- SPECKIT END -->
