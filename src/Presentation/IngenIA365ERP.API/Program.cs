@@ -288,6 +288,8 @@ try
     builder.Services.AddStorageServices(builder.Configuration);
     // Feature 005: el comprobante de pago se pinta con QuestPDF, que solo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.IPayslipPdfRenderer, IngenIA365ERP.API.Reports.PayslipPdfRenderer>();
+    // Feature 010 (US3): el documento de liquidación definitiva para firma, también con QuestPDF.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.ISettlementDocumentRenderer, IngenIA365ERP.API.Reports.SettlementDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Documents.IVoucherPdfRenderer, IngenIA365ERP.API.Reports.VoucherPdfRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();

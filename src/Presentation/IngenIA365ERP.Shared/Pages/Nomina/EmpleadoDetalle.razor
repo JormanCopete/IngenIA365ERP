@@ -2,6 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Net.Http.Json
 @using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
 @inject HttpClient Http
 @inject NominaClient Nomina
 @inject INotificationService Notification
@@ -19,8 +20,18 @@
             <SfButton CssClass="e-primary" IconCss="e-icons e-save"
                       Disabled="@(!_hasChanges || _saving)"
                       OnClick="SaveLaborData">Guardar Cambios</SfButton>
-            <SfButton CssClass="e-danger" IconCss="e-icons e-close"
-                      OnClick="@(() => _showTerminateConfirm = true)">Terminar Contrato</SfButton>
+            @if (_employee.Termination is { Status: 0 })
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-eye"
+                          OnClick="@AbrirDefinitiva">Ver liquidación definitiva</SfButton>
+            }
+            else
+            {
+                <PermissionGate Required="Payroll.Settlements.Calculate">
+                    <SfButton CssClass="e-danger" IconCss="e-icons e-close"
+                              OnClick="@(() => { _registroDeTerminacion?.Reiniciar(); _mostrarTerminacion = true; })">Terminar contrato</SfButton>
+                </PermissionGate>
+            }
         }
     </div>
 </div>
@@ -387,10 +398,12 @@ else
                                 @if (_employee.Termination is { } t)
                                 {
                                     <p>@t.EstadoTexto el @t.TerminationDate.ToString("dd/MM/yyyy") · motivo <strong>@t.ReasonName</strong>@(t.GeneratesSeverancePay ? " (genera indemnización)" : "")</p>
+                                    <p class="texto-tenue">@(t.Status == 0 ? "La liquidación definitiva está en borrador: la ficha sigue vigente hasta aprobarla." : t.Status == 1 ? "Liquidada y aprobada: la ficha quedó retirada; un reingreso es una ficha nueva." : "")</p>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye" OnClick="@AbrirDefinitiva">Ver la liquidación definitiva</SfButton>
                                 }
                                 else
                                 {
-                                    <p class="texto-tenue">Sin terminación registrada.</p>
+                                    <p class="texto-tenue">Sin terminación registrada. El retiro se registra con «Terminar contrato»: crea la liquidación definitiva en borrador y la ficha se cierra al aprobarla.</p>
                                 }
                             </div>
                         </div>
@@ -463,37 +476,11 @@ else
     </IndicadorDeCarga>
 }
 
-@* ===== Dialogo Terminar Contrato ===== *@
-<SfDialog @bind-Visible="_showTerminateConfirm" Header="Terminar Contrato" Width="450px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <IndicadorDeCarga Cargando="@_saving" Texto="Guardando…">
-            <div class="panel-pestana">
-                <p style="margin-bottom:var(--pad-lg);">
-                    ¿Seguro que desea terminar el contrato de
-                    <strong>@_employee?.FirstName @_employee?.LastName</strong>?
-                </p>
-                <div style="display:flex;flex-direction:column;gap:var(--gap-md);">
-                    <div>
-                        <label>Fecha de Terminacion <span style="color:var(--peligro-texto)">*</span></label>
-                        <SfDatePicker TValue="DateTime" @bind-Value="_terminationDate" Format="dd/MM/yyyy" />
-                    </div>
-                    <div>
-                        <label>Motivo</label>
-                        <SfTextBox @bind-Value="_terminationCause" Placeholder="Motivo (opcional, hasta 120 caracteres)" Multiline="true"
-                                   HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "120" } })" />
-                    </div>
-                </div>
-            </div>
-        </IndicadorDeCarga>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showTerminateConfirm = false)" />
-        <DialogButton Content="Terminar Contrato" CssClass="e-danger" IsPrimary="true"
-                      OnClick="TerminateContract" Disabled="@_saving" />
-    </DialogButtons>
-</SfDialog>
+@* ===== Terminar contrato (feature 010, US3): registra la terminación y abre la definitiva ===== *@
+<DialogoDeTerminacion @ref="_registroDeTerminacion" @bind-Visible="_mostrarTerminacion"
+                      EmpleadoPublicId="@EmployeeId" EmpleadoNombre="@($"{_employee?.FirstName} {_employee?.LastName}".Trim())"
+                      ContratoDeLaFicha="@_employee?.Dian?.ContractTypeDian"
+                      OnRegistrada="@(t => Nav.NavigateTo($"/nomina/liquidacion-definitiva/{t.RunPublicId}"))" />
 
 @code {
     [Parameter] public Guid EmployeeId { get; set; }
@@ -528,10 +515,9 @@ else
         new(2, "Corriente")
     };
 
-    // Terminate dialog
-    private bool _showTerminateConfirm;
-    private DateTime _terminationDate = DateTime.Today;
-    private string _terminationCause = "";
+    // Terminar contrato (feature 010): el diálogo compartido registra la terminación y navega a la definitiva.
+    private bool _mostrarTerminacion;
+    private DialogoDeTerminacion? _registroDeTerminacion;
 
     protected override async Task OnInitializedAsync()
     {
@@ -731,40 +717,8 @@ else
 
     // --- Terminar contrato ---
 
-    private async Task TerminateContract()
-    {
-        if (_saving) return;
-
-        _saving = true;
-        try
-        {
-            var payload = new
-            {
-                TerminationDate = _terminationDate,
-                TerminationCause = _terminationCause
-            };
-            var res = await Http.PostAsJsonAsync($"/api/payroll/employees/{EmployeeId}/terminate", payload);
-            if (res.IsSuccessStatusCode)
-            {
-                await Notification.SuccessAsync("Contrato terminado correctamente.");
-                _showTerminateConfirm = false;
-                _terminationCause = "";
-                await LoadEmployee();
-            }
-            else
-            {
-                await Notification.ShowErrorAsync(res, "Error al terminar contrato");
-            }
-        }
-        catch (Exception ex)
-        {
-            await Notification.ErrorAsync($"Error inesperado: {ex.Message}");
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
+    /// <summary>La pantalla de la definitiva filtrada por este empleado: si tiene una terminación viva, abre su liquidación.</summary>
+    private void AbrirDefinitiva() => Nav.NavigateTo($"/nomina/liquidacion-definitiva?empleado={EmployeeId}");
 
     // --- Modelos ---
 
