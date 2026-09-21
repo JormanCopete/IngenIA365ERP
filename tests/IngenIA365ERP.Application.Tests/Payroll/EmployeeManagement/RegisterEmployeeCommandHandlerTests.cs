@@ -109,7 +109,7 @@ public class RegisterEmployeeCommandHandlerTests
         (await d.Db.Employees.SingleAsync(e => e.PublicId == primera.Value)).Status.Should().Be(-1, "la retirada es historial");
         (await d.Db.People.SingleAsync(x => x.Id == p.Id)).IsEmployee.Should().BeTrue();
 
-        var porPersona = await new GetEmployeeByPersonIdQueryHandler(d.Db).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
+        var porPersona = await new GetEmployeeByPersonIdQueryHandler(d.Db, d.Clock).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
         porPersona.IsSuccess.Should().BeTrue(porPersona.Error.Message);
         porPersona.Value.PublicId.Should().Be(segunda.Value, "la consulta por persona mira sólo la ficha viva");
         porPersona.Value.PersonPublicId.Should().Be(p.PublicId);
@@ -123,7 +123,7 @@ public class RegisterEmployeeCommandHandlerTests
         d.Db.Employees.Add(d.Ficha(p, activa: false));
         await d.Db.SaveChangesAsync();
 
-        var r = await new GetEmployeeByPersonIdQueryHandler(d.Db).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
+        var r = await new GetEmployeeByPersonIdQueryHandler(d.Db, d.Clock).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
 
         r.Error.Code.Should().Be("Employee.NotFound", "la pantalla pasa a modo registro: reingreso");
     }

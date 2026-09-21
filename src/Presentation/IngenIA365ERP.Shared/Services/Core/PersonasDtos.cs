@@ -10,6 +10,9 @@ public sealed record PersonaDto
     public Guid PublicId { get; init; }
     public string LastName { get; init; } = "";
     public string FirstName { get; init; } = "";
+    /// <summary>Feature 010 (D-06): segundo apellido y otros nombres separados, para la DIAN y la PILA.</summary>
+    public string? SecondLastName { get; init; }
+    public string? OtherNames { get; init; }
     public string TaxId { get; init; } = "";
     public string? TaxIdCheckDigit { get; init; }
     public string? IdIssuedAt { get; init; }
@@ -56,6 +59,8 @@ public sealed record PersonaEntradaDto
     public DateOnly? IdIssueDate { get; init; }
     public string FirstName { get; init; } = "";
     public string LastName { get; init; } = "";
+    public string? SecondLastName { get; init; }
+    public string? OtherNames { get; init; }
     public string? BusinessName { get; init; }
     public string? PersonType { get; init; }
     public string? Address { get; init; }

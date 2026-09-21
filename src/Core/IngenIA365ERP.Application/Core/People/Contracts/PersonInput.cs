@@ -27,6 +27,10 @@ public record PersonInput
     public DateOnly? IdIssueDate { get; init; }
     public string FirstName { get; init; } = string.Empty;
     public string LastName { get; init; } = string.Empty;
+    /// <summary>Feature 010 (D-06): segundo apellido separado, para la DIAN y la PILA. Nada parte <c>LastName</c> por dato.</summary>
+    public string? SecondLastName { get; init; }
+    /// <summary>Feature 010 (D-06): los nombres que siguen al primero.</summary>
+    public string? OtherNames { get; init; }
     public string? BusinessName { get; init; }
     public string? PersonType { get; init; }
 
@@ -85,6 +89,8 @@ public class PersonInputValidator : AbstractValidator<PersonInput>
             .WithMessage("Correo electronico no valido.")
             .MaximumLength(120);
 
+        RuleFor(x => x.SecondLastName).MaximumLength(150);
+        RuleFor(x => x.OtherNames).MaximumLength(150);
         RuleFor(x => x.Phone1).MaximumLength(40);
         RuleFor(x => x.Phone2).MaximumLength(40);
         RuleFor(x => x.Mobile).MaximumLength(30);

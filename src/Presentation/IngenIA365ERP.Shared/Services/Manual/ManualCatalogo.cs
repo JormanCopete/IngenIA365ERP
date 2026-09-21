@@ -844,6 +844,41 @@ public static class ManualCatalogo
         t.Add(Maestro("/nomina/cuentas-concepto", "Cuentas por concepto", Modulos.Nomina, "una cuenta por concepto", "Contra qué cuentas contabiliza cada concepto de nómina.", "cuentas", "concepto", "contabilizacion"));
         t.Add(Maestro("/nomina/parametros-autoaportes", "Parámetros de autoliquidación de aportes", Modulos.Nomina, "un parámetro de autoliquidación", "Porcentajes de salud, pensión, ARL y parafiscales (PILA).", "pila", "autoliquidacion", "aportes", "parafiscales"));
 
+        // Feature 010: parametrización de prestaciones (políticas, festivos, saldos iniciales).
+        t.Add(Proceso("politicas-de-nomina", "Políticas de nómina de la empresa", Modulos.Nomina, "/nomina/politicas",
+            "Las decisiones de la cooperativa con fecha desde la que rigen: qué días cuentan como hábiles (lunes a sábado o a viernes), si goza de la exoneración del art. 114-1, si las vacaciones se pagan por anticipado, cómo se controlan los topes de retención, qué propone la definitiva como descuento de Cartera y la fecha de arranque de la nómina. No son valores legales —esos van en Parámetros legales—: son lo que la contadora decidió, con motivo e historial.",
+            [
+                P("Nómina → Políticas de la empresa", "Cada clave con su valor vigente a la fecha elegida, qué decide y de dónde sale el valor (vigencia registrada o defecto del catálogo).", "/nomina/politicas", "Abrir Políticas"),
+                P("Nueva vigencia", "En la fila, «Nueva vigencia»: el valor nuevo (entre los admitidos), desde cuándo rige, hasta cuándo si se sabe, y el motivo. La vigencia anterior se cierra el día antes si se cruza."),
+                P("Cuidado con la retroactividad", "Una vigencia anterior a una nómina ya aprobada se registra con aviso: esas nóminas no se recalculan. La exoneración 114-1 se bloquea si hay corridas aprobadas desde esa fecha, porque cambia aportes contabilizados: reversalas primero."),
+                P("Comprobar", "El historial de la clave muestra cada vigencia con su motivo, quién la registró y cuándo. Los borradores de liquidación quedan desactualizados para que se recalculen con el valor nuevo."),
+            ],
+            ["politicas", "semana laboral", "exoneracion", "114-1", "vacaciones anticipadas", "arranque", "topes", "descuento al retiro", "vigencia", "motivo"],
+            ["Cooperativa activa.", "Permiso Payroll.CompanyPolicies.Manage para registrar vigencias; View para consultar."],
+            ["parametros-legales", "festivos", "saldos-iniciales-de-prestaciones"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("festivos", "Calendario de festivos", Modulos.Nomina, "/nomina/festivos",
+            "Los festivos que descuenta el contador de días hábiles de las vacaciones. Los de la Ley 51 de 1983 (fijos, trasladados al lunes y los que dependen de Pascua) vienen sembrados para 2026–2028 y no se retiran; un puente decretado o un día propio de la cooperativa se agrega aquí y queda quién lo hizo.",
+            [
+                P("Nómina → Festivos", "Elegí el año: la lista muestra cada festivo con su origen (Ley 51, decretado, manual).", "/nomina/festivos", "Abrir Festivos"),
+                P("Agregar uno", "«Nuevo festivo»: fecha, nombre y origen (decretado por el Gobierno o manual). Una fecha que ya es festivo se rechaza."),
+                P("Retirar uno", "Sólo los decretados y manuales tienen papelera; uno de la Ley 51 responde que viene de la semilla."),
+                P("Comprobar", "Al registrar unas vacaciones que cubran la fecha, la vista previa de días hábiles lo muestra entre los saltados con su nombre."),
+            ],
+            ["festivos", "ley 51", "puente", "dias habiles", "calendario", "vacaciones"],
+            ["Cooperativa activa.", "Permiso Payroll.Holidays.Manage para agregar y retirar; View para consultar."],
+            ["politicas-de-nomina", "empleados"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("saldos-iniciales-de-prestaciones", "Saldos iniciales de prestaciones", Modulos.Nomina, "/nomina/saldos-iniciales",
+            "Lo que cada empleado traía causado antes de que la nómina corriera en esta plataforma: días hábiles de vacaciones pendientes, cesantías e intereses causados del año y prima causada del semestre, a la fecha de arranque. Sin esto, la primera prima y las cesantías del primer año salen cortas para quien ingresó antes. Es digitación auditada, no migración.",
+            [
+                P("Nómina → Saldos iniciales", "Un renglón por empleado vivo. El filtro «Sólo faltantes» deja a quien ingresó antes del arranque y no tiene saldo: son los que hay que digitar antes de la primera liquidación.", "/nomina/saldos-iniciales", "Abrir Saldos iniciales"),
+                P("Digitar o editar", "El lápiz abre el diálogo: fecha de corte (la del arranque, 30-11-2026 en COOFLOPAL), los cuatro valores y, si se sabe, los días ya contados para que la proporción no los duplique. Se reemplaza libremente mientras ninguna liquidación aprobada lo haya consumido."),
+                P("Ajustar uno consumido", "Cuando una prima o unas cesantías aprobadas ya lo usaron, el saldo no se reemplaza: «Ajustar con motivo» crea una fila nueva con el saldo completo corregido y la razón; la liquidación siguiente toma esa. Reversar la liquidación también libera el saldo."),
+                P("Comprobar", "En la ficha del empleado aparece el saldo vigente, y la liquidación lo explica como primer tramo: «Saldo inicial al … digitado por … el …»."),
+            ],
+            ["saldos iniciales", "prestaciones", "vacaciones pendientes", "cesantias causadas", "prima causada", "arranque", "ajuste", "consumido"],
+            ["Cooperativa activa.", "Permiso Payroll.BenefitBalances.Manage para digitar y ajustar; View para consultar."],
+            ["politicas-de-nomina", "empleados", "liquidacion-de-nomina"], [], TipoDeTema.Proceso));
+
         // ---------------------------------------------------------------- Tesorería --
         t.Add(Proceso("cheques", "Cheques", Modulos.Tesoreria, "/tesoreria/cheques",
             "Girar cheques contra una cuenta bancaria, entregarlos, anularlos y seguir su cobro para la conciliación.",

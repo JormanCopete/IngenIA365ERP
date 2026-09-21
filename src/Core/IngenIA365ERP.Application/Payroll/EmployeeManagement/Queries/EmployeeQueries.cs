@@ -1,5 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.EmployeeManagement.Services;
+using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +28,59 @@ public record RecentPayrollEntryDto(
     string ConceptName,
     decimal? Amount,
     string PeriodDescription);
+
+// Feature 010 (contracts/api.md §12): los bloques que la ficha suma.
+
+/// <summary>Lo que la PILA lee de la ficha. <c>SalaryTypeCode</c>: F fijo, V variable, X integral.</summary>
+public sealed record EmployeePilaDto(
+    string? ContributorType,
+    string? ContributorSubtype,
+    string? DivipolaDepartment,
+    string? DivipolaMunicipality,
+    string? EconomicActivityCode,
+    string? WorkCenter,
+    string SalaryTypeCode,
+    bool ForeignNotPensionObligated,
+    bool ColombianAbroad,
+    PensionTransitionRegime PensionTransitionRegime,
+    bool HighRiskPension);
+
+/// <summary>Lo que el documento DIAN lee de la ficha (D-05: tipo y subtipo son los del cotizante PILA).</summary>
+public sealed record EmployeeDianDto(
+    string? WorkerType,
+    string? WorkerSubtype,
+    DianContractType? ContractTypeDian,
+    bool HighRiskPension,
+    string? PaymentMethodCode,
+    string? WorkAddress);
+
+/// <summary>Saldo de vacaciones derivado (R6). Lo calcula la US4; hasta entonces la ficha lo trae nulo.</summary>
+public sealed record EmployeeVacationBalanceDto(decimal PendingDays, DateOnly AsOf);
+
+/// <summary>El saldo inicial de prestaciones vigente (R3) tal como lo verá el motor.</summary>
+public sealed record EmployeeOpeningBalanceDto(
+    Guid PublicId,
+    OpeningBalanceKind Kind,
+    DateOnly AsOfDate,
+    decimal PendingVacationDays,
+    decimal AccruedSeverance,
+    decimal AccruedSeveranceInterest,
+    decimal AccruedServiceBonus,
+    string? EnteredBy,
+    DateTime EnteredAt,
+    Guid? ConsumedByRunPublicId);
+
+/// <summary>El porcentaje fijo del procedimiento 2 vigente hoy y de dónde salió (manual o calculado).</summary>
+public sealed record EmployeeWithholdingRateDto(decimal RatePercent, DateTime ValidFrom, DateTime? ValidTo, WithholdingRateOrigin Origin, byte Procedure);
+
+/// <summary>La terminación viva del contrato (feature 010, R7), si la hay.</summary>
+public sealed record EmployeeTerminationDto(
+    Guid PublicId,
+    DateOnly TerminationDate,
+    string ReasonCode,
+    string ReasonName,
+    bool GeneratesSeverancePay,
+    TerminationStatus Status);
 
 public record EmployeeDetailDto(
     Guid PublicId,
@@ -68,7 +123,19 @@ public record EmployeeDetailDto(
     string PayrollPlanName,
     DateTime? PayrollPlanEffectiveFrom,
     List<SalaryHistoryDto> SalaryHistory,
-    List<RecentPayrollEntryDto> RecentEntries);
+    List<RecentPayrollEntryDto> RecentEntries,
+    // Feature 010 (contracts/api.md §12)
+    string EmployeeClass = "Standard",
+    EmployeePilaDto? Pila = null,
+    EmployeeDianDto? Dian = null,
+    ApprenticeStage? ApprenticeStage = null,
+    Guid? DisbursementBankPublicId = null,
+    string? DisbursementBankName = null,
+    string? DisbursementBankTransferCode = null,
+    EmployeeVacationBalanceDto? VacationBalance = null,
+    EmployeeOpeningBalanceDto? OpeningBalance = null,
+    EmployeeWithholdingRateDto? CurrentWithholdingRate = null,
+    EmployeeTerminationDto? Termination = null);
 
 // --- List Employees ---
 
@@ -139,7 +206,7 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
 /// </summary>
 public record GetEmployeeByPersonIdQuery(Guid PersonPublicId) : IRequest<Result<EmployeeDetailDto>>;
 
-public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context)
+public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context, IDateTimeService clock)
     : IRequestHandler<GetEmployeeByPersonIdQuery, Result<EmployeeDetailDto>>
 {
     public async Task<Result<EmployeeDetailDto>> Handle(GetEmployeeByPersonIdQuery request, CancellationToken ct)
@@ -154,7 +221,7 @@ public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context)
                 "Esta persona no tiene una ficha de empleado vigente."));
 
         // Reusa el mismo helper interno como GetEmployeeByIdQueryHandler
-        return await new GetEmployeeByIdQueryHandler(context).Handle(
+        return await new GetEmployeeByIdQueryHandler(context, clock).Handle(
             new GetEmployeeByIdQuery(employee.PublicId), ct);
     }
 }
@@ -163,7 +230,7 @@ public class GetEmployeeByPersonIdQueryHandler(IApplicationDbContext context)
 
 public record GetEmployeeByIdQuery(Guid PublicId) : IRequest<Result<EmployeeDetailDto>>;
 
-public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
+public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTimeService clock)
     : IRequestHandler<GetEmployeeByIdQuery, Result<EmployeeDetailDto>>
 {
     public async Task<Result<EmployeeDetailDto>> Handle(
@@ -241,6 +308,46 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             .Select(s => new SalaryHistoryDto(s.EffectiveDate, s.NewSalary, s.UserName))
             .ToListAsync(ct);
 
+        // Feature 010: banco de dispersión, saldo inicial, porcentaje P2 vigente, terminación viva.
+        Guid? dispersionPublicId = null; string? dispersionName = null, dispersionAch = null;
+        if (employee.DisbursementBankId is { } bancoDispersionId)
+        {
+            var banco = await context.Banks.AsNoTracking().FirstOrDefaultAsync(b => b.Id == bancoDispersionId, ct);
+            if (banco is not null) { dispersionPublicId = banco.PublicId; dispersionName = banco.Name; dispersionAch = banco.TransferCode; }
+        }
+
+        var saldos = await context.EmployeeBenefitOpeningBalances.AsNoTracking()
+            .Include(b => b.ConsumedByRun)
+            .Where(b => b.EmployeeId == employee.Id && !b.IsDeleted)
+            .ToListAsync(ct);
+        var saldoVigente = saldos.OrderByDescending(b => b.AsOfDate).ThenByDescending(b => b.Id).FirstOrDefault();
+        var openingBalance = saldoVigente is null ? null : new EmployeeOpeningBalanceDto(
+            saldoVigente.PublicId, saldoVigente.Kind, saldoVigente.AsOfDate, saldoVigente.PendingVacationDays, saldoVigente.AccruedSeverance,
+            saldoVigente.AccruedSeveranceInterest, saldoVigente.AccruedServiceBonus, saldoVigente.CreatedBy, saldoVigente.CreatedAt, saldoVigente.ConsumedByRun?.PublicId);
+
+        var hoy = clock.UtcNow.Date;
+        var tasa = await context.EmployeeWithholdingRates.AsNoTracking()
+            .Where(r => r.EmployeeId == employee.Id && r.ValidFrom <= hoy && (r.ValidTo == null || r.ValidTo >= hoy))
+            .OrderByDescending(r => r.ValidFrom)
+            .FirstOrDefaultAsync(ct);
+        var currentRate = tasa is null ? null : new EmployeeWithholdingRateDto(tasa.RatePercent, tasa.ValidFrom, tasa.ValidTo, tasa.Origin, employee.WithholdingProcedure);
+
+        var terminacion = await context.EmploymentTerminations.AsNoTracking()
+            .Include(t => t.TerminationReason)
+            .Where(t => t.EmployeeId == employee.Id && (t.Status == TerminationStatus.Registered || t.Status == TerminationStatus.Settled))
+            .OrderByDescending(t => t.TerminationDate)
+            .FirstOrDefaultAsync(ct);
+        var termination = terminacion is null ? null : new EmployeeTerminationDto(
+            terminacion.PublicId, terminacion.TerminationDate, terminacion.TerminationReason?.Code ?? "", terminacion.TerminationReason?.Name ?? "",
+            terminacion.TerminationReason?.GeneratesSeverancePay ?? false, terminacion.Status);
+
+        var (divipolaDepto, divipolaMun) = FichaPilaDian.Divipola(employee.WorkMunicipalityDaneCode);
+        var pila = new EmployeePilaDto(employee.PilaContributorType, employee.PilaContributorSubType, divipolaDepto, divipolaMun,
+            employee.EconomicActivityCode, employee.WorkCenterCode, FichaPilaDian.SalaryTypeCode(employee),
+            employee.ForeignNotRequiredToContributePension, employee.ColombianAbroad, employee.PensionTransitionRegime, employee.HighRiskPension);
+        var dian = new EmployeeDianDto(employee.PilaContributorType, employee.PilaContributorSubType, employee.DianContractType,
+            employee.HighRiskPension, employee.DianPaymentMethodCode, employee.WorkAddress);
+
         // Recent payroll entries
         var recentEntries = await context.PayrollTransactions.AsNoTracking()
             .Where(t => t.EmployeeId == employee.Id && !t.IsDeleted)
@@ -287,6 +394,18 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context)
             planName,
             employee.PayrollPlanEffectiveFrom,
             salaryHistory,
-            recentEntries));
+            recentEntries,
+            employee.EmployeeClass.ToString(),
+            pila,
+            dian,
+            employee.ApprenticeStage,
+            dispersionPublicId,
+            dispersionName,
+            dispersionAch,
+            // El saldo de vacaciones es derivado (causado + inicial - disfrutado - compensado) y lo suma la US4.
+            null,
+            openingBalance,
+            currentRate,
+            termination));
     }
 }

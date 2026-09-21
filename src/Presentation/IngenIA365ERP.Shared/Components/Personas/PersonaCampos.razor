@@ -37,15 +37,33 @@
                 </SfDropDownList>
             </div>
             <div>
-                <label>Nombres <span class="obligatorio">*</span></label>
-                <SfTextBox @bind-Value="Modelo.FirstName" Placeholder="Nombres *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+                <label>Primer nombre <span class="obligatorio">*</span></label>
+                <SfTextBox @bind-Value="Modelo.FirstName" Placeholder="Primer nombre *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
                 @Mensaje(() => Modelo.FirstName)
             </div>
             <div>
-                <label>Apellidos <span class="obligatorio">*</span></label>
-                <SfTextBox @bind-Value="Modelo.LastName" Placeholder="Apellidos *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+                <label>Otros nombres</label>
+                <SfTextBox @bind-Value="Modelo.OtherNames" Placeholder="Segundo y demás nombres" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+            </div>
+            <div>
+                <label>Primer apellido <span class="obligatorio">*</span></label>
+                <SfTextBox @bind-Value="Modelo.LastName" Placeholder="Primer apellido *" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
                 @Mensaje(() => Modelo.LastName)
             </div>
+            <div>
+                <label>Segundo apellido</label>
+                <SfTextBox @bind-Value="Modelo.SecondLastName" Placeholder="Segundo apellido" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
+            </div>
+            @if (Editable && Modelo.PuedeProponerParticion)
+            {
+                @* Feature 010 (D-06): la DIAN y la PILA piden el segundo apellido y los otros nombres
+                   separados. Se PROPONE partir por el primer espacio y la persona confirma; nada lo
+                   hace por dato porque «De la Hoz Mejía» partido por el espacio queda mal. *@
+                <div class="campo-ancho">
+                    <SfButton CssClass="e-outline e-small" IconCss="e-icons e-edit" type="button" OnClick="@ProponerParticion">Proponer partición de nombres y apellidos</SfButton>
+                    <span class="hint">La nómina electrónica y la PILA piden el segundo apellido y los otros nombres por separado. La propuesta parte por el primer espacio; revisala antes de guardar (un apellido compuesto como «De la Hoz» hay que corregirlo a mano).</span>
+                </div>
+            }
             <div class="campo-ancho">
                 <label>Razón social (si aplica)</label>
                 <SfTextBox @bind-Value="Modelo.BusinessName" Placeholder="Razón social comercial" Enabled="@Editable" HtmlAttributes="@Largo(150)" />
@@ -203,6 +221,14 @@
     };
 
     private static Dictionary<string, object> Largo(int max) => new() { { "maxlength", max.ToString() } };
+
+    /// <summary>Aplica la propuesta al modelo; los campos quedan editables para confirmar o corregir.</summary>
+    private void ProponerParticion()
+    {
+        Modelo.ProponerParticion();
+        Contexto?.NotifyFieldChanged(FieldIdentifier.Create(() => Modelo.LastName));
+        Contexto?.NotifyFieldChanged(FieldIdentifier.Create(() => Modelo.FirstName));
+    }
 
     private RenderFragment Derivado(string etiqueta, bool tiene, string rol, string cssBadge) => __builder =>
     {
