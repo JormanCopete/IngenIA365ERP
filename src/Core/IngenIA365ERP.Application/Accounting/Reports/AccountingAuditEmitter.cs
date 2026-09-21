@@ -12,12 +12,23 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// <c>Accounting.Report.Exported</c> con informe, filtros y formato. También lo usan los envíos
 /// de certificados, la inicialización y la validación de catálogos. Si la escritura falla no
 /// tumba la operación, pero lo deja en el log con la acción y el motivo (Principio IX).
+///
+/// <para>
+/// La base de auditoría de cada cooperativa se nombra por el <c>PublicId</c> del tenant
+/// (<see cref="ICurrentTenantService.TenantId"/>), que es lo que la consola consulta. Hasta el
+/// 2026-09-21 este emisor escribía con <see cref="ICurrentUserService.TenantId"/> —el Id interno— y
+/// los eventos contables explícitos (cuentas, períodos, tipos de comprobante, catálogos, inicio de la
+/// contabilidad) caían en una base que nadie leía: el mismo defecto que <c>PayrollAuditEmitter</c>
+/// corrigió ese día y que la revisión de la feature 010 encontró aquí. El servicio de tenant es
+/// opcional para que las pruebas que construyen el emisor a mano sigan compilando.
+/// </para>
 /// </summary>
 public sealed class AccountingAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
     IDateTimeService clock,
-    ILogger<AccountingAuditEmitter> logger)
+    ILogger<AccountingAuditEmitter> logger,
+    ICurrentTenantService? tenant = null)
 {
     public const string Modulo = "Accounting";
 
@@ -28,7 +39,7 @@ public sealed class AccountingAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: currentUser.TenantId ?? string.Empty,
+                TenantId: tenant?.TenantId ?? currentUser.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

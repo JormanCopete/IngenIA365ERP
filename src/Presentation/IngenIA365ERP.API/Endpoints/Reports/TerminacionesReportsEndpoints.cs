@@ -20,14 +20,14 @@ public sealed class TerminacionesReportsEndpoints : ICarterModule
             .WithTags("Payroll Reports")
             .RequireAuthorization();
 
-        group.MapGet("/terminaciones", async (DateOnly desde, DateOnly hasta, string? format, ISender sender, CancellationToken ct) =>
-                await EntregaDeInformes.EntregarAsync(await sender.Send(new TerminacionesReportQuery(desde, hasta), ct), format, "terminaciones"))
+        group.MapGet("/terminaciones", async (DateOnly desde, DateOnly hasta, string? format, ISender sender, HttpContext http, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TerminacionesReportQuery(desde, hasta), ct), format, "terminaciones", http))
             .WithName("Reportes_Nomina_Terminaciones")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Settlements.View");
 
-        group.MapGet("/saldos-iniciales-prestaciones", async (DateOnly? asOf, string? format, ISender sender, CancellationToken ct) =>
-                await EntregaDeInformes.EntregarAsync(await sender.Send(new SaldosInicialesPrestacionesReportQuery(asOf), ct), format, "saldos-iniciales-prestaciones"))
+        group.MapGet("/saldos-iniciales-prestaciones", async (DateOnly? asOf, string? format, ISender sender, HttpContext http, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new SaldosInicialesPrestacionesReportQuery(asOf), ct), format, "saldos-iniciales-prestaciones", http))
             .WithName("Reportes_Nomina_SaldosInicialesPrestaciones")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.BenefitBalances.View");

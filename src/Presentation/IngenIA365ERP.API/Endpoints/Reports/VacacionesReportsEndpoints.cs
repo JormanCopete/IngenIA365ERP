@@ -20,12 +20,12 @@ public sealed class VacacionesReportsEndpoints : ICarterModule
             .WithTags("Payroll Reports")
             .RequireAuthorization();
 
-        group.MapGet("/saldos-vacaciones", async (DateOnly? asOf, string? search, string? format, ISender sender, CancellationToken ct) =>
-                await EntregaDeInformes.EntregarAsync(await sender.Send(new SaldosVacacionesReportQuery(asOf, search), ct), format, "saldos-vacaciones"))
+        group.MapGet("/saldos-vacaciones", async (DateOnly? asOf, string? search, string? format, ISender sender, HttpContext http, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new SaldosVacacionesReportQuery(asOf, search), ct), format, "saldos-vacaciones", http))
             .WithName("Reportes_Nomina_SaldosVacaciones").RequirePermission("Payroll.Vacations.View");
 
-        group.MapGet("/movimientos-vacaciones", async (DateOnly desde, DateOnly hasta, Guid? employeeId, string? format, ISender sender, CancellationToken ct) =>
-                await EntregaDeInformes.EntregarAsync(await sender.Send(new MovimientosVacacionesReportQuery(desde, hasta, employeeId), ct), format, "movimientos-vacaciones"))
+        group.MapGet("/movimientos-vacaciones", async (DateOnly desde, DateOnly hasta, Guid? employeeId, string? format, ISender sender, HttpContext http, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new MovimientosVacacionesReportQuery(desde, hasta, employeeId), ct), format, "movimientos-vacaciones", http))
             .WithName("Reportes_Nomina_MovimientosVacaciones").RequirePermission("Payroll.Vacations.View");
     }
 }

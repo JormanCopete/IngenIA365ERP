@@ -278,6 +278,34 @@ public class SemillasDeNominaIdempotentesTests
         custom.UpdatedBy.Should().BeNull();
     }
 
+    /// <summary>Revisión de N1 (D-29): la semilla gobierna las dos columnas sólo en las filas que ella creó.</summary>
+    [Fact]
+    public async Task Una_version_que_una_persona_registro_al_revisar_un_concepto_sembrado_no_se_pisa()
+    {
+        using var db = TestDbContextFactory.Create();
+        var comision = PayrollConceptDefinitionsSeeder.Catalogo().Single(c => c.Code == "COMISION");
+        comision.ValidTo = new DateTime(2026, 9, 30);
+        var revisada = new PayrollConceptDefinition
+        {
+            Code = "COMISION", Name = "Comisiones por ventas", Nature = comision.Nature, CalculationKind = comision.CalculationKind, RequiresAmount = true,
+            AffectsSalaryBase = true, AffectsContributionBase = true, AffectsBenefitsBase = true, AffectsWithholdingBase = true,
+            AffectsVacationBase = false, DianElement = null, // la contadora decidió que esta comisión no entra a la base de vacaciones
+            Origin = ConceptOrigin.Seed, ValidFrom = new DateTime(2026, 10, 1), IsActive = true, CreatedBy = "contadora@coop",
+        };
+        db.PayrollConceptDefinitions.AddRange(comision, revisada);
+        await db.SaveChangesAsync();
+
+        await PayrollConceptDefinitionsSeeder.AplicarAsync(db, CancellationToken.None);
+        await PayrollConceptDefinitionsSeeder.AplicarAsync(db, CancellationToken.None);
+
+        var versiones = await db.PayrollConceptDefinitions.Where(c => c.Code == "COMISION").OrderBy(c => c.ValidFrom).ToListAsync();
+        versiones.Should().HaveCount(2);
+        versiones[0].AffectsVacationBase.Should().BeTrue("la que creó la semilla lleva lo del catálogo");
+        versiones[1].AffectsVacationBase.Should().BeFalse("la que registró la contadora lleva lo que ella decidió, en todos los arranques");
+        versiones[1].DianElement.Should().BeNull();
+        versiones[1].UpdatedBy.Should().BeNull();
+    }
+
     // ---------------------------------------------------- motivos de retiro (010) --
 
     [Fact]

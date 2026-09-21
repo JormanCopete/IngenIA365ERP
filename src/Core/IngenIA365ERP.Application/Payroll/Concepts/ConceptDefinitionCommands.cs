@@ -10,7 +10,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.Concepts;
 
-/// <summary>Los campos editables de una versión de concepto (contracts/api.md §6).</summary>
+/// <summary>
+/// Los campos editables de una versión de concepto (contracts/api.md §6). Feature 010 (D-29):
+/// <see cref="AffectsVacationBase"/> y <see cref="DianElement"/> van en el contrato; nulos al revisar
+/// significan «como la versión anterior» (y una cadena vacía en <c>DianElement</c> la quita). Hasta el
+/// 2026-09-21 no viajaban: una versión revisada de un concepto sembrado nacía sin base de vacaciones y
+/// sin ruta DIAN hasta que la semilla la pisaba en el arranque siguiente, y un concepto propio nunca las tenía.
+/// </summary>
 public sealed record ConceptDefinitionInput
 {
     public string Code { get; init; } = string.Empty;
@@ -32,6 +38,13 @@ public sealed record ConceptDefinitionInput
     public bool AffectsBenefitsBase { get; init; }
     public bool AffectsWithholdingBase { get; init; }
     public bool IsBenefitRelated { get; init; }
+
+    /// <summary>Entra a la base de vacaciones e indemnización (CST art. 192). Nulo al revisar = hereda.</summary>
+    public bool? AffectsVacationBase { get; init; }
+
+    /// <summary>Ruta en el XML de nómina electrónica (<c>Devengados/Basico</c>…). Nulo al revisar = hereda; vacío = sin ruta.</summary>
+    public string? DianElement { get; init; }
+
     public bool AllowsRepeatInPeriod { get; init; }
     public decimal? MaxQuantity { get; init; }
     public decimal? MaxAmount { get; init; }
@@ -64,6 +77,8 @@ public sealed record ConceptDefinitionInput
         AffectsBenefitsBase = AffectsBenefitsBase,
         AffectsWithholdingBase = AffectsWithholdingBase,
         IsBenefitRelated = IsBenefitRelated,
+        AffectsVacationBase = AffectsVacationBase ?? false,
+        DianElement = string.IsNullOrWhiteSpace(DianElement) ? null : DianElement.Trim(),
         AllowsRepeatInPeriod = AllowsRepeatInPeriod,
         MaxQuantity = MaxQuantity,
         MaxAmount = MaxAmount,
@@ -186,6 +201,9 @@ public sealed class ConceptDefinitionInputValidator : AbstractValidator<ConceptD
         RuleFor(x => x.MaxQuantity).GreaterThan(0m).When(x => x.MaxQuantity is not null);
         RuleFor(x => x.MaxAmount).GreaterThan(0m).When(x => x.MaxAmount is not null);
         RuleFor(x => x.ComponentConceptCodes).MaximumLength(400);
+        RuleFor(x => x.DianElement).MaximumLength(60).WithMessage("La ruta DIAN admite hasta 60 caracteres.")
+            .Matches("^[A-Za-z0-9@]+(/[A-Za-z0-9@]+)*$").WithMessage("La ruta DIAN es una ruta del XML, como Devengados/Basico o Deducciones/Salud.")
+            .When(x => !string.IsNullOrWhiteSpace(x.DianElement));
     }
 }
 
@@ -242,6 +260,10 @@ public sealed class ReviseConceptDefinitionCommandHandler(IApplicationDbContext 
                 $"La versión nueva debe empezar después del {actual.ValidFrom:dd/MM/yyyy}, inicio de la versión vigente."));
 
         var nueva = request.Definition.ToEntity(actual.Origin, actual.LegacyConceptId, clock.UtcNow, user.UserName);
+        // Lo que el cliente no manda se hereda de la versión vigente (D-29): la base de vacaciones y la ruta
+        // DIAN no cambian por revisar un nombre o un factor.
+        if (request.Definition.AffectsVacationBase is null) nueva.AffectsVacationBase = actual.AffectsVacationBase;
+        if (request.Definition.DianElement is null) nueva.DianElement = actual.DianElement;
         var reglas = await ConceptDefinitionRules.ValidateAsync(db, nueva, ct);
         if (reglas.IsFailure) return Result.Failure<Guid>(reglas.Error);
 

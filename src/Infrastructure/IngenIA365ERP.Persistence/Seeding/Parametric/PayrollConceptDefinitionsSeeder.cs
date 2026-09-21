@@ -393,10 +393,13 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
             db.PayrollConceptDefinitions.Add(def);
             inserted++;
         }
-        // Feature 010: las dos columnas nuevas se ponen en su sitio en TODAS las versiones sembradas del
-        // código (no cambian ningún valor calculado, así que no ameritan versión); un concepto propio de
-        // la cooperativa (Custom) es suyo y no se toca.
-        foreach (var existente in existentes.Where(e => e.Origin == ConceptOrigin.Seed))
+        // Feature 010: las dos columnas nuevas se ponen en su sitio en las versiones que LA SEMILLA CREÓ
+        // (no cambian ningún valor calculado, así que no ameritan versión). Una versión que una persona
+        // registró al revisar —Origin sigue Seed, pero CreatedBy es ella— lleva lo que ella decidió o
+        // heredó (D-29) y no se toca; un concepto propio de la cooperativa (Custom) tampoco. Hasta el
+        // 2026-09-21 se pisaban todas las Seed en cada arranque, y la revisión de COMISION perdía la base
+        // de vacaciones hasta el reinicio siguiente, cuando volvía a tenerla.
+        foreach (var existente in existentes.Where(e => e.Origin == ConceptOrigin.Seed && e.CreatedBy == SeedContext.ParametricCreatedBy))
         {
             if (!base_.TryGetValue(existente.Code, out var modelo)) continue;
             if (existente.AffectsVacationBase == modelo.AffectsVacationBase && existente.DianElement == modelo.DianElement) continue;
