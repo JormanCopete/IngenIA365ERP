@@ -57,11 +57,19 @@ public class HolidayCommandsTests
         r.Error.Message.Should().Contain("Año Nuevo");
     }
 
+    /// <summary>
+    /// Revisión de N1: el origen de la semilla lo rechaza el <b>handler</b> con su código (422
+    /// <c>Payroll.Holiday.OriginInvalid</c>, D-20). El validador no lo mira: cuando lo miraba, el pipeline
+    /// respondía 400 <c>Validation.Invalid</c> y el código del contrato era inalcanzable por HTTP.
+    /// </summary>
     [Fact]
-    public async Task Solo_se_registran_decretados_o_manuales_desde_la_pantalla()
+    public async Task Solo_se_registran_decretados_o_manuales_y_lo_decide_el_handler_con_su_codigo_no_el_validador()
     {
         var validador = new CreateHolidayCommandValidator();
-        validador.Validate(new CreateHolidayCommand(new DateOnly(2026, 5, 1), "Día del Trabajo", HolidayOrigin.Ley51Fixed)).IsValid.Should().BeFalse();
+        validador.Validate(new CreateHolidayCommand(new DateOnly(2026, 5, 1), "Día del Trabajo", HolidayOrigin.Ley51Fixed)).IsValid
+            .Should().BeTrue("el validador deja pasar el origen para que el handler responda con Payroll.Holiday.OriginInvalid");
+        validador.Validate(new CreateHolidayCommand(new DateOnly(2026, 5, 1), "Día del Trabajo", (HolidayOrigin)99)).IsValid
+            .Should().BeFalse("un número que no es del enum sí es validación de forma");
 
         var r = await new CreateHolidayCommandHandler(_d.Db, _d.Clock, _d.User, _d.AuditEmitter)
             .Handle(new CreateHolidayCommand(new DateOnly(2026, 5, 1), "Día del Trabajo", HolidayOrigin.Ley51Easter), CancellationToken.None);

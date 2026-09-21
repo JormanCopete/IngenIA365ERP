@@ -87,7 +87,10 @@ public sealed class CreateHolidayCommandValidator : AbstractValidator<CreateHoli
     {
         RuleFor(x => x.Date).NotEqual(default(DateOnly)).WithMessage("La fecha es obligatoria.");
         RuleFor(x => x.Name).NotEmpty().WithMessage("El nombre del festivo es obligatorio.").MaximumLength(80);
-        RuleFor(x => x.Origin).Must(o => o is HolidayOrigin.Manual or HolidayOrigin.Decreed).WithMessage(HolidayErrors.OriginInvalid.Message);
+        // El origen NO se valida aquí: un origen de la semilla es una regla de negocio con código propio
+        // (422 Payroll.Holiday.OriginInvalid, D-20) que decide el handler; una regla en el validador la
+        // tapaba con un 400 Validation.Invalid y la pantalla no podía desarmarla (revisión de N1).
+        RuleFor(x => x.Origin).IsInEnum().WithMessage("Origen desconocido.");
     }
 }
 
