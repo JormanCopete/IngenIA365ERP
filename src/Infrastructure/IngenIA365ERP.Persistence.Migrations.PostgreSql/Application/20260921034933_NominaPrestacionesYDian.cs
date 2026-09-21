@@ -738,12 +738,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 column: "TerminationId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns",
-                column: "VacationMovementId");
-
-            migrationBuilder.CreateIndex(
                 name: "UK_PAY_PayrollRuns_Ordinary_Period_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns",
@@ -1278,11 +1272,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             migrationBuilder.DropIndex(
                 name: "IX_PAY_PayrollRuns_TerminationId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns");
-
-            migrationBuilder.DropIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
                 schema: "dbo",
                 table: "PAY_PayrollRuns");
 

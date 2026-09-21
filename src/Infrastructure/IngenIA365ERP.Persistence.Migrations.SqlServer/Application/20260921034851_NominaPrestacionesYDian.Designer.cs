@@ -31179,8 +31179,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("TerminationId");
 
-                    b.HasIndex("VacationMovementId");
-
                     b.HasIndex("Kind", "Status")
                         .HasDatabaseName("IX_PAY_PayrollRuns_Kind_Status");
 
