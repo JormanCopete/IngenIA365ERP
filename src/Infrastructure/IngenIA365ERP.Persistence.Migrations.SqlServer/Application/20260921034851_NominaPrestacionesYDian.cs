@@ -1153,20 +1153,23 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                   AND e.[PayrollBankId] IS NOT NULL AND LTRIM(RTRIM(e.[PayrollBankId])) <> '';
                 """);
 
-            // (3) Source exacto (norma y artículo) SÓLO donde la fila todavía dice el texto genérico de la
-            //     semilla 2026. Los textos genéricos son los de PayrollLegalParametersSeeder a la fecha;
-            //     una vigencia con Source editado a mano no cumple la condición y no se toca.
+            // (3) Source exacto (norma y artículo) SÓLO donde la fila viva todavía dice el texto genérico de la
+            //     semilla 2026. Los textos son EXACTAMENTE las constantes de PayrollLegalParametersSeeder
+            //     (Fuente*): la revisión de N1 encontró cuatro distintos y las cooperativas migradas quedaban con
+            //     una norma y las nuevas con otra, para siempre, porque el seeder respeta todo Source que no sea
+            //     genérico. Una vigencia con Source editado a mano no cumple la condición y no se toca. La
+            //     prueba MigracionYSemillaDicenLaMismaNorma cruza estos literales con el catálogo.
             migrationBuilder.Sql("""
-                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)'
-                WHERE [Code] = 'SMMLV' AND [Source] = N'Decreto de salario mínimo y auxilio de transporte 2026';
-                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Decreto 1470 de 2025 (auxilio de transporte 2026)'
-                WHERE [Code] = 'AUX_TRANSPORTE' AND [Source] = N'Decreto de salario mínimo y auxilio de transporte 2026';
-                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Resolución DIAN 000238 de 2025 (UVT 2026)'
-                WHERE [Code] = 'UVT' AND [Source] = N'Resolución DIAN que fija la UVT 2026';
+                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)'
+                WHERE [Code] = 'SMMLV' AND [IsDeleted] = 0 AND [Source] = N'Decreto de salario mínimo y auxilio de transporte 2026';
+                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Decreto 1470 de 2025'
+                WHERE [Code] = 'AUX_TRANSPORTE' AND [IsDeleted] = 0 AND [Source] = N'Decreto de salario mínimo y auxilio de transporte 2026';
+                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Resolución DIAN 000238 del 15-12-2025'
+                WHERE [Code] = 'UVT' AND [IsDeleted] = 0 AND [Source] = N'Resolución DIAN que fija la UVT 2026';
                 UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Ley 2466 de 2025 art. 21'
-                WHERE [Code] = 'SALUD_APRENDIZ_PCT' AND [Source] = N'Ley 789 de 2002 art. 30 y Decreto 933 de 2003';
-                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Ley 797 de 2003 art. 8'
-                WHERE [Code] = 'FSP_TABLA' AND [Source] = N'Ley 100 de 1993, Ley 797 de 2003 y Decreto 1072 de 2015';
+                WHERE [Code] = 'SALUD_APRENDIZ_PCT' AND [IsDeleted] = 0 AND [Source] = N'Ley 789 de 2002 art. 30 y Decreto 933 de 2003';
+                UPDATE dbo.[PAY_LegalParameters] SET [Source] = N'Ley 797 de 2003 art. 8 (Ley 100 de 1993 art. 27)'
+                WHERE [Code] = 'FSP_TABLA' AND [IsDeleted] = 0 AND [Source] = N'Ley 100 de 1993, Ley 797 de 2003 y Decreto 1072 de 2015';
                 """);
 
             // (4) La tabla del fondo de solidaridad de la Ley 797 rige hasta el 2027-03-31 (Ley 2381 de 2024
