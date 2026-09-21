@@ -75,6 +75,22 @@ public class PayrollConceptDefinition : AuditableEntity
     /// <summary>Prestacional.</summary>
     public bool IsBenefitRelated { get; set; }
 
+    /// <summary>
+    /// Feature 010 (R6): entra a la base de vacaciones e indemnización (CST art. 192: salario
+    /// ordinario sin auxilio, sin extras, sin trabajo en descanso obligatorio). La semilla lo pone
+    /// en su sitio en las versiones sembradas; no altera ningún valor de la nómina ordinaria.
+    /// </summary>
+    public bool AffectsVacationBase { get; set; }
+
+    /// <summary>
+    /// Feature 010 (R10): ruta del concepto en el XML de nómina electrónica (anexo 3.1):
+    /// <c>Devengados/Basico</c>, <c>Deducciones/Salud</c>… Nulo = el concepto no va al documento
+    /// (provisiones, aportes del empleador, informativos). Un concepto con valor y sin ruta es
+    /// inconsistencia bloqueante al generar.
+    /// </summary>
+    [MaxLength(60)]
+    public string? DianElement { get; set; }
+
     // --- Reglas de la novedad ---
 
     public bool AllowsRepeatInPeriod { get; set; }

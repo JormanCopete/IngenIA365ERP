@@ -45,6 +45,26 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         // === Payroll banking ===
         builder.Property(e => e.PayrollBankId).HasMaxLength(4);
         builder.Property(e => e.PayrollBankAccountNumber).HasMaxLength(25);
+        // Feature 010: BankAccountType es el nombre en Domain de PayrollBankAccountType, misma columna.
+        builder.Ignore(e => e.BankAccountType);
+        // Banco destino de la dispersión (R11): FK a COR_Banks; la migración lo rellena por dato
+        // con COR_Banks.LegacyCode = PayrollBankId.
+        builder.HasOne<Domain.Entities.Core.Bank>().WithMany().HasForeignKey(e => e.DisbursementBankId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.DisbursementBankId).HasDatabaseName("IX_PAY_Employees_DisbursementBank");
+
+        // === PILA y nómina electrónica (feature 010, data-model §1.4) ===
+        builder.Property(e => e.PilaContributorType).HasMaxLength(2);
+        builder.Property(e => e.PilaContributorSubType).HasMaxLength(2);
+        builder.Property(e => e.HighRiskPension).HasDefaultValue(false);
+        builder.Property(e => e.DianPaymentMethodCode).HasMaxLength(3);
+        // Default en la base: las fichas existentes quedan «no consta» sin migración de datos.
+        builder.Property(e => e.PensionTransitionRegime).HasDefaultValue(Domain.Enums.Payroll.PensionTransitionRegime.Unknown);
+        builder.Property(e => e.ForeignNotRequiredToContributePension).HasDefaultValue(false);
+        builder.Property(e => e.ColombianAbroad).HasDefaultValue(false);
+        builder.Property(e => e.WorkMunicipalityDaneCode).HasMaxLength(5);
+        builder.Property(e => e.WorkAddress).HasMaxLength(120);
+        builder.Property(e => e.EconomicActivityCode).HasMaxLength(7);
+        builder.Property(e => e.WorkCenterCode).HasMaxLength(9);
 
         // === Bonuses & provisions ===
         builder.Property(e => e.RepresentationExpense).HasPrecision(18, 2);

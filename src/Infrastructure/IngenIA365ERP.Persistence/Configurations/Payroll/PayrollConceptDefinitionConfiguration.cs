@@ -22,6 +22,10 @@ public class PayrollConceptDefinitionConfiguration : IEntityTypeConfiguration<Pa
         builder.Property(e => e.AmountParameterCode).HasMaxLength(40);
         builder.Property(e => e.TableParameterCode).HasMaxLength(40);
         builder.Property(e => e.ComponentConceptCodes).HasMaxLength(400);
+        // Feature 010: base de vacaciones (R6) y ruta en el XML de la DIAN (R10). El default va en la
+        // base para que las versiones ya sembradas lleguen en falso y la semilla las ponga en su sitio.
+        builder.Property(e => e.AffectsVacationBase).HasDefaultValue(false);
+        builder.Property(e => e.DianElement).HasMaxLength(60);
 
         builder.Property(e => e.FixedAmount).HasPrecision(18, 2);
         builder.Property(e => e.Percent).HasPrecision(9, 4);

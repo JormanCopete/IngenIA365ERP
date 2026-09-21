@@ -9247,6 +9247,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)0);
 
+                    b.Property<string>("OtherNames")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<short>("PaymentDays")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
@@ -9275,6 +9279,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("SecondLastName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("SocialStratum")
                         .HasMaxLength(4)
@@ -26579,6 +26587,77 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("PAY_BookBalances", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.CompanyPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Key", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_CompanyPolicies_Key_ValidFrom")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.ToTable("PAY_CompanyPolicies", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.ConceptAccount", b =>
                 {
                     b.Property<int>("Id")
@@ -26781,6 +26860,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ApprenticeStage")
+                        .HasColumnType("integer");
+
                     b.Property<string>("AreaCode")
                         .HasMaxLength(4)
                         .HasColumnType("character varying(4)");
@@ -26795,6 +26877,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<decimal>("BonusDays")
                         .HasPrecision(10)
                         .HasColumnType("numeric(10,0)");
+
+                    b.Property<bool>("ColombianAbroad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime>("ContractEndDate")
                         .HasColumnType("timestamp with time zone");
@@ -26828,6 +26915,20 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DianContractType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DianPaymentMethodCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int?>("DisbursementBankId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EconomicActivityCode")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
                     b.Property<DateTime?>("EffectiveDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -26847,8 +26948,18 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("FirstPayCycle")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("ForeignNotRequiredToContributePension")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("HealthInsuranceId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("HighRiskPension")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("HolidayDays")
                         .HasColumnType("integer");
@@ -26929,8 +27040,21 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(1)
                         .HasColumnType("character varying(1)");
 
+                    b.Property<int>("PensionTransitionRegime")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("PersonId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PilaContributorSubType")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("PilaContributorType")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
 
                     b.Property<int>("PositionId")
                         .HasColumnType("integer");
@@ -27027,6 +27151,18 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(7, 4)
                         .HasColumnType("numeric(7,4)");
 
+                    b.Property<string>("WorkAddress")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("WorkCenterCode")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)");
+
+                    b.Property<string>("WorkMunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)");
+
                     b.Property<int>("WorkRiskId")
                         .HasColumnType("integer");
 
@@ -27040,6 +27176,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DisbursementBankId")
+                        .HasDatabaseName("IX_PAY_Employees_DisbursementBank");
 
                     b.HasIndex("PayrollCompanyId");
 
@@ -27058,6 +27197,106 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("Status");
 
                     b.ToTable("PAY_Employees", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeBenefitOpeningBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AccruedServiceBonus")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("AccruedSeverance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("AccruedSeveranceInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("AdjustmentReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int?>("AdjustsBalanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("AsOfDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ConsumedByRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("PendingVacationDays")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ServiceBonusDaysAccrued")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SeveranceDaysAccrued")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustsBalanceId");
+
+                    b.HasIndex("ConsumedByRunId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "AsOfDate", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_EmployeeBenefitOpeningBalances_Employee_AsOf_Kind")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.ToTable("PAY_EmployeeBenefitOpeningBalances", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeLiquidationDetail", b =>
@@ -27386,12 +27625,20 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Origin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("RatePercent")
                         .HasPrecision(6, 3)
                         .HasColumnType("numeric(6,3)");
+
+                    b.Property<int?>("SourceCalculationId")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -27416,10 +27663,110 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("PublicId")
                         .IsUnique();
 
+                    b.HasIndex("SourceCalculationId");
+
                     b.HasIndex("EmployeeId", "ValidFrom")
                         .HasDatabaseName("IX_PAY_EmployeeWithholdingRates_Employee_ValidFrom");
 
                     b.ToTable("PAY_EmployeeWithholdingRates", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmploymentTermination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly?>("ContractEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ContractTypeAtTermination")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReinstateReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("ReinstatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReinstatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("SettlementDocumentAttachmentPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SignedDocumentAttachmentPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("TerminationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("TerminationReasonId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("TerminationDate")
+                        .HasDatabaseName("IX_PAY_EmploymentTerminations_Date");
+
+                    b.HasIndex("TerminationReasonId");
+
+                    b.HasIndex(new[] { "EmployeeId" }, "UK_PAY_EmploymentTerminations_Employee_Registered")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 0 AND \"IsDeleted\" = FALSE");
+
+                    b.HasIndex(new[] { "EmployeeId" }, "UK_PAY_EmploymentTerminations_Employee_Settled")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1 AND \"IsDeleted\" = FALSE");
+
+                    b.ToTable("PAY_EmploymentTerminations", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.FamilyCompensationFund", b =>
@@ -27574,6 +27921,74 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsUnique();
 
                     b.ToTable("PAY_HealthInsuranceProviders", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Holiday", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<short>("Year")
+                        .HasColumnType("smallint");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_Holidays_Date")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Year")
+                        .HasDatabaseName("IX_PAY_Holidays_Year");
+
+                    b.ToTable("PAY_Holidays", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", b =>
@@ -28047,6 +28462,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("AffectsSalaryBase")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("AffectsVacationBase")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("AffectsWithholdingBase")
                         .HasColumnType("boolean");
 
@@ -28086,6 +28506,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("text");
+
+                    b.Property<string>("DianElement")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
 
                     b.Property<decimal?>("FixedAmount")
                         .HasPrecision(18, 2)
@@ -28628,6 +29052,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
 
+                    b.Property<int?>("VacationMovementId")
+                        .HasColumnType("integer");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -28645,6 +29072,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("VacationMovementId")
+                        .HasDatabaseName("IX_PAY_Novelties_VacationMovement");
 
                     b.HasIndex("PayPeriodId", "ConceptDefinitionId")
                         .HasDatabaseName("IX_PAY_Novelties_Period_Concept");
@@ -29773,6 +30203,189 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("PAY_SalaryChanges", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SettlementDeduction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AdjustedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AdjustmentReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CarteraTransactionPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("LoanPortfolioId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ProposedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ProposedBreakdownJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("RecurringNoveltyId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("RemainingBalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TerminationId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoanPortfolioId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RecurringNoveltyId");
+
+                    b.HasIndex("TerminationId", "LoanPortfolioId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
+                        .HasFilter("\"LoanPortfolioId\" IS NOT NULL");
+
+                    b.HasIndex("TerminationId", "RecurringNoveltyId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Libranza")
+                        .HasFilter("\"RecurringNoveltyId\" IS NOT NULL");
+
+                    b.ToTable("PAY_SettlementDeductions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SeveranceFundDeposit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("DepositedAt")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DepositedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PayrollRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("SeveranceFundId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SeveranceFundId");
+
+                    b.HasIndex("PayrollRunId", "SeveranceFundId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_SeveranceFundDeposits_Run_Fund");
+
+                    b.ToTable("PAY_SeveranceFundDeposits", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SeveranceHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -30089,6 +30702,83 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("PAY_TaxCertificates", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.TerminationReason", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("GeneratesSeverancePay")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LegalBasis")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("RequiresContractEndDate")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_TerminationReasons_Code")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("PAY_TerminationReasons", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
                 {
                     b.Property<int>("Id")
@@ -30124,6 +30814,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
+                    b.Property<DateOnly?>("CutoffDate")
+                        .HasColumnType("date");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -30144,6 +30837,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("EmployeeCount")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ExceptionsJson")
                         .HasColumnType("text");
 
@@ -30155,7 +30851,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("PayPeriodId")
+                    b.Property<int>("Kind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateOnly?>("PayDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("PayPeriodId")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("PublicId")
@@ -30179,7 +30883,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<byte?>("Semester")
+                        .HasColumnType("smallint");
+
                     b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TerminationId")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("TotalDeductions")
@@ -30208,8 +30918,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
 
+                    b.Property<int?>("VacationMovementId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Version")
                         .HasColumnType("integer");
+
+                    b.Property<short?>("Year")
+                        .HasColumnType("smallint");
 
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
@@ -30226,12 +30942,38 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("ReversalAccountingDocumentId");
 
+                    b.HasIndex("TerminationId");
+
+                    b.HasIndex("VacationMovementId");
+
+                    b.HasIndex("Kind", "Status")
+                        .HasDatabaseName("IX_PAY_PayrollRuns_Kind_Status");
+
                     b.HasIndex("PayPeriodId", "Status")
                         .HasDatabaseName("IX_PAY_PayrollRuns_Period_Status");
 
                     b.HasIndex("PayPeriodId", "Version")
                         .IsUnique()
-                        .HasDatabaseName("UK_PAY_PayrollRuns_Period_Version");
+                        .HasDatabaseName("UK_PAY_PayrollRuns_Ordinary_Period_Version")
+                        .HasFilter("\"Kind\" = 0");
+
+                    b.HasIndex("Year", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollRuns_Severance_Year_Version")
+                        .HasFilter("\"Kind\" = 2");
+
+                    b.HasIndex("Year", "Semester", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollRuns_ServiceBonus_Year_Semester_Version")
+                        .HasFilter("\"Kind\" = 1");
+
+                    b.HasIndex(new[] { "EmployeeId", "CutoffDate", "Version" }, "UK_PAY_PayrollRuns_Settlement_Employee_Cutoff_Version")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 4");
+
+                    b.HasIndex(new[] { "EmployeeId", "CutoffDate", "Version" }, "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 3");
 
                     b.ToTable("PAY_PayrollRuns", "dbo");
                 });
@@ -30426,6 +31168,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<int?>("SettlementDeductionId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -30445,6 +31190,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("SettlementDeductionId");
 
                     b.HasIndex("PayrollRunEmployeeId", "Order")
                         .HasDatabaseName("IX_PAY_PayrollRunLines_RunEmployee_Order");
@@ -30570,6 +31317,102 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsUnique();
 
                     b.ToTable("PAY_VacationLiquidations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.VacationMovement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("BusinessDays")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<int>("CalendarDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int?>("PayrollRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SkippedDaysJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WeekPolicyUsed")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_PAY_VacationMovements_Status");
+
+                    b.HasIndex("EmployeeId", "StartDate")
+                        .HasDatabaseName("IX_PAY_VacationMovements_Employee_Start");
+
+                    b.ToTable("PAY_VacationMovements", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingCause", b =>
@@ -30709,6 +31552,236 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_PAY_WithholdingParameters_Plan_Range");
 
                     b.ToTable("PAY_WithholdingParameters", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("AverageInUvt")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("AverageMonthlyBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CalculatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CalculatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("DepuratedBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("DepurationSequence")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("Divisor")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExplanationJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<byte>("MonthsConsidered")
+                        .HasColumnType("smallint");
+
+                    b.Property<bool>("PlanTableUsed")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("RatePercent")
+                        .HasPrecision(6, 3)
+                        .HasColumnType("numeric(6,3)");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int?>("ResultingRateId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TableParameterId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("TargetSemester")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("TargetYear")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal>("TheoreticalWithholding")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalDeclaredDeductions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalExemptIncome")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalGrossIncome")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalMandatoryContributions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("UvtValueUsed")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ResultingRateId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_PAY_WithholdingRateCalculations_Status");
+
+                    b.HasIndex("TableParameterId");
+
+                    b.HasIndex("EmployeeId", "TargetYear", "TargetSemester", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_WithholdingRateCalculations_Employee_Target_Version");
+
+                    b.ToTable("PAY_WithholdingRateCalculations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculationMonth", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CalculationId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("GrossIncome")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IncludedSpecialRuns")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("MandatoryContributions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<byte>("Month")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceRunsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<short>("Year")
+                        .HasColumnType("smallint");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("CalculationId", "Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_WithholdingRateCalculationMonths_Calculation_Year_Month");
+
+                    b.ToTable("PAY_WithholdingRateCalculationMonths", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WorkRiskProvider", b =>
@@ -34379,6 +35452,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Employee", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
+                        .WithMany()
+                        .HasForeignKey("DisbursementBankId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", "PayrollPlan")
                         .WithMany()
                         .HasForeignKey("PayrollPlanId")
@@ -34394,6 +35472,31 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("PayrollPlan");
 
                     b.Navigation("Person");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeBenefitOpeningBalance", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.EmployeeBenefitOpeningBalance", "AdjustsBalance")
+                        .WithMany()
+                        .HasForeignKey("AdjustsBalanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", "ConsumedByRun")
+                        .WithMany()
+                        .HasForeignKey("ConsumedByRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AdjustsBalance");
+
+                    b.Navigation("ConsumedByRun");
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmployeeLiquidationDetail", b =>
@@ -34437,7 +35540,31 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculation", null)
+                        .WithMany()
+                        .HasForeignKey("SourceCalculationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmploymentTermination", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.TerminationReason", "TerminationReason")
+                        .WithMany()
+                        .HasForeignKey("TerminationReasonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("TerminationReason");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.FamilyCompensationFund", b =>
@@ -34550,6 +35677,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.VacationMovement", null)
+                        .WithMany()
+                        .HasForeignKey("VacationMovementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ConceptDefinition");
 
                     b.Navigation("Employee");
@@ -34652,6 +35784,46 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SettlementDeduction", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.LoanPortfolio", null)
+                        .WithMany()
+                        .HasForeignKey("LoanPortfolioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollRecurringNovelty", null)
+                        .WithMany()
+                        .HasForeignKey("RecurringNoveltyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.EmploymentTermination", "Termination")
+                        .WithMany("Deductions")
+                        .HasForeignKey("TerminationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Termination");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SeveranceFundDeposit", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", "PayrollRun")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.SeveranceProvider", "SeveranceFund")
+                        .WithMany()
+                        .HasForeignKey("SeveranceFundId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollRun");
+
+                    b.Navigation("SeveranceFund");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SeveranceHistory", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
@@ -34691,22 +35863,42 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("AccountingDocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayPeriod", "PayPeriod")
                         .WithMany()
                         .HasForeignKey("PayPeriodId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.Transactions.AccountingDocument", "ReversalAccountingDocument")
                         .WithMany()
                         .HasForeignKey("ReversalAccountingDocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.EmploymentTermination", "Termination")
+                        .WithMany()
+                        .HasForeignKey("TerminationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.VacationMovement", "VacationMovement")
+                        .WithMany()
+                        .HasForeignKey("VacationMovementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("AccountingDocument");
+
+                    b.Navigation("Employee");
 
                     b.Navigation("PayPeriod");
 
                     b.Navigation("ReversalAccountingDocument");
+
+                    b.Navigation("Termination");
+
+                    b.Navigation("VacationMovement");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>
@@ -34736,6 +35928,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.SettlementDeduction", null)
+                        .WithMany()
+                        .HasForeignKey("SettlementDeductionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("RunEmployee");
                 });
 
@@ -34750,6 +35947,22 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.VacationMovement", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", null)
+                        .WithMany()
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingParameter", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollPlan", "PayrollPlan")
@@ -34759,6 +35972,41 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsRequired();
 
                     b.Navigation("PayrollPlan");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.EmployeeWithholdingRate", null)
+                        .WithMany()
+                        .HasForeignKey("ResultingRateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameter", "TableParameter")
+                        .WithMany()
+                        .HasForeignKey("TableParameterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("TableParameter");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculationMonth", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculation", "Calculation")
+                        .WithMany("Months")
+                        .HasForeignKey("CalculationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Calculation");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WorkRiskProvider", b =>
@@ -35119,6 +36367,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Transactions");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.EmploymentTermination", b =>
+                {
+                    b.Navigation("Deductions");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PayrollLegalParameter", b =>
                 {
                     b.Navigation("Ranges");
@@ -35132,6 +36385,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WithholdingRateCalculation", b =>
+                {
+                    b.Navigation("Months");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.Permission", b =>

@@ -437,6 +437,27 @@ Month)`. **Transiciones**: `Calculated → Approved` cierra la `EmployeeWithhold
 `Payroll.WithholdingRate.Approved` y la misma `Payroll.EmployeeWithholding.Changed` de hoy.
 `Calculated → Superseded` por recálculo; `Calculated → Rejected` con motivo.
 
+### 2.7a `PAY_SeveranceFundDeposits` — `SeveranceFundDeposit` (FR-012)
+
+La consignación de las cesantías anuales a cada fondo. El contrato (`api.md` §3.2,
+`POST /{runId}/funds/{fundId}/mark-deposited`) la pedía y la tabla no estaba en este documento;
+se agregó al implementar N1 (T010, 2026-09-21).
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `PayrollRunId` | FK `PAY_PayrollRuns` | la corrida `Severance` **aprobada** |
+| `SeveranceFundId` | FK `PAY_SeveranceProviders` | |
+| `DepositedAt` | date | fecha de la consignación, digitada al marcar |
+| `DepositedBy` | nvarchar(100) | quién marcó |
+| `Reference` | nvarchar(60), nullable | referencia del pago o planilla del fondo |
+| `Amount` | 18,2 | lo consignado, como quedó en la relación por fondo al marcar |
+
+Único `(PayrollRunId, SeveranceFundId)`. **Invariantes**: sólo sobre corrida `Approved`
+(`Payroll.Severance.NotApproved`); marcar dos veces → `Payroll.Severance.AlreadyDeposited`; la
+reversión de la corrida **no** la borra (la consignación ocurrió aunque el asiento se reverse; queda
+como historial y la pantalla lo muestra). El aviso de `CESANTIAS_FECHA_LIMITE_CONSIGNACION` se calla
+para los fondos que tienen fila. Auditoría `Payroll.Severance.Deposited`.
+
 ### 2.8 PILA (R9): `PAY_PilaSettings`, `PAY_PilaGenerations`, `PAY_PilaGenerationLines`, `PAY_PilaIssues`
 
 El **layout** (registros tipo 1 y 2 del AT2 v30) es un recurso JSON embebido con `ValidFrom`
@@ -725,6 +746,7 @@ bloquea la reversión como la marca manual (`Payroll.PaymentBlocksReversal`); `G
 | `PAY_SettlementDeductions` | `SettlementDeduction` | `(TerminationId, LoanPortfolioId)` · not null; `(TerminationId, RecurringNoveltyId)` · not null |
 | `PAY_WithholdingRateCalculations` | `WithholdingRateCalculation` | `(EmployeeId, TargetYear, TargetSemester, Version)` |
 | `PAY_WithholdingRateCalculationMonths` | `WithholdingRateCalculationMonth` | `(CalculationId, Year, Month)` |
+| `PAY_SeveranceFundDeposits` | `SeveranceFundDeposit` | `(PayrollRunId, SeveranceFundId)` |
 | `PAY_PilaSettings` | `PilaSettings` | fila única (regla del comando) |
 | `PAY_PilaGenerations` | `PilaGeneration` | `(Year, Month, Version)` |
 | `PAY_PilaGenerationLines` | `PilaGenerationLine` (Long) | `(GenerationId, LineNumber)` |
@@ -768,7 +790,8 @@ base; la API sólo verifica).
      las columnas de `PAY_Employees` de §1.4 (con FK a `COR_Banks`).
    - Tablas nuevas: `PAY_CompanyPolicies`, `PAY_Holidays`, `PAY_EmployeeBenefitOpeningBalances`,
      `PAY_VacationMovements`, `PAY_TerminationReasons`, `PAY_EmploymentTerminations`,
-     `PAY_SettlementDeductions`, `PAY_WithholdingRateCalculations` (+ `Months`).
+     `PAY_SettlementDeductions`, `PAY_WithholdingRateCalculations` (+ `Months`),
+     `PAY_SeveranceFundDeposits` (§2.7a).
    - **Datos (idempotentes, `INSERT … WHERE NOT EXISTS` / `UPDATE … WHERE` con la condición
      exacta)**: copiar `Payroll.ApplyEmployerExemption` → `Exonerada114_1` y
      `Payroll.AllowSameUserApproval` → `AllowSameUserApproval` en `PAY_CompanyPolicies` con

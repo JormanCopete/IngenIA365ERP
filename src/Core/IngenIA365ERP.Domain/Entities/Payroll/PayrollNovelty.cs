@@ -51,6 +51,9 @@ public class PayrollNovelty : AuditableEntity
     public int? LoanPortfolioId { get; set; }
     public int? CarriedFromNoveltyId { get; set; }
 
+    /// <summary>Feature 010 (R6): el movimiento de vacaciones que generó esta novedad (<see cref="NoveltyOrigin.VacationLeave"/>).</summary>
+    public int? VacationMovementId { get; set; }
+
     public int? InstallmentNumber { get; set; }
     public int? InstallmentTotal { get; set; }
 

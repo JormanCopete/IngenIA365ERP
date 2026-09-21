@@ -262,6 +262,18 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<PayrollPayment> PayrollPayments => Set<PayrollPayment>();
     public DbSet<PayslipDelivery> PayslipDeliveries => Set<PayslipDelivery>();
 
+    // === Payroll — feature 010 (entrega N1) ===
+    public DbSet<CompanyPolicy> CompanyPolicies => Set<CompanyPolicy>();
+    public DbSet<Holiday> Holidays => Set<Holiday>();
+    public DbSet<EmployeeBenefitOpeningBalance> EmployeeBenefitOpeningBalances => Set<EmployeeBenefitOpeningBalance>();
+    public DbSet<VacationMovement> VacationMovements => Set<VacationMovement>();
+    public DbSet<TerminationReason> TerminationReasons => Set<TerminationReason>();
+    public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
+    public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
+    public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
+    public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
+    public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
+
     // === Inventory (24) ===
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
