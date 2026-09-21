@@ -20,6 +20,9 @@ public record PersonDto
     // Identificacion
     public string LastName { get; init; } = string.Empty;
     public string FirstName { get; init; } = string.Empty;
+    /// <summary>Feature 010 (D-06): segundo apellido y otros nombres separados; nulos hasta que la ficha los capture.</summary>
+    public string? SecondLastName { get; init; }
+    public string? OtherNames { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public string? TaxIdCheckDigit { get; init; }
     public string? IdIssuedAt { get; init; }

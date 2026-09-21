@@ -64,6 +64,8 @@ public class UpdatePersonCommandHandler(
         person.IdIssueDate = request.IdIssueDate;
         person.FirstName = request.FirstName;
         person.LastName = request.LastName;
+        person.SecondLastName = string.IsNullOrWhiteSpace(request.SecondLastName) ? null : request.SecondLastName.Trim();
+        person.OtherNames = string.IsNullOrWhiteSpace(request.OtherNames) ? null : request.OtherNames.Trim();
         person.BusinessName = request.BusinessName;
         person.PersonType = request.PersonType;
         person.Address = request.Address;

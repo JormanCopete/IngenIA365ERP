@@ -59,6 +59,8 @@ public sealed class PersonFactory(
             IdIssueDate = input.IdIssueDate,
             FirstName = input.FirstName,
             LastName = input.LastName,
+            SecondLastName = Vacio(input.SecondLastName),
+            OtherNames = Vacio(input.OtherNames),
             BusinessName = input.BusinessName,
             PersonType = input.PersonType,
             Address = input.Address,
@@ -141,6 +143,8 @@ public sealed class PersonFactory(
             eliminadaEl is { } fecha
                 ? $"Ese documento pertenece a una persona eliminada el {fecha:yyyy-MM-dd}: {nombre}."
                 : $"Ese documento pertenece a una persona eliminada: {nombre}.");
+
+    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     public static string NombreVisible(string firstName, string lastName, string? businessName) =>
         !string.IsNullOrWhiteSpace(businessName) ? businessName : $"{firstName} {lastName}".Trim();

@@ -1,6 +1,8 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.EmployeeManagement.Contracts;
+using IngenIA365ERP.Application.Payroll.EmployeeManagement.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -13,7 +15,7 @@ namespace IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.UpdateEm
 /// Datos personales (nombre, contacto) NO se editan aqui — viven en
 /// COR_People y se cambian desde /maestros/personas.
 /// </summary>
-public record UpdateEmployeeCommand : IRequest<Result>
+public record UpdateEmployeeCommand : IRequest<Result>, IFichaPilaDian
 {
     public Guid EmployeePublicId { get; init; }
 
@@ -44,6 +46,15 @@ public record UpdateEmployeeCommand : IRequest<Result>
     public Guid? PayrollBankPublicId { get; init; }
     public string? PayrollBankAccountNumber { get; init; }
     public int PayrollBankAccountType { get; init; }
+
+    // Feature 010 (contracts/api.md §12). Un bloque que no viene no toca lo que había: las
+    // pantallas anteriores a la feature mandan sólo lo de arriba y no deben borrar el DIVIPOLA.
+    public PilaEmployeeInput? Pila { get; init; }
+    public DianEmployeeInput? Dian { get; init; }
+    public ApprenticeStage? ApprenticeStage { get; init; }
+    /// <summary>Banco de dispersión. Nulo = no cambia; <see cref="ClearDisbursementBank"/> lo quita.</summary>
+    public Guid? DisbursementBankPublicId { get; init; }
+    public bool ClearDisbursementBank { get; init; }
 }
 
 public class UpdateEmployeeCommandHandler(
@@ -125,6 +136,17 @@ public class UpdateEmployeeCommandHandler(
             if (bank is not null) payrollBankId = bank.Id.ToString();
         }
 
+        int? disbursementBankId = null;
+        if (request.ClearDisbursementBank) disbursementBankId = 0;
+        else if (request.DisbursementBankPublicId is { } bancoDispersion)
+        {
+            var banco = await context.Banks.AsNoTracking()
+                .FirstOrDefaultAsync(b => b.PublicId == bancoDispersion && !b.IsDeleted, ct);
+            if (banco is null)
+                return Result.Failure(new Error("Payroll.Employee.DisbursementBankNotFound", "El banco de dispersión elegido no existe."));
+            disbursementBankId = banco.Id;
+        }
+
         var previousSalary = employee.Salary;
         var salaryChanged = previousSalary != request.BaseSalary;
 
@@ -139,6 +161,8 @@ public class UpdateEmployeeCommandHandler(
         employee.PayrollBankId = payrollBankId;
         employee.PayrollBankAccountNumber = request.PayrollBankAccountNumber ?? "";
         employee.PayrollBankAccountType = request.PayrollBankAccountType;
+        var reparoDeFicha = FichaPilaDian.Aplicar(employee, request, disbursementBankId);
+        if (reparoDeFicha is not null) return Result.Failure(reparoDeFicha);
         employee.UpdatedAt = dateTime.UtcNow;
         employee.UpdatedBy = currentUser.UserName;
 
@@ -222,5 +246,8 @@ public class UpdateEmployeeCommandValidator : AbstractValidator<UpdateEmployeeCo
         RuleFor(x => x.ContractType).InclusiveBetween(0, 10);
         RuleFor(x => x.PayrollBankAccountType).InclusiveBetween(0, 2);
         RuleFor(x => x.PayrollBankAccountNumber).MaximumLength(25);
+        RuleFor(x => x.Pila!).SetValidator(new PilaEmployeeInputValidator()).When(x => x.Pila is not null);
+        RuleFor(x => x.Dian!).SetValidator(new DianEmployeeInputValidator()).When(x => x.Dian is not null);
+        RuleFor(x => x.ApprenticeStage).IsInEnum().When(x => x.ApprenticeStage is not null);
     }
 }

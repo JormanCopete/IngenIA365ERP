@@ -41,6 +41,8 @@ public sealed class EmployeeRegistrar(
         var severanceFundId = await IdDeAsync(() => context.SeveranceProviders, input.SeveranceProviderPublicId, ct);
         var familySubsidyId = await IdDeAsync(() => context.FamilyCompensationFunds, input.FamilyCompensationFundPublicId, ct);
         var payrollBankId = await IdDeAsync(() => context.Banks, input.PayrollBankPublicId, ct);
+        // Feature 010: banco de dispersion (FK real a COR_Banks); si no viene, el mismo de la banca de nomina.
+        var disbursementBankId = input.DisbursementBankPublicId is null ? payrollBankId : await IdDeAsync(() => context.Banks, input.DisbursementBankPublicId, ct);
 
         // La clase ARL sí se exige cuando viene: sin la fila la liquidación queda bloqueada
         // con «sin clase de riesgo ARL» y nadie sabría por qué (2026-09-11).
@@ -115,6 +117,10 @@ public sealed class EmployeeRegistrar(
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };
+        var reparoDeFicha = FichaPilaDian.Aplicar(employee, input, disbursementBankId);
+        if (reparoDeFicha is not null)
+            return Result.Failure<Employee>(reparoDeFicha);
+
         context.Employees.Add(employee);
 
         // Registro inicial en historial salarial, enlazado por navegación: EF pone el
