@@ -43,8 +43,9 @@ public sealed record VacationBalanceResult(
 ///
 /// <para>
 /// Cuenta <b>todos</b> los movimientos vivos del empleado, también los registrados para fechas
-/// posteriores: un disfrute programado ya compromete el saldo. La explicación de una corrida de
-/// vacaciones, en cambio, mira los movimientos hasta su corte.
+/// posteriores: un disfrute programado ya compromete el saldo. El cargador de las liquidaciones
+/// (<see cref="SettlementInputLoader"/>) trae los mismos movimientos y las suspensiones desde el
+/// ingreso, así que la pantalla y lo que pagan la corrida de vacaciones y la definitiva coinciden.
 /// </para>
 /// </summary>
 public sealed class VacationBalanceCalculator(IApplicationDbContext db)

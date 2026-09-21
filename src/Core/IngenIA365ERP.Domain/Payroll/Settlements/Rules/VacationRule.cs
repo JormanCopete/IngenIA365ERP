@@ -54,6 +54,10 @@ public static class VacationRule
                 case VacationMovementKind.SettlementPayout:
                     consumidos += m.BusinessDays;
                     exp.Step($"− {Etiqueta(m.Kind)}{Fechas(m)}", m.BusinessDays);
+                    // Un disfrute o una compensación ya registrados para después del corte (o del retiro)
+                    // comprometen el saldo igual que en la pantalla; si no van a pagarse hay que anularlos.
+                    if (m.Kind != VacationMovementKind.SettlementPayout && m.StartDate is { } inicioMovimiento && inicioMovimiento.Date > fin)
+                        ctx.Warn($"{Etiqueta(m.Kind)}{Fechas(m)} de {Fmt.Num(m.BusinessDays)} días hábiles es posterior al {Fmt.Date(fin)} y ya está registrado: se descuenta del saldo. Si no debe pagarse, anúlelo antes de aprobar.");
                     break;
                 case VacationMovementKind.Adjustment:
                     consumidos -= m.BusinessDays;
