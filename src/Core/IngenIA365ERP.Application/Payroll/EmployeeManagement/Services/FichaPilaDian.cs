@@ -36,6 +36,12 @@ public static class FichaPilaDian
     /// </summary>
     public static Error? Aplicar(Employee e, IFichaPilaDian input, int? disbursementBankId, bool clearApprenticeStage = false)
     {
+        // La regla del aprendiz se mira antes de tocar la ficha: un comando rechazado no deja nada a medias
+        // en la entidad seguida por el contexto (la etapa en nulo, por ejemplo, que otro guardado arrastraría).
+        var etapa = clearApprenticeStage ? null : input.ApprenticeStage ?? e.ApprenticeStage;
+        if (e.EmployeeClass is EmployeeClass.Apprentice or EmployeeClass.Intern && etapa is null)
+            return ApprenticeStageRequired;
+
         if (input.Pila is { } pila)
         {
             e.PilaContributorType = Vacio(pila.ContributorType);
@@ -63,12 +69,8 @@ public static class FichaPilaDian
             if (input.Pila is null) e.HighRiskPension = dian.HighRiskPension;
         }
 
-        if (clearApprenticeStage) e.ApprenticeStage = null;
-        else if (input.ApprenticeStage is { } etapa) e.ApprenticeStage = etapa;
+        e.ApprenticeStage = etapa;
         if (disbursementBankId is { } banco) e.DisbursementBankId = banco == 0 ? null : banco;
-
-        if (e.EmployeeClass is EmployeeClass.Apprentice or EmployeeClass.Intern && e.ApprenticeStage is null)
-            return ApprenticeStageRequired;
         return null;
     }
 
