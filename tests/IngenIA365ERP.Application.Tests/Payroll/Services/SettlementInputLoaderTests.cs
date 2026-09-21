@@ -30,6 +30,30 @@ public class SettlementInputLoaderTests
     }
 
     [Fact]
+    public async Task Un_empleado_sin_provision_acumulada_recibe_las_cuatro_provisiones_en_cero_y_el_motor_ajusta_toda_la_prima_al_gasto()
+    {
+        // Sin ninguna corrida aprobada ni saldo inicial: el saldo consultado es cero de verdad. Si el
+        // lector no informara PROV_PRIMA, el motor omitiría el ajuste y el comprobante debitaría la
+        // provisión por toda la prima (la e2e de la prima lo atrapó el 2026-09-21 con empleados
+        // recién creados por otra prueba en la misma cooperativa).
+        var d = new NominaTestData();
+
+        var batch = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Prima(2026, 1), CancellationToken.None);
+
+        var ana = batch.Employees.Should().ContainSingle(e => e.Employee.Id == d.Ana.Id).Subject;
+        ana.Input.Provisions.Select(p => p.ProvisionConceptCode).Should().BeEquivalentTo(
+            WellKnownConceptCodes.ServiceBonusProvision, WellKnownConceptCodes.SeveranceProvision,
+            WellKnownConceptCodes.SeveranceInterestProvision, WellKnownConceptCodes.VacationProvision);
+        ana.Input.Provisions.Should().OnlyContain(p => p.Accrued == 0m);
+
+        var resultado = new SettlementCalculationEngine().Calculate(ana.Input);
+        var prima = resultado.Lines.Single(l => l.Code == WellKnownConceptCodes.ServiceBonus);
+        var ajuste = resultado.Lines.Should().ContainSingle(l => l.Code == WellKnownConceptCodes.ServiceBonusProvisionAdjustment).Subject;
+        ajuste.Amount.Should().Be(prima.Amount, "sin provisión acumulada, toda la prima va al gasto y nada queda debitado en la provisión");
+        resultado.Skips.Should().NotContain(k => k.ReasonCode == SettlementReasonCodes.SinProvisionInformada);
+    }
+
+    [Fact]
     public async Task La_prima_recibe_bases_por_mes_provisiones_acumuladas_y_el_historial_de_salario()
     {
         var d = ConSeisMesesAprobados();

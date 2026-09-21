@@ -52,9 +52,15 @@ public class ApproveSeveranceCommandHandlerTests
         cxpIntereses.Select(a => a.PersonId).Should().BeEquivalentTo([e.A.PersonId, e.F.PersonId, e.G.PersonId], "los intereses se pagan al empleado");
         cxpIntereses.Single(a => a.PersonId == e.A.PersonId).Credit.Should().Be(329_891.40m);
 
-        // Provisiones canceladas: A tenía 12 meses provisionados; el ajuste lleva la diferencia (+3 cesantías; −0,60 intereses liberados).
-        asientos.Should().Contain(a => a.AccountId == cuentas["CESANTIAS_AJUSTE_PROV"].DebitAccountId && a.Debit == 3m);
-        asientos.Should().Contain(a => a.AccountId == cuentas["INT_CESANTIAS_AJUSTE_PROV"].CreditAccountId && a.Debit == 0.60m, "un ajuste negativo invierte débito y crédito");
+        // Provisiones canceladas: A tenía 12 meses provisionados y el ajuste lleva sólo la diferencia (+3 cesantías;
+        // −0,60 intereses liberados); F y G no tienen NADA provisionado, así que su ajuste es todo lo liquidado al gasto
+        // (sin ese ajuste la provisión quedaría en negativo: lo atrapó la e2e de la prima el 2026-09-21). El poster agrupa
+        // el ajuste de cesantías por fondo (A y G en Porvenir, F en Protección) y el de intereses en una sola línea neta.
+        var ajusteCesantias = asientos.Where(a => a.AccountId == cuentas["CESANTIAS_AJUSTE_PROV"].DebitAccountId && a.Debit > 0m).ToList();
+        ajusteCesantias.Single(a => a.PersonId == e.Porvenir.Id).Debit.Should().Be(3m + 666_666.67m, "A: +3 de diferencia; G: sin provisión, toda su cesantía");
+        ajusteCesantias.Single(a => a.PersonId == e.Proteccion.Id).Debit.Should().Be(2_315_761.67m, "F: sin provisión, toda su cesantía al gasto");
+        asientos.Single(a => a.AccountId == cuentas["INT_CESANTIAS_AJUSTE_PROV"].CreditAccountId).Credit
+            .Should().Be(277_891.40m + 26_666.67m - 0.60m, "F y G al gasto completo, menos la liberación de 0,60 de A, neteados en la misma cuenta");
     }
 
     [Fact]

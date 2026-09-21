@@ -25,6 +25,15 @@ public sealed class ProvisionBalanceReader(IApplicationDbContext db)
     }
 
     /// <summary>Saldos por concepto de provisión para varios empleados, con corte (imputación ≤ mes del corte; liquidaciones con corte ≤ corte).</summary>
+    /// <summary>Las provisiones que alguna liquidación cancela (<see cref="WellKnownConceptCodes.ProvisionPairFor"/>); se informan siempre, aunque valgan cero.</summary>
+    private static readonly string[] ProvisionesConRubroPar =
+    [
+        WellKnownConceptCodes.ServiceBonusProvision,
+        WellKnownConceptCodes.SeveranceProvision,
+        WellKnownConceptCodes.SeveranceInterestProvision,
+        WellKnownConceptCodes.VacationProvision,
+    ];
+
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<Saldo>>> LeerAsync(IReadOnlyCollection<int> employeeIds, DateOnly cutoff, int? excludeRunId, CancellationToken ct)
     {
         if (employeeIds.Count == 0) return new Dictionary<int, IReadOnlyList<Saldo>>();
@@ -106,11 +115,19 @@ public sealed class ProvisionBalanceReader(IApplicationDbContext db)
                     + b.PendingVacationDays * salario / CalendarConventions.DaysPerMonth;
             }
 
-            var codigos = acumulado.Keys.Concat(ajustado.Keys).Concat(consumido.Keys).Concat(inicial.Keys).Distinct(StringComparer.OrdinalIgnoreCase)
+            // Las cuatro provisiones con rubro par van SIEMPRE, con cero si no hay historia: el
+            // saldo se consultó y es cero de verdad. Si faltara el registro, el motor omitiría el
+            // ajuste («sin provisión informada») y el comprobante debitaría la provisión por todo lo
+            // liquidado: un empleado sin provisión acumulada dejaría la cuenta en negativo. Lo
+            // atrapó la e2e de la prima el 2026-09-21 con empleados recién creados por otra prueba.
+            var codigos = ProvisionesConRubroPar
+                .Concat(acumulado.Keys).Concat(ajustado.Keys).Concat(consumido.Keys).Concat(inicial.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(c => c, StringComparer.Ordinal).ToList();
             resultado[empleado] = codigos
                 .Select(c => new Saldo(c, acumulado.GetValueOrDefault(c), ajustado.GetValueOrDefault(c), consumido.GetValueOrDefault(c), inicial.GetValueOrDefault(c)))
-                .Where(s => s.Accrued != 0m || s.Adjusted != 0m || s.Consumed != 0m || s.OpeningBalance != 0m)
+                .Where(s => ProvisionesConRubroPar.Contains(s.ProvisionCode, StringComparer.OrdinalIgnoreCase)
+                            || s.Accrued != 0m || s.Adjusted != 0m || s.Consumed != 0m || s.OpeningBalance != 0m)
                 .ToList();
         }
         return resultado;
