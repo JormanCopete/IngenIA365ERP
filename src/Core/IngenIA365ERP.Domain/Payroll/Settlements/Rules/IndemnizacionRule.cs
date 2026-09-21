@@ -56,7 +56,7 @@ public static class IndemnizacionRule
         decimal dias;
         switch (ctx.Employee.ContractType)
         {
-            case SettlementContractType.Indefinite:
+            case DianContractType.Indefinite:
             {
                 var tabla = ctx.Parameters.Table(SettlementParameterCodes.SeverancePayTable);
                 var busqueda = RangeTableLookup.Find(tabla, baseMensual, ctx.Parameters);
@@ -93,9 +93,9 @@ public static class IndemnizacionRule
                 }
                 break;
             }
-            case SettlementContractType.FixedTerm:
-            case SettlementContractType.WorkOrLabor:
-            case SettlementContractType.Apprenticeship:
+            case DianContractType.FixedTerm:
+            case DianContractType.WorkOrLabor:
+            case DianContractType.Apprenticeship:
             {
                 if (ctx.Employee.ContractEndDate is not { } finContrato)
                 {
@@ -105,7 +105,7 @@ public static class IndemnizacionRule
                 var faltante = CalendarConventions.Days(retiro.AddDays(1), finContrato);
                 exp.Step($"Días que faltaban del {Fmt.Date(retiro.AddDays(1))} al {Fmt.Date(finContrato)} (contrato {Nombre(ctx.Employee.ContractType)})", faltante);
                 dias = faltante;
-                if (ctx.Employee.ContractType == SettlementContractType.WorkOrLabor)
+                if (ctx.Employee.ContractType == DianContractType.WorkOrLabor)
                 {
                     var minimo = ctx.Parameters.Value(SettlementParameterCodes.SeverancePayWorkContractMinimumDays);
                     var pMin = ctx.Parameters.Describe(SettlementParameterCodes.SeverancePayWorkContractMinimumDays);
@@ -141,13 +141,13 @@ public static class IndemnizacionRule
         ctx.Add(LineFactory.Create(bonoDef, bono, exp));
     }
 
-    private static string Nombre(SettlementContractType t) => t switch
+    private static string Nombre(DianContractType t) => t switch
     {
-        SettlementContractType.FixedTerm => "a término fijo",
-        SettlementContractType.Indefinite => "a término indefinido",
-        SettlementContractType.WorkOrLabor => "por obra o labor",
-        SettlementContractType.Apprenticeship => "de aprendizaje",
-        SettlementContractType.Internship => "de prácticas o pasantía",
+        DianContractType.FixedTerm => "a término fijo",
+        DianContractType.Indefinite => "a término indefinido",
+        DianContractType.WorkOrLabor => "por obra o labor",
+        DianContractType.Apprenticeship => "de aprendizaje",
+        DianContractType.Internship => "de prácticas o pasantía",
         _ => t.ToString(),
     };
 }

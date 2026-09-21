@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
+using IngenIA365ERP.Domain.Enums.Payroll;
 namespace IngenIA365ERP.Domain.Payroll.Settlements;
 
 /// <summary>

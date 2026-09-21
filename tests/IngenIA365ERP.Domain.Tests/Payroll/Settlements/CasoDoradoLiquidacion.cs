@@ -199,7 +199,7 @@ public sealed class CasoDoradoLiquidacion
         public byte ProcedimientoRetencion { get; set; } = 1;
         public decimal? TasaRetencion { get; set; }
         public List<CasoDorado.DeduccionTributariaJson> DeduccionesTributarias { get; set; } = [];
-        public SettlementContractType TipoContrato { get; set; } = SettlementContractType.Indefinite;
+        public DianContractType TipoContrato { get; set; } = DianContractType.Indefinite;
         public DateTime? FinContrato { get; set; }
     }
 

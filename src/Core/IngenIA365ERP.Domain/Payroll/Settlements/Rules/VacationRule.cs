@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using IngenIA365ERP.Domain.Payroll.Calculation.Rules;
 
+using IngenIA365ERP.Domain.Enums.Payroll;
 namespace IngenIA365ERP.Domain.Payroll.Settlements.Rules;
 
 /// <summary>

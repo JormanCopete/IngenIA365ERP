@@ -25,34 +25,9 @@ public enum SettlementKind
     Settlement = 4,
 }
 
-/// <summary>Etapa del contrato de aprendizaje (Ley 2466/2025 art. 21). Misma numeración que la columna <c>PAY_Employees.ApprenticeStage</c>.</summary>
-public enum ApprenticeStage
-{
-    /// <summary>Apoyo de sostenimiento sin prestaciones: fuera de las cuatro liquidaciones.</summary>
-    Lective = 1,
-
-    /// <summary>Contrato laboral pleno: prima, cesantías, intereses y vacaciones por los días de esta etapa.</summary>
-    Practical = 2,
-}
-
-/// <summary>Tipo de contrato como lo codifica la DIAN (tabla 5.5.2), que es lo que la indemnización del art. 64 necesita saber.</summary>
-public enum SettlementContractType
-{
-    FixedTerm = 1,
-    Indefinite = 2,
-    WorkOrLabor = 3,
-    Apprenticeship = 4,
-    Internship = 5,
-}
-
-/// <summary>Movimiento de vacaciones (misma numeración que <c>PAY_VacationMovements.Kind</c>).</summary>
-public enum VacationMovementKind
-{
-    Enjoyment = 1,
-    Compensation = 2,
-    Adjustment = 3,
-    SettlementPayout = 4,
-}
+// Etapa de aprendiz, tipo de contrato DIAN y clase de movimiento de vacaciones son los enums
+// comunes de Domain/Enums/Payroll (ApprenticeStage, DianContractType, VacationMovementKind): la
+// misma numeración que las columnas de la ficha y de PAY_VacationMovements.
 
 /// <summary>
 /// Todo lo que el motor de liquidaciones necesita para liquidar a UN empleado en UN corte.
@@ -161,7 +136,7 @@ public sealed record SettlementEmployeeInput
 
     public IReadOnlyList<TaxDeductionInput> TaxDeductions { get; init; } = [];
 
-    public SettlementContractType ContractType { get; init; } = SettlementContractType.Indefinite;
+    public DianContractType ContractType { get; init; } = DianContractType.Indefinite;
 
     /// <summary>Término fijo u obra: hasta cuándo iba el contrato («el tiempo que faltare», CST art. 64).</summary>
     public DateTime? ContractEndDate { get; init; }
