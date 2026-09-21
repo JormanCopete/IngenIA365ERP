@@ -117,7 +117,11 @@ public sealed class UpsertBenefitBalanceCommandHandler(IApplicationDbContext db,
         if (e is null) return Result.Failure<Guid>(BenefitBalanceErrors.EmployeeNotFound);
 
         var filas = await db.EmployeeBenefitOpeningBalances.Include(b => b.ConsumedByRun).Where(b => b.EmployeeId == e.Id && !b.IsDeleted).ToListAsync(ct);
-        var consumidas = filas.Where(f => f.ConsumedByRunId is not null).Select(f => f.ConsumedByRun?.PublicId ?? Guid.Empty).Distinct().ToList();
+        // Toda liquidación aprobada que leyó el saldo lo consume, no sólo la que dejó ConsumedByRunId (revisión N1).
+        var consumidoras = await BenefitBalanceRules.ConsumidoresAsync(db, e.Id, filas, null, ct);
+        var consumidas = consumidoras.Select(r => r.PublicId)
+            .Concat(filas.Where(f => f.ConsumedByRun is not null).Select(f => f.ConsumedByRun!.PublicId))
+            .Distinct().ToList();
         if (consumidas.Count > 0) return Result.Failure<Guid>(BenefitBalanceErrors.Consumed(consumidas));
 
         var primera = await BenefitBalanceValueRules.PrimeraCorridaAprobadaAsync(db, e.Id, ct);

@@ -235,6 +235,43 @@ public class SettlementRunWorkflowTests
         otra.Version.Should().Be(2);
     }
 
+    /// <summary>
+    /// Revisión N1 (2026-09-21): el saldo inicial lo lee toda liquidación especial aprobada con corte igual o
+    /// posterior a su fecha, pero sólo la primera dejaba <c>ConsumedByRunId</c>; reversar esa primera lo liberaba
+    /// y el PUT reemplazaba el saldo (y borraba los ajustes) con las cesantías todavía aprobadas sobre las cifras viejas.
+    /// </summary>
+    [Fact]
+    public async Task Reversar_la_primera_liquidacion_no_libera_el_saldo_inicial_que_otra_aprobada_tambien_uso()
+    {
+        var d = LiquidacionDePrueba.ConPrimerSemestre();
+        LiquidacionDePrueba.ConContabilidad(d);
+        var saldo = d.SaldoInicial(d.Ana, new DateOnly(2025, 12, 31), prima: 300_000m, cesantias: 1_000_000m, intereses: 120_000m, diasPrima: 45, diasCesantias: 180);
+        var prima = await LiquidacionDePrueba.PrimaAsync(d);
+        (await d.Flujo(Contadora).ApproveAsync(Aprobar(prima.PublicId), null, CancellationToken.None)).IsSuccess.Should().BeTrue();
+        var cesantias = await LiquidacionDePrueba.CesantiasAsync(d);
+        var aprobadas = await d.Flujo(Contadora).ApproveAsync(Aprobar(cesantias.PublicId, PayrollRunKind.Severance), null, CancellationToken.None);
+        aprobadas.IsSuccess.Should().BeTrue(aprobadas.Error.Message);
+        (await d.Db.EmployeeBenefitOpeningBalances.AsNoTracking().SingleAsync(b => b.Id == saldo.Id)).ConsumedByRunId.Should().Be(prima.Id, "la más antigua lleva la marca");
+
+        var r = await d.Flujo(Contadora).ReverseAsync(prima.PublicId, PayrollRunKind.ServiceBonus, "Faltó una comisión", null, CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        (await d.Db.EmployeeBenefitOpeningBalances.AsNoTracking().SingleAsync(b => b.Id == saldo.Id)).ConsumedByRunId
+            .Should().Be(cesantias.Id, "las cesantías aprobadas también lo usaron: la marca pasa a ellas");
+        var put = await new Application.Payroll.OpeningBalances.UpsertBenefitBalanceCommandHandler(d.Db, d.Clock, d.User, d.AuditEmitter, d.StaleMarker)
+            .Handle(new Application.Payroll.OpeningBalances.UpsertBenefitBalanceCommand(d.Ana.PublicId, new DateOnly(2025, 12, 31), 0m, 900_000m, 100_000m, 250_000m), CancellationToken.None);
+        put.Error.Code.Should().Be("Payroll.BenefitBalance.Consumed");
+        put.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { runPublicIds = new[] { cesantias.PublicId } });
+
+        // Reversadas también las cesantías, ya nadie lo usa: se libera y el PUT entra.
+        (await d.Flujo(Contadora).ReverseAsync(cesantias.PublicId, PayrollRunKind.Severance, "x", null, CancellationToken.None)).IsSuccess.Should().BeTrue();
+        (await d.Db.EmployeeBenefitOpeningBalances.AsNoTracking().SingleAsync(b => b.Id == saldo.Id)).ConsumedByRunId.Should().BeNull();
+        d.Db.ChangeTracker.Clear();
+        (await new Application.Payroll.OpeningBalances.UpsertBenefitBalanceCommandHandler(d.Db, d.Clock, d.User, d.AuditEmitter, d.StaleMarker)
+            .Handle(new Application.Payroll.OpeningBalances.UpsertBenefitBalanceCommand(d.Ana.PublicId, new DateOnly(2025, 12, 31), 0m, 900_000m, 100_000m, 250_000m), CancellationToken.None))
+            .IsSuccess.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Reversar_exige_aprobada_y_no_admite_marcas_de_pago_vigentes()
     {

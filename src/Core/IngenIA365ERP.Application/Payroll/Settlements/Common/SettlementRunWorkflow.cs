@@ -35,8 +35,8 @@ public sealed record SettlementApprovalRequest(
 /// corte con la segunda confirmación—; contabiliza por <see cref="SettlementAccountingPoster"/>
 /// (fecha = <c>postingDate</c>, por defecto el corte, D-04), marca <c>Approved</c>, fija
 /// <c>PayDate</c> y deja <c>ConsumedByRunId</c> en el saldo inicial que usó (R3). Reversar: sin
-/// marcas de pago vigentes, espejo por el contrato, libera el saldo inicial y queda
-/// <c>Reversed</c>. Descartar: el borrador queda <c>Superseded</c> con quién, cuándo y por qué.
+/// marcas de pago vigentes, espejo por el contrato, libera el saldo inicial —o lo deja a nombre de
+/// la siguiente liquidación aprobada que también lo usó— y queda <c>Reversed</c>. Descartar: el borrador queda <c>Superseded</c> con quién, cuándo y por qué.
 /// Todo auditado con los eventos <c>Payroll.Settlement.*</c>.
 /// </para>
 /// </summary>
@@ -176,14 +176,21 @@ public sealed class SettlementRunWorkflow(
         run.UpdatedAt = ahora;
         run.UpdatedBy = yo;
 
-        // El saldo inicial vuelve a ser editable: la liquidación que lo consumió ya no vale (R3).
+        // El saldo inicial vuelve a ser editable sólo si ninguna otra liquidación aprobada lo usa (R3); si otra
+        // lo leyó (cesantías tras la prima, por ejemplo), la marca pasa a ella (revisión N1 de la feature 010).
         var saldos = await db.EmployeeBenefitOpeningBalances.Where(b => b.ConsumedByRunId == run.Id).ToListAsync(ct);
-        foreach (var b in saldos)
+        var liberados = 0;
+        foreach (var grupo in saldos.GroupBy(b => b.EmployeeId))
         {
-            b.ConsumedByRunId = null;
-            b.ConsumedByRun = null;
-            b.UpdatedAt = ahora;
-            b.UpdatedBy = yo;
+            var otra = (await OpeningBalances.BenefitBalanceRules.ConsumidoresAsync(db, grupo.Key, grupo, run.Id, ct)).FirstOrDefault();
+            foreach (var b in grupo)
+            {
+                b.ConsumedByRunId = otra?.Id;
+                b.ConsumedByRun = null;
+                b.UpdatedAt = ahora;
+                b.UpdatedBy = yo;
+                if (otra is null) liberados++;
+            }
         }
 
         if (antesDeGuardar is not null)
@@ -197,7 +204,7 @@ public sealed class SettlementRunWorkflow(
         var numero = espejo?.Referencia() ?? string.Empty;
         await audit.EmitAsync(AuditEventTypes.PayrollSettlementReversed, nameof(PayrollRun), run.PublicId,
             new { status = "Approved", accountingDocument = original?.Referencia() },
-            new { status = "Reversed", kind = run.Kind.ToString(), reason = motivo, reversalDocument = numero, openingBalancesReleased = saldos.Count }, ct);
+            new { status = "Reversed", kind = run.Kind.ToString(), reason = motivo, reversalDocument = numero, openingBalancesReleased = liberados }, ct);
 
         return Result.Success(new SettlementReversedDto(run.PublicId, espejo?.PublicId ?? Guid.Empty, numero));
     }

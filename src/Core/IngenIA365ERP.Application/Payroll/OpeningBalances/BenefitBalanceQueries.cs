@@ -3,6 +3,8 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
+using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Policies;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +34,26 @@ public static class BenefitBalanceRules
             .Select(p => (DateTime?)p.StartDate)
             .FirstOrDefaultAsync(ct);
         return primerPeriodo is { } inicio ? DateOnly.FromDateTime(inicio) : null;
+    }
+
+    /// <summary>
+    /// Las liquidaciones aprobadas (no reversadas) del empleado que leyeron su saldo inicial: toda corrida
+    /// especial con corte igual o posterior a la fecha de corte del saldo más antiguo, porque el cargador
+    /// toma el saldo por <c>AsOfDate &lt;= corte</c> sin mirar quién lo consumió. <c>ConsumedByRunId</c> sólo
+    /// guarda la más antigua; la edición y la reversión preguntan aquí (revisión N1 de la feature 010).
+    /// </summary>
+    public static async Task<List<PayrollRun>> ConsumidoresAsync(IApplicationDbContext db, int employeeId, IEnumerable<EmployeeBenefitOpeningBalance> filas,
+        int? exceptoRunId, CancellationToken ct)
+    {
+        var vivas = filas.Where(f => !f.IsDeleted).ToList();
+        if (vivas.Count == 0) return [];
+        var desde = vivas.Min(f => f.AsOfDate);
+        return await db.PayrollRuns.AsNoTracking()
+            .Where(r => r.Kind != PayrollRunKind.Ordinary && r.Status == PayrollRunStatus.Approved && r.Id != exceptoRunId
+                        && r.CutoffDate != null && r.CutoffDate >= desde
+                        && db.PayrollRunEmployees.Any(re => re.PayrollRunId == r.Id && re.EmployeeId == employeeId))
+            .OrderBy(r => r.CutoffDate).ThenBy(r => r.Id)
+            .ToListAsync(ct);
     }
 
     public static BenefitBalanceRowDto Map(EmployeeBenefitOpeningBalance f, Guid? ajustaA) => new(
