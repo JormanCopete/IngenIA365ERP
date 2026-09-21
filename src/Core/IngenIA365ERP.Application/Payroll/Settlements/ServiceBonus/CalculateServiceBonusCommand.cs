@@ -87,7 +87,7 @@ public sealed class RecalculateServiceBonusCommandHandler(
         if (run is null) return Result.Failure<SettlementCalculatedDto>(SettlementErrors.RunNotFound);
         if (run.Kind != PayrollRunKind.ServiceBonus) return Result.Failure<SettlementCalculatedDto>(SettlementErrors.KindMismatch(run.Kind, PayrollRunKind.ServiceBonus));
         if (run.Year is not { } year || run.Semester is not { } semester)
-            return Result.Failure<SettlementCalculatedDto>(new Error("Payroll.Settlement.KeyMissing", "La corrida de prima no tiene año y semestre: no se puede recalcular."));
+            return Result.Failure<SettlementCalculatedDto>(SettlementErrors.KeyMissing);
 
         return await new LiquidacionDePrima(db, loader, persister, distributedLock, user, audit, logger)
             .EjecutarAsync(year, semester, request.EmployeePublicIds, recalculo: true, ct);

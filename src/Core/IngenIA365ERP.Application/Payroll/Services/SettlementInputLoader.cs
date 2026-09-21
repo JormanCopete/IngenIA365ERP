@@ -181,7 +181,7 @@ public sealed class SettlementInputLoader(
                 if (request.Kind == SettlementKind.Severance && fecha <= corte)
                 {
                     empleados.Remove(x);
-                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, $"{x.FirstName} {x.LastName}".Trim(), "RetiradoConDefinitiva",
+                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, $"{x.FirstName} {x.LastName}".Trim(), SettlementReasonCodes.RetiradoConDefinitiva,
                         $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva aprobada: sus cesantías e intereses del año ya se pagaron allí."));
                 }
             }

@@ -81,7 +81,7 @@ public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContex
                 .Where(c => c.Code == codigo && c.IsActive && c.ValidFrom <= corte && (c.ValidTo == null || c.ValidTo >= corte))
                 .OrderByDescending(c => c.ValidFrom).FirstOrDefaultAsync(ct);
             if (concepto is null)
-                return Result.Failure<SettlementDeductionItemDto>(new Error("Payroll.Settlement.ConceptMissing", $"No hay una versión vigente del concepto {codigo} al corte: no se puede volver línea el descuento."));
+                return Result.Failure<SettlementDeductionItemDto>(SettlementErrors.ConceptMissing(codigo, corte));
             linea = new PayrollRunLine
             {
                 ConceptDefinitionId = concepto.Id,

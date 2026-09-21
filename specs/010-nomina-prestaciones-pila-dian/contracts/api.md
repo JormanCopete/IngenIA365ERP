@@ -104,7 +104,7 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?year=&status=` | Severance.View | como 3.1 más `interestTotal`, `severanceTotal`, `funds: [{ fundPublicId, name, employees, amount, depositedAt?, depositedBy?, reference? }]` |
-| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `Pasante`, `SinDiasEnElAnio` (el retirado con definitiva aprobada no entra a la población) |
+| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `Pasante`, `SinDiasEnElAnio` y `RetiradoConDefinitiva` (el retirado con definitiva aprobada dentro del año no entra a la población: queda en `excluded` con ese código, §3.6) |
 | `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Severance.* | como 3.1; al aprobar el comprobante deja la cuenta por pagar **al fondo** por las cesantías y **al empleado** por los intereses (FR-011) |
 | `GET /{runId}/deposit-schedule` | Severance.View | relación de consignación por fondo: `{ funds: [{ fundPublicId, fundName, fundNit, pilaCode, lines: [{ employeePublicId, documentType, document, name, hireDate, baseSalary, days, amount }], total, depositedAt? }], grandTotal, dueDate }` (`dueDate` = parámetro `CESANTIAS_FECHA_LIMITE_CONSIGNACION`) |
 | `GET /{runId}/deposit-schedule/{fundId}/file?formatId=` | Severance.View | archivo plano del fondo con un formato parametrizable (ver `archivos.md` §3); 422 `Payroll.Severance.FundFormatMissing` si el fondo no tiene formato vigente |
@@ -179,6 +179,46 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 | `Payroll.Settlement.OpeningBalanceMissing` | — | **aviso**, no error: empleado con ingreso anterior al arranque y sin saldo inicial (Edge Cases) | `{ employeePublicIds[] }` en `warnings` |
 | `Payroll.PaymentBlocksReversal` | 422 | existente (005) | |
 | `Payroll.Run.NotFound` | 404 | | |
+
+### 3.6 Códigos propios de cada tipo y avisos (nacidos al implementar; registrados en la revisión de N1)
+
+Los comunes viven en `SettlementErrors` (Application/Payroll/Settlements/Common), los de cesantías
+en `SeveranceErrors`, los de festivos en `HolidayErrors`; la prueba de arquitectura
+`LosCodigosDeNominaEstanEnElContrato` exige que todo `Payroll.*` emitido por `Application/Payroll`
+figure aquí (completo o como `.Sufijo` bajo su recurso). Los **avisos** no son errores: viajan en
+`warnings[]` con `{ code, message, data }` y la operación sigue.
+
+| Código | HTTP | Cuándo | `data` |
+|---|---|---|---|
+| `Payroll.ServiceBonus.SemesterInvalid` | 422 | `semester` distinto de 1 (enero–junio) o 2 (julio–diciembre) | |
+| `Payroll.Settlement.KeyMissing` | 422 | recalcular una prima cuya corrida no tiene `year`/`semester` (corrida anterior a la 010) | |
+| `Payroll.Settlement.ConceptMissing` | 422 | ajustar un descuento cuando `DESC_CARTERA`/`DESC_LIBRANZA` no tiene versión vigente al corte | `{ conceptCode, asOf }` |
+| `Payroll.Settlement.DeductionNotFound` | 404 | `PUT /{runId}/deductions/{obligationId}` sobre un descuento que no está en la liquidación | |
+| `Payroll.Settlement.ReasonRequired` | 422 | reversar o descartar sin `reason` (lo normal es que lo pare el validador, 400) | |
+| `Payroll.Settlement.DeductionReproposed` | — | **aviso** al recalcular la definitiva: el saldo en Cartera cambió y el ajuste anterior se descartó (§3.4) | `{ employeePublicId, deductionPublicId, previousProposed, proposed }` |
+| `Payroll.Settlement.Warning` | — | **aviso** del motor por empleado (prima, cesantías, definitiva) | `{ employeePublicId }` |
+| `Payroll.Severance.YearInvalid` | 422 | `year` sin cuatro cifras | |
+| `Payroll.Severance.CutoffOutsideYear` | 422 | `cutoffDate` fuera del año liquidado | `{ year, cutoffDate }` |
+| `Payroll.Severance.PayDateBeforeCutoff` | 422 | `payDate` de los intereses anterior al corte | `{ payDate, cutoffDate }` |
+| `Payroll.Severance.FundNotInRun` | 422 | `mark-deposited` de un fondo en el que nadie de la corrida consigna | `{ fundName }` |
+| `Payroll.Severance.DepositDateInvalid` | 422 | `depositedAt` fuera de [corte, hoy] | `{ depositedAt, cutoffDate, today }` |
+| `Payroll.SeveranceFund.NotFound` | 404 | `fundId` inexistente (`mark-deposited`, `deposit-schedule/{fundId}`, `consignacion-cesantias`) | |
+| `Payroll.Vacation.MovementCancelled` | 422 | recalcular o aprobar una liquidación cuyo movimiento está anulado, o anularlo dos veces; en `GET /vacations` sale como **aviso** de la corrida | `{ movementPublicId }` en el aviso |
+| `Payroll.Vacation.MovementNotFound` | 404 | movimiento inexistente | |
+| `Payroll.Vacation.Anticipated` | — | **aviso**: el disfrute consume más días de los pendientes al corte (vacaciones anticipadas) | `{ requestedDays, pendingDays }` |
+| `Payroll.Vacation.PeriodMissing` | — | **aviso** del planner (D-01): el plan del empleado no tiene períodos que cubran el disfrute, o lo cubre a medias | `{ from, to }` |
+| `Payroll.Vacation.Warning` | — | **aviso** del motor en la liquidación de vacaciones | |
+| `Payroll.Termination.ReasonSeverancePayReserved` | 422 | crear o editar un motivo propio con `generatesSeverancePay = true`: la marca la pone la ley y sólo la lleva `DESP_SINJC` | |
+| `Payroll.Holiday.YearNotLoaded` | — | **aviso** del conteo de hábiles (§5, §10.2): el rango toca un año sin festivos cargados | `{ years[] }` |
+| `Payroll.WithholdingRange.Overlap` | 422 | heredado de la tabla de retención propia del plan (`/api/payroll/withholding-parameters`, 2026-09-19): el tramo en UVT se cruza con otro del mismo plan | |
+
+Códigos de exclusión (`excluded[].reasonCode`, `SettlementReasonCodes`): a los del motor
+(`SalarioIntegral`, `AprendizLectiva`, `Pasante`, `YaPagadaEnDefinitiva`, `SinDiasEnElSemestre`,
+`SinDiasEnElAnio`, `SinDiasPendientes`, `MotivoNoGeneraIndemnizacion`, `SinProvisionInformada`,
+`ConceptoSinVersionVigente`, `LoPagaLaNominaOrdinaria`, `SinSaldoDeVacaciones`,
+`CompensacionExcedeMaximo`, `NoCotizaSobreEstaLiquidacion`) se suma `RetiradoConDefinitiva`, que
+pone el **cargador** en cesantías: el retirado con definitiva aprobada dentro del año no entra a la
+población y queda en `excluded` con ese código (§3.2).
 
 ## 4. Saldos iniciales de prestaciones — `/api/payroll/benefit-balances`
 
@@ -395,7 +435,8 @@ gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).
   (D-05): si vienen en los dos bloques manda `pila`. `paymentMethodCode` vacío se deriva de la
   forma de pago por la política `DianMedioPagoMapa`. `apprenticeStage` es **obligatoria** si la
   clase es `Apprentice` o `Intern` (422 `Payroll.Employee.ApprenticeStageRequired`). En el `PUT`,
-  `disbursementBankPublicId` nulo = no cambia y `clearDisbursementBank: true` lo quita. El `GET`
+  `disbursementBankPublicId` nulo = no cambia y `clearDisbursementBank: true` lo quita (un banco
+  inexistente → 404 `Payroll.Employee.DisbursementBankNotFound`). El `GET`
   devuelve además `disbursementBankName`, `disbursementBankTransferCode`, `vacationBalance?`,
   `openingBalance?`, `currentWithholdingRate?`, `termination?`. La cuenta bancaria de nómina
   (`payrollBankId`, `payrollBankAccountType`, `payrollBankAccountNumber`) ya existe y no cambia.

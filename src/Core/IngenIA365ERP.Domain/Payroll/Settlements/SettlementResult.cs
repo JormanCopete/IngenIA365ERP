@@ -45,6 +45,13 @@ public static class SettlementReasonCodes
     public const string SinSaldoDeVacaciones = "SinSaldoDeVacaciones";
     public const string CompensacionExcedeMaximo = "CompensacionExcedeMaximo";
     public const string NoCotizaSobreEstaLiquidacion = "NoCotizaSobreEstaLiquidacion";
+
+    /// <summary>
+    /// Lo pone el cargador, no el motor: el retirado con definitiva aprobada dentro del año no entra a la
+    /// población de cesantías (sus cesantías e intereses ya se pagaron allí) y queda en <c>excluded</c>
+    /// con este código para que la contadora vea por qué (contracts/api.md §3.2).
+    /// </summary>
+    public const string RetiradoConDefinitiva = "RetiradoConDefinitiva";
 }
 
 /// <summary>Un rubro que no produjo línea, con su código de motivo y el texto para la contadora.</summary>
