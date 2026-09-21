@@ -1,0 +1,40 @@
+{
+  "casos": [
+    {
+      "nombre": "Cesantías pagadas al retiro con ingreso promedio de 381,87 UVT: 90 % exento → retención 0",
+      "descripcion": "Research R5 (ET art. 206 num. 4): el ingreso promedio de los seis últimos meses decide el porcentaje no gravado (tabla CESANTIAS_GRAVADA_TABLA_UVT); la parte gravada va a la tabla 383 de forma independiente. En la definitiva las cesantías se pagan al trabajador y sí se retienen. El caso sólo deriva cesantías, intereses y su retención.",
+      "derivacion": "Salario 20.000.000 sin auxilio, todo 2026: cesantías 20.000.000; intereses 20.000.000 × 12 % = 2.400.000. Ingreso promedio 6 meses = 20.000.000 / 52.374 = 381,87 UVT > 350 → tramo 350–410: 90 % no gravado, 10 % gravado. Cesantías gravadas 2.000.000 = 38,19 UVT → 0; intereses gravados 240.000 = 4,58 UVT → 0. Retención 0.",
+      "tipo": "Settlement",
+      "corte": "2026-12-31",
+      "empleado": {
+        "nombre": "Veinte millones",
+        "ingreso": "2024-01-01",
+        "salarios": [ { "desde": "2024-01-01", "mensual": 20000000 } ]
+      },
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { "CESANTIAS": 20000000, "INT_CESANTIAS": 2400000, "RETEFTE_CESANTIAS": 0 },
+        "explicaciones": [ "RETEFTE_CESANTIAS: 90 %" ]
+      }
+    },
+    {
+      "nombre": "Cesantías pagadas al retiro con ingreso promedio de 477,34 UVT: 40 % gravado → retención 1.124.000",
+      "descripcion": "Research R14: cesantías gravadas 1.124.000. Cesantías e intereses se llevan a la tabla 383 cada uno por su lado.",
+      "derivacion": "Salario 25.000.000 sin auxilio, todo 2026: cesantías 25.000.000; intereses 3.000.000. Ingreso promedio 25.000.000 / 52.374 = 477,34 UVT → tramo 470–530: 60 % no gravado, 40 % gravado. Cesantías gravadas 10.000.000 = 190,935 UVT → tramo 150–360: (190,935 − 150) × 28 % + 10 = 21,4618 UVT × 52.374 = 1.124.041 → aproximado a 1.000: 1.124.000. Intereses gravados 1.200.000 = 22,91 UVT → 0. Retención total 1.124.000.",
+      "tipo": "Settlement",
+      "corte": "2026-12-31",
+      "empleado": {
+        "nombre": "Veinticinco millones",
+        "ingreso": "2024-01-01",
+        "salarios": [ { "desde": "2024-01-01", "mensual": 25000000 } ]
+      },
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { "CESANTIAS": 25000000, "INT_CESANTIAS": 3000000, "RETEFTE_CESANTIAS": 1124000 },
+        "explicaciones": [ "RETEFTE_CESANTIAS: 40 %" ]
+      }
+    }
+  ]
+}

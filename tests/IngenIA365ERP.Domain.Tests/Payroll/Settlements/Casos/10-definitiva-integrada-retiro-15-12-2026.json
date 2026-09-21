@@ -1,0 +1,65 @@
+{
+  "nombre": "Definitiva integrada: retiro el 15-12-2026 con saldo inicial al 30-11, provisiones y un préstamo de Cartera",
+  "descripcion": "Research R14: el caso de COOFLOPAL. Arranque de la nómina el 01-12-2026, saldo inicial digitado al 30-11, salario pendiente de diciembre, prima y cesantías con tramo inicial, vacaciones pendientes, ajustes de provisión con los dos signos y el descuento de Cartera que no genera asiento (D-08).",
+  "derivacion": "Salario pendiente: 01-12 a 15-12 = 15 días × 2.400.000/30 = 1.200.000; auxilio 249.095 × 15/30 = 124.547,50. Prima 2026-II: saldo inicial 1.103.789,58 (150 días) + tramo 01-12 a 15-12: 2.649.095 × 15/360 = 110.378,9583 → 1.214.168,54 (165 días; comprobación directa 2.649.095 × 165/360 = 1.214.168,54). Cesantías 2026: saldo 2.428.337,08 (330 días) + 110.378,9583 = 2.538.716,04 (345 días; directa 2.649.095 × 345/360 = 2.538.716,04). Intereses: 2.538.716,04 × 12 % × 345/360 = 2.538.716,04 × 0,115 = 291.952,3446 → 291.952,34. Vacaciones: saldo 12,5 + 15 días × 15/360 = 0,625 → 13,125 pendientes × 80.000 = 1.050.000. Indemnización: renuncia → omitida. IBC = 1.200.000 + 1.050.000 = 2.250.000 (el auxilio no cotiza) → salud 90.000, pensión 90.000, FSP 1,29 SMMLV → 0. Retención ordinaria: bruto 1.200.000 + 124.547,50 + 1.050.000 = 2.374.547,50 − aportes 180.000 = 2.194.547,50 − 25 % (548.636,88) = 1.645.910,63 = 31,43 UVT → 0. Retención prima: 1.214.168,54 × 75 % = 910.626,41 = 17,39 UVT → 0. Retención cesantías: ingreso 2.649.095 = 50,58 UVT ≤ 350 → 0. Ajustes de provisión: prima 1.214.168,54 − 1.180.000 = 34.168,54; cesantías 2.538.716,04 − 2.520.000 = 18.716,04; intereses 291.952,34 − 290.000 = 1.952,34; vacaciones 1.050.000 − 1.100.000 = −50.000 (liberación). Descuento Cartera 500.000 (sin asiento). Devengos = 1.200.000 + 124.547,50 + 1.214.168,54 + 2.538.716,04 + 291.952,34 + 1.050.000 = 6.419.384,42; deducciones = 90.000 + 90.000 + 500.000 = 680.000; neto = 5.739.384,42; provisiones (ajustes) = 34.168,54 + 18.716,04 + 1.952,34 − 50.000 = 4.836,92.",
+  "tipo": "Settlement",
+  "corte": "2026-12-15",
+  "empleado": {
+    "nombre": "Retiro con saldo inicial",
+    "ingreso": "2024-03-01",
+    "salarios": [ { "desde": "2024-03-01", "mensual": 2400000 } ],
+    "tipoContrato": "Indefinite"
+  },
+  "saldoInicial": {
+    "fecha": "2026-11-30",
+    "diasVacaciones": 12.5,
+    "cesantias": 2428337.08,
+    "diasCesantias": 330,
+    "interesesCesantias": 0,
+    "prima": 1103789.58,
+    "diasPrima": 150,
+    "digitadoPor": "Rafaela Lastra",
+    "digitadoEl": "2026-12-01"
+  },
+  "salarioPendiente": { "inicio": "2026-12-01", "fin": "2026-12-31" },
+  "provisiones": {
+    "PROV_PRIMA": 1180000,
+    "PROV_CESANTIAS": 2520000,
+    "PROV_INT_CESANTIAS": 290000,
+    "PROV_VACACIONES": 1100000
+  },
+  "deudas": [
+    { "concepto": "DESC_CARTERA", "descripcion": "Crédito 00123 — saldo total", "propuesto": 500000, "aplicado": 500000, "contabilizadaPorOtroModulo": true }
+  ],
+  "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+  "politicas": { "arranqueNomina": "2026-12-01" },
+  "esperado": {
+    "lineas": {
+      "SALARIO_PENDIENTE": 1200000,
+      "AUX_TRANSPORTE": 124547.50,
+      "PRIMA": 1214168.54,
+      "CESANTIAS": 2538716.04,
+      "INT_CESANTIAS": 291952.34,
+      "VACACIONES_COMP": 1050000,
+      "SALUD_EMP": 90000,
+      "PENSION_EMP": 90000,
+      "FSP": 0,
+      "RETEFTE": 0,
+      "RETEFTE_PRIMA": 0,
+      "RETEFTE_CESANTIAS": 0,
+      "PRIMA_AJUSTE_PROV": 34168.54,
+      "CESANTIAS_AJUSTE_PROV": 18716.04,
+      "INT_CESANTIAS_AJUSTE_PROV": 1952.34,
+      "VACACIONES_AJUSTE_PROV": -50000,
+      "DESC_CARTERA": 500000
+    },
+    "totales": { "devengos": 6419384.42, "deducciones": 680000, "provisiones": 4836.92, "neto": 5739384.42 },
+    "omitidos": [ "INDEMNIZACION:MotivoNoGeneraIndemnizacion" ],
+    "vacaciones": { "causados": 0.625, "pendientes": 13.125 },
+    "explicaciones": [
+      "PRIMA: Saldo inicial de prima al 30/11/2026 digitado por Rafaela Lastra el 01/12/2026",
+      "CESANTIAS: Saldo inicial de cesantías al 30/11/2026 digitado por Rafaela Lastra el 01/12/2026",
+      "VACACIONES_AJUSTE_PROV: Liberación"
+    ]
+  }
+}

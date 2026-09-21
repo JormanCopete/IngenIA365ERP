@@ -1,0 +1,54 @@
+{
+  // Parámetros legales de las liquidaciones especiales, vigencia 2026 (research R4, data-model §1.6).
+  // Son DATOS de los casos dorados: el motor no conoce ninguno de estos números. Los códigos que ya
+  // existen en la semilla 2026 (SMMLV, AUX_TRANSPORTE, UVT, RETEFTE_TABLA_UVT, aportes) se toman de
+  // PayrollLegalParametersSeeder.Catalogo(); los de aquí se agregan o reemplazan por código, así el
+  // archivo sigue siendo correcto cuando la semilla los incorpore.
+  "vigencia": "2026-01-01",
+  "escalares": [
+    { "codigo": "PRIMA_DIAS_ANIO", "tipo": "Amount", "valor": 30, "fuente": "CST art. 306 (Ley 1788/2016)" },
+    { "codigo": "CESANTIAS_DIAS_ANIO", "tipo": "Amount", "valor": 30, "fuente": "CST art. 249; Ley 50/1990 art. 99" },
+    { "codigo": "CESANTIAS_VENTANA_ESTABILIDAD_MESES", "tipo": "Amount", "valor": 3, "fuente": "CST art. 253 (Decreto 2351/1965 art. 17)" },
+    { "codigo": "INT_CESANTIAS_PCT", "tipo": "Percent", "valor": 12, "fuente": "Ley 52/1975 art. 1; Ley 50/1990 art. 99 num. 2" },
+    { "codigo": "VACACIONES_DIAS_ANIO", "tipo": "Amount", "valor": 15, "fuente": "CST art. 186" },
+    { "codigo": "VACACIONES_COMPENSABLE_PCT", "tipo": "Percent", "valor": 50, "fuente": "CST art. 189 num. 1 (Ley 1429/2010 art. 20)" },
+    { "codigo": "INDEMNIZACION_UMBRAL_SMMLV", "tipo": "Amount", "valor": 10, "fuente": "CST art. 64" },
+    { "codigo": "INDEMNIZACION_OBRA_MINIMO_DIAS", "tipo": "Amount", "valor": 15, "fuente": "CST art. 64" },
+    { "codigo": "CESANTIAS_EXENCION_TOPE_UVT", "tipo": "Amount", "valor": 350, "fuente": "ET art. 206 num. 4" },
+    { "codigo": "INDEMNIZACION_RETEFTE_PCT", "tipo": "Percent", "valor": 20, "fuente": "ET art. 401-3 (Ley 788/2002 art. 92)" },
+    { "codigo": "INDEMNIZACION_RETEFTE_TOPE_UVT", "tipo": "Amount", "valor": 204, "fuente": "ET art. 401-3; Concepto DIAN 30573/2015" },
+    { "codigo": "RETEFTE_RENTA_EXENTA_TOPE_ANUAL_UVT", "tipo": "Amount", "valor": 790, "fuente": "ET art. 206 num. 10 (Ley 2277/2022 art. 2)" },
+    { "codigo": "RETEFTE_DEDUCCIONES_TOPE_ANUAL_UVT", "tipo": "Amount", "valor": 1340, "fuente": "ET art. 388; DUR 1.2.4.1.6 par. 3 (Decreto 2231/2023 art. 9)" }
+  ],
+  "tablas": [
+    {
+      // D-08: FixedValue = días del primer año; Rate = días por cada año adicional. Tramos en SMMLV, no marginal.
+      "codigo": "INDEMNIZACION_TABLA",
+      "nombre": "Indemnización por despido sin justa causa (días por tramo de SMMLV)",
+      "unidad": "SMMLV",
+      "marginal": false,
+      "fuente": "CST art. 64 (Ley 789/2002 art. 28)",
+      "tramos": [
+        { "desde": 0, "hasta": 10, "tarifa": 20, "fijo": 30 },
+        { "desde": 10, "hasta": null, "tarifa": 15, "fijo": 20 }
+      ]
+    },
+    {
+      // Rate = porcentaje NO gravado de cesantías e intereses según el ingreso mensual promedio de seis meses en UVT.
+      "codigo": "CESANTIAS_GRAVADA_TABLA_UVT",
+      "nombre": "Cesantías e intereses: porcentaje no gravado por ingreso promedio (UVT)",
+      "unidad": "UVT",
+      "marginal": false,
+      "fuente": "ET art. 206 num. 4",
+      "tramos": [
+        { "desde": 0, "hasta": 350, "tarifa": 100, "fijo": 0 },
+        { "desde": 350, "hasta": 410, "tarifa": 90, "fijo": 0 },
+        { "desde": 410, "hasta": 470, "tarifa": 80, "fijo": 0 },
+        { "desde": 470, "hasta": 530, "tarifa": 60, "fijo": 0 },
+        { "desde": 530, "hasta": 590, "tarifa": 40, "fijo": 0 },
+        { "desde": 590, "hasta": 650, "tarifa": 20, "fijo": 0 },
+        { "desde": 650, "hasta": null, "tarifa": 0, "fijo": 0 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "nombre": "Prima de servicios 2026-II, salario fijo todo el semestre",
+  "descripcion": "Research R1: 2.000.000 + 249.095 = 2.249.095 × 180/360 = 1.124.547,50. La retención independiente de la prima (art. 385) da cero.",
+  "derivacion": "Base mensual = salario 2.000.000 + auxilio 249.095 (2.000.000 ≤ 2 SMMLV = 3.501.810) = 2.249.095. Días del semestre 01-07 a 31-12 = 180 (30/360). Prima = 2.249.095 / 30 × PRIMA_DIAS_ANIO 30 × 180 / 360 = 2.249.095 × 0,5 = 1.124.547,50. Retención P1 sobre la prima sola: 1.124.547,50 − 25 % (281.136,88, bajo el tope 65,83 UVT = 3.447.780,42) = 843.410,63 = 16,10 UVT → tramo 0–95 → 0.",
+  "tipo": "ServiceBonus",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-07-01",
+  "empleado": {
+    "nombre": "Empleado con salario fijo",
+    "ingreso": "2020-03-01",
+    "salarios": [ { "desde": "2020-03-01", "mensual": 2000000 } ]
+  },
+  "esperado": {
+    "lineas": { "PRIMA": 1124547.50, "RETEFTE_PRIMA": 0 },
+    "totales": { "devengos": 1124547.50, "deducciones": 0, "provisiones": 0, "neto": 1124547.50 },
+    "omitidos": [ "PRIMA_AJUSTE_PROV:SinProvisionInformada" ]
+  }
+}
