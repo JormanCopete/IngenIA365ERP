@@ -51,6 +51,32 @@ cooperativa lo hace hoy a mano o en otros programas.
 - Q: ¿Banco pagador para la dispersión? → A: **Banco AV Villas**. El primer formato se construye
   con la estructura del archivo plano de pagos de AV Villas Empresas que publique el banco (el dueño
   la aporta); el formato queda parametrizable para otros bancos.
+- Q: ¿Cómo se aplica la retención en la fuente a las liquidaciones especiales? → A: **Automática
+  según la norma tributaria**, con topes y tarifas como parámetros con vigencia y explicación por
+  valor: prima con retención independiente en procedimiento 1 (sumada al ingreso en el 2);
+  cesantías e intereses exentas cuando el ingreso mensual promedio del empleado está bajo el tope
+  del art. 206 ET y gravadas en la parte que la norma indique; indemnización con la tarifa del
+  art. 401-3 ET cuando el ingreso supera el tope; vacaciones y salario pendiente con la retención
+  ordinaria del procedimiento del empleado.
+- Q: ¿Qué se descuenta en la liquidación definitiva por deudas del empleado? → A: **El saldo
+  total de los préstamos de la cooperativa**, hasta donde alcance la liquidación, propuesto
+  automáticamente desde Cartera con el detalle de cada obligación para que la responsable **valide
+  los saldos** antes de aprobar; ella puede **modificar** el valor hacia abajo con motivo, y todo
+  (saldo propuesto, valor aplicado, motivo, quién y cuándo) queda **auditado**. Las libranzas con
+  terceros sólo las cuotas ya causadas y no descontadas; el resto lo cobra el tercero.
+- Q: ¿La prima y los intereses a las cesantías se pagan aparte o dentro de la quincena? → A:
+  **Pago aparte**: cada liquidación especial tiene su relación de pago, su archivo de dispersión y
+  su comprobante para el empleado, con fecha propia; la nómina ordinaria no la incluye. En el
+  documento de nómina electrónica del mes se suma con lo ordinario pagado en ese mes.
+- Q: ¿La empresa está exonerada de aportes a SENA, ICBF y salud del empleador (art. 114-1 ET)? →
+  A: **COOFLOPAL sí** (cooperativa contribuyente del régimen tributario especial), pero la
+  exoneración es un **parámetro por empresa con vigencia** —«exonerada: sí/no» y el umbral de
+  salarios mínimos—, porque no todas las entidades que usarán el aplicativo son cooperativas ni
+  están exoneradas; la PILA y la nómina ordinaria leen el mismo parámetro.
+- Q: ¿El sábado cuenta como día hábil para las vacaciones? → A: **Sí por defecto** (lunes a
+  sábado; sólo domingos y festivos no cuentan), pero es un **parámetro por empresa con vigencia**
+  («semana laboral: lunes a viernes / lunes a sábado»), porque hay empresas que trabajan de lunes a
+  viernes y otras de lunes a sábado; el calendario de festivos también es parámetro.
 - Q: ¿Reglas laborales cuando la ley admite variantes? → A (por defecto, ver Supuestos): se
   aplica la norma colombiana general (Código Sustantivo del Trabajo, Ley 50 de 1990, Ley 52 de
   1975, Estatuto Tributario art. 385–386, Ley 1607 de 2012 para exoneraciones); toda variante que
@@ -224,8 +250,11 @@ contable y que la siguiente nómina ordinaria no lo incluya.
    indemnización sigue la tabla parametrizada por antigüedad y rango salarial; **Given** renuncia
    o justa causa, **Then** no hay indemnización y la explicación lo dice; **Given** contrato a
    término fijo, **Then** la indemnización es el tiempo que faltaba.
-4. **Given** un préstamo de la cooperativa con saldo, **When** liquida, **Then** el saldo (o lo que
-   autorice la persona, según parámetro) se descuenta y queda explicado.
+4. **Given** un préstamo de la cooperativa con saldo, **When** liquida, **Then** el sistema
+   propone descontar el saldo total con el detalle de la obligación (capital, intereses, cuotas)
+   para validarlo; la responsable puede bajarlo con motivo y el descuento aplicado, el propuesto y
+   el motivo quedan en la explicación y en la auditoría; una libranza con un tercero sólo descuenta
+   las cuotas causadas y no descontadas.
 5. **Given** la liquidación aprobada, **Then** existe el comprobante contable, el documento para
    firma (empresa, empleado, fechas, cada rubro, total, espacio de firmas) y la ficha marca la
    terminación; una nómina ordinaria posterior no lo incluye.
@@ -256,9 +285,10 @@ en los dos períodos de nómina y el comprobante contable.
 1. **Given** un empleado con 18 meses de antigüedad, **When** consulta, **Then** ve 22,5 días
    causados, menos los disfrutados y compensados.
 2. **Given** un disfrute del 28 de octubre al 10 de noviembre, **When** liquida, **Then** los días
-   hábiles se cuentan con el calendario (sábados según parámetro, festivos de Colombia), la
-   novedad de vacaciones queda en los dos períodos que cubre y la nómina ordinaria de esos
-   períodos no paga esos días como salario.
+   hábiles se cuentan con el calendario (festivos de Colombia y la semana laboral parametrizada:
+   con «lunes a sábado» son 11 hábiles y con «lunes a viernes» 9, descontando el festivo del 2 de
+   noviembre), la novedad de vacaciones queda en los dos períodos que cubre y la nómina ordinaria
+   de esos períodos no paga esos días como salario.
 3. **Given** una compensación en dinero que supera la mitad de las vacaciones causadas, **When**
    registra, **Then** rechazo con el máximo permitido.
 4. **Given** la liquidación aprobada, **Then** el comprobante contable cancela la provisión y
@@ -291,9 +321,10 @@ por cotizante, y que el archivo lo acepte el validador del operador. El operador
    con la suma de los comprobantes `NM` del mes.
 2. **Given** un empleado sin EPS afiliada en la ficha, **When** valida, **Then** la inconsistencia
    bloquea la generación y enlaza a la ficha.
-3. **Given** una cooperativa exonerada de aportes a salud, SENA e ICBF por Ley 1607 para
-   empleados que ganan menos de diez salarios mínimos, **When** genera, **Then** esos aportes van
-   en cero con la marca de exoneración y el que gana más de diez sí aporta.
+3. **Given** una empresa marcada como exonerada (art. 114-1 ET) para empleados que ganan menos del
+   umbral de salarios mínimos parametrizado, **When** genera, **Then** esos aportes de salud del
+   empleador, SENA e ICBF van en cero con la marca de exoneración y quien gana el umbral o más sí
+   aporta; **Given** una empresa no exonerada, **Then** todos aportan.
 4. **Given** una PILA ya generada, **When** regenera tras corregir una nómina, **Then** la anterior
    queda como versión consultable y la nueva es la vigente.
 
@@ -444,6 +475,15 @@ referencia y el tercero aparece en pendientes.
   nómina ordinaria de un período posterior a su retiro.
 - **FR-006**: Toda liquidación especial MUST respetar permisos propios (registrar, aprobar,
   reversar) y quedar auditada; la segregación de funciones de la nómina ordinaria aplica igual.
+- **FR-006a**: Cada liquidación especial MUST calcular la retención en la fuente que le
+  corresponde según la norma, con topes y tarifas parametrizados con vigencia y explicación: la
+  prima con retención independiente sobre ella sola en procedimiento 1 y sumada al ingreso del mes
+  en procedimiento 2; las cesantías y sus intereses exentas cuando el ingreso mensual promedio de
+  los últimos seis meses no supera el tope parametrizado (art. 206 ET) y gravadas en la parte que
+  la norma indique cuando lo supera; la indemnización con la tarifa parametrizada (art. 401-3 ET)
+  cuando el ingreso mensual del empleado supera el tope; las vacaciones y el salario pendiente con
+  la retención ordinaria del procedimiento del empleado. La responsable MUST poder ver el detalle y
+  MUST NOT tener que digitarla.
 - **FR-007**: El sistema MUST permitir digitar, por empleado, los saldos iniciales de
   prestaciones a la fecha de arranque (días de vacaciones pendientes, cesantías e intereses
   acumulados del año, prima acumulada del semestre), auditados, y usarlos en las liquidaciones.
@@ -462,8 +502,13 @@ referencia y el tercero aparece en pendientes.
   prestacional × días trabajados del año / 360, con la base del último salario si no varió en los
   últimos tres meses o el promedio del año trabajado si varió.
 - **FR-011**: Los intereses MUST calcularse como cesantías × porcentaje anual vigente × días /
-  360, pagarse al empleado en la relación de pago que la responsable elija dentro del plazo legal
-  y contabilizarse contra su provisión.
+  360, pagarse al empleado con la relación de pago **propia** de la liquidación (fecha dentro del
+  plazo legal) y contabilizarse contra su provisión.
+- **FR-011a**: Toda liquidación especial que pague algo al empleado (prima, intereses,
+  vacaciones compensadas o pagadas, definitiva) MUST tener su propia relación de pago, su propio
+  comprobante para el empleado y su propio archivo de dispersión, con fecha de pago propia; la
+  nómina ordinaria MUST NOT incluir esos valores, y el documento de nómina electrónica del mes MUST
+  sumarlos con lo ordinario pagado en el mes.
 - **FR-012**: El sistema MUST producir la relación de consignación por fondo de cesantías
   (fondo, empleado, documento, valor, total) exportable, y registrar la fecha en que se consignó
   cada fondo.
@@ -476,8 +521,11 @@ referencia y el tercero aparece en pendientes.
   días por año, proporcional a los días trabajados), disfrutados y compensados, y mostrar el
   saldo con su detalle.
 - **FR-015**: Un disfrute MUST registrarse con fechas y contar los días hábiles con el calendario
-  parametrizado (festivos, sábados según parámetro); MUST dejar la novedad de vacaciones en cada
-  período de nómina que cubre para que esos días se paguen como vacaciones y no como salario.
+  parametrizado: festivos de Colombia con vigencia y la **semana laboral de la empresa** («lunes a
+  sábado» por defecto, o «lunes a viernes»), parámetro por empresa con vigencia; MUST mostrar los
+  días hábiles y calendario que consume la solicitud antes de guardarla; y MUST dejar la novedad de
+  vacaciones en cada período de nómina que cubre para que esos días se paguen como vacaciones y no
+  como salario.
 - **FR-016**: La compensación en dinero MUST limitarse al máximo legal parametrizado sobre lo
   causado y MUST rechazar lo que lo supere con el máximo permitido.
 - **FR-017**: El valor de las vacaciones MUST calcularse sobre el salario ordinario del momento
@@ -489,8 +537,14 @@ referencia y el tercero aparece en pendientes.
 - **FR-018**: Al registrar la terminación (fecha, motivo de una lista parametrizable, tipo de
   contrato), el sistema MUST liquidar en un solo documento: salario de los días pendientes,
   cesantías e intereses del período causado, prima proporcional, vacaciones pendientes,
-  indemnización si aplica, y las deducciones pendientes que la cooperativa autorice (préstamos
-  propios, libranzas), cada una con explicación.
+  indemnización si aplica, y las deducciones pendientes, cada una con explicación.
+- **FR-018a**: Las deducciones de la definitiva MUST proponerse solas: el **saldo total** de cada
+  préstamo de la cooperativa (con capital, intereses y cuotas pendientes leídos de Cartera) hasta
+  donde alcance el neto de la liquidación, y sólo las **cuotas causadas y no descontadas** de las
+  libranzas con terceros. La responsable MUST poder validar cada saldo y **modificar el valor hacia
+  abajo con motivo** antes de aprobar; el sistema MUST guardar y auditar el valor propuesto, el
+  aplicado, el motivo, quién y cuándo, y mostrar el saldo que queda en Cartera después del
+  descuento.
 - **FR-019**: La indemnización MUST calcularse con una tabla parametrizada por tipo de contrato,
   antigüedad y rango salarial (contrato indefinido: días por el primer año y por cada año
   siguiente, según el rango de salarios mínimos; término fijo: el tiempo faltante), y MUST ser
@@ -518,6 +572,10 @@ referencia y el tercero aparece en pendientes.
   (ingreso, retiro, variación de salario, incapacidades, licencias, vacaciones), IBC por
   subsistema y aportes de salud, pensión, fondo de solidaridad, riesgos, caja, SENA e ICBF, con
   tarifas y exoneraciones vigentes por parámetro.
+- **FR-024a**: La exoneración del art. 114-1 ET MUST ser un parámetro por empresa con vigencia
+  («exonerada: sí/no» y umbral en salarios mínimos), que la PILA y la nómina ordinaria (aportes
+  del empleador) leen por igual; el aplicativo MUST servir a entidades exoneradas y no exoneradas
+  sin cambio del programa.
 - **FR-025**: Antes de generar, MUST validar afiliaciones, documentos, tarifas y topes y entregar
   la lista de inconsistencias con enlace a la ficha; las bloqueantes impiden generar.
 - **FR-026**: Cada generación MUST quedar registrada (quién, cuándo, período, totales, archivo) y
@@ -585,7 +643,9 @@ referencia y el tercero aparece en pendientes.
 - **Parámetros legales nuevos**: días de prima por semestre, porcentaje de intereses a las
   cesantías, días de vacaciones por año y máximo compensable, tabla de indemnización por tipo de
   contrato/antigüedad/rango salarial, calendario de festivos, sábado hábil o no, tarifas y
-  exoneraciones de aportes por subsistema y tipo de cotizante, topes de IBC; todos con vigencia.
+  exoneraciones de aportes por subsistema y tipo de cotizante, topes de IBC, tope de ingreso para
+  la exención de cesantías e intereses y tarifa y tope de retención sobre indemnizaciones; todos
+  con vigencia.
 - **Cálculo de porcentaje fijo (procedimiento 2)**: empleado, semestre, doce meses con ingresos y
   depuración, promedio, retención teórica, porcentaje, estado (calculado, aprobado), vigencia
   resultante en la ficha.
