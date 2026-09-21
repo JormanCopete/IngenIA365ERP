@@ -65,7 +65,7 @@ EnablementChanged`, `Payroll.Dispersion.Generated/Sent/Cancelled`, `Payroll.Seve
 
 | Ruta existente | Permiso | Qué cambia para una liquidación especial |
 |---|---|---|
-| `GET /` (resumen) | Runs.View | `RunSummaryDto` suma `kind` (`PayrollRunKind`: `Ordinary` 0, `ServiceBonus` 1, `Severance` 2, `Vacation` 3, `Settlement` 4), `cutoffDate`, `year?`, `semester?`, `payPeriodPublicId` **nullable**, `warnings[]` (p. ej. `Payroll.Settlement.OpeningBalanceMissing` con los empleados) |
+| `GET /` (resumen) | Runs.View | `RunSummaryDto` suma `kind` (`PayrollRunKind`: `Ordinary` 0, `ServiceBonus` 1, `Severance` 2, `Vacation` 3, `Settlement` 4; viaja como texto), `cutoffDate`, `payDate`, `year?`, `semester?`, `employeePublicId?` (vacaciones y definitiva), `periodPublicId` **nullable** (el campo existente), `warnings: [{ code, message, data }]` (p. ej. `Payroll.Settlement.OpeningBalanceMissing` con los empleados) |
 | `GET /employees`, `GET /employees/{employeeId}` | Runs.View | mismas líneas `CalculationLine` con explicación paso a paso; en la definitiva la línea `DESC_CARTERA` trae `data: { proposed, applied, reason, obligationPublicId }` |
 | `GET /balance-check` | Runs.View | cuadra contra el comprobante de la liquidación; añade `provision: { accrued, consumed, released, difference }` por concepto |
 | `GET /comparison` | Runs.View | compara con la versión anterior **de la misma corrida especial**; sin anterior → `{ previous: null }` |
@@ -82,7 +82,8 @@ período). Las consultas que hoy asumen período (`historico`, `comparison` de l
 
 Cuatro subrecursos con el mismo ciclo: **calcular** (crea la corrida en `Draft`), **recalcular**
 (versión nueva, la anterior `Superseded`), **aprobar** (contabiliza en la misma transacción por
-`PayrollAccountingPoster` → `AccountingPoster`, único camino al libro), **reversar** (asiento
+`SettlementAccountingPoster` → `AccountingPoster`, único camino al libro; el ciclo común es
+`SettlementRunWorkflow`), **reversar** (asiento
 espejo) y **descartar** (borrador → `Superseded` sin contabilidad). Aprobar y reversar llevan el
 permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con la ruta (422
 `Payroll.Settlement.KindMismatch`).
@@ -92,10 +93,10 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?year=&status=` | ServiceBonus.View | `[{ runPublicId, year, semester, version, status, employees, total, calculatedAt, calculatedBy, approvedAt?, paidCount, postedDocumentPublicId? }]` |
-| `POST /` | ServiceBonus.Calculate | `{ year, semester: 1\|2, employeePublicIds?: [] }` → 201 `{ runPublicId, version, employees, total, excluded: [{ employeePublicId, name, reasonCode, reason }], warnings[] }`. `excluded` explica a quien no tiene derecho (`SalarioIntegral`, `AprendizLectiva`, `YaPagadaEnDefinitiva`, `SinDiasEnElSemestre`) |
+| `POST /` | ServiceBonus.Calculate | `{ year, semester: 1\|2, employeePublicIds?: [] }` → 201 `SettlementCalculatedDto` `{ runPublicId, version, kind, cutoffDate, employees, totals, blockers[], excluded: [{ employeePublicId, name, reasonCode, reason }], warnings[] }` (común a las cuatro). `excluded` explica a quien no tiene derecho (`SettlementReasonCodes`: `SalarioIntegral`, `AprendizLectiva`, `Pasante` (FR-009), `YaPagadaEnDefinitiva`, `SinDiasEnElSemestre`) |
 | `POST /{runId}/recalculate` | ServiceBonus.Calculate | → 201 misma respuesta, versión N+1 |
-| `POST /{runId}/approve` | ServiceBonus.Approve | `{ confirm: true, postingDate?, confirmEmpty?, confirmWithoutSegregation? }` → `{ documentPublicId, number, total }`; `postingDate` por defecto **hoy** (la prima se contabiliza cuando se aprueba, no al corte del semestre) y nunca posterior a hoy ni anterior a la fecha de corte; 422 `Payroll.Settlement.PostingDateInvalid` |
-| `POST /{runId}/reverse` | ServiceBonus.Reverse | `{ reason }` → `{ reversalDocumentPublicId }`; 422 `Payroll.PaymentBlocksReversal` si hay pagos marcados |
+| `POST /{runId}/approve` | ServiceBonus.Approve | `{ confirm: true, postingDate?, confirmEmpty?, confirmWithoutSegregation? }` → `{ runPublicId, documentPublicId, number, total, postingDate, approvedWithoutSegregation }`; `postingDate` por defecto la **fecha de corte** (D-04: la provisión se causa en el mes correcto; el pago lleva `payDate` propio) y sólo entre el corte y hoy (`SettlementAccountingPoster.ResolverFecha`); 422 `Payroll.Settlement.PostingDateInvalid` (`data: { postingDate, cutoffDate, today }`). Sin `confirm` → 422 `Payroll.Settlement.ConfirmationRequired` (el mismo código cuando falta `confirmEmpty` o `confirmWithoutSegregation`) |
+| `POST /{runId}/reverse` | ServiceBonus.Reverse | `{ reason }` → `{ runPublicId, reversalDocumentPublicId, reversalNumber }`; 422 `Payroll.PaymentBlocksReversal` si hay pagos marcados |
 | `POST /{runId}/discard` | ServiceBonus.Calculate | `{ reason }` |
 
 ### 3.2 Cesantías e intereses — `/severance`
@@ -103,7 +104,7 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?year=&status=` | Severance.View | como 3.1 más `interestTotal`, `severanceTotal`, `funds: [{ fundPublicId, name, employees, amount, depositedAt?, depositedBy?, reference? }]` |
-| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `RetiradoConDefinitiva` |
+| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `Pasante`, `SinDiasEnElAnio` (el retirado con definitiva aprobada no entra a la población) |
 | `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Severance.* | como 3.1; al aprobar el comprobante deja la cuenta por pagar **al fondo** por las cesantías y **al empleado** por los intereses (FR-011) |
 | `GET /{runId}/deposit-schedule` | Severance.View | relación de consignación por fondo: `{ funds: [{ fundPublicId, fundName, fundNit, pilaCode, lines: [{ employeePublicId, documentType, document, name, hireDate, baseSalary, days, amount }], total, depositedAt? }], grandTotal, dueDate }` (`dueDate` = parámetro `CESANTIAS_FECHA_LIMITE_CONSIGNACION`) |
 | `GET /{runId}/deposit-schedule/{fundId}/file?formatId=` | Severance.View | archivo plano del fondo con un formato parametrizable (ver `archivos.md` §3); 422 `Payroll.Severance.FundFormatMissing` si el fondo no tiene formato vigente |
@@ -121,7 +122,7 @@ novedades no consumidas. El saldo y la vista previa de días viven en `/api/payr
 |---|---|---|
 | `GET /?employeeId=&year=&status=` | Vacations.View | `[{ runPublicId, movementPublicId, employee…, kind, from?, to?, workingDays, calendarDays, compensatedDays?, amount, status }]` |
 | `POST /` | Vacations.Calculate | `{ employeePublicId, kind: Enjoyment (0) \| Compensation (1), from?, to?, compensationDays?, paymentDate? }` → 201 `{ runPublicId, movementPublicId, workingDays, calendarDays, skipped: [{ date, reason }], amount, novelties: [{ periodPublicId, days, retroactive }] }`. `Enjoyment` exige `from`/`to`; `Compensation` exige `compensationDays` |
-| `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Vacations.* | como 3.1; `approve` acepta `postingDate?` (por defecto el primer día del disfrute o hoy en la compensación) |
+| `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Vacations.* | como 3.1; `approve` acepta `postingDate?` (por defecto la fecha de corte de la corrida, D-04; rango [corte, hoy]) |
 
 Errores propios: `Payroll.Vacation.DatesInvalid`, `.NoWorkingDays` (todo festivo o domingo),
 `.NoBalance` (`data: { pendingDays }`), `.CompensationOverMax` (`data: { requestedDays, maxDays,
@@ -144,7 +145,7 @@ ficha llama a esta.
 | `GET /{runId}/deductions` | Settlements.View | propuesta desde Cartera (FR-018a): `{ net, items: [{ obligationPublicId, kind: Loan (0) \| Payroll deduction to third party (1), description, capitalBalance, interestBalance, defaultBalance, pendingInstallments, causedNotDeducted?, proposed, applied, reason?, adjustedBy?, adjustedAt?, remainingAfter }], totalProposed, totalApplied, netAfterDeductions }` |
 | `PUT /{runId}/deductions/{obligationId}` | Settlements.AdjustDeduction | `{ applied, reason }` → la fila actualizada; recalcula la línea `DESC_CARTERA` sin nueva versión. 422 `Payroll.Settlement.DeductionAboveProposed` (`data: { proposed }`), `.DeductionReasonRequired`, `.NotDraft` |
 | `POST /{runId}/recalculate` | Settlements.Calculate | versión nueva; vuelve a leer Cartera y **conserva los ajustes** cuyo `proposed` no cambió (los demás vuelven al saldo y se avisa) |
-| `POST /{runId}/approve` | Settlements.Approve | `{ confirm, postingDate?, confirmWithoutSegregation? }` → `{ documentPublicId, number, net, portfolioPayments: [{ obligationPublicId, paymentPublicId, applied, remaining }] }`; cada descuento se aplica con `ProcessPaymentCommand` (Cartera contabiliza el recaudo; la línea de nómina `AffectsAccounting = false`, R7); `postingDate` por defecto `terminationDate` |
+| `POST /{runId}/approve` | Settlements.Approve | `{ confirm, postingDate?, confirmWithoutSegregation? }` → `{ documentPublicId, number, net, portfolioPayments: [{ obligationPublicId, paymentPublicId, applied, remaining }] }`; cada descuento se aplica con `ProcessPaymentCommand` (Cartera contabiliza el recaudo; la línea de nómina `AffectsAccounting = false`, R7); `postingDate` por defecto `terminationDate` (= fecha de corte, D-04) |
 | `POST /{runId}/reverse` | Settlements.Reverse | `{ reason }` → asiento espejo, ficha reabierta (`Payroll.Employee.Reinstated`), pagos de Cartera **no** se reversan solos: la respuesta lista `portfolioPayments` para que Cartera los reverse con su propio flujo, y el mensaje lo dice |
 | `POST /{runId}/discard` | Settlements.Calculate | `{ reason }` → borrador descartado y terminación `Cancelled`; la ficha nunca se tocó |
 | `GET /{runId}/document` | Settlements.View | PDF para firma (`SettlementDocumentModel`, QuestPDF): empresa, empleado, cargo, fechas, motivo, cada rubro con base y días, deducciones con propuesto/aplicado, neto, firmas. Antes de aprobar sale con marca «BORRADOR» |
@@ -170,6 +171,11 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 | `Payroll.Settlement.NotDraft` / `.NotApproved` / `.AlreadyReversed` | 422 | transición inválida | `{ status }` |
 | `Payroll.Settlement.KindMismatch` | 422 | la corrida no es del tipo de la ruta | `{ kind }` |
 | `Payroll.Settlement.SegregationViolation` | 422 | aprueba quien calculó y la política no lo admite | `{ calculatedBy }` |
+| `Payroll.Settlement.ConfirmationRequired` | 422 | falta `confirm`, `confirmEmpty` (corrida sin empleados) o `confirmWithoutSegregation` | |
+| `Payroll.Settlement.ApprovalBlocked` | 422 | algún empleado quedó con bandera bloqueante (no aviso) en el cálculo | |
+| `Payroll.Settlement.NothingToPost` | 422 | ninguna línea afecta contabilidad | |
+| `Payroll.Settlement.CalculationRefused` | 422 | el motor se negó a liquidar a un empleado y dice por qué | |
+| `Payroll.Settlement.UseSettlementRoute` | 422 | `approve`/`reverse`/`discard` de `/runs/{runId}` sobre `Kind ≠ Ordinary` (§2) | `{ kind, route }` |
 | `Payroll.Settlement.OpeningBalanceMissing` | — | **aviso**, no error: empleado con ingreso anterior al arranque y sin saldo inicial (Edge Cases) | `{ employeePublicIds[] }` en `warnings` |
 | `Payroll.PaymentBlocksReversal` | 422 | existente (005) | |
 | `Payroll.Run.NotFound` | 404 | | |
@@ -178,14 +184,15 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /?asOf=&onlyMissing=` | BenefitBalances.View | `[{ employeePublicId, name, hireDate, asOfDate?, pendingVacationDays?, accruedSeverance?, accruedSeveranceInterest?, accruedServiceBonus?, consumedBy: [{ runPublicId, kind }], updatedAt?, updatedBy? }]`; `onlyMissing=true` lista a quien ingresó antes del arranque y no tiene saldo |
+| `GET /?asOf=&onlyMissing=&search=` | BenefitBalances.View | `[{ employeePublicId, name, hireDate, asOfDate?, pendingVacationDays?, accruedSeverance?, accruedSeveranceInterest?, accruedServiceBonus?, consumedBy: [{ runPublicId, kind }], updatedAt?, updatedBy? }]`; `onlyMissing=true` lista a quien ingresó antes del arranque y no tiene saldo |
 | `GET /{employeeId}` | BenefitBalances.View | la fila vigente + `history[]` |
 | `PUT /{employeeId}` | BenefitBalances.Manage | `{ asOfDate, pendingVacationDays, accruedSeverance, accruedSeveranceInterest, accruedServiceBonus, notes? }` → crea o reemplaza mientras nada la consumió |
 | `POST /{employeeId}/adjustments` | BenefitBalances.Manage | `{ asOfDate, …mismos campos…, reason }` → fila nueva con vigencia cuando la anterior ya fue consumida (R3) |
 
 422 `Payroll.BenefitBalance.Consumed` (`data: { runPublicIds[] }`: use `adjustments`),
 `.AsOfAfterFirstRun` (la fecha es posterior a la primera corrida aprobada del empleado),
-`.NegativeValue`. Auditoría `Payroll.OpeningBalance.Changed` con antes/después.
+`.NegativeValue`, `.NoBalanceToAdjust` (ajuste sin saldo previo: use el `PUT`), `.AsOfDuplicate`
+(ya hay un ajuste con esa fecha de corte). Auditoría `Payroll.OpeningBalance.Changed` con antes/después.
 
 ## 5. Vacaciones: saldo y movimientos — `/api/payroll/vacations`
 
@@ -240,8 +247,8 @@ Errores: `Payroll.Pila.BlockingIssues` (`data: { issues[] }`), `.NoApprovedRuns`
 
 ## 8. Nómina electrónica — `/api/payroll/electronic-payroll`
 
-Todo lo de la cooperativa vive en **su** base (`PAY_ElectronicPayrollSettings`, `…Ranges`,
-`…Documents`, `…Attempts`); el ERP construye el XML, lo entrega al servicio central **sin
+Todo lo de la cooperativa vive en **su** base (`PAY_ElectronicPayrollSettings`, `…NumberingRanges`,
+`…Documents`, `…Transmissions`); el ERP construye el XML, lo entrega al servicio central **sin
 estado** (`servicio-nomina-electronica.md`) que lo completa (CUNE, SoftwareSC), valida, firma y
 transmite, y guarda lo que vuelve. Los secretos (certificado, PIN) **no pasan por aquí**: la
 habilitación referencia el **nombre** del Secret de Kubernetes que el dueño creó con
@@ -270,7 +277,7 @@ habilitación referencia el **nombre** del Secret de Kubernetes que el dueño cr
 | `GET /documents/{id}/application-response` | ElectronicPayroll.View | `application/xml` (el `ApplicationResponse` firmado por la DIAN) |
 | `GET /documents/{id}/pdf` | ElectronicPayroll.View | representación gráfica (QuestPDF + QR con `CodigoQR`); antes de ser aceptado sale con marca «SIN VALIDAR» y sin CUNE (R10: no es un desprendible; el comprobante del empleado sigue en `/runs/{runId}/payslips`) |
 | `POST /documents/transmit` | ElectronicPayroll.Transmit | `{ documentPublicIds[] }` → `{ results: [{ documentPublicId, status, cune?, statusCode?, errors[] }] }`. **Acción explícita** (FR-029); uno por uno contra el servicio (`SendNominaSync`, 60 s); nunca `Accepted` sin CUNE **y** `ApplicationResponse` |
-| `POST /documents/{id}/refresh-status` | ElectronicPayroll.Generate | consulta `GetStatus(CUNE)` vía el servicio (para `InProcess` o `Transmitted`) → estado actualizado; el trabajo de fondo hace lo mismo con backoff 1, 5, 15, 60 min hasta 24 h (R10), cooperativa por cooperativa (Principio IV) |
+| `POST /documents/{id}/refresh-status` · `POST /{year}/{month}/refresh-status` | ElectronicPayroll.Generate | consulta `GetStatus(CUNE)` vía el servicio (para `InProcess` o `Transmitted`) → estado actualizado, por documento o por mes. **Manual** (D-11): en esta feature no hay trabajo de fondo; el backoff de R10 queda para cuando exista uno por cooperativa |
 | `POST /documents/{id}/regenerate` | ElectronicPayroll.Generate | reconstruye el XML **con el mismo número** cuando está `Generated` o `Rejected` (la DIAN nunca lo registró); conserva `attempts` (FR-029 «conserva su historial»); 422 `.AlreadyAccepted`, `.InProcess` |
 | `POST /documents/{id}/void-number` | ElectronicPayroll.Manage | `{ reason }`: anula un número que nunca fue aceptado y que no se volverá a usar (queda como hueco documentado en el rango) |
 
@@ -321,21 +328,25 @@ alguien fue marcado a mano entre generar y enviar; se excluyen y se avisa), `.So
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /?asOf=` | CompanyPolicies.View | `[{ key, value, validFrom, validTo?, allowed[], description, source }]` con las siete claves de R4: `Exonerada114_1` (`true/false`), `SemanaLaboral` (`LunesASabado`/`LunesAViernes`), `RetefteTopesAnualesModo` (`Acumulado`/`Mensualizado`), `CotizaArlEnVacaciones`, `P2SecuenciaDepuracion` (`DepurarLuegoDividir`/`DividirLuegoDepurar`), `DianPlazoComputo` (`Calendario`/`Habiles`), `AllowSameUserApproval` (migrada de `COR_SystemSettings`) |
-| `GET /{key}/versions` | CompanyPolicies.View | historial |
-| `POST /{key}/versions` | CompanyPolicies.Manage | `{ value, validFrom, validTo?, reason }` → 201; cierra la vigente el día anterior si se solapa y `closePrevious = true`; 422 `Payroll.CompanyPolicy.KeyUnknown`, `.ValueInvalid` (`data: { allowed[] }`), `.VersionOverlaps`, `.RetroactiveNotAllowed` (`validFrom` anterior a una corrida aprobada que la leyó: se avisa, no se bloquea, salvo `Exonerada114_1`, que sí bloquea porque cambia aportes ya contabilizados) |
+| `GET /?asOf=` | CompanyPolicies.View | `[{ key, value, validFrom?, validTo?, allowed[], format?, description, source, publicId?, notes?, versionCount }]` con las **once** claves de `CompanyPolicyKeys` (data-model §2.1): `Exonerada114_1` (`true/false`), `SemanaLaboral` (`LunesASabado`/`LunesAViernes`), `VacacionesPagoAnticipado` (D-01), `CotizaArlEnVacaciones`, `RetefteTopesAnualesModo` (`Acumulado`/`Mensualizado`), `P2SecuenciaDepuracion` (`DepurarLuegoDividir`/`DividirLuegoDepurar`), `DianPlazoComputo` (`Calendario`/`Habiles`), `DianMedioPagoMapa` (JSON), `DeduccionAlRetiroModo` (`SaldoTotal`/`SoloCuotasCausadas`/`NoProponer`), `ArranqueNominaFecha` (`yyyy-MM-dd`), `AllowSameUserApproval` (migrada de `COR_SystemSettings`). `source` dice si el valor viene de `PAY_CompanyPolicies` o del defecto del catálogo |
+| `GET /{key}/versions` | CompanyPolicies.View | historial: `[{ publicId, key, value, validFrom, validTo?, notes, createdBy, createdAt, isCurrent }]` |
+| `POST /{key}/versions` | CompanyPolicies.Manage | `{ value, validFrom, validTo?, reason, closePrevious = true }` → 201 `{ publicId, warnings[] }`; cierra la vigente el día anterior si se solapa y `closePrevious = true`; si hay corridas aprobadas desde `validFrom`, `warnings[]` lo dice (el cambio no las recalcula). 422 `Payroll.CompanyPolicy.KeyUnknown`, `.ValueInvalid` (`data: { allowed[], format }`), `.VersionOverlaps`, `.RetroactiveNotAllowed` (sólo `Exonerada114_1`: cambia aportes ya contabilizados; `data: { approvedRuns, firstApprovedAt, validFrom }`). Toda vigencia nueva marca los borradores como desactualizados |
 
 ### 10.2 `/api/payroll/holidays`
 
-`GET /?year=` → `[{ holidayPublicId, date, name, origin: Law51 (0) \| Decreed (1) \| Manual (2),
-isSeeded }]` (View) · `POST /` `{ date, name }` → 201 `Manual` (Manage) · `DELETE /{id}` soft, sólo
-`Manual`/`Decreed` (Manage; 422 `Payroll.Holiday.Seeded`). Semilla 2026-2028 por la Ley 51/1983.
+`GET /?year=` → `[{ holidayPublicId, date, name, origin, isSeeded, createdBy, createdAt }]` (View);
+`origin` es `HolidayOrigin`: `Ley51Fixed` (1), `Ley51MovedToMonday` (2), `Ley51Easter` (3) —los
+tres de la semilla—, `Decreed` (4), `Manual` (5). `POST /` `{ date, name, origin?: Manual \| Decreed }`
+→ 201 `{ holidayPublicId }` (Manage; por defecto `Manual`; otro origen → 422
+`Payroll.Holiday.OriginInvalid`; fecha repetida → `.DateDuplicate`) · `DELETE /{id}` soft, sólo
+`Manual`/`Decreed` (Manage; 422 `Payroll.Holiday.Seeded`; `.NotFound`). Semilla 2026-2028 por la
+Ley 51/1983. Auditoría `Payroll.Holiday.Changed`.
 
 ### 10.3 Parámetros legales (existente, `/api/payroll/legal-parameters`)
 
 Sin rutas nuevas; entran los códigos de R4 con `Source` preciso. Se agrega
-`GET /api/payroll/legal-parameters/missing?process=Settlements|Pila|WithholdingRates&asOf=`
-(LegalParameters.View) → `{ process, asOf, missing: [{ code, description, source }] }`, la misma
+`GET /api/payroll/legal-parameters/missing?process=Ordinary|Settlements|Pila|WithholdingRates|ElectronicPayroll&asOf=`
+(LegalParameters.View; `LegalParameterProcess`) → `{ process, asOf, missing: [{ code, description, source }] }`, la misma
 lista que devuelve `*.ParametersMissing`, para que la pantalla de parámetros la muestre antes de
 liquidar.
 
@@ -366,22 +377,33 @@ gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).
 
 ## 12. Cambios en rutas existentes
 
-- `PUT /api/payroll/employees/{id}` y `GET /api/payroll/employees/{id}` (`EmployeeDto`) suman los
-  bloques `pila: { contributorType, contributorSubtype, divipolaDepartment, divipolaMunicipality,
-  economicActivityCode, workCenter, salaryTypeCode: F|V|X, foreignNotPensionObligated,
-  colombianAbroad, pensionTransitionRegime: Yes|No|Unknown, highRiskPension }` y `dian:
-  { workerType, workerSubtype, contractTypeDian: 1..5, highRiskPension }` (R9, R10), y el `GET`
-  devuelve además `vacationBalance`, `openingBalance`, `currentWithholdingRate`, `termination?`.
-  La cuenta bancaria de nómina (`payrollBankId`, `payrollBankAccountType`,
-  `payrollBankAccountNumber`) ya existe y no cambia.
+- `PUT /api/payroll/employees/{id}`, `POST /api/payroll/employees[/with-person]` y
+  `GET /api/payroll/employees/{id}` (`EmployeeDto`) suman los bloques `pila: { contributorType,
+  contributorSubtype, divipolaDepartment, divipolaMunicipality, economicActivityCode, workCenter,
+  salaryTypeCode: F|V|X, foreignNotPensionObligated, colombianAbroad, pensionTransitionRegime:
+  Unknown (0)|Yes (1)|No (2), highRiskPension }` y `dian: { workerType, workerSubtype,
+  contractTypeDian: 1..5, highRiskPension, paymentMethodCode?, workAddress? }` (R9, R10;
+  `FichaPilaDian`), más `apprenticeStage?: Lective (1)|Practical (2)` y
+  `disbursementBankPublicId?`. Un bloque que no viene **no toca** lo que había. `salaryTypeCode`
+  se **deriva** de `SalaryType` (0/1/2 ↔ F/V/X; la clase `IntegralSalary` siempre es X) y al
+  escribirlo se guarda ahí. Tipo y subtipo DIAN son las mismas columnas que el cotizante PILA
+  (D-05): si vienen en los dos bloques manda `pila`. `paymentMethodCode` vacío se deriva de la
+  forma de pago por la política `DianMedioPagoMapa`. `apprenticeStage` es **obligatoria** si la
+  clase es `Apprentice` o `Intern` (422 `Payroll.Employee.ApprenticeStageRequired`). En el `PUT`,
+  `disbursementBankPublicId` nulo = no cambia y `clearDisbursementBank: true` lo quita. El `GET`
+  devuelve además `disbursementBankName`, `disbursementBankTransferCode`, `vacationBalance?`,
+  `openingBalance?`, `currentWithholdingRate?`, `termination?`. La cuenta bancaria de nómina
+  (`payrollBankId`, `payrollBankAccountType`, `payrollBankAccountNumber`) ya existe y no cambia.
 - `PUT /api/payroll/health-providers/{id}`, `/pension-providers`, `/work-risk-providers`,
   `/severance-providers`, `/family-compensation-funds` aceptan `pilaCode` (6, distinto del `Code`
   de la cooperativa) y `GET /api/core/banks/{id}` expone `transferCode` (código ACH del banco
   destino, R11; **verificar** que el dato migrado sea el ACH).
 - Segundo apellido y otros nombres separados se escriben en la persona (`PersonInput`,
   `Components/Personas/PersonaDialog`, único sitio que escribe la persona): `secondLastName`,
-  `middleName`. Sin ellos el documento DIAN queda en `skipped`.
+  `otherNames` (columnas `COR_People.SecondLastName/OtherNames`, D-06). Sin ellos el documento DIAN
+  queda en `skipped`.
 - `POST /api/payroll/employees/{id}/terminate` **se retira** (§3.4).
 - `POST /api/payroll/runs/{runId}/approve|reverse|discard` rechazan `Kind ≠ Ordinary` (§2).
-- El trabajo de fondo de consulta de estado DIAN (§8.2) recorre el directorio de cooperativas y
-  abre la conexión de cada una; nunca una consulta que barra todas (Principio IV).
+- No hay trabajo de fondo de consulta de estado DIAN en esta feature (D-11): la consulta es manual
+  (§8.2). Si algún día existe, recorre el directorio de cooperativas y abre la conexión de cada
+  una; nunca una consulta que barra todas (Principio IV).

@@ -62,7 +62,7 @@ dotnet test tests/IngenIA365ERP.Application.Tests --filter "FullyQualifiedName~P
 
 Entre otras: cálculo y persistencia por tipo de liquidación; FR-005 (segunda liquidación del
 mismo tipo, período y empleado → rechazo mientras la anterior no esté reversada); FR-021
-(retiro con fecha en período aprobado → `Payroll.PeriodApproved` con la indicación); aprobación
+(retiro con fecha en período aprobado → `Payroll.Termination.PeriodApproved` con la indicación); aprobación
 que contabiliza en una sola transacción con `SourceType` por tipo; reversión que deja asiento
 espejo **y reabre la ficha**; descuento de Cartera aplicado con `ProcessPaymentCommand` y
 ajuste hacia abajo con motivo auditado (`Payroll.Settlement.DeductionAdjusted`); cierre de la
@@ -131,9 +131,12 @@ Con dos o más cooperativas declaradas con base propia, `--scope all` se niega (
 Tras migrar, `PAY_PayrollRuns` tiene `Kind` (default `Ordinary` en las filas viejas —lo vigila
 `DosContextosUnaTablaTests`—), `PayPeriodId` nullable y los índices filtrados por tipo; existen
 `PAY_EmployeeBenefitOpeningBalances`, `PAY_VacationMovements`, `PAY_TerminationReasons`,
-`PAY_Holidays`, `PAY_CompanyPolicies`, `PAY_WithholdingRateCalculations`, `PAY_PilaGenerations`
-/`PilaLines`/`PilaIssues`, `PAY_ElectronicPayroll*`, `PAY_BankFileFormats`, `PAY_DispersionFiles`
-y `PAY_SettlementDeductionAdjustments`.
+`PAY_EmploymentTerminations`, `PAY_SettlementDeductions`, `PAY_SeveranceFundDeposits`,
+`PAY_Holidays`, `PAY_CompanyPolicies`, `PAY_WithholdingRateCalculations`/`…Months` (N1);
+`PAY_PilaSettings`, `PAY_PilaGenerations`/`…GenerationLines`/`…Issues`,
+`PAY_ElectronicPayrollSettings`/`…NumberingRanges`/`…Documents`/`…Transmissions` (N2+N3);
+`PAY_BankDisbursementFormats`/`…FormatFields` y `PAY_BankDisbursementFiles`/`…FileLines` (N4).
+Los nombres son los de `data-model.md` §3.
 
 1. **Parámetros legales 2026** (`PAY_PayrollLegalParameters`): la semilla agrega los códigos
    nuevos de research R4 —`PRIMA_DIAS_ANIO`, `CESANTIAS_DIAS_ANIO`,
@@ -158,21 +161,31 @@ y `PAY_SettlementDeductionAdjustments`.
    nombrando el código, es la liquidación especial o la PILA que lo necesite. Las vigencias
    **2027** de SMMLV, auxilio y UVT no existen todavía (§6.9): sin ellas los intereses de enero
    y la consignación de febrero avisan `Payroll.LegalParameterMissing`.
-2. **Políticas por empresa** (`/nomina/politicas`, `PAY_CompanyPolicies`, con vigencia):
-   `Exonerada114_1` (COOFLOPAL: **sí**, a confirmar con la contadora, §6.8a),
-   `SemanaLaboral` (`LunesASabado` por defecto), `RetefteTopesAnualesModo`,
-   `CotizaArlEnVacaciones` (no), `P2SecuenciaDepuracion`, `DianPlazoComputo` (`Calendario`),
-   `AllowSameUserApproval`. Cada cambio queda en auditoría (`Payroll.CompanyPolicy.Changed`) y
-   la explicación de cada valor nombra el modo elegido.
+2. **Políticas por empresa** (`/nomina/politicas`, `PAY_CompanyPolicies`, con vigencia): las
+   **once** claves de `CompanyPolicyKeys` — `Exonerada114_1` (COOFLOPAL: **sí**, a confirmar
+   con la contadora, §6.8a; migrada de `Payroll.ApplyEmployerExemption`), `SemanaLaboral`
+   (`LunesASabado` por defecto), `VacacionesPagoAnticipado` (`true`, D-01),
+   `CotizaArlEnVacaciones` (no), `RetefteTopesAnualesModo` (`Mensualizado`),
+   `P2SecuenciaDepuracion` (`DepurarLuegoDividir`), `DianPlazoComputo` (`Calendario`),
+   `DianMedioPagoMapa` (JSON `Transfer/Check/Cash` → código DIAN), `DeduccionAlRetiroModo`
+   (`SaldoTotal`), `ArranqueNominaFecha` (la siembra el seeder con el primer período) y
+   `AllowSameUserApproval` (migrada de `COR_SystemSettings`). Una vigencia nueva
+   (`POST /api/payroll/company-policies/{key}/versions`) responde 201 `{ publicId, warnings[] }`:
+   si hay corridas aprobadas desde `validFrom`, avisa; en `Exonerada114_1` bloquea
+   (`Payroll.CompanyPolicy.RetroactiveNotAllowed`). Cada cambio queda en auditoría
+   (`Payroll.CompanyPolicy.Changed`) y la explicación de cada valor nombra el modo elegido.
 3. **Calendario de festivos** (`/nomina/festivos`, `PAY_Holidays`): la semilla trae 2026–2028
-   por la regla de la Ley 51 de 1983; un puente decretado se agrega a mano con origen
-   `Decretado`. Verificar que el 2 de noviembre de 2026 está y el 1 de noviembre (domingo) no
-   hace falta.
-4. **Motivos de retiro** (`PAY_TerminationReasons`): la semilla deja renuncia, despido sin
-   justa causa, despido con justa causa (art. 62), vencimiento del término con preaviso
-   (art. 46), mutuo acuerdo, terminación de la obra, período de prueba (art. 78), muerte y
-   pensión, con la marca `GeneratesSeverancePay` que sólo lleva «despido sin justa causa». La
-   cooperativa puede sumar motivos propios sin indemnización; las marcas legales no se editan.
+   por la regla de la Ley 51 de 1983 (orígenes `Ley51Fixed`, `Ley51MovedToMonday`,
+   `Ley51Easter`); un puente decretado se agrega a mano con origen `Decreed` (o `Manual`, el
+   valor por defecto; otro origen → `Payroll.Holiday.OriginInvalid`) y sólo esos dos se retiran
+   (`Payroll.Holiday.Seeded`). Verificar que el 2 de noviembre de 2026 está y el 1 de noviembre
+   (domingo) no hace falta.
+4. **Motivos de retiro** (`PAY_TerminationReasons`, códigos de hasta 10 caracteres,
+   `CodigoDeCatalogo`): la semilla deja `RENUNCIA`, `DESP_SINJC` (despido sin justa causa),
+   `DESP_JC` (art. 62), `VENC_TERM` (vencimiento del término con preaviso, art. 46),
+   `MUTUO_ACDO`, `FIN_OBRA`, `PER_PRUEBA` (art. 78), `MUERTE` y `PENSION`, con la marca
+   `GeneratesSeverancePay` que sólo lleva `DESP_SINJC`. La cooperativa puede sumar motivos propios
+   sin indemnización; las marcas legales no se editan (`Payroll.Termination.ReasonSeeded`).
 5. **Saldos iniciales de prestaciones** (`/nomina/saldos-iniciales`, FR-007): por empleado con
    ingreso anterior al 01-12-2026: `AsOfDate` 30-11-2026, días hábiles de vacaciones pendientes,
    cesantías e intereses acumulados del año, prima acumulada del semestre, con la fuente. Sin
@@ -186,20 +199,27 @@ y `PAY_SettlementDeductionAdjustments`.
    Cartera contabiliza el recaudo). Sin ellas la aprobación se bloquea con
    `Payroll.ConceptWithoutAccounts` y la lista. Las define la contadora (§6.8i). El período
    contable `CNT` del mes de la liquidación debe estar abierto.
-7. **Ficha del empleado**, campos nuevos: cuenta bancaria (banco `COR_Banks`, tipo 1 ahorros /
-   2 corriente, número), procedimiento de retención (1 / 2), tipo/subtipo de cotizante PILA,
-   DIVIPOLA departamento y municipio laboral, actividad económica (Decreto 768/2022), centro de
-   trabajo, régimen de transición Ley 2381 (S/N), tipo de contrato DIAN 1–5, etapa del aprendiz;
-   y en los catálogos EPS, AFP, ARL y CCF el `PilaCode` (distinto del `Code` de la cooperativa).
+7. **Ficha del empleado**, campos nuevos (`PUT /api/payroll/employees/{id}`, bloques `pila` y
+   `dian`, `apprenticeStage`, `disbursementBankPublicId`): banco de dispersión (`COR_Banks`,
+   código ACH en `TransferCode`; `clearDisbursementBank` lo quita) más la cuenta que ya existía
+   (tipo 1 ahorros / 2 corriente, número), procedimiento de retención (1 / 2), tipo/subtipo de
+   cotizante PILA (los mismos que `TipoTrabajador` DIAN, D-05), DIVIPOLA departamento y
+   municipio laboral, actividad económica (Decreto 768/2022), centro de trabajo, tipo de salario
+   F/V/X (derivado de `SalaryType`; integral siempre X), régimen de transición Ley 2381
+   (`Unknown`/`Yes`/`No`), tipo de contrato DIAN 1–5, medio de pago y dirección laboral DIAN
+   (opcionales), etapa del aprendiz (**obligatoria** si la clase es aprendiz o pasante:
+   `Payroll.Employee.ApprenticeStageRequired`); en la persona, segundo apellido y otros nombres
+   (`secondLastName`, `otherNames`); y en los catálogos EPS, AFP, ARL y CCF el `PilaCode`
+   (distinto del `Code` de la cooperativa).
    Cada faltante es una inconsistencia **bloqueante** de la PILA o de la nómina electrónica con
    enlace a la ficha, no un error silencioso. Fondos, EPS, ARL y cajas deben estar vinculados a
    su **persona** (FR-088 de la 009) para ser terceros contables.
-8. **Cuenta bancaria de la empresa y formato de dispersión** (`PAY_BankFileFormats`): cuenta
+8. **Cuenta bancaria de la empresa y formato de dispersión** (`PAY_BankDisbursementFormats`): cuenta
    origen; el formato de **AV Villas Empresas** se carga como fila de datos con su vigencia
    cuando el dueño lo aporte (§6.1). Hasta entonces sólo hay un formato ficticio para probar la
    mecánica.
 9. **Habilitación DIAN en modo software propio** (`/nomina/nomina-electronica` › Habilitación,
-   `PAY_ElectronicPayrollEnablement` en la base de la cooperativa): NIT y DV, razón social,
+   `PAY_ElectronicPayrollSettings` en la base de la cooperativa): NIT y DV, razón social,
    modo `SoftwarePropio`, ambiente `Habilitacion`, `SoftwareID`, `TestSetId`, estado del set,
    rangos **internos** de numeración por tipo de documento y por ambiente (prefijo, desde, hasta,
    vigencia; los de habilitación no valen en producción), DANE del lugar de generación, y el
@@ -236,8 +256,9 @@ Empleados: **A** con 2.000.000 fijo todo el semestre y auxilio; **B** con ingres
    redondeo → **52.000**, independiente del salario del mes. Un empleado en P2 ve la prima
    depurada × su porcentaje vigente.
 5. Recalcular tras corregir una novedad: versión 2, la 1 queda `Superseded`.
-6. Aprobar (`Payroll.Settlements.Approve`; el `Operator` no ve el botón): comprobante contable
-   con `SourceType = ServiceBonusRun`, fecha de la liquidación, débito a la provisión de prima
+6. Aprobar (`Payroll.ServiceBonus.Approve`; el `Operator` no ve el botón): comprobante contable
+   con `SourceType = ServiceBonusRun`, fecha = corte del semestre por defecto (D-04;
+   `postingDate` sólo entre el corte y hoy, `Payroll.Settlement.PostingDateInvalid`), débito a la provisión de prima
    acumulada del empleado (líneas `Provision` de las corridas aprobadas + saldo inicial), la
    diferencia al gasto vía `PRIMA_AJUSTE_PROV` (negativa si la provisión supera lo liquidado) y
    CxP al empleado como tercero. El período ordinario de diciembre **no cambia**. Referencia de
@@ -285,7 +306,7 @@ Empleado **H**: contrato indefinido, ingreso 01-10-2024 (810 días al retiro), s
 Retiro **15-12-2026**, despido sin justa causa, dentro de la quincena abierta.
 
 1. Ficha › «Terminar contrato»: fecha, motivo del catálogo, tipo de contrato. Con fecha dentro de
-   un período **aprobado** → `Payroll.PeriodApproved` con la indicación (reversar el período o
+   un período **aprobado** → `Payroll.Termination.PeriodApproved` con la indicación (reversar el período o
    liquidar en el abierto). Con fecha válida se crea la corrida `Settlement` en borrador; la
    ficha **sigue vigente** hasta aprobar.
 2. `/nomina/liquidacion-definitiva` (también desde la ficha), un solo documento con explicación
@@ -401,10 +422,11 @@ y otro con una deducción de libranza; uno de ellos con prima pagada en el mes.
 3. **Rechazo**: forzar un NIExxx (p. ej. un DANE inválido): estado `Rechazado`, errores en
    lenguaje llano del diccionario del servicio, «Notificación» como advertencia; corregir y
    reintentar; el documento conserva su historial de intentos.
-4. **En proceso**: si la DIAN no responde, el documento queda `EnProceso` y el ERP consulta
-   `GetStatus(CUNE)` con backoff (1, 5, 15, 60 min, máx. 24 h) por medio del servicio; **nunca**
-   `Aceptado` sin CUNE ni `ApplicationResponse`; el reenvío del mismo ZIP sólo si la consulta no
-   lo encuentra.
+4. **En proceso**: si la DIAN no responde, el documento queda `EnProceso` y la consulta es
+   **manual** (D-11): el botón «Consultar estado» por documento o por mes pide `GetStatus(CUNE)`
+   por medio del servicio (`POST /documents/{id}/refresh-status`); no hay trabajo de fondo en
+   esta feature. **Nunca** `Aceptado` sin CUNE ni `ApplicationResponse`; el reenvío del mismo ZIP
+   sólo si la consulta no lo encuentra.
 5. **Nota de ajuste**: reversar una quincena del mes ya transmitido y generar la nota:
    `NominaIndividualDeAjuste` (103) `Reemplazar` con los nuevos totales referenciando el CUNE
    original; si el empleado queda en cero en el mes, `Eliminar` con totales «0.00». Transmitir y
@@ -435,7 +457,7 @@ disponibles) y un mes de comisiones altas.
    del plan si tiene tramos) y porcentaje. Con el ejemplo de la investigación:
    `DepurarLuegoDividir` → **3,71 %**; `DividirLuegoDepurar` → **3,44 %**; la política
    `P2SecuenciaDepuracion` decide y la explicación nombra la secuencia.
-2. Aprobar (`Payroll.WithholdingRates.Approve`): la vigencia anterior en
+2. Aprobar (`Payroll.WithholdingRate.Approve`): la vigencia anterior en
    `PAY_EmployeeWithholdingRates` **se cierra** al 31-12-2026 (no se borra) y la nueva abre el
    01-01-2027 hasta el 30-06-2027; auditoría `Payroll.EmployeeWithholding.Changed`.
 3. Calcular la primera quincena de enero de 2027: la línea de retención de J usa el porcentaje
@@ -446,7 +468,7 @@ disponibles) y un mes de comisiones altas.
 Relación de pago de la prima (§3.1) con tres empleados, uno sin cuenta bancaria en la ficha.
 
 1. Desde la relación de pago › **Generar archivo de dispersión**: formato vigente de AV Villas
-   (fila de `PAY_BankFileFormats` cargada con la estructura que aportó el dueño, §6.1); una línea
+   (fila de `PAY_BankDisbursementFormats` cargada con la estructura que aportó el dueño, §6.1); una línea
    por empleado con cuenta (tipo de documento, documento, nombre, código del banco destino desde
    `COR_Banks.TransferCode`, tipo 1/2 y número de cuenta, neto, referencia); el tercero aparece en
    **pendientes** para otro medio. Totales del archivo = suma de los netos incluidos.
@@ -477,7 +499,7 @@ esconde lo que no se puede, pero la puerta es el servidor (`LosEndpointsProtegid
 | Validar y generar PILA; generar documentos DIAN; generar archivo de dispersión | sí | sí | no | no |
 | Marcar PILA cargada; **transmitir** a la DIAN; marcar dispersión enviada | sí | **no** | no | no |
 | Administrar habilitación DIAN, formatos bancarios, festivos, políticas, motivos de retiro | sí | **no** | no | no |
-| Exportar por el centro de reportes | sí | sí | sí (`Payroll.Settlements.Export`) | no |
+| Exportar por el centro de reportes | sí | sí | sí (`Payroll.Runs.Export`, el existente) | no |
 
 Además:
 

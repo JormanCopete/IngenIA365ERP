@@ -555,7 +555,7 @@ Todo vive **aquí**, en la base de la cooperativa. El servicio central no guarda
 | `EmployerMunicipalityDaneCode` | nvarchar(5) | `LugarGeneracionXML` y `Empleador` |
 | `EmployerAddress` | nvarchar(120) | |
 | `EmployerCountryCode` | nvarchar(2) | `CO` |
-| `Mode` | tinyint (`OwnSoftware=1`, `TechnologyProvider=2`) | se arranca en `OwnSoftware`; `TechnologyProvider` sólo cuando el servicio lo tenga habilitado (lo dice el servicio en `GET /v1/capabilities`, no una columna) |
+| `Mode` | tinyint (`OwnSoftware=1`, `TechnologyProvider=2`) | se arranca en `OwnSoftware`; `TechnologyProvider` sólo cuando el servicio lo tenga habilitado (lo dice el servicio en `GET /v1/version` → `modos.proveedorTecnologico`, no una columna; D-16) |
 | `Environment` | tinyint (`Production=1`, `Testing=2`) | los mismos códigos que el atributo `Ambiente` del XML |
 | `SoftwareId` | nvarchar(36) | del catálogo DIAN de la cooperativa (modo propio) |
 | `TestSetId` | nvarchar(36), nullable | |
@@ -942,8 +942,8 @@ un dato de esa cooperativa pudiera haberse quedado.
 - **D-15 · Formato AV Villas.** La fila `AVVILLAS-1` nace vacía e inactiva; hasta que el dueño
   aporte la estructura, la US8 se prueba con `CSV-GENERICO` y SC-007 no se puede cerrar.
 - **D-16 · Modo proveedor tecnológico.** La capacidad la declara el servicio (`GET
-  /v1/capabilities`), no la base de la cooperativa; la cooperativa sólo elige `Mode` si el servicio
-  lo ofrece. Confirmar que el contrato ERP↔servicio del `contracts/` lo incluya.
+  /v1/version` → `modos`), no la base de la cooperativa; la cooperativa sólo elige `Mode` si el
+  servicio lo ofrece. El contrato ERP↔servicio (`contracts/servicio-nomina-electronica.md` §3) ya lo incluye.
 - **D-17 · Retención de blobs ≥ 5 años.** `COR_Attachments` no tiene fecha de retención ni
   política de purga; la nómina electrónica exige conservar 5 años (ET art. 632). ¿Se añade
   `RetainUntil` al adjunto en esta feature o se documenta como regla operativa?
