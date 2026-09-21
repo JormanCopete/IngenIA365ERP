@@ -148,7 +148,7 @@ ficha llama a esta.
 | `POST /{runId}/approve` | Settlements.Approve | `{ confirm, postingDate?, confirmWithoutSegregation? }` → `{ documentPublicId, number, net, portfolioPayments: [{ obligationPublicId, paymentPublicId, applied, remaining }] }`; cada descuento se aplica con `ProcessPaymentCommand` (Cartera contabiliza el recaudo; la línea de nómina `AffectsAccounting = false`, R7); `postingDate` por defecto `terminationDate` (= fecha de corte, D-04) |
 | `POST /{runId}/reverse` | Settlements.Reverse | `{ reason }` → asiento espejo, ficha reabierta (`Payroll.Employee.Reinstated`), pagos de Cartera **no** se reversan solos: la respuesta lista `portfolioPayments` para que Cartera los reverse con su propio flujo, y el mensaje lo dice |
 | `POST /{runId}/discard` | Settlements.Calculate | `{ reason }` → borrador descartado y terminación `Cancelled`; la ficha nunca se tocó |
-| `GET /{runId}/document` | Settlements.View | PDF para firma (`SettlementDocumentModel`, QuestPDF): empresa, empleado, cargo, fechas, motivo, cada rubro con base y días, deducciones con propuesto/aplicado, neto, firmas. Antes de aprobar sale con marca «BORRADOR» |
+| `GET /{runId}/document` | Settlements.View | PDF para firma (`SettlementDocumentModel`, QuestPDF): empresa, empleado, cargo, fechas, motivo, cada rubro con base y días, deducciones con propuesto/aplicado, neto, firmas. Antes de aprobar sale con marca «BORRADOR». Al aprobar, el PDF queda en `COR_Attachments` con dueño `EmploymentTermination` (`settlementDocumentAttachmentPublicId`) y lo gobierna este módulo, no `Attachments.*` (D-28, `AdjuntosDeModulo`): `GET /api/attachments/{id}` y `/by-owner` exigen además `Payroll.Settlements.View` (sin él 404 / lista vacía) y `DELETE /api/attachments/{id}` responde 422 `Attachments.OwnedByModule` |
 | `GET /{runId}/late-payment-penalty?asOf=` | Settlements.View | **informativo** (CST art. 65): `{ asOf, daysLate, dailyRate, penalty, note }`; nunca línea automática (R7) |
 | `GET /reasons` · `POST /reasons` · `PUT /reasons/{id}` · `POST /reasons/{id}/deactivate` | Settlements.View / Manage | catálogo `PAY_TerminationReasons`: `{ publicId, code, name, generatesSeverancePay, requiresContractEndDate, isSeeded, isActive }`. Los sembrados no cambian `generatesSeverancePay` ni `code` (422 `Payroll.Termination.ReasonSeeded`); la cooperativa agrega motivos propios |
 
@@ -354,7 +354,11 @@ liquidar.
 
 Mismo mecanismo de la 006 (`TablaExportable` + `EntregaDeInformes`); encabezado obligatorio con
 empresa, NIT, filtros, usuario y fecha. `json` y los archivos exigen el `.View` del recurso; toda
-exportación a archivo emite `Payroll.Report.Exported`.
+exportación a archivo emite `Payroll.Report.Exported`. Un fallo del handler sale con el sobre y
+el **estado de la convención general** (`*.NotFound` 404 —corrida, empleado o fondo inexistente,
+o sin el `.View` del tipo—, `Payroll.Settlement.KindMismatch` y demás negocio 422, `Validation.*`
+400): como estas rutas devuelven un `IResult` propio, `EntregaDeInformes` pone el estado con la
+misma tabla del `ErrorEnvelopeFilter` (`EstadoDe`). Hasta la revisión de N1 respondían 400 a todo.
 
 | Vista | Filtros | Permiso | Contenido |
 |---|---|---|---|
@@ -402,6 +406,11 @@ gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).
   `Components/Personas/PersonaDialog`, único sitio que escribe la persona): `secondLastName`,
   `otherNames` (columnas `COR_People.SecondLastName/OtherNames`, D-06). Sin ellos el documento DIAN
   queda en `skipped`.
+- `POST /api/payroll/concept-definitions` y `PUT /api/payroll/concept-definitions/{code}` (revisar;
+  `ConceptDefinitionInput`, 005) suman `affectsVacationBase?: bool` y `dianElement?: string` (ruta del XML DIAN, hasta 60,
+  forma `Devengados/Basico`, `Devengados/Cesantias/@PagoIntereses`; D-29). Al revisar, nulo =
+  **hereda** de la versión vigente y `dianElement: ""` quita la ruta; al crear, nulo = `false` /
+  sin ruta. `GET /api/payroll/concept-definitions` (`ConceptDefinitionDto`) los devuelve.
 - `POST /api/payroll/employees/{id}/terminate` **se retira** (§3.4).
 - `POST /api/payroll/runs/{runId}/approve|reverse|discard` rechazan `Kind ≠ Ordinary` (§2).
 - No hay trabajo de fondo de consulta de estado DIAN en esta feature (D-11): la consulta es manual
