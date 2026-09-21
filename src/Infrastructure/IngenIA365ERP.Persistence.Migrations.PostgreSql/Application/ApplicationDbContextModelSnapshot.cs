@@ -30971,7 +30971,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsUnique()
                         .HasFilter("\"Kind\" = 4");
 
-                    b.HasIndex(new[] { "EmployeeId", "CutoffDate", "Version" }, "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version")
+                    b.HasIndex(new[] { "VacationMovementId", "Version" }, "UK_PAY_PayrollRuns_Vacation_Movement_Version")
                         .IsUnique()
                         .HasFilter("\"Kind\" = 3");
 

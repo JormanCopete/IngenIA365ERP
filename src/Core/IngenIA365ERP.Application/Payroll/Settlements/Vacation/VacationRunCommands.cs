@@ -60,7 +60,7 @@ public sealed class RecalculateVacationCommandHandler(
             return Result.Failure<VacationCalculatedDto>(new Error("Payroll.Vacation.MovementCancelled", "El movimiento de este borrador está anulado: registre el disfrute de nuevo."));
 
         var corte = anterior.CutoffDate!.Value;
-        var key = SettlementRunKey.Vacaciones(empleado.Id, corte);
+        var key = SettlementRunKey.Vacaciones(empleado.Id, corte, movimiento.Id);
         var anteriores = await persister.CorridasDeAsync(key, ct);
         if (SettlementRunPersister.Duplicado(anteriores, key, recalculo: true) is { } duplicado)
             return Result.Failure<VacationCalculatedDto>(duplicado);

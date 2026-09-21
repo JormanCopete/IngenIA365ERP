@@ -776,10 +776,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 filter: "\"Kind\" = 2");
 
             migrationBuilder.CreateIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
+                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns",
-                columns: new[] { "EmployeeId", "CutoffDate", "Version" },
+                columns: new[] { "VacationMovementId", "Version" },
                 unique: true,
                 filter: "\"Kind\" = 3");
 
@@ -1307,7 +1307,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "PAY_PayrollRuns");
 
             migrationBuilder.DropIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
+                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns");
 

@@ -163,7 +163,7 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 
 | Código | HTTP | Cuándo | `data` |
 |---|---|---|---|
-| `Payroll.Settlement.Duplicate` | 422 | ya existe una del mismo tipo, período/corte y empleado en `Draft` o `Approved` (FR-005) | `{ runPublicId, status }` |
+| `Payroll.Settlement.Duplicate` | 422 | ya existe una del mismo tipo, período/corte y empleado en `Draft` o `Approved` (FR-005); en vacaciones, del mismo **movimiento** (D-30: dos disfrutes, o un disfrute y una compensación, registrados el mismo día conviven) | `{ runPublicId, status }` |
 | `Payroll.Settlement.NoEligibleEmployees` | 422 | nadie con derecho en el período | `{ excluded[] }` |
 | `Payroll.Settlement.ParametersMissing` | 422 | falta un código de `SettlementParameterCodes.Required` vigente a la fecha de corte (R4) | `{ codes: [{ code, asOf }] }` |
 | `Payroll.Settlement.ConceptAccountsMissing` | 422 | al aprobar: un concepto de la liquidación sin cuentas en `PAY_ConceptDefinitionAccounts` | `{ conceptCodes[] }` |

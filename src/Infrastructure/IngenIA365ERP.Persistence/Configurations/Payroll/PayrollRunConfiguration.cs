@@ -62,9 +62,9 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
         builder.HasIndex(e => new { e.Year, e.Version }).IsUnique()
             .HasDatabaseName("UK_PAY_PayrollRuns_Severance_Year_Version")
             .HasFilter("[Kind] = 2");
-        // Vacaciones y definitiva comparten columnas: el nombre va en HasIndex, porque con las
-        // mismas propiedades EF devuelve el MISMO índice y el segundo pisaría al primero.
-        builder.HasIndex(e => new { e.EmployeeId, e.CutoffDate, e.Version }, "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version").IsUnique()
+        // Vacaciones: una corrida por movimiento (D-03, D-30). El corte de un disfrute futuro es «hoy»,
+        // así que dos movimientos del mismo día comparten corte: la unicidad va por el movimiento.
+        builder.HasIndex(e => new { e.VacationMovementId, e.Version }, "UK_PAY_PayrollRuns_Vacation_Movement_Version").IsUnique()
             .HasFilter("[Kind] = 3");
         builder.HasIndex(e => new { e.EmployeeId, e.CutoffDate, e.Version }, "UK_PAY_PayrollRuns_Settlement_Employee_Cutoff_Version").IsUnique()
             .HasFilter("[Kind] = 4");

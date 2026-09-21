@@ -14,10 +14,13 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Common;
 
 /// <summary>
 /// La llave de unicidad de una liquidación especial (data-model §1.1, FR-005): prima por año y
-/// semestre; cesantías por año; vacaciones y definitiva por empleado y corte. Es lo que los
-/// índices únicos filtrados de <c>PAY_PayrollRuns</c> protegen; el comando la comprueba antes.
+/// semestre; cesantías por año; definitiva por empleado y corte; vacaciones por <b>movimiento</b>
+/// (D-03 y D-30: una corrida por empleado y movimiento; el corte de un disfrute futuro es «hoy»,
+/// así que dos disfrutes o un disfrute y una compensación registrados el mismo día comparten corte
+/// y no son duplicados). Es lo que los índices únicos filtrados de <c>PAY_PayrollRuns</c> protegen;
+/// el comando la comprueba antes.
 /// </summary>
-public sealed record SettlementRunKey(PayrollRunKind Kind, DateOnly CutoffDate, short? Year = null, byte? Semester = null, int? EmployeeId = null)
+public sealed record SettlementRunKey(PayrollRunKind Kind, DateOnly CutoffDate, short? Year = null, byte? Semester = null, int? EmployeeId = null, int? VacationMovementId = null)
 {
     public static SettlementRunKey Prima(int year, int semester) =>
         new(PayrollRunKind.ServiceBonus, semester == 1 ? new DateOnly(year, 6, 30) : new DateOnly(year, 12, 31), (short)year, (byte)semester);
@@ -25,8 +28,9 @@ public sealed record SettlementRunKey(PayrollRunKind Kind, DateOnly CutoffDate, 
     public static SettlementRunKey Cesantias(int year, DateOnly? cutoff = null) =>
         new(PayrollRunKind.Severance, cutoff ?? new DateOnly(year, 12, 31), (short)year);
 
-    public static SettlementRunKey Vacaciones(int employeeId, DateOnly cutoff) =>
-        new(PayrollRunKind.Vacation, cutoff, EmployeeId: employeeId);
+    /// <summary>Vacaciones: la llave es el movimiento. Nulo = el movimiento aún no se guardó (registrar), y no puede tener corridas.</summary>
+    public static SettlementRunKey Vacaciones(int employeeId, DateOnly cutoff, int? vacationMovementId) =>
+        new(PayrollRunKind.Vacation, cutoff, EmployeeId: employeeId, VacationMovementId: vacationMovementId);
 
     public static SettlementRunKey Definitiva(int employeeId, DateOnly terminationDate) =>
         new(PayrollRunKind.Settlement, terminationDate, EmployeeId: employeeId);
@@ -38,7 +42,7 @@ public sealed record SettlementRunKey(PayrollRunKind Kind, DateOnly CutoffDate, 
     {
         PayrollRunKind.ServiceBonus => $"la prima de servicios {Year}-{(Semester == 1 ? "I" : "II")}",
         PayrollRunKind.Severance => $"la liquidación de cesantías e intereses {Year}",
-        PayrollRunKind.Vacation => $"la liquidación de vacaciones con corte {CutoffDate:dd/MM/yyyy}",
+        PayrollRunKind.Vacation => $"la liquidación de vacaciones de este movimiento (corte {CutoffDate:dd/MM/yyyy})",
         PayrollRunKind.Settlement => $"la liquidación definitiva del {CutoffDate:dd/MM/yyyy}",
         _ => SettlementErrors.Nombre(Kind),
     };
@@ -58,15 +62,18 @@ public sealed record SettlementCalculatedEmployee(LoadedSettlementEmployee Loade
 /// </summary>
 public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user)
 {
-    /// <summary>Todas las versiones de la llave, de la más reciente a la más vieja.</summary>
+    /// <summary>Todas las versiones de la llave, de la más reciente a la más vieja. Un movimiento de vacaciones sin guardar no tiene ninguna.</summary>
     public Task<List<PayrollRun>> CorridasDeAsync(SettlementRunKey key, CancellationToken ct) =>
-        db.PayrollRuns
-            .Where(r => r.Kind == key.Kind
-                        && (key.Kind != PayrollRunKind.ServiceBonus || (r.Year == key.Year && r.Semester == key.Semester))
-                        && (key.Kind != PayrollRunKind.Severance || r.Year == key.Year)
-                        && ((key.Kind != PayrollRunKind.Vacation && key.Kind != PayrollRunKind.Settlement) || (r.EmployeeId == key.EmployeeId && r.CutoffDate == key.CutoffDate)))
-            .OrderByDescending(r => r.Version)
-            .ToListAsync(ct);
+        key.Kind == PayrollRunKind.Vacation && key.VacationMovementId is null
+            ? Task.FromResult(new List<PayrollRun>())
+            : db.PayrollRuns
+                .Where(r => r.Kind == key.Kind
+                            && (key.Kind != PayrollRunKind.ServiceBonus || (r.Year == key.Year && r.Semester == key.Semester))
+                            && (key.Kind != PayrollRunKind.Severance || r.Year == key.Year)
+                            && (key.Kind != PayrollRunKind.Vacation || r.VacationMovementId == key.VacationMovementId)
+                            && (key.Kind != PayrollRunKind.Settlement || (r.EmployeeId == key.EmployeeId && r.CutoffDate == key.CutoffDate)))
+                .OrderByDescending(r => r.Version)
+                .ToListAsync(ct);
 
     /// <summary>
     /// FR-005: una segunda liquidación del mismo tipo, período y empleado se rechaza mientras la
@@ -108,7 +115,7 @@ public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeSe
             Semester = key.Semester,
             EmployeeId = key.EmployeeId,
             TerminationId = terminationId,
-            VacationMovementId = vacationMovementId,
+            VacationMovementId = vacationMovementId ?? key.VacationMovementId,
             Status = PayrollRunStatus.Draft,
             CalculatedAt = ahora,
             CalculatedBy = usuario,

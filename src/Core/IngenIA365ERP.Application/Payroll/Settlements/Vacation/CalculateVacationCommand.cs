@@ -35,7 +35,9 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Vacation;
 /// <para>
 /// La fecha de corte es el día anterior al inicio del disfrute (data-model §1.1) —o la fecha de
 /// pago de la compensación—, <b>nunca posterior a hoy</b>: el comprobante se fecha al corte (D-04,
-/// D-21) y una liquidación pagada por anticipado se aprueba antes del descanso. Las novedades
+/// D-21) y una liquidación pagada por anticipado se aprueba antes del descanso. Por eso la unicidad
+/// de la corrida es por movimiento y no por corte (D-30): dos disfrutes futuros registrados el mismo
+/// día comparten corte y ambos valen. Las novedades
 /// que la aprobación dejará en cada período cubierto se proponen aquí (<c>novelties[]</c>); si
 /// un período ya está aprobado, la respuesta es <c>PeriodApproved</c> con el período abierto
 /// siguiente para el ajuste retroactivo, salvo que quien registra lo acepte
@@ -176,8 +178,10 @@ public sealed class CalculateVacationCommandHandler(
         if (plan.IsFailure) return Result.Failure<VacationCalculatedDto>(plan.Error);
         avisos.AddRange(plan.Value.Warnings);
 
-        // --- una sola liquidación viva por empleado y corte (FR-005) ---
-        var key = SettlementRunKey.Vacaciones(empleado.Id, corte);
+        // --- una sola liquidación viva por movimiento (FR-005, D-03, D-30) ---
+        // El movimiento nace aquí, así que no puede tener corridas: lo que impide duplicar un disfrute
+        // es el cruce de fechas (Overlaps), y dos movimientos distintos del mismo día conviven.
+        var key = SettlementRunKey.Vacaciones(empleado.Id, corte, vacationMovementId: null);
         var anteriores = await persister.CorridasDeAsync(key, ct);
         if (SettlementRunPersister.Duplicado(anteriores, key, recalculo: false) is { } duplicado)
             return Result.Failure<VacationCalculatedDto>(duplicado);
