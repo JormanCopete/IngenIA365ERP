@@ -68,7 +68,9 @@ public sealed class CreateTerminationReasonCommandValidator : AbstractValidator<
             .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);
         RuleFor(x => x.Name).NotEmpty().WithMessage("El nombre del motivo es obligatorio.").MaximumLength(120);
         RuleFor(x => x.LegalBasis).MaximumLength(120);
-        RuleFor(x => x.GeneratesSeverancePay).Equal(false).WithMessage(TerminationReasons.SeverancePayReserved.Message);
+        // GeneratesSeverancePay no se valida aquí: es una regla de negocio con código propio (422
+        // Payroll.Termination.ReasonSeverancePayReserved) que decide el handler; en el validador salía
+        // como 400 Validation.Invalid y el código nunca llegaba al cliente (revisión de N1).
     }
 }
 

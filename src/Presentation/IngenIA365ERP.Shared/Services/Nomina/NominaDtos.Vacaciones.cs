@@ -70,9 +70,13 @@ public sealed record VistaPreviaHabilesDto(
     int WorkingDays,
     int CalendarDays,
     int WorkWeek,
-    IReadOnlyList<DiaSaltadoDto> Skipped)
+    IReadOnlyList<DiaSaltadoDto> Skipped,
+    IReadOnlyList<AvisoCorridaDto>? Warnings = null)
 {
     public string SemanaTexto => WorkWeek == 1 ? "lunes a viernes" : "lunes a sábado";
+
+    /// <summary>Un año del rango sin festivos cargados (<c>Payroll.Holiday.YearNotLoaded</c>) y otros avisos del conteo.</summary>
+    public IReadOnlyList<AvisoCorridaDto> Avisos => Warnings ?? [];
 }
 
 public sealed record NovedadDeVacacionesDto(Guid PeriodPublicId, string PeriodLabel, DateOnly From, DateOnly To, int Days, bool Retroactive, Guid? RetroactiveOfPeriodPublicId, string ConceptCode);

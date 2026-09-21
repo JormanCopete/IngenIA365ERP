@@ -194,7 +194,7 @@ public sealed class SettlementInputLoader(
                 if (request.Kind == SettlementKind.Severance)
                 {
                     empleados.Remove(x);
-                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, nombre, "RetiradoConDefinitiva", enBorrador
+                    excluidos.Add(new ExcludedEmployeeDto(x.Employee.PublicId, nombre, SettlementReasonCodes.RetiradoConDefinitiva, enBorrador
                         ? $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva registrada (borrador pendiente de aprobar): sus cesantías e intereses del año se pagan allí."
                         : $"Retirado el {fecha:dd/MM/yyyy} con liquidación definitiva aprobada: sus cesantías e intereses del año ya se pagaron allí."));
                 }

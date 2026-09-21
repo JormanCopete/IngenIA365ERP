@@ -11,7 +11,7 @@
     "tipoContrato": "FixedTerm",
     "finContrato": "2026-12-31"
   },
-  "terminacion": { "motivo": "DESP_SIN_JC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
   "esperado": {
     "soloLineasListadas": true,
     "lineas": { "INDEMNIZACION": 15600000, "RETEFTE_INDEMNIZACION": 0 },

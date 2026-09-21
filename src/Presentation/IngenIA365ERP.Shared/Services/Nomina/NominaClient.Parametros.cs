@@ -66,7 +66,8 @@ public sealed record DefinicionConceptoRequest(
     string? UnitKind, decimal? UnitFactor, string? TableParameterCode, string? ComponentConceptCodes,
     bool AffectsSalaryBase, bool AffectsContributionBase, bool AffectsBenefitsBase, bool AffectsWithholdingBase, bool IsBenefitRelated,
     bool AllowsRepeatInPeriod, decimal? MaxQuantity, decimal? MaxAmount, int ApplicableClasses,
-    bool RequiresDates, bool RequiresQuantity, bool RequiresAmount, bool IsAutomatic, bool ReducesWorkedDays, DateTime ValidFrom);
+    bool RequiresDates, bool RequiresQuantity, bool RequiresAmount, bool IsAutomatic, bool ReducesWorkedDays, DateTime ValidFrom,
+    bool? AffectsVacationBase = null, string? DianElement = null);
 
 public sealed record CuentaDeConceptoRequest(Guid? CostCenterPublicId, string DebitAccountCode, string CreditAccountCode);
 

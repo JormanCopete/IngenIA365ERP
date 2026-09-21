@@ -805,8 +805,13 @@ base; la API sólo verifica).
      `Payroll.AllowSameUserApproval` → `AllowSameUserApproval` en `PAY_CompanyPolicies` con
      `ValidFrom = 2026-01-01`; rellenar `PAY_Employees.DisbursementBankId` desde
      `COR_Banks.LegacyCode = PayrollBankId`; precisar `Source` de los parámetros existentes **sólo
-     donde** `Source` todavía es el texto genérico de la semilla (una vigencia editada a mano no se
-     pisa); poner `ValidTo = 2027-03-31` a la `FSP_TABLA` vigente si sigue abierta.
+     donde** `Source` todavía es el texto genérico de la semilla (una vigencia editada a mano ni una
+     eliminada se pisan) y **con los mismos literales** de `PayrollLegalParametersSeeder` (la prueba
+     `MigracionYSemillaDicenLaMismaNorma` los cruza: la revisión de N1 encontró cuatro distintos, y
+     los textos viejos pasaron a `FuentesGenericasAnteriores` para que una base ya migrada se ponga al
+     día en el arranque siguiente); poner `ValidTo = 2027-03-31` a la `FSP_TABLA` vigente si sigue
+     abierta. En PostgreSQL `CreatedAt` (timestamptz) se inserta con `NOW()` a secas, nunca con
+     `NOW() AT TIME ZONE 'UTC'` (timestamp sin zona que el motor reinterpreta en la zona de la sesión).
    - `Down`: quita columnas y tablas y recrea `UK_PAY_PayrollRuns_Period_Version`. Es reversible
      **sólo mientras no exista una corrida con `Kind ≠ 0`** (con `PayPeriodId` NULL el índice no
      se puede recrear): la migración lo declara en la cabecera y el `Down` falla con mensaje antes

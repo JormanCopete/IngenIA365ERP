@@ -20,10 +20,10 @@ public sealed class CesantiasReportsEndpoints : ICarterModule
             .WithTags("Payroll Reports")
             .RequireAuthorization();
 
-        group.MapGet("/consignacion-cesantias", async (Guid runId, Guid? fundId, string? format, ISender sender, CancellationToken ct) =>
+        group.MapGet("/consignacion-cesantias", async (Guid runId, Guid? fundId, string? format, ISender sender, HttpContext http, CancellationToken ct) =>
                 await EntregaDeInformes.EntregarAsync(
                     await sender.Send(new ConsignacionCesantiasReportQuery(runId, fundId, EntregaDeInformes.Normalizar(format)), ct),
-                    format, "consignacion-cesantias"))
+                    format, "consignacion-cesantias", http))
             .WithName("Reportes_Nomina_ConsignacionCesantias")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Severance.View");

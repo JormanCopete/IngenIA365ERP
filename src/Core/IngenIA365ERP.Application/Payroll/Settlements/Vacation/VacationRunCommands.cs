@@ -58,7 +58,7 @@ public sealed class RecalculateVacationCommandHandler(
         var (anterior, movimiento, empleado) = busqueda.Value;
         if (!anterior.IsEditableDraft) return Result.Failure<VacationCalculatedDto>(SettlementErrors.NotDraft(anterior.Status));
         if (movimiento.Status != VacationMovementStatus.Registered)
-            return Result.Failure<VacationCalculatedDto>(new Error("Payroll.Vacation.MovementCancelled", "El movimiento de este borrador está anulado: registre el disfrute de nuevo."));
+            return Result.Failure<VacationCalculatedDto>(SettlementErrors.VacationMovementCancelled("registre el disfrute de nuevo."));
 
         var corte = anterior.CutoffDate!.Value;
         var key = SettlementRunKey.Vacaciones(empleado.Id, corte, movimiento.Id);
@@ -126,7 +126,7 @@ public sealed class ApproveVacationCommandHandler(
         if (busqueda.IsFailure) return Result.Failure<SettlementApprovedDto>(busqueda.Error);
         var (run, movimiento, empleado) = busqueda.Value;
         if (movimiento.Status != VacationMovementStatus.Registered)
-            return Result.Failure<SettlementApprovedDto>(new Error("Payroll.Vacation.MovementCancelled", "El movimiento de esta liquidación está anulado: no se aprueba."));
+            return Result.Failure<SettlementApprovedDto>(SettlementErrors.VacationMovementCancelled("esta liquidación no se aprueba."));
 
         // D-01: con «paga la nómina ordinaria» la liquidación del disfrute sólo registra el movimiento y la
         // novedad; no tiene líneas contables y se aprueba sin comprobante.

@@ -51,6 +51,33 @@ public class PreviewWorkingDaysQueryHandlerTests
         antesDeLaVigencia.Value.WorkingDays.Should().Be(6, "del lunes 28-09 al sábado 03-10 son seis hábiles: el sábado cuenta porque a esa fecha la semana era de lunes a sábado");
     }
 
+    /// <summary>
+    /// Revisión de N1: la semilla cubre tres años y cada diciembre suma uno; un disfrute de enero de 2029
+    /// registrado en 2028 encontraba la tabla vacía y contaba Reyes como hábil, en silencio. El conteo sigue
+    /// igual (nada que inventar) pero avisa con <c>Payroll.Holiday.YearNotLoaded</c> y los años sin festivos;
+    /// un rango dentro de la semilla no avisa.
+    /// </summary>
+    [Fact]
+    public async Task Un_rango_en_un_anio_sin_festivos_cargados_cuenta_igual_pero_avisa_con_el_anio()
+    {
+        var d = VacacionesDePrueba.Escenario();
+        var handler = new PreviewWorkingDaysQueryHandler(d.Db, d.Policies);
+
+        var sinFestivos = await handler.Handle(new PreviewWorkingDaysQuery(new DateOnly(2029, 1, 2), new DateOnly(2029, 1, 16)), CancellationToken.None);
+        var cruzaAnios = await handler.Handle(new PreviewWorkingDaysQuery(new DateOnly(2028, 12, 26), new DateOnly(2029, 1, 9)), CancellationToken.None);
+        var conSemilla = await handler.Handle(new PreviewWorkingDaysQuery(Desde, Hasta), CancellationToken.None);
+
+        sinFestivos.IsSuccess.Should().BeTrue(sinFestivos.Error.Message);
+        sinFestivos.Value.WorkingDays.Should().Be(13, "sin la tabla, el lunes 8 de enero (Reyes trasladado) se cuenta como hábil: de eso avisa");
+        var aviso = sinFestivos.Value.Warnings.Should().ContainSingle().Which;
+        aviso.Code.Should().Be("Payroll.Holiday.YearNotLoaded");
+        aviso.Message.Should().Contain("2029");
+        aviso.Data.Should().BeEquivalentTo(new { years = new[] { 2029 } });
+
+        cruzaAnios.Value.Warnings.Should().ContainSingle().Which.Data.Should().BeEquivalentTo(new { years = new[] { 2029 } }, "2028 sí está sembrado; sólo falta 2029");
+        conSemilla.Value.Warnings.Should().BeEmpty("el rango cae dentro de los años sembrados");
+    }
+
     [Fact]
     public async Task Fechas_al_reves_responden_DatesInvalid_y_todo_festivo_o_domingo_da_cero_habiles()
     {

@@ -22,6 +22,20 @@ public class CalculateVacationCommandHandlerTests
     private static readonly DateOnly Desde = new(2026, 7, 15);
     private static readonly DateOnly Hasta = new(2026, 7, 28);
 
+    /// <summary>Revisión de N1: el aviso del conteo (año sin festivos cargados) llega a la respuesta del registro, con los hábiles tal cual se contaron.</summary>
+    [Fact]
+    public async Task Registrar_un_disfrute_en_un_anio_sin_festivos_cargados_avisa_en_la_respuesta()
+    {
+        var d = VacacionesDePrueba.Escenario();
+        d.Periodo(new DateTime(2029, 1, 1), new DateTime(2029, 1, 31), PayPeriodStatus.Open);
+
+        var r = await VacacionesDePrueba.Registrar(d).Handle(VacacionesDePrueba.Disfrute(d.Ana, new DateOnly(2029, 1, 2), new DateOnly(2029, 1, 16)), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Warnings.Should().Contain(w => w.Code == "Payroll.Holiday.YearNotLoaded" && w.Message.Contains("2029"));
+        r.Value.WorkingDays.Should().Be(13, "sin la tabla de 2029, Reyes (lunes 8) se cuenta como hábil: por eso el aviso");
+    }
+
     [Fact]
     public async Task Registrar_el_disfrute_crea_el_movimiento_y_la_corrida_en_una_accion_con_los_dias_congelados()
     {

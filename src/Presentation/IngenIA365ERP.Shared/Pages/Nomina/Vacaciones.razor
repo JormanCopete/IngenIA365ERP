@@ -281,6 +281,10 @@
                             {
                                 <p>Ningún domingo ni festivo en el rango.</p>
                             }
+                            @foreach (var aviso in _vista.Avisos)
+                            {
+                                <p class="texto-tenue">@aviso.Message</p>
+                            }
                             @if (_vista.WorkingDays == 0)
                             {
                                 <p class="texto-tenue">Sin días hábiles: el rango no se puede registrar.</p>

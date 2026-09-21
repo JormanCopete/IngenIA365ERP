@@ -54,6 +54,13 @@ public static class SettlementReasonCodes
 
     /// <summary>D-29: una novedad del período pendiente cuya forma de cálculo necesita las bases de la nómina ordinaria (porcentaje sobre base, compuesto, tabla) y la definitiva no puede liquidar.</summary>
     public const string NovedadNoLiquidable = "NovedadNoLiquidable";
+
+    /// <summary>
+    /// Lo pone el cargador, no el motor: el retirado con definitiva aprobada dentro del año no entra a la
+    /// población de cesantías (sus cesantías e intereses ya se pagaron allí) y queda en <c>excluded</c>
+    /// con este código para que la contadora vea por qué (contracts/api.md §3.2).
+    /// </summary>
+    public const string RetiradoConDefinitiva = "RetiradoConDefinitiva";
 }
 
 /// <summary>Un rubro que no produjo línea, con su código de motivo y el texto para la contadora.</summary>

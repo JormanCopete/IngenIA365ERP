@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Holidays;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -34,14 +35,34 @@ public static class VacationQueriesSupport
             .Where(h => h.Date >= desde && h.Date <= hasta)
             .ToDictionaryAsync(h => h.Date.ToDateTime(TimeOnly.MinValue), h => h.Name, ct);
 
-    /// <summary>La vista previa de hábiles con la semana laboral vigente a la fecha de inicio y los festivos de la tabla (FR-015).</summary>
+    /// <summary>
+    /// La vista previa de hábiles con la semana laboral vigente a la fecha de inicio y los festivos de la tabla (FR-015).
+    /// Si el rango toca un año <b>sin ningún festivo cargado</b>, la cuenta sale igual (cada festivo se contaría como
+    /// hábil) pero con el aviso <c>Payroll.Holiday.YearNotLoaded</c> y los años: la semilla cubre tres años y cada
+    /// diciembre suma uno (D-20), y un disfrute se programa con meses de anticipación. Hasta la revisión de N1 el
+    /// conteo callaba y un disfrute de enero de 2029 registrado en 2028 descontaba Reyes como hábil.
+    /// </summary>
     public static async Task<WorkingDaysPreviewDto> ContarHabilesAsync(IApplicationDbContext db, PayrollPolicyReader policies, DateOnly desde, DateOnly hasta, CancellationToken ct)
     {
         var politicas = await policies.ReadAsync(desde, ct);
         var festivos = await FestivosAsync(db, desde, hasta, ct);
         var conteo = DiasHabiles.Contar(desde.ToDateTime(TimeOnly.MinValue), hasta.ToDateTime(TimeOnly.MinValue), politicas.SemanaLaboral, festivos);
+        var sinFestivos = await AñosSinFestivosAsync(db, desde, hasta, ct);
+        var avisos = new List<WarningDto>();
+        if (sinFestivos.Count > 0) avisos.Add(HolidayErrors.YearNotLoaded(sinFestivos));
         return new WorkingDaysPreviewDto(desde, hasta, conteo.Habiles, conteo.Calendario, politicas.SemanaLaboral,
-            conteo.Saltados.Select(SkippedDayDto.From).ToList());
+            conteo.Saltados.Select(SkippedDayDto.From).ToList(), avisos);
+    }
+
+    /// <summary>Los años del rango que no tienen ni un festivo en <c>PAY_Holidays</c>, de cualquier origen.</summary>
+    public static async Task<IReadOnlyList<int>> AñosSinFestivosAsync(IApplicationDbContext db, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        var primero = (short)desde.Year;
+        var ultimo = (short)hasta.Year;
+        var cargados = await db.Holidays.AsNoTracking()
+            .Where(h => h.Year >= primero && h.Year <= ultimo)
+            .Select(h => h.Year).Distinct().ToListAsync(ct);
+        return Enumerable.Range(primero, ultimo - primero + 1).Where(a => !cargados.Contains((short)a)).ToList();
     }
 }
 

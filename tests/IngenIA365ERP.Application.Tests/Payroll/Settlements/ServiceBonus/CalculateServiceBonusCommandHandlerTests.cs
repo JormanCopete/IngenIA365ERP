@@ -107,6 +107,12 @@ public class CalculateServiceBonusCommandHandlerTests
 
         var deOtroTipo = await PrimaDePrueba.Recalcular(s.D).Handle(new RecalculateServiceBonusCommand(s.DefinitivaDeE.PublicId), CancellationToken.None);
         deOtroTipo.Error.Code.Should().Be("Payroll.Settlement.KindMismatch");
+
+        // Revisión de N1: recalcular la versión reemplazada es la transición inválida (NotDraft, como cesantías,
+        // definitiva y vacaciones), no un «duplicado»; antes creaba una versión 3 sobre el borrador vivo.
+        var laSuperseded = await PrimaDePrueba.Recalcular(s.D).Handle(new RecalculateServiceBonusCommand(v1.Value.RunPublicId), CancellationToken.None);
+        laSuperseded.Error.Code.Should().Be("Payroll.Settlement.NotDraft");
+        (await s.D.Db.PayrollRuns.CountAsync(r => r.Kind == PayrollRunKind.ServiceBonus)).Should().Be(2, "la versión 3 no se creó");
     }
 
     [Fact]

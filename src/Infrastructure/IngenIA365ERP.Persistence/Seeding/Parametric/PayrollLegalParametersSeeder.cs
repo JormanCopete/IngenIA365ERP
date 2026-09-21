@@ -102,6 +102,12 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
         "Código Sustantivo del Trabajo y Ley 50 de 1990",
         "Ley 789 de 2002 art. 30 y Decreto 933 de 2003",
         "Ley 2101 de 2021 (jornada de 42 h desde el 15/07/2026)",
+        // Los que dejó la migración NominaPrestacionesYDian antes de la revisión de N1 (2026-09-21), cuando
+        // sus literales no eran los de aquí: una base migrada con ellos se pone al día en el arranque siguiente.
+        "Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)",
+        "Decreto 1470 de 2025 (auxilio de transporte 2026)",
+        "Resolución DIAN 000238 de 2025 (UVT 2026)",
+        "Ley 797 de 2003 art. 8",
     };
 
     public static IReadOnlyList<PayrollLegalParameter> Catalogo()

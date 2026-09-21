@@ -1113,7 +1113,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             // ----------------------------------------------------------------- datos (idempotentes)
 
             // (1) Las dos políticas que hoy viven en COR_SystemSettings pasan a PAY_CompanyPolicies con
-            //     vigencia desde el 1 de enero de 2026. Sólo si el valor es un booleano legible y la clave
+            //     vigencia desde el 1 de enero de 2026. CreatedAt es timestamptz y NOW() ya es un instante:
+            //     «NOW() AT TIME ZONE 'UTC'» da un timestamp sin zona que el motor reinterpreta en la zona de
+            //     la sesión (con el servidor en America/Bogota, +5 h); la revisión de N1 lo corrigió aquí. Sólo si el valor es un booleano legible y la clave
             //     no tiene ya una vigencia viva (una registrada a mano por la pantalla no se pisa). El
             //     lector cae a COR_SystemSettings si la clave no existe, así que una cooperativa sin la
             //     fila tampoco se queda sin política.
@@ -1121,7 +1123,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 INSERT INTO dbo."PAY_CompanyPolicies" ("Key", "Value", "ValidFrom", "ValidTo", "Notes", "PublicId", "IsDeleted", "CreatedAt", "CreatedBy")
                 SELECT 'Exonerada114_1', LOWER(TRIM(s."SettingValue")), DATE '2026-01-01', NULL,
                        'Copiada de COR_SystemSettings.Payroll.ApplyEmployerExemption por la migracion NominaPrestacionesYDian',
-                       gen_random_uuid(), FALSE, NOW() AT TIME ZONE 'UTC', 'Migration'
+                       gen_random_uuid(), FALSE, NOW(), 'Migration'
                 FROM dbo."COR_SystemSettings" s
                 WHERE s."SettingKey" = 'Payroll.ApplyEmployerExemption' AND s."IsDeleted" = FALSE
                   AND LOWER(TRIM(s."SettingValue")) IN ('true', 'false')
@@ -1131,7 +1133,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 INSERT INTO dbo."PAY_CompanyPolicies" ("Key", "Value", "ValidFrom", "ValidTo", "Notes", "PublicId", "IsDeleted", "CreatedAt", "CreatedBy")
                 SELECT 'AllowSameUserApproval', LOWER(TRIM(s."SettingValue")), DATE '2026-01-01', NULL,
                        'Copiada de COR_SystemSettings.Payroll.AllowSameUserApproval por la migracion NominaPrestacionesYDian',
-                       gen_random_uuid(), FALSE, NOW() AT TIME ZONE 'UTC', 'Migration'
+                       gen_random_uuid(), FALSE, NOW(), 'Migration'
                 FROM dbo."COR_SystemSettings" s
                 WHERE s."SettingKey" = 'Payroll.AllowSameUserApproval' AND s."IsDeleted" = FALSE
                   AND LOWER(TRIM(s."SettingValue")) IN ('true', 'false')
@@ -1150,20 +1152,23 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                   AND TRIM(b."LegacyCode") = TRIM(e."PayrollBankId");
                 """);
 
-            // (3) Source exacto (norma y artículo) SÓLO donde la fila todavía dice el texto genérico de la
-            //     semilla 2026. Los textos genéricos son los de PayrollLegalParametersSeeder a la fecha;
-            //     una vigencia con Source editado a mano no cumple la condición y no se toca.
+            // (3) Source exacto (norma y artículo) SÓLO donde la fila viva todavía dice el texto genérico de la
+            //     semilla 2026. Los textos son EXACTAMENTE las constantes de PayrollLegalParametersSeeder
+            //     (Fuente*): la revisión de N1 encontró cuatro distintos y las cooperativas migradas quedaban con
+            //     una norma y las nuevas con otra, para siempre, porque el seeder respeta todo Source que no sea
+            //     genérico. Una vigencia con Source editado a mano no cumple la condición y no se toca. La
+            //     prueba MigracionYSemillaDicenLaMismaNorma cruza estos literales con el catálogo.
             migrationBuilder.Sql("""
-                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)'
-                WHERE "Code" = 'SMMLV' AND "Source" = 'Decreto de salario mínimo y auxilio de transporte 2026';
-                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Decreto 1470 de 2025 (auxilio de transporte 2026)'
-                WHERE "Code" = 'AUX_TRANSPORTE' AND "Source" = 'Decreto de salario mínimo y auxilio de transporte 2026';
-                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Resolución DIAN 000238 de 2025 (UVT 2026)'
-                WHERE "Code" = 'UVT' AND "Source" = 'Resolución DIAN que fija la UVT 2026';
+                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)'
+                WHERE "Code" = 'SMMLV' AND "IsDeleted" = FALSE AND "Source" = 'Decreto de salario mínimo y auxilio de transporte 2026';
+                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Decreto 1470 de 2025'
+                WHERE "Code" = 'AUX_TRANSPORTE' AND "IsDeleted" = FALSE AND "Source" = 'Decreto de salario mínimo y auxilio de transporte 2026';
+                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Resolución DIAN 000238 del 15-12-2025'
+                WHERE "Code" = 'UVT' AND "IsDeleted" = FALSE AND "Source" = 'Resolución DIAN que fija la UVT 2026';
                 UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Ley 2466 de 2025 art. 21'
-                WHERE "Code" = 'SALUD_APRENDIZ_PCT' AND "Source" = 'Ley 789 de 2002 art. 30 y Decreto 933 de 2003';
-                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Ley 797 de 2003 art. 8'
-                WHERE "Code" = 'FSP_TABLA' AND "Source" = 'Ley 100 de 1993, Ley 797 de 2003 y Decreto 1072 de 2015';
+                WHERE "Code" = 'SALUD_APRENDIZ_PCT' AND "IsDeleted" = FALSE AND "Source" = 'Ley 789 de 2002 art. 30 y Decreto 933 de 2003';
+                UPDATE dbo."PAY_LegalParameters" SET "Source" = 'Ley 797 de 2003 art. 8 (Ley 100 de 1993 art. 27)'
+                WHERE "Code" = 'FSP_TABLA' AND "IsDeleted" = FALSE AND "Source" = 'Ley 100 de 1993, Ley 797 de 2003 y Decreto 1072 de 2015';
                 """);
 
             // (4) La tabla del fondo de solidaridad de la Ley 797 rige hasta el 2027-03-31 (Ley 2381 de 2024

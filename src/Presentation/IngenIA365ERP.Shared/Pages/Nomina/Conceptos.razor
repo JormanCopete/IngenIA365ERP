@@ -240,6 +240,7 @@
                         <label class="campo-check"><input type="checkbox" @bind="_f.AffectsContributionBase" /> Base de aportes (IBC)</label>
                         <label class="campo-check"><input type="checkbox" @bind="_f.AffectsBenefitsBase" /> Base prestacional</label>
                         <label class="campo-check"><input type="checkbox" @bind="_f.AffectsWithholdingBase" /> Base de retención</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_f.AffectsVacationBase" /> Base de vacaciones e indemnización (CST art. 192)</label>
                         <label class="campo-check"><input type="checkbox" @bind="_f.IsBenefitRelated" /> Prestacional</label>
                         <label class="campo-check"><input type="checkbox" @bind="_f.IsAutomatic" /> Automático (lo genera el cálculo sin novedad)</label>
                         <label class="campo-check"><input type="checkbox" @bind="_f.RequiresQuantity" /> La novedad trae cantidad</label>
@@ -249,6 +250,7 @@
                         <label class="campo-check"><input type="checkbox" @bind="_f.AllowsRepeatInPeriod" /> Admite repetirse en el período</label>
                         <SfNumericTextBox TValue="decimal?" @bind-Value="_f.MaxQuantity" Placeholder="Tope de cantidad" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" />
                         <SfNumericTextBox TValue="decimal?" @bind-Value="_f.MaxAmount" Placeholder="Tope de valor" FloatLabelType="FloatLabelType.Always" Format="N0" Min="0" />
+                        <SfTextBox @bind-Value="_f.DianElement" MaxLength="60" Placeholder="Ruta en la nómina electrónica (p. ej. Devengados/Basico; vacío = no va al documento)" FloatLabelType="FloatLabelType.Always" />
                     </div>
 
                     <span class="label">Clases de empleado a las que aplica (ninguna marcada = todas)</span>
@@ -475,6 +477,7 @@
         if (c.AffectsContributionBase) b.Add("IBC");
         if (c.AffectsBenefitsBase) b.Add("prestacional");
         if (c.AffectsWithholdingBase) b.Add("retención");
+        if (c.AffectsVacationBase) b.Add("vacaciones");
         return b.Count == 0 ? "—" : string.Join(", ", b);
     }
 
@@ -705,6 +708,8 @@
         public bool AffectsBenefitsBase { get; set; }
         public bool AffectsWithholdingBase { get; set; }
         public bool IsBenefitRelated { get; set; }
+        public bool AffectsVacationBase { get; set; }
+        [StringLength(60)] public string? DianElement { get; set; }
         public bool AllowsRepeatInPeriod { get; set; }
         public decimal? MaxQuantity { get; set; }
         public decimal? MaxAmount { get; set; }
@@ -724,13 +729,16 @@
             AffectsBenefitsBase = c.AffectsBenefitsBase, AffectsWithholdingBase = c.AffectsWithholdingBase, IsBenefitRelated = c.IsBenefitRelated, AllowsRepeatInPeriod = c.AllowsRepeatInPeriod,
             MaxQuantity = c.MaxQuantity, MaxAmount = c.MaxAmount, ApplicableClasses = c.ApplicableClasses, RequiresDates = c.RequiresDates, RequiresQuantity = c.RequiresQuantity,
             RequiresAmount = c.RequiresAmount, IsAutomatic = c.IsAutomatic, ReducesWorkedDays = c.ReducesWorkedDays, ValidFrom = c.ValidFrom,
+            AffectsVacationBase = c.AffectsVacationBase, DianElement = c.DianElement,
         };
 
         public DefinicionConceptoRequest ARequest() => new(
             Code.Trim().ToUpperInvariant(), Name.Trim(), Nature, CalculationKind, FixedAmount, Vacio(AmountParameterCode), ProrateByDays,
             Vacio(BaseKind), Percent, Vacio(PercentParameterCode), Vacio(UnitKind), UnitFactor, Vacio(TableParameterCode), Vacio(ComponentConceptCodes),
             AffectsSalaryBase, AffectsContributionBase, AffectsBenefitsBase, AffectsWithholdingBase, IsBenefitRelated,
-            AllowsRepeatInPeriod, MaxQuantity, MaxAmount, ApplicableClasses, RequiresDates, RequiresQuantity, RequiresAmount, IsAutomatic, ReducesWorkedDays, ValidFrom);
+            AllowsRepeatInPeriod, MaxQuantity, MaxAmount, ApplicableClasses, RequiresDates, RequiresQuantity, RequiresAmount, IsAutomatic, ReducesWorkedDays, ValidFrom,
+            // Siempre se mandan: el formulario muestra los dos, así que lo que se ve es lo que se guarda (una ruta vacía la quita).
+            AffectsVacationBase, DianElement ?? string.Empty);
 
         private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }

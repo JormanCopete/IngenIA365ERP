@@ -239,7 +239,8 @@ public class LiquidacionDefinitivaTests(CentralIdentityApiFixture fx)
         var propio = await EnviarAsync(http, admin, HttpMethod.Post, $"{Terminaciones}/reasons", new { code = codigo.ToLowerInvariant(), name = "Motivo propio de la cooperativa", generatesSeverancePay = false, requiresContractEndDate = false });
         propio.StatusCode.Should().Be(HttpStatusCode.Created, await propio.Content.ReadAsStringAsync());
         var conIndemnizacion = await EnviarAsync(http, admin, HttpMethod.Post, $"{Terminaciones}/reasons", new { code = $"X{codigo}", name = "No puede indemnizar", generatesSeverancePay = true });
-        conIndemnizacion.StatusCode.Should().BeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.UnprocessableEntity);
+        conIndemnizacion.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, "es una regla de negocio con código propio, no una validación de forma (revisión de N1)");
+        (await CodigoDeErrorAsync(conIndemnizacion)).Should().Be("Payroll.Termination.ReasonSeverancePayReserved");
         var creados = await GetAsync(http, admin, $"{Terminaciones}/reasons");
         creados.EnumerateArray().Should().Contain(m => m.GetProperty("code").GetString() == codigo && !m.GetProperty("isSeeded").GetBoolean());
     }

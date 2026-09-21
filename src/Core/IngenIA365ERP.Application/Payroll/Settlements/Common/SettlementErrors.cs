@@ -146,6 +146,8 @@ public static class SettlementErrors
     public static readonly Error VacationEmployeeTerminated = new("Payroll.Vacation.EmployeeTerminated", "El empleado está retirado: las vacaciones pendientes se pagan en la liquidación definitiva.");
     public static readonly Error VacationMovementConfirmed = new("Payroll.Vacation.MovementConfirmed", "El movimiento ya fue liquidado por una corrida aprobada: reverse la corrida en vez de anularlo.");
     public static readonly Error VacationMovementNotFound = new("Payroll.Vacation.MovementNotFound", "No existe el movimiento de vacaciones indicado.");
+    public static Error VacationMovementCancelled(string queHacer) =>
+        new("Payroll.Vacation.MovementCancelled", $"El movimiento de vacaciones está anulado: {queHacer}");
 
     // ---------------------------------------------- terminación y definitiva (§3.4) --
 
@@ -178,6 +180,15 @@ public static class SettlementErrors
         new ErrorConDatos("Payroll.Settlement.DeductionAboveProposed", $"El descuento aplicado no puede superar lo propuesto ({proposed:N0}). Sólo se baja, con motivo.", new { proposed });
     public static readonly Error DeductionReasonRequired = new("Payroll.Settlement.DeductionReasonRequired", "Bajar un descuento propuesto exige motivo.");
     public static readonly Error DeductionNotFound = new("Payroll.Settlement.DeductionNotFound", "No existe ese descuento en la liquidación.");
+    public static Error ConceptMissing(string conceptCode, DateTime asOf) =>
+        new ErrorConDatos("Payroll.Settlement.ConceptMissing",
+            $"No hay una versión vigente del concepto {conceptCode} al {asOf:dd/MM/yyyy}: no se puede volver línea el descuento. Revise Nómina › Conceptos.",
+            new { conceptCode, asOf = asOf.ToString("yyyy-MM-dd") });
+
+    // ------------------------------------------------------------ prima (§3.1) --
+
+    public static readonly Error KeyMissing = new("Payroll.Settlement.KeyMissing",
+        "La corrida de prima no tiene año y semestre: no se puede recalcular.");
 
     // ------------------------------------------------------------------ textos --
 

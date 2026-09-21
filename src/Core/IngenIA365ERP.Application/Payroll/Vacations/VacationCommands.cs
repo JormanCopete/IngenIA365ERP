@@ -103,7 +103,7 @@ public sealed class CancelVacationMovementCommandHandler(
         if (movimiento is null) return Result.Failure(SettlementErrors.VacationMovementNotFound);
         if (movimiento.Status == VacationMovementStatus.Liquidated) return Result.Failure(SettlementErrors.VacationMovementConfirmed);
         if (movimiento.Status == VacationMovementStatus.Cancelled)
-            return Result.Failure(new Error("Payroll.Vacation.MovementCancelled", "El movimiento ya está anulado."));
+            return Result.Failure(SettlementErrors.VacationMovementCancelled("ya estaba anulado."));
 
         var motivo = request.Reason.Trim();
 

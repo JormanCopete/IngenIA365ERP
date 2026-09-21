@@ -286,6 +286,30 @@ public class CesantiasAnualesTests(CentralIdentityApiFixture fx)
         marca.StatusCode.Should().Be(HttpStatusCode.NotFound, "sin Payroll.Severance.MarkDeposited tampoco");
     }
 
+    /// <summary>
+    /// Revisión de N1 (2026-09-21): las vistas del centro de reportes devuelven un <c>IResult</c> propio y el
+    /// filtro no las traduce, así que <c>EntregaDeInformes</c> tiene que poner el estado del contrato
+    /// (<c>*.NotFound</c> → 404, negocio → 422) con el sobre y su <c>traceId</c>. Respondían 400 a todo. La
+    /// <c>KindMismatch</c> (422) la fija la prueba unitaria de <c>ReportesDeCesantias</c> y la misma tabla.
+    /// </summary>
+    [Fact]
+    public async Task El_centro_de_reportes_responde_404_con_el_sobre_a_la_corrida_o_el_empleado_inexistente()
+    {
+        var ctx = await NominaE2E.PrepararAsync(fx);
+        using var http = fx.CreateClient();
+        var admin = ctx.TokenAdmin;
+
+        var inexistente = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"/api/reports/payroll/consignacion-cesantias?runId={Guid.NewGuid()}", null);
+        inexistente.StatusCode.Should().Be(HttpStatusCode.NotFound, $"«{await inexistente.Content.ReadAsStringAsync()}»");
+        var sobre = await NominaE2E.LeerAsync(inexistente);
+        sobre.GetProperty("code").GetString().Should().Be("Payroll.Run.NotFound");
+        sobre.GetProperty("traceId").GetString().Should().NotBeNullOrWhiteSpace();
+
+        var empleadoInexistente = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"/api/reports/payroll/movimientos-vacaciones?desde=2026-01-01&hasta=2026-12-31&employeeId={Guid.NewGuid()}", null);
+        empleadoInexistente.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await NominaE2E.CodigoDeErrorAsync(empleadoInexistente)).Should().Be("Payroll.Employee.NotFound");
+    }
+
     // ------------------------------------------------------------------- datos --
 
     private static int _documento = 800_100_000;

@@ -14,7 +14,7 @@
     { "tipo": "Enjoyment", "desde": "2025-10-06", "hasta": "2025-10-22", "diasHabiles": 15, "diasCalendario": 17 },
     { "tipo": "Enjoyment", "desde": "2026-08-03", "hasta": "2026-08-19", "diasHabiles": 15, "diasCalendario": 17 }
   ],
-  "terminacion": { "motivo": "DESP_SIN_JC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
   "esperado": {
     "lineas": {
       "PRIMA": 1324547.50,
