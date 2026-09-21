@@ -11,9 +11,10 @@ namespace IngenIA365ERP.API.IntegrationTests.Payroll;
 /// encima del máximo rechazada con el máximo; registrar el disfrute crea el movimiento y la corrida
 /// en una acción; aprobar contabiliza contra la provisión (SC-003) y deja la ausencia en los dos
 /// períodos; la ordinaria de esos períodos no paga esos días como salario pero cotiza completo; un
-/// disfrute sobre un período aprobado responde 422 con el destino del retroactivo; reversar deja el
-/// espejo y anula la novedad del período aún abierto. Los períodos son de 2027 para no chocar con
-/// los que las otras pruebas de la colección crean en 2026.
+/// disfrute sobre un período aprobado responde 422 con el destino del retroactivo; con la ordinaria
+/// de enero aprobada la reversión se rechaza (D-32) y, reversada esa nómina, deja el espejo y anula
+/// las novedades de los dos períodos. Los períodos son de 2027 para no chocar con los que las otras
+/// pruebas de la colección crean en 2026.
 /// </summary>
 [Collection(NominaCollection.Nombre)]
 public class VacacionesTests(CentralIdentityApiFixture fx)
@@ -176,7 +177,18 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
         sobreRetro.GetProperty("data").GetProperty("periodPublicId").GetGuid().Should().Be(enero);
         sobreRetro.GetProperty("data").GetProperty("retroactiveTargetPeriodPublicId").GetGuid().Should().Be(febrero);
 
-        // --- reversar: espejo, movimiento de vuelta a registrado, la novedad de febrero (abierto) se anula y la de enero (aprobado) queda ---
+        // --- reversar con la ordinaria de enero aprobada: rechazo (D-32), porque enero ya descontó los días y la novedad quedaría viva sin salida ---
+        var bloqueada = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/settlements/vacations/{runId}/reverse", new { reason = "Prueba e2e: las fechas cambian" });
+        bloqueada.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, $"«{await bloqueada.Content.ReadAsStringAsync()}»");
+        var sobreBloqueo = await NominaE2E.LeerAsync(bloqueada);
+        sobreBloqueo.GetProperty("code").GetString().Should().Be("Payroll.Vacation.NoveltyAlreadyPaid");
+        sobreBloqueo.GetProperty("data").GetProperty("periodPublicId").GetGuid().Should().Be(enero);
+        sobreBloqueo.GetProperty("data").GetProperty("ordinaryRunPublicId").GetGuid().Should().Be(runEnero);
+        (await NominaE2E.GetAsync(http, admin, $"/api/payroll/runs/{runId}")).GetProperty("status").GetString().Should().Be("Approved", "nada cambió");
+
+        // Reversada la ordinaria de enero (el período vuelve a abrirse), la liquidación sí se reversa: espejo, movimiento de vuelta a registrado y las dos novedades anuladas.
+        var reversarEnero = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/runs/{runEnero}/reverse", new { reason = "Prueba e2e: se reversa la nómina de enero para poder reversar las vacaciones" });
+        reversarEnero.StatusCode.Should().Be(HttpStatusCode.OK, $"reversar enero: «{await reversarEnero.Content.ReadAsStringAsync()}»");
         var reversar = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/settlements/vacations/{runId}/reverse", new { reason = "Prueba e2e: las fechas cambian" });
         reversar.StatusCode.Should().Be(HttpStatusCode.OK, $"reversar: «{await reversar.Content.ReadAsStringAsync()}»");
         (await NominaE2E.LeerAsync(reversar)).GetProperty("reversalNumber").GetString().Should().StartWith("NM");
@@ -184,9 +196,12 @@ public class VacacionesTests(CentralIdentityApiFixture fx)
         var tras = (await NominaE2E.GetAsync(http, admin, $"/api/payroll/vacations/employees/{empleadoId}/movements")).EnumerateArray()
             .Single(m => m.GetProperty("movementPublicId").GetGuid() == movimientoId);
         tras.GetProperty("status").GetInt32().Should().Be(0, "Registered");
-        var febreroTras = await NominaE2E.GetAsync(http, admin, $"/api/payroll/pay-periods/{febrero}/novelties");
-        febreroTras.EnumerateArray().Where(n => n.GetProperty("conceptCode").GetString() == "AUSENCIA_VACACIONES" && n.GetProperty("employeePublicId").GetGuid() == empleadoId)
-            .Should().NotBeEmpty().And.OnlyContain(n => n.GetProperty("status").GetString() == "Cancelled", "febrero seguía abierto");
+        foreach (var periodoId in new[] { enero, febrero })
+        {
+            var novedadesTras = await NominaE2E.GetAsync(http, admin, $"/api/payroll/pay-periods/{periodoId}/novelties");
+            novedadesTras.EnumerateArray().Where(n => n.GetProperty("conceptCode").GetString() == "AUSENCIA_VACACIONES" && n.GetProperty("employeePublicId").GetGuid() == empleadoId)
+                .Should().NotBeEmpty().And.OnlyContain(n => n.GetProperty("status").GetString() == "Cancelled", "los dos períodos estaban abiertos al reversar");
+        }
 
         var liquidaciones = await NominaE2E.GetAsync(http, admin, $"/api/payroll/settlements/vacations?employeeId={empleadoId}");
         liquidaciones.EnumerateArray().Single(l => l.GetProperty("runPublicId").GetGuid() == runId).GetProperty("status").GetString().Should().Be("Reversed");

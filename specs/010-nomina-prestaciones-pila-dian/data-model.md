@@ -64,7 +64,8 @@ empleado) se hace cumplir en el comando —busca corridas `Draft`/`Stale`/`Appro
 ordinaria: `Draft → Superseded` (recálculo o descarte), `Draft → Approved` (contabiliza en la
 misma transacción; en `Settlement` además cierra la ficha y aplica los descuentos en Cartera),
 `Approved → Reversed` (asiento espejo; en `Settlement` reabre la ficha; en `Vacation` devuelve el
-movimiento a `Registered` y anula las novedades generadas). Una corrida especial no tiene
+movimiento a `Registered` y anula las novedades generadas; si la ordinaria de un período cubierto ya
+está aprobada, se rechaza con `Payroll.Vacation.NoveltyAlreadyPaid`, D-32). Una corrida especial no tiene
 `ExceptionsJson` de período ni `ApprovedWithoutSegregation` distinto: la segregación compara
 aprobador con `CalculatedBy`. `SourceType` contable por tipo: `ServiceBonusRun`, `SeveranceRun`,
 `VacationRun`, `SettlementRun` (la ordinaria sigue con el suyo).

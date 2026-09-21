@@ -115,8 +115,10 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 La liquidación nace de un movimiento (`PAY_VacationMovements`, R6): registrar el disfrute o la
 compensación **crea el movimiento en `Pending` y la corrida `Vacation` en `Draft`** en la misma
 acción; aprobar la corrida confirma el movimiento y deja la novedad `VACACIONES` (`NoveltyOrigin`
-`VacationLeave`) en cada período que cubre; reversar o descartar anula el movimiento y las
-novedades no consumidas. El saldo y la vista previa de días viven en `/api/payroll/vacations` (§5).
+`VacationLeave`) en cada período que cubre; descartar anula el movimiento y reversar lo devuelve a
+`Registered` y anula sus novedades —si la ordinaria de un período cubierto ya está aprobada, la
+reversión se rechaza (`.NoveltyAlreadyPaid`, D-32: primero se reversa esa nómina)—. El saldo y la
+vista previa de días viven en `/api/payroll/vacations` (§5).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
@@ -131,7 +133,8 @@ accruedDays, policyCode: "VACACIONES_COMPENSABLE_PCT" }`, FR-016), `.PeriodAppro
 retroactivo, Edge Cases), `.Overlaps` (`data: { movementPublicId }`), `.EmployeeTerminated`,
 `.PeriodMissing` (sólo en `approve`, D-31: días del disfrute que ningún período del plan cubre ni
 cubrirá por traslado, `data: { missing: [{ from, to }] }`; al registrar es un `warning` con el
-mismo código).
+mismo código), `.NoveltyAlreadyPaid` (sólo en `reverse`, D-32: `data: { periodPublicId,
+ordinaryRunPublicId }`).
 
 ### 3.4 Terminación y liquidación definitiva — `/terminations`
 

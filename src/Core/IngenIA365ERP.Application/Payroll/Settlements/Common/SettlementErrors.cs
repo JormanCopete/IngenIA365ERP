@@ -136,6 +136,11 @@ public static class SettlementErrors
             $"El plan del empleado no tiene período de nómina para los días {texto}: sin período no queda la novedad de ausencia y la nómina pagaría esos días como salario. Cree los períodos y apruebe de nuevo.",
             new { missing = tramos });
     }
+    /// <summary>D-32: la nómina ordinaria de un período cubierto ya descontó los días del disfrute y está aprobada; reversar la liquidación dejaría esos días sin pagar y el disfrute sin salida.</summary>
+    public static Error VacationNoveltyAlreadyPaid(Guid periodPublicId, Guid? ordinaryRunPublicId) =>
+        new ErrorConDatos("Payroll.Vacation.NoveltyAlreadyPaid",
+            "La nómina ordinaria de un período que cubre el disfrute ya descontó esos días y está aprobada: reverse primero esa nómina (el período vuelve a abrirse) y después esta liquidación.",
+            new { periodPublicId, ordinaryRunPublicId });
     public static Error VacationOverlaps(Guid movementPublicId) =>
         new ErrorConDatos("Payroll.Vacation.Overlaps", "Las fechas se cruzan con otro disfrute registrado del mismo empleado.", new { movementPublicId });
     public static readonly Error VacationEmployeeTerminated = new("Payroll.Vacation.EmployeeTerminated", "El empleado está retirado: las vacaciones pendientes se pagan en la liquidación definitiva.");

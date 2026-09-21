@@ -156,7 +156,13 @@ public sealed class ApproveVacationCommandHandler(
 
 // ---------------------------------------------------------------- reversar --
 
-/// <summary>Asiento espejo por el ciclo común; el movimiento vuelve a <c>Registered</c> y las novedades no consumidas (períodos aún abiertos) se anulan.</summary>
+/// <summary>
+/// Asiento espejo por el ciclo común; el movimiento vuelve a <c>Registered</c> y sus novedades se
+/// anulan. Si la nómina ordinaria de un período cubierto ya está aprobada —ya descontó los días—,
+/// la reversión se rechaza con <c>Payroll.Vacation.NoveltyAlreadyPaid</c> (D-32): reversada, el
+/// disfrute quedaría con la novedad viva en un período inmutable y sin salida (no se puede anular,
+/// recalcular ni registrar de nuevo). El camino es reversar antes esa nómina, que reabre el período.
+/// </summary>
 public sealed record ReverseVacationCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedDto>>;
 
 public sealed class ReverseVacationCommandValidator : AbstractValidator<ReverseVacationCommand>
@@ -180,7 +186,24 @@ public sealed class ReverseVacationCommandHandler(
     {
         var busqueda = await VacationRunLookup.BuscarAsync(db, request.RunPublicId, ct);
         if (busqueda.IsFailure) return Result.Failure<SettlementReversedDto>(busqueda.Error);
-        var (_, movimiento, _) = busqueda.Value;
+        var (run, movimiento, _) = busqueda.Value;
+
+        if (run.Status == PayrollRunStatus.Approved)
+        {
+            var pagada = await db.PayrollNovelties.AsNoTracking()
+                .Where(n => n.VacationMovementId == movimiento.Id && n.Status == NoveltyStatus.Active
+                            && n.PayPeriod!.Status != PayPeriodStatus.Open && n.PayPeriod.Status != PayPeriodStatus.Calculated)
+                .OrderBy(n => n.PayPeriod!.StartDate)
+                .Select(n => new { n.PayPeriodId, n.PayPeriod!.PublicId })
+                .FirstOrDefaultAsync(ct);
+            if (pagada is not null)
+            {
+                var ordinaria = await db.PayrollRuns.AsNoTracking()
+                    .Where(r => r.PayPeriodId == pagada.PayPeriodId && r.Status == PayrollRunStatus.Approved)
+                    .Select(r => (Guid?)r.PublicId).FirstOrDefaultAsync(ct);
+                return Result.Failure<SettlementReversedDto>(SettlementErrors.VacationNoveltyAlreadyPaid(pagada.PublicId, ordinaria));
+            }
+        }
 
         return await workflow.ReverseAsync(request.RunPublicId, PayrollRunKind.Vacation, request.Reason,
             async (_, _, token) =>
