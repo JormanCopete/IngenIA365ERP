@@ -1,0 +1,59 @@
+{
+  "casos": [
+    {
+      "nombre": "Aprendiz en etapa lectiva: excluido de la prima",
+      "descripcion": "Ley 2466/2025 art. 21 (FR-009): en la etapa lectiva hay apoyo de sostenimiento sin prestaciones.",
+      "derivacion": "Clase Apprentice con etapa Lective → exclusión AprendizLectiva; sin líneas.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Aprendiz lectiva",
+        "clase": "Apprentice",
+        "etapaAprendiz": "Lective",
+        "ingreso": "2026-04-01",
+        "salarios": [ { "desde": "2026-04-01", "mensual": 1313178.75 } ]
+      },
+      "esperado": { "excluido": "AprendizLectiva", "omitidos": [ "PRIMA:AprendizLectiva" ] }
+    },
+    {
+      "nombre": "Aprendiz en etapa práctica desde el 01-10: prima completa por los días de esa etapa",
+      "descripcion": "Ley 2466/2025 art. 21 (FR-009): en la etapa práctica el aprendiz tiene prima completa; los días cuentan desde que empezó la etapa (la ficha la lleva con vigencia).",
+      "derivacion": "La etapa práctica empieza el 01-10-2026: días 01-10 a 31-12 = 90. Apoyo 100 % del SMMLV = 1.750.905 + auxilio 249.095 (el concepto aplica a aprendices y el salario ≤ 2 SMMLV) = 2.000.000. Prima = 2.000.000 / 30 × 30 × 90 / 360 = 500.000. Retención: 500.000 × 75 % = 375.000 = 7,16 UVT → 0.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Aprendiz práctica",
+        "clase": "Apprentice",
+        "etapaAprendiz": "Practical",
+        "etapaDesde": "2026-10-01",
+        "ingreso": "2026-04-01",
+        "salarios": [
+          { "desde": "2026-04-01", "mensual": 1313178.75 },
+          { "desde": "2026-10-01", "mensual": 1750905 }
+        ]
+      },
+      "esperado": {
+        "lineas": { "PRIMA": 500000, "RETEFTE_PRIMA": 0 },
+        "totales": { "devengos": 500000, "deducciones": 0, "provisiones": 0, "neto": 500000 },
+        "explicaciones": [ "PRIMA: 90 días" ]
+      }
+    },
+    {
+      "nombre": "Pasante sin contrato de aprendizaje: excluido",
+      "descripcion": "FR-009: pasante sin contrato de aprendizaje, sin prestaciones, como hoy.",
+      "derivacion": "Clase Intern → exclusión Pasante; sin líneas.",
+      "tipo": "Severance",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-01-01",
+      "empleado": {
+        "nombre": "Pasante",
+        "clase": "Intern",
+        "ingreso": "2026-02-01",
+        "salarios": [ { "desde": "2026-02-01", "mensual": 1750905 } ]
+      },
+      "esperado": { "excluido": "Pasante", "omitidos": [ "CESANTIAS:Pasante" ] }
+    }
+  ]
+}

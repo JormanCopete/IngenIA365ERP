@@ -1,0 +1,19 @@
+{
+  "nombre": "Indemnización con salario ≥ 10 SMMLV: 20 + 15 por año adicional (50 días × 600.000 = 30.000.000)",
+  "descripcion": "Research R14: tramo ≥ 10 SMMLV de la tabla del art. 64 (20 días el primer año, 15 por cada año siguiente). Tres años exactos de servicio. Incluye la retención del art. 401-3 porque el ingreso supera 204 UVT.",
+  "derivacion": "Salario 18.000.000 = 10,28 SMMLV (1.750.905) → tramo ≥ 10: FixedValue 20, Rate 15. Antigüedad 01-01-2024 a 31-12-2026 = 1.080 días. Días = 20 + (1.080 − 360) × 15 / 360 = 20 + 30 = 50. Día = 18.000.000 / 30 = 600.000. Indemnización = 50 × 600.000 = 30.000.000. Retención 401-3: ingreso mensual 18.000.000 (sin auxilio: > 2 SMMLV) = 343,68 UVT > 204 → renta exenta 25 % = 7.500.000 (≤ cupo anual 790 UVT = 41.375.460) → base gravada 22.500.000 × 20 % = 4.500.000.",
+  "tipo": "Settlement",
+  "corte": "2026-12-31",
+  "empleado": {
+    "nombre": "Salario alto, indefinido",
+    "ingreso": "2024-01-01",
+    "salarios": [ { "desde": "2024-01-01", "mensual": 18000000 } ],
+    "tipoContrato": "Indefinite"
+  },
+  "terminacion": { "motivo": "DESP_SIN_JC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "esperado": {
+    "soloLineasListadas": true,
+    "lineas": { "INDEMNIZACION": 30000000, "RETEFTE_INDEMNIZACION": 4500000 },
+    "explicaciones": [ "INDEMNIZACION: 50 días" ]
+  }
+}

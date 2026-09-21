@@ -1,0 +1,43 @@
+{
+  "casos": [
+    {
+      "nombre": "Prima 2026-II de un empleado activo que ya recibió prima proporcional en una definitiva del semestre: se descuenta",
+      "descripcion": "FR-009: la prima ya pagada en una liquidación definitiva del mismo semestre se resta. Es el caso del empleado cuya definitiva se aprobó y luego siguió vinculado (misma ficha).",
+      "derivacion": "Prima del semestre completo: (2.000.000 + 249.095) × 180/360 = 1.124.547,50. Pagada en la definitiva hasta el 30-09 (90 días): 2.249.095 × 90/360 = 562.273,75. Prima a pagar = 1.124.547,50 − 562.273,75 = 562.273,75. Retención sobre la prima que se paga (la de la parte ya pagada la practicó la definitiva): 562.273,75 × 75 % = 421.705,31 = 8,05 UVT → 0.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Activo con prima pagada en definitiva",
+        "ingreso": "2020-03-01",
+        "salarios": [ { "desde": "2020-03-01", "mensual": 2000000 } ]
+      },
+      "primaPagadaEnDefinitiva": [
+        { "corrida": "33333333-3333-3333-3333-333333333333", "hasta": "2026-09-30", "valor": 562273.75, "dias": 90 }
+      ],
+      "esperado": {
+        "lineas": { "PRIMA": 562273.75, "RETEFTE_PRIMA": 0 },
+        "totales": { "devengos": 562273.75, "deducciones": 0, "provisiones": 0, "neto": 562273.75 },
+        "explicaciones": [ "PRIMA: Prima ya pagada en la liquidación definitiva" ]
+      }
+    },
+    {
+      "nombre": "Retirado el 30-09 con definitiva aprobada: excluido de la prima del semestre",
+      "descripcion": "FR-009 y FR-013: quien se retiró con definitiva en el semestre queda fuera de la liquidación semestral.",
+      "derivacion": "Retiro 30-09-2026 dentro del semestre y prima pagada en la definitiva → exclusión YaPagadaEnDefinitiva; sin líneas.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Retirado con definitiva",
+        "ingreso": "2020-03-01",
+        "retiro": "2026-09-30",
+        "salarios": [ { "desde": "2020-03-01", "mensual": 2000000 } ]
+      },
+      "primaPagadaEnDefinitiva": [
+        { "corrida": "33333333-3333-3333-3333-333333333333", "hasta": "2026-09-30", "valor": 562273.75, "dias": 90 }
+      ],
+      "esperado": { "excluido": "YaPagadaEnDefinitiva", "omitidos": [ "PRIMA:YaPagadaEnDefinitiva" ] }
+    }
+  ]
+}

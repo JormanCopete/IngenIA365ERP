@@ -372,7 +372,7 @@ public sealed class PayrollCalculationEngine
     }
 
     private static CalculationLine WithholdingProcedure2(PayrollConceptDefinition def, RuleContext ctx,
-        WithholdingBaseBuilder.Depuration depuracion, decimal tasaPct)
+        Depuration depuracion, decimal tasaPct)
     {
         var fraccion = tasaPct / 100m;
         var exp = new Explanation
