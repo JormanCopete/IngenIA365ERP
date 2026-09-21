@@ -86,6 +86,11 @@ public sealed class RecalculateServiceBonusCommandHandler(
         var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Result.Failure<SettlementCalculatedDto>(SettlementErrors.RunNotFound);
         if (run.Kind != PayrollRunKind.ServiceBonus) return Result.Failure<SettlementCalculatedDto>(SettlementErrors.KindMismatch(run.Kind, PayrollRunKind.ServiceBonus));
+        // El estado de la corrida pedida se mira ANTES que la llave, como en cesantías, definitiva y vacaciones:
+        // recalcular una aprobada o una superseded es la transición inválida (NotDraft, contrato §3.5), no un
+        // «duplicado». Hasta la revisión de N1 la prima respondía Duplicate, y con un runId superseded y un
+        // borrador vivo de la misma llave lo reemplazaba por una versión más.
+        if (!run.IsEditableDraft) return Result.Failure<SettlementCalculatedDto>(SettlementErrors.NotDraft(run.Status));
         if (run.Year is not { } year || run.Semester is not { } semester)
             return Result.Failure<SettlementCalculatedDto>(SettlementErrors.KeyMissing);
 

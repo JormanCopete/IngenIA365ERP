@@ -10,7 +10,7 @@
     "salarios": [ { "desde": "2021-01-01", "mensual": 12000000 } ],
     "tipoContrato": "Indefinite"
   },
-  "terminacion": { "motivo": "DESP_SIN_JC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
   "esperado": {
     "soloLineasListadas": true,
     "lineas": { "INDEMNIZACION": 52000000, "RETEFTE_INDEMNIZACION": 7800000 },

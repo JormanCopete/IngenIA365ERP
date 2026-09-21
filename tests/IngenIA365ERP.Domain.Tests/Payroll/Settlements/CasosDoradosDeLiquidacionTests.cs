@@ -104,6 +104,25 @@ public class CasosDoradosDeLiquidacionTests
         CasoDoradoLiquidacion.Archivos().Should().HaveCountGreaterThanOrEqualTo(18);
     }
 
+    /// <summary>
+    /// Revisión de N1: el motivo de cada caso es un código del catálogo sembrado (D-23, <c>TerminationReason</c>:
+    /// 10 caracteres). Cuatro casos llevaban «DESP_SIN_JC», el nombre anterior al recorte, y como el motor decide
+    /// por <c>generaIndemnizacion</c> ningún valor cambiaba; pero el caso dorado tiene que ejercitar el código
+    /// real, o una regla futura por código no se probaría nunca.
+    /// </summary>
+    [Fact]
+    public void El_motivo_de_cada_caso_es_un_codigo_del_catalogo_sembrado()
+    {
+        string[] sembrados = ["RENUNCIA", "DESP_SINJC", "DESP_JC", "VENC_TERM", "MUTUO_ACDO", "FIN_OBRA", "PER_PRUEBA", "MUERTE", "PENSION"];
+        var motivos = CasoDoradoLiquidacion.Archivos()
+            .SelectMany(a => CasoDoradoLiquidacion.Cargar(a).Select(c => (Archivo: Path.GetFileName(a), c.Terminacion?.Motivo)))
+            .Where(x => !string.IsNullOrEmpty(x.Motivo))
+            .ToList();
+
+        motivos.Should().NotBeEmpty();
+        motivos.Should().OnlyContain(x => sembrados.Contains(x.Motivo), "los casos de definitiva usan los códigos que siembra TerminationReasonsSeeder (D-23)");
+    }
+
     [Fact]
     public void Calcular_dos_veces_da_el_mismo_hash_y_las_mismas_lineas()
     {
