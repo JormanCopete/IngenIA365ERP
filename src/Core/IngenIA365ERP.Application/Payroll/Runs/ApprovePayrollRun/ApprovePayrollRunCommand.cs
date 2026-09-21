@@ -58,7 +58,8 @@ public sealed class ApprovePayrollRunCommandHandler(
     IPermissionChecker permissions,
     IDateTimeService clock,
     ICurrentUserService user,
-    PayrollAuditEmitter audit)
+    PayrollAuditEmitter audit,
+    IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<ApprovePayrollRunCommand, Result<ApproveRunResultDto>>
 {
     public const string AuthorizeExceptionPermission = "Payroll.Runs.AuthorizeException";
@@ -181,6 +182,11 @@ public sealed class ApprovePayrollRunCommandHandler(
                 r.UpdatedBy = yo;
             }
         }
+
+        // Feature 010 (revisión N1): las provisiones y bases de un borrador de prima, cesantías, vacaciones o
+        // definitiva de estos empleados con corte desde este período cambian con esta aprobación: quedan Stale.
+        await staleMarker.MarkSettlementDraftsStaleAsync(idsEmpleados, DateOnly.FromDateTime(period.StartDate),
+            $"aprobación de la nómina ordinaria {period.StartDate:yyyy-MM-dd} a {period.EndDate:yyyy-MM-dd}", ct);
 
         await db.SaveChangesAsync(ct);
 

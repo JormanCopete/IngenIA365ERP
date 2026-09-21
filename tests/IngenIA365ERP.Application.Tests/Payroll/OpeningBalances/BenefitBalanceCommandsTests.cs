@@ -22,8 +22,8 @@ public class BenefitBalanceCommandsTests
 {
     private readonly NominaTestData _d = new();
 
-    private UpsertBenefitBalanceCommandHandler Upsert() => new(_d.Db, _d.Clock, _d.User, _d.AuditEmitter);
-    private AddBenefitBalanceAdjustmentCommandHandler Ajuste() => new(_d.Db, _d.Clock, _d.User, _d.AuditEmitter);
+    private UpsertBenefitBalanceCommandHandler Upsert() => new(_d.Db, _d.Clock, _d.User, _d.AuditEmitter, _d.StaleMarker);
+    private AddBenefitBalanceAdjustmentCommandHandler Ajuste() => new(_d.Db, _d.Clock, _d.User, _d.AuditEmitter, _d.StaleMarker);
 
     private UpsertBenefitBalanceCommand Apertura(decimal vacaciones = 10m, decimal cesantias = 1_500_000m, DateOnly? corte = null) =>
         new(_d.Ana.PublicId, corte ?? new DateOnly(2025, 12, 31), vacaciones, cesantias, 180_000m, 900_000m, Notes: "Del liquidador anterior");

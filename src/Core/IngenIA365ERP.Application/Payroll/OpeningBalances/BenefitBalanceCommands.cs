@@ -106,7 +106,7 @@ public sealed class UpsertBenefitBalanceCommandValidator : AbstractValidator<Ups
     }
 }
 
-public sealed class UpsertBenefitBalanceCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit)
+public sealed class UpsertBenefitBalanceCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit, IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<UpsertBenefitBalanceCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(UpsertBenefitBalanceCommand request, CancellationToken ct)
@@ -126,6 +126,10 @@ public sealed class UpsertBenefitBalanceCommandHandler(IApplicationDbContext db,
         var ahora = clock.UtcNow;
         var apertura = filas.Where(f => f.Kind == OpeningBalanceKind.Opening).OrderByDescending(f => f.Id).FirstOrDefault();
         var antes = apertura is null ? null : BenefitBalanceValueRules.Foto(apertura);
+        // Feature 010 (revisión N1): un borrador de liquidación especial del empleado calculado con el saldo que había
+        // (o sin saldo) queda Stale; cambia desde la fecha más antigua entre lo que había y lo que entra.
+        var desde = filas.Count == 0 ? request.AsOfDate : new[] { request.AsOfDate, filas.Min(f => f.AsOfDate) }.Min();
+        await staleMarker.MarkSettlementDraftsStaleAsync([e.Id], desde, $"saldo inicial de prestaciones de {e.PublicId} al {request.AsOfDate:yyyy-MM-dd}", ct);
 
         // Mientras nada lo consumió, los ajustes anteriores sobran: el saldo vuelve a ser uno solo.
         foreach (var ajuste in filas.Where(f => f.Kind == OpeningBalanceKind.Adjustment))
@@ -190,7 +194,7 @@ public sealed class AddBenefitBalanceAdjustmentCommandValidator : AbstractValida
     }
 }
 
-public sealed class AddBenefitBalanceAdjustmentCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit)
+public sealed class AddBenefitBalanceAdjustmentCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit, IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<AddBenefitBalanceAdjustmentCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(AddBenefitBalanceAdjustmentCommand request, CancellationToken ct)
@@ -225,6 +229,8 @@ public sealed class AddBenefitBalanceAdjustmentCommandHandler(IApplicationDbCont
             CreatedBy = user.UserName,
         };
         db.EmployeeBenefitOpeningBalances.Add(ajuste);
+        // Feature 010 (revisión N1): un borrador de liquidación especial del empleado con corte desde esta fecha queda Stale.
+        await staleMarker.MarkSettlementDraftsStaleAsync([e.Id], request.AsOfDate, $"ajuste del saldo inicial de prestaciones de {e.PublicId} al {request.AsOfDate:yyyy-MM-dd}", ct);
         await db.SaveChangesAsync(ct);
 
         await audit.EmitAsync(AuditEventTypes.PayrollOpeningBalanceChanged, nameof(EmployeeBenefitOpeningBalance), ajuste.PublicId,
