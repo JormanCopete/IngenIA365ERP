@@ -588,6 +588,50 @@ public class SettlementInputLoaderTests
     }
 
     [Fact]
+    public async Task Vacaciones_y_definitiva_cargan_las_suspensiones_desde_el_ingreso_y_los_movimientos_posteriores_al_corte()
+    {
+        // Ana ingresó el 15-01-2025. Una suspensión de febrero de 2025 queda fuera de la ventana de doce
+        // meses de prima y cesantías, pero descuenta vacaciones toda la vida del contrato (CST art. 53);
+        // y un disfrute ya registrado para septiembre compromete el saldo aunque el corte sea julio.
+        // Hasta el 2026-09-21 el cargador no traía ni la una ni el otro y la definitiva pagaba de más.
+        var d = ConSeisMesesAprobados();
+        var febrero2025 = d.Periodo(new DateTime(2025, 2, 1), new DateTime(2025, 2, 28), PayPeriodStatus.Approved);
+        var suspension = await d.Db.PayrollConceptDefinitions.SingleAsync(c => c.Code == "SUSPENSION");
+        d.Db.PayrollNovelties.Add(new PayrollNovelty
+        {
+            PayPeriodId = febrero2025.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = suspension.Id, ConceptCode = suspension.Code,
+            StartDate = new DateTime(2025, 2, 3), EndDate = new DateTime(2025, 2, 28), CreatedBy = "test",
+        });
+        d.Db.VacationMovements.Add(new VacationMovement
+        {
+            EmployeeId = d.Ana.Id, Kind = VacationMovementKind.Enjoyment, StartDate = new DateOnly(2026, 9, 7), EndDate = new DateOnly(2026, 9, 12),
+            BusinessDays = 6m, CalendarDays = 6, WeekPolicyUsed = "LunesASabado", Status = VacationMovementStatus.Registered, CreatedBy = "test",
+        });
+        await d.Db.SaveChangesAsync();
+        var corte = new DateOnly(2026, 7, 14);
+        var compensacion = new VacationMovement { EmployeeId = d.Ana.Id, Kind = VacationMovementKind.Compensation, StartDate = corte, BusinessDays = 2m, CreatedBy = "test" };
+
+        var vacaciones = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Vacaciones(d.Ana.Id, compensacion, corte), CancellationToken.None);
+        var prima = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Prima(2026, 1), CancellationToken.None);
+
+        var entrada = vacaciones.Employees.Single().Input;
+        entrada.Absences.Should().ContainSingle(a => a.IsSuspension && a.From == new DateTime(2025, 2, 3), "la suspensión de 2025 descuenta vacaciones aunque tenga más de un año");
+        entrada.VacationMovements.Should().ContainSingle(m => m.Kind == VacationMovementKind.Enjoyment && m.StartDate == new DateTime(2026, 9, 7), "el disfrute posterior al corte ya está registrado y compromete el saldo");
+        prima.Employees.Single(e => e.Employee.Id == d.Ana.Id).Input.Absences.Should().BeEmpty("la prima sigue mirando sólo el año hacia atrás");
+
+        var resultado = new SettlementCalculationEngine().Calculate(entrada);
+        // 15-01-2025 a 14-07-2026 = 540 días − 28 de suspensión (03 al 28-02-2025: el 28 vale 30 en el calendario comercial) = 512 × 15 / 360 = 21,33; menos 6 del disfrute registrado.
+        resultado.Vacations.Accrued.Should().BeApproximately(21.3333m, 0.0001m);
+        resultado.Vacations.Pending.Should().BeApproximately(15.3333m, 0.0001m);
+        resultado.Warnings.Should().Contain(w => w.Contains("posterior al 14/07/2026", StringComparison.Ordinal));
+
+        // La pantalla de saldo (VacationBalanceCalculator) y lo que paga la liquidación son el mismo número.
+        var pantalla = await new IngenIA365ERP.Application.Payroll.Vacations.VacationBalanceCalculator(d.Db).CalcularAsync(d.Ana, corte, CancellationToken.None);
+        pantalla.IsSuccess.Should().BeTrue(pantalla.Error.Message);
+        pantalla.Value.PendingDays.Should().BeApproximately(resultado.Vacations.Pending, 0.0001m, "hasta el 2026-09-21 la pantalla y la definitiva diferían");
+    }
+
+    [Fact]
     public async Task Las_bases_por_mes_separan_variables_prestacionales_de_las_de_vacaciones()
     {
         var d = new NominaTestData();

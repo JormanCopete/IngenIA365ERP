@@ -151,6 +151,32 @@ public class CalculateVacationCommandHandlerTests
     }
 
     [Fact]
+    public async Task Dos_disfrutes_disjuntos_o_un_disfrute_y_una_compensacion_registrados_el_mismo_dia_conviven_con_el_mismo_corte()
+    {
+        // D-32. Hoy es el 14-07-2026: todo disfrute futuro y toda compensación sin fecha de pago llevan corte «hoy».
+        // Hasta el 2026-09-21 la llave era (empleado, corte) y el segundo registro del día respondía Duplicate.
+        var d = VacacionesDePrueba.Escenario();
+        d.Periodo(new DateTime(2026, 7, 1), new DateTime(2026, 7, 31), PayPeriodStatus.Open);
+        d.Periodo(new DateTime(2026, 8, 1), new DateTime(2026, 8, 31), PayPeriodStatus.Open);
+        var handler = VacacionesDePrueba.Registrar(d);
+
+        var julio = await handler.Handle(VacacionesDePrueba.Disfrute(d.Ana, new DateOnly(2026, 7, 21), new DateOnly(2026, 7, 25)), CancellationToken.None);
+        var agosto = await handler.Handle(VacacionesDePrueba.Disfrute(d.Ana, new DateOnly(2026, 8, 3), new DateOnly(2026, 8, 8)), CancellationToken.None);
+        var compensacion = await handler.Handle(VacacionesDePrueba.Compensacion(d.Ana, 2m), CancellationToken.None);
+
+        julio.IsSuccess.Should().BeTrue(julio.Error.Message);
+        agosto.IsSuccess.Should().BeTrue(agosto.Error.Message);
+        compensacion.IsSuccess.Should().BeTrue(compensacion.Error.Message);
+        var corridas = await d.Db.PayrollRuns.Where(r => r.Kind == PayrollRunKind.Vacation).ToListAsync();
+        corridas.Should().HaveCount(3);
+        corridas.Should().OnlyContain(r => r.CutoffDate == VacacionesDePrueba.CorteDe540Dias && r.EmployeeId == d.Ana.Id && r.Version == 1, "las tres comparten corte y empleado: la unicidad es por movimiento");
+        corridas.Select(r => r.VacationMovementId).Should().OnlyHaveUniqueItems().And.NotContainNulls();
+
+        // El saldo del último ya descuenta los dos disfrutes anteriores (movimientos vivos, aunque sean posteriores al corte).
+        compensacion.Value.Warnings.Should().Contain(w => w.Message.Contains("posterior al 14/07/2026", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Recalcular_crea_una_version_nueva_y_deja_la_anterior_Superseded_sin_tocar_el_movimiento()
     {
         var d = VacacionesDePrueba.Escenario();

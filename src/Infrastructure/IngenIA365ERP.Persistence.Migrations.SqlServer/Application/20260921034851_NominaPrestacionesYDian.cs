@@ -737,12 +737,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 column: "TerminationId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns",
-                column: "VacationMovementId");
-
-            migrationBuilder.CreateIndex(
                 name: "UK_PAY_PayrollRuns_Ordinary_Period_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns",
@@ -775,10 +769,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 filter: "[Kind] = 2");
 
             migrationBuilder.CreateIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
+                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns",
-                columns: new[] { "EmployeeId", "CutoffDate", "Version" },
+                columns: new[] { "VacationMovementId", "Version" },
                 unique: true,
                 filter: "[Kind] = 3");
 
@@ -1275,11 +1269,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 table: "PAY_PayrollRuns");
 
             migrationBuilder.DropIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns");
-
-            migrationBuilder.DropIndex(
                 name: "UK_PAY_PayrollRuns_Ordinary_Period_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns");
@@ -1300,7 +1289,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 table: "PAY_PayrollRuns");
 
             migrationBuilder.DropIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
+                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
                 schema: "dbo",
                 table: "PAY_PayrollRuns");
 

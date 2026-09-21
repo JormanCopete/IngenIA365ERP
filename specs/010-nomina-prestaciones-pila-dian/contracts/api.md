@@ -115,8 +115,10 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 La liquidación nace de un movimiento (`PAY_VacationMovements`, R6): registrar el disfrute o la
 compensación **crea el movimiento en `Pending` y la corrida `Vacation` en `Draft`** en la misma
 acción; aprobar la corrida confirma el movimiento y deja la novedad `VACACIONES` (`NoveltyOrigin`
-`VacationLeave`) en cada período que cubre; reversar o descartar anula el movimiento y las
-novedades no consumidas. El saldo y la vista previa de días viven en `/api/payroll/vacations` (§5).
+`VacationLeave`) en cada período que cubre; descartar anula el movimiento y reversar lo devuelve a
+`Registered` y anula sus novedades —si la ordinaria de un período cubierto ya está aprobada, la
+reversión se rechaza (`.NoveltyAlreadyPaid`, D-34: primero se reversa esa nómina)—. El saldo y la
+vista previa de días viven en `/api/payroll/vacations` (§5).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
@@ -128,7 +130,11 @@ Errores propios: `Payroll.Vacation.DatesInvalid`, `.NoWorkingDays` (todo festivo
 `.NoBalance` (`data: { pendingDays }`), `.CompensationOverMax` (`data: { requestedDays, maxDays,
 accruedDays, policyCode: "VACACIONES_COMPENSABLE_PCT" }`, FR-016), `.PeriodApproved` (`data:
 { periodPublicId, retroactiveTargetPeriodPublicId }` — la novedad se ofrece como ajuste
-retroactivo, Edge Cases), `.Overlaps` (`data: { movementPublicId }`), `.EmployeeTerminated`.
+retroactivo, Edge Cases), `.Overlaps` (`data: { movementPublicId }`), `.EmployeeTerminated`,
+`.PeriodMissing` (sólo en `approve`, D-33: días del disfrute que ningún período del plan cubre ni
+cubrirá por traslado, `data: { missing: [{ from, to }] }`; al registrar es un `warning` con el
+mismo código), `.NoveltyAlreadyPaid` (sólo en `reverse`, D-34: `data: { periodPublicId,
+ordinaryRunPublicId }`).
 
 ### 3.4 Terminación y liquidación definitiva — `/terminations`
 
@@ -172,7 +178,7 @@ no respondió: la propuesta sale vacía con aviso, no se bloquea).
 
 | Código | HTTP | Cuándo | `data` |
 |---|---|---|---|
-| `Payroll.Settlement.Duplicate` | 422 | ya existe una del mismo tipo, período/corte y empleado en `Draft` o `Approved` (FR-005) | `{ runPublicId, status }` |
+| `Payroll.Settlement.Duplicate` | 422 | ya existe una del mismo tipo, período/corte y empleado en `Draft` o `Approved` (FR-005); en vacaciones, del mismo **movimiento** (D-32: dos disfrutes, o un disfrute y una compensación, registrados el mismo día conviven) | `{ runPublicId, status }` |
 | `Payroll.Settlement.NoEligibleEmployees` | 422 | nadie con derecho en el período | `{ excluded[] }` |
 | `Payroll.Settlement.ParametersMissing` | 422 | falta un código de `SettlementParameterCodes.Required` vigente a la fecha de corte (R4) | `{ codes: [{ code, asOf }] }` |
 | `Payroll.Settlement.ConceptAccountsMissing` | 422 | al aprobar: un concepto de la liquidación sin cuentas en `PAY_ConceptDefinitionAccounts` | `{ conceptCodes[] }` |

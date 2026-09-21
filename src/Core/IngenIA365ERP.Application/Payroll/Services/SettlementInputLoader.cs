@@ -281,16 +281,21 @@ public sealed class SettlementInputLoader(
             : [];
         var retencionesEspecialesPorEmpleado = retencionesEspeciales.ToLookup(l => l.EmployeeId, l => l.ExplanationJson);
 
-        // --- ausencias: novedades con fechas que reducen días (aprobadas o del período abierto), del año hacia atrás ---
+        // --- ausencias: novedades con fechas que reducen días (aprobadas o del período abierto) ---
+        // Prima y cesantías miran a lo sumo un año hacia atrás; el saldo de vacaciones se deriva desde el
+        // ingreso (CST art. 53: toda suspensión del contrato descuenta), así que vacaciones y definitiva
+        // cargan las suspensiones completas. Hasta el 2026-09-21 la ventana de doce meses se aplicaba a
+        // las cuatro y una licencia no remunerada de hace dos años no descontaba días en la definitiva.
         var conceptosQueReducen = await db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters()
             .Where(c => c.ReducesWorkedDays).Select(c => new { c.Id, c.Code, c.Nature }).ToListAsync(ct);
         var reducenPorId = conceptosQueReducen.ToDictionary(c => c.Id);
         var idsReducen = conceptosQueReducen.Select(c => c.Id).ToList();
         var desdeAusencias = desdeHistoria.ToDateTime(TimeOnly.MinValue);
+        var ausenciasDesdeElIngreso = request.Kind is SettlementKind.Vacation or SettlementKind.Settlement;
         var ausencias = await db.PayrollNovelties.AsNoTracking()
             .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active
                         && idsReducen.Contains(n.ConceptDefinitionId) && n.StartDate != null && n.EndDate != null
-                        && n.EndDate >= desdeAusencias && n.StartDate <= corteDt)
+                        && (ausenciasDesdeElIngreso || n.EndDate >= desdeAusencias) && n.StartDate <= corteDt)
             .ToListAsync(ct);
         var ausenciasPorEmpleado = ausencias.ToLookup(n => n.EmployeeId);
 
@@ -299,8 +304,11 @@ public sealed class SettlementInputLoader(
             .Where(b => idsEmpleados.Contains(b.EmployeeId) && b.AsOfDate <= corte)
             .OrderBy(b => b.AsOfDate).ThenBy(b => b.Kind).ToListAsync(ct);
         var saldosPorEmpleado = saldos.ToLookup(b => b.EmployeeId);
+        // Todos los movimientos vivos, también los registrados para después del corte: un disfrute ya
+        // registrado (y pagado por anticipado, D-01) compromete el saldo igual que en la pantalla
+        // (VacationBalanceCalculator); el motor avisa cuando uno es posterior al corte o al retiro.
         var movimientos = await db.VacationMovements.AsNoTracking()
-            .Where(m => idsEmpleados.Contains(m.EmployeeId) && m.Status != VacationMovementStatus.Cancelled && m.StartDate <= corte
+            .Where(m => idsEmpleados.Contains(m.EmployeeId) && m.Status != VacationMovementStatus.Cancelled
                         && (movimiento == null || m.Id != movimiento.Id))
             .OrderBy(m => m.StartDate).ToListAsync(ct);
         var movimientosPorEmpleado = movimientos.ToLookup(m => m.EmployeeId);

@@ -49,7 +49,7 @@ filtros entienda `OR`):
 | `UK_PAY_PayrollRuns_Ordinary_Period_Version` | `(PayPeriodId, Version)` | `[Kind] = 0` |
 | `UK_PAY_PayrollRuns_ServiceBonus_Year_Semester_Version` | `(Year, Semester, Version)` | `[Kind] = 1` |
 | `UK_PAY_PayrollRuns_Severance_Year_Version` | `(Year, Version)` | `[Kind] = 2` |
-| `UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version` | `(EmployeeId, CutoffDate, Version)` | `[Kind] = 3` |
+| `UK_PAY_PayrollRuns_Vacation_Movement_Version` | `(VacationMovementId, Version)` | `[Kind] = 3` (D-32: una corrida por movimiento; el corte de un disfrute futuro es «hoy» y dos movimientos del mismo día lo comparten) |
 | `UK_PAY_PayrollRuns_Settlement_Employee_Cutoff_Version` | `(EmployeeId, CutoffDate, Version)` | `[Kind] = 4` |
 
 Más `IX_PAY_PayrollRuns_Kind_Status (Kind, Status)` para las listas por tipo, y se conserva
@@ -60,11 +60,12 @@ empleados con derecho (una versión por recálculo; la unicidad es por `Year[/Se
 consultas que hoy asumen período (historial, comparativo, `balance-check`, `GetPaymentRegister`
 por `periodId`) filtran `Kind = Ordinary`. FR-005 (segunda liquidación del mismo tipo, período y
 empleado) se hace cumplir en el comando —busca corridas `Draft`/`Stale`/`Approved` del mismo
-`Kind` con el mismo empleado y corte— y el índice es la red. **Transiciones** iguales a la
+`Kind` con el mismo empleado y corte; en `Vacation`, del mismo movimiento (D-32)— y el índice es la red. **Transiciones** iguales a la
 ordinaria: `Draft → Superseded` (recálculo o descarte), `Draft → Approved` (contabiliza en la
 misma transacción; en `Settlement` además cierra la ficha y aplica los descuentos en Cartera),
 `Approved → Reversed` (asiento espejo; en `Settlement` reabre la ficha; en `Vacation` devuelve el
-movimiento a `Registered` y anula las novedades generadas). Una corrida especial no tiene
+movimiento a `Registered` y anula las novedades generadas; si la ordinaria de un período cubierto ya
+está aprobada, se rechaza con `Payroll.Vacation.NoveltyAlreadyPaid`, D-34). Una corrida especial no tiene
 `ExceptionsJson` de período ni `ApprovedWithoutSegregation` distinto: la segregación compara
 aprobador con `CalculatedBy`. `SourceType` contable por tipo: `ServiceBonusRun`, `SeveranceRun`,
 `VacationRun`, `SettlementRun` (la ordinaria sigue con el suyo).

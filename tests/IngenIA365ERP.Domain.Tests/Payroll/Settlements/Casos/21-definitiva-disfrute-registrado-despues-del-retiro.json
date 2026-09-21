@@ -1,0 +1,48 @@
+{
+  "casos": [
+    {
+      "nombre": "Definitiva con un disfrute registrado para después del retiro: se descuenta del saldo y se avisa",
+      "descripcion": "El disfrute ya registrado (y quizá pagado por anticipado, D-01) compromete el saldo igual que en la pantalla; hasta el 2026-09-21 el cargador no lo traía y la definitiva volvía a pagar esos días como pendientes.",
+      "derivacion": "Vinculación 01-01-2025 a 30-11-2026 = 690 días comerciales; causados = 690 × 15 / 360 = 28,75. Disfrute registrado del 01-12 al 15-12-2026 de 12 hábiles → pendientes = 28,75 − 12 = 16,75. VACACIONES_COMP = 16,75 × 100.000 = 1.675.000. Aviso: el disfrute es posterior al retiro.",
+      "tipo": "Settlement",
+      "corte": "2026-11-30",
+      "empleado": {
+        "nombre": "Retiro con disfrute futuro",
+        "ingreso": "2025-01-01",
+        "salarios": [
+          {
+            "desde": "2025-01-01",
+            "mensual": 3000000
+          }
+        ]
+      },
+      "movimientosVacaciones": [
+        {
+          "tipo": "Enjoyment",
+          "desde": "2026-12-01",
+          "hasta": "2026-12-15",
+          "diasHabiles": 12,
+          "diasCalendario": 15
+        }
+      ],
+      "terminacion": {
+        "motivo": "RENUNCIA",
+        "nombreMotivo": "Renuncia voluntaria",
+        "generaIndemnizacion": false
+      },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "VACACIONES_COMP": 1675000
+        },
+        "advertencias": [
+          "posterior al 30/11/2026"
+        ],
+        "vacaciones": {
+          "causados": 28.75,
+          "pendientes": 16.75
+        }
+      }
+    }
+  ]
+}

@@ -11,8 +11,9 @@ namespace IngenIA365ERP.Domain.Payroll.Settlements.Rules;
 /// saldo se deriva, nunca se guarda. El valor del día es el salario ordinario del corte
 /// sin auxilio ni extras (los conceptos con «entra a la base de vacaciones» ya vienen
 /// promediados en <c>MonthlyBases</c>) dividido en 30. En la definitiva se paga el total
-/// pendiente; en un disfrute, los días calendario si la política paga anticipado (D-01);
-/// en una compensación, los hábiles compensados hasta el máximo parametrizado (FR-016).
+/// pendiente; en un disfrute, los días del descanso por el calendario comercial —los mismos que
+/// la ordinaria descuenta— si la política paga anticipado (D-01, D-31); en una compensación, los
+/// hábiles compensados hasta el máximo parametrizado (FR-016).
 /// </summary>
 public static class VacationRule
 {
@@ -53,6 +54,10 @@ public static class VacationRule
                 case VacationMovementKind.SettlementPayout:
                     consumidos += m.BusinessDays;
                     exp.Step($"− {Etiqueta(m.Kind)}{Fechas(m)}", m.BusinessDays);
+                    // Un disfrute o una compensación ya registrados para después del corte (o del retiro)
+                    // comprometen el saldo igual que en la pantalla; si no van a pagarse hay que anularlos.
+                    if (m.Kind != VacationMovementKind.SettlementPayout && m.StartDate is { } inicioMovimiento && inicioMovimiento.Date > fin)
+                        ctx.Warn($"{Etiqueta(m.Kind)}{Fechas(m)} de {Fmt.Num(m.BusinessDays)} días hábiles es posterior al {Fmt.Date(fin)} y ya está registrado: se descuenta del saldo. Si no debe pagarse, anúlelo antes de aprobar.");
                     break;
                 case VacationMovementKind.Adjustment:
                     consumidos -= m.BusinessDays;
@@ -146,11 +151,13 @@ public static class VacationRule
                 if (movimiento.BusinessDays > balance.Pending)
                     ctx.Warn($"El disfrute consume {Fmt.Num(movimiento.BusinessDays)} días hábiles y el empleado tiene {Fmt.Num(balance.Pending)} pendientes: quedan {Fmt.Num(balance.Pending - movimiento.BusinessDays)} (anticipados).");
                 var (diario, baseMensual) = DailyValue(ctx, exp);
-                var valor = movimiento.CalendarDays * diario;
-                exp.Note("Disfrute", $"{Fechas(movimiento).TrimStart()}: {Fmt.Num(movimiento.BusinessDays)} días hábiles, {movimiento.CalendarDays} calendario (D-01: se pagan los días calendario del descanso).");
-                exp.Step($"{movimiento.CalendarDays} días calendario × {Fmt.Money(diario)}", valor);
-                exp.Summary = $"{movimiento.CalendarDays} días × {Fmt.Money(diario)} = {Fmt.Money(valor)}";
-                ctx.Add(LineFactory.Create(def, valor, exp, quantity: movimiento.CalendarDays, baseAmount: baseMensual));
+                var diasPagados = DiasComerciales(movimiento);
+                var valor = diasPagados * diario;
+                exp.Note("Disfrute", $"{Fechas(movimiento).TrimStart()}: {Fmt.Num(movimiento.BusinessDays)} días hábiles, {movimiento.CalendarDays} calendario " +
+                                     $"(D-01 y D-31: se pagan los {diasPagados} días del descanso por el calendario comercial de la nómina, los mismos que la ordinaria descuenta del salario).");
+                exp.Step($"{diasPagados} días del descanso (calendario comercial) × {Fmt.Money(diario)}", valor);
+                exp.Summary = $"{diasPagados} días × {Fmt.Money(diario)} = {Fmt.Money(valor)}";
+                ctx.Add(LineFactory.Create(def, valor, exp, quantity: diasPagados, baseAmount: baseMensual));
                 return;
             }
             case VacationMovementKind.Compensation:
@@ -189,6 +196,15 @@ public static class VacationRule
                 return;
         }
     }
+
+    /// <summary>
+    /// Los días del descanso que la liquidación paga (D-31): los del calendario comercial de la nómina
+    /// entre las fechas del disfrute —el mismo conteo con que la ordinaria descuenta la ausencia—, para
+    /// que salario más vacaciones sumen siempre el mes completo. Los días calendario reales quedan en el
+    /// movimiento para la explicación y la nómina electrónica. Sin fechas, los calendario informados.
+    /// </summary>
+    public static int DiasComerciales(VacationMovementInput movimiento) =>
+        movimiento is { StartDate: { } desde, EndDate: { } hasta } ? CalendarConventions.Days(desde, hasta) : movimiento.CalendarDays;
 
     private static string Etiqueta(VacationMovementKind kind) => kind switch
     {

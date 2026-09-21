@@ -87,7 +87,8 @@ public class LasCorridasViejasQuedanOrdinariasTests
             ["UK_PAY_PayrollRuns_Ordinary_Period_Version"] = (["PayPeriodId", "Version"], 0),
             ["UK_PAY_PayrollRuns_ServiceBonus_Year_Semester_Version"] = (["Year", "Semester", "Version"], 1),
             ["UK_PAY_PayrollRuns_Severance_Year_Version"] = (["Year", "Version"], 2),
-            ["UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version"] = (["EmployeeId", "CutoffDate", "Version"], 3),
+            // D-32: una corrida por movimiento; el corte de un disfrute futuro es «hoy» y dos movimientos del mismo día lo comparten.
+            ["UK_PAY_PayrollRuns_Vacation_Movement_Version"] = (["VacationMovementId", "Version"], 3),
             ["UK_PAY_PayrollRuns_Settlement_Employee_Cutoff_Version"] = (["EmployeeId", "CutoffDate", "Version"], 4),
         };
 

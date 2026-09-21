@@ -1,5 +1,6 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Settlements.Vacation;
 using IngenIA365ERP.Application.Payroll.Vacations;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
@@ -12,9 +13,10 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Vacation;
 
 /// <summary>
 /// Feature 010 US4 (T056): reversar deja el asiento espejo, devuelve el movimiento a <c>Registered</c>
-/// y anula las novedades de ausencia que aún no consumió ninguna nómina aprobada; descartar el
-/// borrador anula el movimiento; anular un movimiento con borrador lo descarta en la misma acción, y
-/// uno ya liquidado exige reversar la corrida.
+/// y anula las novedades de ausencia; si la nómina de un período cubierto ya está aprobada la
+/// reversión se rechaza (D-34: primero se reversa esa nómina); descartar el borrador anula el
+/// movimiento; anular un movimiento con borrador lo descarta en la misma acción, y uno ya liquidado
+/// exige reversar la corrida.
 /// </summary>
 public class ReverseVacationCommandHandlerTests
 {
@@ -64,20 +66,32 @@ public class ReverseVacationCommandHandlerTests
     }
 
     [Fact]
-    public async Task La_novedad_de_un_periodo_ya_aprobado_no_se_anula_al_reversar()
+    public async Task Con_la_nomina_de_un_periodo_cubierto_ya_aprobada_la_reversion_se_rechaza_y_pasa_cuando_esa_nomina_se_reversa()
     {
+        // D-34. Hasta el 2026-09-21 la reversión pasaba en silencio: la novedad de julio quedaba activa en un
+        // período inmutable y el movimiento en Registered sin salida (ni anular, ni recalcular, ni registrar otro).
         var (d, runId, movementId) = await AprobadaAsync();
         var julio = await d.Db.PayPeriods.SingleAsync(p => p.StartDate == new DateTime(2026, 7, 1));
         julio.Status = PayPeriodStatus.Approved;
         await d.Db.SaveChangesAsync();
 
-        var r = await VacacionesDePrueba.Reversar(d, Contadora).Handle(new ReverseVacationCommand(runId, "Reversión con julio ya pagado"), CancellationToken.None);
+        var rechazo = await VacacionesDePrueba.Reversar(d, Contadora).Handle(new ReverseVacationCommand(runId, "Reversión con julio ya pagado"), CancellationToken.None);
+
+        rechazo.Error.Code.Should().Be("Payroll.Vacation.NoveltyAlreadyPaid");
+        rechazo.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { periodPublicId = julio.PublicId, ordinaryRunPublicId = (Guid?)null });
+        (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == runId)).Status.Should().Be(PayrollRunStatus.Approved, "nada cambió");
+        (await d.Db.VacationMovements.SingleAsync(m => m.PublicId == movementId)).Status.Should().Be(VacationMovementStatus.Liquidated);
+        (await d.Db.PayrollNovelties.Where(n => n.Origin == NoveltyOrigin.VacationLeave).ToListAsync()).Should().OnlyContain(n => n.Status == NoveltyStatus.Active);
+
+        // Reversar la ordinaria de julio reabre el período; entonces la liquidación sí se reversa y las dos novedades caen.
+        julio.Status = PayPeriodStatus.Open;
+        await d.Db.SaveChangesAsync();
+        var r = await VacacionesDePrueba.Reversar(d, Contadora).Handle(new ReverseVacationCommand(runId, "Reversión con julio reabierto"), CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var movimiento = await d.Db.VacationMovements.SingleAsync(m => m.PublicId == movementId);
-        var novedades = await d.Db.PayrollNovelties.Include(n => n.PayPeriod).Where(n => n.VacationMovementId == movimiento.Id).ToListAsync();
-        novedades.Single(n => n.PayPeriod!.StartDate.Month == 7).Status.Should().Be(NoveltyStatus.Active, "la nómina de julio ya la pagó: es inmutable");
-        novedades.Single(n => n.PayPeriod!.StartDate.Month == 8).Status.Should().Be(NoveltyStatus.Cancelled);
+        movimiento.Status.Should().Be(VacationMovementStatus.Registered);
+        (await d.Db.PayrollNovelties.Where(n => n.VacationMovementId == movimiento.Id).ToListAsync()).Should().HaveCount(2).And.OnlyContain(n => n.Status == NoveltyStatus.Cancelled);
     }
 
     [Fact]

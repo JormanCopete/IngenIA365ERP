@@ -31179,8 +31179,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("TerminationId");
 
-                    b.HasIndex("VacationMovementId");
-
                     b.HasIndex("Kind", "Status")
                         .HasDatabaseName("IX_PAY_PayrollRuns_Kind_Status");
 
@@ -31206,7 +31204,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique()
                         .HasFilter("[Kind] = 4");
 
-                    b.HasIndex(new[] { "EmployeeId", "CutoffDate", "Version" }, "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version")
+                    b.HasIndex(new[] { "VacationMovementId", "Version" }, "UK_PAY_PayrollRuns_Vacation_Movement_Version")
                         .IsUnique()
                         .HasFilter("[Kind] = 3");
 
