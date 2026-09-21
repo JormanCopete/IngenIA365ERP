@@ -131,7 +131,7 @@ public class AltaDePersonaEnUnPasoTests(CentralIdentityApiFixture fx)
     // ------------------------------------------------------------------------- US3 --
 
     [Fact]
-    public async Task Las_banderas_no_se_pisan_y_terminar_apaga_solo_empleado()
+    public async Task Las_banderas_no_se_pisan_y_la_ruta_vieja_de_terminar_ya_no_existe()
     {
         var ctx = await PrepararAsync(fx);
         using var http = fx.CreateClient();
@@ -162,27 +162,13 @@ public class AltaDePersonaEnUnPasoTests(CentralIdentityApiFixture fx)
         persona.GetProperty("isCustomer").GetBoolean().Should().BeTrue("las simples sí se editan");
         persona.GetProperty("email").GetString().Should().Contain("elena.nueva");
 
-        // Terminar apaga sólo «Empleado». El motivo es texto libre (hasta 120; antes la columna
-        // era el código de 4 caracteres de SOLIDO y «Renuncia» daba 500).
-        var fin = await EnviarAsync(http, ctx.TokenAdmin, HttpMethod.Post, $"/api/payroll/employees/{empleadoId}/terminate",
+        // Feature 010 (US3): terminar el contrato ya no es POST /employees/{id}/terminate (retirado sin
+        // alias, responde 404): el retiro se registra en /api/payroll/settlements/terminations y la ficha se
+        // cierra al aprobar la definitiva. Que aquello apaga sólo «Empleado» y que el reingreso es una ficha
+        // nueva lo recorre LiquidacionDefinitivaTests; aquí sólo queda constancia de que la ruta vieja no existe.
+        var viejo = await EnviarAsync(http, ctx.TokenAdmin, HttpMethod.Post, $"/api/payroll/employees/{empleadoId}/terminate",
             new { terminationDate = new DateTime(2026, 10, 31), terminationCause = "Renuncia voluntaria" });
-        fin.IsSuccessStatusCode.Should().BeTrue(await fin.Content.ReadAsStringAsync());
-        persona = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people/{personaId}");
-        persona.GetProperty("isEmployee").GetBoolean().Should().BeFalse();
-        persona.GetProperty("isAssociate").GetBoolean().Should().BeTrue();
-
-        // Sin ficha viva, by-person es 404 (la pantalla pasa a modo registro).
-        var sinViva = await EnviarAsync(http, ctx.TokenAdmin, HttpMethod.Get, $"/api/payroll/employees/by-person/{personaId}", null);
-        sinViva.StatusCode.Should().Be(HttpStatusCode.NotFound);
-
-        // Reingreso = ficha nueva; by-person devuelve la viva, no la retirada.
-        var reingreso = await EnviarAsync(http, ctx.TokenAdmin, HttpMethod.Post, "/api/payroll/employees",
-            new { personPublicId = personaId, baseSalary = 2_900_000m, contractType = 1, hireDate = new DateTime(2027, 1, 15) });
-        reingreso.StatusCode.Should().Be(HttpStatusCode.Created, await reingreso.Content.ReadAsStringAsync());
-        var nuevaFicha = (await LeerAsync(reingreso)).GetGuid();
-        nuevaFicha.Should().NotBe(empleadoId);
-        var viva = await GetAsync(http, ctx.TokenAdmin, $"/api/payroll/employees/by-person/{personaId}");
-        viva.GetProperty("publicId").GetGuid().Should().Be(nuevaFicha);
+        viejo.StatusCode.Should().Be(HttpStatusCode.NotFound, "la ruta heredada se retiró sin alias (feature 010, US3)");
         (await GetAsync(http, ctx.TokenAdmin, $"/api/core/people/{personaId}")).GetProperty("isEmployee").GetBoolean().Should().BeTrue();
     }
 

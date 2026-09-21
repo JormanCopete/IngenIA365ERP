@@ -1,6 +1,5 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
-using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.TerminateEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Queries;
 using IngenIA365ERP.Application.Tests.Core.People;
 using Microsoft.EntityFrameworkCore;
@@ -97,10 +96,16 @@ public class RegisterEmployeeCommandHandlerTests
         var registrar = new RegisterEmployeeCommandHandler(d.Db, d.Empleados);
         var primera = await registrar.Handle(Comando(p.PublicId), CancellationToken.None);
 
-        var terminar = new TerminateEmployeeCommandHandler(d.Db, d.Clock, d.User);
-        var t = await terminar.Handle(new TerminateEmployeeCommand(primera.Value, new DateTime(2026, 10, 31), "Renuncia"), CancellationToken.None);
-        t.IsSuccess.Should().BeTrue(t.Error.Message);
-        (await d.Db.People.SingleAsync(x => x.Id == p.Id)).IsEmployee.Should().BeFalse("terminar apaga sólo «Empleado»");
+        // Feature 010 (US3): la ficha la cierra la aprobación de la liquidación definitiva
+        // (ApproveSettlementCommand, probado en Settlements/Settlement); aquí se deja el mismo estado
+        // que ella deja —Status -1, fecha de retiro, persona sin la bandera de empleado— para probar el reingreso.
+        var retirada = await d.Db.Employees.SingleAsync(e => e.PublicId == primera.Value);
+        retirada.Status = -1;
+        retirada.TerminationDate = new DateTime(2026, 10, 31);
+        retirada.TerminationCause = "Renuncia voluntaria";
+        var personaRetirada = await d.Db.People.SingleAsync(x => x.Id == p.Id);
+        personaRetirada.IsEmployee = false;
+        await d.Db.SaveChangesAsync();
 
         var segunda = await registrar.Handle(Comando(p.PublicId) with { HireDate = new DateTime(2027, 1, 15) }, CancellationToken.None);
         segunda.IsSuccess.Should().BeTrue(segunda.Error.Message);
