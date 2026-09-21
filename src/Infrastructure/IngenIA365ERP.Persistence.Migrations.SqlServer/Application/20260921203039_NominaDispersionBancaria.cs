@@ -11,16 +11,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns");
-
-            migrationBuilder.DropIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
-                schema: "dbo",
-                table: "PAY_PayrollRuns");
-
             migrationBuilder.AddColumn<int>(
                 name: "BankDisbursementFileId",
                 schema: "dbo",
@@ -245,14 +235,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
-                schema: "dbo",
-                table: "PAY_PayrollRuns",
-                columns: new[] { "VacationMovementId", "Version" },
-                unique: true,
-                filter: "[Kind] = 3");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_PAY_PayrollPayments_BankDisbursementFileId",
                 schema: "dbo",
                 table: "PAY_PayrollPayments",
@@ -386,11 +368,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo");
 
             migrationBuilder.DropIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Movement_Version",
-                schema: "dbo",
-                table: "PAY_PayrollRuns");
-
-            migrationBuilder.DropIndex(
                 name: "IX_PAY_PayrollPayments_BankDisbursementFileId",
                 schema: "dbo",
                 table: "PAY_PayrollPayments");
@@ -399,20 +376,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 name: "BankDisbursementFileId",
                 schema: "dbo",
                 table: "PAY_PayrollPayments");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PAY_PayrollRuns_VacationMovementId",
-                schema: "dbo",
-                table: "PAY_PayrollRuns",
-                column: "VacationMovementId");
-
-            migrationBuilder.CreateIndex(
-                name: "UK_PAY_PayrollRuns_Vacation_Employee_Cutoff_Version",
-                schema: "dbo",
-                table: "PAY_PayrollRuns",
-                columns: new[] { "EmployeeId", "CutoffDate", "Version" },
-                unique: true,
-                filter: "[Kind] = 3");
         }
     }
 }

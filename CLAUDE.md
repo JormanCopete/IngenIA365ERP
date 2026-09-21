@@ -296,8 +296,37 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   y los de N2–N4) los siembra la API al arrancar, **no el DbMigrator**. Dos migraciones
   aditivas (`NominaPrestacionesYDian`, `SettlementDeductionsUnicosEntreVivas`). Receta:
   `docs/manual/liquidaciones-especiales.md`; runbook `docs/operaciones/nomina-primer-periodo.md` §4d.
-  N2 (PILA + procedimiento 2), N3 (nómina electrónica: servicio central **sin estado**, modo
-  «software propio» de cada cooperativa primero) y N4 (dispersión AV Villas) siguen pendientes.
+  N2 (PILA + procedimiento 2) y N3 (nómina electrónica: servicio central **sin estado**, modo
+  «software propio» de cada cooperativa primero) siguen pendientes.
+
+- **Dispersión bancaria (feature 010, entrega N4, misma rama, 2026-09-21)**: la nómina paga por
+  archivo plano y «marcar enviado» deja pagados a todos los del archivo en una transacción
+  (`PayrollPayment` con `BankDisbursementFileId`, medio `Transfer`, la misma referencia; la corrida ya
+  no se reversa). **El formato es un dato de Core ligado al banco, no de nómina** (D-42, pedido del
+  dueño para que los planos de otros bancos y los pagos de tesorería y contabilidad usen lo mismo):
+  `COR_BankFileFormats`/`COR_BankFileFormatFields` con `BankId` nulo = genérico, `Scope`
+  (`PayrollDisbursement`, `SeveranceDeposit`, `SupplierPayments` reservado) y vigencia; **un solo motor**,
+  `Application/Common/BankFiles/FlatFileWriter`, que no conoce la nómina —recibe contexto (empresa,
+  cuenta origen, lote) y líneas con orígenes genéricos `Payee*`/`Amount`/`Concept`; los `Employee*`,
+  `NetAmount`, `PaymentConcept` del contrato son sinónimos—; nómina aporta `PayrollDisbursementLines` y
+  guarda sus archivos inmutables en `PAY_BankDisbursementFiles`/`Lines` (adjunto no borrable con
+  SHA-256, subido **antes** de guardar la fila); la consignación de cesantías por fondo ya escribe con
+  el mismo motor. Reglas: dos formatos activos del mismo banco y ámbito no se cruzan en el tiempo
+  (los genéricos tampoco entre sí, `Core.BankFileFormat.Overlaps`); uno que ya generó archivos **no
+  cambia de estructura** (`InUse`: se cierra la vigencia y se crea la versión nueva); la cuenta origen
+  no va en el formato sino que se elige al generar entre las cuentas bancarias del plan
+  (`GET /api/accounting/accounts/bank-accounts`) y debe ser del banco del formato; un empleado va a lo
+  sumo a un archivo no anulado de su corrida; un archivo `Sent` no se anula (las marcas se retiran una a
+  una). **D-10 resuelto**: `COR_Banks.TransferCode` **es** el código ACH (el `codtras` de SOLIDO); sin él
+  el empleado queda en pendientes (`BankCodeMissing`), igual que sin cuenta (`NoBankAccount`). Rutas
+  `/api/core/bank-file-formats` (`Core.BankFileFormats.View/Manage`) y `/api/payroll/disbursements`
+  (`Payroll.Disbursement.View/Generate/MarkSent`); pantallas `/maestros/formatos-bancarios` (campo a
+  campo o JSON pegado, vista previa con una corrida real) y `/nomina/dispersion`; botón «Archivo de
+  dispersión» en las cinco relaciones de pago; vista `dispersion` del centro de reportes. Semilla
+  `CSV-GENERICO` (Order 76); `AVVILLAS-1` inactivo y sin campos sólo si hay un banco «VILLAS»: el layout
+  real de AV Villas lo aporta el dueño (T147) y se carga como dato. Migración aditiva
+  `NominaDispersionBancaria` (su scaffold arrastró un cambio de índice de vacaciones ya hecho y se
+  limpió antes de salir). Receta: `docs/manual/dispersion-bancaria.md`; runbook §4e.
 
 ## Arquitectura
 Clean Architecture en 4 capas:
@@ -307,22 +336,22 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-21 (cierre de N1 de la feature 010, en su rama), remedida. **Son cifras que
+Instantánea del 2026-09-21 (cierre de N4 de la feature 010, en su rama), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 702 (2026-09-21; la 010 N1 sumó 52 rutas de liquidaciones, políticas, festivos, saldos iniciales y 7 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 172 con `@page` (2026-09-21; la 010 N1 sumó 7) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | 717 (2026-09-21; la 010 N1 sumó 52 y la N4 15: 6 de formatos en Core, 7 de dispersión, 1 de cuentas bancarias del plan y 1 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 174 con `@page` (2026-09-21; la 010 N1 sumó 7 y la N4 2: `/nomina/dispersion`, `/maestros/formatos-bancarios`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.413 el 2026-09-21 (200 Domain, 1.035 Application, 106 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 161 el 2026-09-21 con Docker: 160 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.431 el 2026-09-21 (200 Domain, 1.052 Application, 107 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 162 el 2026-09-21 con Docker: 161 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
-corriendo. Las 10 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
+corriendo. Las 11 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
 `PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,

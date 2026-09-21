@@ -465,24 +465,33 @@ disponibles) y un mes de comisiones altas.
 3. Calcular la primera quincena de enero de 2027: la línea de retención de J usa el porcentaje
    nuevo y su explicación lo referencia; el motor ordinario no cambió.
 
-### 3.8 Dispersión AV Villas (US8)
+### 3.8 Dispersión bancaria (US8) — corrido el 2026-09-21 por `DispersionTests`
 
-Relación de pago de la prima (§3.1) con tres empleados, uno sin cuenta bancaria en la ficha.
+Nómina mensual aprobada con tres empleados, dos con banco, tipo y número de cuenta en la ficha y
+uno sin. Antes: los bancos con «Código de transferencia (ACH)», la cuenta bancaria del plan bajo
+`111005` con banco y número, la empresa registrada y el formato del banco en
+Maestros › Formatos bancarios (`CSV-GENERICO` viene sembrado; `DEMO-ANCHOFIJO` del contrato §2.2
+se carga por `POST /api/core/bank-file-formats`).
 
-1. Desde la relación de pago › **Generar archivo de dispersión**: formato vigente de AV Villas
-   (fila de `PAY_BankDisbursementFormats` cargada con la estructura que aportó el dueño, §6.1); una línea
-   por empleado con cuenta (tipo de documento, documento, nombre, código del banco destino desde
-   `COR_Banks.TransferCode`, tipo 1/2 y número de cuenta, neto, referencia); el tercero aparece en
-   **pendientes** para otro medio. Totales del archivo = suma de los netos incluidos.
-2. Descargar; cargar en el portal AV Villas Empresas (§6.1); guardar la captura de aceptación
-   (SC-007).
-3. **Marcar enviado** con la referencia del banco: los dos empleados quedan pagados con la misma
-   fecha, medio `Transfer` y `Reference` = referencia del archivo (`MarkPaymentsCommand`), en una
-   sola acción; la reversión de esa liquidación queda bloqueada como con la marca manual. El
-   tercero se paga a mano como hoy.
-4. Cambiar de formato con vigencia desde mañana: el archivo de hoy conserva el suyo; el de
-   mañana usa el nuevo. Toda liquidación especial genera su propio archivo con fecha propia
-   (FR-011a).
+1. Relación de pago › **Archivo de dispersión**: cuenta origen, formato (el vigente del banco de
+   la cuenta o el genérico), fecha de pago y referencia. **Vista previa**: dos líneas (tipo de
+   documento, documento, nombre, código ACH del banco destino, tipo 1/2 y cuenta, neto en centavos
+   implícitos, concepto) y el tercero en **pendientes** con `NoBankAccount`; no persiste nada.
+2. **Generar**: archivo `DEMO20260505.txt` con cabecera (48), dos detalles (114) y totales (24),
+   `lineCount = 2`, total = suma de los dos netos, un excluido; detalle con el texto de cada
+   registro y estado `Generated`.
+3. **Descargar**: `text/plain; charset=us-ascii`, CRLF, SHA-256 igual a la huella guardada. La vista
+   `dispersion` del centro de reportes sale en JSON y en Excel. Cargar en el portal del banco.
+4. Sin permiso (`ReadOnly`) marcar enviado responde 404 `Generic.NotFound`.
+5. **Marcar enviado** con la referencia del banco: `markedPaid = 2`; la relación de pago muestra los
+   dos pagados por `Transfer` con la misma `Reference` y el tercero sin pagar; el archivo pasa a
+   `Sent`; reversar la corrida responde 422 `Payroll.PaymentBlocksReversal`.
+6. Un archivo enviado no se anula (422); editar la estructura del formato usado responde 422
+   `Core.BankFileFormat.InUse`; otro archivo de la misma corrida no tiene a quién llevar
+   (`Payroll.Disbursement.NothingToPay`) porque el pendiente sigue sin cuenta.
+7. Cambiar de formato con vigencia desde mañana: el archivo de hoy conserva el suyo; el de mañana
+   usa el nuevo (`FlatFileWriterTests`/`DisbursementCommandsTests`). Toda liquidación especial
+   genera su propio archivo con fecha propia (FR-011a).
 
 ## 4. QA por rol
 
