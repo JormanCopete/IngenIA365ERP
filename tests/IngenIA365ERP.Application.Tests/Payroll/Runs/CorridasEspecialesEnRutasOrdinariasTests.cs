@@ -137,8 +137,14 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         modelo.PlanName.Should().Be("prima de servicios");
     }
 
+    /// <summary>
+    /// D-28 (spec US3 escenario 1, FR-020): el último tramo lo paga la definitiva como SALARIO_PENDIENTE,
+    /// así que el empleado con definitiva aprobada dentro del período (o antes) no entra a la ordinaria de
+    /// ese período. Hasta la revisión de N1 el cargador lo conservaba «por los días hasta el retiro» y el
+    /// salario, el auxilio y las deducciones de ley de esos días salían dos veces.
+    /// </summary>
     [Fact]
-    public async Task La_nomina_ordinaria_excluye_al_retirado_con_definitiva_aprobada_antes_del_periodo_y_liquida_por_dias_al_retirado_dentro()
+    public async Task La_nomina_ordinaria_excluye_al_retirado_con_definitiva_aprobada_antes_o_dentro_del_periodo()
     {
         var d = new NominaTestData();
         var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
@@ -147,15 +153,25 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         // Luis: definitiva aprobada en febrero, la ficha aún no cerrada (Status vigente): FR-005 lo saca de marzo.
         var luis = d.Empleado("Luis", 1_800_000m, new DateTime(2025, 6, 1));
         d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = luis.Id, TerminationDate = new DateOnly(2026, 2, 20), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
-        // Marta: se retira el 10 de marzo con definitiva aprobada: entra por los días hasta el retiro.
-        var marta = d.Empleado("Marta", 1_800_000m, new DateTime(2025, 6, 1));
+        // Marta: se retira el 10 de marzo con definitiva aprobada: la definitiva pagó del 1 al 10, no entra.
+        var marta = d.Empleado("Marta", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 10));
         d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = marta.Id, TerminationDate = new DateOnly(2026, 3, 10), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
+        // Pedro: se retira el 31 de marzo (último día) con definitiva aprobada: tampoco entra, aunque la ficha no recorte días.
+        var pedro = d.Empleado("Pedro", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 31));
+        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = pedro.Id, TerminationDate = new DateOnly(2026, 3, 31), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
+        // Rosa: ficha cerrada el 20 de marzo por el camino anterior, sin definitiva: se liquida por los días hasta el retiro.
+        var rosa = d.Empleado("Rosa", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 20));
+        // Elena: definitiva aprobada con retiro en abril: marzo la liquida completa.
+        var elena = d.Empleado("Elena", 1_800_000m, new DateTime(2025, 6, 1));
+        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = elena.Id, TerminationDate = new DateOnly(2026, 4, 5), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
         await d.Db.SaveChangesAsync();
 
         var batch = await d.Loader.LoadAsync(d.Marzo, CancellationToken.None);
 
-        batch.Employees.Select(e => e.Employee.Id).Should().BeEquivalentTo([d.Ana.Id, marta.Id]);
-        batch.Employees.Single(e => e.Employee.Id == marta.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 10));
+        batch.Employees.Select(e => e.Employee.Id).Should().BeEquivalentTo([d.Ana.Id, rosa.Id, elena.Id],
+            "Luis, Marta y Pedro tienen definitiva aprobada hasta el fin de marzo: su último tramo ya lo pagó la definitiva (D-28)");
+        batch.Employees.Single(e => e.Employee.Id == rosa.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 20));
+        batch.Employees.Single(e => e.Employee.Id == elena.Id).Input.TerminationDate.Should().BeNull();
         batch.Employees.Single(e => e.Employee.Id == d.Ana.Id).Input.TerminationDate.Should().BeNull();
     }
 }

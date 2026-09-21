@@ -285,13 +285,15 @@ public sealed class SettlementInputLoader(
         var movimientosPorEmpleado = movimientos.ToLookup(m => m.EmployeeId);
         var saldosProvision = await provisiones.LeerAsync(idsEmpleados, corte, excludeRunId: null, ct);
 
-        // --- prima pagada en corridas aprobadas del semestre del corte: definitivas (FR-009) y la semestral (D-28) ---
+        // --- prima pagada en corridas aprobadas del semestre del corte: definitivas (FR-009) y, para la
+        // definitiva, la semestral aprobada antes de registrar el retiro (D-28) ---
         var (semInicio, semFin) = SemestreDe(corte);
+        var esDefinitiva = request.Kind == SettlementKind.Settlement;
         var primasPagadas = await (
             from l in db.PayrollRunLines.AsNoTracking()
             join re in db.PayrollRunEmployees.AsNoTracking() on l.PayrollRunEmployeeId equals re.Id
             join r in db.PayrollRuns.AsNoTracking() on re.PayrollRunId equals r.Id
-            where idsEmpleados.Contains(re.EmployeeId) && (r.Kind == PayrollRunKind.Settlement || r.Kind == PayrollRunKind.ServiceBonus)
+            where idsEmpleados.Contains(re.EmployeeId) && (r.Kind == PayrollRunKind.Settlement || (esDefinitiva && r.Kind == PayrollRunKind.ServiceBonus))
                   && r.Status == PayrollRunStatus.Approved
                   && r.CutoffDate >= semInicio && r.CutoffDate <= semFin
                   && l.ConceptCode == WellKnownConceptCodes.ServiceBonus
