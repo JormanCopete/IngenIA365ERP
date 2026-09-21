@@ -149,7 +149,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
     DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
-    DbSet<LoanPortfolio> IApplicationDbContext.LoanPortfolios => throw new NotImplementedException();
+    // Feature 010: la definitiva lee Cartera por persona (FR-018a).
+    public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
     DbSet<LendingTransaction> IApplicationDbContext.LendingTransactions => throw new NotImplementedException();
     DbSet<PendingInstallment> IApplicationDbContext.PendingInstallments => throw new NotImplementedException();
     DbSet<CreditLineParameter> IApplicationDbContext.CreditLineParameters => throw new NotImplementedException();
@@ -349,6 +350,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<WithholdingRateCalculation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<WithholdingRateCalculationMonth>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SeveranceFundDeposit>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<LoanPortfolio>(b =>
+        {
+            b.Ignore(l => l.Person); b.Ignore(l => l.CreditLine); b.Ignore(l => l.Transactions); b.Ignore(l => l.PendingInstallments);
+            b.Ignore(l => l.ExtraPayments); b.Ignore(l => l.Guarantees); b.Ignore(l => l.DefaultRecords); b.Ignore("RowVersion");
+        });
     }
 }
 

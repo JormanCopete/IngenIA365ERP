@@ -86,7 +86,7 @@ public static class VacationRule
     /// <summary>Definitiva: paga en dinero todos los días hábiles pendientes (CST art. 189 num. 2; Ley 995/2005).</summary>
     public static void EvaluateSettlementPayout(SettlementContext ctx)
     {
-        var code = SettlementConceptCodes.VacationsCompensated;
+        var code = WellKnownConceptCodes.VacationCompensation;
         if (ctx.BenefitsExclusion(forVacations: true) is { } exclusion)
         {
             ctx.Skip(code, exclusion, SettlementContext.ExclusionText(exclusion));
@@ -123,7 +123,7 @@ public static class VacationRule
         }
         if (ctx.BenefitsExclusion(forVacations: true) is { } exclusion)
         {
-            ctx.Skip(SettlementConceptCodes.VacationsEnjoyed, exclusion, SettlementContext.ExclusionText(exclusion));
+            ctx.Skip(WellKnownConceptCodes.VacationPayout, exclusion, SettlementContext.ExclusionText(exclusion));
             return;
         }
 
@@ -134,7 +134,7 @@ public static class VacationRule
         {
             case VacationMovementKind.Enjoyment:
             {
-                var code = SettlementConceptCodes.VacationsEnjoyed;
+                var code = WellKnownConceptCodes.VacationPayout;
                 if (!ctx.Policies.VacacionesPagoAnticipado)
                 {
                     ctx.Skip(code, SettlementReasonCodes.LoPagaLaNominaOrdinaria,
@@ -155,7 +155,7 @@ public static class VacationRule
             }
             case VacationMovementKind.Compensation:
             {
-                var code = SettlementConceptCodes.VacationsCompensated;
+                var code = WellKnownConceptCodes.VacationCompensation;
                 var def = ctx.Concept(code);
                 if (def is null) return;
                 var pct = ctx.Parameters.Fraction(SettlementParameterCodes.VacationCompensablePct);

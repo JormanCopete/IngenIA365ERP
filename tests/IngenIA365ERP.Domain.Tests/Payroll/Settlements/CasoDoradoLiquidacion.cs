@@ -429,30 +429,30 @@ public static class ConceptosDeLiquidacion
             lista.Add(d);
         }
 
-        Falta(SettlementConceptCodes.ServiceBonus, "Prima de servicios", ConceptNature.Earning, d => d.AffectsWithholdingBase = true);
-        Falta(SettlementConceptCodes.Severance, "Cesantías", ConceptNature.Earning);
-        Falta(SettlementConceptCodes.SeveranceInterest, "Intereses a las cesantías", ConceptNature.Earning);
-        Falta(SettlementConceptCodes.VacationsEnjoyed, "Vacaciones disfrutadas (liquidación)", ConceptNature.Earning, d => d.AffectsWithholdingBase = true);
-        Falta(SettlementConceptCodes.VacationsCompensated, "Vacaciones compensadas en dinero", ConceptNature.Earning, d =>
+        Falta(WellKnownConceptCodes.ServiceBonus, "Prima de servicios", ConceptNature.Earning, d => d.AffectsWithholdingBase = true);
+        Falta(WellKnownConceptCodes.Severance, "Cesantías", ConceptNature.Earning);
+        Falta(WellKnownConceptCodes.SeveranceInterest, "Intereses a las cesantías", ConceptNature.Earning);
+        Falta(WellKnownConceptCodes.VacationPayout, "Vacaciones disfrutadas (liquidación)", ConceptNature.Earning, d => d.AffectsWithholdingBase = true);
+        Falta(WellKnownConceptCodes.VacationCompensation, "Vacaciones compensadas en dinero", ConceptNature.Earning, d =>
         {
             d.AffectsContributionBase = true; d.AffectsWithholdingBase = true;
         });
-        Falta(SettlementConceptCodes.SeverancePay, "Indemnización por despido sin justa causa", ConceptNature.Earning);
-        Falta(SettlementConceptCodes.RetirementBonus, "Bonificación por retiro", ConceptNature.Earning, d => d.IsAutomatic = false);
-        Falta(SettlementConceptCodes.PendingSalary, "Salario de los días pendientes", ConceptNature.Earning, d =>
+        Falta(WellKnownConceptCodes.Indemnity, "Indemnización por despido sin justa causa", ConceptNature.Earning);
+        Falta(WellKnownConceptCodes.RetirementBonus, "Bonificación por retiro", ConceptNature.Earning, d => d.IsAutomatic = false);
+        Falta(WellKnownConceptCodes.PendingSalary, "Salario de los días pendientes", ConceptNature.Earning, d =>
         {
             d.AffectsSalaryBase = d.AffectsContributionBase = d.AffectsBenefitsBase = d.AffectsWithholdingBase = true;
         });
-        Falta(SettlementConceptCodes.ServiceBonusProvisionAdjustment, "Ajuste de provisión de prima", ConceptNature.Provision);
-        Falta(SettlementConceptCodes.SeveranceProvisionAdjustment, "Ajuste de provisión de cesantías", ConceptNature.Provision);
-        Falta(SettlementConceptCodes.SeveranceInterestProvisionAdjustment, "Ajuste de provisión de intereses a las cesantías", ConceptNature.Provision);
-        Falta(SettlementConceptCodes.VacationProvisionAdjustment, "Ajuste de provisión de vacaciones", ConceptNature.Provision);
-        Falta(SettlementConceptCodes.ServiceBonusWithholding, "Retención en la fuente sobre la prima", ConceptNature.Deduction, d =>
+        Falta(WellKnownConceptCodes.ServiceBonusProvisionAdjustment, "Ajuste de provisión de prima", ConceptNature.Provision);
+        Falta(WellKnownConceptCodes.SeveranceProvisionAdjustment, "Ajuste de provisión de cesantías", ConceptNature.Provision);
+        Falta(WellKnownConceptCodes.SeveranceInterestProvisionAdjustment, "Ajuste de provisión de intereses a las cesantías", ConceptNature.Provision);
+        Falta(WellKnownConceptCodes.VacationProvisionAdjustment, "Ajuste de provisión de vacaciones", ConceptNature.Provision);
+        Falta(WellKnownConceptCodes.WithholdingOnServiceBonus, "Retención en la fuente sobre la prima", ConceptNature.Deduction, d =>
         {
             d.CalculationKind = CalculationKind.RangeTable; d.TableParameterCode = LegalParameterCodes.WithholdingTableUvt;
         });
-        Falta(SettlementConceptCodes.SeveranceWithholding, "Retención en la fuente sobre cesantías e intereses", ConceptNature.Deduction);
-        Falta(SettlementConceptCodes.SeverancePayWithholding, "Retención en la fuente sobre la indemnización", ConceptNature.Deduction);
+        Falta(WellKnownConceptCodes.WithholdingOnSeverance, "Retención en la fuente sobre cesantías e intereses", ConceptNature.Deduction);
+        Falta(WellKnownConceptCodes.WithholdingOnIndemnity, "Retención en la fuente sobre la indemnización", ConceptNature.Deduction);
         return lista;
     }
 }

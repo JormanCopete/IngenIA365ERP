@@ -77,6 +77,13 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Services.PayrollAccountingPoster>();
         services.AddScoped<Payroll.Services.IPayrollRunStaleMarker, Payroll.Services.PayrollRunStaleMarker>();
         services.AddScoped<Payroll.Services.PayrollAuditEmitter>();
+        // Feature 010 — liquidaciones especiales: cargador, saldo de provisiones, contabilizador
+        // sobre el de nómina, persistencia y ciclo de vida comunes a las cuatro (T026-T028).
+        services.AddScoped<Payroll.Services.ProvisionBalanceReader>();
+        services.AddScoped<Payroll.Services.SettlementInputLoader>();
+        services.AddScoped<Payroll.Services.SettlementAccountingPoster>();
+        services.AddScoped<Payroll.Settlements.Common.SettlementRunPersister>();
+        services.AddScoped<Payroll.Settlements.Common.SettlementRunWorkflow>();
         // Feature 009: mismo molde para contabilidad (exportaciones, envios, configuracion).
         services.AddScoped<Accounting.Reports.AccountingAuditEmitter>();
         // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad

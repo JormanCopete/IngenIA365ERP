@@ -3,7 +3,9 @@ using IngenIA365ERP.Application.Payroll.LegalParameters;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Payroll.Calculation;
+using IngenIA365ERP.Domain.Payroll.Policies;
 using IngenIA365ERP.Persistence.Seeding;
 using IngenIA365ERP.Persistence.Seeding.Parametric;
 using Microsoft.EntityFrameworkCore;
@@ -18,10 +20,9 @@ namespace IngenIA365ERP.Application.Tests.Infrastructure;
 /// exponen <c>AplicarAsync(IApplicationDbContext)</c>).
 ///
 /// <para>
-/// Pendiente de la ola 2 (cuando existan las entidades <c>TerminationReason</c>, <c>Holiday</c> y
-/// <c>CompanyPolicy</c> y sus seeders): <c>TerminationReasonsSeeder</c> no cambia
-/// <c>GeneratesSeverancePay</c> de un motivo existente; <c>HolidaysSeeder</c> no pisa un festivo
-/// <c>Decreed</c>; <c>CompanyPoliciesSeeder</c> no pisa una vigencia existente.
+/// Y los tres de la feature 010 (T017): <see cref="TerminationReasonsSeeder"/> no cambia
+/// <c>GeneratesSeverancePay</c> de un motivo existente; <see cref="HolidaysSeeder"/> no pisa un
+/// festivo <c>Decreed</c>; <see cref="CompanyPoliciesSeeder"/> no pisa una vigencia existente.
 /// </para>
 /// </summary>
 public class SemillasDeNominaIdempotentesTests
@@ -275,5 +276,109 @@ public class SemillasDeNominaIdempotentesTests
         var custom = await db.PayrollConceptDefinitions.SingleAsync(c => c.Code == "BONO_COOP");
         custom.DianElement.Should().Be("Devengados/OtrosConceptos/ConceptoS");
         custom.UpdatedBy.Should().BeNull();
+    }
+
+    // ---------------------------------------------------- motivos de retiro (010) --
+
+    [Fact]
+    public async Task Los_motivos_de_retiro_se_siembran_una_vez_con_su_marca_legal()
+    {
+        using var db = TestDbContextFactory.Create();
+
+        var primera = await TerminationReasonsSeeder.AplicarAsync(db, CancellationToken.None);
+        var segunda = await TerminationReasonsSeeder.AplicarAsync(db, CancellationToken.None);
+
+        primera.Should().Be(9);
+        segunda.Should().Be(0);
+        var motivos = await db.TerminationReasons.ToListAsync();
+        motivos.Select(m => m.Code).Should().BeEquivalentTo(["RENUNCIA", "DESP_SINJC", "DESP_JC", "VENC_TERM", "MUTUO_ACDO", "FIN_OBRA", "PER_PRUEBA", "MUERTE", "PENSION"]);
+        motivos.Where(m => m.GeneratesSeverancePay).Select(m => m.Code).Should().ContainSingle("sólo el despido sin justa causa indemniza (CST art. 64)").Which.Should().Be("DESP_SINJC");
+        motivos.Should().OnlyContain(m => m.IsSeeded && m.IsActive && !string.IsNullOrWhiteSpace(m.LegalBasis) && m.Code.Length <= 10);
+    }
+
+    [Fact]
+    public async Task El_seeder_de_motivos_corrige_textos_pero_nunca_la_marca_de_indemnizacion_ni_un_motivo_propio()
+    {
+        using var db = TestDbContextFactory.Create();
+        // Un sembrado con la marca cambiada a mano por error y el nombre viejo; y un motivo propio con código de la semilla.
+        db.TerminationReasons.Add(new TerminationReason { Code = "DESP_SINJC", Name = "Despido", GeneratesSeverancePay = false, IsSeeded = true, CreatedBy = SeedContext.ParametricCreatedBy });
+        db.TerminationReasons.Add(new TerminationReason { Code = "RENUNCIA", Name = "Renuncia (propio)", GeneratesSeverancePay = true, IsSeeded = false, CreatedBy = "contadora@coop" });
+        await db.SaveChangesAsync();
+
+        var insertados = await TerminationReasonsSeeder.AplicarAsync(db, CancellationToken.None);
+
+        insertados.Should().Be(7, "los dos códigos existentes no se insertan");
+        var despido = await db.TerminationReasons.SingleAsync(m => m.Code == "DESP_SINJC");
+        despido.Name.Should().Be("Despido sin justa causa", "el texto sí se pone al día");
+        despido.LegalBasis.Should().NotBeNullOrEmpty();
+        despido.GeneratesSeverancePay.Should().BeFalse("la marca nunca la toca la semilla: si alguien la cambió, es decisión suya");
+        var propio = await db.TerminationReasons.SingleAsync(m => m.Code == "RENUNCIA");
+        propio.Name.Should().Be("Renuncia (propio)");
+        propio.GeneratesSeverancePay.Should().BeTrue();
+        propio.UpdatedBy.Should().BeNull();
+    }
+
+    // ------------------------------------------------------------ festivos (010) --
+
+    [Fact]
+    public async Task Los_festivos_de_tres_anios_se_siembran_una_vez_y_no_pisan_un_puente_decretado()
+    {
+        using var db = TestDbContextFactory.Create();
+        // La cooperativa registró un puente decretado justo en una fecha de la Ley 51 y un festivo manual en otra.
+        db.Holidays.Add(new Holiday { Date = new DateOnly(2026, 11, 2), Name = "Puente decretado", Origin = HolidayOrigin.Decreed, Year = 2026, CreatedBy = "contadora@coop" });
+        db.Holidays.Add(new Holiday { Date = new DateOnly(2026, 12, 24), Name = "Día de la cooperativa", Origin = HolidayOrigin.Manual, Year = 2026, CreatedBy = "contadora@coop" });
+        await db.SaveChangesAsync();
+
+        var primera = await HolidaysSeeder.AplicarAsync(db, CancellationToken.None);
+        var segunda = await HolidaysSeeder.AplicarAsync(db, CancellationToken.None);
+
+        primera.Should().Be(HolidaysSeeder.Años.Count * 18 - 1, "18 por año menos la fecha que ya era festivo por decreto");
+        segunda.Should().Be(0);
+        var todosLosSantos = await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 11, 2));
+        todosLosSantos.Origin.Should().Be(HolidayOrigin.Decreed, "la fila de la cooperativa se respeta");
+        todosLosSantos.Name.Should().Be("Puente decretado");
+        (await db.Holidays.CountAsync(h => h.Origin == HolidayOrigin.Manual)).Should().Be(1);
+        (await db.Holidays.CountAsync(h => h.Year == 2027)).Should().Be(18);
+        (await db.Holidays.Where(h => h.Year == 2026).Select(h => h.Date).ToListAsync()).Should().OnlyHaveUniqueItems();
+        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 1, 12))).Origin.Should().Be(HolidayOrigin.Ley51MovedToMonday, "Reyes cae martes 6 y se corre al lunes 12");
+        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 4, 3))).Origin.Should().Be(HolidayOrigin.Ley51Easter, "Viernes Santo");
+        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 12, 25))).Origin.Should().Be(HolidayOrigin.Ley51Fixed);
+    }
+
+    // ----------------------------------------------------------- políticas (010) --
+
+    [Fact]
+    public async Task Las_politicas_nacen_con_su_defecto_y_una_vigencia_existente_no_se_pisa()
+    {
+        using var db = TestDbContextFactory.Create();
+        db.CompanyPolicies.Add(new CompanyPolicy { Key = CompanyPolicyKeys.SemanaLaboral, Value = CompanyPolicyKeys.SemanaLaboralValores.LunesAViernes, ValidFrom = new DateOnly(2026, 7, 1), CreatedBy = "contadora@coop" });
+        db.SystemSettings.Add(new SystemSetting { SettingKey = "Payroll.ApplyEmployerExemption", SettingValue = "true", ValueType = "Bool", ModulePrefix = "PAY", CreatedBy = "test" });
+        await db.SaveChangesAsync();
+
+        var primera = await CompanyPoliciesSeeder.AplicarAsync(db, CancellationToken.None);
+        var segunda = await CompanyPoliciesSeeder.AplicarAsync(db, CancellationToken.None);
+
+        // Once claves menos SemanaLaboral (ya tenía vigencia) y ArranqueNominaFecha (sin períodos no se siembra).
+        primera.Should().Be(CompanyPolicyKeys.Todas.Count - 2);
+        segunda.Should().Be(0);
+        var semana = await db.CompanyPolicies.Where(p => p.Key == CompanyPolicyKeys.SemanaLaboral).ToListAsync();
+        semana.Should().ContainSingle().Which.Value.Should().Be(CompanyPolicyKeys.SemanaLaboralValores.LunesAViernes, "la decisión de la cooperativa manda aunque no cubra todas las fechas");
+        (await db.CompanyPolicies.SingleAsync(p => p.Key == CompanyPolicyKeys.Exonerada114_1)).Value.Should().Be("true", "copiada de COR_SystemSettings");
+        (await db.CompanyPolicies.SingleAsync(p => p.Key == CompanyPolicyKeys.AllowSameUserApproval)).Value.Should().Be("false", "sin setting heredado, falso");
+        (await db.CompanyPolicies.SingleAsync(p => p.Key == CompanyPolicyKeys.VacacionesPagoAnticipado)).ValidFrom.Should().Be(CompanyPoliciesSeeder.VigenciaAbierta);
+        (await db.CompanyPolicies.AnyAsync(p => p.Key == CompanyPolicyKeys.ArranqueNominaFecha)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task El_arranque_de_la_nomina_es_la_fecha_del_primer_periodo()
+    {
+        using var db = TestDbContextFactory.Create();
+        db.PayPeriods.Add(new PayPeriod { PlanId = 2, PayrollPlanId = 1, StartDate = new DateTime(2026, 12, 16), EndDate = new DateTime(2026, 12, 31), CreatedBy = "test", StatusMessage = string.Empty, AdvanceLiquidation = "N", AdvanceCrossing = "N" });
+        db.PayPeriods.Add(new PayPeriod { PlanId = 1, PayrollPlanId = 1, StartDate = new DateTime(2026, 12, 1), EndDate = new DateTime(2026, 12, 15), CreatedBy = "test", StatusMessage = string.Empty, AdvanceLiquidation = "N", AdvanceCrossing = "N" });
+        await db.SaveChangesAsync();
+
+        await CompanyPoliciesSeeder.AplicarAsync(db, CancellationToken.None);
+
+        (await db.CompanyPolicies.SingleAsync(p => p.Key == CompanyPolicyKeys.ArranqueNominaFecha)).Value.Should().Be("2026-12-01");
     }
 }

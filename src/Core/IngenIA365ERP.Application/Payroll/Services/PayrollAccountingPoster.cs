@@ -26,15 +26,36 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
 {
     public const string VoucherCode = "NM";
     public const string ModuleCode = ModuloContable.Nomina;
+
+    /// <summary>El <c>SourceType</c> de la nómina ordinaria; las liquidaciones especiales llevan el suyo por tipo (<see cref="PayrollRun.SourceTypeNameDe"/>, R2).</summary>
     public const string SourceType = "PayrollRun";
 
     private sealed record Grupo(string Code, int? CostCenterId, int? PersonId, EntidadInstitucional Entidad, string? EntidadNombre);
 
-    public async Task<Result<AccountingDocument>> PostAsync(
+    /// <summary>El origen contable de una corrida: módulo Nómina, <c>SourceType</c> según su <c>Kind</c> y su PublicId.</summary>
+    public static AccountingOrigin OrigenDe(PayrollRun run) => new(ModuleCode, run.SourceTypeName, run.PublicId);
+
+    public Task<Result<AccountingDocument>> PostAsync(
         PayrollRun run,
         IReadOnlyList<(PayrollRunEmployee RunEmployee, Employee Employee, IReadOnlyList<PayrollRunLine> Lines)> employees,
         DateOnly documentDate,
         string detail,
+        CancellationToken ct) =>
+        PostAsync(OrigenDe(run), employees, documentDate, detail, terceroPorLinea: null, ct);
+
+    /// <summary>
+    /// Feature 010: la misma armada del comprobante para cualquier origen (prima, cesantías, vacaciones,
+    /// definitiva), con <c>SourceType</c> propio y, si hace falta, otra regla de tercero por línea
+    /// (<paramref name="terceroPorLinea"/>: nulo = la de <see cref="TercerosDeNomina"/>). Es la
+    /// sobrecarga que usa <see cref="SettlementAccountingPoster"/>; el camino al libro sigue siendo
+    /// uno solo, <see cref="AccountingPoster.PrepareAsync"/>.
+    /// </summary>
+    public async Task<Result<AccountingDocument>> PostAsync(
+        AccountingOrigin origen,
+        IReadOnlyList<(PayrollRunEmployee RunEmployee, Employee Employee, IReadOnlyList<PayrollRunLine> Lines)> employees,
+        DateOnly documentDate,
+        string detail,
+        Func<PayrollRunLine, EntidadInstitucional>? terceroPorLinea,
         CancellationToken ct)
     {
         // --- centro de costo de cada empleado (código legado → Id); sin centro, la cuenta decide ---
@@ -55,7 +76,7 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             int? cc = !string.IsNullOrWhiteSpace(employee.CostCenterId) && ccPorCodigo.TryGetValue(employee.CostCenterId, out var id) ? id : null;
             foreach (var line in lines.Where(l => l.AffectsAccounting && l.Amount != 0m))
             {
-                var entidad = TercerosDeNomina.EntidadDe(line.ConceptCode, line.Nature);
+                var entidad = terceroPorLinea?.Invoke(line) ?? TercerosDeNomina.EntidadDe(line.ConceptCode, line.Nature);
                 var (personId, nombre) = entidad == EntidadInstitucional.Ninguna
                     ? (line.Nature is ConceptNature.Earning or ConceptNature.Deduction ? employee.PersonId : (int?)null, null)
                     : entidades.Buscar(entidad, IdDeEntidad(employee, entidad));
@@ -114,14 +135,16 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             lineas.Add(new PostingLine { AccountId = credito, Credit = valor, Detail = detalle, CostCenterId = a.Grupo.CostCenterId, PersonId = a.Grupo.PersonId });
         }
 
-        return await poster.PrepareAsync(
-            new PostingRequest(VoucherCode, documentDate, detail, new AccountingOrigin(ModuleCode, SourceType, run.PublicId), lineas), ct);
+        return await poster.PrepareAsync(new PostingRequest(VoucherCode, documentDate, detail, origen, lineas), ct);
     }
 
     /// <summary>Comprobante reverso del original (FR-032) por el contrato: mismas líneas con débito y crédito invertidos, referencia en ambos sentidos.</summary>
     public Task<Result<AccountingDocument>> ReverseAsync(AccountingDocument original, DateOnly documentDate, string reason, CancellationToken ct) =>
-        poster.PrepareReversalAsync(original, documentDate, reason,
-            new AccountingOrigin(ModuleCode, SourceType, original.SourcePublicId ?? Guid.Empty), ct);
+        ReverseAsync(original, documentDate, reason, new AccountingOrigin(ModuleCode, original.SourceType ?? SourceType, original.SourcePublicId ?? Guid.Empty), ct);
+
+    /// <summary>Reverso con el origen explícito (una liquidación especial conserva su <c>SourceType</c> en el espejo).</summary>
+    public Task<Result<AccountingDocument>> ReverseAsync(AccountingDocument original, DateOnly documentDate, string reason, AccountingOrigin origen, CancellationToken ct) =>
+        poster.PrepareReversalAsync(original, documentDate, reason, origen, ct);
 
     // --------------------------------------------------------------------------------------------
 

@@ -65,7 +65,7 @@ public sealed record ExcepcionAprobacionDto(Guid EmployeePublicId, string Flag, 
 
 public sealed record ResumenCorridaDto(
     Guid PublicId,
-    Guid PeriodPublicId,
+    Guid? PeriodPublicId,
     int Version,
     string Status,
     DateTime CalculatedAt,
@@ -88,8 +88,28 @@ public sealed record ResumenCorridaDto(
     IReadOnlyList<ExcepcionAprobacionDto> Exceptions,
     DateTime? DiscardedAt = null,
     string? DiscardedBy = null,
-    string? DiscardReason = null)
+    string? DiscardReason = null,
+    string Kind = "Ordinary",
+    DateOnly? CutoffDate = null,
+    DateOnly? PayDate = null,
+    int? Year = null,
+    int? Semester = null,
+    Guid? EmployeePublicId = null,
+    IReadOnlyList<AvisoCorridaDto>? Warnings = null)
 {
+    /// <summary>Feature 010: prima, cesantías, vacaciones o definitiva; la ordinaria es «Ordinary».</summary>
+    public bool EsEspecial => Kind is not "Ordinary";
+
+    public string TipoTexto => Kind switch
+    {
+        "Ordinary" => "Nómina ordinaria",
+        "ServiceBonus" => Year is { } a && Semester is { } s ? $"Prima de servicios {a}-{(s == 1 ? "I" : "II")}" : "Prima de servicios",
+        "Severance" => Year is { } a2 ? $"Cesantías e intereses {a2}" : "Cesantías e intereses",
+        "Vacation" => "Vacaciones",
+        "Settlement" => "Liquidación definitiva",
+        _ => Kind,
+    };
+
     public string EstadoTexto => Status switch
     {
         "Draft" => "Borrador",
@@ -102,6 +122,9 @@ public sealed record ResumenCorridaDto(
 
     public bool EsBorrador => Status is "Draft" or "Stale";
 }
+
+/// <summary>Aviso de una corrida especial con su código (feature 010, contracts/api.md §3.5).</summary>
+public sealed record AvisoCorridaDto(string Code, string Message, System.Text.Json.JsonElement? Data);
 
 public sealed record ResultadoCalculoDto(Guid RunPublicId, int Version, int EmployeeCount, int ChangedEmployees, TotalesCorridaDto Totals, IReadOnlyList<BloqueoDto> Blockers, IReadOnlyList<string> Warnings);
 

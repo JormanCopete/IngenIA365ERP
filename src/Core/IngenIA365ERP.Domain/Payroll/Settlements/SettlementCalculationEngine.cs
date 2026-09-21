@@ -77,7 +77,7 @@ public sealed class SettlementCalculationEngine
             {
                 if (ctx.BenefitsExclusion(forVacations: true) is { } exclusion)
                 {
-                    ctx.Skip(SettlementConceptCodes.VacationsEnjoyed, exclusion, SettlementContext.ExclusionText(exclusion));
+                    ctx.Skip(WellKnownConceptCodes.VacationPayout, exclusion, SettlementContext.ExclusionText(exclusion));
                     return Excluded(ctx, exclusion, hash);
                 }
                 VacationRule.EvaluateMovement(ctx);

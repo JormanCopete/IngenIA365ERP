@@ -37,17 +37,17 @@ public static class SettlementWithholdingRules
     /// <summary>Rubros con retención propia: no entran a la depuración del ingreso ordinario.</summary>
     private static readonly string[] ConRetencionPropia =
     [
-        SettlementConceptCodes.ServiceBonus, SettlementConceptCodes.Severance, SettlementConceptCodes.SeveranceInterest,
-        SettlementConceptCodes.SeverancePay, SettlementConceptCodes.RetirementBonus,
+        WellKnownConceptCodes.ServiceBonus, WellKnownConceptCodes.Severance, WellKnownConceptCodes.SeveranceInterest,
+        WellKnownConceptCodes.Indemnity, WellKnownConceptCodes.RetirementBonus,
     ];
 
     // ------------------------------------------------------------------ prima --
 
     public static void ServiceBonus(SettlementContext ctx)
     {
-        var prima = ctx.LineAmount(SettlementConceptCodes.ServiceBonus);
+        var prima = ctx.LineAmount(WellKnownConceptCodes.ServiceBonus);
         if (prima <= 0m) return;
-        var def = ctx.Concept(SettlementConceptCodes.ServiceBonusWithholding);
+        var def = ctx.Concept(WellKnownConceptCodes.WithholdingOnServiceBonus);
         if (def is null) return;
 
         // Sin aportes (la prima no cotiza) y sin deducciones declaradas: sólo la renta exenta legal (art. 385).
@@ -71,10 +71,10 @@ public static class SettlementWithholdingRules
     /// <param name="severancePaidDirectly">Verdadero en la definitiva (las cesantías se pagan al trabajador); falso en la anual (van al fondo).</param>
     public static void SeveranceAndInterest(SettlementContext ctx, bool severancePaidDirectly)
     {
-        var cesantias = ctx.LineAmount(SettlementConceptCodes.Severance);
-        var intereses = ctx.LineAmount(SettlementConceptCodes.SeveranceInterest);
+        var cesantias = ctx.LineAmount(WellKnownConceptCodes.Severance);
+        var intereses = ctx.LineAmount(WellKnownConceptCodes.SeveranceInterest);
         if (cesantias <= 0m && intereses <= 0m) return;
-        var def = ctx.Concept(SettlementConceptCodes.SeveranceWithholding);
+        var def = ctx.Concept(WellKnownConceptCodes.WithholdingOnSeverance);
         if (def is null) return;
 
         var uvt = ctx.Parameters.Value(LegalParameterCodes.Uvt);
@@ -142,9 +142,9 @@ public static class SettlementWithholdingRules
 
     public static void SeverancePay(SettlementContext ctx)
     {
-        var indemnizacion = ctx.LineAmount(SettlementConceptCodes.SeverancePay) + ctx.LineAmount(SettlementConceptCodes.RetirementBonus);
+        var indemnizacion = ctx.LineAmount(WellKnownConceptCodes.Indemnity) + ctx.LineAmount(WellKnownConceptCodes.RetirementBonus);
         if (indemnizacion <= 0m) return;
-        var def = ctx.Concept(SettlementConceptCodes.SeverancePayWithholding);
+        var def = ctx.Concept(WellKnownConceptCodes.WithholdingOnIndemnity);
         if (def is null) return;
 
         var uvt = ctx.Parameters.Value(LegalParameterCodes.Uvt);

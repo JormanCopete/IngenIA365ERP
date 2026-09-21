@@ -16,9 +16,15 @@ public sealed record RunConceptTotalDto(string Code, string Name, string Nature,
 
 public sealed record RunBlockerDto(Guid EmployeePublicId, string EmployeeName, string Flag, string Detail);
 
+/// <summary>
+/// Resumen de una corrida. Feature 010 (R2): <see cref="PeriodPublicId"/> es nulo en las
+/// liquidaciones especiales, que en cambio traen <see cref="Kind"/>, <see cref="CutoffDate"/>,
+/// <see cref="Year"/>/<see cref="Semester"/> (prima y cesantías) y <see cref="Warnings"/> (avisos
+/// con código, p. ej. <c>Payroll.Settlement.OpeningBalanceMissing</c>).
+/// </summary>
 public sealed record RunSummaryDto(
     Guid PublicId,
-    Guid PeriodPublicId,
+    Guid? PeriodPublicId,
     int Version,
     string Status,
     DateTime CalculatedAt,
@@ -41,7 +47,17 @@ public sealed record RunSummaryDto(
     IReadOnlyList<ApprovalExceptionDto> Exceptions,
     DateTime? DiscardedAt = null,
     string? DiscardedBy = null,
-    string? DiscardReason = null);
+    string? DiscardReason = null,
+    string Kind = "Ordinary",
+    DateOnly? CutoffDate = null,
+    DateOnly? PayDate = null,
+    int? Year = null,
+    int? Semester = null,
+    Guid? EmployeePublicId = null,
+    IReadOnlyList<RunWarningDto>? Warnings = null);
+
+/// <summary>Un aviso de la corrida con código estable (contracts/api.md §3.5), texto y datos.</summary>
+public sealed record RunWarningDto(string Code, string Message, object? Data);
 
 public sealed record RunEmployeeRowDto(
     Guid EmployeePublicId,
@@ -93,7 +109,7 @@ public sealed record RunEmployeeDetailDto(
     IReadOnlyList<string> Skips);
 
 /// <summary>Lo que se guarda en <c>PayrollRunEmployee.NotesJson</c>.</summary>
-public sealed record RunEmployeeNotes(IReadOnlyList<string> Refusals, IReadOnlyList<string> Skips);
+public sealed record RunEmployeeNotes(IReadOnlyList<string> Refusals, IReadOnlyList<string> Skips, IReadOnlyList<string>? Warnings = null);
 
 /// <summary>Excepción autorizada a un bloqueo (FR-022): quién, qué bandera, por qué.</summary>
 public sealed record ApprovalExceptionDto(Guid EmployeePublicId, string Flag, string Reason, string? AuthorizedBy = null, DateTime? AuthorizedAt = null);
@@ -119,6 +135,8 @@ public static class RunJson
         RunEmployeeFlag.MissingAffiliation => "Afiliación faltante (salud, pensión o ARL)",
         RunEmployeeFlag.ConceptWithoutAccounts => "Concepto sin cuentas contables",
         RunEmployeeFlag.WithholdingRateMissing => "Procedimiento 2 sin porcentaje de retención vigente",
+        RunEmployeeFlag.OpeningBalanceMissing => "Ingreso anterior al arranque de la nómina sin saldo inicial de prestaciones",
+        RunEmployeeFlag.DeductionOverNet => "Los descuentos propuestos superan el neto",
         _ => flag.ToString(),
     };
 }

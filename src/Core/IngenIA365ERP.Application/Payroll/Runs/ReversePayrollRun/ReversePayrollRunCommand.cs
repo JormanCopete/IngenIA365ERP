@@ -53,6 +53,8 @@ public sealed class ReversePayrollRunCommandHandler(
         var run = await db.PayrollRuns.Include(r => r.PayPeriod).Include(r => r.AccountingDocument)
             .FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Fallo("Payroll.RunNotFound", "No existe la corrida indicada.");
+        // Feature 010: las liquidaciones especiales se reversan por su ruta con su permiso.
+        if (run.EsEspecial) return Result.Failure<ReverseRunResultDto>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
         if (run.Status != PayrollRunStatus.Approved)
             return Fallo("Payroll.RunNotApproved", $"La corrida está {run.Status}: sólo se reversa una liquidación aprobada.");
         var period = run.PayPeriod!;

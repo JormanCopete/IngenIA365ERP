@@ -18,7 +18,7 @@ public static class SeveranceRule
 
     public static Outcome Evaluate(SettlementContext ctx, DateTime yearStart, DateTime yearEnd)
     {
-        var code = SettlementConceptCodes.Severance;
+        var code = WellKnownConceptCodes.Severance;
         if (ctx.BenefitsExclusion() is { } exclusion)
         {
             ctx.Skip(code, exclusion, SettlementContext.ExclusionText(exclusion));
@@ -109,7 +109,7 @@ public static class SeveranceInterestRule
 {
     public static void Evaluate(SettlementContext ctx, SeveranceRule.Outcome cesantias)
     {
-        var code = SettlementConceptCodes.SeveranceInterest;
+        var code = WellKnownConceptCodes.SeveranceInterest;
         if (cesantias.ExclusionCode is { } exclusion)
         {
             ctx.Skip(code, exclusion, SettlementContext.ExclusionText(exclusion));

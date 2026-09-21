@@ -38,6 +38,11 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<ResumenParametrosLegalesDto>> ListarParametrosLegalesAsync(DateTime? vigenteA = null, CancellationToken ct = default) =>
         EnviarAsync<ResumenParametrosLegalesDto>(HttpMethod.Get, "/api/payroll/legal-parameters" + (vigenteA is { } d ? $"?asOf={d:yyyy-MM-dd}" : string.Empty), null, ct);
 
+    /// <summary>Feature 010 (T006): los códigos requeridos por un proceso sin vigencia a la fecha.</summary>
+    public Task<InvitationApiResult<ParametrosFaltantesDto>> ParametrosFaltantesAsync(string proceso, DateTime? vigenteA = null, CancellationToken ct = default) =>
+        EnviarAsync<ParametrosFaltantesDto>(HttpMethod.Get,
+            $"/api/payroll/legal-parameters/missing?process={Uri.EscapeDataString(proceso)}" + (vigenteA is { } d ? $"&asOf={d:yyyy-MM-dd}" : string.Empty), null, ct);
+
     public Task<InvitationApiResult<IReadOnlyList<ParametroLegalDto>>> VersionesDeParametroAsync(string codigo, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<ParametroLegalDto>>(HttpMethod.Get, $"/api/payroll/legal-parameters/{Uri.EscapeDataString(codigo)}/versions", null, ct);
 
@@ -128,6 +133,10 @@ public sealed record ParametroLegalDto(
 }
 
 public sealed record ResumenParametrosLegalesDto(DateTime AsOf, IReadOnlyList<ParametroLegalDto> Items, IReadOnlyList<string> MissingThisYear, IReadOnlyList<string> MissingNextYear);
+
+/// <summary>Feature 010: lo que le falta a un proceso a una fecha (contracts: <c>GET /legal-parameters/missing</c>).</summary>
+public sealed record ParametroFaltanteDto(string Code, string Description, string? Source);
+public sealed record ParametrosFaltantesDto(string Process, DateTime AsOf, IReadOnlyList<ParametroFaltanteDto> Missing);
 
 public sealed record NuevaVigenciaRequest(
     DateTime ValidFrom, decimal? Value, IReadOnlyList<TramoDto>? Ranges, string Source,
