@@ -303,8 +303,11 @@ lo hizo).
 
 Único `(EmployeeId, AsOfDate, Kind)` filtrado `[IsDeleted] = 0`. **Invariantes**: se edita sólo
 mientras `ConsumedByRunId IS NULL`; después, corregir es una fila `Adjustment` con motivo; la
-reversión de la liquidación consumidora vuelve `ConsumedByRunId` a NULL. El motor lo recibe como
-«tramo inicial» y lo explica como paso propio («Saldo inicial al 30-11-2026 digitado por … el …»).
+reversión de la liquidación consumidora vuelve `ConsumedByRunId` a NULL. La fila **vigente** (corte
+más reciente y, a igual corte, la última registrada: `BenefitBalanceRules.Vigente`) ES el saldo completo:
+el ajuste se digita como saldo corregido, no como diferencia, y el motor y el lector de provisiones toman
+esa sola fila, nunca la suma de apertura y ajustes. El motor lo recibe como «tramo inicial» y lo explica
+como paso propio («Saldo inicial al 30-11-2026 digitado por … el …»).
 Auditoría `Payroll.OpeningBalance.Changed`.
 
 ### 2.4 `PAY_VacationMovements` — `VacationMovement` (R6, FR-014 a FR-017)

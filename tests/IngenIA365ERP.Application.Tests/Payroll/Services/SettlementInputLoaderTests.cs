@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using IngenIA365ERP.Domain.Payroll.Policies;
@@ -88,14 +89,19 @@ public class SettlementInputLoaderTests
     }
 
     [Fact]
-    public async Task El_saldo_inicial_y_sus_ajustes_llegan_como_un_solo_tramo_con_fecha_y_autor()
+    public async Task El_ajuste_del_saldo_inicial_reemplaza_a_la_apertura_y_llega_como_un_solo_tramo_con_fecha_y_autor()
     {
+        // La contadora digita el ajuste como el saldo COMPLETO corregido (así lo dicen el comando, la
+        // pantalla y contracts/api.md §4): la apertura decía 2.000.000 de cesantías y eran 2.100.000.
+        // Hasta el 2026-09-21 el cargador sumaba apertura más ajuste (4.100.000) y doblaba los días de
+        // vacaciones; el motor y el lector de provisiones deben ver una sola fila, la vigente.
         var d = ConSeisMesesAprobados();
         var apertura = d.SaldoInicial(d.Ana, new DateOnly(2025, 12, 31), prima: 500_000m, cesantias: 2_000_000m, intereses: 240_000m, diasVacaciones: 10m, diasPrima: 80);
         d.Db.EmployeeBenefitOpeningBalances.Add(new EmployeeBenefitOpeningBalance
         {
             EmployeeId = d.Ana.Id, AsOfDate = new DateOnly(2025, 12, 31), Kind = OpeningBalanceKind.Adjustment, AdjustsBalanceId = apertura.Id,
-            AccruedSeverance = 100_000m, AdjustmentReason = "Faltó un mes", CreatedBy = "contadora@demo",
+            AccruedServiceBonus = 500_000m, AccruedSeverance = 2_100_000m, AccruedSeveranceInterest = 240_000m, PendingVacationDays = 10m,
+            AdjustmentReason = "Faltó un mes", CreatedBy = "revisora@demo",
         });
         d.Politica(CompanyPolicyKeys.ArranqueNominaFecha, "2026-01-01", new DateOnly(2020, 1, 1));
         await d.Db.SaveChangesAsync();
@@ -105,13 +111,43 @@ public class SettlementInputLoaderTests
         var input = batch.Employees.Single().Input;
         input.OpeningBalance.Should().NotBeNull();
         input.OpeningBalance!.AsOfDate.Should().Be(new DateTime(2025, 12, 31));
-        input.OpeningBalance.AccruedSeverance.Should().Be(2_100_000m, "apertura más ajuste");
+        input.OpeningBalance.AccruedSeverance.Should().Be(2_100_000m, "el ajuste es el saldo completo: reemplaza, no se suma");
         input.OpeningBalance.AccruedServiceBonus.Should().Be(500_000m);
-        input.OpeningBalance.ServiceBonusDaysAccrued.Should().Be(80);
-        input.OpeningBalance.EnteredBy.Should().Be("contadora@demo");
+        input.OpeningBalance.PendingVacationDays.Should().Be(10m, "los días tampoco se suman");
+        input.OpeningBalance.ServiceBonusDaysAccrued.Should().Be(80, "el ajuste no trajo los días ya contados: se heredan de la apertura");
+        input.OpeningBalance.EnteredBy.Should().Be("revisora@demo", "la fila vigente es la que se explica");
         input.Policies.PayrollStartDate.Should().Be(new DateTime(2026, 1, 1));
-        // La provisión de cesantías incluye lo digitado en el saldo inicial (R3).
+        // La provisión de cesantías incluye lo digitado en el saldo inicial (R3), una sola vez.
         input.Provisions.Single(p => p.ProvisionConceptCode == WellKnownConceptCodes.SeveranceProvision).Accrued.Should().Be(6 * 187_424m + 2_100_000m);
+        input.Provisions.Single(p => p.ProvisionConceptCode == WellKnownConceptCodes.ServiceBonusProvision).Accrued.Should().Be(6 * 187_424m + 500_000m);
+    }
+
+    [Fact]
+    public async Task Un_ajuste_con_corte_posterior_manda_sobre_la_apertura_y_los_movimientos_de_vacaciones_lo_ven_igual()
+    {
+        // Apertura al 31-12-2025 con 10 días; ajuste al 31-03-2026 que dice 12 días y 1.200.000 de
+        // cesantías. La fila más reciente es el saldo, y el saldo de vacaciones (VacationBalanceCalculator)
+        // usa la misma lectura que el motor.
+        var d = ConSeisMesesAprobados();
+        var apertura = d.SaldoInicial(d.Ana, new DateOnly(2025, 12, 31), cesantias: 1_000_000m, diasVacaciones: 10m);
+        d.Db.EmployeeBenefitOpeningBalances.Add(new EmployeeBenefitOpeningBalance
+        {
+            EmployeeId = d.Ana.Id, AsOfDate = new DateOnly(2026, 3, 31), Kind = OpeningBalanceKind.Adjustment, AdjustsBalanceId = apertura.Id,
+            AccruedSeverance = 1_200_000m, PendingVacationDays = 12m, AdjustmentReason = "Eran 12 días", CreatedBy = "contadora@demo",
+        });
+        await d.Db.SaveChangesAsync();
+
+        var batch = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Cesantias(2026, new DateOnly(2026, 6, 30)), CancellationToken.None);
+        var input = batch.Employees.Single().Input;
+        input.OpeningBalance!.AsOfDate.Should().Be(new DateTime(2026, 3, 31));
+        input.OpeningBalance.AccruedSeverance.Should().Be(1_200_000m);
+        input.OpeningBalance.PendingVacationDays.Should().Be(12m);
+        input.Provisions.Single(p => p.ProvisionConceptCode == WellKnownConceptCodes.SeveranceProvision).Accrued.Should().Be(6 * 187_424m + 1_200_000m);
+
+        var saldos = await d.SaldosDeProvision.LeerAsync([d.Ana.Id], new DateOnly(2026, 6, 30), excludeRunId: null, CancellationToken.None);
+        saldos[d.Ana.Id].Single(s => s.ProvisionCode == WellKnownConceptCodes.SeveranceProvision).OpeningBalance.Should().Be(1_200_000m);
+        saldos[d.Ana.Id].Single(s => s.ProvisionCode == WellKnownConceptCodes.VacationProvision).OpeningBalance
+            .Should().Be(12m * 2_000_000m / 30m, "los días vigentes al salario de la fecha del ajuste, no la suma de 10 + 12");
     }
 
     [Fact]
@@ -196,6 +232,119 @@ public class SettlementInputLoaderTests
         libranza.AccountedByOtherModule.Should().BeFalse();
         input.ProposedDeductions.Should().HaveCount(3);
         batch.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Las_cuotas_causadas_de_una_libranza_siguen_la_regla_ApplyOn_de_la_recurrente_en_un_plan_quincenal()
+    {
+        // Plan quincenal; libranza mensual (LastOfMonth) de 12 cuotas desde enero; ocho corridas de fin
+        // de mes la descontaron (InstallmentsIssued = 8). Retiro el 20/09: la novena cuota (septiembre)
+        // es la única causada y no descontada. Hasta el 2026-09-21 se contaba cada quincena como una
+        // cuota (18 → min 12) y se proponían cuatro: 600.000 de más al empleado.
+        var d = new NominaTestData();
+        var quincenal = new PayrollPlan { Code = "QUINC", Name = "Quincenal", Periodicity = PayrollPeriodicity.Biweekly, IsActive = true, CreatedBy = "test" };
+        d.Db.PayrollPlans.Add(quincenal);
+        await d.Db.SaveChangesAsync();
+        for (var mes = 1; mes <= 9; mes++)
+        {
+            var fin = new DateTime(2026, mes, DateTime.DaysInMonth(2026, mes));
+            var estado = mes < 9 ? PayPeriodStatus.Approved : PayPeriodStatus.Open;
+            d.Periodo(new DateTime(2026, mes, 1), new DateTime(2026, mes, 15), estado, plan: quincenal);
+            d.Periodo(new DateTime(2026, mes, 16), fin, estado, plan: quincenal);
+        }
+        var luis = d.Empleado("Luis", 2_000_000m, new DateTime(2025, 6, 1));
+        luis.PayrollPlanId = quincenal.Id;
+        var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
+        d.Db.TerminationReasons.Add(motivo);
+        await d.Db.SaveChangesAsync();
+        var retiro = new DateOnly(2026, 9, 20);
+        var terminacion = new EmploymentTermination { EmployeeId = luis.Id, TerminationDate = retiro, TerminationReasonId = motivo.Id, CreatedBy = "test" };
+        d.Db.EmploymentTerminations.Add(terminacion);
+        d.Db.PayrollRecurringNovelties.AddRange(
+            new PayrollRecurringNovelty
+            {
+                EmployeeId = luis.Id, ConceptCode = SettlementInputLoader.LibranzaCode, Amount = 200_000m, StartDate = new DateTime(2026, 1, 1),
+                TotalInstallments = 12, InstallmentsIssued = 8, ApplyOn = RecurringApplyRule.LastOfMonth, Notes = "Mensual", CreatedBy = "test",
+            },
+            new PayrollRecurringNovelty
+            {
+                EmployeeId = luis.Id, ConceptCode = SettlementInputLoader.LibranzaCode, Amount = 50_000m, StartDate = new DateTime(2026, 7, 1),
+                TotalInstallments = 24, InstallmentsIssued = 4, ApplyOn = RecurringApplyRule.EveryPeriod, Notes = "Quincenal", CreatedBy = "test",
+            },
+            new PayrollRecurringNovelty
+            {
+                EmployeeId = luis.Id, ConceptCode = SettlementInputLoader.LibranzaCode, Amount = 30_000m, StartDate = new DateTime(2026, 8, 1),
+                TotalInstallments = 10, InstallmentsIssued = 1, ApplyOn = RecurringApplyRule.FirstOfMonth, Notes = "Primera quincena", CreatedBy = "test",
+            });
+        await d.Db.SaveChangesAsync();
+
+        var batch = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Definitiva(luis.Id, terminacion.Id, retiro), CancellationToken.None);
+
+        var deudas = batch.Employees.Single().Deudas;
+        deudas.Single(x => x.Description.Contains("Mensual")).Proposed.Should().Be(200_000m,
+            "nueve fines de mes (enero a septiembre) causan nueve cuotas y ocho se descontaron: queda la de septiembre");
+        deudas.Single(x => x.Description.Contains("Quincenal")).Proposed.Should().Be(2 * 50_000m,
+            "seis quincenas (julio a septiembre, incluida la 16–30/09 que contiene el retiro) menos cuatro descontadas");
+        deudas.Single(x => x.Description.Contains("Primera quincena")).Proposed.Should().Be(30_000m,
+            "dos primeras quincenas (agosto y septiembre) menos una descontada");
+    }
+
+    [Fact]
+    public async Task En_modo_acumulado_el_cupo_anual_usado_suma_la_retencion_de_las_liquidaciones_especiales_aprobadas_del_anio()
+    {
+        // Prima de junio aprobada con RETEFTE_PRIMA que aplicó 5.000.000 de renta exenta; una
+        // definitiva de otro año y una prima reversada no cuentan. La liquidación siguiente (cesantías
+        // al 30/06, misma lectura para vacaciones y definitiva) debe partir de ese «usado» más el de la
+        // ordinaria. Hasta el 2026-09-21 sólo se sumaba la ordinaria: el cupo de 790 UVT se excedía.
+        var d = ConSeisMesesAprobados();
+        d.Politica(CompanyPolicyKeys.RetefteTopesAnualesModo, CompanyPolicyKeys.RetefteTopesAnualesModoValores.Acumulado, new DateOnly(2020, 1, 1));
+        // La ordinaria de marzo retuvo con 400.000 de exenta y 700.000 de depuración total.
+        var marzo = await d.Db.PayrollRuns.Include(r => r.Employees).ThenInclude(re => re.Lines)
+            .Where(r => r.PayPeriod!.StartDate == new DateTime(2026, 3, 1)).SingleAsync();
+        var definiciones = await d.Db.PayrollConceptDefinitions.ToDictionaryAsync(c => c.Code);
+        marzo.Employees.Single().Lines.Add(Retencion(definiciones[WellKnownConceptCodes.Withholding], 90_000m, exenta: 400_000m, total: 700_000m));
+        EspecialAprobada(d, PayrollRunKind.ServiceBonus, new DateOnly(2026, 6, 30), d.Ana, Retencion(definiciones[WellKnownConceptCodes.WithholdingOnServiceBonus], 300_000m, exenta: 5_000_000m, total: 5_000_000m));
+        EspecialAprobada(d, PayrollRunKind.ServiceBonus, new DateOnly(2025, 12, 31), d.Ana, Retencion(definiciones[WellKnownConceptCodes.WithholdingOnServiceBonus], 100_000m, exenta: 2_000_000m, total: 2_000_000m));
+        EspecialAprobada(d, PayrollRunKind.Vacation, new DateOnly(2026, 4, 10), d.Ana, Retencion(definiciones[WellKnownConceptCodes.Withholding], 50_000m, exenta: 250_000m, total: 300_000m), status: PayrollRunStatus.Reversed);
+        // La indemnización sólo resta la exenta (art. 401-3): consume del cupo global lo mismo.
+        var sinTotal = Retencion(definiciones[WellKnownConceptCodes.WithholdingOnIndemnity], 800_000m, exenta: 1_000_000m, total: null);
+        EspecialAprobada(d, PayrollRunKind.Settlement, new DateOnly(2026, 5, 20), d.Ana, sinTotal);
+        await d.Db.SaveChangesAsync();
+
+        var batch = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Cesantias(2026, new DateOnly(2026, 6, 30)), CancellationToken.None);
+
+        var ytd = batch.Employees.Single().Input.WithholdingYearToDate;
+        ytd.Should().NotBeNull();
+        ytd!.RentaExentaUsada.Should().Be(400_000m + 5_000_000m + 1_000_000m, "ordinaria de marzo + prima de junio + indemnización de mayo; no la prima de 2025 ni la reversada");
+        ytd.DeduccionesYExentasUsadas.Should().Be(700_000m + 5_000_000m + 1_000_000m);
+    }
+
+    private static PayrollRunLine Retencion(PayrollConceptDefinition def, decimal valor, decimal exenta, decimal? total)
+    {
+        var exp = new Explanation { Form = "Tabla por rangos" };
+        exp.Steps.Add(new ExplanationStep("Ingreso gravado del período", 10_000_000m, null));
+        exp.Steps.Add(new ExplanationStep("Renta exenta del 25,00 % sobre 9.000.000 (RETEFTE_EXENTA_PCT)", exenta, null));
+        if (total is { } t) exp.Steps.Add(new ExplanationStep("Total de deducciones y rentas exentas", t, null));
+        exp.Steps.Add(new ExplanationStep("Base de retención depurada", 4_000_000m, null));
+        return new PayrollRunLine
+        {
+            ConceptDefinitionId = def.Id, ConceptCode = def.Code, ConceptName = def.Name, Nature = ConceptNature.Deduction, Amount = valor,
+            ExplanationJson = System.Text.Json.JsonSerializer.Serialize(exp, IngenIA365ERP.Application.Payroll.Runs.RunJson.Options), CreatedBy = "test",
+        };
+    }
+
+    private static void EspecialAprobada(NominaTestData d, PayrollRunKind kind, DateOnly corte, Employee e, PayrollRunLine linea, PayrollRunStatus status = PayrollRunStatus.Approved)
+    {
+        var run = new PayrollRun
+        {
+            Kind = kind, CutoffDate = corte, Version = 1, Status = status, EmployeeId = kind is PayrollRunKind.Vacation or PayrollRunKind.Settlement ? e.Id : null,
+            CalculatedAt = corte.ToDateTime(TimeOnly.MinValue), CalculatedBy = "ana@demo", ApprovedAt = corte.ToDateTime(TimeOnly.MinValue), ApprovedBy = "contadora@demo",
+            InputsHash = new string('c', 64), CreatedBy = "test",
+        };
+        var fila = new PayrollRunEmployee { EmployeeId = e.Id, PayrollPlanId = e.PayrollPlanId, DaysWorked = 30, EmployeeClass = e.EmployeeClass, CreatedBy = "test" };
+        fila.Lines.Add(linea);
+        run.Employees.Add(fila);
+        d.Db.PayrollRuns.Add(run);
     }
 
     [Fact]

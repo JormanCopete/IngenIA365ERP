@@ -41,6 +41,12 @@ public static class SettlementWithholdingRules
         WellKnownConceptCodes.Indemnity, WellKnownConceptCodes.RetirementBonus,
     ];
 
+    /// <summary>Las líneas cuya cantidad son los días que el pago ordinario cubre (salario pendiente, disfrute, compensación); el auxilio repite los del salario y no se cuenta.</summary>
+    private static readonly string[] ConDiasPagados =
+    [
+        WellKnownConceptCodes.PendingSalary, WellKnownConceptCodes.VacationPayout, WellKnownConceptCodes.VacationCompensation,
+    ];
+
     // ------------------------------------------------------------------ prima --
 
     public static void ServiceBonus(SettlementContext ctx)
@@ -210,7 +216,19 @@ public static class SettlementWithholdingRules
         var aportes = ctx.Lines
             .Where(l => l.Nature == ConceptNature.Deduction && AportesObligatorios.Contains(l.Code, StringComparer.OrdinalIgnoreCase))
             .Sum(l => l.Amount);
-        var depuracion = DepuracionDeRetencion.Depurar(bruto, aportes, ctx.Employee.TaxDeductions, ctx.Parameters, 1m,
+
+        // Los topes mensuales en UVT se proporcionan a los días que este pago cubre, con tope de un
+        // mes (D-29): es la misma regla con que la nómina ordinaria proporciona los suyos a los días
+        // del período (ModoDeTopesAnuales.Mensualizado). Con proporción 1 fija, la liquidación de
+        // vacaciones de un mes sumaba a la ordinaria de ese mes un segundo mes entero de topes de
+        // vivienda, prepagada, dependientes y renta exenta. En modo Acumulado la exenta y el tope
+        // global ya van por cupo anual; la proporción sólo toca los topes por rubro.
+        var diasPagados = ctx.Lines
+            .Where(l => l.Nature == ConceptNature.Earning && ConDiasPagados.Contains(l.Code, StringComparer.OrdinalIgnoreCase))
+            .Sum(l => l.Quantity ?? 0m);
+        var proporcion = diasPagados > 0m ? Math.Min(1m, diasPagados / CalendarConventions.DaysPerMonth) : 1m;
+
+        var depuracion = DepuracionDeRetencion.Depurar(bruto, aportes, ctx.Employee.TaxDeductions, ctx.Parameters, proporcion,
             ctx.Policies.RetefteTopesAnualesModo, ctx.Input.WithholdingYearToDate);
 
         var exp = new Explanation
@@ -218,7 +236,8 @@ public static class SettlementWithholdingRules
             Form = ctx.Employee.WithholdingProcedure == 2 ? "Base × porcentaje (procedimiento 2)" : "Tabla por rangos",
             Base = new ExplanationBase(Bases.Label(CalculationBase.WithholdingBase), depuracion.Base),
         };
-        exp.Note("Alcance", "Pago laboral ordinario de esta liquidación (salario pendiente, auxilio, vacaciones): se depura aparte con los topes de un mes; la prima, las cesantías y la indemnización llevan su propia retención.");
+        exp.Note("Alcance", "Pago laboral ordinario de esta liquidación (salario pendiente, auxilio, vacaciones): se depura aparte; la prima, las cesantías y la indemnización llevan su propia retención.");
+        exp.Step($"Días que cubre este pago ({Fmt.Num(diasPagados)}) / {CalendarConventions.DaysPerMonth}: proporción de los topes mensuales en UVT", proporcion);
         exp.Steps.AddRange(depuracion.Steps);
         if (!depuracion.HasDeclaredItems)
             exp.Note("Depuraciones declaradas", "Ninguna: si el empleado tiene intereses de vivienda, medicina prepagada o dependientes, faltó registrarlos.");
