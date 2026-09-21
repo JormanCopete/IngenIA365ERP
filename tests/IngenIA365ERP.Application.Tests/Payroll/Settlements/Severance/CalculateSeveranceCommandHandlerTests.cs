@@ -72,6 +72,12 @@ public class CalculateSeveranceCommandHandlerTests
         run.Status.Should().Be(PayrollRunStatus.Draft);
         run.EsCoherente.Should().BeTrue();
         dto.Totals.Earnings.Should().Be(a.Cesantias + a.Intereses + f.Cesantias + f.Intereses + g.Cesantias + g.Intereses);
+        // Revisión N1: el neto de la corrida es lo que se le paga al EMPLEADO (intereses menos retención); las cesantías
+        // van al fondo y no entran ni en NetPay ni en TotalNet, que leen la relación de pago, la marca y el comprobante.
+        dto.Totals.Net.Should().Be(dto.Totals.Earnings - dto.Totals.Deductions - (a.Cesantias + f.Cesantias + g.Cesantias));
+        var filas = await e.D.Db.PayrollRunEmployees.AsNoTracking().Where(x => x.PayrollRunId == run.Id).ToListAsync();
+        filas.Single(x => x.EmployeeId == e.A.Id).NetPay.Should().Be(a.Intereses - filas.Single(x => x.EmployeeId == e.A.Id).TotalDeductions);
+        filas.Sum(x => x.NetPay).Should().Be(run.TotalNet);
     }
 
     [Fact]

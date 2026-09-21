@@ -97,7 +97,7 @@ public class DepositScheduleTests
         item.Status.Should().Be("Approved");
         item.SeveranceTotal.Should().Be(2_749_095m + 2_315_761.67m + 666_666.67m);
         item.InterestTotal.Should().Be(329_891.40m + 277_891.40m + 26_666.67m);
-        item.Total.Should().Be(item.SeveranceTotal + item.InterestTotal, "sin retención, el neto es la suma de los dos rubros");
+        item.Total.Should().Be(item.InterestTotal, "el neto es lo que se le paga al empleado: los intereses (aquí sin retención); las cesantías van al fondo (revisión N1)");
         item.PostedDocumentNumber.Should().StartWith("NM-");
         item.PaidCount.Should().Be(0);
         item.Funds.Should().HaveCount(2);
