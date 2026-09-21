@@ -157,7 +157,10 @@ openPeriodPublicId? }`; FR-021: reversar el período o liquidar con fecha en el 
 `.DateBeforeHire`, `.DateInFuture`, `.EmployeeAlreadyTerminated` (`data: { terminationPublicId }`),
 `.PendingSettlement` (ya hay una definitiva en borrador o aprobada; `data: { runPublicId }`),
 `.ReasonNotFound`, `.ContractEndDateRequired`, `Payroll.Settlement.PortfolioUnavailable` (Cartera
-no respondió: la propuesta sale vacía con aviso, no se bloquea).
+no respondió: la propuesta sale vacía con aviso, no se bloquea), `Payroll.Settlement.EmployeeRehired`
+(422 en `POST /{runId}/reverse`: la persona ya tiene una ficha nueva por reingreso y sólo hay una ficha
+viva por persona —feature 008—; `data: { employeePublicId, rehiredEmployeePublicId, rehiredOn }`: retirar
+o eliminar la ficha nueva antes de reversar. Revisión N1: antes era un 500 por el índice único).
 
 ### 3.5 Errores comunes a las cuatro
 

@@ -150,6 +150,15 @@ public static class SettlementErrors
         "En un contrato a término fijo o por obra cuyo motivo genera indemnización, indique hasta cuándo iba el contrato (el tiempo que faltaba, CST art. 64).");
     public static readonly Error TerminationReasonSeeded = new("Payroll.Termination.ReasonSeeded", "Un motivo sembrado por el programa no cambia de código ni de marca de indemnización.");
     public static readonly Error TerminationNotFound = new("Payroll.Termination.NotFound", "No existe la terminación indicada.");
+    /// <summary>
+    /// Revisión N1 (2026-09-21): reversar la definitiva reintegra la ficha, pero el reingreso de la feature 008 es una
+    /// ficha nueva y sólo puede haber una viva por persona (<c>UK_PAY_Employees_PersonId</c>); con la nueva registrada,
+    /// reintegrar la vieja violaba el índice y respondía 500 sin explicación.
+    /// </summary>
+    public static Error EmployeeRehired(Guid employeePublicId, Guid rehiredEmployeePublicId, DateTime rehiredOn) =>
+        new ErrorConDatos("Payroll.Settlement.EmployeeRehired",
+            $"La persona ya tiene una ficha nueva por reingreso (desde el {rehiredOn:dd/MM/yyyy}). Reintegrar la ficha anterior dejaría dos fichas vivas de la misma persona: retire o elimine la ficha nueva antes de reversar la liquidación definitiva.",
+            new { employeePublicId, rehiredEmployeePublicId, rehiredOn = DateOnly.FromDateTime(rehiredOn) });
 
     public static Error DeductionAboveProposed(decimal proposed) =>
         new ErrorConDatos("Payroll.Settlement.DeductionAboveProposed", $"El descuento aplicado no puede superar lo propuesto ({proposed:N0}). Sólo se baja, con motivo.", new { proposed });

@@ -20,7 +20,9 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// <c>TerminationDate = MaxValue</c>, <c>Person.IsEmployee = true</c>), la terminación queda
 /// <c>Reinstated</c> con el motivo, los descuentos <c>Reverted</c> y el movimiento de vacaciones de la
 /// definitiva anulado. Los recaudos de Cartera <b>no</b> se reversan solos: la respuesta los lista para
-/// que Cartera los reverse por su propio flujo (FR-020, R7). Auditoría <c>Payroll.Employee.Reinstated</c>.
+/// que Cartera los reverse por su propio flujo (FR-020, R7). Si la persona ya tiene ficha nueva por
+/// reingreso, no se reversa: <c>Payroll.Settlement.EmployeeRehired</c> con la ficha nueva (sólo hay una
+/// ficha viva por persona). Auditoría <c>Payroll.Employee.Reinstated</c>.
 /// </summary>
 public sealed record ReverseSettlementCommand(Guid RunPublicId, string Reason) : IRequest<Result<SettlementReversedWithPortfolioDto>>, IReintentableAnteConcurrencia;
 
@@ -53,6 +55,16 @@ public sealed class ReverseSettlementCommandHandler(
         var empleado = await db.Employees.FirstOrDefaultAsync(e => e.Id == terminacion.EmployeeId, ct);
         if (empleado is null) return Result.Failure<SettlementReversedWithPortfolioDto>(SettlementErrors.EmployeeNotFound);
         var persona = await db.People.FirstOrDefaultAsync(p => p.Id == empleado.PersonId, ct);
+
+        // El reingreso es una ficha nueva (feature 008) y sólo hay una viva por persona: si ya existe, reintegrar
+        // ésta violaría UK_PAY_Employees_PersonId. Se dice antes de tocar nada (revisión N1).
+        var reingreso = await db.Employees.AsNoTracking()
+            .Where(e => e.PersonId == empleado.PersonId && e.Id != empleado.Id && e.Status != -1 && !e.IsDeleted)
+            .OrderByDescending(e => e.JoinDate)
+            .Select(e => new { e.PublicId, e.JoinDate })
+            .FirstOrDefaultAsync(ct);
+        if (reingreso is not null)
+            return Result.Failure<SettlementReversedWithPortfolioDto>(SettlementErrors.EmployeeRehired(empleado.PublicId, reingreso.PublicId, reingreso.JoinDate));
 
         var pagos = new List<PortfolioPaymentDto>();
         var reversado = await TransaccionDeLiquidacion.EjecutarAsync(db, () => workflow.ReverseAsync(run.PublicId, PayrollRunKind.Settlement, request.Reason,
