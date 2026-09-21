@@ -436,7 +436,7 @@ Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de l
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-#### P16 — Feature 010 (nómina completa): N1 en `develop`; N4 terminada en la rama; N2–N3 pendientes
+#### P16 — Feature 010 (nómina completa): N1 en `develop`; N2 y N4 terminadas en la rama; N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
 definitiva, con políticas por empresa, festivos, saldos iniciales y ficha PILA/DIAN— está
@@ -467,6 +467,24 @@ consignación de cesantías por fondo ya escribe con el mismo motor. D-10 quedó
 (T147) se carga como dato en Maestros › Formatos bancarios; si exige un origen que no exista,
 eso sí es programa. Los códigos ACH de los bancos de las fichas se digitan en Maestros › Bancos.
 
+**Entrega N2 — PILA y procedimiento 2** (2026-09-21, en la rama, sin merge): planilla de aportes
+con el layout de la Res. 2388 como dato versionado (sin cotejar todavía: alerta
+`Pila.LayoutSinCotejar` hasta T094), motor puro con casos dorados byte a byte, validación con la
+taxonomía del operador, generación versionada, cuadre contra la nómina antes de descargar y marca
+de cargada; porcentaje fijo del art. 386 con explicación mes a mes y aprobación que cierra la
+vigencia anterior. Verde: 1.479 sin contenedores y 164 e2e (163 pasan, 1 omitida). Migración
+aditiva `NominaPilaYNominaElectronica` (con las tablas de N3). Runbook:
+[pila-primera-planilla.md](pila-primera-planilla.md); manual:
+[retencion-procedimiento-2.md](../manual/retencion-procedimiento-2.md). **Lo que aporta el
+dueño**: cotejar el layout con el anexo v30 y una planilla pagada (el registro tipo 1 suma 358 y
+el anexo declara 359; decimales de las tarifas; código del operador) y pasar el `.txt` por el
+validador de Aportes en Línea con la cuenta de COOFLOPAL (SC-004); códigos PILA de EPS, fondos,
+ARL y cajas; confirmación 8h de la contadora (secuencia del procedimiento 2). Dos hallazgos que
+convienen saber: la nómina ordinaria redondea la ARL al múltiplo más cercano y la planilla al
+superior (Decreto 780 art. 3.2.1.5) —la diferencia se muestra y se reconoce; si se quiere cero,
+la política `Payroll.Rounding`—, y la exoneración del art. 114-1 se decide por lo devengado, no
+por el IBC (un integral de 20 M no queda exonerado).
+
 Lo que sigue y a quién le toca:
 
 1. **Usuario**: confirmar la rama y autorizar el merge a `develop` (T076); el pipeline la lleva
@@ -483,10 +501,10 @@ Lo que sigue y a quién le toca:
    `ingenia365erp_admin`, segundo revisor de las dos migraciones (aditivas) en su cabecera, y
    en `cooflopal` digitar antes lo de §4d del runbook (cuentas de los 16 conceptos, políticas,
    festivos, saldos iniciales al 30-11-2026 validados).
-4. **N2** (PILA por Aportes en Línea planilla E y retención procedimiento 2, T079–T107),
-   **N3** (nómina electrónica DIAN con el servicio central sin estado, modo «software propio»
-   primero, T108–T135) siguen en la misma rama o en ramas hijas, con su migración par
-   (`NominaPilaYNominaElectronica`); N4 (T136–T146) ya está en la rama y T147 es del dueño.
+4. **N3** (nómina electrónica DIAN con el servicio central sin estado, modo «software propio»
+   primero, T108–T135) sigue en la misma rama o en una rama hija; sus tablas ya existen por la
+   migración de N2 (D-12). N2 (T079–T093, T095–T105) y N4 (T136–T146) ya están en la rama; T094
+   (cotejo del layout y validador del operador), T106–T107 y T147 son del dueño.
    Lo que el dueño debe aportar antes: layout del archivo de AV Villas (se carga como dato), registro de cada
    cooperativa en el catálogo DIAN (SoftwareID, PIN, TestSetId) con su certificado y set de
    pruebas aceptado, acceso al validador de Aportes en Línea, SMMLV/UVT 2027.

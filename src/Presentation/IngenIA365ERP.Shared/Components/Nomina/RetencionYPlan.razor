@@ -66,6 +66,7 @@
             </table>
             <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@(() => _tasas.Add(new FilaTasa { ValidFrom = DateTime.Today }))">Agregar porcentaje</SfButton>
             <p class="texto-tenue">Si el período a liquidar no tiene porcentaje vigente, el cálculo se niega para este empleado y lo nombra: no cae al procedimiento 1.</p>
+            <p class="texto-tenue">El porcentaje semestral se calcula y aprueba en <a class="enlace" href="/nomina/retencion-procedimiento-2">Nómina › Retención procedimiento 2</a>: aprobar cierra la vigencia anterior la víspera y abre la nueva con origen «calculado»; aquí se ven todas y se pueden ajustar a mano.</p>
         }
 
         <span class="label">Deducciones y rentas exentas declaradas</span>

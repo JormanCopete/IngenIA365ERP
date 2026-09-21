@@ -24,5 +24,9 @@
   <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Feature 010 (US5): el layout de la PILA es dato versionado embebido, como la semilla del PUC. -->
+    <EmbeddedResource Include="Payroll\Pila\Layouts\*.json" />
+  </ItemGroup>
 
 </Project>

@@ -1,0 +1,104 @@
+{
+  // Caso dorado 02 del procedimiento 2 (feature 010, US7): la otra secuencia admitida por la política, con topes mensuales sobre el promedio.
+  "nombre": "Dividir la sumatoria y depurar el promedio (política DividirLuegoDepurar)",
+  "derivacion": "Mismos doce meses y prima que el caso 01: ingreso promedio 250.000.000 ÷ 13 = 19.230.769,23; aportes promedio 1.661.538,46; neto 17.569.230,77. Renta exenta 25 % = 4.392.307,69, limitada al tope mensual 65,83 UVT = 3.447.780,42. Base 14.121.450,35 = 269,6271 UVT → tramo 150–360: (269,6271 − 150) × 28 % + 10 UVT = 2.278.038,10. Porcentaje 16,13 %: distinto del caso 01 porque el tope mensual muerde más que el anual proporcionado.",
+  "year": 2026,
+  "semester": 2,
+  "mesDeCalculo": "2026-12-01",
+  "secuencia": "DivideThenDepurate",
+  "meses": [
+    {
+      "year": 2025,
+      "month": 12,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 4,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "bruto": 30000000,
+      "aportes": 1800000,
+      "especial": true
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "bruto": 20000000,
+      "aportes": 1800000,
+      "especial": false
+    }
+  ],
+  "deducciones": [],
+  "esperado": {
+    "mesesConsiderados": 12,
+    "divisor": 13,
+    "basePromedio": 14121450.35,
+    "promedioUvt": 269.6271,
+    "retencionTeorica": 2278038.1,
+    "porcentaje": 16.13
+  }
+}

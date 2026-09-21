@@ -1,0 +1,1858 @@
+{
+ "code": "AT2-v30",
+ "version": "30",
+ "source": "Res. 2388/2016, Anexo Técnico 2 consolidado 24-07-2026 (hasta Res. 1529/2026)",
+ "validFrom": "2026-08-01",
+ "validTo": null,
+ "encoding": "us-ascii",
+ "lineEnding": "CRLF",
+ "notes": [
+  "Posiciones reconstruidas de la resolución; cada campo lleva verified=false hasta cotejarlo con el anexo v30 y con una planilla pagada (T094). Mientras haya campos sin cotejar, generar deja la alerta Pila.LayoutSinCotejar.",
+  "Registro tipo 1: los 22 campos suman 358 posiciones; el anexo v30 (numeral 2.1.1.1) declara 359. Hay un campo con una posición de diferencia por cotejar.",
+  "Tarifas con 7 posiciones (0.04000) y la de ARL con 9 (0.0052200): el anexo no fija los decimales; se cotejan con una planilla pagada."
+ ],
+ "records": [
+  {
+   "type": 1,
+   "length": 358,
+   "fields": [
+    {
+     "number": 1,
+     "name": "Tipo de registro",
+     "start": 1,
+     "length": 1,
+     "kind": "N",
+     "required": true,
+     "source": "Constant",
+     "path": null,
+     "constant": "1",
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 2,
+     "name": "Modalidad de la planilla",
+     "start": 2,
+     "length": 1,
+     "kind": "N",
+     "required": true,
+     "source": "Constant",
+     "path": null,
+     "constant": "1",
+     "format": "Integer",
+     "rules": [
+      "1 = electrónica"
+     ],
+     "verified": false
+    },
+    {
+     "number": 3,
+     "name": "Secuencia",
+     "start": 3,
+     "length": 4,
+     "kind": "N",
+     "required": true,
+     "source": "Constant",
+     "path": null,
+     "constant": "0001",
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 4,
+     "name": "Nombre o razón social del aportante",
+     "start": 7,
+     "length": 200,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.Name",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 5,
+     "name": "Tipo de documento del aportante",
+     "start": 207,
+     "length": 2,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.DocumentType",
+     "constant": "NI",
+     "format": "Text",
+     "rules": [
+      "NI para persona jurídica"
+     ],
+     "verified": false
+    },
+    {
+     "number": 6,
+     "name": "Número de identificación del aportante",
+     "start": 209,
+     "length": 16,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.Nit",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "NIT sin dígito de verificación"
+     ],
+     "verified": false
+    },
+    {
+     "number": 7,
+     "name": "Dígito de verificación",
+     "start": 225,
+     "length": 1,
+     "kind": "N",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.CheckDigit",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 8,
+     "name": "Tipo de planilla",
+     "start": 226,
+     "length": 1,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.PlanillaType",
+     "constant": "E",
+     "format": "Text",
+     "rules": [
+      "E empleados; N y A fuera de alcance"
+     ],
+     "verified": false
+    },
+    {
+     "number": 9,
+     "name": "Número de la planilla asociada",
+     "start": 227,
+     "length": 10,
+     "kind": "N",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "sólo planillas N/A"
+     ],
+     "verified": false
+    },
+    {
+     "number": 10,
+     "name": "Fecha de pago de la planilla asociada",
+     "start": 237,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Date",
+     "rules": [
+      "sólo planillas N/A"
+     ],
+     "verified": false
+    },
+    {
+     "number": 11,
+     "name": "Forma de presentación",
+     "start": 247,
+     "length": 1,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.PresentationForm",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "U única / S sucursal"
+     ],
+     "verified": false
+    },
+    {
+     "number": 12,
+     "name": "Código de la sucursal",
+     "start": 248,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Settings",
+     "path": "Employer.BranchCode",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "si forma de presentación = S"
+     ],
+     "verified": false
+    },
+    {
+     "number": 13,
+     "name": "Nombre de la sucursal",
+     "start": 258,
+     "length": 40,
+     "kind": "A",
+     "required": false,
+     "source": "Settings",
+     "path": "Employer.BranchName",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "si forma de presentación = S"
+     ],
+     "verified": false
+    },
+    {
+     "number": 14,
+     "name": "Código de la ARL del aportante",
+     "start": 298,
+     "length": 6,
+     "kind": "A",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.ArlPilaCode",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 15,
+     "name": "Período de pago para sistemas distintos a salud",
+     "start": 304,
+     "length": 7,
+     "kind": "A",
+     "required": true,
+     "source": "Calculation",
+     "path": "Period.Others",
+     "constant": null,
+     "format": "Period",
+     "rules": [
+      "AAAA-MM del mes liquidado"
+     ],
+     "verified": false
+    },
+    {
+     "number": 16,
+     "name": "Período de pago para el sistema de salud",
+     "start": 311,
+     "length": 7,
+     "kind": "A",
+     "required": true,
+     "source": "Calculation",
+     "path": "Period.Health",
+     "constant": null,
+     "format": "Period",
+     "rules": [
+      "mes siguiente al campo 15 en planilla E"
+     ],
+     "verified": false
+    },
+    {
+     "number": 17,
+     "name": "Número de radicación o de la planilla integrada",
+     "start": 318,
+     "length": 10,
+     "kind": "N",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "lo asigna el operador"
+     ],
+     "verified": false
+    },
+    {
+     "number": 18,
+     "name": "Fecha de pago",
+     "start": 328,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Date",
+     "rules": [
+      "la pone el operador al pagar"
+     ],
+     "verified": false
+    },
+    {
+     "number": 19,
+     "name": "Número total de empleados",
+     "start": 338,
+     "length": 5,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Totals.Contributors",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "cotizantes únicos, no líneas"
+     ],
+     "verified": false
+    },
+    {
+     "number": 20,
+     "name": "Valor total de la nómina",
+     "start": 343,
+     "length": 12,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Totals.IbcFamilyCompensation",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "Σ campo 45 de todas las líneas"
+     ],
+     "verified": false
+    },
+    {
+     "number": 21,
+     "name": "Tipo de aportante",
+     "start": 355,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.ContributorType",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "1 empleador"
+     ],
+     "verified": false
+    },
+    {
+     "number": 22,
+     "name": "Código del operador de información",
+     "start": 357,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Settings",
+     "path": "Employer.OperatorCode",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "Aportes en Línea; lo confirma el operador"
+     ],
+     "verified": false
+    }
+   ]
+  },
+  {
+   "type": 2,
+   "length": 693,
+   "fields": [
+    {
+     "number": 1,
+     "name": "Tipo de registro",
+     "start": 1,
+     "length": 1,
+     "kind": "N",
+     "required": true,
+     "source": "Constant",
+     "path": null,
+     "constant": "2",
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 2,
+     "name": "Secuencia",
+     "start": 2,
+     "length": 5,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "LineNumber",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "consecutivo desde 00001"
+     ],
+     "verified": false
+    },
+    {
+     "number": 3,
+     "name": "Tipo de documento del cotizante",
+     "start": 7,
+     "length": 2,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Person.DocumentType",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "CC/CE/TI/PA/PE/PT/CD/SC/NI"
+     ],
+     "verified": false
+    },
+    {
+     "number": 4,
+     "name": "Número de identificación del cotizante",
+     "start": 9,
+     "length": 16,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Person.Document",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "longitud por tipo (Res. 1529/2026): CC ≤ 10, TI ≤ 11, CE ≤ 7, PA ≤ 16, PE = 15, PT ≤ 8"
+     ],
+     "verified": false
+    },
+    {
+     "number": 5,
+     "name": "Tipo de cotizante",
+     "start": 25,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.Type",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "1 dependiente; 19 aprendiz etapa lectiva; 51 tiempo parcial"
+     ],
+     "verified": false
+    },
+    {
+     "number": 6,
+     "name": "Subtipo de cotizante",
+     "start": 27,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.SubType",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "00; 1 pensionado activo (tarifa de pensión 0)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 7,
+     "name": "Extranjero no obligado a cotizar a pensiones",
+     "start": 29,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Contributor.ForeignNotPension",
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 8,
+     "name": "Colombiano en el exterior",
+     "start": 30,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Contributor.ColombianAbroad",
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 9,
+     "name": "Código del departamento de la ubicación laboral",
+     "start": 31,
+     "length": 2,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.DivipolaDepartment",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "DIVIPOLA; defecto de la sede"
+     ],
+     "verified": false
+    },
+    {
+     "number": 10,
+     "name": "Código del municipio de la ubicación laboral",
+     "start": 33,
+     "length": 3,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.DivipolaMunicipality",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "DIVIPOLA"
+     ],
+     "verified": false
+    },
+    {
+     "number": 11,
+     "name": "Primer apellido",
+     "start": 36,
+     "length": 20,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Person.FirstLastName",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 12,
+     "name": "Segundo apellido",
+     "start": 56,
+     "length": 30,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Person.SecondLastName",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "alerta si falta"
+     ],
+     "verified": false
+    },
+    {
+     "number": 13,
+     "name": "Primer nombre",
+     "start": 86,
+     "length": 20,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Person.FirstName",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 14,
+     "name": "Segundo nombre",
+     "start": 106,
+     "length": 30,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Person.OtherNames",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 15,
+     "name": "ING: ingreso",
+     "start": 136,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.ING",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si ingresó en el mes (+ campo 80)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 16,
+     "name": "RET: retiro",
+     "start": 137,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.RET",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si se retiró en el mes (+ campo 81)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 17,
+     "name": "TDE: traslado desde otra EPS",
+     "start": 138,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "se digita en el operador"
+     ],
+     "verified": false
+    },
+    {
+     "number": 18,
+     "name": "TAE: traslado a otra EPS",
+     "start": 139,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 19,
+     "name": "TDP: traslado desde otra AFP",
+     "start": 140,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 20,
+     "name": "TAP: traslado a otra AFP",
+     "start": 141,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 21,
+     "name": "VSP: variación permanente de salario",
+     "start": 142,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.VSP",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si cambió el salario en el mes (+ campo 82)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 22,
+     "name": "Correcciones",
+     "start": 143,
+     "length": 2,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "sólo planillas de corrección"
+     ],
+     "verified": false
+    },
+    {
+     "number": 23,
+     "name": "VST: variación transitoria del salario",
+     "start": 145,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.VST",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si el IBC superó el salario básico por devengos variables"
+     ],
+     "verified": false
+    },
+    {
+     "number": 24,
+     "name": "SLN: suspensión temporal o licencia no remunerada",
+     "start": 146,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.SLN",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "+ fechas 83-84; línea aparte, sólo tarifas del empleador, FSP 0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 25,
+     "name": "IGE: incapacidad por enfermedad general",
+     "start": 147,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.IGE",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "+ fechas 85-86; línea aparte; ARL 0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 26,
+     "name": "LMA: licencia de maternidad o paternidad",
+     "start": 148,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.LMA",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "+ fechas 87-88; ARL 0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 27,
+     "name": "VAC-LR: vacaciones o licencia remunerada",
+     "start": 149,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.VAC",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "+ fechas 89-90; línea aparte; ARL según política CotizaArlEnVacaciones"
+     ],
+     "verified": false
+    },
+    {
+     "number": 28,
+     "name": "AVP: aporte voluntario a pensión",
+     "start": 150,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.AVP",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si hay aporte voluntario (campos 48-49)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 29,
+     "name": "VCT: variación de centros de trabajo",
+     "start": 151,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Flag",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 30,
+     "name": "IRL: días de incapacidad por riesgo laboral",
+     "start": 152,
+     "length": 2,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.IRLDays",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "días; + fechas 93-94"
+     ],
+     "verified": false
+    },
+    {
+     "number": 31,
+     "name": "Código de la AFP a la que pertenece",
+     "start": 154,
+     "length": 6,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Codes.Pension",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "PensionProvider.PilaCode"
+     ],
+     "verified": false
+    },
+    {
+     "number": 32,
+     "name": "Código de la AFP a la que se traslada",
+     "start": 160,
+     "length": 6,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 33,
+     "name": "Código de la EPS o EOC a la que pertenece",
+     "start": 166,
+     "length": 6,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Codes.Health",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "HealthInsuranceProvider.PilaCode"
+     ],
+     "verified": false
+    },
+    {
+     "number": 34,
+     "name": "Código de la EPS a la que se traslada",
+     "start": 172,
+     "length": 6,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 35,
+     "name": "Código de la CCF a la que pertenece",
+     "start": 178,
+     "length": 6,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Codes.FamilyCompensation",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "FamilyCompensationFund.PilaCode"
+     ],
+     "verified": false
+    },
+    {
+     "number": 36,
+     "name": "Días cotizados a pensión",
+     "start": 184,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Days.Pension",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "suman 30 entre las líneas del cotizante salvo ING/RET"
+     ],
+     "verified": false
+    },
+    {
+     "number": 37,
+     "name": "Días cotizados a salud",
+     "start": 186,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Days.Health",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 38,
+     "name": "Días cotizados a riesgos laborales",
+     "start": 188,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Days.WorkRisk",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 39,
+     "name": "Días cotizados a CCF",
+     "start": 190,
+     "length": 2,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Days.FamilyCompensation",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 40,
+     "name": "Salario básico",
+     "start": 192,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Salary.Basic",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "salario mensual vigente; integral el 100 %"
+     ],
+     "verified": false
+    },
+    {
+     "number": 41,
+     "name": "Salario integral",
+     "start": 201,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Salary.Integral",
+     "constant": null,
+     "format": "Flag",
+     "rules": [
+      "X si la clase es salario integral"
+     ],
+     "verified": false
+    },
+    {
+     "number": 42,
+     "name": "IBC pensión",
+     "start": 202,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Ibc.Pension",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "≥ 1 SMMLV proporcional, ≤ 25 SMMLV, integral 70 %, sin auxilio; al peso superior"
+     ],
+     "verified": false
+    },
+    {
+     "number": 43,
+     "name": "IBC salud",
+     "start": 211,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Ibc.Health",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "idem"
+     ],
+     "verified": false
+    },
+    {
+     "number": 44,
+     "name": "IBC riesgos laborales",
+     "start": 220,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Ibc.WorkRisk",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "idem"
+     ],
+     "verified": false
+    },
+    {
+     "number": 45,
+     "name": "IBC CCF",
+     "start": 229,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Ibc.FamilyCompensation",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "salario + novedades del mes"
+     ],
+     "verified": false
+    },
+    {
+     "number": 46,
+     "name": "Tarifa de aportes a pensión",
+     "start": 238,
+     "length": 7,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.Pension",
+     "constant": null,
+     "format": "Rate7",
+     "rules": [
+      "PENSION_EMPLEADO_PCT + PENSION_EMPLEADOR_PCT; 0 en subtipo 1"
+     ],
+     "verified": false
+    },
+    {
+     "number": 47,
+     "name": "Cotización obligatoria a pensión",
+     "start": 245,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.Pension",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "al múltiplo de 100 superior"
+     ],
+     "verified": false
+    },
+    {
+     "number": 48,
+     "name": "Aporte voluntario del afiliado a pensión obligatoria",
+     "start": 254,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.VoluntaryEmployee",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 49,
+     "name": "Aporte voluntario del aportante a pensión obligatoria",
+     "start": 263,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.VoluntaryEmployer",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 50,
+     "name": "Total cotización al sistema general de pensiones",
+     "start": 272,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.PensionTotal",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "47 + 48 + 49"
+     ],
+     "verified": false
+    },
+    {
+     "number": 51,
+     "name": "Aportes al fondo de solidaridad pensional, subcuenta de solidaridad",
+     "start": 281,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.SolidarityFund",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "FSP_TABLA vigente; los liquida el operador (v30): diferencia = alerta"
+     ],
+     "verified": false
+    },
+    {
+     "number": 52,
+     "name": "Aportes al fondo de solidaridad pensional, subcuenta de subsistencia",
+     "start": 290,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.SubsistenceFund",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 53,
+     "name": "Valor no retenido por aportes voluntarios",
+     "start": 299,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.NotWithheldVoluntary",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 54,
+     "name": "Tarifa de aportes a salud",
+     "start": 308,
+     "length": 7,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.Health",
+     "constant": null,
+     "format": "Rate7",
+     "rules": [
+      "0.12500; exonerado (art. 114-1) 0.04000"
+     ],
+     "verified": false
+    },
+    {
+     "number": 55,
+     "name": "Cotización obligatoria a salud",
+     "start": 315,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.Health",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "al múltiplo de 100 superior"
+     ],
+     "verified": false
+    },
+    {
+     "number": 56,
+     "name": "Valor UPC adicional",
+     "start": 324,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Contributions.AdditionalUpc",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 57,
+     "name": "Número de autorización de la incapacidad por enfermedad general",
+     "start": 333,
+     "length": 15,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.IGEAuthorization",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 58,
+     "name": "Valor de la incapacidad por enfermedad general",
+     "start": 348,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.IGEValue",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "0: se cobra a la EPS por otro canal"
+     ],
+     "verified": false
+    },
+    {
+     "number": 59,
+     "name": "Número de autorización de la licencia de maternidad o paternidad",
+     "start": 357,
+     "length": 15,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.LMAAuthorization",
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 60,
+     "name": "Valor de la licencia de maternidad o paternidad",
+     "start": 372,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Calculation",
+     "path": "Novelty.LMAValue",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 61,
+     "name": "Tarifa de aportes a riesgos laborales",
+     "start": 381,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.WorkRisk",
+     "constant": null,
+     "format": "Rate9",
+     "rules": [
+      "ARL_CLASE_n_PCT de la fila PAY_WorkRiskRates de la ficha; 0 en IGE/LMA"
+     ],
+     "verified": false
+    },
+    {
+     "number": 62,
+     "name": "Centro de trabajo CT",
+     "start": 390,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Profile",
+     "path": "Contributor.WorkCenter",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 63,
+     "name": "Cotización obligatoria a riesgos laborales",
+     "start": 399,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.WorkRisk",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "al múltiplo de 100 superior"
+     ],
+     "verified": false
+    },
+    {
+     "number": 64,
+     "name": "Tarifa de aportes a CCF",
+     "start": 408,
+     "length": 7,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.FamilyCompensation",
+     "constant": null,
+     "format": "Rate7",
+     "rules": [
+      "CAJA_PCT; completa aun exonerado"
+     ],
+     "verified": false
+    },
+    {
+     "number": 65,
+     "name": "Valor del aporte a CCF",
+     "start": 415,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.FamilyCompensation",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 66,
+     "name": "Tarifa de aportes al SENA",
+     "start": 424,
+     "length": 7,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.Sena",
+     "constant": null,
+     "format": "Rate7",
+     "rules": [
+      "SENA_PCT; exonerado 0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 67,
+     "name": "Valor del aporte al SENA",
+     "start": 431,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.Sena",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 68,
+     "name": "Tarifa de aportes al ICBF",
+     "start": 440,
+     "length": 7,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Rates.Icbf",
+     "constant": null,
+     "format": "Rate7",
+     "rules": [
+      "ICBF_PCT; exonerado 0"
+     ],
+     "verified": false
+    },
+    {
+     "number": 69,
+     "name": "Valor del aporte al ICBF",
+     "start": 447,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributions.Icbf",
+     "constant": null,
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 70,
+     "name": "Tarifa de aportes a la ESAP",
+     "start": 456,
+     "length": 7,
+     "kind": "N",
+     "required": false,
+     "source": "Constant",
+     "path": null,
+     "constant": "0",
+     "format": "Rate7",
+     "rules": [
+      "sólo entidades públicas"
+     ],
+     "verified": false
+    },
+    {
+     "number": 71,
+     "name": "Valor del aporte a la ESAP",
+     "start": 463,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Constant",
+     "path": null,
+     "constant": "0",
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 72,
+     "name": "Tarifa de aportes al MEN",
+     "start": 472,
+     "length": 7,
+     "kind": "N",
+     "required": false,
+     "source": "Constant",
+     "path": null,
+     "constant": "0",
+     "format": "Rate7",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 73,
+     "name": "Valor del aporte al MEN",
+     "start": 479,
+     "length": 9,
+     "kind": "N",
+     "required": false,
+     "source": "Constant",
+     "path": null,
+     "constant": "0",
+     "format": "Integer",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 74,
+     "name": "Tipo de documento del cotizante principal",
+     "start": 488,
+     "length": 2,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "sólo beneficiarios / UPC adicional"
+     ],
+     "verified": false
+    },
+    {
+     "number": 75,
+     "name": "Número de identificación del cotizante principal",
+     "start": 490,
+     "length": 16,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Text",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 76,
+     "name": "Cotizante exonerado de aportes a salud, SENA e ICBF (Ley 1607/2012)",
+     "start": 506,
+     "length": 1,
+     "kind": "A",
+     "required": true,
+     "source": "Calculation",
+     "path": "Contributor.Exempt",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "S/N: política Exonerada114_1 vigente y IBC < EXONERACION_PARAFISCALES_TOPE_SMMLV; coherente con el campo 54"
+     ],
+     "verified": false
+    },
+    {
+     "number": 77,
+     "name": "Código de la ARL a la que pertenece",
+     "start": 507,
+     "length": 6,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Codes.WorkRisk",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "WorkRiskProvider.PilaCode"
+     ],
+     "verified": false
+    },
+    {
+     "number": 78,
+     "name": "Clase de riesgo del afiliado",
+     "start": 513,
+     "length": 1,
+     "kind": "N",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.WorkRiskClass",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "PAY_WorkRiskRates.Code 1..5"
+     ],
+     "verified": false
+    },
+    {
+     "number": 79,
+     "name": "Indicador de tarifa especial de pensiones",
+     "start": 514,
+     "length": 1,
+     "kind": "A",
+     "required": false,
+     "source": "Profile",
+     "path": "Contributor.HighRiskPension",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "alto riesgo"
+     ],
+     "verified": false
+    },
+    {
+     "number": 80,
+     "name": "Fecha de ingreso",
+     "start": 515,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.Hire",
+     "constant": null,
+     "format": "Date",
+     "rules": [
+      "si ING"
+     ],
+     "verified": false
+    },
+    {
+     "number": 81,
+     "name": "Fecha de retiro",
+     "start": 525,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.Termination",
+     "constant": null,
+     "format": "Date",
+     "rules": [
+      "si RET"
+     ],
+     "verified": false
+    },
+    {
+     "number": 82,
+     "name": "Fecha de inicio de la VSP",
+     "start": 535,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.VSP",
+     "constant": null,
+     "format": "Date",
+     "rules": [
+      "si VSP"
+     ],
+     "verified": false
+    },
+    {
+     "number": 83,
+     "name": "Fecha de inicio de la SLN",
+     "start": 545,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.SLNStart",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 84,
+     "name": "Fecha de fin de la SLN",
+     "start": 555,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.SLNEnd",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 85,
+     "name": "Fecha de inicio de la IGE",
+     "start": 565,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.IGEStart",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 86,
+     "name": "Fecha de fin de la IGE",
+     "start": 575,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.IGEEnd",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 87,
+     "name": "Fecha de inicio de la LMA",
+     "start": 585,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.LMAStart",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 88,
+     "name": "Fecha de fin de la LMA",
+     "start": 595,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.LMAEnd",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 89,
+     "name": "Fecha de inicio de VAC-LR",
+     "start": 605,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.VACStart",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 90,
+     "name": "Fecha de fin de VAC-LR",
+     "start": 615,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.VACEnd",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 91,
+     "name": "Fecha de inicio de la VCT",
+     "start": 625,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 92,
+     "name": "Fecha de fin de la VCT",
+     "start": 635,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 93,
+     "name": "Fecha de inicio de la IRL",
+     "start": 645,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.IRLStart",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 94,
+     "name": "Fecha de fin de la IRL",
+     "start": 655,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Calculation",
+     "path": "Dates.IRLEnd",
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 95,
+     "name": "IBC de otros parafiscales distintos a CCF",
+     "start": 665,
+     "length": 9,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Ibc.OtherParafiscal",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "base SENA/ICBF: = 45 salvo exonerado (0)"
+     ],
+     "verified": false
+    },
+    {
+     "number": 96,
+     "name": "Número de horas laboradas",
+     "start": 674,
+     "length": 3,
+     "kind": "N",
+     "required": true,
+     "source": "Calculation",
+     "path": "Hours",
+     "constant": null,
+     "format": "Integer",
+     "rules": [
+      "días × HORAS_MES / 30"
+     ],
+     "verified": false
+    },
+    {
+     "number": 97,
+     "name": "Fecha de radicación en el exterior",
+     "start": 677,
+     "length": 10,
+     "kind": "A",
+     "required": false,
+     "source": "Blank",
+     "path": null,
+     "constant": null,
+     "format": "Date",
+     "rules": [],
+     "verified": false
+    },
+    {
+     "number": 98,
+     "name": "Código de la actividad económica ARL (Decreto 768/2022; Res. 2520/2024)",
+     "start": 687,
+     "length": 7,
+     "kind": "A",
+     "required": true,
+     "source": "Profile",
+     "path": "Contributor.EconomicActivity",
+     "constant": null,
+     "format": "Text",
+     "rules": [
+      "Employee.EconomicActivityCode o el de la empresa"
+     ],
+     "verified": false
+    }
+   ]
+  }
+ ]
+}

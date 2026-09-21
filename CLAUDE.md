@@ -296,8 +296,49 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   y los de N2–N4) los siembra la API al arrancar, **no el DbMigrator**. Dos migraciones
   aditivas (`NominaPrestacionesYDian`, `SettlementDeductionsUnicosEntreVivas`). Receta:
   `docs/manual/liquidaciones-especiales.md`; runbook `docs/operaciones/nomina-primer-periodo.md` §4d.
-  N2 (PILA + procedimiento 2) y N3 (nómina electrónica: servicio central **sin estado**, modo
-  «software propio» de cada cooperativa primero) siguen pendientes.
+  N3 (nómina electrónica: servicio central **sin estado**, modo «software propio» de cada
+  cooperativa primero) sigue pendiente.
+
+- **PILA y procedimiento 2 (feature 010, entrega N2, misma rama, 2026-09-21)**: la planilla de
+  aportes (Res. 2388/2016, archivo tipo 2, planilla E) y el porcentaje fijo semestral del art. 386.
+  **El layout es dato versionado**, un JSON embebido con vigencia
+  (`Application/Payroll/Pila/Layouts/at2-v30-2026-07-24.json`, 22 campos / 358 posiciones y 98 / 693;
+  `PilaLayoutCatalog` elige el vigente por fecha): una versión nueva del anexo es un archivo nuevo,
+  no lógica. Todos sus campos llevan `verified = false` hasta que el dueño lo coteje con el anexo
+  v30 y una planilla pagada (T094); mientras tanto **sí es vigente** y generar deja la alerta
+  `Pila.LayoutSinCotejar` (D-43). **Otro motor puro**, `Domain/Payroll/Pila/PilaBuilder` (+
+  `PilaValidator`, `PilaWriter`; casos dorados en `Domain.Tests/Payroll/Pila/Casos/` con el archivo
+  `.esperado.txt` byte a byte, regenerable sólo a propósito con `PILA_ESCRIBIR_ESPERADO=1`): una
+  línea base por cotizante y una por cada novedad con IBC propio (IGE, LMA, VAC, SLN, IRL), ING y
+  RET en la misma línea, IBC ≥ 1 SMMLV proporcional y ≤ 25, integral al 70 %, al peso superior,
+  aportes al múltiplo de 100 superior, ARL 0 en IGE/LMA y por política en VAC, SLN sólo pensión
+  del empleador, FSP con la tabla vigente o **la de transición según la ficha** (Ley 2381 desde
+  2027-04), exoneración del art. 114-1 = política **y** lo **devengado** bajo 10 SMMLV (no el IBC).
+  Sin valores legales en el código: `PilaParameterCodes.Required` con vigencia. Datos nuevos:
+  `PilaCode` (6, admite guion) en EPS, pensiones (+ `IsAccai`), ARL, cesantías y cajas —distinto
+  del `Code` de la cooperativa—, `PAY_PilaSettings` (clase de aportante, forma, ARL, operador,
+  DIVIPOLA y actividad de la sede). Reglas: **validar no guarda** y lista las inconsistencias con
+  la taxonomía del operador (bloqueante / alerta), campo, empleado y ruta; **generar con
+  bloqueantes deja una generación `Validated` sin archivo** con las inconsistencias guardadas;
+  con alertas exige reconocerlas; regenerar crea la versión siguiente y deja la anterior
+  `Superseded` con su archivo; el **cuadre** (FR-027) compara el archivo con los conceptos de
+  aportes de las corridas del mes por subsistema **antes de descargar** y con diferencia la
+  descarga exige reconocerla —una diferencia de redondeo en la ARL es normal: la ordinaria
+  redondea al múltiplo más cercano y la planilla al superior—; marcar cargada anota el radicado y
+  el período ya no se regenera (planillas N y A se digitan en el operador). El **procedimiento 2**
+  es `Domain/Payroll/Withholding/FixedRateCalculator` sobre la misma `DepuracionDeRetencion` y
+  `RangeTableLookup` de la ordinaria: doce meses anteriores (prima sí, cesantías e intereses no),
+  aportes reales, secuencia por política `P2SecuenciaDepuracion`, ÷ `RETEFTE_P2_DIVISOR` o los
+  meses de vinculación, tabla vigente o del plan; aprobar **cierra** la vigencia anterior de la
+  ficha la víspera y abre la nueva con `Origin = Calculated` (R8, D-44: `SetEmployeeWithholding`
+  también cierra en vez de reemplazar). Rutas `/api/payroll/pila` (`Payroll.Pila.*`) y
+  `/api/payroll/withholding-rates` (`Payroll.WithholdingRate.*`); pantallas `/nomina/pila` y
+  `/nomina/retencion-procedimiento-2`; vistas `pila-lineas`, `pila-cuadre`,
+  `pila-inconsistencias`, `retencion-p2`. Migración aditiva `NominaPilaYNominaElectronica` (trae
+  también las cuatro tablas de N3, D-12). Lo que sigue siendo del dueño: cotejar el layout y pasar
+  el `.txt` por el validador de Aportes en Línea (SC-004), cargar los códigos PILA y confirmar la
+  secuencia del procedimiento 2 (8h). Recetas: `docs/operaciones/pila-primera-planilla.md`,
+  `docs/manual/retencion-procedimiento-2.md`.
 
 - **Dispersión bancaria (feature 010, entrega N4, misma rama, 2026-09-21)**: la nómina paga por
   archivo plano y «marcar enviado» deja pagados a todos los del archivo en una transacción
@@ -336,22 +377,22 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-21 (cierre de N4 de la feature 010, en su rama), remedida. **Son cifras que
+Instantánea del 2026-09-21 (cierre de N2 de la feature 010, en su rama), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 717 (2026-09-21; la 010 N1 sumó 52 y la N4 15: 6 de formatos en Core, 7 de dispersión, 1 de cuentas bancarias del plan y 1 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 174 con `@page` (2026-09-21; la 010 N1 sumó 7 y la N4 2: `/nomina/dispersion`, `/maestros/formatos-bancarios`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | 738 (2026-09-21; la 010 sumó 52 en N1, 15 en N4 y 21 en N2: 11 de PILA, 6 de procedimiento 2 y 4 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 176 con `@page` (2026-09-21; la 010 sumó 7 en N1, 2 en N4 y 2 en N2: `/nomina/pila`, `/nomina/retencion-procedimiento-2`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.431 el 2026-09-21 (200 Domain, 1.052 Application, 107 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 162 el 2026-09-21 con Docker: 161 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.479 el 2026-09-21 (223 Domain, 1.075 Application, 109 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 164 el 2026-09-21 con Docker: 163 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
-corriendo. Las 11 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
+corriendo. Las 13 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
 `PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,

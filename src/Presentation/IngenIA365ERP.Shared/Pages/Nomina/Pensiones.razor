@@ -21,6 +21,8 @@
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="180" />
         <GridColumn Field="TaxId" HeaderText="NIT" Width="140" />
         <GridColumn Field="CheckDigit" HeaderText="DV" Width="80" TextAlign="TextAlign.Center" />
+        <GridColumn Field="PilaCode" HeaderText="Código PILA" Width="120" />
+        <GridColumn HeaderText="ACCAI" Width="80" TextAlign="TextAlign.Center"><Template>@(((ItemModel)context).IsAccai ? "Sí" : "")</Template></GridColumn>
         <GridColumn Field="PersonName" HeaderText="Tercero" Width="200" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
             <Template>
@@ -45,7 +47,9 @@
                 <SfTextBox @bind-Value="_model.Name" Placeholder="Nombre *" MaxLength="100" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.ShortName" Placeholder="Nombre corto" MaxLength="50" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT" MaxLength="20" FloatLabelType="FloatLabelType.Always" />
-                <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
+                <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_model.PilaCode" Placeholder="Código PILA (6 posiciones, el del listado del operador)" MaxLength="6" FloatLabelType="FloatLabelType.Always" />
+                <label class="texto-tenue"><input type="checkbox" @bind="_model.IsAccai" /> Administradora de ahorro individual (ACCAI, Ley 2381/2024)</label>
                 <div class="campo">
                     <label>Persona que la representa como tercero (feature 009)</label>
                     <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@CrearPersonaAsync" TextoSinResultados="Regístrela en Maestros › Personas y vuelva a buscarla." />
@@ -100,7 +104,7 @@
 
     private void OpenEdit(ItemModel item)
     {
-        _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName, TaxId = item.TaxId, CheckDigit = item.CheckDigit };
+        _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName, TaxId = item.TaxId, CheckDigit = item.CheckDigit, PilaCode = item.PilaCode, IsAccai = item.IsAccai };
         _persona = item.PersonPublicId is { } pid ? new PersonSearchPicker.PersonSearchItem { PublicId = pid, FullName = item.PersonName ?? "" } : null;
         _editId = item.PublicId; _dialogTitle = "Editar Fondo de Pensiones"; _showDialog = true;
     }
@@ -146,6 +150,8 @@
         public string ShortName { get; set; } = "";
         public string TaxId { get; set; } = "";
         public int CheckDigit { get; set; }
+        public string? PilaCode { get; set; }
+        public bool IsAccai { get; set; }
     }
     private class FormModel
     {
@@ -155,6 +161,8 @@
         public string ShortName { get; set; } = "";
         public string TaxId { get; set; } = "";
         public int CheckDigit { get; set; }
+        public string? PilaCode { get; set; }
+        public bool IsAccai { get; set; }
     }
     // Feature 009 (FR-088): la persona que representa a la entidad como tercero contable.
     private PersonSearchPicker.PersonSearchItem? _persona;

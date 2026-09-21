@@ -84,6 +84,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
     public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.BankDisbursementFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.BankDisbursementFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Pila.PilaSettings> PilaSettings => Set<IngenIA365ERP.Domain.Entities.Payroll.Pila.PilaSettings>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PilaGeneration> PilaGenerations => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PilaGeneration>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PilaGenerationLine> PilaGenerationLines => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PilaGenerationLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Pila.PilaIssue> PilaIssues => Set<IngenIA365ERP.Domain.Entities.Payroll.Pila.PilaIssue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings> ElectronicPayrollSettings => Set<IngenIA365ERP.Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange> ElectronicPayrollNumberingRanges => Set<IngenIA365ERP.Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission>();
     // TenantBranches salio de IApplicationDbContext: es del plano de control.
 
     // === Resto de la interfaz — throw on access (auth no las toca) ===

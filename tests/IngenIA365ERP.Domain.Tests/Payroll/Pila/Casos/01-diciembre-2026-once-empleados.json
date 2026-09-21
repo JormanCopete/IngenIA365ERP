@@ -1,0 +1,52 @@
+{
+  // Caso dorado principal de la PILA (feature 010, US5; quickstart §3.5): diciembre de 2026, once
+  // cotizantes, empresa exonerada del art. 114-1. Semilla 2026: SMMLV 1.750.905; pensión 4 % + 12 %;
+  // salud 4 % + 8,5 % (exonerado: 4 %); ARL clase I 0,522 %; CCF 4 %; SENA 2 %; ICBF 3 %; umbral de
+  // exoneración 10 SMMLV = 17.509.050; FSP desde 4 SMMLV = 7.003.620 (Ley 797: 4–16 SMMLV → 1 %, mitad a
+  // solidaridad); IBC al peso superior; aportes al múltiplo de 100 superior; 210 horas al mes.
+  "nombre": "Diciembre de 2026, once cotizantes, empresa exonerada",
+  "derivacion": "Arias (2.000.000, mes completo, exonerada): pensión 320.000, salud 4 % 80.000, ARL 10.440→10.500, CCF 80.000 = 490.500. Bernal (3.000.000, ingresa el 10: 21 días, IBC 2.100.000): 336.000 + 84.000 + 10.962→11.000 + 84.000 = 515.000. Castro (2.500.000, IGE 5–7 dic: base 27 días IBC 2.250.000 → 360.000 + 90.000 + 11.745→11.800 + 90.000 = 551.800; línea IGE 3 días IBC 250.000 → 40.000 + 10.000 + ARL 0 + 10.000 = 60.000). Duque (2.000.000, retira el 20: 20 días, IBC 1.333.333,33→1.333.334): 213.333,44→213.400 + 53.333,36→53.400 + 6.960,00→7.000 + 53.400 = 327.200. Escobar (integral 20.000.000, IBC 70 % = 14.000.000; devenga ≥ 10 SMMLV → no exonerada): 2.240.000 + salud 12,5 % 1.750.000 + 73.080→73.100 + CCF 560.000 + SENA 280.000 + ICBF 420.000 + FSP 1 % 140.000 (70.000/70.000) = 5.463.100. Franco (2.000.000, vacaciones 14–28 dic, 15 días; ARL no cotiza en VAC): base 15 días IBC 1.000.000 → 160.000 + 40.000 + 5.220→5.300 + 40.000 = 245.300; VAC 15 días IBC 1.000.000 → 160.000 + 40.000 + 0 + 40.000 = 240.000. Gómez (8.000.000 = 4,57 SMMLV → FSP 1 % 80.000): 1.280.000 + 320.000 + 41.760→41.800 + 320.000 + 80.000 = 2.041.800. Herrera (1.750.905 + comisión 500.000 → IBC 2.250.905, VST): 360.144,8→360.200 + 90.036,2→90.100 + 11.749,7→11.800 + 90.100 = 552.200. Ibáñez (1.750.905, sin segundo apellido → alerta): 280.144,8→280.200 + 70.036,2→70.100 + 9.139,7→9.200 + 70.100 = 429.600. Jiménez (aprendiz lectiva tipo 19, apoyo 1.313.179 → IBC mínimo 1 SMMLV 1.750.905): pensión 0, salud 12,5 % 218.863,1→218.900, ARL 9.200, sin parafiscales = 228.100. Kaplan (pensionada activa subtipo 01, 3.000.000): pensión 0, FSP 0, salud 4 % 120.000, ARL 15.660→15.700, CCF 120.000 = 255.700. Total 11.400.300; 11 cotizantes, 13 líneas; Σ IBC CCF 40.686.049.",
+  "year": 2026,
+  "month": 12,
+  "empresa": { "nombre": "Cooperativa de Prueba", "nit": "900123456", "dv": "7", "clase": "B", "arlPilaCode": "14-23", "codigoOperador": "24", "dane": "76001", "actividadEconomica": "1649501" },
+  "politicas": { "exonerada114_1": true, "cotizaArlEnVacaciones": false },
+  "parametros": {},
+  "cotizantes": [
+    { "documento": "1001", "primerApellido": "Arias", "segundoApellido": "Ávila", "primerNombre": "Ana", "ingreso": "2020-01-15", "salario": 2000000 },
+    { "documento": "1002", "primerApellido": "Bernal", "segundoApellido": "Bravo", "primerNombre": "Bruno", "ingreso": "2026-12-10", "salario": 3000000, "devengosIbc": 2100000, "diasTrabajados": 21 },
+    { "documento": "1003", "primerApellido": "Castro", "segundoApellido": "Cano", "primerNombre": "Carla", "ingreso": "2021-03-01", "salario": 2500000,
+      "novedades": [ { "tipo": "IGE", "desde": "2026-12-05", "hasta": "2026-12-07", "autorizacion": "INC-2026-77" } ] },
+    { "documento": "1004", "primerApellido": "Duque", "segundoApellido": "Díaz", "primerNombre": "Diego", "ingreso": "2019-06-01", "retiro": "2026-12-20", "salario": 2000000, "devengosIbc": 1333334, "diasTrabajados": 20 },
+    { "documento": "1005", "primerApellido": "Escobar", "segundoApellido": "Echeverri", "primerNombre": "Elena", "clase": "IntegralSalary", "ingreso": "2018-02-01", "salario": 20000000 },
+    { "documento": "1006", "primerApellido": "Franco", "segundoApellido": "Flórez", "primerNombre": "Fabio", "ingreso": "2020-05-04", "salario": 2000000,
+      "novedades": [ { "tipo": "VAC", "desde": "2026-12-14", "hasta": "2026-12-28" } ] },
+    { "documento": "1007", "primerApellido": "Gómez", "segundoApellido": "Giraldo", "primerNombre": "Gloria", "ingreso": "2015-08-18", "salario": 8000000 },
+    { "documento": "1008", "primerApellido": "Herrera", "segundoApellido": "Hoyos", "primerNombre": "Hugo", "ingreso": "2022-11-01", "salario": 1750905, "devengosIbc": 2250905 },
+    { "documento": "1009", "primerApellido": "Ibáñez", "primerNombre": "Irene", "ingreso": "2023-01-16", "salario": 1750905 },
+    { "documento": "1010", "primerApellido": "Jiménez", "segundoApellido": "Jaramillo", "primerNombre": "Julián", "clase": "Apprentice", "etapa": "Lective", "ingreso": "2026-08-01", "salario": 1313179, "afp": null, "ccf": null },
+    { "documento": "1011", "primerApellido": "Kaplan", "segundoApellido": "Kuri", "primerNombre": "Karen", "clase": "Pensioner", "ingreso": "2010-03-01", "salario": 3000000 }
+  ],
+  "esperado": {
+    "cotizantes": 11,
+    "lineas": 13,
+    "totalIbcCcf": 40686049,
+    "totalAportes": 11400300,
+    "bloqueantes": [],
+    "alertas": [ "Pila.SegundoApellidoFaltante", "Pila.LayoutSinCotejar" ],
+    "lineasEsperadas": [
+      { "n": 1,  "documento": "1001", "novedades": "",        "tipo": "01/00", "dias": 30, "ibc": 2000000,  "pension": 320000,  "fsp": 0,      "salud": 80000,   "arl": 10500, "ccf": 80000,  "sena": 0,      "icbf": 0,      "exonerado": true,  "horas": 210 },
+      { "n": 2,  "documento": "1002", "novedades": "ING",     "tipo": "01/00", "dias": 21, "ibc": 2100000,  "pension": 336000,  "fsp": 0,      "salud": 84000,   "arl": 11000, "ccf": 84000,  "sena": 0,      "icbf": 0,      "exonerado": true,  "horas": 147 },
+      { "n": 3,  "documento": "1003", "novedades": "",        "tipo": "01/00", "dias": 27, "ibc": 2250000,  "pension": 360000,  "fsp": 0,      "salud": 90000,   "arl": 11800, "ccf": 90000,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 4,  "documento": "1003", "novedades": "IGE",     "tipo": "01/00", "dias": 3,  "ibc": 250000,   "pension": 40000,   "fsp": 0,      "salud": 10000,   "arl": 0,     "ccf": 10000,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 5,  "documento": "1004", "novedades": "RET",     "tipo": "01/00", "dias": 20, "ibc": 1333334,  "pension": 213400,  "fsp": 0,      "salud": 53400,   "arl": 7000,  "ccf": 53400,  "sena": 0,      "icbf": 0,      "exonerado": true,  "horas": 140 },
+      { "n": 6,  "documento": "1005", "novedades": "",        "tipo": "01/00", "dias": 30, "ibc": 14000000, "pension": 2240000, "fsp": 140000, "salud": 1750000, "arl": 73100, "ccf": 560000, "sena": 280000, "icbf": 420000, "exonerado": false },
+      { "n": 7,  "documento": "1006", "novedades": "",        "tipo": "01/00", "dias": 15, "ibc": 1000000,  "pension": 160000,  "fsp": 0,      "salud": 40000,   "arl": 5300,  "ccf": 40000,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 8,  "documento": "1006", "novedades": "VAC-LR",  "tipo": "01/00", "dias": 15, "ibc": 1000000,  "pension": 160000,  "fsp": 0,      "salud": 40000,   "arl": 0,     "ccf": 40000,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 9,  "documento": "1007", "novedades": "",        "tipo": "01/00", "dias": 30, "ibc": 8000000,  "pension": 1280000, "fsp": 80000,  "salud": 320000,  "arl": 41800, "ccf": 320000, "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 10, "documento": "1008", "novedades": "VST",     "tipo": "01/00", "dias": 30, "ibc": 2250905,  "pension": 360200,  "fsp": 0,      "salud": 90100,   "arl": 11800, "ccf": 90100,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 11, "documento": "1009", "novedades": "",        "tipo": "01/00", "dias": 30, "ibc": 1750905,  "pension": 280200,  "fsp": 0,      "salud": 70100,   "arl": 9200,  "ccf": 70100,  "sena": 0,      "icbf": 0,      "exonerado": true },
+      { "n": 12, "documento": "1010", "novedades": "",        "tipo": "19/00", "dias": 30, "ibc": 1750905,  "pension": 0,       "fsp": 0,      "salud": 218900,  "arl": 9200,  "ccf": 0,      "sena": 0,      "icbf": 0,      "exonerado": false },
+      { "n": 13, "documento": "1011", "novedades": "",        "tipo": "01/01", "dias": 30, "ibc": 3000000,  "pension": 0,       "fsp": 0,      "salud": 120000,  "arl": 15700, "ccf": 120000, "sena": 0,      "icbf": 0,      "exonerado": true }
+    ]
+  }
+}

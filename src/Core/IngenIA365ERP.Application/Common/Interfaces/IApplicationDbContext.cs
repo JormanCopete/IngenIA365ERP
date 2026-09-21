@@ -177,6 +177,14 @@ public interface IApplicationDbContext
     DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }
     DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles { get; }
     DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines { get; }
+    DbSet<Domain.Entities.Payroll.Pila.PilaSettings> PilaSettings { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PilaGeneration> PilaGenerations { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PilaGenerationLine> PilaGenerationLines { get; }
+    DbSet<Domain.Entities.Payroll.Pila.PilaIssue> PilaIssues { get; }
+    DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings> ElectronicPayrollSettings { get; }
+    DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange> ElectronicPayrollNumberingRanges { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions { get; }
 
     // Inventory
     DbSet<Product> Products { get; }

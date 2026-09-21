@@ -23,6 +23,7 @@ public static class AdjuntosDeModulo
     {
         ["EmploymentTermination"] = new("Payroll.Settlements.View", Borrable: false, "el documento para firma de la liquidación definitiva"),
         ["BankDisbursementFile"] = new("Payroll.Disbursement.View", Borrable: false, "el archivo de dispersión bancaria que se entregó al banco"),
+        ["PilaGeneration"] = new("Payroll.Pila.View", Borrable: false, "la planilla PILA tal como se generó y se cargó en el operador"),
     };
 
     /// <summary>La regla del tipo de dueño, o nula si el adjunto es de una persona y lo gobierna <c>Attachments.*</c>.</summary>

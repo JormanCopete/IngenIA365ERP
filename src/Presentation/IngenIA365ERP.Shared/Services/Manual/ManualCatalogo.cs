@@ -952,6 +952,32 @@ public static class ManualCatalogo
             ["Cooperativa activa.", "Ficha del empleado con fecha de ingreso, salario, afiliaciones y tipo de contrato; conceptos con cuentas contables; parámetros legales; período contable de la fecha de retiro abierto.", "Permiso Payroll.Settlements.Calculate para registrar la terminación, recalcular y descartar; Approve para aprobar; Reverse para reversar; AdjustDeduction para bajar descuentos; Manage para el catálogo de motivos; View para consultar."],
             ["empleados", "prima-de-servicios", "cesantias-e-intereses", "vacaciones", "cartera-de-creditos", "descuento-de-nomina"], ["/nomina/liquidacion-definitiva/{RunId}"], TipoDeTema.Proceso));
 
+        t.Add(Proceso("planilla-pila", "Planilla PILA (aportes a seguridad social)", Modulos.Nomina, "/nomina/pila",
+            "Generar cada mes el archivo plano de la Resolución 2388 de 2016 con los aportes a pensión, salud, riesgos laborales, caja, SENA e ICBF de todos los cotizantes, validarlo antes con la lista de inconsistencias del operador, cuadrarlo contra la nómina y cargarlo en Aportes en Línea (planilla E).",
+            [
+                P("Antes de la primera vez", "En Nómina › EPS, Pensiones, ARL y Cajas cada administradora necesita su «Código PILA» (el del listado del operador, distinto del código de la cooperativa); en la ficha de cada empleado, DIVIPOLA y actividad económica si difieren de la sede; y en «Datos del aportante» (Payroll.Pila.Manage) la clase de aportante, el código PILA de la ARL, el código del operador y la ubicación de la sede."),
+                P("Validar", "Elija el año y el mes y «Validar»: lista lo que el operador devolvería como Error (bloqueante: sin EPS, sin código PILA, documento más largo que la Res. 1529/2026, sin DIVIPOLA…) o Alerta (segundo apellido faltante, régimen de transición desconocido), cada una con el enlace a la ficha o al catálogo donde se corrige. No guarda nada.", "/nomina/pila", "Abrir Planilla PILA"),
+                P("Generar", "Con las bloqueantes en cero y las alertas reconocidas, «Generar» arma el archivo con las nóminas aprobadas del mes (más vacaciones y definitivas con corte en el mes): una línea por cotizante y una adicional por incapacidad, licencia, vacaciones o suspensión; IBC al peso, aportes al múltiplo de 100, exoneración del art. 114-1 según la política de la empresa. Regenerar crea una versión nueva y deja la anterior como reemplazada, con su archivo."),
+                P("Cuadre", "Antes de descargar se muestra el cuadre por subsistema contra los aportes que la nómina liquidó (comprobantes NM). Con diferencia, la descarga la exige reconocida; el fondo de solidaridad lo liquida el operador y una diferencia allí es alerta."),
+                P("Cargar y marcar", "Descargue el .txt, cárguelo en Aportes en Línea (Liquidaciones › Adicionar › Cargar archivo › Validar) y, con el número de planilla, «Marcar cargada» (Payroll.Pila.MarkUploaded). Ese período ya no se regenera: una corrección se digita en el operador (planilla N)."),
+                P("Cada línea explicada", "En el detalle, seleccione una línea para ver sus 98 campos con el valor, el origen y de qué salió cada uno (línea de la corrida, parámetro con su vigencia, política). Reportes: líneas, cuadre e inconsistencias en Excel y PDF."),
+            ],
+            ["pila", "planilla", "aportes", "seguridad social", "aportes en linea", "resolucion 2388", "eps", "pension", "arl", "caja", "sena", "icbf", "fondo de solidaridad"],
+            ["Nóminas del mes aprobadas.", "Códigos PILA en EPS, Pensiones, ARL y Cajas.", "Datos del aportante completos.", "Parámetros legales vigentes al primer día del mes."],
+            ["liquidacion-de-nomina", "empleados", "retencion-procedimiento-2"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("retencion-procedimiento-2", "Retención en la fuente: porcentaje fijo (procedimiento 2)", Modulos.Nomina, "/nomina/retencion-procedimiento-2",
+            "Calcular en junio y en diciembre el porcentaje fijo de retención de los empleados en procedimiento 2 (ET art. 386) con los doce meses anteriores, aprobarlo como vigencia nueva en la ficha y dejar que la nómina siguiente lo aplique.",
+            [
+                P("Quién entra", "Los empleados activos con «Procedimiento 2» en Retención y plan de la ficha. El semestre 1 se calcula en junio y rige julio–diciembre; el 2 en diciembre y rige enero–junio del año siguiente."),
+                P("Calcular", "«Calcular» (Payroll.WithholdingRate.Calculate) suma los pagos gravables de los doce meses anteriores de las nóminas aprobadas (la prima entra; cesantías e intereses no), resta los aportes obligatorios reales, depura con las deducciones y rentas exentas declaradas en la secuencia de la política P2SecuenciaDepuracion, divide por RETEFTE_P2_DIVISOR (o por los meses de vinculación si son menos de doce) y lleva el promedio a la tabla vigente (o a la del plan). Quien no tiene historia queda en «sin cálculo» con el motivo.", "/nomina/retencion-procedimiento-2", "Abrir Procedimiento 2"),
+                P("Revisar", "Seleccione un cálculo para ver el mes a mes con sus corridas, la depuración paso a paso, el divisor y el tramo de la tabla. Exportable a Excel y PDF para la contadora."),
+                P("Aprobar", "Por ítem o en lote (Payroll.WithholdingRate.Approve): cierra la vigencia anterior de la ficha la víspera del semestre y abre la nueva con origen «calculado»; la quincena siguiente ya la aplica. Recalcular crea una versión nueva; un cálculo se puede rechazar con motivo."),
+            ],
+            ["retencion", "procedimiento 2", "porcentaje fijo", "articulo 386", "semestre", "uvt", "tabla 383"],
+            ["Empleados en procedimiento 2 con nóminas aprobadas.", "Parámetros RETEFTE_P2_DIVISOR, UVT y tabla vigentes al mes del cálculo."],
+            ["empleados", "liquidacion-de-nomina", "planilla-pila"], [], TipoDeTema.Proceso));
+
         t.Add(Proceso("dispersion-bancaria", "Dispersión bancaria (archivo de pagos)", Modulos.Nomina, "/nomina/dispersion",
             "Pagar la nómina, la prima, los intereses de cesantías, las vacaciones o una definitiva por archivo plano: el programa arma el archivo con el formato del banco desde la relación de pago de la liquidación aprobada, se carga en el portal del banco y, al confirmar el envío, todos los del archivo quedan pagados en una sola acción.",
             [

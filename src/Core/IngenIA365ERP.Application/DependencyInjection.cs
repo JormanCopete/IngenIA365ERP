@@ -84,6 +84,9 @@ public static class DependencyInjection
         // Feature 010 (US8): dispersión bancaria sobre el motor genérico de archivos planos (Common/BankFiles).
         services.AddScoped<Payroll.Dispersion.PayrollDisbursementLines>();
         services.AddScoped<Payroll.Dispersion.PreparacionDeDispersion>();
+        services.AddScoped<Payroll.Pila.PilaInputLoader>();
+        services.AddScoped<Payroll.Pila.PreparacionDePila>();
+        services.AddScoped<Payroll.WithholdingRates.WithholdingRateInputLoader>();
         services.AddScoped<Payroll.Services.SettlementAccountingPoster>();
         services.AddScoped<Payroll.Settlements.Common.SettlementRunPersister>();
         services.AddScoped<Payroll.Settlements.Common.SettlementRunWorkflow>();

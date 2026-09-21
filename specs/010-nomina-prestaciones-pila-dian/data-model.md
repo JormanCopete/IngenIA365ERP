@@ -472,6 +472,11 @@ El **layout** (registros tipo 1 y 2 del AT2 v30) es un recurso JSON embebido con
 (`Application/Payroll/Pila/Layouts/at2-v30-2026-07-24.json`), no una tabla; cada generación
 guarda qué versión usó.
 
+> Como quedó en N2 (2026-09-21, D-43): `Status` `Validated (0)` es la generación con bloqueantes
+> sin archivo; el layout sin cotejar sigue vigente y deja la alerta `Pila.LayoutSinCotejar`; el
+> registro tipo 1 del layout embebido mide 358 hasta el cotejo; `Balanced` y `PaidAt` son columnas
+> nuevas; `PilaSettings` guarda además `OperatorCode` (campo 22) y `OperatorName`.
+
 **`PilaSettings`** (fila única; datos del aportante que la Res. 2388 pide y la empresa no tiene):
 
 | Campo | Tipo | Regla |
@@ -509,6 +514,8 @@ propone con `PILA_PLAZO_PAGO_POR_NIT` y los dos últimos dígitos del NIT.
 | `BlockingIssueCount`, `WarningCount` | int | |
 | `ProposedPaymentDueDate` | date, nullable | |
 | `UploadedAt`, `UploadedBy`, `OperatorFilingNumber` (nvarchar(40)), `OperatorFilingDate` | | digitados al marcar «cargada» |
+| `Balanced` | bit | el cuadre no tiene diferencia (como quedó en N2) |
+| `PaidAt` | date, nullable | fecha de pago digitada al marcar cargada (N2) |
 
 Único `(Year, Month, Version)`. **Transiciones**: generar crea `Validated` (si hay bloqueantes) o
 `Generated` (con archivo); `Generated → Uploaded` (radicado en el operador; permiso
@@ -535,7 +542,7 @@ propone con `PILA_PLAZO_PAGO_POR_NIT` y los dos últimos dígitos del NIT.
 
 Único `(GenerationId, LineNumber)`; índice `(GenerationId, EmployeeId)`.
 
-**`PilaIssue`**:
+**`PilaIssue`** (`AuditableEntity`, Principio VII; como quedó en N2):
 
 | Campo | Tipo | Regla |
 |---|---|---|

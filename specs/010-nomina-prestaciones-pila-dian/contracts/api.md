@@ -275,7 +275,12 @@ población y queda en `excluded` con ese código (§3.2).
 
 Errores: `Payroll.WithholdingRate.NoProcedure2Employees`, `.NoHistory` (`data: { employeePublicId,
 firstApprovedMonth }`), `.SemesterIncomplete` (**aviso**: falta aprobar corridas del último mes),
-`.AlreadyApproved` (`data: { calculationPublicId }`), `.NotCalculated`, `.TableMissing`.
+`.AlreadyApproved` (`data: { calculationPublicId }`), `.NotCalculated`, `.TableMissing`,
+`.CalculationNotFound`, `.ParametersMissing` (`data: { codes[] }`, `WithholdingRateParameterCodes.Required`
+al mes del cálculo). Como quedó en N2 (2026-09-21): `POST /{calculationPublicId}/reject` (`{ reason }`,
+`WithholdingRate.Approve`) deja el cálculo `Rejected (3)` con el motivo; la respuesta de `GET /{id}`
+trae además `summary` (el ítem de la lista), `divisorSource` (`RETEFTE_P2_DIVISOR` | `MesesDeVinculacion`),
+`depurationSteps` y `steps` (la explicación mes a mes tal como la guarda `ExplanationJson`).
 
 ## 7. PILA — `/api/payroll/pila`
 
@@ -301,7 +306,26 @@ Errores: `Payroll.Pila.BlockingIssues` (`data: { issues[] }`), `.NoApprovedRuns`
 `.LayoutMissing` (sin layout vigente para el período), `.ParametersMissing` (`data: { codes[] }`,
 `PilaParameterCodes.Required`), `.SettingsIncomplete` (`data: { missing[] }`),
 `.WarningsNotAcknowledged`, `.AlreadyUploaded` (regenerar exige que la vigente no esté cargada;
-`data: { generationPublicId }`), `.NotGenerated`.
+`data: { generationPublicId }`), `.NotGenerated`, `.GenerationNotFound`, `.LineNotFound`,
+`.CompanyMissing` (sin empresa con NIT), `.FileTampered` (el adjunto no coincide con la huella).
+
+Como quedó en N2 (2026-09-21, D-43): generar con bloqueantes **no responde `BlockingIssues`**: crea una
+generación `Validated (0)` sin archivo, con las inconsistencias guardadas en `PAY_PilaIssues`, para que
+queden a la vista y auditadas; `validate` sigue siendo la consulta sin guardar. Un layout con campos sin
+cotejar (`verified = false`) **sí es vigente**: generar deja la alerta `Pila.LayoutSinCotejar` (hay que
+reconocerla) en vez de `LayoutMissing`, que queda para «ningún layout cubre el período». Los códigos de
+las inconsistencias (`issues[].code`) son `Pila.SinEps`, `Pila.SinAfp`, `Pila.SinArl`, `Pila.SinCcf`,
+`Pila.SinCodigoPila`, `Pila.SinClaseRiesgo`, `Pila.SinDivipola`, `Pila.SinActividadEconomica`,
+`Pila.DatosPersonalesIncompletos`, `Pila.DocumentoLargo`, `Pila.SinSalario`, `Pila.DiasNoSuman30`,
+`Pila.TarifaSinVigencia`, `Pila.AportanteSinNit`, `Pila.AportanteSinArl`, `Pila.AportanteSinOperador`,
+`Pila.AportanteSinSucursal`, `Pila.AportanteIncompleto` (bloqueantes) y `Pila.SegundoApellidoFaltante`,
+`Pila.RegimenTransicionDesconocido`, `Pila.LayoutSinCotejar`, `Pila.EmpleadoSinNomina` (alertas).
+`GET /settings` devuelve además `operatorName` y `planillaType`; `PUT /settings` recibe
+`{ contributorType, contributorClass, presentationForm, branchCode?, branchName?, arlPilaCode?,
+economicActivityCode?, divipolaDepartment?, divipolaMunicipality?, operatorCode?, operatorName? }`.
+`GET /{generationPublicId}` trae `summary`, `lines[]` (con `fields` por número de campo), `issues[]`,
+`reconciliation`, `sources[]` y `exemptionApplied`; `mark-uploaded` recibe `{ uploadedAt, operatorReference,
+operatorFilingDate?, paidAt? }`.
 
 ## 8. Nómina electrónica — `/api/payroll/electronic-payroll`
 

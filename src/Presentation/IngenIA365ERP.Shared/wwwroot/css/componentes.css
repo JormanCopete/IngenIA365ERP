@@ -288,6 +288,11 @@ table.tabla th.monto,
     color: var(--texto-tenue);
 }
 
+/* Feature 010 (N2): aviso en línea que pide atención sin ser error (cuadre de la PILA, datos del aportante). */
+.texto-alerta {
+    color: var(--alerta-texto);
+}
+
 /* --- 6. Botones ----------------------------------------------------------- */
 
 /* Los botones nativos que no pasan por SyncFusion. `.primary` está en 14

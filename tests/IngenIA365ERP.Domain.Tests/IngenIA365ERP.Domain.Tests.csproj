@@ -20,6 +20,9 @@
     <!-- Feature 010: casos dorados de las liquidaciones especiales y sus parametros 2026 (datos, no programa). -->
     <None Include="Payroll\Settlements\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Payroll\Settlements\Parametros\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Payroll\Pila\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Payroll\Pila\Casos\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Payroll\Withholding\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

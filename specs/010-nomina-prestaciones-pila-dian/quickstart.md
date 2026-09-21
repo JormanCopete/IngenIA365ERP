@@ -369,35 +369,32 @@ Empleado **I** con 18 meses de antigüedad (540 días), 2.400.000, sin vacacione
 6. Disfrute que cruza un período ya aprobado → la novedad de ese período se rechaza y se ofrece el
    ajuste retroactivo, como en la ordinaria.
 
-### 3.5 PILA de diciembre con el validador de Aportes en Línea (US5)
+### 3.5 PILA del mes (US5) — corrido el 2026-09-21 por `PilaTests` (marzo de 2027)
 
-Mes de diciembre de 2026 con los once empleados de COOFLOPAL (o los de `coop_prueba`): uno con
-ingreso el 10, uno con incapacidad general de tres días, uno retirado el 20, uno con salario
-integral, uno con vacaciones, y la empresa marcada exonerada.
+Once cotizantes de diciembre de 2026 (ingreso el 10, incapacidad de tres días, retiro el 20,
+integral, vacaciones, aprendiz lectiva, pensionada, empresa exonerada) están en el caso dorado
+`01-diciembre-2026-once-empleados.json` con los aportes calculados a mano y el archivo esperado
+byte a byte; por HTTP la prueba usa marzo de 2027 en un plan propio con dos empleados.
 
-1. `/nomina/pila` › diciembre 2026 › **Validar**: la lista de inconsistencias distingue
-   **Bloqueante** (sin EPS/AFP/ARL/CCF o sin `PilaCode`, sin DIVIPOLA, sin actividad económica,
-   documento de longitud inválida según la Res. 1529/2026, días que no suman 30 sin novedad,
-   tarifa sin vigencia, layout sin versión vigente) de **Alerta** (IBC distinto entre
-   subsistemas, FSP recalculable por el operador, cotizante del mes anterior sin RET); cada
-   una enlaza a la ficha. Quitar la EPS a un empleado → bloqueante; generar se niega.
-2. **Generar**: registro tipo 1 de 22 campos/359 posiciones y un tipo 2 de 98 campos/693 por
-   línea (layout `at2-v30-2026-07-24.json`); una línea adicional por cada novedad con IBC
-   distinto (IGE, VAC); ING y RET del mismo mes en la misma línea; el retirado con RET y 20 días;
-   el que ingresó con ING y 21; el integral con IBC al 70 %; IBC al peso superior y aportes al
-   múltiplo de 100 superior; exonerados con campo 54 = 0,04, SENA/ICBF en 0 y CCF completa; quien
-   gana ≥ 10 SMMLV aporta todo.
-3. **Cuadre** antes de descargar: Σ campos 47/55/63/65/67/69 contra los conceptos de aportes de
-   los `NM` del mes por subsistema; la diferencia, si la hay, se muestra y hay que explicarla.
-4. Descargar el `.txt` (ASCII, CRLF, mayúsculas sin tildes) y en Aportes en Línea, con la cuenta
-   del aportante (§6.6): Liquidaciones › Adicionar liquidación › Cargar archivo › **Validar**.
-   Sin **Error**; las **Alertas** se anotan y se comparan con las nuestras. Guardar la captura
-   y el número de planilla como evidencia (SC-004).
-5. Regenerar tras corregir una nómina: versión N+1 vigente, la anterior `Superseded` y
-   consultable con su archivo. Marcar «Cargada» con número y fecha de radicación
-   (`Payroll.Pila.Uploaded`).
-6. Caso **abril 2027**: con la segunda `FSP_TABLA` vigente y un empleado en régimen de
-   transición, el FSP sale distinto para quien no lo está; el caso dorado lo fija.
+1. Catálogos con «Código PILA» (EPS010, 230301, 14-23, CCF24), datos del aportante completos,
+   empresa con NIT, fichas con EPS/fondo/ARL (clase I)/caja y DIVIPOLA; nómina del mes aprobada.
+2. `POST /api/payroll/pila/2027/3/validate`: `canGenerate = true`, 2 cotizantes, la alerta
+   `Pila.LayoutSinCotejar` (D-43). Sin la EPS en la ficha → bloqueante `Pila.SinEps` con
+   `link = /nomina/empleados/{id}`; restaurada, vuelve a validar limpio; validar no guarda.
+3. Generar sin reconocer alertas → 422 `WarningsNotAcknowledged`; con `acknowledgeWarnings` →
+   201, versión 1, `Generated`, 2 líneas, `PILA_900123456_2027-03_v1.txt`, FSP 80.000 (8.000.000
+   = 4,57 SMMLV → 1 %). Detalle con `fields` por número (campo 33 = EPS010); explicación de la
+   línea 1 con 98 campos y el registro de 693 posiciones.
+4. **Cuadre (FR-027)**: pensión, salud, FSP, CCF, SENA e ICBF cuadran al peso; la ARL difiere en
+   100 porque la ordinaria redondea al múltiplo más cercano y la planilla al superior: descargar
+   sin `acknowledgeDifference=true` → 422 `Payroll.Pila.Unreconciled`; con él → `text/plain;
+   charset=us-ascii`, 3 renglones CRLF (358 / 693 / 693), sólo ASCII, `2027-032027-04` en la
+   cabecera. `pila-cuadre` del centro de reportes: 7 filas.
+5. Regenerar → versión 2; la 1 queda `Superseded (3)` y conserva su archivo.
+6. `ReadOnly` marca cargada → 404 `Generic.NotFound`. Marcar cargada con `PL-2027-000456` y
+   fecha de pago → `Uploaded`; generar otra vez → 422 `Payroll.Pila.AlreadyUploaded`.
+7. Lo que sigue siendo del dueño (T094): cotejar el layout con el anexo v30 y una planilla pagada,
+   y pasar el `.txt` por el validador de Aportes en Línea con la cuenta del aportante (SC-004).
 
 ### 3.6 Nómina electrónica en habilitación con el set de pruebas (US6)
 
@@ -446,24 +443,25 @@ y otro con una deducción de libranza; uno de ellos con prima pagada en el mes.
    falta (FR-031). Auditoría: `Payroll.ElectronicPayroll.Generated/Transmitted/StatusChanged/
    EnablementChanged`.
 
-### 3.7 Procedimiento 2 (US7)
+### 3.7 Procedimiento 2 (US7) — corrido el 2026-09-21 por `RetencionProcedimiento2Tests`
 
-Empleado **J** marcado en procedimiento 2 con doce meses liquidados en el sistema (o los
-disponibles) y un mes de comisiones altas.
+Los casos dorados de `Domain.Tests/Payroll/Withholding/Casos/` fijan los números a mano: doce
+meses de 20.000.000 con prima de 10.000.000 dan **16,35 %** (`DepurarLuegoDividir`) y **16,13 %**
+(`DividirLuegoDepurar`); ocho meses de 12.000.000 con prima de 4.000.000 dividen por 8 y dan
+8,43 %; doce de 12.000.000 con prima de 6.000.000 y cesantías excluidas, 6,80 %; con la tabla del
+plan, 6,75 %. Por HTTP:
 
-1. `/nomina/retencion-procedimiento-2` › semestre 2027-1 (cálculo en diciembre de 2026) ›
-   Calcular: la explicación lista los doce meses con ingreso gravable (ordinarias **y** prima;
-   cesantías e intereses excluidas), aportes obligatorios restados, depuración (25 % con tope,
-   deducciones declaradas con tope 40 %/1.340 UVT), división por `RETEFTE_P2_DIVISOR` = 13 (o por
-   los meses de vinculación si son menos, y lo dice), retención teórica con la tabla vigente (la
-   del plan si tiene tramos) y porcentaje. Con el ejemplo de la investigación:
-   `DepurarLuegoDividir` → **3,71 %**; `DividirLuegoDepurar` → **3,44 %**; la política
-   `P2SecuenciaDepuracion` decide y la explicación nombra la secuencia.
-2. Aprobar (`Payroll.WithholdingRate.Approve`): la vigencia anterior en
-   `PAY_EmployeeWithholdingRates` **se cierra** al 31-12-2026 (no se borra) y la nueva abre el
-   01-01-2027 hasta el 30-06-2027; auditoría `Payroll.EmployeeWithholding.Changed`.
-3. Calcular la primera quincena de enero de 2027: la línea de retención de J usa el porcentaje
-   nuevo y su explicación lo referencia; el motor ordinario no cambió.
+1. Juan en procedimiento 2 (5 % digitado a mano, abierto) en un plan propio, con septiembre,
+   octubre y noviembre de 2027 aprobados.
+2. `POST /api/payroll/withholding-rates/calculate { year: 2027, semester: 2 }` → 201: 3 meses,
+   divisor 3 (`divisorSource = MesesDeVinculacion`), rige 2028-01-01 – 2028-06-30, porcentaje > 0;
+   el detalle trae mes a mes con sus corridas, la depuración y el tramo; `retencion-p2` da 4 filas.
+3. `ReadOnly` aprueba → 404. Aprobar → `previousClosedAt = 2027-12-31`; la ficha tiene dos
+   vigencias: la manual cerrada al 31-12-2027 y la calculada con el porcentaje; aprobar otra vez →
+   422 `AlreadyApproved`.
+4. Calcular enero de 2028: la línea `RETEFTE` de Juan es mayor que cero y su explicación dice
+   «procedimiento 2» y trae el porcentaje aprobado.
+5. Recalcular → versión 2; la aprobada sigue `Approved (1)`.
 
 ### 3.8 Dispersión bancaria (US8) — corrido el 2026-09-21 por `DispersionTests`
 

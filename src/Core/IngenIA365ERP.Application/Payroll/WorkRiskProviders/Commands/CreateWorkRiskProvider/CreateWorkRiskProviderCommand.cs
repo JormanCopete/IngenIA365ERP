@@ -15,6 +15,9 @@ public record CreateWorkRiskProviderCommand : IRequest<Result<Guid>>
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
+
+    /// <summary>Feature 010 (US5): código de la administradora en el listado del operador de la PILA (6 posiciones).</summary>
+    public string? PilaCode { get; init; }
     public decimal Factor { get; init; }
     /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
     public Guid? PersonPublicId { get; init; }
@@ -45,6 +48,7 @@ public class CreateWorkRiskProviderCommandHandler(
             ShortName = request.ShortName ?? string.Empty,
             TaxId = request.TaxId,
             CheckDigit = request.CheckDigit,
+            PilaCode = string.IsNullOrWhiteSpace(request.PilaCode) ? null : request.PilaCode.Trim().ToUpperInvariant(),
             Factor = request.Factor,
             PersonId = persona.Value,
             CreatedAt = dateTime.UtcNow,
@@ -76,5 +80,9 @@ public class CreateWorkRiskProviderCommandValidator : AbstractValidator<CreateWo
 
         RuleFor(x => x.TaxId)
             .MaximumLength(20).WithMessage("TaxId must not exceed 20 characters.");
+
+        RuleFor(x => x.PilaCode)
+            .MaximumLength(6).WithMessage("El código PILA tiene hasta 6 posiciones.")
+            .Matches("^[A-Za-z0-9-]*$").WithMessage("El código PILA es alfanumérico (admite guion), sin espacios.");
     }
 }
