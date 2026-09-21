@@ -154,6 +154,9 @@
                                         <PermissionGate Required="Payroll.Vacations.Reverse">
                                             <SfButton CssClass="e-flat e-small" IconCss="e-icons e-undo" Title="Reversar (asiento espejo)" OnClick="@(() => AbrirMotivo(l, descartar: false))" />
                                         </PermissionGate>
+                                        <PermissionGate Required="Payroll.Disbursement.Generate">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-export" Title="Archivo de dispersión para el banco" OnClick="@(() => { _corridaDispersion = l.RunPublicId; _mostrarDispersion = true; })" />
+                                        </PermissionGate>
                                     }
                                 }
                             </Template>
@@ -542,7 +545,12 @@
     </DialogTemplates>
 </SfDialog>
 
+<GenerarDispersion @bind-Visible="_mostrarDispersion" RunPublicId="@_corridaDispersion" Etiqueta="Liquidación de vacaciones" />
+
 @code {
+    // Feature 010 (US8): el archivo de dispersión se genera desde esta relación de pago.
+    private bool _mostrarDispersion;
+    private Guid _corridaDispersion;
     /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») abre la pestaña Liquidaciones en el año del corte y el detalle de esa corrida.</summary>
     [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
 

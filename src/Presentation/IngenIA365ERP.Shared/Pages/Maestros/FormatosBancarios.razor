@@ -1,0 +1,463 @@
+@page "/maestros/formatos-bancarios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject HttpClient Http
+@inject INotificationService Notification
+
+@*
+    Feature 010 (N4, D-42): los formatos de archivo plano de cada banco, en Core y ligados al banco.
+    El layout es dato con vigencia: cabecera, detalle y totales campo a campo (origen, largo,
+    alineación, relleno, mapa), o pegado como JSON tal como lo entrega el banco. Un formato que ya
+    generó archivos no cambia de estructura: se cierra su vigencia y se crea la versión nueva. Lo
+    usan la dispersión de nómina y, con su ámbito, la consignación de cesantías; tesorería y
+    contabilidad se cuelgan del mismo motor.
+*@
+
+<PageTitle>Formatos bancarios - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Core.BankFileFormats.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Formatos de archivo por banco</h3>
+    <div class="toolbar">
+        <select class="e-input" @bind="_ambito" @bind:after="CargarAsync">
+            <option value="">Todos los ámbitos</option>
+            <option value="PayrollDisbursement">Dispersión de nómina</option>
+            <option value="SeveranceDeposit">Consignación de cesantías</option>
+            <option value="SupplierPayments">Pagos a proveedores</option>
+        </select>
+        <PermissionGate Required="Core.BankFileFormats.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirNuevo(null))">Nuevo formato</SfButton>
+        </PermissionGate>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">El layout es dato, no código</span>
+    <p>Cada banco publica la estructura de su archivo de pagos; aquí se carga campo a campo (o se pega el JSON) y queda ligada al banco con su vigencia. <strong>CSV-GENERICO</strong> viene sembrado y sirve con cualquier banco; cópielo para armar el de su banco. El código ACH de cada banco destino se registra en Maestros › Bancos («Código de transferencia»).</p>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="FormatoBancarioResumenDto" DataSource="@_formatos" AllowSorting="true" AllowPaging="true">
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="Code" HeaderText="Código" Width="140" />
+        <GridColumn Field="Name" HeaderText="Nombre" Width="260" />
+        <GridColumn Field="BancoTexto" HeaderText="Banco" Width="170" />
+        <GridColumn Field="AmbitoTexto" HeaderText="Ámbito" Width="170" />
+        <GridColumn Field="TipoTexto" HeaderText="Tipo" Width="100" />
+        <GridColumn Field="VigenciaTexto" HeaderText="Vigencia" Width="180" />
+        <GridColumn Field="FieldCount" HeaderText="Campos" Width="80" TextAlign="TextAlign.Right" />
+        <GridColumn Field="FilesGenerated" HeaderText="Archivos" Width="90" TextAlign="TextAlign.Right" />
+        <GridColumn Field="EstadoTexto" HeaderText="Estado" Width="120" />
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var f = (FormatoBancarioResumenDto)context;
+                    <PermissionGate Required="Core.BankFileFormats.Manage">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => AbrirEdicionAsync(f.FormatPublicId))" />
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-copy" Title="Copiar como formato nuevo" OnClick="@(() => AbrirNuevo(f.FormatPublicId))" />
+                        @if (!f.IsSeeded && f.FilesGenerated == 0)
+                        {
+                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" Title="Retirar" OnClick="@(() => { _aRetirar = f; _confirmarRetiro = true; })" />
+                        }
+                    </PermissionGate>
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+@if (!_carga.Activa && _formatos.Count == 0)
+{
+    <div class="sin-datos">Sin formatos. La semilla deja CSV-GENERICO; si no aparece, reaplique la semilla desde Nómina › Conceptos.</div>
+}
+</IndicadorDeCarga>
+</PermissionGate>
+
+@* --------------------------------------------------------------- editor --- *@
+<SfDialog @bind-Visible="_mostrarEditor" Header="@_tituloEditor" Width="1100px" Height="90%" IsModal="true" ShowCloseIcon="true" AllowDragging="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _editorCarga.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+            @if (_def is not null)
+            {
+                <div class="pagina">
+                    @if (_enUso > 0)
+                    {
+                        <div class="aviso">Este formato ya generó @_enUso archivo(s): su estructura no cambia. Sólo se editan nombre, fin de vigencia, notas y estado; para otra estructura use «Copiar como formato nuevo» con vigencia posterior.</div>
+                    }
+                    <div class="form-grid">
+                        <SfTextBox @bind-Value="_def.Code" MaxLength="20" Placeholder="Código *" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
+                        <SfTextBox @bind-Value="_def.Name" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
+                        <label class="campo">
+                            Banco (vacío = genérico, cualquier banco)
+                            <select class="e-input" @bind="_bancoId" disabled="@(_enUso > 0)">
+                                <option value="">— genérico —</option>
+                                @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">
+                            Ámbito
+                            <select class="e-input" @bind="_def.Scope" disabled="@(_enUso > 0)">
+                                <option value="PayrollDisbursement">Dispersión de nómina</option>
+                                <option value="SeveranceDeposit">Consignación de cesantías</option>
+                                <option value="SupplierPayments">Pagos a proveedores (tesorería)</option>
+                            </select>
+                        </label>
+                        <SfDatePicker TValue="DateTime" Value="@_def.ValidFrom.ToDateTime(TimeOnly.MinValue)" ValueChanged="@((DateTime d) => _def.ValidFrom = DateOnly.FromDateTime(d))" Placeholder="Vigente desde" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
+                        <SfDatePicker TValue="DateTime?" Value="@_def.ValidTo?.ToDateTime(TimeOnly.MinValue)" ValueChanged="@((DateTime? d) => _def.ValidTo = d is { } x ? DateOnly.FromDateTime(x) : null)" Placeholder="Vigente hasta (vacío = sin fin)" FloatLabelType="FloatLabelType.Always" />
+                        <label class="campo">
+                            Tipo
+                            <select class="e-input" @bind="_def.Kind" disabled="@(_enUso > 0)">
+                                <option value="FixedWidth">Ancho fijo</option>
+                                <option value="Delimited">Delimitado</option>
+                            </select>
+                        </label>
+                        <SfTextBox @bind-Value="_def.Delimiter" MaxLength="5" Placeholder="Separador (delimitado)" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0 && _def.Kind == "Delimited")" />
+                        <label class="campo">
+                            Codificación
+                            <select class="e-input" @bind="_def.Encoding" disabled="@(_enUso > 0)">
+                                <option value="us-ascii">ASCII (sin tildes)</option>
+                                <option value="utf-8">UTF-8</option>
+                                <option value="windows-1252">Windows-1252</option>
+                            </select>
+                        </label>
+                        <label class="campo">
+                            Fin de línea
+                            <select class="e-input" @bind="_def.LineEnding" disabled="@(_enUso > 0)">
+                                <option value="CRLF">CRLF (Windows)</option>
+                                <option value="LF">LF</option>
+                            </select>
+                        </label>
+                        <label class="campo">
+                            Montos
+                            <select class="e-input" @bind="_def.AmountFormat" disabled="@(_enUso > 0)">
+                                <option value="Integer">Pesos sin decimales (1250000)</option>
+                                <option value="ImplicitCents">Centavos implícitos (125000000)</option>
+                                <option value="Point2">Con punto y dos decimales (1250000.00)</option>
+                            </select>
+                        </label>
+                        <SfTextBox @bind-Value="_def.FileName" MaxLength="120" Placeholder="Nombre del archivo (plantilla)" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
+                        <SfTextBox @bind-Value="_def.AgreementCode" MaxLength="20" Placeholder="Convenio / código de empresa en el banco" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
+                        <SfTextBox @bind-Value="_def.ContentType" MaxLength="60" Placeholder="Content-Type (text/plain, text/csv)" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
+                    </div>
+                    <div class="toolbar">
+                        <label class="campo-check"><input type="checkbox" @bind="_def.Uppercase" disabled="@(_enUso > 0)" /> Mayúsculas</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_def.StripAccents" disabled="@(_enUso > 0)" /> Sin tildes ni eñes</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_def.QuoteText" disabled="@(_enUso > 0 || _def.Kind != "Delimited")" /> Textos entre comillas</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_def.IsActive" /> Activo</label>
+                    </div>
+                    <SfTextBox @bind-Value="_def.Notes" MaxLength="500" Multiline="true" Placeholder="Notas (qué dijo el banco, pendientes)" FloatLabelType="FloatLabelType.Always" />
+
+                    <SfTab>
+                        <TabItems>
+                            @foreach (var (nombre, registro, permiteTotales) in new[] { ("Cabecera", _def.Records.Header, true), ("Detalle (una línea por pago)", _def.Records.Detail, false), ("Totales", _def.Records.Trailer, true) })
+                            {
+                                <TabItem>
+                                    <ChildContent><TabHeader Text="@nombre" /></ChildContent>
+                                    <ContentTemplate>
+                                        <div class="toolbar">
+                                            @if (permiteTotales)
+                                            {
+                                                <label class="campo-check"><input type="checkbox" @bind="registro.Enabled" disabled="@(_enUso > 0)" /> Este registro va en el archivo</label>
+                                            }
+                                            @if (_enUso == 0)
+                                            {
+                                                <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" type="button" OnClick="@(() => AgregarCampo(registro))">Agregar campo</SfButton>
+                                            }
+                                        </div>
+                                        <div class="tabla-desplazable">
+                                        <table class="campos-formato">
+                                            <thead>
+                                                <tr><th class="estrecha">#</th><th>Nombre</th><th>Origen</th><th>Valor constante</th><th class="estrecha">Largo</th><th>Alineación</th><th class="estrecha">Relleno</th><th>Tipo</th><th>Formato</th><th>Mapa (clave=valor;…)</th><th class="estrecha">Req.</th><th class="estrecha">Recorta</th><th></th></tr>
+                                            </thead>
+                                            <tbody>
+                                            @foreach (var c in registro.Fields.OrderBy(x => x.Order))
+                                            {
+                                                <tr>
+                                                    <td>@c.Order</td>
+                                                    <td><input class="e-input" @bind="c.Name" disabled="@(_enUso > 0)" /></td>
+                                                    <td>
+                                                        <select class="e-input" @bind="c.Source" disabled="@(_enUso > 0)">
+                                                            @foreach (var o in OrigenesPara(nombre)) { <option value="@o.Code" title="@o.Description">@o.Code</option> }
+                                                        </select>
+                                                    </td>
+                                                    <td><input class="e-input" @bind="c.Value" disabled="@(_enUso > 0 || c.Source != "Constant")" /></td>
+                                                    <td><input class="e-input" type="number" min="0" @bind="c.Length" disabled="@(_enUso > 0)" /></td>
+                                                    <td><select class="e-input" @bind="c.Align" disabled="@(_enUso > 0)"><option value="Left">Izquierda</option><option value="Right">Derecha</option></select></td>
+                                                    <td><select class="e-input" @bind="c.Pad" disabled="@(_enUso > 0)"><option value=" ">espacio</option><option value="0">cero</option></select></td>
+                                                    <td><select class="e-input" @bind="c.DataType" disabled="@(_enUso > 0)"><option value="">(según origen)</option><option value="Text">Texto</option><option value="Integer">Entero</option><option value="Amount">Monto</option><option value="Date">Fecha</option></select></td>
+                                                    <td><input class="e-input" @bind="c.Format" placeholder="yyyyMMdd" disabled="@(_enUso > 0)" /></td>
+                                                    <td><input class="e-input" @bind="c.MapTexto" placeholder="1=S;2=D" disabled="@(_enUso > 0)" /></td>
+                                                    <td><input type="checkbox" @bind="c.Required" disabled="@(_enUso > 0)" /></td>
+                                                    <td><input type="checkbox" @bind="c.Truncate" disabled="@(_enUso > 0)" /></td>
+                                                    <td>
+                                                        @if (_enUso == 0)
+                                                        {
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-chevron-up" type="button" Title="Subir" OnClick="@(() => Mover(registro, c, -1))" />
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-chevron-down" type="button" Title="Bajar" OnClick="@(() => Mover(registro, c, +1))" />
+                                                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" type="button" Title="Quitar" OnClick="@(() => Quitar(registro, c))" />
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                            </tbody>
+                                        </table>
+                                        </div>
+                                        @if (registro.Fields.Count == 0) { <div class="sin-datos">Sin campos.</div> }
+                                    </ContentTemplate>
+                                </TabItem>
+                            }
+                            <TabItem>
+                                <ChildContent><TabHeader Text="JSON" /></ChildContent>
+                                <ContentTemplate>
+                                    <p class="texto-tenue">La definición completa tal como la documenta el contrato. Pegue aquí la que entregue el banco (o la de otra cooperativa) y aplíquela; o copie ésta para guardarla.</p>
+                                    <SfTextBox @bind-Value="_json" Multiline="true" Placeholder="JSON del formato" FloatLabelType="FloatLabelType.Always" CssClass="archivo-plano" />
+                                    <div class="toolbar">
+                                        <SfButton CssClass="e-outline" type="button" OnClick="@ExportarJson">Mostrar el JSON de lo editado</SfButton>
+                                        @if (_enUso == 0)
+                                        {
+                                            <SfButton CssClass="e-outline" type="button" OnClick="@ImportarJson">Aplicar el JSON pegado al editor</SfButton>
+                                        }
+                                    </div>
+                                </ContentTemplate>
+                            </TabItem>
+                            <TabItem>
+                                <ChildContent><TabHeader Text="Vista previa" /></ChildContent>
+                                <ContentTemplate>
+                                    <p class="texto-tenue">Escribe las primeras líneas con una liquidación aprobada real, sin guardar nada. Pegue el id de la corrida (se ve en la dirección de la pantalla de la liquidación, <code>?corrida=</code>) o venga desde Dispersión con «Probar formato».</p>
+                                    <div class="fila-campos">
+                                        <SfTextBox @bind-Value="_corridaPrueba" Placeholder="Id de la corrida aprobada" FloatLabelType="FloatLabelType.Always" Width="360px" />
+                                        <SfButton CssClass="e-outline" IconCss="e-icons e-eye" type="button" Disabled="@_vistaCarga.Activa" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+                                    </div>
+                                    <IndicadorDeCarga Cargando="@_vistaCarga.Activa" Texto="Escribiendo…">
+                                    @if (_vista is not null)
+                                    {
+                                        @if (_vista.FormatErrors.Count > 0)
+                                        {
+                                            <div class="aviso">El formato tiene errores:
+                                                <ul>@foreach (var e in _vista.FormatErrors) { <li>@e.Record @e.Order @e.Field: @e.Message</li> }</ul>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <p class="texto-tenue">@_vista.FileName · @_vista.LineCount línea(s) · total @_vista.TotalAmount.ToString("N2") · @_vista.Excluded.Count en pendientes</p>
+                                            <pre class="archivo-plano">@string.Join("\n", _vista.Lines)</pre>
+                                        }
+                                    }
+                                    </IndicadorDeCarga>
+                                </ContentTemplate>
+                            </TabItem>
+                        </TabItems>
+                    </SfTab>
+
+                    @if (_errores.Count > 0)
+                    {
+                        <div class="aviso">
+                            <strong>No se guardó:</strong>
+                            <ul>@foreach (var e in _errores) { <li>@e.Record @e.Order @e.Field: @e.Message</li> }</ul>
+                        </div>
+                    }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarEditor = false)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" type="button" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar</SfButton>
+                    </div>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarRetiro" Title="Retirar formato" ConfirmText="Retirar"
+               Message="@($"¿Retirar el formato «{_aRetirar?.Code}»? No generó archivos, así que no queda rastro en ninguna liquidación.")"
+               OnConfirm="RetirarAsync" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _editorCarga = new(), _guardado = new(), _vistaCarga = new();
+    private List<FormatoBancarioResumenDto> _formatos = [];
+    private List<OrigenDeCampoDto> _origenes = [];
+    private List<BancoItem> _bancos = [];
+    private string _ambito = string.Empty;
+    private bool _mostrarEditor, _confirmarRetiro;
+    private string _tituloEditor = string.Empty;
+    private FormatoBancarioDefinicion? _def;
+    private Guid? _editandoId;
+    private int _enUso;
+    private string _bancoId = string.Empty;
+    private string _json = string.Empty, _corridaPrueba = string.Empty;
+    private readonly List<ErrorDeFormatoDto> _errores = [];
+    private VistaPreviaDeDispersionDto? _vista;
+    private FormatoBancarioResumenDto? _aRetirar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _corridaPrueba = Corrida?.ToString() ?? string.Empty;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarFormatosBancariosAsync(string.IsNullOrEmpty(_ambito) ? null : _ambito);
+        if (res.IsSuccess) _formatos = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los formatos.");
+    }
+
+    private async Task PrepararEditorAsync()
+    {
+        if (_origenes.Count == 0)
+        {
+            var o = await Nomina.OrigenesDeCampoAsync();
+            if (o.IsSuccess) _origenes = (o.Value ?? []).ToList();
+        }
+        if (_bancos.Count == 0)
+            _bancos = await Http.TryGetListAsync<BancoItem>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+    }
+
+    private IEnumerable<OrigenDeCampoDto> OrigenesPara(string registro) => _origenes.Where(o =>
+        (registro.StartsWith("Cabecera") && o.Header) || (registro.StartsWith("Detalle") && o.Detail) || (registro.StartsWith("Totales") && o.Trailer));
+
+    private async Task AbrirNuevo(Guid? copiarDe)
+    {
+        _errores.Clear(); _vista = null; _enUso = 0; _editandoId = null;
+        _mostrarEditor = true;
+        using var carga = _editorCarga.Iniciar();
+        await PrepararEditorAsync();
+        if (copiarDe is { } id)
+        {
+            var res = await Nomina.FormatoBancarioAsync(id);
+            if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo copiar el formato."); _mostrarEditor = false; return; }
+            _def = res.Value!.Definition;
+            _def.Code = string.Empty; _def.Name = $"{res.Value.Summary.Name} (copia)"; _def.ValidFrom = DateOnly.FromDateTime(DateTime.Today); _def.ValidTo = null; _def.IsActive = true;
+            _bancoId = _def.BankPublicId?.ToString() ?? string.Empty;
+            _tituloEditor = $"Nuevo formato a partir de {res.Value.Summary.Code}";
+        }
+        else
+        {
+            _def = new FormatoBancarioDefinicion();
+            _def.Records.Detail.Fields.Add(new FormatoBancarioDefinicion.CampoDeFormato { Order = 1, Name = "Documento", Source = "PayeeDocument", Length = 15, Align = "Right", Pad = "0", Required = true });
+            _bancoId = string.Empty;
+            _tituloEditor = "Nuevo formato";
+        }
+        _json = string.Empty;
+    }
+
+    private async Task AbrirEdicionAsync(Guid id)
+    {
+        _errores.Clear(); _vista = null; _json = string.Empty;
+        _mostrarEditor = true;
+        using var carga = _editorCarga.Iniciar();
+        await PrepararEditorAsync();
+        var res = await Nomina.FormatoBancarioAsync(id);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo abrir el formato."); _mostrarEditor = false; return; }
+        _def = res.Value!.Definition;
+        _editandoId = id;
+        _enUso = res.Value.Summary.FilesGenerated;
+        _bancoId = _def.BankPublicId?.ToString() ?? string.Empty;
+        _tituloEditor = $"Editar {res.Value.Summary.Code}";
+    }
+
+    private void AgregarCampo(FormatoBancarioDefinicion.RegistroDeFormato registro)
+    {
+        registro.Fields.Add(new FormatoBancarioDefinicion.CampoDeFormato { Order = registro.Fields.Count + 1, Name = $"Campo {registro.Fields.Count + 1}", Source = "Constant", Value = string.Empty, Length = _def?.Kind == "FixedWidth" ? 1 : null });
+    }
+
+    private static void Renumerar(FormatoBancarioDefinicion.RegistroDeFormato registro)
+    {
+        var i = 1;
+        foreach (var c in registro.Fields) c.Order = i++;
+    }
+
+    private void Quitar(FormatoBancarioDefinicion.RegistroDeFormato registro, FormatoBancarioDefinicion.CampoDeFormato c) { registro.Fields.Remove(c); Renumerar(registro); }
+
+    private void Mover(FormatoBancarioDefinicion.RegistroDeFormato registro, FormatoBancarioDefinicion.CampoDeFormato c, int delta)
+    {
+        var i = registro.Fields.IndexOf(c); var j = i + delta;
+        if (j < 0 || j >= registro.Fields.Count) return;
+        (registro.Fields[i], registro.Fields[j]) = (registro.Fields[j], registro.Fields[i]);
+        Renumerar(registro);
+    }
+
+    private static readonly JsonSerializerOptions JsonOpciones = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    private void ExportarJson()
+    {
+        if (_def is null) return;
+        _def.BankPublicId = Guid.TryParse(_bancoId, out var b) ? b : null;
+        _json = JsonSerializer.Serialize(_def, JsonOpciones);
+    }
+
+    private async Task ImportarJson()
+    {
+        try
+        {
+            var d = JsonSerializer.Deserialize<FormatoBancarioDefinicion>(_json, JsonOpciones);
+            if (d is null) { await Notification.ErrorAsync("El JSON está vacío."); return; }
+            _def = d;
+            _bancoId = d.BankPublicId?.ToString() ?? string.Empty;
+            await Notification.SuccessAsync("JSON aplicado al editor; revise y guarde.");
+        }
+        catch (JsonException ex)
+        {
+            await Notification.ErrorAsync($"El JSON no se pudo leer: {ex.Message}");
+        }
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        if (_def is null || _vistaCarga.Activa) return;
+        if (!Guid.TryParse(_corridaPrueba, out var corrida)) { await Notification.ErrorAsync("Pegue el id de una corrida aprobada."); return; }
+        using var carga = _vistaCarga.Iniciar();
+        _def.BankPublicId = Guid.TryParse(_bancoId, out var b) ? b : null;
+        var res = await Nomina.VistaPreviaDeDispersionAsync(new VistaPreviaDeDispersionRequest(corrida, null, DateOnly.FromDateTime(DateTime.Today), null, "PRUEBA", _def));
+        if (!res.IsSuccess) { _vista = null; await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo armar la vista previa."); return; }
+        _vista = res.Value;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_def is null || _guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        _errores.Clear();
+        _def.BankPublicId = Guid.TryParse(_bancoId, out var b) ? b : null;
+        var (ok, codigo, mensaje) = _editandoId is { } id
+            ? await Enviar(Nomina.ActualizarFormatoBancarioAsync(id, _def))
+            : await Enviar(Nomina.CrearFormatoBancarioAsync(_def));
+        if (!ok)
+        {
+            // El sobre de Core.BankFileFormat.Invalid ya nombra los primeros problemas (registro, orden, campo); el resto se ve en la vista previa.
+            await Notification.ErrorAsync(codigo == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : mensaje ?? "No se pudo guardar el formato.");
+            return;
+        }
+        await Notification.SuccessAsync("Formato guardado.");
+        _mostrarEditor = false;
+        await CargarAsync();
+    }
+
+    private static async Task<(bool Ok, string? Codigo, string? Mensaje)> Enviar<T>(Task<IngenIA365ERP.Shared.Services.Security.InvitationApiResult<T>> tarea)
+    {
+        var r = await tarea;
+        return (r.IsSuccess, r.ErrorCode, r.ErrorMessage);
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_aRetirar is null) return;
+        var res = await Nomina.EliminarFormatoBancarioAsync(_aRetirar.FormatPublicId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo retirar el formato."); return; }
+        await Notification.SuccessAsync("Formato retirado.");
+        _aRetirar = null;
+        await CargarAsync();
+    }
+
+    private sealed class BancoItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}

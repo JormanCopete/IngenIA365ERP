@@ -1059,3 +1059,11 @@ input[type="checkbox"], input[type="radio"] {
 .periodo-tarjeta { padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
 .periodo-tarjeta.periodo-cerrado { background: var(--superficie-2); color: var(--texto-secundario); }
 .periodo-tarjeta .periodo-mes { font-weight: var(--peso-fuerte); }
+
+/* Feature 010 (N4): archivos planos bancarios — la vista previa se lee en monoespaciada, sin cortar líneas. */
+.archivo-plano { font-family: var(--fuente-mono); font-size: var(--texto-sm); white-space: pre; overflow-x: auto; margin: var(--pad-sm) 0 0; padding: var(--pad-sm) var(--pad-md); background: var(--superficie-2); border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.fila-campos { display: flex; flex-wrap: wrap; gap: var(--gap-md); align-items: flex-end; }
+.campos-formato { width: 100%; border-collapse: collapse; font-size: var(--texto-sm); }
+.campos-formato th, .campos-formato td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde-suave, var(--borde)); vertical-align: middle; }
+.campos-formato input, .campos-formato select { width: 100%; min-width: 4rem; }
+.campos-formato .estrecha { width: 4.5rem; }

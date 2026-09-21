@@ -1,0 +1,179 @@
+@*
+    GenerarDispersion — «Generar archivo de dispersión» (feature 010, US8; contracts/api.md §9.2).
+    Se abre desde la relación de pago de cualquier corrida aprobada (ordinaria, prima, cesantías,
+    vacaciones, definitiva): cuenta bancaria origen de la cooperativa, formato (el vigente del
+    banco de esa cuenta o el genérico, o uno elegido), fecha de pago y referencia. Antes de
+    generar muestra la vista previa (primeras líneas y quiénes quedarían en pendientes con motivo).
+    Generar deja el archivo en la pantalla de Dispersión; «marcar enviado» se hace allá.
+*@
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<SfDialog Visible="@Visible" VisibleChanged="@CambioVisible" Header="Generar archivo de dispersión bancaria" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_carga.Activa || _envio.Activa)" Texto="@(_envio.Activa ? "Generando el archivo…" : "Cargando cuentas y formatos…")">
+            <div class="pagina">
+                <div class="info-card">
+                    <span class="label">@Etiqueta</span>
+                    <p>El archivo lleva a cada empleado con banco y cuenta en la ficha y neto por pagar; quien no tenga datos bancarios o ya esté pagado queda en <strong>pendientes</strong> con el motivo, y se marca a mano. Al entregarlo al banco, en Nómina › Dispersión se marca <strong>enviado</strong> y todos los del archivo quedan pagados en una sola acción.</p>
+                </div>
+
+                <label class="campo">
+                    Cuenta bancaria origen
+                    <select class="e-input" @bind="_cuentaId" @bind:after="AlCambiarCuenta">
+                        <option value="">— sin cuenta origen (sólo formatos que no la escriben) —</option>
+                        @foreach (var c in _cuentas)
+                        {
+                            <option value="@c.AccountPublicId">@c.Texto</option>
+                        }
+                    </select>
+                </label>
+                @if (_cuentas.Count == 0 && !_carga.Activa)
+                {
+                    <p class="texto-tenue">No hay cuentas bancarias en el plan de cuentas: en Contabilidad › Plan de cuentas, marque la cuenta del banco con su banco y número de cuenta.</p>
+                }
+
+                <label class="campo">
+                    Formato del archivo
+                    <select class="e-input" @bind="_formatoId">
+                        <option value="">— el vigente del banco de la cuenta, o el genérico —</option>
+                        @foreach (var f in FormatosOfrecidos)
+                        {
+                            <option value="@f.FormatPublicId">@f.Code · @f.Name (@f.BancoTexto, @f.VigenciaTexto)</option>
+                        }
+                    </select>
+                </label>
+
+                <div class="fila-campos">
+                    <SfDatePicker TValue="DateTime" @bind-Value="_fechaDePago" Placeholder="Fecha de pago" FloatLabelType="FloatLabelType.Always" Width="200px" />
+                    <SfTextBox @bind-Value="_referencia" MaxLength="60" Placeholder="Referencia del lote (opcional)" FloatLabelType="FloatLabelType.Always" Width="320px" />
+                </div>
+
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-eye" type="button" Disabled="@_envio.Activa" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+                </div>
+
+                @if (_vista is not null)
+                {
+                    <div class="info-card">
+                        <span class="label">@_vista.FileName · @_vista.LineCount línea(s) · total @_vista.TotalAmount.ToString("N2") · @_vista.Excluded.Count en pendientes</span>
+                        @if (_vista.FormatErrors.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var e in _vista.FormatErrors) { <li>@e.Record @e.Order @e.Field: @e.Message</li> }
+                            </ul>
+                        }
+                        else
+                        {
+                            <pre class="archivo-plano">@string.Join("\n", _vista.Lines)</pre>
+                        }
+                    </div>
+                    @if (_vista.Excluded.Count > 0)
+                    {
+                        <SfGrid TValue="ExcluidoDeDispersionDto" DataSource="@_vista.Excluded" Height="180">
+                            <GridColumns>
+                                <GridColumn Field="Name" HeaderText="Empleado" Width="220" />
+                                <GridColumn Field="MotivoTexto" HeaderText="Motivo" Width="180" />
+                                <GridColumn Field="Reason" HeaderText="Detalle" Width="320" />
+                                <GridColumn Field="NetPay" HeaderText="Neto" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                            </GridColumns>
+                        </SfGrid>
+                    }
+                }
+
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@Cerrar">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-export" type="button" Disabled="@(_envio.Activa || _vista is null || _vista.FormatErrors.Count > 0 || _vista.LineCount == 0)" OnClick="@GenerarAsync">Generar archivo</SfButton>
+                </div>
+                @if (_vista is null)
+                {
+                    <p class="texto-tenue">Primero la vista previa: así se ve qué va al archivo y quién queda pendiente antes de generarlo.</p>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public Guid RunPublicId { get; set; }
+    [Parameter] public string Etiqueta { get; set; } = "Relación de pago";
+    [Parameter] public DateTime? FechaDePagoPropuesta { get; set; }
+    /// <summary>Se dispara con el archivo generado; la pantalla que abrió el diálogo decide si navega a Dispersión.</summary>
+    [Parameter] public EventCallback<DispersionGeneradaDto> Generado { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _envio = new();
+    private List<CuentaBancariaDelPlanDto> _cuentas = [];
+    private List<FormatoBancarioResumenDto> _formatos = [];
+    private string _cuentaId = string.Empty, _formatoId = string.Empty;
+    private string? _referencia;
+    private DateTime _fechaDePago = DateTime.Today;
+    private VistaPreviaDeDispersionDto? _vista;
+    private bool _cargado;
+
+    private IEnumerable<FormatoBancarioResumenDto> FormatosOfrecidos
+    {
+        get
+        {
+            var banco = _cuentas.FirstOrDefault(c => c.AccountPublicId.ToString() == _cuentaId)?.BankPublicId;
+            return _formatos.Where(f => f.IsActive && (f.BankPublicId is null || f.BankPublicId == banco));
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible) { _cargado = false; return; }
+        if (_cargado) return;
+        _cargado = true;
+        _vista = null; _formatoId = string.Empty; _referencia = null;
+        _fechaDePago = FechaDePagoPropuesta ?? DateTime.Today;
+        using var carga = _carga.Iniciar();
+        var cuentas = await Nomina.CuentasBancariasAsync();
+        if (cuentas.IsSuccess) _cuentas = (cuentas.Value ?? []).ToList();
+        var formatos = await Nomina.ListarFormatosBancariosAsync("PayrollDisbursement", null, soloActivos: true);
+        if (formatos.IsSuccess) _formatos = (formatos.Value ?? []).ToList();
+        else await Notification.ErrorAsync(formatos.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : formatos.ErrorMessage ?? "No se pudieron cargar los formatos.");
+        if (_cuentas.Count == 1) _cuentaId = _cuentas[0].AccountPublicId.ToString();
+    }
+
+    private void AlCambiarCuenta() { _formatoId = string.Empty; _vista = null; }
+
+    private Guid? CuentaElegida => Guid.TryParse(_cuentaId, out var g) ? g : null;
+    private Guid? FormatoElegido => Guid.TryParse(_formatoId, out var g) ? g : null;
+
+    private async Task VistaPreviaAsync()
+    {
+        if (_envio.Activa) return;
+        using var envio = _envio.Iniciar();
+        var res = await Nomina.VistaPreviaDeDispersionAsync(new VistaPreviaDeDispersionRequest(RunPublicId, FormatoElegido, DateOnly.FromDateTime(_fechaDePago), CuentaElegida, _referencia, null));
+        if (!res.IsSuccess) { _vista = null; await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo armar la vista previa."); return; }
+        _vista = res.Value;
+    }
+
+    private async Task GenerarAsync()
+    {
+        if (_envio.Activa || _vista is null) return;
+        using var envio = _envio.Iniciar();
+        var res = await Nomina.GenerarDispersionAsync(new GenerarDispersionRequest(RunPublicId, FormatoElegido, DateOnly.FromDateTime(_fechaDePago), CuentaElegida, _referencia, null));
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo generar el archivo."); return; }
+        var generado = res.Value!;
+        await Notification.SuccessAsync($"Archivo {generado.FileName} generado: {generado.LineCount} línea(s), total {generado.TotalAmount:N2}" + (generado.Excluded.Count > 0 ? $"; {generado.Excluded.Count} en pendientes." : "."));
+        await Cerrar();
+        if (Generado.HasDelegate) await Generado.InvokeAsync(generado);
+        else Nav.NavigateTo($"/nomina/dispersion?archivo={generado.FilePublicId}");
+    }
+
+    private async Task Cerrar() => await CambioVisible(false);
+
+    private async Task CambioVisible(bool visible)
+    {
+        Visible = visible;
+        if (!visible) { _cargado = false; _vista = null; }
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}
