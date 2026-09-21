@@ -182,7 +182,7 @@ public sealed class ApprovePayrollRunCommandHandler(
             }
         }
 
-        // Feature 010 (D-30): una definitiva en borrador cuyo retiro cae en este período traía el salario
+        // Feature 010 (D-29): una definitiva en borrador cuyo retiro cae en este período traía el salario
         // pendiente y las novedades del período; esta aprobación acaba de pagarlos con la ordinaria, así que
         // el borrador queda desactualizado y al recalcularlo sale sin ese tramo («la última nómina ya lo pagó»).
         var inicioDt = DateOnly.FromDateTime(period.StartDate);

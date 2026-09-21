@@ -31,7 +31,7 @@ public static class SeveranceRule
         var fin = ctx.EffectiveEnd < yearEnd ? ctx.EffectiveEnd : yearEnd.Date;
         var inicio = ctx.EmploymentStart > yearStart.Date ? ctx.EmploymentStart : yearStart.Date;
 
-        // D-30: una corrida anual aprobada del año ya pagó las cesantías hasta su corte (y consumió el
+        // D-29: una corrida anual aprobada del año ya pagó las cesantías hasta su corte (y consumió el
         // saldo inicial); la definitiva registrada después liquida sólo los días posteriores a ese corte.
         var pagada = ctx.Input.SeverancePaidInRuns
             .Where(p => p.PaidThrough.Date >= yearStart.Date && p.PaidThrough.Date <= yearEnd.Date)
@@ -63,7 +63,7 @@ public static class SeveranceRule
         var exp = new Explanation { Form = "Cesantías", Parameter = pDias };
         exp.Note("Período", $"{Fmt.Date(yearStart)} a {Fmt.Date(yearEnd)}; días de cesantías por año: {Fmt.Num(diasPorAnio)} ({pDias.Code}, vigente desde {Fmt.Date(pDias.ValidFrom)}).");
         if (pagada is not null)
-            exp.Note("Corrida anual", $"Las cesantías hasta el {Fmt.Date(pagada.PaidThrough)} ya se pagaron en la corrida anual aprobada {pagada.RunPublicId} ({Fmt.Money(pagada.Amount)}); aquí se liquidan los días desde el {Fmt.Date(inicio)} (D-30).");
+            exp.Note("Corrida anual", $"Las cesantías hasta el {Fmt.Date(pagada.PaidThrough)} ya se pagaron en la corrida anual aprobada {pagada.RunPublicId} ({Fmt.Money(pagada.Amount)}); aquí se liquidan los días desde el {Fmt.Date(inicio)} (D-29).");
         if (saldo.Applies)
         {
             exp.Note("Saldo inicial", saldo.Text!);

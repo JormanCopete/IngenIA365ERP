@@ -218,7 +218,7 @@ public static class SettlementWithholdingRules
             .Sum(l => l.Amount);
 
         // Los topes mensuales en UVT se proporcionan a los días que este pago cubre, con tope de un
-        // mes (D-29): es la misma regla con que la nómina ordinaria proporciona los suyos a los días
+        // mes (D-28): es la misma regla con que la nómina ordinaria proporciona los suyos a los días
         // del período (ModoDeTopesAnuales.Mensualizado). Con proporción 1 fija, la liquidación de
         // vacaciones de un mes sumaba a la ordinaria de ese mes un segundo mes entero de topes de
         // vivienda, prepagada, dependientes y renta exenta. En modo Acumulado la exenta y el tope

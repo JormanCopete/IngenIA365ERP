@@ -30,7 +30,7 @@ public static class ServiceBonusRule
         var fin = ctx.EffectiveEnd < semesterEnd ? ctx.EffectiveEnd : semesterEnd.Date;
         var inicio = ctx.EmploymentStart > semesterStart.Date ? ctx.EmploymentStart : semesterStart.Date;
 
-        // FR-009: la definitiva ya pagó la prima proporcional de este semestre. D-30, el otro sentido: la
+        // FR-009: la definitiva ya pagó la prima proporcional de este semestre. D-29, el otro sentido: la
         // corrida semestral aprobada antes de registrar el retiro ya pagó la prima completa del semestre.
         var pagadas = ctx.Input.ServiceBonusPaidInSettlements
             .Where(p => p.PaidThrough.Date >= semesterStart.Date && p.PaidThrough.Date <= semesterEnd.Date)

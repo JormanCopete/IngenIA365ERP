@@ -151,7 +151,7 @@ public class ApproveSettlementCommandHandlerTests
     }
 
     /// <summary>
-    /// D-30: la definitiva paga el último tramo (SALARIO_PENDIENTE) y la ordinaria del período donde cae el
+    /// D-29: la definitiva paga el último tramo (SALARIO_PENDIENTE) y la ordinaria del período donde cae el
     /// retiro ya no incluye al empleado. Si esa ordinaria ya estaba calculada con el empleado, aprobar la
     /// definitiva la deja Stale y al recargarla el empleado no entra. Hasta la revisión de N1 el borrador
     /// seguía vivo con los mismos días y se aprobaba pagándolos dos veces.
@@ -176,11 +176,11 @@ public class ApproveSettlementCommandHandlerTests
         (await p.D.Db.PayrollRuns.SingleAsync(x => x.PublicId == calculada.Value.RunPublicId)).Status.Should().Be(PayrollRunStatus.Stale,
             "el borrador de septiembre traía a Ana con el mes entero y la definitiva acaba de pagar su último tramo");
         var septiembre = await p.D.Loader.LoadAsync(await p.D.Db.PayPeriods.SingleAsync(x => x.Id == p.Septiembre.Id), CancellationToken.None);
-        septiembre.Employees.Should().BeEmpty("la definitiva aprobada con retiro dentro de septiembre saca a Ana de la ordinaria de septiembre (D-30)");
+        septiembre.Employees.Should().BeEmpty("la definitiva aprobada con retiro dentro de septiembre saca a Ana de la ordinaria de septiembre (D-29)");
     }
 
     /// <summary>
-    /// D-30 en el orden inverso: si la ordinaria del período se aprueba con la definitiva todavía en borrador,
+    /// D-29 en el orden inverso: si la ordinaria del período se aprueba con la definitiva todavía en borrador,
     /// la ordinaria pagó el tramo; la definitiva queda Stale y al recalcularla sale sin salario pendiente.
     /// </summary>
     [Fact]

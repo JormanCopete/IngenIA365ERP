@@ -138,7 +138,7 @@ public class CorridasEspecialesEnRutasOrdinariasTests
     }
 
     /// <summary>
-    /// D-30 (spec US3 escenario 1, FR-020): el último tramo lo paga la definitiva como SALARIO_PENDIENTE,
+    /// D-29 (spec US3 escenario 1, FR-020): el último tramo lo paga la definitiva como SALARIO_PENDIENTE,
     /// así que el empleado con definitiva aprobada dentro del período (o antes) no entra a la ordinaria de
     /// ese período. Hasta la revisión de N1 el cargador lo conservaba «por los días hasta el retiro» y el
     /// salario, el auxilio y las deducciones de ley de esos días salían dos veces. Si la definitiva no trajo
@@ -173,7 +173,7 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         var batch = await d.Loader.LoadAsync(d.Marzo, CancellationToken.None);
 
         batch.Employees.Select(e => e.Employee.Id).Should().BeEquivalentTo([d.Ana.Id, julia.Id, rosa.Id, elena.Id],
-            "Luis, Marta y Pedro tienen definitiva aprobada hasta el fin de marzo que ya pagó su último tramo (D-30)");
+            "Luis, Marta y Pedro tienen definitiva aprobada hasta el fin de marzo que ya pagó su último tramo (D-29)");
         batch.Employees.Single(e => e.Employee.Id == julia.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 12), "su definitiva no pagó marzo: la ordinaria liquida hasta el retiro");
         batch.Employees.Single(e => e.Employee.Id == rosa.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 20));
         batch.Employees.Single(e => e.Employee.Id == elena.Id).Input.TerminationDate.Should().BeNull();

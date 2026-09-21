@@ -59,7 +59,7 @@ public sealed class CasoDoradoLiquidacion
     public List<CesantiasPagadasJson> CesantiasPagadasEnAnual { get; set; } = [];
     public SalarioPendienteJson? SalarioPendiente { get; set; }
 
-    /// <summary>D-30: novedades activas del período pendiente que la definitiva liquida con su concepto.</summary>
+    /// <summary>D-29: novedades activas del período pendiente que la definitiva liquida con su concepto.</summary>
     public List<CasoDorado.NovedadJson> NovedadesPendientes { get; set; } = [];
     public AcumuladoJson? AcumuladoRetencion { get; set; }
     public PoliticasJson Politicas { get; set; } = new();
@@ -286,11 +286,11 @@ public sealed class CasoDoradoLiquidacion
         public decimal Valor { get; set; }
         public int Dias { get; set; }
 
-        /// <summary>Quién la pagó: la definitiva (por defecto, FR-009) o la corrida semestral (D-30).</summary>
+        /// <summary>Quién la pagó: la definitiva (por defecto, FR-009) o la corrida semestral (D-29).</summary>
         public SettlementKind PagadaPor { get; set; } = SettlementKind.Settlement;
     }
 
-    /// <summary>Cesantías pagadas en una corrida anual aprobada hasta su corte (D-30).</summary>
+    /// <summary>Cesantías pagadas en una corrida anual aprobada hasta su corte (D-29).</summary>
     public sealed class CesantiasPagadasJson
     {
         public Guid? Corrida { get; set; }

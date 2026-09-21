@@ -449,7 +449,7 @@ public class SettlementInputLoaderTests
     }
 
     /// <summary>
-    /// D-30: una terminación registrada (definitiva en borrador) también saca al empleado de la prima
+    /// D-29: una terminación registrada (definitiva en borrador) también saca al empleado de la prima
     /// semestral y de las cesantías anuales cuyo corte cae en o después del retiro: la definitiva paga
     /// esos rubros al retirarse. Hasta la revisión de N1 sólo contaba la Settled, y la corrida colectiva
     /// aprobada entre el registro y la aprobación de la definitiva pagaba la prima o las cesantías dos veces.
@@ -486,7 +486,7 @@ public class SettlementInputLoaderTests
     }
 
     /// <summary>
-    /// D-30, el otro sentido: la definitiva registrada después de aprobar la prima semestral o la corrida
+    /// D-29, el otro sentido: la definitiva registrada después de aprobar la prima semestral o la corrida
     /// anual de cesantías del mismo período recibe lo ya pagado, con quién lo pagó, para omitir el rubro o
     /// liquidar sólo los días posteriores al corte. Una prima semestral no se informa a la propia corrida
     /// semestral: ahí sólo cuentan las definitivas (FR-009).
@@ -528,7 +528,7 @@ public class SettlementInputLoaderTests
     }
 
     /// <summary>
-    /// D-30: la definitiva trae las novedades activas del empleado en el período abierto donde cae el
+    /// D-29: la definitiva trae las novedades activas del empleado en el período abierto donde cae el
     /// retiro —devengadas y deducciones con su concepto— porque la nómina ordinaria de ese período ya no
     /// lo incluye. Quedan fuera las informativas (ya viajan como ausencias), la cuota de una libranza
     /// recurrente (va como deuda propuesta, FR-018a) y lo anulado.

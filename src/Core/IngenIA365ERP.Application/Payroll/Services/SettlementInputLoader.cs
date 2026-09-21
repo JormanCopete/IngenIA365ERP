@@ -98,7 +98,7 @@ public sealed class SettlementBatch
     public EmploymentTermination? Termination { get; init; }
     public VacationMovement? Movement { get; init; }
 
-    /// <summary>Id interno de cada novedad del período pendiente por su PublicId, para <c>PayrollRunLine.NoveltyId</c> (D-30).</summary>
+    /// <summary>Id interno de cada novedad del período pendiente por su PublicId, para <c>PayrollRunLine.NoveltyId</c> (D-29).</summary>
     public IReadOnlyDictionary<Guid, int> NoveltyIds { get; init; } = new Dictionary<Guid, int>();
 
     public IReadOnlyList<string> MissingRequiredParameters =>
@@ -113,7 +113,7 @@ public sealed class SettlementBatch
 /// <b>provisión acumulada</b> por concepto (<see cref="ProvisionBalanceReader"/>); el saldo
 /// inicial de prestaciones; los movimientos de vacaciones; las ausencias y suspensiones (las
 /// novedades con fechas que reducen días); la prima ya pagada en definitivas o en la semestral del
-/// semestre y las cesantías pagadas en la anual del año (D-30); el salario pendiente del período
+/// semestre y las cesantías pagadas en la anual del año (D-29); el salario pendiente del período
 /// abierto donde cae el retiro con las novedades activas del empleado en él; el acumulado anual de retención
 /// cuando la política es «acumulado»; y, en la definitiva, las deudas propuestas desde Cartera
 /// por persona y las libranzas recurrentes según <c>DeduccionAlRetiroModo</c>. Las políticas se
@@ -170,7 +170,7 @@ public sealed class SettlementInputLoader(
 
         // --- terminaciones vivas (FR-005, FR-013, exclusión «RetiradoConDefinitiva») ---
         // Una definitiva aprobada (Settled) retiró al empleado; una registrada (Registered) tiene su
-        // borrador vivo y va a pagar el tramo, la prima y las cesantías del retiro (D-30): la corrida
+        // borrador vivo y va a pagar el tramo, la prima y las cesantías del retiro (D-29): la corrida
         // colectiva no lo incluye en ninguno de los dos casos, para no pagarle dos veces.
         var vivas = await db.EmploymentTerminations.AsNoTracking()
             .Where(t => idsEmpleados.Contains(t.EmployeeId) && (t.Status == TerminationStatus.Settled || t.Status == TerminationStatus.Registered))
@@ -307,7 +307,7 @@ public sealed class SettlementInputLoader(
         var saldosProvision = await provisiones.LeerAsync(idsEmpleados, corte, excludeRunId: null, ct);
 
         // --- prima pagada en corridas aprobadas del semestre del corte: definitivas (FR-009) y, para la
-        // definitiva, la semestral aprobada antes de registrar el retiro (D-30) ---
+        // definitiva, la semestral aprobada antes de registrar el retiro (D-29) ---
         var (semInicio, semFin) = SemestreDe(corte);
         var esDefinitiva = request.Kind == SettlementKind.Settlement;
         var primasPagadas = await (
@@ -322,7 +322,7 @@ public sealed class SettlementInputLoader(
             .ToListAsync(ct);
         var primasPorEmpleado = primasPagadas.ToLookup(x => x.EmployeeId);
 
-        // --- cesantías pagadas en la corrida anual aprobada del año del retiro (definitiva, D-30) ---
+        // --- cesantías pagadas en la corrida anual aprobada del año del retiro (definitiva, D-29) ---
         var anioInicio = new DateOnly(corte.Year, 1, 1);
         var anioFin = new DateOnly(corte.Year, 12, 31);
         var cesantiasPagadas = request.Kind == SettlementKind.Settlement
@@ -345,7 +345,7 @@ public sealed class SettlementInputLoader(
                 .ToListAsync(ct)
             : [];
 
-        // --- novedades activas del empleado en ese período (definitiva, D-30): la bonificación por retiro
+        // --- novedades activas del empleado en ese período (definitiva, D-29): la bonificación por retiro
         // pactada viaja en la terminación; las demás devengadas y deducciones se liquidan con su concepto
         // porque la ordinaria del período ya no lo incluye. Las informativas ya entraron como ausencias y
         // la cuota de una libranza recurrente ya viene propuesta como deuda (FR-018a).

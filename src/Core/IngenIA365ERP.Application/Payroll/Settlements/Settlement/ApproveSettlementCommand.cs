@@ -31,7 +31,7 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// <item>las vacaciones pagadas quedan como movimiento <c>SettlementPayout</c> liquidado;</item>
 /// <item>la terminación pasa a <c>Settled</c>;</item>
 /// <item>el borrador de la nómina ordinaria del período donde cae el retiro, si existe, queda <c>Stale</c>
-/// (D-30): al recalcularlo el empleado ya no entra, porque su último tramo lo pagó esta definitiva.</item>
+/// (D-29): al recalcularlo el empleado ya no entra, porque su último tramo lo pagó esta definitiva.</item>
 /// </list>
 /// Tras confirmar, el PDF para firma se guarda en <c>COR_Attachments</c> (<c>OwnerEntityType =
 /// "EmploymentTermination"</c>); si eso falla la aprobación no se deshace —el documento se vuelve a
@@ -195,14 +195,14 @@ public sealed class ApproveSettlementCommandHandler(
         terminacion.UpdatedAt = ahora;
         terminacion.UpdatedBy = quien;
 
-        // --- la ordinaria del período donde cae el retiro ya no lo incluye (D-30): su borrador, si lo hay, se recalcula ---
+        // --- la ordinaria del período donde cae el retiro ya no lo incluye (D-29): su borrador, si lo hay, se recalcula ---
         var fechaDt = fecha.ToDateTime(TimeOnly.MinValue);
         var periodosDelRetiro = await db.PayPeriods.AsNoTracking()
             .Where(p => p.PayrollPlanId == empleado.PayrollPlanId && p.Status == PayPeriodStatus.Calculated && p.StartDate <= fechaDt && p.EndDate >= fechaDt)
             .Select(p => p.Id)
             .ToListAsync(ct);
         foreach (var periodoId in periodosDelRetiro)
-            await staleMarker.MarkStaleAsync(periodoId, $"Se aprobó la liquidación definitiva ({referencia}) del empleado retirado el {fecha:dd/MM/yyyy}: ya no entra a la nómina ordinaria de este período (D-30).", ct);
+            await staleMarker.MarkStaleAsync(periodoId, $"Se aprobó la liquidación definitiva ({referencia}) del empleado retirado el {fecha:dd/MM/yyyy}: ya no entra a la nómina ordinaria de este período (D-29).", ct);
 
         return Result.Success();
     }

@@ -5,7 +5,7 @@ using IngenIA365ERP.Domain.Payroll.Calculation.Rules;
 namespace IngenIA365ERP.Domain.Payroll.Settlements.Rules;
 
 /// <summary>
-/// Novedades del período pendiente en la definitiva (D-30): las extras, recargos, incapacidades,
+/// Novedades del período pendiente en la definitiva (D-29): las extras, recargos, incapacidades,
 /// comisiones y descuentos autorizados que el empleado tenía activos en el período abierto donde
 /// cae el retiro. La nómina ordinaria de ese período ya no lo incluye —el último tramo lo paga la
 /// definitiva—, así que sin esto se perderían. Cada novedad se vuelve una línea con su propio
@@ -98,7 +98,7 @@ public static class PendingNoveltiesRule
                 continue;
             }
             linea.Explanation.Note("Período pendiente",
-                $"Novedad del período {Fmt.Date(pendiente.PeriodStart)} a {Fmt.Date(pendiente.PeriodEnd)} liquidada en la definitiva: la nómina ordinaria de ese período ya no incluye al empleado (D-30).");
+                $"Novedad del período {Fmt.Date(pendiente.PeriodStart)} a {Fmt.Date(pendiente.PeriodEnd)} liquidada en la definitiva: la nómina ordinaria de ese período ya no incluye al empleado (D-29).");
             ctx.Add(linea);
         }
     }

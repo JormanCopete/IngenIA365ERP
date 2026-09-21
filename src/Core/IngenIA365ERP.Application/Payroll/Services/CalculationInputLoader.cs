@@ -55,7 +55,7 @@ public sealed class PayrollCalculationBatch
 /// es posterior al fin del período, ingresó antes del fin y no se retiró antes del
 /// inicio. Una ficha cerrada dentro del período sin definitiva se liquida por los días hasta
 /// el retiro; con definitiva aprobada dentro del período (o antes) el empleado no entra: ese
-/// tramo lo pagó la definitiva como <c>SALARIO_PENDIENTE</c> (D-30). Si la definitiva no lo
+/// tramo lo pagó la definitiva como <c>SALARIO_PENDIENTE</c> (D-29). Si la definitiva no lo
 /// pagó —no había período abierto al aprobarla—, la ordinaria lo liquida por días hasta el retiro.
 /// </para>
 /// </summary>
@@ -82,7 +82,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email }
         ).ToListAsync(ct);
 
-        // Feature 010 (FR-005, FR-020, D-30): la verdad del retiro es PAY_EmploymentTerminations. Una
+        // Feature 010 (FR-005, FR-020, D-29): la verdad del retiro es PAY_EmploymentTerminations. Una
         // definitiva aprobada (Settled) con fecha anterior al período saca al empleado aunque la ficha no
         // se hubiera cerrado. Una con fecha DENTRO del período también lo saca si pagó el último tramo
         // —salario, auxilio y novedades hasta el retiro— como SALARIO_PENDIENTE: liquidarlo aquí por días
@@ -257,7 +257,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
     /// <summary>
     /// La fecha de retiro que manda dentro del período: la de la ficha (cerrada por el camino anterior, sin
     /// definitiva) o la de una definitiva aprobada que no pagó el tramo, la menor; el motor liquida por días
-    /// hasta ella. Con definitiva que sí lo pagó el empleado ya no llega aquí (D-30). Nula si el retiro no cae
+    /// hasta ella. Con definitiva que sí lo pagó el empleado ya no llega aquí (D-29). Nula si el retiro no cae
     /// antes del fin.
     /// </summary>
     private static DateTime? FechaDeRetiro(Employee e, DateTime? liquidado, DateTime end)
