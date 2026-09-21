@@ -448,6 +448,145 @@ public class SettlementInputLoaderTests
         excluida.ReasonCode.Should().Be("RetiradoConDefinitiva");
     }
 
+    /// <summary>
+    /// D-30: una terminación registrada (definitiva en borrador) también saca al empleado de la prima
+    /// semestral y de las cesantías anuales cuyo corte cae en o después del retiro: la definitiva paga
+    /// esos rubros al retirarse. Hasta la revisión de N1 sólo contaba la Settled, y la corrida colectiva
+    /// aprobada entre el registro y la aprobación de la definitiva pagaba la prima o las cesantías dos veces.
+    /// </summary>
+    [Fact]
+    public async Task La_prima_y_las_cesantias_excluyen_al_retirado_con_definitiva_registrada_en_borrador()
+    {
+        var d = ConSeisMesesAprobados();
+        var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
+        d.Db.TerminationReasons.Add(motivo);
+        await d.Db.SaveChangesAsync();
+        // Ana: retiro registrado el 25 de junio, definitiva en borrador; la ficha sigue abierta a propósito.
+        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = d.Ana.Id, TerminationDate = new DateOnly(2026, 6, 25), TerminationReasonId = motivo.Id, Status = TerminationStatus.Registered, CreatedBy = "test" });
+        // Luis: retiro registrado en julio: la prima del primer semestre y las cesantías al 30 de junio lo incluyen completo.
+        var luis = d.Empleado("Luis", 1_800_000m, new DateTime(2026, 2, 1));
+        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = luis.Id, TerminationDate = new DateOnly(2026, 7, 10), TerminationReasonId = motivo.Id, Status = TerminationStatus.Registered, CreatedBy = "test" });
+        await d.Db.SaveChangesAsync();
+
+        var prima = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Prima(2026, 1), CancellationToken.None);
+        var cesantias = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Cesantias(2026, new DateOnly(2026, 6, 30)), CancellationToken.None);
+
+        prima.Employees.Select(e => e.Employee.Id).Should().Equal(luis.Id);
+        var sinPrima = prima.Excluded.Should().ContainSingle().Subject;
+        sinPrima.EmployeePublicId.Should().Be(d.Ana.PublicId);
+        sinPrima.ReasonCode.Should().Be(SettlementReasonCodes.YaPagadaEnDefinitiva);
+        sinPrima.Reason.Should().Contain("borrador");
+        prima.Employees.Single().Input.Employee.TerminationDate.Should().Be(new DateTime(2026, 7, 10), "el retiro registrado viaja al motor aunque caiga después del corte");
+
+        cesantias.Employees.Select(e => e.Employee.Id).Should().Equal(luis.Id);
+        var sinCesantias = cesantias.Excluded.Should().ContainSingle().Subject;
+        sinCesantias.EmployeePublicId.Should().Be(d.Ana.PublicId);
+        sinCesantias.ReasonCode.Should().Be("RetiradoConDefinitiva");
+        sinCesantias.Reason.Should().Contain("borrador");
+    }
+
+    /// <summary>
+    /// D-30, el otro sentido: la definitiva registrada después de aprobar la prima semestral o la corrida
+    /// anual de cesantías del mismo período recibe lo ya pagado, con quién lo pagó, para omitir el rubro o
+    /// liquidar sólo los días posteriores al corte. Una prima semestral no se informa a la propia corrida
+    /// semestral: ahí sólo cuentan las definitivas (FR-009).
+    /// </summary>
+    [Fact]
+    public async Task La_definitiva_recibe_la_prima_de_la_semestral_y_las_cesantias_de_la_anual_ya_aprobadas()
+    {
+        var d = ConSeisMesesAprobados();
+        var conceptos = await d.Db.PayrollConceptDefinitions.ToDictionaryAsync(c => c.Code);
+        var semestral = CorridaAprobada(d, PayrollRunKind.ServiceBonus, new DateOnly(2026, 6, 30), conceptos[WellKnownConceptCodes.ServiceBonus], 1_124_547.50m, 180m, year: 2026, semester: 1);
+        var anual = CorridaAprobada(d, PayrollRunKind.Severance, new DateOnly(2026, 5, 31), conceptos[WellKnownConceptCodes.Severance], 937_123m, 150m, year: 2026);
+        var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
+        d.Db.TerminationReasons.Add(motivo);
+        await d.Db.SaveChangesAsync();
+        var retiro = new DateOnly(2026, 6, 25);
+        var terminacion = new EmploymentTermination { EmployeeId = d.Ana.Id, TerminationDate = retiro, TerminationReasonId = motivo.Id, CreatedBy = "test" };
+        d.Db.EmploymentTerminations.Add(terminacion);
+        await d.Db.SaveChangesAsync();
+
+        var definitiva = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Definitiva(d.Ana.Id, terminacion.Id, retiro), CancellationToken.None);
+        var prima = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Prima(2026, 1, [d.Ana.Id]), CancellationToken.None);
+
+        var input = definitiva.Employees.Single().Input;
+        var primaPagada = input.ServiceBonusPaidInSettlements.Should().ContainSingle().Subject;
+        primaPagada.RunPublicId.Should().Be(semestral.PublicId);
+        primaPagada.PaidBy.Should().Be(SettlementKind.ServiceBonus);
+        primaPagada.PaidThrough.Should().Be(new DateTime(2026, 6, 30));
+        primaPagada.Amount.Should().Be(1_124_547.50m);
+        primaPagada.Days.Should().Be(180);
+        var cesantiasPagadas = input.SeverancePaidInRuns.Should().ContainSingle().Subject;
+        cesantiasPagadas.RunPublicId.Should().Be(anual.PublicId);
+        cesantiasPagadas.PaidThrough.Should().Be(new DateTime(2026, 5, 31));
+        cesantiasPagadas.Amount.Should().Be(937_123m);
+
+        // Recalcular la semestral con la terminación ya registrada: Ana queda fuera (su definitiva paga), y la
+        // prima semestral aprobada no se informa a la propia semestral: ahí sólo cuentan las definitivas (FR-009).
+        prima.Employees.Should().BeEmpty();
+        prima.Excluded.Should().ContainSingle(x => x.EmployeePublicId == d.Ana.PublicId && x.ReasonCode == SettlementReasonCodes.YaPagadaEnDefinitiva);
+    }
+
+    /// <summary>
+    /// D-30: la definitiva trae las novedades activas del empleado en el período abierto donde cae el
+    /// retiro —devengadas y deducciones con su concepto— porque la nómina ordinaria de ese período ya no
+    /// lo incluye. Quedan fuera las informativas (ya viajan como ausencias), la cuota de una libranza
+    /// recurrente (va como deuda propuesta, FR-018a) y lo anulado.
+    /// </summary>
+    [Fact]
+    public async Task La_definitiva_trae_las_novedades_activas_del_periodo_pendiente_con_su_id_interno()
+    {
+        var d = ConSeisMesesAprobados();
+        var julio = d.Periodo(new DateTime(2026, 7, 1), new DateTime(2026, 7, 31), PayPeriodStatus.Open);
+        var conceptos = await d.Db.PayrollConceptDefinitions.ToDictionaryAsync(c => c.Code);
+        var junio = await d.Db.PayPeriods.SingleAsync(p => p.StartDate == new DateTime(2026, 6, 1));
+        var recurrente = new PayrollRecurringNovelty { EmployeeId = d.Ana.Id, ConceptCode = SettlementInputLoader.LibranzaCode, Amount = 50_000m, StartDate = new DateTime(2026, 6, 1), TotalInstallments = 12, InstallmentsIssued = 1, CreatedBy = "test" };
+        d.Db.PayrollRecurringNovelties.Add(recurrente);
+        await d.Db.SaveChangesAsync();
+        var extras = new PayrollNovelty { PayPeriodId = julio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["HEX_DIURNA"].Id, ConceptCode = "HEX_DIURNA", Quantity = 10m, Notes = "Cierre de mes", CreatedBy = "test" };
+        var embargo = new PayrollNovelty { PayPeriodId = julio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["EMBARGO"].Id, ConceptCode = "EMBARGO", Amount = 150_000m, CreatedBy = "test" };
+        d.Db.PayrollNovelties.AddRange(
+            extras, embargo,
+            new PayrollNovelty { PayPeriodId = julio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["LIC_NO_REMUNERADA"].Id, ConceptCode = "LIC_NO_REMUNERADA", StartDate = new DateTime(2026, 7, 6), EndDate = new DateTime(2026, 7, 8), CreatedBy = "test" },
+            new PayrollNovelty { PayPeriodId = julio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["LIBRANZA"].Id, ConceptCode = "LIBRANZA", Amount = 50_000m, RecurringNoveltyId = recurrente.Id, Origin = NoveltyOrigin.Recurring, CreatedBy = "test" },
+            new PayrollNovelty { PayPeriodId = julio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["HEX_NOCTURNA"].Id, ConceptCode = "HEX_NOCTURNA", Quantity = 4m, Status = NoveltyStatus.Cancelled, CreatedBy = "test" },
+            new PayrollNovelty { PayPeriodId = junio.Id, EmployeeId = d.Ana.Id, ConceptDefinitionId = conceptos["HEX_DIURNA"].Id, ConceptCode = "HEX_DIURNA", Quantity = 3m, CreatedBy = "test" });
+        var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
+        d.Db.TerminationReasons.Add(motivo);
+        await d.Db.SaveChangesAsync();
+        var retiro = new DateOnly(2026, 7, 15);
+        var terminacion = new EmploymentTermination { EmployeeId = d.Ana.Id, TerminationDate = retiro, TerminationReasonId = motivo.Id, CreatedBy = "test" };
+        d.Db.EmploymentTerminations.Add(terminacion);
+        await d.Db.SaveChangesAsync();
+
+        var batch = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Definitiva(d.Ana.Id, terminacion.Id, retiro), CancellationToken.None);
+
+        var input = batch.Employees.Single().Input;
+        input.PendingSalary.Should().Be(new PendingSalaryInput(julio.StartDate, julio.EndDate));
+        input.PendingNovelties.Select(n => n.ConceptCode).Should().BeEquivalentTo(["HEX_DIURNA", "EMBARGO"],
+            "la informativa va como ausencia, la cuota de libranza como deuda, la anulada no existe y la de junio ya la pagó la ordinaria");
+        input.PendingNovelties.Single(n => n.ConceptCode == "HEX_DIURNA").Should().BeEquivalentTo(new { extras.PublicId, Quantity = 10m, Description = "Hora extra diurna: Cierre de mes" });
+        input.PendingNovelties.Single(n => n.ConceptCode == "EMBARGO").Amount.Should().Be(150_000m);
+        input.Absences.Should().ContainSingle(a => a.Description == "LIC_NO_REMUNERADA");
+        batch.NoveltyIds.Should().BeEquivalentTo(new Dictionary<Guid, int> { [extras.PublicId] = extras.Id, [embargo.PublicId] = embargo.Id },
+            "la línea de la corrida se enlaza a la novedad por su id interno");
+    }
+
+    private static Domain.Entities.Payroll.Transactions.PayrollRun CorridaAprobada(NominaTestData d, PayrollRunKind kind, DateOnly corte, PayrollConceptDefinition concepto,
+        decimal valor, decimal dias, int year, int? semester = null)
+    {
+        var run = new Domain.Entities.Payroll.Transactions.PayrollRun
+        {
+            Kind = kind, CutoffDate = corte, Year = (short)year, Semester = (byte?)semester, Version = 1, Status = PayrollRunStatus.Approved,
+            CalculatedBy = "ana@demo", CalculatedAt = NominaTestData.Ahora, InputsHash = new string('c', 64), CreatedBy = "test",
+        };
+        var fila = new Domain.Entities.Payroll.Transactions.PayrollRunEmployee { EmployeeId = d.Ana.Id, PayrollPlanId = d.Plan.Id, CreatedBy = "test" };
+        fila.Lines.Add(new Domain.Entities.Payroll.Transactions.PayrollRunLine { ConceptDefinitionId = concepto.Id, ConceptCode = concepto.Code, ConceptName = concepto.Name, Nature = ConceptNature.Earning, Amount = valor, Quantity = dias, ExplanationJson = "{}", CreatedBy = "test" });
+        run.Employees.Add(fila);
+        d.Db.PayrollRuns.Add(run);
+        return run;
+    }
+
     [Fact]
     public async Task Las_bases_por_mes_separan_variables_prestacionales_de_las_de_vacaciones()
     {

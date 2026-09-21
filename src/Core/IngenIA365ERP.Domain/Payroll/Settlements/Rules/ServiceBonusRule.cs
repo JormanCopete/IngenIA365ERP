@@ -30,14 +30,20 @@ public static class ServiceBonusRule
         var fin = ctx.EffectiveEnd < semesterEnd ? ctx.EffectiveEnd : semesterEnd.Date;
         var inicio = ctx.EmploymentStart > semesterStart.Date ? ctx.EmploymentStart : semesterStart.Date;
 
-        // FR-009: la definitiva ya pagó la prima proporcional de este semestre.
+        // FR-009: la definitiva ya pagó la prima proporcional de este semestre. D-30, el otro sentido: la
+        // corrida semestral aprobada antes de registrar el retiro ya pagó la prima completa del semestre.
         var pagadas = ctx.Input.ServiceBonusPaidInSettlements
             .Where(p => p.PaidThrough.Date >= semesterStart.Date && p.PaidThrough.Date <= semesterEnd.Date)
             .ToList();
         if (pagadas.Count > 0 && ctx.Employee.TerminationDate is { } retiro && retiro.Date <= semesterEnd.Date)
         {
-            ctx.Skip(code, SettlementReasonCodes.YaPagadaEnDefinitiva, SettlementContext.ExclusionText(SettlementReasonCodes.YaPagadaEnDefinitiva));
-            return SettlementReasonCodes.YaPagadaEnDefinitiva;
+            var semestral = pagadas.FirstOrDefault(p => p.PaidBy == SettlementKind.ServiceBonus);
+            var motivo = semestral is null ? SettlementReasonCodes.YaPagadaEnDefinitiva : SettlementReasonCodes.YaPagadaEnCorridaSemestral;
+            var texto = SettlementContext.ExclusionText(motivo);
+            if (semestral is not null)
+                texto += $" Corrida {semestral.RunPublicId}: {Fmt.Money(semestral.Amount)} por {semestral.Days} días hasta el {Fmt.Date(semestral.PaidThrough)}.";
+            ctx.Skip(code, motivo, texto);
+            return motivo;
         }
 
         var saldo = OpeningBalanceStep.Apply(ctx, inicio, fin, s => s.AccruedServiceBonus, s => s.ServiceBonusDaysAccrued, "prima");

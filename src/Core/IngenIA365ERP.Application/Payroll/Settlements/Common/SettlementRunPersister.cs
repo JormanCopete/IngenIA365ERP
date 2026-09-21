@@ -161,6 +161,7 @@ public sealed class SettlementRunPersister(IApplicationDbContext db, IDateTimeSe
                     RangeTo = l.RangeTo,
                     Amount = l.Amount,
                     LegalParameterId = l.LegalParameterId,
+                    NoveltyId = l.NoveltyPublicId is { } novedad && batch.NoveltyIds.TryGetValue(novedad, out var noveltyId) ? noveltyId : null,
                     ExplanationJson = JsonSerializer.Serialize(l.Explanation, RunJson.Options),
                     AffectsAccounting = l.AffectsAccounting,
                     Order = l.Order,

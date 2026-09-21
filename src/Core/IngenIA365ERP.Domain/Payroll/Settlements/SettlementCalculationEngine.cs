@@ -16,9 +16,9 @@ namespace IngenIA365ERP.Domain.Payroll.Settlements;
 /// <para>
 /// Orden por tipo: prima → retención de la prima → ajuste de provisión; cesantías →
 /// intereses → retención → ajuste; vacaciones (disfrute o compensación) → aportes →
-/// retención → ajuste; definitiva: salario pendiente → prima proporcional → cesantías e
-/// intereses → vacaciones pendientes → indemnización → aportes de ley → las cuatro
-/// retenciones → ajustes de provisión → descuentos validados. Un empleado sin derecho
+/// retención → ajuste; definitiva: salario pendiente → novedades del período pendiente (D-30)
+/// → prima proporcional → cesantías e intereses → vacaciones pendientes → indemnización →
+/// aportes de ley → las cuatro retenciones → ajustes de provisión → descuentos validados. Un empleado sin derecho
 /// (salario integral, aprendiz en etapa lectiva, pasante, prima ya pagada en la
 /// definitiva) queda <b>excluido</b> con su código; en la definitiva sólo se omite el rubro.
 /// </para>
@@ -91,6 +91,7 @@ public sealed class SettlementCalculationEngine
                 var (semInicio, semFin) = ServiceBonusRule.SemesterOf(asOf);
                 var (anioInicio, anioFin) = SeveranceRule.YearOf(asOf);
                 PendingSalaryRule.Evaluate(ctx);
+                PendingNoveltiesRule.Evaluate(ctx);
                 ServiceBonusRule.Evaluate(ctx, semInicio, semFin);
                 var cesantias = SeveranceRule.Evaluate(ctx, anioInicio, anioFin);
                 SeveranceInterestRule.Evaluate(ctx, cesantias);

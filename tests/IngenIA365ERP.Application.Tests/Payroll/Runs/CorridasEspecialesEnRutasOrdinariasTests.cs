@@ -137,8 +137,15 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         modelo.PlanName.Should().Be("prima de servicios");
     }
 
+    /// <summary>
+    /// D-30 (spec US3 escenario 1, FR-020): el último tramo lo paga la definitiva como SALARIO_PENDIENTE,
+    /// así que el empleado con definitiva aprobada dentro del período (o antes) no entra a la ordinaria de
+    /// ese período. Hasta la revisión de N1 el cargador lo conservaba «por los días hasta el retiro» y el
+    /// salario, el auxilio y las deducciones de ley de esos días salían dos veces. Si la definitiva no trajo
+    /// ese tramo (no había período abierto al aprobarla), la ordinaria sí lo liquida por días.
+    /// </summary>
     [Fact]
-    public async Task La_nomina_ordinaria_excluye_al_retirado_con_definitiva_aprobada_antes_del_periodo_y_liquida_por_dias_al_retirado_dentro()
+    public async Task La_nomina_ordinaria_excluye_al_retirado_con_definitiva_aprobada_antes_o_dentro_del_periodo_salvo_que_no_le_pagara_el_tramo()
     {
         var d = new NominaTestData();
         var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
@@ -146,16 +153,47 @@ public class CorridasEspecialesEnRutasOrdinariasTests
         await d.Db.SaveChangesAsync();
         // Luis: definitiva aprobada en febrero, la ficha aún no cerrada (Status vigente): FR-005 lo saca de marzo.
         var luis = d.Empleado("Luis", 1_800_000m, new DateTime(2025, 6, 1));
-        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = luis.Id, TerminationDate = new DateOnly(2026, 2, 20), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
-        // Marta: se retira el 10 de marzo con definitiva aprobada: entra por los días hasta el retiro.
-        var marta = d.Empleado("Marta", 1_800_000m, new DateTime(2025, 6, 1));
-        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = marta.Id, TerminationDate = new DateOnly(2026, 3, 10), TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
+        Liquidado(d, luis.Id, new DateOnly(2026, 2, 20), motivo, conTramo: true);
+        // Marta: se retira el 10 de marzo con definitiva aprobada que pagó del 1 al 10: no entra.
+        var marta = d.Empleado("Marta", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 10));
+        Liquidado(d, marta.Id, new DateOnly(2026, 3, 10), motivo, conTramo: true);
+        // Pedro: se retira el 31 de marzo (último día) con definitiva aprobada que pagó el mes: tampoco entra, aunque la ficha no recorte días.
+        var pedro = d.Empleado("Pedro", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 31));
+        Liquidado(d, pedro.Id, new DateOnly(2026, 3, 31), motivo, conTramo: true);
+        // Julia: definitiva aprobada el 12 de marzo cuando marzo no existía como período (sin SALARIO_PENDIENTE): entra por los días hasta el retiro.
+        var julia = d.Empleado("Julia", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 12));
+        Liquidado(d, julia.Id, new DateOnly(2026, 3, 12), motivo, conTramo: false);
+        // Rosa: ficha cerrada el 20 de marzo por el camino anterior, sin definitiva: se liquida por los días hasta el retiro.
+        var rosa = d.Empleado("Rosa", 1_800_000m, new DateTime(2025, 6, 1), retiro: new DateTime(2026, 3, 20));
+        // Elena: definitiva aprobada con retiro en abril: marzo la liquida completa.
+        var elena = d.Empleado("Elena", 1_800_000m, new DateTime(2025, 6, 1));
+        Liquidado(d, elena.Id, new DateOnly(2026, 4, 5), motivo, conTramo: true);
         await d.Db.SaveChangesAsync();
 
         var batch = await d.Loader.LoadAsync(d.Marzo, CancellationToken.None);
 
-        batch.Employees.Select(e => e.Employee.Id).Should().BeEquivalentTo([d.Ana.Id, marta.Id]);
-        batch.Employees.Single(e => e.Employee.Id == marta.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 10));
+        batch.Employees.Select(e => e.Employee.Id).Should().BeEquivalentTo([d.Ana.Id, julia.Id, rosa.Id, elena.Id],
+            "Luis, Marta y Pedro tienen definitiva aprobada hasta el fin de marzo que ya pagó su último tramo (D-30)");
+        batch.Employees.Single(e => e.Employee.Id == julia.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 12), "su definitiva no pagó marzo: la ordinaria liquida hasta el retiro");
+        batch.Employees.Single(e => e.Employee.Id == rosa.Id).Input.TerminationDate.Should().Be(new DateTime(2026, 3, 20));
+        batch.Employees.Single(e => e.Employee.Id == elena.Id).Input.TerminationDate.Should().BeNull();
         batch.Employees.Single(e => e.Employee.Id == d.Ana.Id).Input.TerminationDate.Should().BeNull();
+    }
+
+    /// <summary>Terminación Settled con su definitiva aprobada; con <paramref name="conTramo"/> la corrida trae la línea SALARIO_PENDIENTE.</summary>
+    private static void Liquidado(NominaTestData d, int employeeId, DateOnly retiro, TerminationReason motivo, bool conTramo)
+    {
+        d.Db.EmploymentTerminations.Add(new EmploymentTermination { EmployeeId = employeeId, TerminationDate = retiro, TerminationReasonId = motivo.Id, Status = TerminationStatus.Settled, CreatedBy = "test" });
+        var run = new Domain.Entities.Payroll.Transactions.PayrollRun
+        {
+            Kind = PayrollRunKind.Settlement, CutoffDate = retiro, EmployeeId = employeeId, Version = 1, Status = PayrollRunStatus.Approved,
+            CalculatedBy = "contadora@demo", CalculatedAt = NominaTestData.Ahora, InputsHash = new string('d', 64), CreatedBy = "test",
+        };
+        var fila = new Domain.Entities.Payroll.Transactions.PayrollRunEmployee { EmployeeId = employeeId, PayrollPlanId = d.Plan.Id, CreatedBy = "test" };
+        var pendiente = d.Db.PayrollConceptDefinitions.Single(c => c.Code == Domain.Payroll.Calculation.WellKnownConceptCodes.PendingSalary);
+        if (conTramo)
+            fila.Lines.Add(new Domain.Entities.Payroll.Transactions.PayrollRunLine { ConceptDefinitionId = pendiente.Id, ConceptCode = pendiente.Code, ConceptName = pendiente.Name, Nature = ConceptNature.Earning, Amount = 600_000m, Quantity = 10m, ExplanationJson = "{}", CreatedBy = "test" });
+        run.Employees.Add(fila);
+        d.Db.PayrollRuns.Add(run);
     }
 }

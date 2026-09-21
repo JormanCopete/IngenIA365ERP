@@ -333,7 +333,9 @@ Retiro **15-12-2026**, despido sin justa causa, dentro de la quincena abierta.
    documento para firma en PDF (empresa/NIT, empleado, cargo, fechas, motivo, tipo de contrato,
    rubros con base y días, deducciones con propuesto/aplicado, neto, firmas); saldo del préstamo
    en Cartera bajó exactamente lo aplicado.
-6. Calcular la quincena ordinaria del 16 al 31: H **no aparece**. La prima del semestre (§3.1)
+6. Calcular la quincena ordinaria del 1 al 15 (la del retiro): H **no aparece** —su último tramo,
+   auxilio y novedades de esa quincena los pagó la definitiva (D-30); si ya estaba calculada con H,
+   quedó `Stale` al aprobar—. La del 16 al 31 tampoco lo trae. La prima del semestre (§3.1)
    descuenta la que ya se le pagó aquí.
 7. Reversar con motivo: asiento espejo, la ficha vuelve a estar vigente
    (`Payroll.Employee.Reinstated`), Cartera recibe la reversión del recaudo, y se puede liquidar

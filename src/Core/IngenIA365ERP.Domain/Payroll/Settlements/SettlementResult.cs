@@ -45,6 +45,15 @@ public static class SettlementReasonCodes
     public const string SinSaldoDeVacaciones = "SinSaldoDeVacaciones";
     public const string CompensacionExcedeMaximo = "CompensacionExcedeMaximo";
     public const string NoCotizaSobreEstaLiquidacion = "NoCotizaSobreEstaLiquidacion";
+
+    /// <summary>D-30: la prima del semestre ya la pagó la corrida semestral aprobada antes de registrar el retiro; la definitiva no la repite.</summary>
+    public const string YaPagadaEnCorridaSemestral = "YaPagadaEnCorridaSemestral";
+
+    /// <summary>D-30: las cesantías del año ya las pagó la corrida anual aprobada hasta su corte y no quedan días después de él.</summary>
+    public const string YaPagadaEnCorridaAnual = "YaPagadaEnCorridaAnual";
+
+    /// <summary>D-30: una novedad del período pendiente cuya forma de cálculo necesita las bases de la nómina ordinaria (porcentaje sobre base, compuesto, tabla) y la definitiva no puede liquidar.</summary>
+    public const string NovedadNoLiquidable = "NovedadNoLiquidable";
 }
 
 /// <summary>Un rubro que no produjo línea, con su código de motivo y el texto para la contadora.</summary>

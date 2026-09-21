@@ -18,7 +18,7 @@ public static class SettlementInputsHasher
     public static string Compute(SettlementInput input)
     {
         var sb = new StringBuilder(4096);
-        sb.Append("settlement-v1|");
+        sb.Append("settlement-v2|");
         Add(sb, "kind", (int)input.Kind, input.CutoffDate, input.PeriodStart);
         var pol = input.Policies;
         Add(sb, "policy", (int)pol.Rounding, (int)pol.SemanaLaboral, pol.VacacionesPagoAnticipado, (int)pol.RetefteTopesAnualesModo, pol.PayrollStartDate);
@@ -48,10 +48,14 @@ public static class SettlementInputsHasher
             Add(sb, "term", t.ReasonCode.ToUpperInvariant(), t.GeneratesSeverancePay, t.VoluntaryRetirementBonus);
         foreach (var d in input.ProposedDeductions.OrderBy(d => d.ConceptCode, StringComparer.Ordinal).ThenBy(d => d.Description, StringComparer.Ordinal))
             Add(sb, "ded", d.ConceptCode.ToUpperInvariant(), d.Description, d.ProposedAmount, d.AppliedAmount, d.AccountedByOtherModule);
-        foreach (var p in input.ServiceBonusPaidInSettlements.OrderBy(p => p.PaidThrough))
-            Add(sb, "paid", p.RunPublicId, p.PaidThrough, p.Amount, p.Days);
+        foreach (var p in input.ServiceBonusPaidInSettlements.OrderBy(p => p.PaidThrough).ThenBy(p => p.RunPublicId))
+            Add(sb, "paid", p.RunPublicId, p.PaidThrough, p.Amount, p.Days, (int)p.PaidBy);
+        foreach (var p in input.SeverancePaidInRuns.OrderBy(p => p.PaidThrough).ThenBy(p => p.RunPublicId))
+            Add(sb, "sevpaid", p.RunPublicId, p.PaidThrough, p.Amount);
         if (input.PendingSalary is { } ps)
             Add(sb, "pend", ps.PeriodStart, ps.PeriodEnd);
+        foreach (var n in input.PendingNovelties.OrderBy(n => n.PublicId))
+            Add(sb, "nov", n.PublicId, n.ConceptCode.ToUpperInvariant(), n.Quantity, n.Amount, n.StartDate, n.EndDate, (int)n.Origin);
         if (input.WithholdingYearToDate is { } ytd)
             Add(sb, "ytd", ytd.RentaExentaUsada, ytd.DeduccionesYExentasUsadas);
 

@@ -1,0 +1,87 @@
+{
+  "casos": [
+    {
+      "nombre": "Definitiva registrada después de la prima semestral aprobada: la prima se omite y las cesantías del año siguen hasta el retiro (D-30)",
+      "descripcion": "El retiro del 25-06 se registra el 01-07, cuando la prima 2026-I ya se aprobó y pagó el semestre completo. La definitiva no la repite: la omite con YaPagadaEnCorridaSemestral y el número de la corrida. Las cesantías y sus intereses del año no tienen corrida anual aprobada y se liquidan del 01-01 al 25-06. Sin período pendiente informado: la última nómina ya pagó el salario.",
+      "derivacion": "Prima: omitida (la semestral 2026-I aprobada pagó 180 días hasta el 30-06). Cesantías 2026: días 01-01 a 25-06 = 5 × 30 + 25 = 175; base = 2.100.000 + auxilio 249.095 = 2.349.095 (2.100.000 ≤ 2 SMMLV); 2.349.095 / 30 × 30 × 175 / 360 = 2.349.095 × 175 / 360 = 411.091.625 / 360 = 1.141.921,18. Intereses: 1.141.921,18 × 12 % × 175 / 360 = 137.030,5416 × 175 / 360 = 66.612,07.",
+      "tipo": "Settlement",
+      "corte": "2026-06-25",
+      "empleado": {
+        "nombre": "Retiro tras la prima semestral",
+        "ingreso": "2024-01-15",
+        "salarios": [ { "desde": "2024-01-15", "mensual": 2100000 } ],
+        "tipoContrato": "Indefinite"
+      },
+      "primaPagadaEnDefinitiva": [
+        { "corrida": "bbbbbbbb-0000-0000-0000-000000000001", "hasta": "2026-06-30", "valor": 1174547.50, "dias": 180, "pagadaPor": "ServiceBonus" }
+      ],
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "CESANTIAS": 1141921.18,
+          "INT_CESANTIAS": 66612.07
+        },
+        "omitidos": [ "PRIMA:YaPagadaEnCorridaSemestral", "SALARIO_PENDIENTE:SinDiasPendientes", "INDEMNIZACION:MotivoNoGeneraIndemnizacion" ]
+      }
+    },
+    {
+      "nombre": "Definitiva registrada después de la corrida anual de cesantías con corte 30-11: sólo los días posteriores al corte (D-30)",
+      "descripcion": "La anual 2026 se aprobó con corte 30-11 y pagó las cesantías hasta ese día. El retiro del 20-12 se registra después: la definitiva liquida cesantías e intereses sólo del 01-12 al 20-12 y lo dice en la explicación. La prima 2026-II ya la pagó la semestral aprobada: omitida.",
+      "derivacion": "Cesantías: días 01-12 a 20-12 = 20; base 2.349.095; 2.349.095 × 20 / 360 = 46.981.900 / 360 = 130.505,28. Intereses: 130.505,28 × 12 % × 20 / 360 = 15.660,6336 × 20 / 360 = 870,04. Prima: omitida (semestral 2026-II aprobada hasta el 31-12).",
+      "tipo": "Settlement",
+      "corte": "2026-12-20",
+      "empleado": {
+        "nombre": "Retiro tras la anual con corte anticipado",
+        "ingreso": "2024-01-15",
+        "salarios": [ { "desde": "2024-01-15", "mensual": 2100000 } ],
+        "tipoContrato": "Indefinite"
+      },
+      "primaPagadaEnDefinitiva": [
+        { "corrida": "bbbbbbbb-0000-0000-0000-000000000002", "hasta": "2026-12-31", "valor": 1174547.50, "dias": 180, "pagadaPor": "ServiceBonus" }
+      ],
+      "cesantiasPagadasEnAnual": [
+        { "corrida": "cccccccc-0000-0000-0000-000000000001", "hasta": "2026-11-30", "valor": 2153337.08 }
+      ],
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "CESANTIAS": 130505.28,
+          "INT_CESANTIAS": 870.04
+        },
+        "omitidos": [ "PRIMA:YaPagadaEnCorridaSemestral", "INDEMNIZACION:MotivoNoGeneraIndemnizacion" ],
+        "explicaciones": [
+          "CESANTIAS: Corrida anual",
+          "CESANTIAS: ya se pagaron en la corrida anual aprobada cccccccc-0000-0000-0000-000000000001",
+          "CESANTIAS: aquí se liquidan los días desde el 01/12/2026"
+        ]
+      }
+    },
+    {
+      "nombre": "Retiro retroactivo al 20-12 registrado tras la anual con corte 31-12: cesantías e intereses omitidos (D-30)",
+      "descripcion": "La anual 2026 con corte 31-12 ya pagó el año entero, incluido el empleado (su terminación no existía). Registrada después la definitiva al 20-12, no quedan días posteriores al corte: cesantías e intereses se omiten con YaPagadaEnCorridaAnual, nunca se pagan dos veces.",
+      "derivacion": "Cesantías e intereses: omitidos (corte de la anual 31-12 ≥ retiro 20-12, sin días posteriores). Prima 2026-II: omitida por la semestral aprobada.",
+      "tipo": "Settlement",
+      "corte": "2026-12-20",
+      "empleado": {
+        "nombre": "Retiro retroactivo tras la anual",
+        "ingreso": "2024-01-15",
+        "salarios": [ { "desde": "2024-01-15", "mensual": 2100000 } ],
+        "tipoContrato": "Indefinite"
+      },
+      "primaPagadaEnDefinitiva": [
+        { "corrida": "bbbbbbbb-0000-0000-0000-000000000003", "hasta": "2026-12-31", "valor": 1174547.50, "dias": 180, "pagadaPor": "ServiceBonus" }
+      ],
+      "cesantiasPagadasEnAnual": [
+        { "corrida": "cccccccc-0000-0000-0000-000000000002", "hasta": "2026-12-31", "valor": 2349095 }
+      ],
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { },
+        "omitidos": [ "PRIMA:YaPagadaEnCorridaSemestral", "CESANTIAS:YaPagadaEnCorridaAnual", "INT_CESANTIAS:YaPagadaEnCorridaAnual", "INDEMNIZACION:MotivoNoGeneraIndemnizacion" ]
+      }
+    }
+  ]
+}

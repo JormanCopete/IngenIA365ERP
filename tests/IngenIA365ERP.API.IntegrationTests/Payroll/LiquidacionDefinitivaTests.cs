@@ -176,6 +176,10 @@ public class LiquidacionDefinitivaTests(CentralIdentityApiFixture fx)
         var corridaQ2 = await CalcularAsync(http, admin, q2);
         var empleadosQ2 = await GetAsync(http, admin, $"/api/payroll/runs/{corridaQ2.GetProperty("runPublicId").GetGuid()}/employees");
         empleadosQ2.EnumerateArray().Should().NotContain(e => e.GetProperty("employeePublicId").GetGuid() == empleadoId, "retirado con definitiva aprobada antes del período");
+        // D-30: la quincena del retiro (1 al 15) tampoco lo trae: SALARIO_PENDIENTE ya pagó esos días en la definitiva, una sola vez.
+        var corridaQ1 = await CalcularAsync(http, admin, q1);
+        var empleadosQ1 = await GetAsync(http, admin, $"/api/payroll/runs/{corridaQ1.GetProperty("runPublicId").GetGuid()}/employees");
+        empleadosQ1.EnumerateArray().Should().NotContain(e => e.GetProperty("employeePublicId").GetGuid() == empleadoId, "la definitiva aprobada pagó del 1 al 15 como salario pendiente (D-30)");
 
         // --- una definitiva aprobada no se recalcula ni se registra otra terminación ---
         (await CodigoDeErrorAsync(await EnviarAsync(http, admin, HttpMethod.Post, $"{Terminaciones}/{runId}/recalculate", null))).Should().Be("Payroll.Settlement.NotDraft");

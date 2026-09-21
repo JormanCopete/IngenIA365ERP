@@ -93,7 +93,7 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?year=&status=` | ServiceBonus.View | `[{ runPublicId, year, semester, version, status, employees, total, calculatedAt, calculatedBy, approvedAt?, paidCount, postedDocumentPublicId? }]` |
-| `POST /` | ServiceBonus.Calculate | `{ year, semester: 1\|2, employeePublicIds?: [] }` → 201 `SettlementCalculatedDto` `{ runPublicId, version, kind, cutoffDate, employees, totals, blockers[], excluded: [{ employeePublicId, name, reasonCode, reason }], warnings[] }` (común a las cuatro). `excluded` explica a quien no tiene derecho (`SettlementReasonCodes`: `SalarioIntegral`, `AprendizLectiva`, `Pasante` (FR-009), `YaPagadaEnDefinitiva`, `SinDiasEnElSemestre`) |
+| `POST /` | ServiceBonus.Calculate | `{ year, semester: 1\|2, employeePublicIds?: [] }` → 201 `SettlementCalculatedDto` `{ runPublicId, version, kind, cutoffDate, employees, totals, blockers[], excluded: [{ employeePublicId, name, reasonCode, reason }], warnings[] }` (común a las cuatro). `excluded` explica a quien no tiene derecho (`SettlementReasonCodes`: `SalarioIntegral`, `AprendizLectiva`, `Pasante` (FR-009), `YaPagadaEnDefinitiva` —también con la definitiva todavía en borrador (D-30)—, `SinDiasEnElSemestre`) |
 | `POST /{runId}/recalculate` | ServiceBonus.Calculate | → 201 misma respuesta, versión N+1 |
 | `POST /{runId}/approve` | ServiceBonus.Approve | `{ confirm: true, postingDate?, confirmEmpty?, confirmWithoutSegregation? }` → `{ runPublicId, documentPublicId, number, total, postingDate, approvedWithoutSegregation }`; `postingDate` por defecto la **fecha de corte** (D-04: la provisión se causa en el mes correcto; el pago lleva `payDate` propio) y sólo entre el corte y hoy (`SettlementAccountingPoster.ResolverFecha`); 422 `Payroll.Settlement.PostingDateInvalid` (`data: { postingDate, cutoffDate, today }`). Sin `confirm` → 422 `Payroll.Settlement.ConfirmationRequired` (el mismo código cuando falta `confirmEmpty` o `confirmWithoutSegregation`) |
 | `POST /{runId}/reverse` | ServiceBonus.Reverse | `{ reason }` → `{ runPublicId, reversalDocumentPublicId, reversalNumber }`; 422 `Payroll.PaymentBlocksReversal` si hay pagos marcados |
@@ -104,7 +104,7 @@ permiso del tipo; el handler comprueba que el `Kind` de la corrida coincide con 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /?year=&status=` | Severance.View | como 3.1 más `interestTotal`, `severanceTotal`, `funds: [{ fundPublicId, name, employees, amount, depositedAt?, depositedBy?, reference? }]` |
-| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `Pasante`, `SinDiasEnElAnio` (el retirado con definitiva aprobada no entra a la población) |
+| `POST /` | Severance.Calculate | `{ year, cutoffDate?, employeePublicIds?: [] }` (`cutoffDate` por defecto 31-12 del año) → 201 como 3.1; `excluded` con `SalarioIntegral`, `AprendizLectiva`, `Pasante`, `SinDiasEnElAnio`, `RetiradoConDefinitiva` (el retirado con definitiva aprobada **o registrada en borrador** con corte en o después del retiro no entra a la población, D-30) |
 | `POST /{runId}/recalculate` · `/approve` · `/reverse` · `/discard` | Severance.* | como 3.1; al aprobar el comprobante deja la cuenta por pagar **al fondo** por las cesantías y **al empleado** por los intereses (FR-011) |
 | `GET /{runId}/deposit-schedule` | Severance.View | relación de consignación por fondo: `{ funds: [{ fundPublicId, fundName, fundNit, pilaCode, lines: [{ employeePublicId, documentType, document, name, hireDate, baseSalary, days, amount }], total, depositedAt? }], grandTotal, dueDate }` (`dueDate` = parámetro `CESANTIAS_FECHA_LIMITE_CONSIGNACION`) |
 | `GET /{runId}/deposit-schedule/{fundId}/file?formatId=` | Severance.View | archivo plano del fondo con un formato parametrizable (ver `archivos.md` §3); 422 `Payroll.Severance.FundFormatMissing` si el fondo no tiene formato vigente |
@@ -137,6 +137,15 @@ ficha se cierra **al aprobar** (`Status`, `TerminationDate`, `Person.IsEmployee 
 reversión la reabre en la misma transacción (FR-020). La ruta heredada
 `POST /api/payroll/employees/{id}/terminate` (motivo como texto libre) **se retira sin alias**: la
 ficha llama a esta.
+
+**Un solo pagador del último tramo (D-30)**: la definitiva paga `SALARIO_PENDIENTE` (con auxilio) por
+los días del período abierto hasta el retiro **y las novedades activas del empleado en ese período**
+con su concepto (extras, recargos, comisiones, descuentos; una forma que necesita las bases de la
+ordinaria queda en `skips` con `NovedadNoLiquidable`); la nómina ordinaria de ese período ya no incluye
+al empleado una vez aprobada la definitiva, y los dos borradores se marcan `Stale` entre sí. Si el
+retiro se registra después de una prima semestral o una anual de cesantías aprobadas del mismo
+período, la definitiva omite la prima (`YaPagadaEnCorridaSemestral`) y liquida cesantías e intereses
+sólo por los días posteriores al corte de la anual (`YaPagadaEnCorridaAnual` si no quedan).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
