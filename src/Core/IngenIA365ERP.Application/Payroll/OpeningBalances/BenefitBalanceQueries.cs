@@ -1,7 +1,7 @@
-using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Payroll.Policies;
 using MediatR;
@@ -18,20 +18,14 @@ public static class BenefitBalanceRules
 
     /// <summary>
     /// Fecha desde la que la nómina corre en esta plataforma: la política
-    /// <c>ArranqueNominaFecha</c> vigente a la fecha; si nadie la registró, el inicio del primer
-    /// período de la cooperativa; sin períodos, nula (nadie «ingresó antes del arranque»).
-    /// Se lee aquí y no por <c>PayrollPolicyReader</c> porque esa clase es de otra tarea de la
-    /// misma ola y este listado sólo necesita una clave.
+    /// <c>ArranqueNominaFecha</c> vigente a la fecha (por <see cref="PayrollPolicyReader"/>, el único
+    /// lector de políticas); si nadie la registró, el inicio del primer período de la cooperativa;
+    /// sin períodos, nula (nadie «ingresó antes del arranque»).
     /// </summary>
-    public static async Task<DateOnly?> ArranqueAsync(IApplicationDbContext db, DateOnly asOf, CancellationToken ct)
+    public static async Task<DateOnly?> ArranqueAsync(IApplicationDbContext db, PayrollPolicyReader politicas, DateOnly asOf, CancellationToken ct)
     {
-        var politica = await db.CompanyPolicies.AsNoTracking()
-            .Where(p => p.Key == CompanyPolicyKeys.ArranqueNominaFecha && !p.IsDeleted && p.ValidFrom <= asOf && (p.ValidTo == null || p.ValidTo >= asOf))
-            .OrderByDescending(p => p.ValidFrom)
-            .Select(p => p.Value)
-            .FirstOrDefaultAsync(ct);
-        if (politica is not null && DateOnly.TryParseExact(politica.Trim(), CompanyPolicyKeys.FormatoFecha, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha))
-            return fecha;
+        var vigentes = await politicas.ReadAsync(asOf, ct);
+        if (vigentes.ArranqueNominaFecha is { } fecha) return fecha;
 
         var primerPeriodo = await db.PayPeriods.AsNoTracking()
             .OrderBy(p => p.StartDate)
@@ -62,13 +56,13 @@ public sealed class ListBenefitBalancesQueryValidator : AbstractValidator<ListBe
     public ListBenefitBalancesQueryValidator() => RuleFor(x => x.Search).MaximumLength(100);
 }
 
-public sealed class ListBenefitBalancesQueryHandler(IApplicationDbContext db, IDateTimeService clock)
+public sealed class ListBenefitBalancesQueryHandler(IApplicationDbContext db, PayrollPolicyReader politicas, IDateTimeService clock)
     : IRequestHandler<ListBenefitBalancesQuery, Result<IReadOnlyList<BenefitBalanceSummaryDto>>>
 {
     public async Task<Result<IReadOnlyList<BenefitBalanceSummaryDto>>> Handle(ListBenefitBalancesQuery request, CancellationToken ct)
     {
         var asOf = request.AsOf ?? clock.TodayUtc;
-        var arranque = await BenefitBalanceRules.ArranqueAsync(db, asOf, ct);
+        var arranque = await BenefitBalanceRules.ArranqueAsync(db, politicas, asOf, ct);
         var arranqueDt = arranque?.ToDateTime(TimeOnly.MinValue);
 
         var empleados = db.Employees.AsNoTracking().Include(e => e.Person).Where(e => e.Status != -1 && !e.IsDeleted);
@@ -119,7 +113,7 @@ public sealed class GetBenefitBalanceQueryValidator : AbstractValidator<GetBenef
     public GetBenefitBalanceQueryValidator() => RuleFor(x => x.EmployeePublicId).NotEmpty();
 }
 
-public sealed class GetBenefitBalanceQueryHandler(IApplicationDbContext db, IDateTimeService clock)
+public sealed class GetBenefitBalanceQueryHandler(IApplicationDbContext db, PayrollPolicyReader politicas, IDateTimeService clock)
     : IRequestHandler<GetBenefitBalanceQuery, Result<BenefitBalanceDetailDto>>
 {
     public async Task<Result<BenefitBalanceDetailDto>> Handle(GetBenefitBalanceQuery request, CancellationToken ct)
@@ -132,7 +126,7 @@ public sealed class GetBenefitBalanceQueryHandler(IApplicationDbContext db, IDat
             .Where(b => b.EmployeeId == e.Id && !b.IsDeleted)
             .ToListAsync(ct);
         var publicIdPorId = filas.ToDictionary(f => f.Id, f => f.PublicId);
-        var arranque = await BenefitBalanceRules.ArranqueAsync(db, clock.TodayUtc, ct);
+        var arranque = await BenefitBalanceRules.ArranqueAsync(db, politicas, clock.TodayUtc, ct);
         var vigente = BenefitBalanceRules.Vigente(filas);
 
         BenefitBalanceRowDto Map(EmployeeBenefitOpeningBalance f) =>

@@ -125,7 +125,7 @@ public class BenefitBalanceCommandsTests
         ajuste.AdjustmentReason.Should().Contain("Certificado");
         ajuste.ConsumedByRunId.Should().BeNull("la liquidación siguiente lo consumirá");
 
-        var detalle = await new GetBenefitBalanceQueryHandler(_d.Db, _d.Clock).Handle(new GetBenefitBalanceQuery(_d.Ana.PublicId), CancellationToken.None);
+        var detalle = await new GetBenefitBalanceQueryHandler(_d.Db, _d.Policies, _d.Clock).Handle(new GetBenefitBalanceQuery(_d.Ana.PublicId), CancellationToken.None);
         detalle.Value.Current!.PublicId.Should().Be(ajuste.PublicId);
         detalle.Value.Current.PendingVacationDays.Should().Be(11m);
         detalle.Value.History.Should().HaveCount(2);
@@ -153,13 +153,13 @@ public class BenefitBalanceCommandsTests
         var carla = _d.Empleado("Carla", 2_200_000m, new DateTime(2024, 6, 1));
         await Upsert().Handle(new UpsertBenefitBalanceCommand(carla.PublicId, new DateOnly(2025, 12, 31), 5m, 0m, 0m, 0m), CancellationToken.None);
 
-        var todos = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Clock).Handle(new ListBenefitBalancesQuery(), CancellationToken.None);
+        var todos = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Policies, _d.Clock).Handle(new ListBenefitBalancesQuery(), CancellationToken.None);
         todos.Value.Should().HaveCount(3);
         todos.Value.Single(x => x.EmployeePublicId == _d.Ana.PublicId).Should().Match<BenefitBalanceSummaryDto>(x => x.HiredBeforeStart && x.AsOfDate == null && x.IsEditable);
         todos.Value.Single(x => x.EmployeePublicId == beto.PublicId).HiredBeforeStart.Should().BeFalse();
         todos.Value.Single(x => x.EmployeePublicId == carla.PublicId).AsOfDate.Should().Be(new DateOnly(2025, 12, 31));
 
-        var faltantes = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Clock).Handle(new ListBenefitBalancesQuery(OnlyMissing: true), CancellationToken.None);
+        var faltantes = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Policies, _d.Clock).Handle(new ListBenefitBalancesQuery(OnlyMissing: true), CancellationToken.None);
         faltantes.Value.Should().ContainSingle().Which.EmployeePublicId.Should().Be(_d.Ana.PublicId);
     }
 
@@ -167,10 +167,10 @@ public class BenefitBalanceCommandsTests
     public async Task Sin_politica_de_arranque_manda_el_primer_periodo_de_la_cooperativa()
     {
         // Marzo 2026 es el único período: Ana (ingreso 2025-01-15) queda antes del arranque.
-        var faltantes = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Clock).Handle(new ListBenefitBalancesQuery(OnlyMissing: true), CancellationToken.None);
+        var faltantes = await new ListBenefitBalancesQueryHandler(_d.Db, _d.Policies, _d.Clock).Handle(new ListBenefitBalancesQuery(OnlyMissing: true), CancellationToken.None);
         faltantes.Value.Should().ContainSingle().Which.EmployeePublicId.Should().Be(_d.Ana.PublicId);
 
-        var detalle = await new GetBenefitBalanceQueryHandler(_d.Db, _d.Clock).Handle(new GetBenefitBalanceQuery(_d.Ana.PublicId), CancellationToken.None);
+        var detalle = await new GetBenefitBalanceQueryHandler(_d.Db, _d.Policies, _d.Clock).Handle(new GetBenefitBalanceQuery(_d.Ana.PublicId), CancellationToken.None);
         detalle.Value.PayrollStartDate.Should().Be(new DateOnly(2026, 3, 1));
         detalle.Value.HiredBeforeStart.Should().BeTrue();
         detalle.Value.Current.Should().BeNull();
