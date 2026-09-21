@@ -79,6 +79,17 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email }
         ).ToListAsync(ct);
 
+        // Feature 010 (FR-005): la verdad del retiro es PAY_EmploymentTerminations. Una definitiva
+        // aprobada (Settled) con fecha anterior al período saca al empleado aunque la ficha no se
+        // hubiera cerrado; una con fecha dentro del período lo liquida por los días hasta el retiro.
+        var candidatos = empleados.Select(x => x.Employee.Id).ToList();
+        var retiros = await db.EmploymentTerminations.AsNoTracking()
+            .Where(t => candidatos.Contains(t.EmployeeId) && t.Status == TerminationStatus.Settled)
+            .GroupBy(t => t.EmployeeId)
+            .Select(g => new { EmployeeId = g.Key, Fecha = g.Max(t => t.TerminationDate) })
+            .ToDictionaryAsync(x => x.EmployeeId, x => x.Fecha.ToDateTime(TimeOnly.MinValue), ct);
+        empleados = empleados.Where(x => !retiros.TryGetValue(x.Employee.Id, out var f) || f >= start).ToList();
+
         var ids = empleados.Select(x => x.Employee.Id).ToList();
         var documentos = empleados.Select(x => x.TaxId).ToList();
 
@@ -145,7 +156,8 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             .ToListAsync(ct);
         var deduccionesPorEmpleado = deducciones.ToLookup(d => d.EmployeeId);
 
-        var politicas = (await policies.ReadAsync(ct)).ForCalculation();
+        // Las políticas rigen por vigencia: las del fin del período, no las de hoy (R4).
+        var politicas = (await policies.ReadAsync(DateOnly.FromDateTime(end), ct)).ForCalculation();
 
         var cargados = new List<LoadedEmployee>(empleados.Count);
         foreach (var x in empleados)
@@ -192,7 +204,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                 // Un cambio de plan con fecha de efecto dentro del período: el empleado
                 // entra al plan desde esa fecha, nunca se le liquidan días dos veces.
                 JoinDate = e.PayrollPlanEffectiveFrom is { } ef && ef > e.JoinDate ? ef.Date : e.JoinDate.Date,
-                TerminationDate = e.TerminationDate < end ? e.TerminationDate.Date : null,
+                TerminationDate = FechaDeRetiro(e, retiros.TryGetValue(e.Id, out var liquidado) ? liquidado : null, end),
                 SalaryHistory = historial,
                 Affiliations = new AffiliationsInput
                 {
@@ -223,5 +235,13 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             Policies = politicas,
             NoveltyIds = noveltyIds,
         };
+    }
+
+    /// <summary>La fecha de retiro que manda dentro del período: la de la definitiva aprobada o la de la ficha, la menor; nula si el retiro no cae antes del fin.</summary>
+    private static DateTime? FechaDeRetiro(Employee e, DateTime? liquidado, DateTime end)
+    {
+        var ficha = e.TerminationDate < end ? e.TerminationDate.Date : (DateTime?)null;
+        if (liquidado is { } l && l.Date < end && (ficha is null || l.Date < ficha)) return l.Date;
+        return ficha;
     }
 }

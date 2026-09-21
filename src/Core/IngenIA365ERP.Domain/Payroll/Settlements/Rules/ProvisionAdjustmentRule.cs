@@ -17,8 +17,8 @@ public static class ProvisionAdjustmentRule
     public static void Evaluate(SettlementContext ctx)
     {
         var liquidados = ctx.Lines
-            .Where(l => l.Nature == ConceptNature.Earning && SettlementConceptCodes.ProvisionPairFor(l.Code) is not null)
-            .GroupBy(l => SettlementConceptCodes.ProvisionPairFor(l.Code)!.Value)
+            .Where(l => l.Nature == ConceptNature.Earning && WellKnownConceptCodes.ProvisionPairFor(l.Code) is not null)
+            .GroupBy(l => WellKnownConceptCodes.ProvisionPairFor(l.Code)!.Value)
             .ToList();
 
         foreach (var grupo in liquidados)

@@ -18,12 +18,12 @@ public static class PendingSalaryRule
         var pendiente = ctx.Input.PendingSalary;
         if (pendiente is null)
         {
-            ctx.Skip(SettlementConceptCodes.PendingSalary, SettlementReasonCodes.SinDiasPendientes,
+            ctx.Skip(WellKnownConceptCodes.PendingSalary, SettlementReasonCodes.SinDiasPendientes,
                 "Sin período ordinario abierto informado: la definitiva no paga salario pendiente (la última nómina ya lo pagó).");
             return;
         }
 
-        var def = ctx.Concept(SettlementConceptCodes.PendingSalary);
+        var def = ctx.Concept(WellKnownConceptCodes.PendingSalary);
         if (def is null) return;
 
         var inicio = pendiente.PeriodStart.Date;

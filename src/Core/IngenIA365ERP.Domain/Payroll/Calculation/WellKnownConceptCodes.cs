@@ -48,6 +48,27 @@ public static class WellKnownConceptCodes
     public const string WithholdingOnSeverance = "RETEFTE_CESANTIAS";
     public const string WithholdingOnIndemnity = "RETEFTE_INDEMNIZACION";
 
+    /// <summary>Provisiones de la nómina ordinaria que cada rubro de las liquidaciones cancela (research «Contabilización de las liquidaciones»).</summary>
+    public const string ServiceBonusProvision = "PROV_PRIMA";
+    public const string SeveranceProvision = "PROV_CESANTIAS";
+    public const string SeveranceInterestProvision = "PROV_INT_CESANTIAS";
+    public const string VacationProvision = "PROV_VACACIONES";
+
+    /// <summary>
+    /// Rubro liquidado → (provisión que cancela, concepto del ajuste). Es lo que el motor de
+    /// liquidaciones y el contabilizador comparten: la prima cancela <c>PROV_PRIMA</c> y lleva la
+    /// diferencia a <c>PRIMA_AJUSTE_PROV</c>; las vacaciones disfrutadas y las compensadas cancelan
+    /// la misma provisión.
+    /// </summary>
+    public static (string Provision, string Adjustment)? ProvisionPairFor(string liquidatedCode) => liquidatedCode.ToUpperInvariant() switch
+    {
+        ServiceBonus => (ServiceBonusProvision, ServiceBonusProvisionAdjustment),
+        Severance => (SeveranceProvision, SeveranceProvisionAdjustment),
+        SeveranceInterest => (SeveranceInterestProvision, SeveranceInterestProvisionAdjustment),
+        VacationPayout or VacationCompensation => (VacationProvision, VacationProvisionAdjustment),
+        _ => null,
+    };
+
     /// <summary>La novedad de ausencia que deja el disfrute de vacaciones ya pagado por la liquidación (D-01).</summary>
     public const string VacationLeave = "AUSENCIA_VACACIONES";
 

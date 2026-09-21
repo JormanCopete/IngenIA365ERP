@@ -84,13 +84,14 @@ public sealed class CalculatePayrollRunCommandHandler(
         var engine = new PayrollCalculationEngine();
 
         // Corrida anterior: la versión siguiente y, si estaba en borrador, queda reemplazada.
-        var corridas = await db.PayrollRuns.Where(r => r.PayPeriodId == period.Id).OrderByDescending(r => r.Version).ToListAsync(ct);
+        var corridas = await db.PayrollRuns.Where(r => r.PayPeriodId == period.Id && r.Kind == PayrollRunKind.Ordinary).OrderByDescending(r => r.Version).ToListAsync(ct);
         var anterior = corridas.FirstOrDefault();
         var version = (anterior?.Version ?? 0) + 1;
         var lineasAnteriores = await LineasDeComparacionAsync(anterior, ct);
 
         var run = new PayrollRun
         {
+            Kind = PayrollRunKind.Ordinary,
             PayPeriodId = period.Id,
             Version = version,
             Status = PayrollRunStatus.Draft,

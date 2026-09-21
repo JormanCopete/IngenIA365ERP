@@ -17,7 +17,7 @@ public static class ServiceBonusRule
     /// <summary>Devuelve el código de exclusión si no hay línea; nulo si la produjo (o la omitió por un motivo menor ya anotado).</summary>
     public static string? Evaluate(SettlementContext ctx, DateTime semesterStart, DateTime semesterEnd)
     {
-        var code = SettlementConceptCodes.ServiceBonus;
+        var code = WellKnownConceptCodes.ServiceBonus;
         if (ctx.BenefitsExclusion() is { } exclusion)
         {
             ctx.Skip(code, exclusion, SettlementContext.ExclusionText(exclusion));

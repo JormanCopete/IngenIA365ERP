@@ -18,7 +18,7 @@ public static class IndemnizacionRule
 {
     public static void Evaluate(SettlementContext ctx)
     {
-        var code = SettlementConceptCodes.SeverancePay;
+        var code = WellKnownConceptCodes.Indemnity;
         var terminacion = ctx.Input.Termination;
         if (terminacion is null)
         {
@@ -134,7 +134,7 @@ public static class IndemnizacionRule
     {
         var terminacion = ctx.Input.Termination;
         if (terminacion is not { VoluntaryRetirementBonus: { } bono } || bono <= 0m) return;
-        if (ctx.Concept(SettlementConceptCodes.RetirementBonus) is not { } bonoDef) return;
+        if (ctx.Concept(WellKnownConceptCodes.RetirementBonus) is not { } bonoDef) return;
         var exp = new Explanation { Form = "Bonificación por retiro" };
         exp.Step("Bonificación pactada al retiro", bono);
         exp.Summary = $"Bonificación por retiro: {Fmt.Money(bono)}";

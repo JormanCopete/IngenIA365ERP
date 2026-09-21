@@ -82,14 +82,14 @@ public class ComparisonAndBalanceQueriesTests
         d.ConfigurarContabilidad();
         var runId = await Calcular(d, d.Marzo);
 
-        var antes = await new GetRunBalanceCheckQueryHandler(d.Db).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
+        var antes = await new GetRunBalanceCheckQueryHandler(d.Db, d.SaldosDeProvision).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
         antes.Value.EarningsMinusDeductionsEqualsNet.Should().BeTrue();
         antes.Value.EmployerAndProvisionsOutsideNet.Should().BeTrue();
         antes.Value.LinesMatchEmployeeTotals.Should().BeTrue();
         antes.Value.AccountingDocumentBalanced.Should().BeNull("todavía no hay comprobante");
 
         await Aprobar(d, runId);
-        var despues = await new GetRunBalanceCheckQueryHandler(d.Db).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
+        var despues = await new GetRunBalanceCheckQueryHandler(d.Db, d.SaldosDeProvision).Handle(new GetRunBalanceCheckQuery(runId), CancellationToken.None);
         despues.Value.AccountingDocumentBalanced.Should().BeTrue();
         despues.Value.Details.Should().Contain(x => x.Contains("NM-"));
     }

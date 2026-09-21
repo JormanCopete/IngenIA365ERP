@@ -345,9 +345,10 @@ indemnización):
 | `LegalBasis` | nvarchar(120), nullable | artículo |
 | `IsSeeded`, `IsActive` | bit | un sembrado no se elimina ni cambia de marca |
 
-Semilla: `RENUNCIA` (no), `DESP_SIN_JC` despido sin justa causa (sí; CST art. 64), `DESP_JC`
-despido con justa causa (no; art. 62), `VENC_TERMINO` vencimiento del término con preaviso (no;
-art. 46), `MUTUO_ACUERDO` (no), `FIN_OBRA` terminación de la obra (no), `PER_PRUEBA` (no; art. 78),
+Semilla (códigos de hasta 10 caracteres, la regla de `CodigoDeCatalogo`; hasta el 2026-09-21 decía
+`DESP_SIN_JC`, `VENC_TERMINO` y `MUTUO_ACUERDO`, que no caben en la columna): `RENUNCIA` (no), `DESP_SINJC` despido sin justa causa (sí; CST art. 64), `DESP_JC`
+despido con justa causa (no; art. 62), `VENC_TERM` vencimiento del término con preaviso (no;
+art. 46), `MUTUO_ACDO` (no), `FIN_OBRA` terminación de la obra (no), `PER_PRUEBA` (no; art. 78),
 `MUERTE` (no), `PENSION` reconocimiento de pensión (no).
 
 **`EmploymentTermination`**:
