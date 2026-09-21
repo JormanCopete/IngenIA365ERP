@@ -4,7 +4,7 @@
 (cesantías) | **Hermano**: `api.md` §3.2, §7, §9
 
 Regla común a los tres: **el layout es dato, no código**. Cada formato vive en un JSON (embebido y
-versionado para la PILA; fila de `PAY_BankFileFormats` para bancos y fondos) con `validFrom/validTo`;
+versionado para la PILA; fila de `COR_BankFileFormats` —Core, ligada al banco, D-42— para bancos y fondos) con `validFrom/validTo`;
 un archivo generado guarda el código del layout con que se escribió y no cambia cuando llega una
 versión nueva (Principio XI). Los escritores (`PilaWriter`, `FlatFileWriter`) sólo saben poner un
 valor en una posición con una alineación y un relleno; lo que va en cada campo lo dice el layout.
@@ -203,7 +203,14 @@ conceptos de aportes de los comprobantes `NM` del mes por subsistema (la diferen
 antes de descargar). Los códigos de las administradoras (`PilaCode`) son los del listado del
 operador, no el `Code` de la cooperativa.
 
-## 2. Dispersión bancaria — formato parametrizable (`PAY_BankFileFormats`)
+## 2. Dispersión bancaria — formato parametrizable (`COR_BankFileFormats`, D-42)
+
+> **Como quedó en N4 (2026-09-21)**: el formato vive en **Core** (`COR_BankFileFormats`/`…Fields`), con `bankPublicId`
+> nulo = genérico y `scope` (`PayrollDisbursement`, `SeveranceDeposit`, `SupplierPayments` reservado). Rutas
+> `/api/core/bank-file-formats` (`Core.BankFileFormats.View/Manage`) y pantalla `/maestros/formatos-bancarios`.
+> Los orígenes del beneficiario se llaman `Payee*`, `Amount` y `Concept` (los `Employee*`, `NetAmount` y
+> `PaymentConcept` de abajo siguen valiendo como sinónimos); `GET …/sources` lista el catálogo. La cuenta
+> origen no va en el formato: se elige al generar entre las cuentas bancarias del plan.
 
 ### 2.1 Definición
 
@@ -321,7 +328,7 @@ El tercer empleado sin cuenta no está en el archivo y sale en `excluded` con `N
 
 ### 2.3 Lo que cambia cuando llegue el formato real de AV Villas
 
-Nada en el código: una fila nueva en `PAY_BankFileFormats` con `code = "AVVILLAS-PAGOS"` y la
+Nada en el código: una fila nueva en `COR_BankFileFormats` con `code = "AVVILLAS-PAGOS"` y la
 vigencia; si exige un origen que no está en la tabla de §2.1 (p. ej. un código de oficina), se
 agrega al enum de orígenes con su prueba, y esa sí es una tarea. Preguntas que el dueño debe traer
 respondidas con la estructura: ancho fijo o delimitado; codificación; si la cuenta origen va en
@@ -359,7 +366,7 @@ fondo va además en su propia hoja para entregarla al fondo.
 Los fondos (Porvenir, Protección, Colfondos, FNA) reciben la consignación por su portal con
 formatos propios que **no se investigaron** en esta fase (los dos fondos de COOFLOPAL se confirman
 con la contadora). Cuando un fondo exija archivo, se define con el **mismo motor de §2**
-(`PAY_BankFileFormats` con `scope = "SeveranceDeposit"` y el fondo como «banco») y se descarga por
+(`COR_BankFileFormats` con `scope = "SeveranceDeposit"` y el fondo como «banco»; ya escribe con `FlatFileWriter` desde N4) y se descarga por
 `GET /api/payroll/settlements/severance/{runId}/deposit-schedule/{fundId}/file?formatId=`. Orígenes
 adicionales del ámbito: `FundNit`, `FundPilaCode`, `SeveranceAmount` (en lugar de `NetAmount`),
 `SeveranceDays`, `SeveranceBaseSalary`, `EmployeeHireDate`, `Year`. Sin formato vigente para el

@@ -1,0 +1,84 @@
+{
+  // Caso dorado 03 (feature 010, US5): empresa que NO está exonerada; salud 12,5 %, SENA e ICBF completos, campo 76 = N.
+  "nombre": "Empresa no exonerada del art. 114-1",
+  "derivacion": "Sin la política Exonerada114_1 todos aportan completo. Arias (2.000.000): pensión 320.000, salud 12,5 % 250.000, ARL 10.500, CCF 80.000, SENA 40.000, ICBF 60.000 = 760.500; campo 95 = IBC. Gómez (8.000.000): 1.280.000 + 1.000.000 + 41.800 + 320.000 + 160.000 + 240.000 + FSP 80.000 = 3.121.800. Total 3.882.300; Σ IBC 10.000.000.",
+  "year": 2026,
+  "month": 12,
+  "empresa": {
+    "nombre": "Cooperativa de Prueba",
+    "nit": "900123456",
+    "dv": "7",
+    "clase": "B",
+    "arlPilaCode": "14-23",
+    "codigoOperador": "24",
+    "dane": "76001",
+    "actividadEconomica": "1649501"
+  },
+  "politicas": {
+    "exonerada114_1": false,
+    "cotizaArlEnVacaciones": false
+  },
+  "parametros": {},
+  "cotizantes": [
+    {
+      "documento": "3001",
+      "primerApellido": "Arias",
+      "segundoApellido": "Ávila",
+      "primerNombre": "Ana",
+      "ingreso": "2020-01-15",
+      "salario": 2000000
+    },
+    {
+      "documento": "3002",
+      "primerApellido": "Gómez",
+      "segundoApellido": "Giraldo",
+      "primerNombre": "Gloria",
+      "ingreso": "2015-08-18",
+      "salario": 8000000
+    }
+  ],
+  "esperado": {
+    "cotizantes": 2,
+    "lineas": 2,
+    "totalIbcCcf": 10000000,
+    "totalAportes": 3882300,
+    "bloqueantes": [],
+    "alertas": [
+      "Pila.LayoutSinCotejar"
+    ],
+    "lineasEsperadas": [
+      {
+        "n": 1,
+        "documento": "3001",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 2000000,
+        "pension": 320000,
+        "fsp": 0,
+        "salud": 250000,
+        "arl": 10500,
+        "ccf": 80000,
+        "sena": 40000,
+        "icbf": 60000,
+        "exonerado": false
+      },
+      {
+        "n": 2,
+        "documento": "3002",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 8000000,
+        "pension": 1280000,
+        "fsp": 80000,
+        "salud": 1000000,
+        "arl": 41800,
+        "ccf": 320000,
+        "sena": 160000,
+        "icbf": 240000,
+        "exonerado": false
+      }
+    ]
+  }
+}

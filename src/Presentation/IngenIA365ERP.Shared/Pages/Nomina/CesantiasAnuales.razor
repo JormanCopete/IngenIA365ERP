@@ -299,6 +299,9 @@ else if (_lista.Count > 0)
                                         <PermissionGate Required="Payroll.Payments.Mark">
                                             <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_ocupado" OnClick="@(() => { _marca.Fecha = _corrida.PayDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today; _marca.Referencia = null; _mostrarMarcarPago = true; })">Marcar pagados</SfButton>
                                         </PermissionGate>
+                                        <PermissionGate Required="Payroll.Disbursement.Generate">
+                                            <SfButton CssClass="e-outline" IconCss="e-icons e-export" Disabled="@_ocupado" OnClick="@(() => _mostrarDispersion = true)" Title="Archivo plano para el banco con los que tienen cuenta; «marcar enviado» los deja pagados en una acción">Archivo de dispersión</SfButton>
+                                        </PermissionGate>
                                     }
                                     <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@DescargarTodosLosComprobantesAsync" Title="Todos los comprobantes en un PDF">Comprobantes PDF</SfButton>
                                 </div>
@@ -615,7 +618,11 @@ else if (_lista.Count > 0)
     </DialogTemplates>
 </SfDialog>
 
+<GenerarDispersion @bind-Visible="_mostrarDispersion" RunPublicId="@(_corrida?.PublicId ?? Guid.Empty)" Etiqueta="Intereses a las cesantías (lo que va al empleado)" FechaDePagoPropuesta="@(_corrida?.PayDate?.ToDateTime(TimeOnly.MinValue))" />
+
 @code {
+    // Feature 010 (US8): el archivo de dispersión se genera desde esta relación de pago.
+    private bool _mostrarDispersion;
     /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») elige esa corrida al cargar y se para en su año.</summary>
     [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
 

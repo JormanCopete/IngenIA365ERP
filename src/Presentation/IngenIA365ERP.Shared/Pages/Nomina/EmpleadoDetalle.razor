@@ -389,6 +389,7 @@ else
                                 @if (_employee.CurrentWithholdingRate is { } tasa)
                                 {
                                     <p>Procedimiento @tasa.Procedure · porcentaje fijo vigente <strong>@tasa.RatePercent.ToString("0.##") %</strong> (@tasa.OrigenTexto), desde @tasa.ValidFrom.ToString("dd/MM/yyyy")@(tasa.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</p>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-calculator" OnClick='@(() => Nav.NavigateTo("/nomina/retencion-procedimiento-2"))'>Cálculos del procedimiento 2</SfButton>
                                 }
                                 else
                                 {

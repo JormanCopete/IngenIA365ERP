@@ -1,0 +1,86 @@
+{
+  // Caso dorado 02 (feature 010, US5): la tabla del fondo de solidaridad cambia el 2027-04-01 y la bandera de transición de la ficha decide cuál aplica; sin bandera, alerta.
+  "nombre": "Abril de 2027: fondo de solidaridad de la Ley 2381 salvo régimen de transición",
+  "derivacion": "Desde el 2027-04-01 la semilla trae FSP_TABLA de la Ley 2381 (4–7 SMMLV → 1,5 %). Gómez (8.000.000 = 4,57 SMMLV, régimen desconocido → alerta) liquida 1,5 %: 120.000 (60.000 solidaridad / 60.000 subsistencia); pensión 1.280.000, salud 4 % 320.000, ARL 41.760→41.800, CCF 320.000 = 2.081.800. Guerrero (8.000.000, régimen de transición) sigue con la tabla de la Ley 797 (1 %): 80.000 → 2.041.800. Total 4.123.600; Σ IBC 16.000.000.",
+  "year": 2027,
+  "month": 4,
+  "empresa": {
+    "nombre": "Cooperativa de Prueba",
+    "nit": "900123456",
+    "dv": "7",
+    "clase": "B",
+    "arlPilaCode": "14-23",
+    "codigoOperador": "24",
+    "dane": "76001",
+    "actividadEconomica": "1649501"
+  },
+  "politicas": {
+    "exonerada114_1": true,
+    "cotizaArlEnVacaciones": false
+  },
+  "parametros": {},
+  "cotizantes": [
+    {
+      "documento": "2001",
+      "primerApellido": "Gómez",
+      "segundoApellido": "Giraldo",
+      "primerNombre": "Gloria",
+      "ingreso": "2015-08-18",
+      "salario": 8000000
+    },
+    {
+      "documento": "2002",
+      "primerApellido": "Guerrero",
+      "segundoApellido": "Gil",
+      "primerNombre": "Gustavo",
+      "ingreso": "1998-02-02",
+      "salario": 8000000,
+      "regimenTransicion": "Yes"
+    }
+  ],
+  "esperado": {
+    "cotizantes": 2,
+    "lineas": 2,
+    "totalIbcCcf": 16000000,
+    "totalAportes": 4123600,
+    "bloqueantes": [],
+    "alertas": [
+      "Pila.RegimenTransicionDesconocido",
+      "Pila.LayoutSinCotejar"
+    ],
+    "lineasEsperadas": [
+      {
+        "n": 1,
+        "documento": "2001",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 8000000,
+        "pension": 1280000,
+        "fsp": 120000,
+        "salud": 320000,
+        "arl": 41800,
+        "ccf": 320000,
+        "sena": 0,
+        "icbf": 0,
+        "exonerado": true
+      },
+      {
+        "n": 2,
+        "documento": "2002",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 8000000,
+        "pension": 1280000,
+        "fsp": 80000,
+        "salud": 320000,
+        "arl": 41800,
+        "ccf": 320000,
+        "sena": 0,
+        "icbf": 0,
+        "exonerado": true
+      }
+    ]
+  }
+}

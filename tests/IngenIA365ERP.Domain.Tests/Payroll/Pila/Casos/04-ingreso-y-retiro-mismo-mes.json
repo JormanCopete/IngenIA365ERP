@@ -1,0 +1,64 @@
+{
+  // Caso dorado 04 (feature 010, US5): ING y RET del mismo mes van en la misma línea y los días no tienen que sumar 30.
+  "nombre": "Ingreso y retiro en el mismo mes, en la misma línea",
+  "derivacion": "Bernal ingresa el 10 y se retira el 25 de diciembre: 16 días (10..25), ING y RET en la misma línea. Salario 3.000.000 → IBC 1.600.000: pensión 256.000, salud 4 % 64.000, ARL 8.352→8.400, CCF 64.000 = 392.400; 16 × 210 / 30 = 112 horas.",
+  "year": 2026,
+  "month": 12,
+  "empresa": {
+    "nombre": "Cooperativa de Prueba",
+    "nit": "900123456",
+    "dv": "7",
+    "clase": "B",
+    "arlPilaCode": "14-23",
+    "codigoOperador": "24",
+    "dane": "76001",
+    "actividadEconomica": "1649501"
+  },
+  "politicas": {
+    "exonerada114_1": true,
+    "cotizaArlEnVacaciones": false
+  },
+  "parametros": {},
+  "cotizantes": [
+    {
+      "documento": "4001",
+      "primerApellido": "Bernal",
+      "segundoApellido": "Bravo",
+      "primerNombre": "Bruno",
+      "ingreso": "2026-12-10",
+      "retiro": "2026-12-25",
+      "salario": 3000000,
+      "devengosIbc": 1600000,
+      "diasTrabajados": 16
+    }
+  ],
+  "esperado": {
+    "cotizantes": 1,
+    "lineas": 1,
+    "totalIbcCcf": 1600000,
+    "totalAportes": 392400,
+    "bloqueantes": [],
+    "alertas": [
+      "Pila.LayoutSinCotejar"
+    ],
+    "lineasEsperadas": [
+      {
+        "n": 1,
+        "documento": "4001",
+        "novedades": "ING,RET",
+        "tipo": "01/00",
+        "dias": 16,
+        "ibc": 1600000,
+        "pension": 256000,
+        "fsp": 0,
+        "salud": 64000,
+        "arl": 8400,
+        "ccf": 64000,
+        "sena": 0,
+        "icbf": 0,
+        "exonerado": true,
+        "horas": 112
+      }
+    ]
+  }
+}

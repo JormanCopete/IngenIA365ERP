@@ -1,0 +1,76 @@
+{
+  // Caso dorado 03 del procedimiento 2 (feature 010, US7): empleado con menos de doce meses; el divisor es el número de meses, no RETEFTE_P2_DIVISOR.
+  "nombre": "Menos de doce meses: el divisor son los meses de vinculación",
+  "derivacion": "Ingresó en abril de 2026: ocho meses de 12.000.000 (aportes 1.080.000) y prima proporcional de 4.000.000 en junio: sumatoria 100.000.000, aportes 8.640.000, neto 91.360.000; renta exenta 25 % = 22.840.000 (tope 65,83 UVT × 8 = 27.582.243 no muerde); base 68.520.000 ÷ 8 meses = 8.565.000 = 163,5353 UVT → (163,5353 − 150) × 28 % + 10 UVT = 722.232,00 → 8,43 %.",
+  "year": 2026,
+  "semester": 2,
+  "mesDeCalculo": "2026-12-01",
+  "secuencia": "DepurateThenDivide",
+  "meses": [
+    {
+      "year": 2026,
+      "month": 4,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "bruto": 16000000,
+      "aportes": 1080000,
+      "especial": true
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    }
+  ],
+  "deducciones": [],
+  "esperado": {
+    "mesesConsiderados": 8,
+    "divisor": 8,
+    "basePromedio": 8565000.0,
+    "promedioUvt": 163.5353,
+    "retencionTeorica": 722232.0,
+    "porcentaje": 8.43
+  }
+}

@@ -166,7 +166,7 @@ public class DepositScheduleTests
         var e = new EscenarioDeCesantias();
         var calculo = await e.CalcularAsync();
 
-        var r = await new GetFundDepositFileQueryHandler(e.D.Db).Handle(new GetFundDepositFileQuery(calculo.Value.RunPublicId, e.FondoPorvenir.PublicId), CancellationToken.None);
+        var r = await new GetFundDepositFileQueryHandler(e.D.Db, e.D.Clock).Handle(new GetFundDepositFileQuery(calculo.Value.RunPublicId, e.FondoPorvenir.PublicId), CancellationToken.None);
 
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Payroll.Severance.FundFormatMissing");

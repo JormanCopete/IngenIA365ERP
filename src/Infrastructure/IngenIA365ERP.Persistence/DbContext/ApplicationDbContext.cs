@@ -50,6 +50,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
+    public DbSet<BankFileFormat> BankFileFormats => Set<BankFileFormat>();
+    public DbSet<BankFileFormatField> BankFileFormatFields => Set<BankFileFormatField>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Committee> Committees => Set<Committee>();
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
@@ -273,6 +275,16 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
+    public DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles => Set<Domain.Entities.Payroll.Transactions.BankDisbursementFile>();
+    public DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines => Set<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine>();
+    public DbSet<Domain.Entities.Payroll.Pila.PilaSettings> PilaSettings => Set<Domain.Entities.Payroll.Pila.PilaSettings>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PilaGeneration> PilaGenerations => Set<Domain.Entities.Payroll.Transactions.PilaGeneration>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PilaGenerationLine> PilaGenerationLines => Set<Domain.Entities.Payroll.Transactions.PilaGenerationLine>();
+    public DbSet<Domain.Entities.Payroll.Pila.PilaIssue> PilaIssues => Set<Domain.Entities.Payroll.Pila.PilaIssue>();
+    public DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings> ElectronicPayrollSettings => Set<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings>();
+    public DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange> ElectronicPayrollNumberingRanges => Set<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange>();
+    public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument>();
+    public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission>();
 
     // === Inventory (24) ===
     public DbSet<Product> Products => Set<Product>();

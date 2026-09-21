@@ -472,6 +472,11 @@ El **layout** (registros tipo 1 y 2 del AT2 v30) es un recurso JSON embebido con
 (`Application/Payroll/Pila/Layouts/at2-v30-2026-07-24.json`), no una tabla; cada generación
 guarda qué versión usó.
 
+> Como quedó en N2 (2026-09-21, D-43): `Status` `Validated (0)` es la generación con bloqueantes
+> sin archivo; el layout sin cotejar sigue vigente y deja la alerta `Pila.LayoutSinCotejar`; el
+> registro tipo 1 del layout embebido mide 358 hasta el cotejo; `Balanced` y `PaidAt` son columnas
+> nuevas; `PilaSettings` guarda además `OperatorCode` (campo 22) y `OperatorName`.
+
 **`PilaSettings`** (fila única; datos del aportante que la Res. 2388 pide y la empresa no tiene):
 
 | Campo | Tipo | Regla |
@@ -509,6 +514,8 @@ propone con `PILA_PLAZO_PAGO_POR_NIT` y los dos últimos dígitos del NIT.
 | `BlockingIssueCount`, `WarningCount` | int | |
 | `ProposedPaymentDueDate` | date, nullable | |
 | `UploadedAt`, `UploadedBy`, `OperatorFilingNumber` (nvarchar(40)), `OperatorFilingDate` | | digitados al marcar «cargada» |
+| `Balanced` | bit | el cuadre no tiene diferencia (como quedó en N2) |
+| `PaidAt` | date, nullable | fecha de pago digitada al marcar cargada (N2) |
 
 Único `(Year, Month, Version)`. **Transiciones**: generar crea `Validated` (si hay bloqueantes) o
 `Generated` (con archivo); `Generated → Uploaded` (radicado en el operador; permiso
@@ -535,7 +542,7 @@ propone con `PILA_PLAZO_PAGO_POR_NIT` y los dos últimos dígitos del NIT.
 
 Único `(GenerationId, LineNumber)`; índice `(GenerationId, EmployeeId)`.
 
-**`PilaIssue`**:
+**`PilaIssue`** (`AuditableEntity`, Principio VII; como quedó en N2):
 
 | Campo | Tipo | Regla |
 |---|---|---|
@@ -663,80 +670,92 @@ a `Superseded` **sólo cuando la nota es `Accepted`**. Nada se transmite sin la 
 
 Único `(DocumentId, Attempt)`. Nunca se edita ni se borra.
 
-### 2.10 Dispersión bancaria (R11): `PAY_BankDisbursementFormats`, `…FormatFields`, `PAY_BankDisbursementFiles`, `…FileLines`
+### 2.10 Dispersión bancaria (R11, D-42): `COR_BankFileFormats`, `COR_BankFileFormatFields` (Core) y `PAY_BankDisbursementFiles`, `PAY_BankDisbursementFileLines` (nómina)
 
-**`BankDisbursementFormat`** (formato en datos, con vigencia; una fila por banco y versión):
+Tal como quedó en N4 (2026-09-21). Los formatos viven en **Core** ligados al banco y los usa
+cualquier módulo que pague por archivo; el motor `FlatFileWriter` es genérico (D-42).
+
+**`BankFileFormat`** (`COR_BankFileFormats`; `Domain/Entities/Core/BankFileFormat.cs`; una fila por banco, ámbito y versión):
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `BankId` | FK `COR_Banks` | banco pagador |
-| `Code` | nvarchar(10) (`CodigoDeCatalogo`), único filtrado `[IsDeleted] = 0` | `AVVILLAS-1`, `CSV-GENERICO` |
+| `BankId` | FK `COR_Banks`, **nullable** | nulo = formato genérico para cualquier banco (`CSV-GENERICO`) |
+| `Scope` | tinyint (`PayrollDisbursement=1`, `SeveranceDeposit=2`, `SupplierPayments=3` reservado) | qué fuente de líneas lo alimenta |
+| `Code` | nvarchar(20) (`CodigoDeCatalogo`), único filtrado `[IsDeleted] = 0` | `AVVILLAS-1`, `CSV-GENERICO`, `DEMO-ANCHOFIJO` |
 | `Name` | nvarchar(120) | |
-| `ValidFrom`, `ValidTo` | date | un cambio de banco o de formato a mitad de año no toca los archivos anteriores (Edge Cases) |
-| `FileKind` | tinyint (`FixedWidth=1`, `Delimited=2`) | |
-| `Delimiter` | nvarchar(5), nullable | `Delimited` |
-| `Encoding` | nvarchar(20) | `ASCII`, `UTF-8`, `Windows-1252` |
+| `ValidFrom`, `ValidTo` | date | dos formatos activos del mismo banco y ámbito no se cruzan (`Core.BankFileFormat.Overlaps`); un archivo conserva el formato con que se escribió |
+| `Kind` | tinyint (`FixedWidth=1`, `Delimited=2`) | |
+| `Delimiter`, `QuoteText` | nvarchar(5) nullable, bit | `Delimited` |
+| `Encoding` | nvarchar(20) | `us-ascii`, `utf-8`, `windows-1252` (nombre .NET) |
 | `LineEnding` | tinyint (`Crlf=1`, `Lf=2`) | |
-| `DecimalPlaces`, `DecimalSeparator`, `AmountInCents` | tinyint, nvarchar(1), bit | |
-| `DateFormat` | nvarchar(20) | `yyyyMMdd`… |
-| `TextTransform` | tinyint (`None=0`, `Upper=1`, `UpperNoAccents=2`) | |
-| `FileNamePattern` | nvarchar(120) | `PAGO_{yyyyMMdd}_{seq}.txt` |
+| `Uppercase`, `StripAccents` | bit | transformación del texto |
+| `AmountFormat` | tinyint (`Integer=1`, `ImplicitCents=2`, `Point2=3`) | |
+| `FileNamePattern` | nvarchar(120) | `PAGO{PaymentDate:yyyyMMdd}.txt` |
+| `ContentType` | nvarchar(60) | `text/plain`, `text/csv` |
 | `HasHeader`, `HasTrailer` | bit | |
-| `OriginAccountNumber`, `OriginAccountType` | nvarchar(30), tinyint | cuenta origen de la cooperativa (FR-032) |
-| `OriginAgreementCode` | nvarchar(20), nullable | convenio / código de empresa en el banco |
-| `Origin` | tinyint (`Seed=1`, `Custom=2`) | |
-| `IsActive` | bit | |
-| `Notes` | nvarchar(500) | «estructura pendiente del dueño» en la fila AV Villas |
+| `AgreementCode` | nvarchar(20), nullable | convenio / código de empresa en el banco (`SourceAgreementCode`) |
+| `IsSeeded`, `IsActive` | bit | una fila cargada a mano no se pisa al resembrar |
+| `Notes` | nvarchar(500) | «estructura pendiente del dueño» en `AVVILLAS-1` |
 
-**`BankDisbursementFormatField`**:
+Índice `(BankId, Scope, ValidFrom)`. La cuenta origen **no** va en el formato: se elige al
+generar (cuenta bancaria del plan, `ACC_ChartOfAccounts` con `BankId` y `BankAccountNumber`) y
+debe ser del banco del formato (`SourceAccountBankMismatch`).
+
+**`BankFileFormatField`** (`COR_BankFileFormatFields`, cascada con el formato):
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `FormatId` | FK (Restrict) | |
+| `FormatId` | FK | |
 | `Record` | tinyint (`Header=1`, `Detail=2`, `Trailer=3`) | |
-| `Order` | int | |
+| `Order` | int | consecutivo dentro del registro |
 | `Name` | nvarchar(60) | |
-| `Source` | tinyint (`Constant`, `OriginAccountNumber`, `OriginAccountType`, `OriginAgreementCode`, `CompanyTaxId`, `CompanyName`, `EmployeeIdType`, `EmployeeTaxId`, `EmployeeFullName`, `EmployeeEmail`, `DestinationBankCode`, `DestinationAccountType`, `DestinationAccountNumber`, `Amount`, `Reference`, `PaymentDate`, `FileDate`, `LineSequence`, `DetailCount`, `TotalAmount`) | |
+| `Source` | tinyint (`BankFieldSource`: `Constant`, `Blank`; `CompanyNit`, `CompanyNitDv`, `CompanyName`; `SourceAccountNumber`, `SourceAccountType`, `SourceBankCode`, `SourceAgreementCode`; `PaymentDate`, `GenerationDate`, `GenerationTime`, `Sequence`, `BatchReference`; sólo detalle: `LineNumber`, `PayeeDocumentType`, `PayeeDocument`, `PayeeFullName`, `PayeeFirstNames`, `PayeeLastNames`, `PayeeBankCode`, `PayeeAccountType`, `PayeeAccountNumber`, `Amount`, `Concept`, `PayeeEmail`; sólo cabecera/totales: `LineCount`, `TotalAmount`; cesantías: `FundNit`, `FundPilaCode`, `SeveranceDays`, `SeveranceBaseSalary`, `PayeeHireDate`, `Year`) | los nombres del contrato original (`EmployeeDocument`, `EmployeeBankCode`, `NetAmount`, `PaymentConcept`…) entran como sinónimos |
 | `ConstantValue` | nvarchar(120), nullable | |
-| `StartPosition`, `Length` | int, nullable / int | posición 1-based (ancho fijo) y largo (o máximo, delimitado) |
+| `Length` | int, nullable | obligatorio en ancho fijo; máximo en delimitado |
 | `Alignment` | tinyint (`Left=1`, `Right=2`) | |
 | `PadChar` | nvarchar(1) | espacio o `0` |
-| `DataType` | tinyint (`Text`, `Integer`, `Amount`, `Date`) | |
-| `Format` | nvarchar(40), nullable | formato de fecha o de importe si difiere del general |
-| `ValueMapJson` | nvarchar(400), nullable | equivalencias (`{"1":"CA","2":"CC"}`, `{"C":"CC","E":"CE","P":"PA"}`) |
-| `Required` | bit | valor vacío en campo requerido → el empleado queda en pendientes con motivo |
+| `DataType` | tinyint (`Text=1`, `Integer=2`, `Amount=3`, `Date=4`) | |
+| `ValueFormat` | nvarchar(40), nullable | formato de fecha o de importe si difiere del general |
+| `ValueMapJson` | nvarchar(400), nullable | equivalencias (`{"1":"S","2":"D"}`, `{"CC":"1","CE":"2"}`) |
+| `Required` | bit | vacío → el beneficiario queda en pendientes con `RequiredFieldEmpty` |
+| `Truncate` | bit | si no, un valor más largo que su posición responde `LineTooLong { lineNumber, field }` |
 
-Único `(FormatId, Record, Order)`; en ancho fijo el validador exige que los campos no se solapen y
-cubran el registro.
+Único `(FormatId, Record, Order)`; `BankFileFormatValidator` exige órdenes consecutivos,
+`length` en ancho fijo, `Constant` con valor, orígenes de detalle sólo en el detalle y de totales
+fuera de él.
 
-**`BankDisbursementFile`** (transacción):
+**`BankDisbursementFile`** (`PAY_BankDisbursementFiles`, transacción inmutable):
 
 | Campo | Tipo | Regla |
 |---|---|---|
 | `PayrollRunId` | FK `PAY_PayrollRuns` | corrida **Approved** (ordinaria o especial: cada una su archivo, FR-011a) |
-| `BankId`, `FormatId` | FK | el formato vigente al generar |
+| `BankId`, `FormatId`, `FormatCode` | FK nullable, FK, nvarchar(20) | el formato vigente al generar; el código queda copiado |
 | `Status` | tinyint (`Generated=0`, `Sent=1`, `Voided=2`) | |
 | `GeneratedAt`, `GeneratedBy` | | |
-| `PaymentDate` | date | la que va al archivo y a `PayrollPayment.PaidAt` |
-| `Reference` | nvarchar(60) | referencia del archivo (va a `PayrollPayment.Reference`) |
+| `PaymentDate`, `Sequence` | date, int | la fecha que va al archivo y a `PayrollPayment.PaidAt`; consecutivo del día |
+| `Reference` | nvarchar(60) | referencia del lote (`BatchReference`) |
+| `SourceAccountId`, `SourceAccountNumber` | FK `ACC_ChartOfAccounts` nullable, nvarchar(30) | cuenta origen elegida al generar |
 | `LineCount`, `TotalAmount` | int, 18,2 | cuadran con la relación de pago menos los excluidos |
-| `ExcludedCount`, `ExcludedJson` | int, nvarchar(max) | empleados sin cuenta o con campo requerido vacío, con motivo (quedan en «pendientes») |
-| `FileName`, `FileSha256`, `FileAttachmentPublicId` | | `COR_Attachments` (`OwnerEntityType = "BankDisbursementFile"`) |
-| `SentAt`, `SentBy`, `SentNotes` | | |
+| `ExcludedCount`, `ExcludedJson` | int, nvarchar(max) | pendientes con motivo (`NoBankAccount`, `BankCodeMissing`, `AlreadyPaid`, `AlreadySent`, `ZeroNet`, `RequiredFieldEmpty`) |
+| `FileName`, `FileSha256`, `FileAttachmentPublicId` | | `COR_Attachments` (`OwnerEntityType = "BankDisbursementFile"`, no borrable, `Payroll.Disbursement.View`) |
+| `SentAt`, `SentBy`, `BankReference`, `SentNotes` | | la referencia del banco es la `Reference` de cada pago |
 | `VoidedAt`, `VoidedBy`, `VoidReason` | | |
 
-**`BankDisbursementFileLine`**: `FileId`, `LineNumber`, `PayrollRunEmployeeId` (FK), `EmployeeId`,
-`DestinationBankId`, `AccountType`, `AccountNumber` (25), `Amount`, `RecordText` (nvarchar(600)),
-`PayrollPaymentId` (int, nullable: la marca que dejó «enviado»). Único `(FileId, LineNumber)`;
-índice `(PayrollRunEmployeeId)`.
+**`BankDisbursementFileLine`** (`PAY_BankDisbursementFileLines`): `FileId`, `LineNumber`,
+`PayrollRunEmployeeId` (FK), `EmployeeId`, `DestinationBankId`, `AccountType`, `AccountNumber` (25),
+`Amount`, `RecordText` (nvarchar(600)), `PayrollPaymentId` (nullable: la marca que dejó «enviado»;
+navegación `Payment`, por eso marcar enviado es un solo `SaveChanges`). Único `(FileId, LineNumber)`;
+índice `(PayrollRunEmployeeId)`. `PAY_PayrollPayments.BankDisbursementFileId` apunta al archivo.
 
 **Invariantes y transiciones**: sólo se genera desde una corrida `Approved`; un
-`PayrollRunEmployee` está en a lo sumo un archivo no anulado de su corrida (regla del comando) y
-si ya tiene pago vigente no entra; `Generated → Sent` llama `MarkPaymentsCommand(RunPublicId,
-empleados del archivo, PaidAt = PaymentDate, Transfer, Reference)` en la misma transacción y
-bloquea la reversión como la marca manual (`Payroll.PaymentBlocksReversal`); `Generated → Voided`
-(nada pagado); `Sent` **no** se anula: cada marca se retira una a una con
-`RevertPaymentMarkCommand` como hoy. Auditoría `Payroll.Dispersion.Generated/Sent`.
+`PayrollRunEmployee` está en a lo sumo un archivo no anulado de su corrida y si ya tiene pago
+vigente no entra; `Generated → Sent` crea los `PayrollPayment` (`Transfer`, `PaidAt = paidAt ?? sentAt`,
+`Reference = bankReference`) en la misma transacción y bloquea la reversión como la marca manual
+(`Payroll.PaymentBlocksReversal`); `Generated → Voided` (nada pagado); `Sent` **no** se anula: cada
+marca se retira una a una con `RevertPaymentMarkCommand`. El adjunto se sube **antes** de guardar
+la fila: no existe archivo generado que no se pueda descargar. Auditoría
+`Payroll.Disbursement.Generated/Sent/Cancelled` (`PayrollAuditEmitter`) y la genérica de comandos
+para los formatos.
 
 ---
 
@@ -758,13 +777,15 @@ bloquea la reversión como la marca manual (`Payroll.PaymentBlocksReversal`); `G
 | `PAY_PilaSettings` | `PilaSettings` | fila única (regla del comando) |
 | `PAY_PilaGenerations` | `PilaGeneration` | `(Year, Month, Version)` |
 | `PAY_PilaGenerationLines` | `PilaGenerationLine` (Long) | `(GenerationId, LineNumber)` |
+| `COR_BankFileFormats` | `BankFileFormat` | `(Code)` · `[IsDeleted] = 0`; índice `(BankId, Scope, ValidFrom)` |
+| `COR_BankFileFormatFields` | `BankFileFormatField` | `(FormatId, Record, Order)` |
+| `PAY_BankDisbursementFiles` | `BankDisbursementFile` | índice `(PayrollRunId)`, `(PaymentDate, Sequence)` |
+| `PAY_BankDisbursementFileLines` | `BankDisbursementFileLine` | `(FileId, LineNumber)`; índice `(PayrollRunEmployeeId)` |
 | `PAY_PilaIssues` | `PilaIssue` | — |
 | `PAY_ElectronicPayrollSettings` | `ElectronicPayrollSettings` | fila única |
 | `PAY_ElectronicPayrollNumberingRanges` | `ElectronicPayrollNumberingRange` | `(DocumentType, Environment, Prefix, ValidFrom)` · `[IsDeleted] = 0` |
 | `PAY_ElectronicPayrollDocuments` | `ElectronicPayrollDocument` | `(Environment, Prefix, Consecutive)`; `(Cune)` · not null |
 | `PAY_ElectronicPayrollTransmissions` | `ElectronicPayrollTransmission` | `(DocumentId, Attempt)` |
-| `PAY_BankDisbursementFormats` | `BankDisbursementFormat` | `(Code)` · `[IsDeleted] = 0` |
-| `PAY_BankDisbursementFormatFields` | `BankDisbursementFormatField` | `(FormatId, Record, Order)` |
 | `PAY_BankDisbursementFiles` | `BankDisbursementFile` | — |
 | `PAY_BankDisbursementFileLines` | `BankDisbursementFileLine` | `(FileId, LineNumber)` |
 

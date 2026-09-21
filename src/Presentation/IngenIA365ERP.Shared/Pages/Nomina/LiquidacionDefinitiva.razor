@@ -146,6 +146,9 @@
                     <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarReversar = true; })" Title="Asiento espejo y ficha reabierta; los recaudos de Cartera se reversan aparte">Reversar</SfButton>
                 </PermissionGate>
                 <SfButton CssClass="e-outline" IconCss="e-icons e-file-document" Disabled="@_ocupado" OnClick="@DescargarComprobanteAsync">Comprobante del empleado</SfButton>
+                <PermissionGate Required="Payroll.Disbursement.Generate">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-export" Disabled="@_ocupado" OnClick="@(() => _mostrarDispersion = true)" Title="Archivo plano para el banco; «marcar enviado» deja pagado al empleado">Archivo de dispersión</SfButton>
+                </PermissionGate>
             }
             <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_ocupado" OnClick="@DescargarDocumentoAsync" Title="@(_corrida.EsBorrador ? "Sale con la marca BORRADOR hasta aprobar" : "Documento de liquidación para firma")">Documento para firma</SfButton>
             <SfButton CssClass="e-outline" IconCss="e-icons e-clock" Disabled="@_ocupado" OnClick="@AbrirSancionAsync" Title="Cálculo informativo del CST art. 65; nunca una línea">Sanción moratoria si pagara hoy</SfButton>
@@ -474,7 +477,11 @@
 
 </PermissionGate>
 
+<GenerarDispersion @bind-Visible="_mostrarDispersion" RunPublicId="@(_corrida?.PublicId ?? Guid.Empty)" Etiqueta="Liquidación definitiva" FechaDePagoPropuesta="@(_corrida?.PayDate?.ToDateTime(TimeOnly.MinValue))" />
+
 @code {
+    // Feature 010 (US8): el archivo de dispersión se genera desde esta relación de pago.
+    private bool _mostrarDispersion;
     [Parameter] public Guid? RunId { get; set; }
 
     /// <summary>Llegar con <c>?empleado=</c> (desde la ficha) filtra por ese empleado y abre su terminación viva si la tiene.</summary>

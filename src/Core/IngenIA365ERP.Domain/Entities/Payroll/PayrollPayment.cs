@@ -31,5 +31,8 @@ public class PayrollPayment : AuditableEntity
     [MaxLength(300)]
     public string? RevertReason { get; set; }
 
+    /// <summary>Feature 010 (US8): el archivo de dispersión cuyo «marcar enviado» dejó esta marca; nulo si fue manual.</summary>
+    public int? BankDisbursementFileId { get; set; }
+
     public PayrollRunEmployee? RunEmployee { get; set; }
 }

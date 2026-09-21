@@ -436,7 +436,7 @@ Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de l
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-#### P16 — Feature 010 (nómina completa): N1 terminada en su rama; N2–N4 pendientes; sin merge ni despliegue
+#### P16 — Feature 010 (nómina completa): N1 en `develop`; N2 y N4 terminadas en la rama; N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
 definitiva, con políticas por empresa, festivos, saldos iniciales y ficha PILA/DIAN— está
@@ -452,6 +452,38 @@ con Docker (colección «Nomina e2e» con las cuatro e2e nuevas). La e2e complet
 un defecto que las aisladas no veían (empleado sin provisión acumulada dejaba la provisión en
 negativo). Manual: [liquidaciones-especiales.md](../manual/liquidaciones-especiales.md); runbook:
 [nomina-primer-periodo.md](nomina-primer-periodo.md) §4d. **`develop` y los ambientes no se han tocado.**
+
+**Entrega N4 — dispersión bancaria** (2026-09-21, en la rama, sin merge): a pedido del dueño
+(«deja la funcionalidad de dispersión configurada asociada a los bancos, para que más adelante se
+puedan implementar los planos de los demás bancos y se pueda utilizar en contabilidad y tesorería»)
+los formatos de archivo quedaron en **Core** (`COR_BankFileFormats`, ligados a `COR_Banks`, con
+ámbito y vigencia; D-42) y el motor `FlatFileWriter` es genérico; nómina genera desde las cinco
+relaciones de pago, «marcar enviado» paga a todos en una transacción y bloquea la reversa, y la
+consignación de cesantías por fondo ya escribe con el mismo motor. D-10 quedó resuelto:
+`COR_Banks.TransferCode` es el código ACH. Verde: 1.431 sin contenedores y la e2e
+`DispersionTests` (flujo completo por HTTP; 162 de integración, 161 pasan, 1 omitida). Manual:
+[dispersion-bancaria.md](../manual/dispersion-bancaria.md); runbook §4e. Migración aditiva
+`NominaDispersionBancaria`. **Lo que aporta el dueño**: el layout real de AV Villas Empresas
+(T147) se carga como dato en Maestros › Formatos bancarios; si exige un origen que no exista,
+eso sí es programa. Los códigos ACH de los bancos de las fichas se digitan en Maestros › Bancos.
+
+**Entrega N2 — PILA y procedimiento 2** (2026-09-21, en la rama, sin merge): planilla de aportes
+con el layout de la Res. 2388 como dato versionado (sin cotejar todavía: alerta
+`Pila.LayoutSinCotejar` hasta T094), motor puro con casos dorados byte a byte, validación con la
+taxonomía del operador, generación versionada, cuadre contra la nómina antes de descargar y marca
+de cargada; porcentaje fijo del art. 386 con explicación mes a mes y aprobación que cierra la
+vigencia anterior. Verde: 1.479 sin contenedores y 164 e2e (163 pasan, 1 omitida). Migración
+aditiva `NominaPilaYNominaElectronica` (con las tablas de N3). Runbook:
+[pila-primera-planilla.md](pila-primera-planilla.md); manual:
+[retencion-procedimiento-2.md](../manual/retencion-procedimiento-2.md). **Lo que aporta el
+dueño**: cotejar el layout con el anexo v30 y una planilla pagada (el registro tipo 1 suma 358 y
+el anexo declara 359; decimales de las tarifas; código del operador) y pasar el `.txt` por el
+validador de Aportes en Línea con la cuenta de COOFLOPAL (SC-004); códigos PILA de EPS, fondos,
+ARL y cajas; confirmación 8h de la contadora (secuencia del procedimiento 2). Dos hallazgos que
+convienen saber: la nómina ordinaria redondea la ARL al múltiplo más cercano y la planilla al
+superior (Decreto 780 art. 3.2.1.5) —la diferencia se muestra y se reconoce; si se quiere cero,
+la política `Payroll.Rounding`—, y la exoneración del art. 114-1 se decide por lo devengado, no
+por el IBC (un integral de 20 M no queda exonerado).
 
 Lo que sigue y a quién le toca:
 
@@ -469,17 +501,17 @@ Lo que sigue y a quién le toca:
    `ingenia365erp_admin`, segundo revisor de las dos migraciones (aditivas) en su cabecera, y
    en `cooflopal` digitar antes lo de §4d del runbook (cuentas de los 16 conceptos, políticas,
    festivos, saldos iniciales al 30-11-2026 validados).
-4. **N2** (PILA por Aportes en Línea planilla E y retención procedimiento 2, T079–T107),
-   **N3** (nómina electrónica DIAN con el servicio central sin estado, modo «software propio»
-   primero, T108–T135) y **N4** (dispersión bancaria, T136–T153) siguen en la misma rama o en
-   ramas hijas; cada una con su migración par (`NominaPilaYNominaElectronica`, `NominaDispersionBancaria`).
-   Lo que el dueño debe aportar antes: layout del archivo de AV Villas, registro de cada
+4. **N3** (nómina electrónica DIAN con el servicio central sin estado, modo «software propio»
+   primero, T108–T135) sigue en la misma rama o en una rama hija; sus tablas ya existen por la
+   migración de N2 (D-12). N2 (T079–T093, T095–T105) y N4 (T136–T146) ya están en la rama; T094
+   (cotejo del layout y validador del operador), T106–T107 y T147 son del dueño.
+   Lo que el dueño debe aportar antes: layout del archivo de AV Villas (se carga como dato), registro de cada
    cooperativa en el catálogo DIAN (SoftwareID, PIN, TestSetId) con su certificado y set de
    pruebas aceptado, acceso al validador de Aportes en Línea, SMMLV/UVT 2027.
 5. Deuda conocida de N1 (en `plan.md` D-29 y el manual §9): los aportes patronales y
    provisiones del último tramo de una definitiva no los calcula ninguna corrida (N2 los toma
    de la corrida `Settlement`); los devengos variables de la definitiva no entran al promedio
-   de su propia prima/cesantías; archivo plano de consignación por fondo en N4; recaudo en
+   de su propia prima/cesantías; el archivo de consignación por fondo ya sale con el motor de N4 cuando el fondo tenga formato; recaudo en
    Cartera probado sólo en Application.Tests hasta que exista desembolso por HTTP.
 
 ### 🟡 Prioridad media
