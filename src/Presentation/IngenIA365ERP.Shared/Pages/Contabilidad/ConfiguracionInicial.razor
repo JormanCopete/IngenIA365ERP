@@ -78,9 +78,16 @@
         }
         <div class="campo">
             <label>Sucursal principal <span class="obligatorio">*</span></label>
-            <SfDropDownList TValue="Guid?" TItem="SucursalItem" @bind-Value="_modelo.MainBranchPublicId" DataSource="@_sucursales" Placeholder="Elija la sucursal">
+            <SfDropDownList TValue="Guid?" TItem="SucursalItem" @bind-Value="_modelo.MainBranchPublicId" DataSource="@_sucursales" Placeholder="Elija la sucursal" Enabled="@(_sucursales.Count > 0)">
                 <DropDownListFieldSettings Text="Name" Value="PublicId" />
             </SfDropDownList>
+            @if (_sucursalesCargadas && _sucursales.Count == 0)
+            {
+                @* Una cooperativa recién creada no tiene sucursales: la pantalla lo dice y lleva a crearla,
+                   en vez de un desplegable vacío y «Elija … la sucursal principal» al guardar. *@
+                <p class="texto-alerta">La cooperativa no tiene sucursales registradas. Cree la principal (por ejemplo «Principal») en Maestros › Agencias y vuelva a esta pantalla.
+                    <a class="enlace" href="/maestros/agencias">Ir a Agencias</a></p>
+            }
             <span class="hint">Se propone en toda línea; una cuenta que «exige sucursal» obliga a elegirla explícitamente.</span>
         </div>
         <div class="campo campo-check">
@@ -128,6 +135,7 @@
     private ConfiguracionContableDto? _config;
     private List<CatalogoContableDto> _catalogos = [];
     private List<SucursalItem> _sucursales = [];
+    private bool _sucursalesCargadas;
     private List<CuentaBuscadaDto> _cuentas = [];
     private string _busquedaCuenta = "";
     private readonly Modelo _modelo = new();
@@ -148,6 +156,7 @@
         var catalogos = await Contabilidad.ListarCatalogosAsync();
         _catalogos = catalogos.IsSuccess ? [.. catalogos.Value!] : [];
         _sucursales = await Http.TryGetListAsync<SucursalItem>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        _sucursalesCargadas = true;
 
         _modelo.CatalogCode = _config.CatalogCode ?? _catalogos.FirstOrDefault(c => c.Code == "PUC-SOLIDARIO")?.Code ?? _catalogos.FirstOrDefault()?.Code;
         _modelo.MovementLevel = _config.MovementLevel;
@@ -169,6 +178,11 @@
 
     private async Task IniciarAsync()
     {
+        if (_sucursales.Count == 0)
+        {
+            await Notification.ErrorAsync("La cooperativa no tiene sucursales: cree la principal en Maestros › Agencias antes de iniciar la contabilidad.");
+            return;
+        }
         if (_modelo.CatalogCode is null || _modelo.MainBranchPublicId is null)
         {
             await Notification.ErrorAsync("Elija el catálogo y la sucursal principal.");

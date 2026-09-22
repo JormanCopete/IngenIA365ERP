@@ -70,10 +70,16 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
         var fecha = request.Date;
         if (esApertura)
         {
+            // Una apertura contabilizada bloquea otra (FR-087); la que se está editando, no.
             if (await Opening.Aperturas.VigenteAsync(db, ct) is { } vigente) return Result.Failure<BorradorGuardadoDto>(Opening.Aperturas.YaExiste(vigente));
-            var esperada = await Opening.Aperturas.FechaEsperadaAsync(db, ct);
-            if (esperada.IsFailure) return Result.Failure<BorradorGuardadoDto>(esperada.Error);
-            fecha = esperada.Value;
+            // La fecha la elige quien implanta (E2): si no viene ninguna se propone la víspera del primer período.
+            if (fecha == default)
+            {
+                var esperada = await Opening.Aperturas.FechaEsperadaAsync(db, ct);
+                if (esperada.IsFailure) return Result.Failure<BorradorGuardadoDto>(esperada.Error);
+                fecha = esperada.Value;
+            }
+            if (await AccountingPoster.FechaDeAperturaInvalidaAsync(db, fecha, ct) is { } reparo) return Result.Failure<BorradorGuardadoDto>(reparo);
         }
 
         AccountingDocument? documento = null;

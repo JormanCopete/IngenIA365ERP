@@ -55,6 +55,7 @@ public class AperturaTests(CentralIdentityApiFixture fx)
         // (b) el estado antes de importar
         var estado = await GetAsync(http, admin, "/api/accounting/opening");
         estado.GetProperty("expectedDate").GetString().Should().Be("2025-12-31");
+        estado.GetProperty("maxDate").GetString().Should().Be("2026-12-31", "la fecha se puede mover hasta el fin del primer ejercicio");
         estado.GetProperty("posted").ValueKind.Should().Be(JsonValueKind.Null);
 
         // (c) con errores: 422 con cada fila y su columna, y nada guardado
@@ -147,6 +148,73 @@ public class AperturaTests(CentralIdentityApiFixture fx)
     }
 
     [Fact]
+    public async Task La_fecha_se_elige_el_borrador_se_reemplaza_y_se_descarta_hasta_que_se_contabiliza()
+    {
+        var coop = await CooperativaAisladaAsync(fx, "aperturafecha", 2026);
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        await CrearAuxiliarAsync(http, admin, Caja, "Caja general");
+        await CrearAuxiliarAsync(http, admin, Aportes, "Aportes sociales");
+
+        // (a) el corte real: 30 de noviembre de 2026, dentro de un período abierto
+        var corte = new DateOnly(2026, 11, 30);
+        var primera = await ImportarAsync(http, admin, Csv(Fila(Caja, 1_000_000m, 0m), Fila(Aportes, 0m, 1_000_000m)), corte);
+        primera.StatusCode.Should().Be(HttpStatusCode.Created, $"«{await primera.Content.ReadAsStringAsync()}»");
+        var cuerpo = await LeerAsync(primera);
+        cuerpo.GetProperty("date").GetString().Should().Be("2026-11-30");
+        cuerpo.GetProperty("replaced").GetBoolean().Should().BeFalse();
+        var borrador = cuerpo.GetProperty("draftPublicId").GetGuid();
+        (await GetAsync(http, admin, $"/api/accounting/documents/{borrador}")).GetProperty("date").GetString().Should().Be("2026-11-30");
+
+        // (b) volver a importar reemplaza las líneas y conserva el mismo borrador
+        var segunda = await ImportarAsync(http, admin, Csv(Fila(Caja, 2_000_000m, 0m), Fila(Aportes, 0m, 2_000_000m)), corte);
+        segunda.StatusCode.Should().Be(HttpStatusCode.Created);
+        var reimportada = await LeerAsync(segunda);
+        reimportada.GetProperty("draftPublicId").GetGuid().Should().Be(borrador);
+        reimportada.GetProperty("replaced").GetBoolean().Should().BeTrue();
+        var documento = await GetAsync(http, admin, $"/api/accounting/documents/{borrador}");
+        documento.GetProperty("lines").GetArrayLength().Should().Be(2, "las líneas viejas quedaron de baja");
+        documento.GetProperty("totalDebit").GetDecimal().Should().Be(2_000_000m);
+
+        // (c) editar el borrador desde Comprobantes: se agrega, se cambia y se quita una cuenta
+        var lineas = new object[]
+        {
+            Linea(Caja, null, 2_500_000m, 0m, detalle: "Corregido"),
+            Linea(Aportes, null, 0m, 2_500_000m),
+        };
+        var editado = await EnviarAsync(http, admin, HttpMethod.Put, $"/api/accounting/documents/drafts/{borrador}", new
+        {
+            voucherTypeCode = "AP", date = corte, description = "Saldos de apertura al corte", lines = lineas,
+        });
+        editado.IsSuccessStatusCode.Should().BeTrue($"editar el borrador AP: «{await editado.Content.ReadAsStringAsync()}»");
+        (await GetAsync(http, admin, $"/api/accounting/documents/{borrador}")).GetProperty("totalDebit").GetDecimal().Should().Be(2_500_000m);
+
+        // (d) mover la fecha a un mes cerrado no se puede; a uno abierto sí
+        await CerrarMesAsync(http, admin, 2026, 1);
+        var aCerrado = await EnviarAsync(http, admin, HttpMethod.Put, $"/api/accounting/documents/drafts/{borrador}", new
+        {
+            voucherTypeCode = "AP", date = new DateOnly(2026, 1, 31), description = "Saldos de apertura al corte", lines = lineas,
+        });
+        (await CodigoDeErrorAsync(aCerrado)).Should().Be("Accounting.Opening.DateClosed");
+        var fueraDeRango = await ImportarAsync(http, admin, Csv(Fila(Caja, 1m, 0m), Fila(Aportes, 0m, 1m)), new DateOnly(2027, 3, 1));
+        (await CodigoDeErrorAsync(fueraDeRango)).Should().Be("Accounting.Opening.DateOutOfRange");
+
+        // (e) descartar el borrador: no queda nada y se puede volver a empezar
+        (await EnviarAsync(http, admin, HttpMethod.Delete, $"/api/accounting/documents/drafts/{borrador}", null)).IsSuccessStatusCode.Should().BeTrue();
+        (await GetAsync(http, admin, "/api/accounting/opening")).GetProperty("drafts").GetArrayLength().Should().Be(0);
+
+        // (f) y la definitiva se contabiliza con su fecha elegida, y es saldo inicial de diciembre
+        var final = await ImportarAsync(http, admin, Csv(Fila(Caja, 3_000_000m, 0m), Fila(Aportes, 0m, 3_000_000m)), corte);
+        final.StatusCode.Should().Be(HttpStatusCode.Created);
+        var definitivo = (await LeerAsync(final)).GetProperty("draftPublicId").GetGuid();
+        (await EnviarAsync(http, admin, HttpMethod.Post, $"/api/accounting/documents/{definitivo}/post", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var balance = await InformeAsync(http, admin, "trial-balance?from=2026-12-01&to=2026-12-31");
+        var filaCaja = balance.PorCodigo(Caja);
+        balance.Numero(filaCaja!.Value, "Saldo inicial").Should().Be(3_000_000m);
+        balance.Numero(filaCaja.Value, "Débitos").Should().Be(0m, "la apertura nunca es movimiento del mes");
+    }
+
+    [Fact]
     public async Task Cinco_mil_filas_se_importan_en_menos_de_dos_minutos()
     {
         if (Environment.GetEnvironmentVariable("RUN_PERF_TESTS") != "1") return;
@@ -184,12 +252,13 @@ public class AperturaTests(CentralIdentityApiFixture fx)
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    private static async Task<HttpResponseMessage> ImportarAsync(HttpClient http, string token, byte[] csv)
+    private static async Task<HttpResponseMessage> ImportarAsync(HttpClient http, string token, byte[] csv, DateOnly? fecha = null)
     {
         using var contenido = new MultipartFormDataContent();
         var archivo = new ByteArrayContent(csv);
         archivo.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
         contenido.Add(archivo, "archivo", "apertura.csv");
+        if (fecha is { } f) contenido.Add(new StringContent(f.ToString("yyyy-MM-dd")), "date");
         using var req = new HttpRequestMessage(HttpMethod.Post, "/api/accounting/opening/import") { Content = contenido };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await http.SendAsync(req);

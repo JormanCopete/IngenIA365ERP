@@ -33,16 +33,20 @@ namespace IngenIA365ERP.Application.Accounting.Opening;
 /// <summary>Un borrador de apertura pendiente de contabilizar, o una apertura reversada, tal como los lista <see cref="EstadoDeAperturaDto"/>.</summary>
 public sealed record AperturaResumenDto(Guid PublicId, long? Number, DateOnly Date, string Status, decimal TotalDebit, decimal TotalCredit, int Lines, string RegisteredBy, DateTime? PostedAt, string? PostedBy, Guid? ReversedByPublicId);
 
-/// <summary><c>GET /api/accounting/opening</c>: la fecha que le toca, la apertura vigente si la hay, los borradores pendientes y las reversadas.</summary>
+/// <summary>
+/// <c>GET /api/accounting/opening</c>: la fecha propuesta y hasta cuándo se puede mover, la apertura
+/// vigente si la hay, los borradores pendientes y las reversadas.
+/// </summary>
 public sealed record EstadoDeAperturaDto(
     DateOnly ExpectedDate,
+    DateOnly MaxDate,
     int FirstFiscalYear,
     AperturaResumenDto? Posted,
     IReadOnlyList<AperturaResumenDto> Drafts,
     IReadOnlyList<AperturaResumenDto> Reversed);
 
-/// <summary><c>POST /import</c> → 201: el borrador creado y cuántas líneas trae; <c>Errors</c> va vacío (con errores no hay borrador: 422 <c>Accounting.Opening.Invalid</c>).</summary>
-public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, decimal TotalDebit, decimal TotalCredit, IReadOnlyList<ErrorDeFila> Errors);
+/// <summary><c>POST /import</c> → 201: el borrador (nuevo o el que ya había, con sus líneas reemplazadas), cuántas líneas trae y su fecha; <c>Errors</c> va vacío (con errores no hay borrador: 422 <c>Accounting.Opening.Invalid</c>).</summary>
+public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, decimal TotalDebit, decimal TotalCredit, DateOnly Date, bool Replaced, IReadOnlyList<ErrorDeFila> Errors);
 
 /// <summary>Las columnas de la plantilla, en su orden; los encabezados se comparan sin tildes ni mayúsculas.</summary>
 public static class PlantillaDeApertura
@@ -78,6 +82,7 @@ public sealed class GetOpeningStatusQueryHandler(IApplicationDbContext db) : IRe
         if (setup is null) return Result.Failure<EstadoDeAperturaDto>(AccountingErrors.NotInitialized);
         var fecha = await Aperturas.FechaEsperadaAsync(db, ct);
         if (fecha.IsFailure) return Result.Failure<EstadoDeAperturaDto>(fecha.Error);
+        var tope = await Aperturas.FechaMaximaAsync(db, ct);
 
         var aperturas = await db.AccountingDocuments.AsNoTracking()
             .Where(d => !d.IsDeleted && d.Kind == DocumentKind.Opening && d.ReversesDocumentId == null)
@@ -87,7 +92,7 @@ public sealed class GetOpeningStatusQueryHandler(IApplicationDbContext db) : IRe
             .ToListAsync(ct);
 
         return Result.Success(new EstadoDeAperturaDto(
-            fecha.Value, setup.FirstFiscalYear,
+            fecha.Value, tope, setup.FirstFiscalYear,
             aperturas.FirstOrDefault(a => a.Status == nameof(DocumentStatus.Posted)),
             aperturas.Where(a => a.Status == nameof(DocumentStatus.Draft)).ToList(),
             aperturas.Where(a => a.Status == nameof(DocumentStatus.Reversed)).ToList()));
@@ -129,7 +134,13 @@ public sealed class GetOpeningTemplateQueryHandler(IApplicationDbContext db) : I
 
 // --------------------------------------------------------------------------------- importar --
 
-public sealed record ImportOpeningBalancesCommand(string FileName, byte[] Content) : IRequest<Result<AperturaImportadaDto>>;
+/// <summary>
+/// Importa el archivo de saldos. <paramref name="Date"/> nula = la fecha propuesta (la víspera del
+/// primer período); si se indica, manda la elegida. Si ya hay un borrador de apertura, sus líneas se
+/// <b>reemplazan</b> por las del archivo (el borrador conserva su <c>PublicId</c> y sus adjuntos):
+/// volver a subir el archivo corregido es la forma natural de rehacer la carga.
+/// </summary>
+public sealed record ImportOpeningBalancesCommand(string FileName, byte[] Content, DateOnly? Date = null) : IRequest<Result<AperturaImportadaDto>>;
 
 public sealed class ImportOpeningBalancesCommandValidator : AbstractValidator<ImportOpeningBalancesCommand>
 {
@@ -164,8 +175,10 @@ public sealed class ImportOpeningBalancesCommandHandler(
         if (tipo is null) return Fallo(AccountingErrors.VoucherTypeNotFound(PlantillaDeApertura.Tipo));
         if (!tipo.IsActive) return Fallo(AccountingErrors.VoucherTypeInactive(tipo.Code));
 
-        var fecha = await Aperturas.FechaEsperadaAsync(db, ct);
-        if (fecha.IsFailure) return Fallo(fecha.Error);
+        var propuesta = await Aperturas.FechaEsperadaAsync(db, ct);
+        if (propuesta.IsFailure) return Fallo(propuesta.Error);
+        var fecha = request.Date ?? propuesta.Value;
+        if (await AccountingPoster.FechaDeAperturaInvalidaAsync(db, fecha, ct) is { } reparoDeFecha) return Fallo(reparoDeFecha);
 
         var lectura = await lector.LeerAsync(request.Content, request.FileName, 1, ct);
         if (lectura.IsFailure) return Fallo(lectura.Error);
@@ -264,7 +277,7 @@ public sealed class ImportOpeningBalancesCommandHandler(
         // --- las reglas de cuenta del contrato (FR-014), fila por fila; el descuadre no es error de importación ---
         if (resueltas.Count > 0)
         {
-            var validacion = await poster.ValidarAsync(new PostingRequest(tipo.Code, fecha.Value, PlantillaDeApertura.Descripcion, AccountingOrigin.Manual(Guid.Empty),
+            var validacion = await poster.ValidarAsync(new PostingRequest(tipo.Code, fecha, PlantillaDeApertura.Descripcion, AccountingOrigin.Manual(Guid.Empty),
                 resueltas.Select(r => r.Linea).ToList(), DocumentKind.Opening), ct);
             foreach (var e in validacion.Errores)
             {
@@ -283,10 +296,28 @@ public sealed class ImportOpeningBalancesCommandHandler(
         // --- el borrador AP, por el contrato (único sitio que instancia documentos y líneas) ---
         var ahora = clock.UtcNow;
         var quien = string.IsNullOrWhiteSpace(user.UserName) ? "system" : user.UserName;
-        var documentoAp = poster.NuevoBorrador();
+        // Si ya había un borrador, se reutiliza y sus líneas se dan de baja (nunca Remove: Principio XI
+        // lo vigila también en los borradores) para que el archivo nuevo sea el que manda.
+        var anterior = await db.AccountingDocuments.Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => !d.IsDeleted && d.Kind == DocumentKind.Opening && d.Status == DocumentStatus.Draft, ct);
+        var documentoAp = anterior ?? poster.NuevoBorrador();
+        if (anterior is not null)
+        {
+            foreach (var vieja in anterior.Lines.Where(l => !l.IsDeleted))
+            {
+                vieja.IsDeleted = true;
+                vieja.DeletedAt = ahora;
+                vieja.UpdatedAt = ahora;
+                vieja.UpdatedBy = quien;
+            }
+            anterior.UpdatedAt = ahora;
+            anterior.UpdatedBy = quien;
+            anterior.RegisteredByUserId = user.UserId ?? 0;
+            anterior.RegisteredBy = quien;
+        }
         documentoAp.Kind = DocumentKind.Opening;
         documentoAp.VoucherTypeId = tipo.Id;
-        documentoAp.Date = fecha.Value;
+        documentoAp.Date = fecha;
         documentoAp.PeriodId = null;
         documentoAp.Description = $"{PlantillaDeApertura.Descripcion} ({request.FileName})";
         documentoAp.TotalDebit = resueltas.Sum(r => r.Linea.Debit);
@@ -305,15 +336,15 @@ public sealed class ImportOpeningBalancesCommandHandler(
             linea.Debit = r.Linea.Debit;
             linea.Credit = r.Linea.Credit;
             linea.Description = string.IsNullOrWhiteSpace(r.Linea.Detail) ? null : r.Linea.Detail.Trim();
-            linea.Date = fecha.Value;
+            linea.Date = fecha;
             linea.IsPosted = false;
             documentoAp.Lines.Add(linea);
         }
         await db.SaveChangesAsync(ct);
 
         await audit.EmitAsync("Accounting.Opening.Imported", nameof(AccountingDocument), documentoAp.PublicId, null,
-            new { file = request.FileName, lines = numero, totalDebit = documentoAp.TotalDebit, totalCredit = documentoAp.TotalCredit, date = fecha.Value }, ct);
-        return Result.Success(new AperturaImportadaDto(documentoAp.PublicId, numero, documentoAp.TotalDebit, documentoAp.TotalCredit, []));
+            new { file = request.FileName, lines = numero, totalDebit = documentoAp.TotalDebit, totalCredit = documentoAp.TotalCredit, date = fecha, replaced = anterior is not null }, ct);
+        return Result.Success(new AperturaImportadaDto(documentoAp.PublicId, numero, documentoAp.TotalDebit, documentoAp.TotalCredit, fecha, anterior is not null, []));
     }
 
     /// <summary>Un importe de la plantilla: vacío = 0; decimal con punto o coma, sin miles; a lo sumo dos decimales.</summary>
@@ -360,7 +391,16 @@ public sealed class ImportOpeningBalancesCommandHandler(
 /// <summary>Lo que comparten importar, contabilizar y consultar la apertura: su fecha y cuál es la vigente.</summary>
 public static class Aperturas
 {
-    /// <summary>La víspera del primer período del primer ejercicio (FR-084).</summary>
+    /// <summary>Hasta cuándo se puede mover la apertura: el último día del primer ejercicio (E2, 2026-09-22).</summary>
+    public static async Task<DateOnly> FechaMaximaAsync(IApplicationDbContext db, CancellationToken ct)
+    {
+        var primero = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.StartDate)
+            .Select(p => (int?)p.FiscalYearId).FirstOrDefaultAsync(ct);
+        if (primero is null) return default;
+        return await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted && p.FiscalYearId == primero.Value).MaxAsync(p => p.EndDate, ct);
+    }
+
+    /// <summary>La víspera del primer período del primer ejercicio: la fecha que se propone (FR-084).</summary>
     public static async Task<Result<DateOnly>> FechaEsperadaAsync(IApplicationDbContext db, CancellationToken ct)
     {
         var primero = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.StartDate).Select(p => (DateOnly?)p.StartDate).FirstOrDefaultAsync(ct);

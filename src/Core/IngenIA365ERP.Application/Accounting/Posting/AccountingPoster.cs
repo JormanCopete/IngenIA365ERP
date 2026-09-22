@@ -322,10 +322,14 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         AccountingPeriod? periodo = null;
         if (request.Kind == DocumentKind.Opening)
         {
-            var primero = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.StartDate).FirstOrDefaultAsync(ct);
-            if (primero is null) return Result.Failure<Analisis>(AccountingErrors.PeriodNotFound(request.Date));
-            var esperada = primero.StartDate.AddDays(-1);
-            if (request.Date != esperada) return Result.Failure<Analisis>(AccountingErrors.OpeningDateInvalid(esperada));
+            // La apertura la fecha quien implanta (E2, 2026-09-22: el dueño la necesitó al corte real
+            // de SOLIDO, que casi nunca cae la víspera del primer período). Dos límites, y nada más:
+            // no puede ser posterior al último día del primer ejercicio —después de eso ya no es un
+            // saldo inicial sino un movimiento— ni caer en un período CERRADO. Su período queda nulo
+            // aunque la fecha caiga dentro de uno: en las consultas es saldo inicial, no movimiento
+            // del mes (MovimientosContables), y por eso tampoco estorba al cierre mensual.
+            var reparo = await FechaDeAperturaInvalidaAsync(db, request.Date, ct);
+            if (reparo is not null) return Result.Failure<Analisis>(reparo);
         }
         else if (request.Kind == DocumentKind.Closing)
         {
@@ -478,6 +482,24 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             cuenta.FirstMovementAt ??= request.Date;
         }
         return documento;
+    }
+
+    /// <summary>
+    /// Por qué esa fecha no sirve para la apertura, o null si sirve: tiene que existir un ejercicio,
+    /// no pasar del fin del primero y no caer en un período cerrado (FR-084, ampliado en E2).
+    /// Lo usan el contrato y quien guarda el borrador, para que los dos digan lo mismo.
+    /// </summary>
+    public static async Task<Error?> FechaDeAperturaInvalidaAsync(IApplicationDbContext db, DateOnly fecha, CancellationToken ct)
+    {
+        var primero = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.StartDate)
+            .Select(p => new { p.StartDate, p.FiscalYearId }).FirstOrDefaultAsync(ct);
+        if (primero is null) return AccountingErrors.PeriodNotFound(fecha);
+        var finDelPrimerEjercicio = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted && p.FiscalYearId == primero.FiscalYearId)
+            .MaxAsync(p => p.EndDate, ct);
+        if (fecha > finDelPrimerEjercicio) return AccountingErrors.OpeningDateOutOfRange(primero.StartDate.AddDays(-1), finDelPrimerEjercicio);
+        var periodo = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => !p.IsDeleted && p.StartDate <= fecha && p.EndDate >= fecha, ct);
+        if (periodo is { Status: PeriodStatus.Closed }) return AccountingErrors.OpeningDateClosed(fecha);
+        return null;
     }
 
     private Task<AccountingPeriod?> PeriodoDeAsync(DateOnly fecha, CancellationToken ct) =>

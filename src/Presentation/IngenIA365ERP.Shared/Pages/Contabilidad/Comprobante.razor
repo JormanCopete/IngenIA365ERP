@@ -64,13 +64,16 @@
 <div>
     <div class="form-grid">
         <label class="campo">Tipo de comprobante
-            <select class="e-input" value="@_m.TipoCode" disabled="@_soloLectura" @onchange="@(async e => { _m.TipoCode = e.Value?.ToString() ?? ""; await RevalidarAsync(); })" @onfocus="@(() => _campo = "VoucherType")">
-                @if (_soloLectura) { <option value="@_m.TipoCode">@_m.TipoCode · @_documento?.VoucherTypeName</option> }
-                @foreach (var t in _tipos) { <option value="@t.Code">@t.Code · @t.Name</option> }
+            @* Un borrador de apertura (AP) se edita aquí como cualquier otro, pero su tipo no se elige:
+               es un tipo reservado y cambiarlo convertiría la apertura en otra cosa (E2, 2026-09-22). *@
+            <select class="e-input" value="@_m.TipoCode" disabled="@(_soloLectura || _esApertura)" @onchange="@(async e => { _m.TipoCode = e.Value?.ToString() ?? ""; await RevalidarAsync(); })" @onfocus="@(() => _campo = "VoucherType")">
+                @if (_soloLectura || _esApertura) { <option value="@_m.TipoCode">@_m.TipoCode · @_documento?.VoucherTypeName</option> }
+                else { @foreach (var t in _tipos) { <option value="@t.Code">@t.Code · @t.Name</option> } }
             </select>
         </label>
         <label class="campo">Fecha
-            <SfDatePicker TValue="DateTime" @bind-Value="_m.Fecha" Enabled="@(!_soloLectura)" Format="yyyy-MM-dd" Max="DateTime.Today" ValueChange="@(async (Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime> _) => await RevalidarAsync())" OnFocus="@(() => _campo = "Date")" />
+            @* La apertura puede quedar fechada en el futuro del reloj (el fin del primer ejercicio), así que su tope es otro. *@
+            <SfDatePicker TValue="DateTime" @bind-Value="_m.Fecha" Enabled="@(!_soloLectura)" Format="yyyy-MM-dd" Max="@(_esApertura ? _topeDeApertura : DateTime.Today)" ValueChange="@(async (Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime> _) => await RevalidarAsync())" OnFocus="@(() => _campo = "Date")" />
         </label>
         <label class="campo campo-ancho">Descripción
             <input class="e-input" value="@_m.Descripcion" maxlength="200" disabled="@_soloLectura" placeholder="Qué registra este comprobante" @onchange="@(e => _m.Descripcion = e.Value?.ToString() ?? "")" @onfocus="@(() => _campo = "Description")" />
@@ -200,6 +203,8 @@
     private Guid? _cargado;
 
     private bool _esBorrador => _documento is null || _documento.Status == "Draft";
+    private bool _esApertura => _documento?.Kind == "Opening";
+    private DateTime _topeDeApertura = DateTime.Today.AddYears(1);
     private bool _soloLectura => !_esBorrador || (_documento is not null && _documento.Origin.Module != "CNT");
     private string _titulo => _documento is null ? "Nuevo comprobante" : _esBorrador ? "Borrador de comprobante" : $"Comprobante {_documento.Referencia}";
     private int Paso => string.IsNullOrEmpty(_m.TipoCode) || string.IsNullOrWhiteSpace(_m.Descripcion) ? 1 : _m.Lineas.Count < 2 ? 2 : _errores.Any(x => x.Bloquea) || Id is null ? 3 : 4;
@@ -241,6 +246,11 @@
         }
         _m = ComprobanteModelo.Desde(_documento, cuentas);
         _errores = [.. _documento.Errors];
+        if (_esApertura)
+        {
+            var apertura = await Contabilidad.EstadoDeAperturaAsync();
+            if (apertura.IsSuccess) _topeDeApertura = apertura.Value!.MaxDate.ToDateTime(TimeOnly.MinValue);
+        }
     }
 
     /// <summary>Al salir de cada campo: espera 400 ms de silencio y valida sin guardar (FR-041).</summary>

@@ -274,6 +274,22 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   reversión es también `Opening` de la misma fecha y suelta la referencia. Las e2e que cambian todo el
   libro corren en **cooperativas aisladas del mismo host** (`ContabilidadE2E.CooperativaAisladaAsync`:
   «cierre» con primer ejercicio 2025, «apertura» con 2026), no en la compartida. Receta: runbook §7a.
+  **Implantación (2026-09-22, pedido del dueño al implantar COOFLOPAL)**: (1) **carga masiva de
+  auxiliares** (`ImportAccountsCommand`, `GET/POST /api/accounting/accounts/template.xlsx|import`,
+  botones en `/contabilidad/plan-de-cuentas`) con la mecánica de la apertura —plantilla con
+  encabezados en la fila 1, todo-o-nada, `data.errors[] { row, column }`— y **las mismas reglas que
+  crear una a una**, porque reusa `CreateAccountCommandHandler.AplicarReglasAsync`: el padre es la
+  cuenta viva cuyo código es el prefijo más largo (una propia y su auxiliar pueden ir en el mismo
+  archivo: se ordenan por código), un código que ya existe **actualiza** —con movimientos sólo el
+  nombre (`Account.Locked`), del catálogo nunca (`FromCatalog`)— y una cuenta que no recibe
+  movimiento no admite reglas. (2) **la apertura se fecha donde el corte real de SOLIDO**: la
+  víspera del primer período es sólo la propuesta y la fecha se mueve hasta el fin del primer
+  ejercicio, nunca a un mes cerrado (`Opening.DateOutOfRange` / `.DateClosed`, en
+  `AccountingPoster.FechaDeAperturaInvalidaAsync` para que el contrato y el borrador digan lo mismo);
+  su `PeriodId` sigue **nulo** aunque la fecha caiga dentro de un período, que es lo que la mantiene
+  como saldo inicial y fuera del cierre mensual. El borrador se edita entero hasta contabilizarlo
+  (líneas por `PUT /documents/drafts/{id}` con tipo `AP`, fecha, descartar) y **volver a importar
+  reemplaza sus líneas** conservando el mismo comprobante (las viejas quedan de baja, Principio XI).
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -446,11 +462,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 763 (2026-09-21, tras el merge de E2 contable: 13 vistas de informes, 6 de presupuesto, 2 de cierre del ejercicio y 3 de apertura, más las 738 de la 010) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | 765 (2026-09-22; +2 de la carga masiva de auxiliares sobre las 763 de E2) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.656 el 2026-09-21 (223 Domain, 1.217 Application, 113 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 211 el 2026-09-21 con Docker: 210 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.664 el 2026-09-22 (223 Domain, 1.225 Application, 113 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 213 el 2026-09-22 con Docker: 212 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
