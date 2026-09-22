@@ -179,26 +179,22 @@ internal sealed class BlobStoreHealthCheck : IHealthCheck
         _store = store;
     }
 
-    public Task<HealthCheckResult> CheckHealthAsync(
+    /// <summary>
+    /// Se lo pregunta al almacén (<c>IBlobStore.ProbarAsync</c>): escribe y borra algo, sea disco o
+    /// bucket. Desde 2026-09-22 el health check no sabe cuál de los dos hay detrás —antes daba
+    /// «writable» mirando un directorio que con el proveedor S3 no se usa para nada—.
+    /// </summary>
+    public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context, CancellationToken ct = default)
     {
-        // El store es Local; basta verificar que el root existe / se puede crear.
         try
         {
-            var root = Path.GetFullPath(_settings.LocalRootPath);
-            if (!Directory.Exists(root))
-            {
-                Directory.CreateDirectory(root);
-            }
-            // Probar un write+delete trivial.
-            var probe = Path.Combine(root, $".healthcheck-{Guid.NewGuid():N}.tmp");
-            File.WriteAllText(probe, "ok");
-            File.Delete(probe);
-            return Task.FromResult(HealthCheckResult.Healthy($"writable: {root}"));
+            var donde = await _store.ProbarAsync(ct);
+            return HealthCheckResult.Healthy($"{_settings.Provider}: {donde}");
         }
         catch (Exception ex)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy("BlobStore not writable", ex));
+            return HealthCheckResult.Unhealthy($"Almacén de adjuntos ({_settings.Provider}) no disponible o de sólo lectura", ex);
         }
     }
 }

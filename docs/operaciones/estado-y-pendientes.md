@@ -328,6 +328,17 @@ Consola AWS → IAM → usuario dueño → *Credenciales de seguridad* → **Des
 Confirmar antes que `polly-carteravirtual` tenga su reemplazo: esa aplicación sí
 la estaba usando.
 
+#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22 (falta desplegar)
+
+Los adjuntos (soportes de comprobantes, planillas, dispersión) escribían en un PVC `local-path` de
+10 Gi: sin redundancia, **fuera de los respaldos diarios** y `ReadWriteOnce`, o sea que con un
+segundo nodo una de las dos réplicas de la API no podría montarlo. Ya existe `S3BlobStore` detrás
+del mismo `IBlobStore` y se elige con `AttachmentStorage:Provider`; el cifrado sigue siendo nuestro
+(AES-256-GCM antes de subir) y S3 pone el suyo encima. **Se hizo con el volumen vacío en producción**,
+así que no hay nada que migrar. Falta: crear el bucket con
+[`crear-bucket-adjuntos.ps1`](../../tools/scripts/crear-bucket-adjuntos.ps1), poner las variables en
+el overlay y verificar `/health/ready`. Receta: [adjuntos-en-s3.md](adjuntos-en-s3.md).
+
 #### P2 — MongoDB sin redundancia de almacenamiento
 
 La auditoría SARLAFT (retención obligatoria de 5 años) vive en `local-path`, es

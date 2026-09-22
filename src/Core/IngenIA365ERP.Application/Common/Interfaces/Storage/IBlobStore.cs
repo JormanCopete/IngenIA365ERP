@@ -1,11 +1,17 @@
 namespace IngenIA365ERP.Application.Common.Interfaces.Storage;
 
 /// <summary>
-/// Almacén de blobs abstracto. La implementación por defecto en Fase 0 es
-/// <c>LocalEncryptedFileStore</c> (T107, US5) que persiste blobs cifrados
-/// en filesystem; backends compatibles con S3 quedan disponibles vía
-/// implementación alternativa sin tocar el dominio. Vive en Application
-/// para que los handlers no se acoplen a Infrastructure.
+/// Almacén de blobs abstracto. Dos implementaciones (se elige por configuración,
+/// <c>AttachmentStorage:Provider</c>): <c>LocalEncryptedFileStore</c> (T107, US5), que escribe en
+/// el sistema de archivos y es lo que se usa en desarrollo, y <c>S3BlobStore</c> (2026-09-22), que
+/// escribe en S3 y es lo que corre en los tres ambientes del clúster —el disco del nodo no tiene
+/// redundancia ni respaldo, y con más de un nodo un volumen RWO ni siquiera se puede montar dos
+/// veces—. Vive en Application para que los handlers no se acoplen a Infrastructure.
+///
+/// <para>
+/// El almacén es <b>transparente</b>: guarda los bytes que recibe. El contenido ya viene cifrado
+/// por <see cref="IAttachmentCipher"/>, así que ningún backend ve el archivo original.
+/// </para>
 /// </summary>
 public interface IBlobStore
 {
@@ -29,6 +35,13 @@ public interface IBlobStore
     /// <see cref="FileNotFoundException"/>.
     /// </summary>
     Task DeleteAsync(BlobReference reference, CancellationToken ct);
+
+    /// <summary>
+    /// Comprueba que el almacén responde y se puede escribir en él, y describe en una frase dónde
+    /// está guardando (la ruta, el bucket). Lo usa el health check de la API: sin esto tendría que
+    /// saber si el backend es disco o S3, que es justamente lo que esta interfaz esconde.
+    /// </summary>
+    Task<string> ProbarAsync(CancellationToken ct);
 }
 
 public sealed record BlobReference(string Uri);

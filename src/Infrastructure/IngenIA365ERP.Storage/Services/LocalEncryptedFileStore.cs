@@ -86,6 +86,16 @@ public sealed class LocalEncryptedFileStore : IBlobStore
         return Task.CompletedTask;
     }
 
+    /// <summary>Escribe y borra un archivo de prueba: que el directorio exista no dice que se pueda escribir en él.</summary>
+    public async Task<string> ProbarAsync(CancellationToken ct)
+    {
+        Directory.CreateDirectory(_rootPath);
+        var prueba = Path.Combine(_rootPath, $".healthcheck-{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(prueba, "ok", ct);
+        File.Delete(prueba);
+        return _rootPath;
+    }
+
     private string ResolveAbsolutePath(BlobReference reference)
     {
         // Defensa contra path traversal: el Uri persistido se resuelve

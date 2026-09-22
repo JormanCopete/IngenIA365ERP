@@ -31,6 +31,7 @@
 | `docs/operaciones/slo.md` | **Service Level Objectives** — 99.5 % mensual, ventanas, error budget (T134). |
 | `docs/operaciones/runbook-fase0.md` | **Runbook** de incidentes típicos: lockout, SMTP, Mongo down, rotación de claves (T135). |
 | `docs/operaciones/despliegue-rediseno-mfa.md` | **El documento a tener delante el día del despliegue.** Producción no tiene nada del rediseño del segundo factor: son 9 migraciones administrativas, una de datos y otra que mueve el llavero. Lleva delante las tres consultas que hay que correr antes, las dos variables sin las cuales la API no arranca, el orden, y por qué el rollback es volver la imagen dejando la base adelantada. |
+| `docs/operaciones/adjuntos-en-s3.md` | **Dónde viven los adjuntos.** Desde el 2026-09-22 van a `s3://ingenia365-erp-attachments` (bucket aparte del de respaldos) en vez del disco del nodo, que no tenía redundancia ni entraba en los respaldos. Cómo crear el bucket y la credencial, qué poner en el overlay y cómo verificarlo. El cifrado sigue siendo nuestro. |
 | `docs/operaciones/llavero-dataprotection.md` | **Leer antes de desplegar el llavero en base.** Qué cifra DataProtection (segundos factores y clave de cada adjunto) y por qué se perdía en cada rotación de pod. Lleva delante la decisión: si no hay adjuntos que duelan, aceptar la pérdida es la respuesta correcta y **no cuesta ningún paso manual**. El rescate pod a pod es la otra rama, no el camino por defecto. |
 | `docs/operaciones/rescate-del-administrador-maestro.md` | **La única cuenta que nadie más puede rescatar.** Por qué las tres vías de recuperación fallan para el maestro, el interruptor de configuración que lo saca de una política de plataforma mal puesta, y el SQL de último recurso — con backup y segundo par de ojos. |
 | `docs/operaciones/nomina-primer-periodo.md` | **Nómina (feature 005): antes de la primera liquidación de una cooperativa.** Qué deja la semilla (plan, 40 conceptos, 33 parámetros con vigencia, comprobante `NM`, permisos) y qué no (cuentas por concepto, período contable, afiliaciones); cómo comprobarlo contra la base del ambiente; qué hacer ante `Payroll.LegalParameterMissing`; cómo cargar la vigencia de un año nuevo y reaplicar la semilla. |
@@ -148,6 +149,7 @@ con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
 | despliegue-infraestructura.md | docs/operaciones/ | Diseño de la infraestructura y bitácora de instalación |
 | migracion-dns-cloudflare.md | docs/operaciones/ | Guía paso a paso de la migración de DNS |
 | politica-iam-respaldos.json | docs/operaciones/ | Política IAM del usuario de respaldos (permisos mínimos) |
+| politica-iam-adjuntos.json | docs/operaciones/ | Política IAM del usuario de adjuntos: puede borrar objetos pero no versiones, y tiene negado el bucket de respaldos |
 
 Los manifiestos de Kubernetes, el diseño de respaldos (`backups.md`) y el manual
 operativo de MongoDB (`mongo-replica-set.md`) viven en el repositorio **privado**

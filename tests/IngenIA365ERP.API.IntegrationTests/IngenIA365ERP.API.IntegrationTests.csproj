@@ -19,6 +19,8 @@
     <PackageReference Include="Testcontainers.MongoDb" Version="4.*" />
     <PackageReference Include="Testcontainers.Redis" Version="4.*" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
+    <!-- 2026-09-22: el almacén S3 de adjuntos se prueba con un IAmazonS3 falso; el CI no tiene credenciales ni las necesita. -->
+    <PackageReference Include="NSubstitute" Version="5.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Presentation\IngenIA365ERP.API\IngenIA365ERP.API.csproj" />

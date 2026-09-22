@@ -19,11 +19,20 @@ public static class DependencyInjection
         // Feature 005: el archivo de novedades se lee con CsvHelper, que solo conoce Storage.
         services.AddSingleton<Application.Payroll.Services.INoveltyFileParser, Payroll.CsvNoveltyFileParser>();
 
-        // T106 + T107 — Adjuntos cifrados (US5).
-        services.Configure<AttachmentStorageSettings>(
-            configuration.GetSection(AttachmentStorageSettings.SectionName));
+        // T106 + T107 — Adjuntos cifrados (US5). El cifrado es siempre nuestro; lo que cambia es
+        // dónde queda el blob: disco en desarrollo, S3 en el clúster (2026-09-22). Un proveedor
+        // desconocido tumba el arranque en vez de caer al disco sin avisar: en producción eso sería
+        // escribir soportes en un volumen que nadie respalda.
+        var seccion = configuration.GetSection(AttachmentStorageSettings.SectionName);
+        services.Configure<AttachmentStorageSettings>(seccion);
         services.AddSingleton<IAttachmentCipher, AttachmentEncryptionService>();
-        services.AddSingleton<IBlobStore, LocalEncryptedFileStore>();
+        var proveedor = seccion[nameof(AttachmentStorageSettings.Provider)] ?? AttachmentStorageSettings.ProveedorLocal;
+        if (string.Equals(proveedor, AttachmentStorageSettings.ProveedorS3, StringComparison.OrdinalIgnoreCase))
+            services.AddSingleton<IBlobStore, S3BlobStore>();
+        else if (string.Equals(proveedor, AttachmentStorageSettings.ProveedorLocal, StringComparison.OrdinalIgnoreCase))
+            services.AddSingleton<IBlobStore, LocalEncryptedFileStore>();
+        else
+            throw new InvalidOperationException($"AttachmentStorage:Provider = «{proveedor}» no existe. Use {AttachmentStorageSettings.ProveedorLocal} o {AttachmentStorageSettings.ProveedorS3}.");
 
         // T117 — Renderer de templates Razor para correo. Singleton: cachea
         // los .cshtml leídos del filesystem; thread-safe via ConcurrentDictionary.

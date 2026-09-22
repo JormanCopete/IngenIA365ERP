@@ -290,6 +290,22 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   como saldo inicial y fuera del cierre mensual. El borrador se edita entero hasta contabilizarlo
   (líneas por `PUT /documents/drafts/{id}` con tipo `AP`, fecha, descartar) y **volver a importar
   reemplaza sus líneas** conservando el mismo comprobante (las viejas quedan de baja, Principio XI).
+- **Adjuntos**: se suben cifrados (`AttachmentEncryptionService`, AES-256-GCM con clave por archivo
+  envuelta con DataProtection) y se guardan por `IBlobStore`, que tiene dos implementaciones y se
+  elige con `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`,
+  2026-09-22, los tres ambientes del clúster). El almacén es **transparente**: recibe bytes ya
+  cifrados, así que S3 nunca ve el archivo original y su SSE-S3 va encima, no en lugar del nuestro.
+  El bucket de adjuntos (`ingenia365-erp-attachments`) es **otro** que el de respaldos: aquél tiene
+  Object Lock a 40 días y un adjunto se borra cuando su dueño lo borra; la credencial puede borrar
+  objetos pero **no versiones**, de modo que un borrado deja marca y se recupera. La clave es
+  `{prefijo del ambiente}/{cooperativa}/{aaaa}/{mm}/{guid}.bin` y **el prefijo no se guarda en la
+  base** (`BlobUri` lleva la referencia sin él), así se puede mover el prefijo o el bucket sin
+  invalidar lo escrito. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
+  redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
+  réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
+  health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
+  se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
+  `docs/operaciones/adjuntos-en-s3.md`.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
