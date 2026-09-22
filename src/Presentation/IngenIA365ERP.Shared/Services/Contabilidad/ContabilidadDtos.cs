@@ -184,7 +184,8 @@ public sealed record AbrirEjercicioRequest(int Year);
 
 public sealed record MotivoRequest(string Reason);
 
-public sealed record CierreDeEjercicioDto(Guid ClosingDocumentPublicId, string Number);
+/// <summary>Respuesta de cerrar o reabrir el ejercicio (E2, US6): el comprobante <c>CI</c> (o su reverso), nulo si no había resultados que cancelar.</summary>
+public sealed record CierreDeEjercicioDto(int Year, Guid? ClosingDocumentPublicId, long? Number, int Lines, decimal Result);
 
 // -------------------------------------------------------------------------- comprobantes --
 
@@ -298,4 +299,10 @@ public sealed record ReversadoDto(Guid ReversalPublicId, long Number);
 
 // ------------------------------------------------------------------------------- apertura --
 
-public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, IReadOnlyList<ErrorDeFilaDto> Errors);
+public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, decimal TotalDebit, decimal TotalCredit, IReadOnlyList<ErrorDeFilaDto> Errors);
+
+public sealed record AperturaResumenDto(Guid PublicId, long? Number, DateOnly Date, string Status, decimal TotalDebit, decimal TotalCredit, int Lines,
+    string RegisteredBy, DateTime? PostedAt, string? PostedBy, Guid? ReversedByPublicId);
+
+/// <summary><c>GET /api/accounting/opening</c> (E2, US13): la fecha que le toca a la apertura, la vigente, los borradores pendientes y las reversadas.</summary>
+public sealed record EstadoDeAperturaDto(DateOnly ExpectedDate, int FirstFiscalYear, AperturaResumenDto? Posted, IReadOnlyList<AperturaResumenDto> Drafts, IReadOnlyList<AperturaResumenDto> Reversed);

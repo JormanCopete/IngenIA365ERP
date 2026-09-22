@@ -129,8 +129,8 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<CierreDeEjercicioDto>> CerrarEjercicioAsync(int year, CancellationToken ct = default) =>
         EnviarAsync<CierreDeEjercicioDto>(HttpMethod.Post, $"{Base}/periods/years/{year}/close", null, ct);
 
-    public Task<InvitationApiResult<EmptyResponse>> ReabrirEjercicioAsync(int year, string motivo, CancellationToken ct = default) =>
-        EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/years/{year}/reopen", new MotivoRequest(motivo), ct);
+    public Task<InvitationApiResult<CierreDeEjercicioDto>> ReabrirEjercicioAsync(int year, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<CierreDeEjercicioDto>(HttpMethod.Post, $"{Base}/periods/years/{year}/reopen", new MotivoRequest(motivo), ct);
 
     // -------------------------------------------------------------------------- comprobantes --
 
@@ -177,6 +177,9 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
         DescargarAsync($"{Base}/documents/{id}/print", ct);
 
     // ------------------------------------------------------------------------------- apertura --
+
+    public Task<InvitationApiResult<EstadoDeAperturaDto>> EstadoDeAperturaAsync(CancellationToken ct = default) =>
+        EnviarAsync<EstadoDeAperturaDto>(HttpMethod.Get, $"{Base}/opening", null, ct);
 
     public Task<InvitationApiResult<ArchivoDescargado>> PlantillaDeAperturaAsync(CancellationToken ct = default) =>
         DescargarAsync($"{Base}/opening/template.xlsx", ct);

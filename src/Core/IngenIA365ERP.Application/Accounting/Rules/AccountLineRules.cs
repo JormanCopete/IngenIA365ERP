@@ -61,9 +61,28 @@ public sealed record ContextoDeReglas(
     IReadOnlySet<int> SucursalesVigentes,
     IReadOnlySet<int> TercerosVigentes,
     IReadOnlySet<int> CentrosVigentes,
-    IReadOnlySet<string> TiposDeCruceVigentes)
+    IReadOnlySet<string> TiposDeCruceVigentes,
+    DocumentKind Kind = DocumentKind.Regular)
 {
     public bool EsContabilidad => Module == ModuloContable.Contabilidad;
+
+    /// <summary>
+    /// El cierre del ejercicio (feature 009 E2, US6) no digita: cancela lo que ya pasó por cada
+    /// cuenta de resultado, agrupado por sucursal y centro de costo. Lo que se exige a quien digita
+    /// —cuenta activa y habilitada para el módulo, tercero, documento cruce, base gravable— ya se
+    /// exigió cuando el movimiento entró; volver a pedirlo aquí dejaría el año sin cerrar por una
+    /// cuenta que Nómina alimentó y Contabilidad no tiene habilitada, o por un ingreso que exige
+    /// tercero y se cancela en bloque.
+    /// </summary>
+    public bool EsCierre => Kind == DocumentKind.Closing;
+
+    /// <summary>
+    /// La apertura (US13) trae los saldos con que la cooperativa llega, vengan del módulo que
+    /// vengan: «habilitada para» gobierna quién mueve la cuenta de aquí en adelante, no de dónde
+    /// vino su saldo. El resto de las reglas (tercero, cruce, centro, sucursal) sí aplican fila a
+    /// fila (FR-085), que para eso se importa con detalle.
+    /// </summary>
+    public bool EsApertura => Kind == DocumentKind.Opening;
 }
 
 /// <summary>
@@ -91,8 +110,8 @@ public static class AccountLineRules
         }
         var code = cuenta.Code;
         if (!cuenta.IsMovement) errores.Add(AccountingErrors.LineAccountNotMovement(n, code));
-        else if (!cuenta.IsActive) errores.Add(AccountingErrors.LineAccountInactive(n, code));
-        else if (!ModuloContable.Habilitada(cuenta.EnabledModules, contexto.Module))
+        else if (!cuenta.IsActive && !contexto.EsCierre) errores.Add(AccountingErrors.LineAccountInactive(n, code));
+        else if (!contexto.EsCierre && !contexto.EsApertura && !ModuloContable.Habilitada(cuenta.EnabledModules, contexto.Module))
             errores.Add(AccountingErrors.LineAccountNotEnabledForModule(n, code, contexto.Module));
 
         // 6. sucursal: explícita si la cuenta lo exige; vigente; dentro del alcance sólo al digitar en Contabilidad
@@ -104,20 +123,20 @@ public static class AccountLineRules
             errores.Add(AccountingErrors.LineBranchOutOfScope(n));
 
         // 7. tercero
-        if (cuenta.RequiresThirdParty && linea.PersonId is null)
+        if (cuenta.RequiresThirdParty && linea.PersonId is null && !contexto.EsCierre)
             errores.Add(AccountingErrors.LineThirdPartyRequired(n, code));
         else if (linea.PersonId is { } tercero && !contexto.TercerosVigentes.Contains(tercero))
             errores.Add(AccountingErrors.LineThirdPartyInvalid(n));
 
         // 8. documento cruce
         var tipo = string.IsNullOrWhiteSpace(linea.CrossDocumentType) ? null : linea.CrossDocumentType.Trim();
-        if (cuenta.RequiresCrossDocument && (tipo is null || string.IsNullOrWhiteSpace(linea.CrossDocumentNumber)))
+        if (cuenta.RequiresCrossDocument && (tipo is null || string.IsNullOrWhiteSpace(linea.CrossDocumentNumber)) && !contexto.EsCierre)
             errores.Add(AccountingErrors.LineCrossDocumentRequired(n, code));
         else if (tipo is not null && !contexto.TiposDeCruceVigentes.Contains(tipo))
             errores.Add(AccountingErrors.LineCrossDocumentTypeInvalid(n, tipo));
 
         // 9. centro de costo: presente si lo exige, ausente si no lo maneja, vigente
-        if (cuenta.RequiresCostCenter && linea.CostCenterId is null)
+        if (cuenta.RequiresCostCenter && linea.CostCenterId is null && !contexto.EsCierre)
             errores.Add(AccountingErrors.LineCostCenterRequired(n, code));
         else if (!cuenta.RequiresCostCenter && linea.CostCenterId is not null)
             errores.Add(AccountingErrors.LineCostCenterNotAllowed(n, code));
@@ -125,7 +144,7 @@ public static class AccountLineRules
             errores.Add(AccountingErrors.LineCostCenterInvalid(n));
 
         // 10. base gravable: presente si la cuenta es de impuesto; aviso dentro de la tolerancia, error fuera
-        if (cuenta.RequiresTaxBase)
+        if (cuenta.RequiresTaxBase && !contexto.EsCierre)
         {
             if (linea.TaxBase is not { } baseGravable)
                 errores.Add(AccountingErrors.LineTaxBaseRequired(n, code));

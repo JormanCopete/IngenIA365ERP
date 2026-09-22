@@ -217,13 +217,15 @@ public class LibrosQueriesTests
     {
         var e = new Escenario();
         await e.ContabilizarAsync(e.Gasto, e.Caja);
-        await e.ContabilizarAsync(e.Caja, e.Gasto, tipo: "CI", kind: DocumentKind.Closing);
+        // El cierre va el 31/12 (es la única fecha que el contrato le admite, E2/US6); el balance se pide hasta ahí.
+        var finDeAnio = new DateOnly(2026, 12, 31);
+        await e.ContabilizarAsync(e.Caja, e.Gasto, fecha: finDeAnio, tipo: "CI", kind: DocumentKind.Closing);
 
-        var sinCierre = await e.BalanceAsync();
+        var sinCierre = await e.BalanceAsync(new FiltrosDeInforme { To = finDeAnio });
         Numero(Fila(sinCierre, "510505"), 5).Should().Be(100m);
         Numero(sinCierre.Totales!, 3).Should().Be(100m);
 
-        var conCierre = await e.BalanceAsync(new FiltrosDeInforme { IncludeClosing = true });
+        var conCierre = await e.BalanceAsync(new FiltrosDeInforme { To = finDeAnio, IncludeClosing = true });
         Numero(Fila(conCierre, "510505"), 5).Should().Be(0m, "el cierre cancela el gasto");
         Numero(conCierre.Totales!, 3).Should().Be(200m);
         Numero(conCierre.Totales!, 4).Should().Be(200m);

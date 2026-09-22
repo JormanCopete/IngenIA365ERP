@@ -1,0 +1,207 @@
+@page "/contabilidad/apertura"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Saldos de apertura - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US13 (FR-084..FR-087): la cooperativa que llega desde SOLIDO carga una sola vez
+   los saldos con que arranca. Se descarga la plantilla, se llena, se importa: cada fila se valida con
+   las reglas de cuenta y con un solo error no se guarda nada. Lo que queda es un borrador AP fechado
+   la víspera del primer período, que se revisa y se contabiliza en Comprobantes como cualquier otro;
+   a lo sumo una apertura contabilizada y no reversada por empresa. *@
+<PermissionGate Required="Accounting.Opening.Manage" MostrarAviso="true">
+<div class="page-header">
+    <h3>Saldos de apertura</h3>
+    <div class="toolbar">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_ocupado || _estado is null)" OnClick="@DescargarPlantillaAsync">Plantilla Excel</SfButton>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-upload-1" Disabled="@(_ocupado || _estado is null || _estado.Posted is not null)" OnClick="@(() => { _errores = []; _archivo = null; _importando = true; })"
+                  title="@(_estado?.Posted is not null ? "Ya hay una apertura contabilizada: reverse la existente antes de cargar otra" : "")">Importar archivo</SfButton>
+    </div>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_estado is null)
+    {
+        @if (_cargado)
+        {
+            <div class="info-card"><span class="label">Sin contabilidad</span><p>La contabilidad no está iniciada. Vaya a Contabilidad › Configuración inicial y luego abra el primer ejercicio.</p></div>
+        }
+    }
+    else
+    {
+        <div class="info-card">
+            <span class="label">Cómo funciona</span>
+            <p>El comprobante de apertura se fecha el <strong>@_estado.ExpectedDate.ToString("yyyy-MM-dd")</strong>, la víspera del primer período del ejercicio @_estado.FirstFiscalYear, y en consultas e informes es <em>saldo inicial</em>, no movimiento del mes.
+               Descargue la plantilla, llénela con una fila por cuenta de movimiento (y por tercero y documento donde la cuenta lo exige) e impórtela: si una fila falla, se indica cuál y no se guarda nada. El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.</p>
+        </div>
+
+        @if (_estado.Posted is { } vigente)
+        {
+            <div class="info-card">
+                <span class="label">Apertura vigente</span>
+                <p>AP-@vigente.Number del @vigente.Date.ToString("yyyy-MM-dd"): @vigente.Lines líneas, débitos @vigente.TotalDebit.ToString("N2") y créditos @vigente.TotalCredit.ToString("N2"). Contabilizó @vigente.PostedBy el @(vigente.PostedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "").
+                   Para cargar otra, primero reverse ésta desde el comprobante; las dos quedan referenciadas y auditadas.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{vigente.PublicId}"))">Ver el comprobante</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => Navigation.NavigateTo($"/contabilidad/informes?vista=trial-balance&from={_estado.FirstFiscalYear}-01-01&to={_estado.FirstFiscalYear}-01-31"))">Balance de prueba del primer mes</SfButton>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="info-card"><span class="label">Sin apertura contabilizada</span><p>Los informes arrancan en cero hasta que se contabilice un comprobante de apertura.</p></div>
+        }
+
+        @if (_estado.Drafts.Count > 0)
+        {
+            <h4>Borradores pendientes</h4>
+            <p class="texto-apoyo">Revíselos línea a línea y contabilícelos desde el comprobante (permiso de contabilizar; cuatro ojos si la empresa lo exige). Un borrador que ya no sirve se descarta desde el mismo comprobante.</p>
+            <table class="data-grid filas-clicables">
+                <thead><tr><th>Fecha</th><th>Descripción</th><th class="num">Líneas</th><th class="num">Débitos</th><th class="num">Créditos</th><th class="num">Diferencia</th><th>Registró</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _estado.Drafts)
+                    {
+                        <tr class="clicable" tabindex="0" @onclick="@(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{d.PublicId}"))">
+                            <td>@d.Date.ToString("yyyy-MM-dd")</td><td>Borrador de apertura</td><td class="num">@d.Lines</td>
+                            <td class="num">@d.TotalDebit.ToString("N2")</td><td class="num">@d.TotalCredit.ToString("N2")</td>
+                            <td class="num">@((d.TotalDebit - d.TotalCredit) == 0 ? "cuadra" : (d.TotalDebit - d.TotalCredit).ToString("N2"))</td>
+                            <td>@d.RegisteredBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (_estado.Reversed.Count > 0)
+        {
+            <h4>Aperturas reversadas</h4>
+            <table class="data-grid filas-clicables">
+                <thead><tr><th>Comprobante</th><th>Fecha</th><th class="num">Líneas</th><th class="num">Débitos</th><th>Contabilizó</th><th>Reversión</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _estado.Reversed)
+                    {
+                        <tr class="clicable" tabindex="0" @onclick="@(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{r.PublicId}"))">
+                            <td>AP-@r.Number</td><td>@r.Date.ToString("yyyy-MM-dd")</td><td class="num">@r.Lines</td><td class="num">@r.TotalDebit.ToString("N2")</td><td>@r.PostedBy</td>
+                            <td>@if (r.ReversedByPublicId is { } rev) { <a class="enlace" href="/contabilidad/comprobantes/@rev" @onclick:stopPropagation="true">ver reversión</a> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</IndicadorDeCarga>
+
+<SfDialog @bind-Visible="_importando" Header="Importar saldos de apertura" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Validando el archivo…">
+            <div class="pagina">
+                <p class="texto-apoyo">Excel o CSV con las columnas de la plantilla: <code>cuenta</code>, <code>tercero</code>, <code>tipoDocumento</code>, <code>numeroDocumento</code>, <code>centroCosto</code>, <code>sucursal</code>, <code>debito</code>, <code>credito</code>, <code>detalle</code>.
+                   Cada fila se valida con las reglas de su cuenta; con un solo error no se guarda nada.</p>
+                <InputFile OnChange="@ArchivoElegido" accept=".xlsx,.csv,.txt" />
+                @if (_errores.Count > 0)
+                {
+                    <p class="texto-alerta">@_errores.Count error(es). Corrija el archivo y vuelva a importarlo.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _errores) { <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _importando = false)" />
+        <DialogButton Content="Importar" IsPrimary="true" OnClick="@ImportarAsync" Disabled="@(_guardado.Activa || _archivo is null)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _guardado = new();
+    private EstadoDeAperturaDto? _estado;
+    private bool _cargado, _ocupado, _importando;
+    private IBrowserFile? _archivo;
+    private List<ErrorDeFilaDto> _errores = [];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.EstadoDeAperturaAsync();
+        _cargado = true;
+        if (!r.IsSuccess)
+        {
+            _estado = null;
+            if (r.ErrorCode != "Accounting.NotInitialized" && r.ErrorCode != "Accounting.FiscalYear.NotFound")
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la apertura.");
+            return;
+        }
+        _estado = r.Value;
+    }
+
+    private async Task DescargarPlantillaAsync()
+    {
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.PlantillaDeAperturaAsync();
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private void ArchivoElegido(InputFileChangeEventArgs e)
+    {
+        _archivo = e.File;
+        _errores = [];
+    }
+
+    private async Task ImportarAsync()
+    {
+        if (_archivo is null) return;
+        using var guardado = _guardado.Iniciar();
+        _errores = [];
+        byte[] bytes;
+        try
+        {
+            using var ms = new MemoryStream();
+            await _archivo.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (IOException ex)
+        {
+            await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        var r = await Contabilidad.ImportarAperturaAsync(_archivo.Name, bytes);
+        if (!r.IsSuccess)
+        {
+            _errores = r.ErroresDeFila();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo importar la apertura.");
+            return;
+        }
+        var v = r.Value!;
+        var diferencia = v.TotalDebit - v.TotalCredit;
+        await Notification.SuccessAsync(diferencia == 0
+            ? $"Borrador de apertura creado con {v.Lines} líneas; cuadra. Revíselo y contabilícelo."
+            : $"Borrador de apertura creado con {v.Lines} líneas; no cuadra (diferencia {diferencia:N2}): corríjalo antes de contabilizar.");
+        _importando = false;
+        _archivo = null;
+        Navigation.NavigateTo($"/contabilidad/comprobantes/{v.DraftPublicId}");
+    }
+}

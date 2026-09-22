@@ -56,7 +56,7 @@ public class LedgerQueryTests
             Contabilizar(Venta(new DateOnly(2026, 3, 10), 200m, D.Tercero, "FV", "002"));
             BobNorte = Contabilizar(Venta(new DateOnly(2026, 3, 12), 300m, Bob, null, null, D.Norte));
             Contabilizar(Venta(ContabilidadTestData.Marzo15, 50m, null, null, null));
-            Contabilizar(new PostingRequest("CI", new DateOnly(2026, 3, 18), "Cierre", ContabilidadTestData.Manual(),
+            Contabilizar(new PostingRequest("CI", new DateOnly(2026, 12, 31), "Cierre", ContabilidadTestData.Manual(),
                 [PostingLine.Debito(Ingreso.Id, 100m), PostingLine.Credito(Caja.Id, 100m)], DocumentKind.Closing));
 
             var emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
@@ -313,9 +313,11 @@ public class LedgerQueryTests
     public async Task El_cierre_solo_entra_si_se_pide()
     {
         var e = new Escenario();
+        // El cierre está fechado el 31/12 (E2/US6: es la única fecha que el contrato le admite), así que el rango llega hasta ahí.
+        var finDeAnio = new DateOnly(2026, 12, 31);
 
-        Saldos(Fila(await e.Consultar("account:110505"), "11050501"), 1500m, 650m, 0m, 2150m);
-        Saldos(Fila(await e.Consultar("account:110505", e.Filtros(cierre: true)), "11050501"), 1500m, 650m, 100m, 2050m);
+        Saldos(Fila(await e.Consultar("account:110505", e.Filtros() with { To = finDeAnio }), "11050501"), 1500m, 650m, 0m, 2150m);
+        Saldos(Fila(await e.Consultar("account:110505", e.Filtros(cierre: true) with { To = finDeAnio }), "11050501"), 1500m, 650m, 100m, 2050m);
     }
 
     [Theory]
