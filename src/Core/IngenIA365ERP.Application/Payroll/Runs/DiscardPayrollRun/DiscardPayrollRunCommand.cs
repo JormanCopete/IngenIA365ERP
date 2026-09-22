@@ -51,6 +51,8 @@ public sealed class DiscardPayrollRunCommandHandler(
         var run = await db.PayrollRuns.Include(r => r.PayPeriod)
             .FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Fallo("Payroll.RunNotFound", "No existe la corrida indicada.");
+        // Feature 010: el borrador de una liquidación especial se descarta por su ruta.
+        if (run.EsEspecial) return Result.Failure<DiscardRunResultDto>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
         if (run.Status != PayrollRunStatus.Draft)
             return Fallo("Payroll.RunNotDraft",
                 $"La corrida está {run.Status}: sólo se descarta un borrador. Una liquidación aprobada se reversa.");

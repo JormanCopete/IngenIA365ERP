@@ -1,0 +1,307 @@
+# Implementation Plan: Nómina completa — prestaciones, retiro, procedimiento 2, PILA, nómina electrónica y dispersión
+
+**Branch**: `010-nomina-prestaciones-pila-dian` | **Date**: 2026-09-20 | **Spec**: [spec.md](spec.md)
+
+**Input**: Feature specification from `/specs/010-nomina-prestaciones-pila-dian/spec.md`
+
+## Summary
+
+Completar la nómina con los ocho procesos que la 005 dejó afuera, todos consumidores de la
+nómina ordinaria que ya está en producción: cuatro **liquidaciones especiales** (prima de
+servicios, cesantías e intereses, vacaciones, definitiva por retiro) calculadas por un **motor
+puro nuevo** (`SettlementCalculationEngine`, Domain) que reutiliza las piezas del ordinario
+—explicación, tramos de salario, parámetros con vigencia— y se persisten en las **mismas tablas
+de corrida** con un `Kind`, para heredar pago, comprobante del empleado, reversión y reportes;
+**procedimiento 2** como cálculo semestral explicado que escribe la vigencia en la ficha; **PILA**
+como generador del archivo plano de la Res. 2388/2016 (planilla E, Aportes en Línea) con
+validación, versiones e inconsistencias; **nómina electrónica** con el documento DIAN (anexo v1.0,
+Res. 013/2021 compilada en la 227/2025) construido en el ERP y **firmado y transmitido por un
+servicio central de Ingenia365 sin estado** —los datos de cada cooperativa viven en su base;
+el servicio sólo custodia certificados y credenciales en Secrets y habla con la DIAN—, en modo
+«software propio» primero y «proveedor tecnológico» cuando exista la habilitación; y
+**dispersión bancaria** con un formato parametrizable cargado como dato (AV Villas). Ningún valor
+legal en el código: 40 parámetros nuevos con vigencia y su semilla 2026 (research R4), políticas
+por empresa (exoneración 114-1, semana laboral, calendario) con vigencia. Todo por el contrato
+único de contabilidad, con permisos propios por proceso, auditoría y exportación al centro de
+reportes. Detalle de cada decisión en [research.md](research.md) (R1–R14).
+
+## Technical Context
+
+**Language/Version**: C# / .NET 10.0.5 (API, Domain, Application, servicio nuevo); Blazor
+(Shared, Web, WebAssembly) con Syncfusion 33.2.8 por paquetes de componente.
+
+**Primary Dependencies**: Carter (minimal APIs), MediatR + FluentValidation, EF Core 10
+(PostgreSQL y SQL Server por migraciones pares), QuestPDF (documento de liquidación para firma,
+representación gráfica con QR de la nómina electrónica), ClosedXML/OpenXML (exportación),
+`System.Security.Cryptography.Xml` (`SignedXml`) para la firma XAdES-EPES y WS-Security **sólo en
+el servicio de nómina electrónica** (research R10: XAdES construido a mano sobre `SignedXml` o
+FirmaXadesNetCore LGPL —decidir en la primera tarea del servicio, con la prueba de arquitectura
+«sólo el servicio referencia criptografía de firma»—), `HttpClient` + SOAP 1.2 armado a mano
+para `WcfDianCustomerServices` (el binding WS-Security X.509 no lo cubre WCF Core). Sin librerías
+nuevas en Domain.
+
+**Storage**: PostgreSQL/SQL Server por cooperativa (tablas `PAY_*` nuevas y columnas nuevas en
+`PAY_PayrollRuns`, `PAY_Employees`, `COR_People`), MongoDB por cooperativa (auditoría), Redis
+(sin uso nuevo), almacenamiento de objetos ya existente (`IngenIA365ERP.Storage`, `IBlobStore`)
+para los blobs inmutables de nómina electrónica (XML firmado, ZIP, ApplicationResponse, PDF) y
+los archivos PILA y de dispersión generados. **El servicio central no tiene base de datos**
+(Principio IV): recibe, firma, transmite, devuelve.
+
+**Testing**: xUnit + FluentAssertions + NSubstitute; casos dorados JSON en
+`Domain.Tests/Payroll/Settlements/Casos/` y `Domain.Tests/Payroll/Pila/Casos/`; Application
+sobre `NominaTestData` (InMemory); arquitectura (`LaNominaNoTieneValoresLegalesFijos`,
+`NingunModuloEscribeMovimientosFueraDelContrato`, `PrincipioVIII_DualValidation` con los
+namespaces nuevos, `LasPantallasDicenQueEstanCargando`, `TodoEnlaceDelMenuTieneSuPagina`);
+e2e con Testcontainers (colección «Nomina e2e»); el servicio central con pruebas propias y un
+**simulador de la DIAN** (respuestas grabadas del ambiente de habilitación) para no depender de la
+red; validadores externos documentados en `quickstart.md` (Aportes en Línea, set de pruebas DIAN,
+portal AV Villas).
+
+**Target Platform**: Linux (k3s, contenedores) para API, Web y el servicio nuevo; navegador para
+la interfaz.
+
+**Project Type**: web-service + SPA existentes, más **un servicio interno nuevo**
+(`src/Servicios/IngenIA365.NominaElectronica`) desplegado en el mismo clúster, sin exposición
+pública, con `NetworkPolicy` que sólo admite tráfico desde la API.
+
+**Performance Goals**: una cooperativa de decenas de empleados: cualquier liquidación especial,
+la PILA de un mes y la generación de los documentos DIAN de un mes en menos de 10 s en pantalla;
+transmisión a la DIAN por documento en menos de 30 s con reintento manual; las corridas
+ordinarias no se degradan (índices filtrados nuevos en `PAY_PayrollRuns`).
+
+**Constraints**: ningún literal legal en `Domain/Payroll` ni `Application/Payroll` (SC-008);
+corridas inmutables con versión; toda escritura al libro por `AccountingPoster`; certificados,
+PIN y credenciales sólo en Secrets del clúster (nunca en el ERP, la base de la cooperativa ni el
+repositorio); nada se transmite a la DIAN sin acción explícita; documentos DIAN y sus respuestas
+conservados ≥ 5 años; respaldo por cooperativa incluye lo nuevo sin pasos aparte.
+
+**Scale/Scope**: 8 historias, ~40 parámetros legales nuevos, ~14 tablas nuevas y ~12 columnas
+nuevas, 3 migraciones pares aditivas (una por entrega N1, N2+N3 y N4; ninguna destructiva), ~11
+pantallas nuevas y una ficha ampliada, ~60 rutas nuevas (`/api/payroll/settlements|vacations|
+terminations|benefit-balances|withholding-rates|pila|electronic-payroll|disbursements|policies`),
+1 servicio nuevo con 4 rutas internas, ~8 vistas nuevas del centro de reportes.
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+| #    | Principio | Estado | Nota |
+|------|-----------|--------|------|
+| I    | Spec-First | PASS | spec → clarify (10 respuestas del dueño) → research (R1–R14) → este plan → tasks. Las ocho correcciones que trajo la investigación se aplican a la spec en la Fase 1. |
+| II   | Clean Architecture | PASS | Motor de liquidaciones y reglas PILA/CUNE/porcentaje P2 en Domain (puros, sin IO); handlers en Application; firma y SOAP sólo en el servicio nuevo, que no referencia Domain ni Persistence (recibe XML). Una prueba de arquitectura lo fija. |
+| III  | CQRS + MediatR | PASS | Comandos/consultas con `AbstractValidator` cada uno; los namespaces nuevos entran a `PrincipioVIII_DualValidation.InScopeNamespacePrefixes` en el primer commit (R12). Endpoints sólo reenvían. |
+| IV   | Multi-tenancy | PASS | Toda tabla nueva vive en la base de la cooperativa. El servicio central **no guarda datos de clientes** (desvío deliberado respecto de R10, que proponía una base propia multi-tenant): habilitación, documentos, respuestas y CUNE los persiste el ERP en `PAY_ElectronicPayroll*` de cada cooperativa; el servicio custodia secretos por cooperativa en Secrets y exige que la identidad de la petición coincida con la cooperativa. Sin trabajos de fondo que barran cooperativas: la transmisión es una acción de la persona. |
+| V    | Person centralizada | PASS | Los campos nuevos de identificación para la DIAN (segundo apellido/otros nombres separados, municipio DANE) van en `COR_People`; en `PAY_Employees` sólo lo laboral (tipo de trabajador PILA, tipo de contrato DIAN, alto riesgo, cuenta bancaria del pago). |
+| VI   | PublicId externo | PASS | Todas las rutas y DTOs por `PublicId`; el número del documento DIAN y el CUNE son identificadores del negocio, no `Id`. |
+| VII  | Soft-delete + auditoría | PASS | Entidades nuevas `AuditableEntity`; índices únicos filtrados por `IsDeleted`; movimientos de vacaciones y saldos iniciales se anulan con motivo, nunca se borran. |
+| VIII | Validación dual | PASS | FluentValidation por comando; las pantallas validan antes (días, fechas, montos en pesos) y la API vuelve a validar. |
+| IX   | Errores visibles | PASS | Respuestas de la DIAN traducidas y guardadas (códigos `NIExxx`); ningún `catch` vacío; el servicio central devuelve el error crudo y el ERP lo muestra. |
+| X    | Trazabilidad SIPLA/SARLAFT | PASS | `PayrollAuditEmitter` (ya corregido para escribir en la base del PublicId) con eventos por proceso (R12); transmisión, generación de archivos y marca de enviado auditadas. |
+| XI   | Inmutabilidad contable | PASS | Cada liquidación aprobada contabiliza por `AccountingPoster` en la misma transacción y sólo se reversa con espejo; PILA y documentos DIAN son versiones, nunca se editan. |
+| XII  | Migraciones idempotentes y reversibles | PASS | Tres migraciones pares aditivas (`NominaPrestacionesYDian`, `NominaPilaYNominaElectronica`, `NominaDispersionBancaria`: columnas, tablas, índices filtrados que reemplazan `UK_PAY_PayrollRuns_Period_Version`); semillas de parámetros/conceptos/motivos/festivos por `Revisiones()` idempotentes; sin borrado de datos → sin marcador destructivo. La primera transmisión a la DIAN en producción exige **segundo revisor** nombrado por el dueño (research R14). |
+| UI   | Indicador de carga; sin colores literales ni `<style>` | PASS | Pantallas bajo `Pages/Nomina` (módulo migrado); `IndicadorDeCarga` + `EstadoDeCarga` por zona; menú sólo a páginas con `@page`. |
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/010-nomina-prestaciones-pila-dian/
+├── plan.md              # este archivo
+├── spec.md              # con las correcciones de la investigación
+├── research.md          # Fase 0: R1–R14, semilla 2026, lo que falta del dueño, riesgos
+├── data-model.md        # Fase 1
+├── quickstart.md        # Fase 1
+├── contracts/
+│   ├── api.md                          # rutas /api/payroll/* nuevas, permisos, errores, reportes
+│   ├── servicio-nomina-electronica.md  # contrato ERP → servicio central y mapeo al WS de la DIAN
+│   └── archivos.md                     # layout PILA 2388, formato de dispersión parametrizable, consignación por fondo
+├── checklists/requirements.md
+└── tasks.md             # Fase 2 (/speckit-tasks)
+```
+
+### Source Code (repository root)
+
+```text
+src/Core/IngenIA365ERP.Domain/
+├── Payroll/Settlements/            # motor puro nuevo: SettlementCalculationEngine, SettlementInput, reglas por tipo,
+│                                   #   SettlementParameterCodes, calendario laboral (días hábiles, festivos)
+├── Payroll/Pila/                   # reglas puras: IBC, novedades, tarifas/exoneraciones, redondeos, layout 2388 (registros 1 y 2)
+├── Payroll/ElectronicPayroll/      # construcción del XML NominaIndividual/DeAjuste (sin firma), CUNE, SoftwareSC, reglas NIE
+├── Payroll/Withholding/            # porcentaje fijo procedimiento 2 (12 meses ÷ 13, depuración, tabla)
+├── Entities/Payroll/               # PayrollRun.Kind/CutoffDate…, EmployeeBenefitOpeningBalance, VacationMovement,
+│                                   #   EmploymentTermination(+Reason), SettlementDeduction, WithholdingRateCalculation,
+│                                   #   PilaGeneration(+Line,+Issue), ElectronicPayrollSettings/Document/Transmission,
+│                                   #   BankDisbursementFormat/File, CompanyPolicy, Holiday
+└── Enums/Payroll/                  # PayrollRunKind, SettlementStatus, VacationMovementKind, ElectronicPayrollStatus…
+
+src/Core/IngenIA365ERP.Application/Payroll/
+├── Settlements/{Prima,Cesantias,Vacaciones,Definitiva}/  # Calculate/Approve/Reverse + queries con explicación
+├── OpeningBalances/  Vacations/  Terminations/  WithholdingRates/  Pila/  ElectronicPayroll/  Dispersion/  Policies/
+├── Services/          # SettlementInputLoader (bases prestacionales de 6/12 meses desde corridas aprobadas, provisiones,
+│                      #   deudas de Cartera), SettlementAccountingPoster (cancela provisión, diferencia al gasto, CxP),
+│                      #   IElectronicPayrollSigner (puerto al servicio central), IBankFileFormatter
+└── Reports/           # vistas nuevas de TablaExportable para /api/reports/payroll/{vista}
+
+src/Infrastructure/IngenIA365ERP.Persistence/
+├── Configurations/Payroll/*        # tablas y columnas nuevas, índices filtrados
+├── Seeding/Parametric/*            # parámetros 2026 (Revisiones), conceptos nuevos, motivos de retiro, festivos 2026–2027,
+│                                   #   políticas por defecto, formato de dispersión vacío «AV Villas»
+└── Migrations.{PostgreSql,SqlServer}/  # NominaPrestacionesYDian (par)
+
+src/Infrastructure/IngenIA365ERP.Identity/Seed/   # PayrollPermissionCatalogSeeder (recursos nuevos), BuiltInRolesSeeder
+
+src/Presentation/IngenIA365ERP.API/
+├── Endpoints/Payroll/{Settlements,Vacations,Terminations,BenefitBalances,WithholdingRates,Pila,ElectronicPayroll,Disbursements,Policies}Endpoints.cs
+├── Reports/{SettlementDocumentReport,ElectronicPayrollGraphicReport}.cs   # QuestPDF
+└── Services/ElectronicPayrollSignerClient.cs   # HttpClient al servicio central (JWT de servicio por cooperativa)
+
+src/Servicios/IngenIA365.NominaElectronica/     # servicio central sin estado (.NET 10 minimal API)
+├── Firma/          # XAdES-EPES sobre SignedXml, política v2 y su hash, certificados desde Secrets
+├── Dian/           # SOAP 1.2 + WS-Security X.509, SendNominaSync/SendTestSetAsync/GetStatus/GetStatusZip, diccionario NIExxx
+├── Endpoints/      # POST firmar-y-transmitir, POST set-de-pruebas, POST estado, GET salud
+└── Dockerfile      # imagen propia; GitOps: Deployment + NetworkPolicy + Secrets montados
+
+src/Presentation/IngenIA365ERP.Shared/
+├── Pages/Nomina/{Prima,CesantiasAnuales,Vacaciones,LiquidacionDefinitiva,RetencionProcedimiento2,Pila,NominaElectronica,
+│                 Dispersion,SaldosIniciales,Festivos,Politicas}.razor   # + ficha del empleado ampliada
+├── Services/Nomina/NominaClient.{Prima,CesantiasAnuales,Vacaciones,Definitiva,Retencion2,Pila,NominaElectronica,Dispersion,
+│                                  SaldosIniciales,Festivos,Politicas}.cs
+└── Layout/NavMenu.razor, Services/Manual/ManualCatalogo.cs
+
+tests/
+├── IngenIA365ERP.Domain.Tests/Payroll/{Settlements,Pila,ElectronicPayroll,Withholding}/   # casos dorados JSON + pruebas
+├── IngenIA365ERP.Application.Tests/Payroll/{Settlements,Vacations,Terminations,Pila,ElectronicPayroll,Dispersion}/
+├── IngenIA365ERP.Architecture.Tests/Principles/   # SoloElServicioDeNominaElectronicaFirma.cs; listas ampliadas
+├── IngenIA365.NominaElectronica.Tests/           # firma verificable, SOAP contra simulador DIAN, política
+└── IngenIA365ERP.API.IntegrationTests/Payroll/    # e2e: prima → pago → dispersión → documento DIAN generado; definitiva; PILA
+
+tools/scripts/crear-secreto-nomina-electronica.ps1   # certificado .p12 + contraseña + PIN por cooperativa → Secret (Read-Host -AsSecureString)
+```
+
+**Structure Decision**: se extienden los proyectos existentes (Domain, Application, Persistence,
+Identity, API, Shared) siguiendo el molde de la feature 005, y se agrega **un** proyecto nuevo,
+el servicio de firma y transmisión, porque es el único lugar donde pueden vivir certificados y
+credenciales y porque debe poder atender a varias cooperativas (y, más adelante, actuar como
+proveedor tecnológico) sin que el ERP toque criptografía. No se crean tablas propias de
+«liquidación»: las corridas existentes ganan un `Kind` (research R2), lo que evita duplicar
+pago, comprobante, reversión y reportes.
+
+## Complexity Tracking
+
+Sin violaciones. El único punto que requiere justificación es el **proyecto nuevo** (servicio
+de nómina electrónica): la alternativa de firmar dentro de la API pondría el certificado y el
+PIN de cada cooperativa en el proceso que atiende a todas y en la base de cada una (prohibido
+por FR-031a y por el principio de mínimo privilegio); la alternativa de una base propia
+multi-tenant en el servicio (research R10) violaría el Principio IV y se descartó: el servicio
+queda sin estado.
+
+## Decisiones
+
+Se adoptan las decisiones R1–R14 de [research.md](research.md) con estas precisiones:
+
+| Tema | Decisión del plan |
+|---|---|
+| Motor (R1) | `SettlementCalculationEngine` puro con `SettlementInput`; reutiliza `Explanation`, `SalaryTranches`, `CalendarConventions`, `LineFactory` y un helper de tabla por rangos extraído de `RangeTableRule`. Días 30/360. Casos dorados con los ejemplos numéricos de research. |
+| Persistencia (R2) | `PayrollRun.Kind` (`Ordinary`, `ServiceBonus`, `Severance`, `Vacation`, `Settlement`), `PayPeriodId` nullable, `CutoffDate`, `Year`, `Semester`; índices únicos filtrados por tipo; la definitiva es una corrida de un empleado; `SourceType` contable por tipo. |
+| Saldos iniciales (R3) | `PAY_EmployeeBenefitOpeningBalances`; el motor los explica como paso propio; advertencia cuando el ingreso es anterior al arranque y no hay saldo. |
+| Parámetros (R4) | 40 códigos nuevos con `Source` exacto y vigencia 2026; listas `Required` **por proceso** (no en la de la nómina ordinaria); políticas por empresa en `PAY_CompanyPolicies` con vigencia, leídas por `PayrollPolicyReader`. Los valores 2027 (SMMLV, auxilio, UVT) entran por la pantalla de parámetros o por `Revisiones()` en diciembre. |
+| Retención (R5) | Automática por norma en cada tipo (FR-006a); topes y tarifas por parámetro; explicación paso a paso. |
+| Vacaciones (R6) | Calendario laboral (festivos con vigencia + semana laboral por empresa); movimientos derivan el saldo; la novedad de nómina se registra por período cubierto. |
+| Definitiva (R7) | `EmploymentTermination` con catálogo de motivos (`GeneratesSeverancePay`); deudas de Cartera propuestas por saldo total (préstamos propios) y por cuotas causadas (libranzas), ajustables hacia abajo con motivo y auditadas; aprobar cierra la ficha y aplica los pagos en Cartera por su propio comando; reversar reabre. |
+| Procedimiento 2 (R8) | Doce meses anteriores ÷ 13 (o meses de vinculación), depuración de la ordinaria, tabla vigente, vigencia semestral en `EmployeeWithholdingRate`; cálculo guardado con su explicación. |
+| PILA (R9) | Layout 2388 v30 como dato versionado (registros 1 y 2), planilla E para Aportes en Línea, redondeos por parámetro (IBC al peso, aportes al múltiplo de 100), tabla FSP 2027 + bandera de transición, generaciones con versión, inconsistencias con enlace, cuadre con `NM`. |
+| Nómina electrónica (R10 con desvío IV) | ERP: construcción del XML (anexo v1.0, XSD 1.0.6 embebidos), documentos mensuales por empleado acumulando quincenas y especiales, notas de ajuste, habilitación por cooperativa, estados, blobs inmutables; **servicio central sin estado**: CUNE/SoftwareSC, validación XSD, firma XAdES-EPES (política v2, hash fijo), SOAP WS-Security, diccionario de códigos; modo software propio → PT por configuración; secretos por Secret. Plazo «diez primeros días del mes siguiente (calendario)» como política por empresa hasta que la contadora confirme. |
+| Dispersión (R11) | `BankDisbursementFormat` (definición de columnas como dato, con vigencia) + `BankDisbursementFile` (estados Generado/Enviado, marca de pagado en bloque); formato «AV Villas» se carga cuando el dueño aporte la estructura; un CSV genérico de referencia para pruebas. |
+| Permisos y auditoría (R12) | Recursos y eventos nuevos como en research; namespaces en la prueba de validación dual desde el primer commit. |
+| Pantallas y reportes (R13) | Once páginas bajo `Pages/Nomina`, ficha ampliada, vistas nuevas en `ReportesDeNomina`, dos PDF QuestPDF. |
+| Pruebas (R14) | Casos dorados de liquidación, PILA y DIAN; e2e del ciclo; simulador de la DIAN en el servicio; validadores externos en quickstart con evidencia. |
+
+## Entregas
+
+Cuatro entregas en esta misma rama o en ramas hijas, por calendario legal:
+
+| Entrega | Historias | Contenido | Fecha objetivo |
+|---|---|---|---|
+| **N1 prestaciones** | US1, US2, US3, US4 + saldos iniciales, políticas, calendario | motor, corridas con `Kind`, parámetros 2026, cuatro liquidaciones con aprobación/contabilización/pago/reversión, definitiva con Cartera y documento para firma, vacaciones con novedad, retención por norma, pantallas y reportes | antes del 1 de diciembre de 2026 (prima el 20-12) |
+| **N2 PILA + procedimiento 2** | US5, US7 | generador 2388 con validación y versiones; cálculo P2 semestral | diciembre de 2026 (primera PILA en enero) |
+| **N3 nómina electrónica** | US6 | XML, notas de ajuste, habilitación por cooperativa, servicio central, set de pruebas en habilitación, representación gráfica | set de pruebas en noviembre; producción en los diez primeros días de enero de 2027 |
+| **N4 dispersión y cierre** | US8 | formato parametrizable, archivo AV Villas, marca de pagado en bloque; documentación, CLAUDE.md, quickstart, promoción | diciembre de 2026 |
+
+## Riesgos y lo que falta del dueño
+
+Resumen (detalle en research «Lo que falta del dueño» y «Riesgos»): estructura del archivo de
+AV Villas; registro de COOFLOPAL en el catálogo de la DIAN (modo, SoftwareID, PIN, TestSetId) y
+su certificado de firma de una ECD acreditada; viabilidad y plazo de Ingenia365 como proveedor
+tecnológico (no viable a corto plazo: patrimonio ≥ 20.000 UVT, ISO 27001, visita); acceso al
+validador de Aportes en Línea y datos del aportante; confirmaciones de la contadora
+(exoneración 114-1, topes 790/1.340, ARL en vacaciones, plazo DIAN, prestaciones en el documento
+DIAN, aprendices, cuentas contables de los conceptos nuevos); vigencias 2027; infraestructura y
+segundo revisor de la primera transmisión. La reforma pensional (Ley 2381/2024, desde el
+01-04-2027) se prevé con una segunda tabla FSP y una bandera de transición, sin más.
+
+
+## Decisiones de integración tras la Fase 1
+
+Los cuatro artefactos de la Fase 1 (`spec.md` corregida, `data-model.md`, `contracts/*`,
+`quickstart.md`) dejaron dudas; se resuelven aquí y **mandan** sobre cualquier redacción distinta
+en ellos. Fuente de verdad por tema: nombres de permisos, rutas y errores → `contracts/api.md`;
+tablas y columnas → `data-model.md`; contrato ERP↔servicio → `contracts/servicio-nomina-electronica.md`;
+layouts → `contracts/archivos.md`. `quickstart.md` se alinea a esos nombres en la Fase 2.
+
+| # | Duda | Decisión |
+|---|---|---|
+| D-01 | Quién paga los días de vacaciones | La liquidación `Vacation` los paga **anticipadamente** (política `VacacionesPagoAnticipado = sí` por defecto) por los **días calendario** del disfrute sobre el salario ordinario; la nómina ordinaria de los períodos cubiertos recibe la novedad informativa `AUSENCIA_VACACIONES` que reduce los días de salario y no paga nada. La contadora puede cambiar la política a «paga la nómina ordinaria». |
+| D-02 | Prima y cesantías anuales por empresa o por plan | Una corrida por empresa y período (`Year`, `Semester`); un plan de nómina no cambia la prestación. |
+| D-03 | Vacaciones colectivas | Fuera de alcance: una corrida `Vacation` por empleado y movimiento. |
+| D-04 | Fecha del comprobante contable de una liquidación especial | `CutoffDate` (30-06, 31-12, fecha de retiro, fin del disfrute) para causar contra la provisión en el mes correcto; el pago lleva `PayDate` propio. |
+| D-05 | Tipo de trabajador DIAN vs cotizante PILA | La DIAN adoptó los códigos PILA de tipo de cotizante (tabla 5.5.1): **un solo par de columnas** en la ficha. |
+| D-06 | Segundo apellido y otros nombres | Columnas nullable en `COR_People`; la ficha de persona las captura y **propone** la partición de `LastName`/`FirstName` por espacios para confirmar; sin migración de datos. |
+| D-07 | Fechas límite legales | `LegalParameterKind.DateInYear` con `Value` = MMDD (p. ej. 1220) y helper de lectura; sirven sólo para avisos en pantalla. |
+| D-08 | Tabla de indemnización con dos valores por tramo | `FixedValue` = días del primer año, `Rate` = días por año adicional; la pantalla de parámetros rotula según `Kind`. |
+| D-09 | Umbral de exoneración | El parámetro legal que **ya existe**, `EXONERACION_PARAFISCALES_TOPE_SMMLV` (`LegalParameterCodes.PayrollExemptionThresholdSmmlv`, 10) + política por empresa `Exonerada114_1` sí/no con vigencia (migrada de `Payroll.ApplyEmployerExemption`). No se crea `EXONERACION_114_1_UMBRAL_SMMLV`. |
+| D-10 | Código ACH del banco destino | **Resuelto en N4 (2026-09-21)**: `COR_Banks.TransferCode` **es** el código ACH. En SOLIDO era `codtras` y `clstesoreria.vb` lo escribía como banco destino en su plano de Colmena; no se agrega `AchCode`. La pantalla de Bancos lo muestra como «Código de transferencia (ACH)» y el archivo lo escribe con `PayeeBankCode`; sin él, el empleado queda en pendientes con `BankCodeMissing`. |
+| D-11 | Consulta del estado «en proceso» en la DIAN | **Manual** en esta feature (botón «Consultar estado» por documento y por mes); un trabajo de fondo por cooperativa queda para después, porque hoy no existe ninguno y exige recorrer el directorio abriendo cada conexión (Principio IV). |
+| D-12 | Número de migraciones | **Tres** pares aditivas alineadas con las entregas: `NominaPrestacionesYDian` (N1), `NominaPilaYNominaElectronica` (N2+N3), `NominaDispersionBancaria` (N4). Corrige el «dos» del contexto técnico. |
+| D-13 | ¿La primera migración es destructiva? | No: sólo agrega columnas e índices y reemplaza el índice único de corridas; ningún dato se pierde hacia adelante. `Down` con guarda. Respaldo previo como en toda promoción. |
+| D-14 | Líneas PILA: JSON + columnas tipadas | Aceptado; se agregan columnas si un reporte las necesita. |
+| D-15 | Formato AV Villas sin estructura | Nace inactivo; US8 se prueba con `CSV-GENERICO`; SC-007 queda pendiente del dueño. |
+| D-16 | Modo PT declarado por el servicio | Sí: `GET /v1/version` del contrato devuelve `modos: { softwarePropio, proveedorTecnologico }` (no hay ruta `/capabilities`); la habilitación de la cooperativa sólo puede elegir `ProveedorTecnologico` si el servicio lo anuncia. |
+| D-17 | Retención ≥ 5 años de los blobs DIAN | Regla operativa documentada (no existe purga de adjuntos); una columna `RetainUntil` queda para cuando exista purga. |
+| — | Permisos | Los de `contracts/api.md` §1 y `PayrollPermissionCatalogSeeder`: `Payroll.ServiceBonus`, `Payroll.Severance`, `Payroll.Vacations`, `Payroll.Settlements` (definitiva, descuentos y, con `Manage`, el catálogo de motivos de retiro), `Payroll.BenefitBalances`, `Payroll.WithholdingRate`, `Payroll.Pila`, `Payroll.ElectronicPayroll`, `Payroll.Disbursement` (`Manage` = formatos por banco), `Payroll.CompanyPolicies`, `Payroll.Holidays`; la exportación sigue siendo `Payroll.Runs.Export`. Aprobar/reversar/transmitir/marcar enviado/ajustar descuentos sólo `CompanyAdmin`; `Operator` ve, registra, calcula y genera; `Auditor`/`ReadOnly` `*.View`. |
+| — | `POST /api/payroll/employees/{id}/terminate` | Se **conserva** mientras la pantalla de la ficha lo use; en N1 la ficha pasa a «Terminar contrato» → crea la terminación y abre la definitiva (`/api/payroll/settlements/terminations`); el endpoint viejo se retira al final de N1, sin alias, con la pantalla ya migrada. |
+| — | Rutas de corrida existentes | `approve`, `reverse` y `discard` de `/api/payroll/runs/{runId}` rechazan `Kind != Ordinary` con 422 `Payroll.Settlement.UseSettlementRoute`; pagos, comprobantes y relación de pago sirven a cualquier `Kind`. |
+| — | Fechas de pago en el documento DIAN | Se leen de las marcas de pago (`PayrollPayment.PaidAt`); un empleado sin marca en el mes se omite salvo `acknowledgeUnpaid` explícito, y la pantalla lo lista. |
+| — | Aprendiz en etapa práctica y parafiscales | Parámetro por tipo de cotizante (`APORTES_APRENDIZ_PRACTICA_PARAFISCALES` sí/no); por defecto **no** (caja, SENA e ICBF no se causan por aprendices) hasta que la contadora confirme. |
+| — | Numeración DIAN | Consecutivo interno del empleador con prefijo, por tipo de documento y ambiente (`LastIssuedNumber`, nunca `NextNumber`, por la prueba de arquitectura del contrato contable); sin rango autorizado por la DIAN. |
+| D-18 | Claves de política | Son **once**, no siete: a las de R4 se suman `VacacionesPagoAnticipado` (D-01), `DianMedioPagoMapa` (derivación del medio de pago DIAN), `DeduccionAlRetiroModo` (propuesta de descuentos de la definitiva) y `ArranqueNominaFecha` (la siembra el seeder con el primer período). Catálogo cerrado en `CompanyPolicyKeys`; `contracts/api.md` §10.1 y `data-model.md` §2.1 las listan. |
+| D-19 | Vigencia nueva de política | `POST /company-policies/{key}/versions` responde 201 `{ publicId, warnings[] }`. Una vigencia anterior a corridas aprobadas **avisa** en `warnings` y sigue; sólo `Exonerada114_1` bloquea (`Payroll.CompanyPolicy.RetroactiveNotAllowed`) porque cambia aportes ya contabilizados. Toda vigencia nueva marca los borradores como desactualizados. |
+| D-20 | Origen de los festivos | `HolidayOrigin` tiene cinco valores: `Ley51Fixed`, `Ley51MovedToMonday`, `Ley51Easter` (los pone la semilla) y `Decreed`, `Manual` (los registra la cooperativa; `Manual` por defecto; otro origen → `Payroll.Holiday.OriginInvalid`). Sólo esos dos se retiran. |
+| D-21 | Fecha del comprobante de toda liquidación especial | Confirma D-04 para las cuatro: `postingDate` por defecto = `CutoffDate` y sólo entre el corte y hoy (`SettlementAccountingPoster.ResolverFecha`, `Payroll.Settlement.PostingDateInvalid`). El «hoy por defecto para la prima» que decía `contracts/api.md` §3.1 se retira. |
+| D-22 | Pasante sin contrato de aprendizaje | `reasonCode` `Pasante` en `SettlementReasonCodes` (FR-009): sin prestaciones ni indemnización art. 64; queda en `excluded` de prima, cesantías y definitiva. |
+| D-23 | Códigos de motivos de retiro | Van por `CodigoDeCatalogo` (10 caracteres): `RENUNCIA`, `DESP_SINJC`, `DESP_JC`, `VENC_TERM`, `MUTUO_ACDO`, `FIN_OBRA`, `PER_PRUEBA`, `MUERTE`, `PENSION`. |
+| D-24 | `RunSummaryDto` | Los campos nuevos son `kind` (texto), `cutoffDate`, `payDate`, `year`, `semester`, `employeePublicId` y `warnings: [{ code, message, data }]`; el período sigue siendo `periodPublicId` (nullable), no `payPeriodPublicId`. |
+| D-25 | Ficha PILA/DIAN | `salaryTypeCode` F/V/X se deriva de `SalaryType` (0/1/2; `IntegralSalary` siempre X) y no es columna nueva; `ApprenticeStage` es obligatoria si la clase es `Apprentice` o `Intern` (`Payroll.Employee.ApprenticeStageRequired`); el `PUT` quita el banco de dispersión con `clearDisbursementBank`; el bloque `dian` lleva además `paymentMethodCode` y `workAddress` opcionales. Otros nombres de la persona es `OtherNames` (no `MiddleName`). |
+| D-26 | Parámetros faltantes por proceso | `GET /legal-parameters/missing?process=` acepta `LegalParameterProcess`: `Ordinary`, `Settlements`, `Pila`, `WithholdingRates`, `ElectronicPayroll` (los dos primeros y el último no estaban en el contrato). |
+| D-27 | Tablas de N2–N4 | Los nombres que valen son los de `data-model.md` §3: `PAY_PilaGenerationLines`, `PAY_ElectronicPayrollSettings`/`…NumberingRanges`/`…Transmissions`, `PAY_BankDisbursementFormats`/`…Files`, `PAY_SettlementDeductions`; `quickstart.md` y `contracts/api.md` §8 quedaron alineados en T038. |
+| D-28 | Topes mensuales de retención en las liquidaciones de vacaciones y salario pendiente | En modo `Mensualizado` los topes mensuales en UVT (vivienda, prepagada, dependientes, voluntarios, renta exenta del 25 % y el global) se **proporcionan a los días que cubre el pago** —la cantidad de `SALARIO_PENDIENTE`, `VACACIONES_LIQ` y `VACACIONES_COMP`, sobre 30, con tope 1—, la misma regla con que la nómina ordinaria proporciona los suyos a los días del período (`ModoDeTopesAnuales.Mensualizado`: «proporcionados a los días del pago»). Antes iban con proporción 1 fija y la liquidación de vacaciones sumaba a la ordinaria del mes un segundo mes entero de topes. Sigue **sin resolverse** que la ordinaria del mes del disfrute use la duración del período y no los días trabajados: compartir los topes por mes de imputación entre corridas queda pendiente; el modo `Acumulado` es el exacto según la DIAN y allí el cupo anual usado suma también la retención practicada en las liquidaciones especiales aprobadas del año (prima, vacaciones, indemnización, definitiva), no sólo la ordinaria. |
+| D-29 | Un solo pagador del último tramo y de la prima/cesantías del retiro (revisión de N1) | La **definitiva paga el último tramo**: `SALARIO_PENDIENTE` con auxilio por los días del período abierto hasta el retiro **y las novedades activas del empleado en ese período** (`PendingNoveltiesRule`: devengadas y deducciones por «valor fijo» y «cantidad × unidad» con su concepto; las informativas ya viajan como ausencias, la cuota de libranza recurrente como deuda y `BONIF_RETIRO` en la terminación; una forma que necesita las bases de la ordinaria queda omitida con `NovedadNoLiquidable`). El empleado con **definitiva aprobada dentro del período o antes no entra a la ordinaria** de ese período (spec US3 escenario 1, FR-020; hasta la revisión `CalculationInputLoader` lo liquidaba «por los días hasta el retiro» y el tramo salía dos veces; si la definitiva **no** trajo `SALARIO_PENDIENTE` porque no había período abierto al aprobarla, la ordinaria sí lo liquida por días hasta el retiro). Los dos borradores se vigilan entre sí: aprobar la definitiva deja `Stale` la ordinaria calculada del período del retiro; aprobar la ordinaria deja `Stale` la definitiva en borrador, que al recalcular sale sin salario pendiente. En el otro sentido, la **prima semestral y la anual de cesantías excluyen también la terminación `Registered`** (definitiva en borrador) con corte en o después del retiro, y la **definitiva registrada después de una semestral o anual aprobada** del mismo período omite la prima (`YaPagadaEnCorridaSemestral`) y liquida cesantías e intereses sólo por los días posteriores al corte de la anual (`YaPagadaEnCorridaAnual` si no quedan); la semestral sólo recibe primas pagadas en definitivas (FR-009). **Lo que la definitiva no calcula del tramo pendiente**: aportes patronales, ARL, parafiscales y provisiones de esos días; N2 (PILA) los toma de la corrida `Settlement` como novedad de retiro, y la provisión se cierra por el ajuste de la propia definitiva. Los devengos variables de ese tramo tampoco entran al promedio de la prima ni de las cesantías (sólo las corridas aprobadas alimentan `MonthlyBases`). |
+| D-30 | Ajuste de provisión en un disfrute o compensación parcial | La provisión de vacaciones cubre **todos** los días hábiles pendientes, no sólo los del movimiento que se paga: una corrida `Vacation` compara lo liquidado con la parte de la provisión que corresponde a sus días —`Accrued × días hábiles del movimiento / días hábiles pendientes antes de él`— y deja el resto provisionado; si consume todos los pendientes (o más, anticipadas) cancela toda la provisión. La definitiva, la prima y las cesantías siguen cancelando la provisión completa. Hasta la revisión de N1 cada disfrute parcial liberaba toda `PROV_VACACIONES` y el siguiente salía «corto» al gasto (contradecía SC-003). `ProvisionAdjustmentRule.ProvisionDeLosDiasLiquidados`; caso dorado 19. |
+| D-31 | Días que paga el disfrute | Precisa D-01: la corrida `Vacation` paga los días del descanso contados por el **calendario comercial** de la nómina (`CalendarConventions.Days`: el 31 no existe y el último día del mes vale 30), que son exactamente los que la ordinaria descuenta con la novedad `AUSENCIA_VACACIONES`, de modo que salario más vacaciones suman siempre el mes completo. Los días calendario reales siguen en el movimiento (`CalendarDays`) para la explicación y la nómina electrónica. Con los días reales, un disfrute del 14 al 28 de febrero pagaba 15 y la ordinaria descontaba 17 (el empleado perdía dos días) y uno del 17 al 31 de octubre cobraba 31 días del mes. `VacationRule.DiasComerciales`; caso dorado 20. |
+| D-32 | Unicidad de la corrida de vacaciones | Por **movimiento**, no por empleado y corte: el corte de un disfrute futuro (o de una compensación con pago futuro) es «hoy» (D-04, D-21: el comprobante no puede fecharse después de hoy), así que dos disfrutes disjuntos —o un disfrute y una compensación— registrados el mismo día para el mismo empleado compartían corte y el segundo respondía `Payroll.Settlement.Duplicate`; fraccionar las vacaciones es legítimo. `SettlementRunKey.Vacaciones` lleva `VacationMovementId`, `CorridasDeAsync` filtra por él y el índice pasa a `UK_PAY_PayrollRuns_Vacation_Movement_Version (VacationMovementId, Version)` con `[Kind] = 3` (corregido en la propia migración `NominaPrestacionesYDian`, que aún no salió de la rama). Lo que impide duplicar un disfrute es el cruce de fechas (`Overlaps`). `CutoffDate` sigue siendo la víspera del disfrute o la fecha de pago, nunca posterior a hoy. |
+| D-33 | Aprobar un disfrute sin período de nómina que lo cubra | **Se rechaza** (422 `Payroll.Vacation.PeriodMissing`, `data: { missing: [{ from, to }] }`). D-01 sostiene que la ordinaria «recibe la novedad» de los períodos cubiertos y nadie la crearía después: el planificador sólo reparte entre períodos existentes y el traslado (FR-003) sólo cubre lo que sigue al **último** período existente. Aprobar con el aviso dejaba los días pagados dos veces (liquidación y salario). Registrar y recalcular siguen avisando con el mismo código (`warnings[]`) para que se creen los períodos antes de aprobar; los días posteriores al último período existente siguen entrando como traslado. `PlanDeNovedades.SinPeriodo`. |
+| D-34 | Reversar una liquidación de vacaciones cuya ausencia ya descontó una nómina aprobada | **Se rechaza** (422 `Payroll.Vacation.NoveltyAlreadyPaid`, `data: { periodPublicId, ordinaryRunPublicId }`), como el edge case del retiro en período aprobado: primero se reversa esa nómina ordinaria (reabre el período) y después la liquidación, que entonces anula todas sus novedades. Antes la reversión pasaba en silencio con la novedad viva en un período inmutable y el movimiento en `Registered` sin salida: no se podía anular (`PeriodApproved`), recalcular (`NotDraft`) ni registrar otro (`Overlaps`). `Liquidated → Registered` al reversar (data-model §2.4) se mantiene; no hay ruta para re-liquidar un movimiento reversado (se anula y se registra de nuevo). |
+| D-35 | Ciclo y contabilidad de las liquidaciones (revisión N1, 2026-09-21) | Cinco reglas que el código ya cumple y ningún artefacto decía. **(a)** En las cesantías anuales `NetPay`/`TotalNet` son **lo que se le paga al empleado** (intereses menos retención); las cesantías del fondo son devengo (`TotalEarnings`) pero no neto, así que la relación de pago, la marca, el comprobante del empleado y la dispersión de N4 nunca las incluyen (`SettlementRunPersister.NetoPagadero`, único escritor). **(b)** Los cuatro ajustes de provisión (`*_AJUSTE_PROV`) se contabilizan **sin tercero**, como la provisión que corrigen (`TercerosDeNomina`). **(c)** Un borrador especial (prima, cesantías, vacaciones, definitiva) queda `Stale` cuando se aprueba o reversa una ordinaria cuyo período empieza en o antes de su corte, cambia un salario con efecto hasta su corte o cambia el saldo inicial del empleado (`IPayrollRunStaleMarker.MarkSettlementDraftsStaleAsync`); aprobar exige recalcular. **(d)** El saldo inicial lo consume **toda** liquidación aprobada que lo leyó (corte ≥ su fecha): `ConsumedByRunId` señala a la más antigua, reversarla pasa la marca a la siguiente y el `PUT` se rechaza (`Payroll.BenefitBalance.Consumed` con todas) mientras quede alguna (`BenefitBalanceRules.ConsumidoresAsync`). **(e)** El recaudo de Cartera de la definitiva corre **directo** por `RecaudoDeCredito` dentro de la transacción de la aprobación, nunca por `ISender`; con eso aprobar y reversar las cuatro liquidaciones son reintentables ante concurrencia como la prima (R3). Además: reversar la definitiva con la persona ya reingresada responde `Payroll.Settlement.EmployeeRehired`, y los únicos de `PAY_SettlementDeductions` cuentan sólo filas vivas (migración par `SettlementDeductionsUnicosEntreVivas`). |
+| D-36 | Quién gobierna el PDF de la definitiva en `COR_Attachments` | El adjunto que **genera un módulo** lo gobierna ese módulo, no `Attachments.*`: `AdjuntosDeModulo` (Application/Attachments/Common) declara por `OwnerEntityType` el permiso de lectura y si la ruta genérica puede borrarlo. `EmploymentTermination` exige `Payroll.Settlements.View` para descargar y listar (sin él, 404 / lista vacía, como si no existiera) y **no se borra** por `DELETE /api/attachments/{id}` (422 `Attachments.OwnedByModule`): se conserva con la operación que lo produjo. Los dueños no declarados (`User`, `Loan`, `Transaction`…) siguen con `Attachments.*`; los archivos de N2–N4 entran a la tabla cuando existan. Hasta la revisión de N1 el Operador lo borraba y cualquier `Attachments.Download` lo descargaba. |
+| D-37 | `AffectsVacationBase` y `DianElement` en el contrato de conceptos | Van en `ConceptDefinitionInput` (y en el DTO y la pantalla de Conceptos): `affectsVacationBase?: bool`, `dianElement?: string` (ruta del XML, 60, `Devengados/Basico`…). Al **revisar**, nulo = hereda de la versión vigente y `dianElement: ""` quita la ruta; al crear, nulo = `false`/sin ruta. La semilla pone las dos columnas en su sitio **sólo en las versiones que ella creó** (`CreatedBy` de la semilla), nunca en una versión que una persona registró al revisar ni en un `Custom`. Hasta la revisión de N1 la versión revisada de un concepto sembrado nacía sin base de vacaciones hasta el arranque siguiente, y un concepto propio nunca la tenía. |
+| D-38 | Códigos de error y de exclusión que nacieron al implementar | Los códigos `Payroll.*` de N1 viven en `SettlementErrors` (comunes, prima, vacaciones, terminación y definitiva), `SeveranceErrors` (cesantías) y `HolidayErrors`; ninguno se construye suelto con `new Error("Payroll…")` en un handler. `contracts/api.md` §3.6 registra los que el contrato no tenía (`KeyMissing`, `ConceptMissing`, `Severance.CutoffOutsideYear`…, los avisos `*.Warning`, `Vacation.Anticipated/PeriodMissing`, `Settlement.DeductionReproposed`, `Holiday.YearNotLoaded`) y la prueba de arquitectura `LosCodigosDeNominaEstanEnElContrato` exige que todo código emitido por `Application/Payroll` figure en el contrato. `RetiradoConDefinitiva` entra a `SettlementReasonCodes` y a §3.2: el retirado con definitiva aprobada queda en `excluded` con ese código, no desaparece en silencio. |
+| D-39 | Números y nombres de los enums que viajan por HTTP | Mandan `data-model.md` §2 y el código, y `contracts/api.md` quedó corregido en la revisión de N1: `VacationMovementKind` `Enjoyment=1, Compensation=2, Adjustment=3, SettlementPayout=4` (numera desde 1); `VacationMovementStatus` `Registered=0, Liquidated=1, Cancelled=2` (no `Pending/Confirmed`); `DianContractType` `FixedTerm=1, Indefinite=2, WorkOrLabor=3, Apprenticeship=4, Internship=5` (la tabla de la DIAN, no al revés); `SettlementDeductionKind` `CooperativeLoan=1, ThirdPartyLibranza=2, Other=3` y `SettlementDeductionStatus` `Proposed=0, Adjusted=1, Applied=2, Reverted=3`; `SemanaLaboral` `LunesASabado=0, LunesAViernes=1`. Un cliente que siguiera el contrato viejo mandaba `kind: 0` (400) o registraba un término fijo como indefinido. `LosEnumsDelContratoNumeranComoElDominio` (Architecture.Tests) lee cada `Nombre (N)` del contrato y lo contrasta con el Domain. |
+| D-40 | Permisos del botón «Registrar disfrute o compensación» | Registrar es una acción de pantalla que cruza dos endpoints con permisos distintos: la vista previa obligatoria de hábiles (FR-015, `POST /api/payroll/vacations/working-days`) es `Payroll.Vacations.Register` y el registro que crea el movimiento y la liquidación (`POST /api/payroll/settlements/vacations`) es `Payroll.Vacations.Calculate`. La API no cambia; la pantalla pone el botón detrás de **los dos** gates (anidados = AND), porque un botón que se ve y no se puede terminar es peor que uno que no se ve. Hasta la revisión de N1 (2026-09-21) el botón iba sólo detrás de `Calculate`: un rol con `Calculate` sin `Register` abría el diálogo y «Ver días hábiles» respondía el 404 indistinguible, así que «Registrar y calcular» nunca se habilitaba; el `Operator` no lo sufría porque lleva ambos. `contracts/api.md` §1 dice ahora qué es cada permiso sin contradecir §3.3 y §5. |
+| D-41 | Quitar la etapa del contrato de aprendizaje | El `PUT /api/payroll/employees/{id}` acepta `clearApprenticeStage: true` para dejar `ApprenticeStage` en nulo, simétrico a `clearDisbursementBank` (D-25): «un bloque que no viene no toca lo que había» sigue valiendo, y por eso el nulo a secas no borra. La regla del aprendiz manda igual: quitarla con clase `Apprentice` o `Intern` responde `Payroll.Employee.ApprenticeStageRequired`. La ficha manda la bandera cuando la persona limpia el desplegable y la clase ya no es aprendiz ni pasante; hasta la revisión de N1 la X del desplegable notificaba éxito y no borraba nada. |
+| D-42 | Los formatos de archivo bancario viven en **Core**, ligados al banco, y el motor es genérico | Pedido del dueño al arrancar N4 («deja la funcionalidad de dispersión configurada asociada a los bancos, para que más adelante se puedan implementar los planos de los demás bancos y se pueda utilizar en contabilidad y tesorería»). Las tablas son `COR_BankFileFormats` / `COR_BankFileFormatFields` (no `PAY_*`): `BankId` nulo = formato genérico para cualquier banco; `Scope` (`PayrollDisbursement=1`, `SeveranceDeposit=2`, `SupplierPayments=3` reservado para tesorería/contabilidad) dice qué fuente de líneas lo alimenta. El motor `Application/Common/BankFiles/FlatFileWriter` no conoce la nómina: recibe un contexto (empresa, cuenta origen, lote) y líneas con orígenes genéricos (`Payee*`, `Amount`, `Concept`); los nombres del contrato (`Employee*`, `NetAmount`, `PaymentConcept`) quedan como sinónimos. Nómina aporta `PayrollDisbursementLines` y guarda sus archivos en `PAY_BankDisbursementFiles`; la consignación de cesantías (`GetFundDepositFileQuery`) ya escribe con el mismo motor. Permisos de formatos en Core (`Core.BankFileFormats.View/Manage`); rutas `/api/core/bank-file-formats`; pantalla `/maestros/formatos-bancarios`. Dos formatos activos del mismo banco y ámbito no se cruzan en el tiempo (los genéricos tampoco entre sí), y uno que ya generó archivos no cambia de estructura (`Core.BankFileFormat.InUse`). |
+| D-43 | El layout de la PILA sin cotejar es vigente, y las bloqueantes se guardan | Nacieron al implementar N2 (2026-09-21). (a) `PilaLayoutCatalog` elige el layout por fecha; que tenga campos con `verified = false` **no** lo saca de vigencia (con la regla original de T084 nada se podía generar hasta el cotejo del dueño, T094, y el archivo no se podía probar en el validador del operador, que es justamente cómo se coteja). Generar con un layout sin cotejar deja la alerta `Pila.LayoutSinCotejar`, que hay que reconocer; `LayoutMissing` queda para «ningún layout cubre el período». (b) Generar con bloqueantes no responde `BlockingIssues`: crea una generación `Validated (0)` sin archivo con las inconsistencias en `PAY_PilaIssues` (quedan a la vista, versionadas y auditadas); `validate` sigue siendo la consulta sin guardar. (c) El registro tipo 1 suma 358 posiciones con los campos reconstruidos de la resolución y el anexo declara 359: el layout embebido declara 358 (contiguo y sin huecos, `PilaLayoutTests`) y el campo faltante se corrige al cotejar. (d) La exoneración del art. 114-1 mira lo **devengado** del mes (antes del 70 % integral y de los topes), no el IBC: un integral de 20.000.000 no queda exonerado aunque su IBC (14.000.000) esté bajo 10 SMMLV. (e) `PilaIssue` es auditable (`AuditableEntity`), no `Lookup`: Principio VII. (f) El cuadre FR-027 compara el archivo con los conceptos de aportes de las **corridas** aprobadas del mes (las líneas que alimentaron los `NM`), y una diferencia por redondeo es esperable: la ordinaria redondea según `Payroll.Rounding` y la planilla al múltiplo de 100 superior; se muestra y se descarga reconociéndola. |
+| D-44 | Procedimiento 2: la ficha cierra vigencias y el cálculo no las pisa | `SetEmployeeWithholdingCommand` (R8) conserva la tasa que sigue igual —con su `Origin` y `SourceCalculationId`—, cierra la abierta la víspera de la siguiente y sólo retira en blando la que desaparece sin sucesora; dos tasas que empiezan el mismo día siguen siendo `WithholdingRateOverlap`. Aprobar un cálculo cierra la vigencia que cruza el semestre la víspera y retira en blando las que empezaban dentro de él; una aprobada no se supersede al recalcular (se crea la versión siguiente al lado). Con menos de doce meses el divisor son los meses con historia (`divisorSource = MesesDeVinculacion`); el aviso `SemesterIncomplete` no impide calcular. |
+
+**Re-evaluación de la constitución tras el diseño**: sin cambios en las compuertas. El servicio
+central sigue sin estado (data-model.md §«Principio IV» lo enumera); las tres migraciones son
+aditivas; los namespaces nuevos entran en `PrincipioVIII_DualValidation` en el primer commit de N1.

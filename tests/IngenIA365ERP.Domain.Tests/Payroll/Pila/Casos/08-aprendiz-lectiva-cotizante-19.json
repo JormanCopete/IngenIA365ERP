@@ -1,0 +1,90 @@
+{
+  // Caso dorado 08 (feature 010, US5): Ley 2466/2025 — la etapa lectiva es cotizante 19 sin pensión ni parafiscales; la práctica cotiza como dependiente.
+  "nombre": "Aprendiz en etapa lectiva (tipo 19) y en etapa práctica (dependiente)",
+  "derivacion": "Jiménez (lectiva, apoyo 1.313.179): tipo 19, IBC mínimo 1 SMMLV = 1.750.905; pensión 0; salud SALUD_APRENDIZ_PCT 12,5 % = 218.863,1→218.900; ARL 9.139,7→9.200; sin CCF, SENA ni ICBF = 228.100. Pérez (práctica, apoyo 1.750.905): tipo 01 como dependiente: pensión 280.144,8→280.200; salud 4 % 70.036,2→70.100; ARL 9.200; CCF 70.100 = 429.600. Total 657.700; Σ IBC 3.501.810.",
+  "year": 2026,
+  "month": 12,
+  "empresa": {
+    "nombre": "Cooperativa de Prueba",
+    "nit": "900123456",
+    "dv": "7",
+    "clase": "B",
+    "arlPilaCode": "14-23",
+    "codigoOperador": "24",
+    "dane": "76001",
+    "actividadEconomica": "1649501"
+  },
+  "politicas": {
+    "exonerada114_1": true,
+    "cotizaArlEnVacaciones": false
+  },
+  "parametros": {},
+  "cotizantes": [
+    {
+      "documento": "8001",
+      "primerApellido": "Jiménez",
+      "segundoApellido": "Jaramillo",
+      "primerNombre": "Julián",
+      "clase": "Apprentice",
+      "etapa": "Lective",
+      "ingreso": "2026-08-01",
+      "salario": 1313179,
+      "afp": null,
+      "ccf": null
+    },
+    {
+      "documento": "8002",
+      "primerApellido": "Pérez",
+      "segundoApellido": "Pardo",
+      "primerNombre": "Pedro",
+      "clase": "Apprentice",
+      "etapa": "Practical",
+      "ingreso": "2026-02-01",
+      "salario": 1750905
+    }
+  ],
+  "esperado": {
+    "cotizantes": 2,
+    "lineas": 2,
+    "totalIbcCcf": 3501810,
+    "totalAportes": 657700,
+    "bloqueantes": [],
+    "alertas": [
+      "Pila.LayoutSinCotejar"
+    ],
+    "lineasEsperadas": [
+      {
+        "n": 1,
+        "documento": "8001",
+        "novedades": "",
+        "tipo": "19/00",
+        "dias": 30,
+        "ibc": 1750905,
+        "pension": 0,
+        "fsp": 0,
+        "salud": 218900,
+        "arl": 9200,
+        "ccf": 0,
+        "sena": 0,
+        "icbf": 0,
+        "exonerado": false
+      },
+      {
+        "n": 2,
+        "documento": "8002",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 1750905,
+        "pension": 280200,
+        "fsp": 0,
+        "salud": 70100,
+        "arl": 9200,
+        "ccf": 70100,
+        "sena": 0,
+        "icbf": 0,
+        "exonerado": true
+      }
+    ]
+  }
+}

@@ -25,6 +25,8 @@ public interface IApplicationDbContext
     DbSet<CostCenter> CostCenters { get; }
     DbSet<City> Cities { get; }
     DbSet<Bank> Banks { get; }
+    DbSet<BankFileFormat> BankFileFormats { get; }
+    DbSet<BankFileFormatField> BankFileFormatFields { get; }
     DbSet<Company> Companies { get; }
     DbSet<Committee> Committees { get; }
     DbSet<Beneficiary> Beneficiaries { get; }
@@ -161,6 +163,28 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Payroll.Transactions.PayrollRunLine> PayrollRunLines { get; }
     DbSet<PayrollPayment> PayrollPayments { get; }
     DbSet<PayslipDelivery> PayslipDeliveries { get; }
+
+    // Payroll — feature 010 (prestaciones, retiro, procedimiento 2; entrega N1)
+    DbSet<CompanyPolicy> CompanyPolicies { get; }
+    DbSet<Holiday> Holidays { get; }
+    DbSet<EmployeeBenefitOpeningBalance> EmployeeBenefitOpeningBalances { get; }
+    DbSet<VacationMovement> VacationMovements { get; }
+    DbSet<TerminationReason> TerminationReasons { get; }
+    DbSet<EmploymentTermination> EmploymentTerminations { get; }
+    DbSet<SettlementDeduction> SettlementDeductions { get; }
+    DbSet<WithholdingRateCalculation> WithholdingRateCalculations { get; }
+    DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths { get; }
+    DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFile> BankDisbursementFiles { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.BankDisbursementFileLine> BankDisbursementFileLines { get; }
+    DbSet<Domain.Entities.Payroll.Pila.PilaSettings> PilaSettings { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PilaGeneration> PilaGenerations { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PilaGenerationLine> PilaGenerationLines { get; }
+    DbSet<Domain.Entities.Payroll.Pila.PilaIssue> PilaIssues { get; }
+    DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollSettings> ElectronicPayrollSettings { get; }
+    DbSet<Domain.Entities.Payroll.ElectronicPayroll.ElectronicPayrollNumberingRange> ElectronicPayrollNumberingRanges { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions { get; }
 
     // Inventory
     DbSet<Product> Products { get; }

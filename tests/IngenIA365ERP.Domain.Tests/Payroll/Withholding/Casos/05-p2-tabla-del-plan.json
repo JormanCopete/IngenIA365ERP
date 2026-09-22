@@ -1,0 +1,126 @@
+{
+  // Caso dorado 05 del procedimiento 2 (feature 010, US7): TablaDeRetencionDelPlan manda sobre RETEFTE_TABLA_UVT cuando el plan trae tramos.
+  "nombre": "La tabla de retención propia del plan reemplaza a la legal",
+  "derivacion": "Mismos doce meses del caso 04 (base promedio 7.906.153,85 = 150,9557 UVT) con la tabla del plan: 0–100 → 0 %; 100–200 → 20 %; 200+ → 30 % + 20 UVT. Tramo 100–200: (150,9557 − 100) × 20 % = 10,1911 UVT = 533.750,77 → 6,75 %.",
+  "year": 2026,
+  "semester": 2,
+  "mesDeCalculo": "2026-12-01",
+  "secuencia": "DepurateThenDivide",
+  "meses": [
+    {
+      "year": 2025,
+      "month": 12,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 4,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "bruto": 18000000,
+      "aportes": 1080000,
+      "especial": true
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    }
+  ],
+  "deducciones": [],
+  "esperado": {
+    "mesesConsiderados": 12,
+    "divisor": 13,
+    "basePromedio": 7906153.85,
+    "promedioUvt": 150.9557,
+    "retencionTeorica": 533750.77,
+    "porcentaje": 6.75
+  },
+  "tablaDelPlan": {
+    "tramos": [
+      {
+        "desde": 0,
+        "hasta": 100,
+        "tarifa": 0,
+        "fijo": 0
+      },
+      {
+        "desde": 100,
+        "hasta": 200,
+        "tarifa": 20,
+        "fijo": 0
+      },
+      {
+        "desde": 200,
+        "hasta": null,
+        "tarifa": 30,
+        "fijo": 20
+      }
+    ]
+  }
+}

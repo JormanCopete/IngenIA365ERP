@@ -41,6 +41,13 @@ public sealed record TablaExportable(
     FilaExportable? Totales,
     IReadOnlyList<string> Notas)
 {
+    /// <summary>
+    /// Feature 010 (FR-012, contracts/archivos.md §3.1): en Excel, además de la hoja completa, cada
+    /// <see cref="FilaExportable.Seccion"/> va en su propia hoja con sus filas y su subtotal, para
+    /// entregar a cada fondo de cesantías sólo lo suyo. PDF y Word no cambian. Apagado por defecto.
+    /// </summary>
+    public bool HojaPorSeccion { get; init; }
+
     public static TablaExportable Vacia(string titulo, string subtitulo, IReadOnlyList<ColumnaExportable> columnas) =>
         new(titulo, subtitulo, columnas, [], null, []);
 }

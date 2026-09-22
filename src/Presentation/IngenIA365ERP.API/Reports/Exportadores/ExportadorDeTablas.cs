@@ -90,9 +90,77 @@ public static class ExportadorDeTablas
         fila++;
         foreach (var nota in tabla.Notas) { hoja.Cell(fila++, 1).Value = nota; }
         hoja.Columns().AdjustToContents(4, Math.Max(5, fila));
+        if (tabla.HojaPorSeccion) HojasPorSeccion(libro, tabla);
         using var ms = new MemoryStream();
         libro.SaveAs(ms);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Feature 010 (FR-012): una hoja más por sección —el fondo de cesantías— con el mismo
+    /// encabezado, sólo sus filas y un subtotal de las columnas numéricas. El nombre de la hoja
+    /// respeta el límite de 31 caracteres y los que Excel prohíbe; si dos secciones chocan, se numeran.
+    /// </summary>
+    private static void HojasPorSeccion(XLWorkbook libro, TablaExportable tabla)
+    {
+        var usados = new HashSet<string>(libro.Worksheets.Select(w => w.Name), StringComparer.OrdinalIgnoreCase);
+        foreach (var seccion in tabla.Filas.Where(f => f.Seccion is not null).Select(f => f.Seccion!).Distinct())
+        {
+            var hoja = libro.AddWorksheet(NombreDeHoja(seccion, usados));
+            hoja.Cell(1, 1).Value = tabla.Titulo;
+            hoja.Cell(1, 1).Style.Font.Bold = true;
+            hoja.Cell(2, 1).Value = seccion;
+            hoja.Cell(2, 1).Style.Font.Bold = true;
+            hoja.Cell(2, 1).Style.Font.FontSize = 13;
+            hoja.Cell(3, 1).Value = tabla.Subtitulo;
+            hoja.Cell(3, 1).Style.Font.Italic = true;
+
+            var fila = 5;
+            for (var i = 0; i < tabla.Columnas.Count; i++) hoja.Cell(fila, i + 1).Value = tabla.Columnas[i].Nombre;
+            var encabezado = hoja.Range(fila, 1, fila, tabla.Columnas.Count);
+            encabezado.Style.Font.Bold = true;
+            encabezado.Style.Fill.BackgroundColor = XLColor.FromHtml("#E2D8EA");
+            fila++;
+
+            var filas = tabla.Filas.Where(f => f.Seccion == seccion).ToList();
+            foreach (var f in filas)
+            {
+                for (var i = 0; i < tabla.Columnas.Count; i++) Celda(hoja.Cell(fila, i + 1), f.Valores.ElementAtOrDefault(i), tabla.Columnas[i].Tipo);
+                if (f.Resaltada) hoja.Range(fila, 1, fila, tabla.Columnas.Count).Style.Font.Bold = true;
+                fila++;
+            }
+
+            // Subtotal de la sección: suma de las columnas numéricas de los renglones de detalle (las
+            // filas resaltadas son totales que la vista ya trae y no se vuelven a sumar).
+            var detalle = filas.Where(f => !f.Resaltada).ToList();
+            hoja.Cell(fila, 1).Value = $"Total {seccion}";
+            for (var i = 1; i < tabla.Columnas.Count; i++)
+            {
+                var tipo = tabla.Columnas[i].Tipo;
+                if (tipo is not (TipoDeColumna.Moneda or TipoDeColumna.Decimal)) continue;
+                var suma = detalle.Select(f => f.Valores.ElementAtOrDefault(i)).OfType<decimal>().Sum();
+                Celda(hoja.Cell(fila, i + 1), suma, tipo);
+            }
+            var total = hoja.Range(fila, 1, fila, tabla.Columnas.Count);
+            total.Style.Font.Bold = true;
+            total.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+            hoja.Cell(fila + 1, 1).Value = $"{detalle.Count} renglón(es)";
+            hoja.Columns().AdjustToContents(5, Math.Max(6, fila + 1));
+        }
+    }
+
+    private static string NombreDeHoja(string seccion, HashSet<string> usados)
+    {
+        var limpio = new string(seccion.Select(c => @"\/?*[]:".Contains(c) ? ' ' : c).ToArray()).Trim();
+        if (limpio.Length == 0) limpio = "Sección";
+        var nombre = Recortar(limpio, 31);
+        var n = 2;
+        while (!usados.Add(nombre))
+        {
+            var sufijo = $" ({n++})";
+            nombre = Recortar(limpio, 31 - sufijo.Length) + sufijo;
+        }
+        return nombre;
     }
 
     private static void Celda(IXLCell celda, object? valor, TipoDeColumna tipo)

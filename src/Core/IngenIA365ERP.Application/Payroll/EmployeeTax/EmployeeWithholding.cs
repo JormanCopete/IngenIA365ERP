@@ -54,8 +54,9 @@ public sealed class GetEmployeeWithholdingQueryHandler(IApplicationDbContext db)
 
 /// <summary>
 /// FR-039 (D-11): procedimiento de retención, porcentajes con vigencia (procedimiento 2)
-/// y deducciones declaradas con vigencia. Reemplaza el conjunto: lo anterior queda
-/// marcado como retirado, no borrado. Evento explícito de auditoría con antes y después.
+/// y deducciones declaradas con vigencia. Desde la feature 010 (R8) las vigencias de porcentaje se
+/// cierran en vez de reemplazarse: la que sigue igual se conserva con su origen, la anterior se cierra la
+/// víspera de la nueva. Evento explícito de auditoría con antes y después.
 /// </summary>
 public sealed record SetEmployeeWithholdingCommand(
     Guid EmployeePublicId,
@@ -100,13 +101,16 @@ public sealed class SetEmployeeWithholdingCommandHandler(
         var e = await db.Employees.FirstOrDefaultAsync(x => x.PublicId == request.EmployeePublicId, ct);
         if (e is null) return Result.Failure(new Error("Payroll.EmployeeNotFound", "No existe el empleado indicado."));
 
+        // Feature 010 (R8): una vigencia abierta seguida de otra posterior se cierra sola la víspera; sólo un cruce
+        // real (la anterior termina después de que empieza la siguiente) se rechaza.
         var tasas = request.Rates.OrderBy(r => r.ValidFrom).ToList();
         for (var i = 1; i < tasas.Count; i++)
         {
             var anterior = tasas[i - 1];
-            if (anterior.ValidTo is null || anterior.ValidTo >= tasas[i].ValidFrom)
+            if (anterior.ValidFrom.Date == tasas[i].ValidFrom.Date || (anterior.ValidTo is { } fin && fin.Date >= tasas[i].ValidFrom.Date))
                 return Result.Failure(new Error("Payroll.WithholdingRateOverlap",
                     $"Los porcentajes con vigencia desde {anterior.ValidFrom:dd/MM/yyyy} y {tasas[i].ValidFrom:dd/MM/yyyy} se solapan."));
+            if (anterior.ValidTo is null) tasas[i - 1] = anterior with { ValidTo = tasas[i].ValidFrom.Date.AddDays(-1) };
         }
 
         var ahora = clock.UtcNow;
@@ -118,19 +122,41 @@ public sealed class SetEmployeeWithholdingCommandHandler(
             deductions = await db.EmployeeTaxDeductions.Where(d => d.EmployeeId == e.Id).Select(d => new { d.Kind, d.MonthlyAmount, d.Percent, d.ValidFrom, d.ValidTo }).ToListAsync(ct),
         };
 
-        foreach (var r in await db.EmployeeWithholdingRates.Where(r => r.EmployeeId == e.Id).ToListAsync(ct))
+        // Feature 010 (R8): las vigencias se CIERRAN, no se borran. Una tasa que sigue igual se conserva (con su
+        // origen y el cálculo del que salió); la que ya no viene y estaba abierta se cierra la víspera de la
+        // siguiente que la reemplaza; sólo se retira en blando la que desaparece sin sucesora.
+        var existentes = await db.EmployeeWithholdingRates.Where(r => r.EmployeeId == e.Id).OrderBy(r => r.ValidFrom).ToListAsync(ct);
+        var conservadas = new HashSet<int>();
+        foreach (var r in tasas)
         {
-            r.IsDeleted = true; r.DeletedAt = ahora; r.DeletedBy = user.UserName;
+            var igual = existentes.FirstOrDefault(x => !conservadas.Contains(x.Id) && x.RatePercent == r.RatePercent && x.ValidFrom.Date == r.ValidFrom.Date);
+            if (igual is not null)
+            {
+                conservadas.Add(igual.Id);
+                if (igual.ValidTo?.Date != r.ValidTo?.Date) { igual.ValidTo = r.ValidTo?.Date; igual.UpdatedAt = ahora; igual.UpdatedBy = user.UserName; }
+                continue;
+            }
+            db.EmployeeWithholdingRates.Add(new EmployeeWithholdingRate
+            {
+                EmployeeId = e.Id, RatePercent = r.RatePercent, ValidFrom = r.ValidFrom.Date, ValidTo = r.ValidTo?.Date, CreatedAt = ahora, CreatedBy = user.UserName,
+            });
+        }
+        foreach (var x in existentes.Where(x => !conservadas.Contains(x.Id)))
+        {
+            var sucesora = tasas.Where(r => r.ValidFrom.Date > x.ValidFrom.Date).OrderBy(r => r.ValidFrom).FirstOrDefault();
+            if (sucesora is not null && (x.ValidTo is null || x.ValidTo.Value.Date >= sucesora.ValidFrom.Date))
+            {
+                x.ValidTo = sucesora.ValidFrom.Date.AddDays(-1); x.UpdatedAt = ahora; x.UpdatedBy = user.UserName;
+            }
+            else
+            {
+                x.IsDeleted = true; x.DeletedAt = ahora; x.DeletedBy = user.UserName;
+            }
         }
         foreach (var d in await db.EmployeeTaxDeductions.Where(d => d.EmployeeId == e.Id).ToListAsync(ct))
         {
             d.IsDeleted = true; d.DeletedAt = ahora; d.DeletedBy = user.UserName;
         }
-        foreach (var r in tasas)
-            db.EmployeeWithholdingRates.Add(new EmployeeWithholdingRate
-            {
-                EmployeeId = e.Id, RatePercent = r.RatePercent, ValidFrom = r.ValidFrom.Date, ValidTo = r.ValidTo?.Date, CreatedAt = ahora, CreatedBy = user.UserName,
-            });
         foreach (var d in request.Deductions)
             db.EmployeeTaxDeductions.Add(new EmployeeTaxDeduction
             {

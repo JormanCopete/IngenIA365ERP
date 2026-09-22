@@ -1,6 +1,5 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
-using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.TerminateEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Queries;
 using IngenIA365ERP.Application.Tests.Core.People;
 using Microsoft.EntityFrameworkCore;
@@ -97,10 +96,16 @@ public class RegisterEmployeeCommandHandlerTests
         var registrar = new RegisterEmployeeCommandHandler(d.Db, d.Empleados);
         var primera = await registrar.Handle(Comando(p.PublicId), CancellationToken.None);
 
-        var terminar = new TerminateEmployeeCommandHandler(d.Db, d.Clock, d.User);
-        var t = await terminar.Handle(new TerminateEmployeeCommand(primera.Value, new DateTime(2026, 10, 31), "Renuncia"), CancellationToken.None);
-        t.IsSuccess.Should().BeTrue(t.Error.Message);
-        (await d.Db.People.SingleAsync(x => x.Id == p.Id)).IsEmployee.Should().BeFalse("terminar apaga sólo «Empleado»");
+        // Feature 010 (US3): la ficha la cierra la aprobación de la liquidación definitiva
+        // (ApproveSettlementCommand, probado en Settlements/Settlement); aquí se deja el mismo estado
+        // que ella deja —Status -1, fecha de retiro, persona sin la bandera de empleado— para probar el reingreso.
+        var retirada = await d.Db.Employees.SingleAsync(e => e.PublicId == primera.Value);
+        retirada.Status = -1;
+        retirada.TerminationDate = new DateTime(2026, 10, 31);
+        retirada.TerminationCause = "Renuncia voluntaria";
+        var personaRetirada = await d.Db.People.SingleAsync(x => x.Id == p.Id);
+        personaRetirada.IsEmployee = false;
+        await d.Db.SaveChangesAsync();
 
         var segunda = await registrar.Handle(Comando(p.PublicId) with { HireDate = new DateTime(2027, 1, 15) }, CancellationToken.None);
         segunda.IsSuccess.Should().BeTrue(segunda.Error.Message);
@@ -109,7 +114,7 @@ public class RegisterEmployeeCommandHandlerTests
         (await d.Db.Employees.SingleAsync(e => e.PublicId == primera.Value)).Status.Should().Be(-1, "la retirada es historial");
         (await d.Db.People.SingleAsync(x => x.Id == p.Id)).IsEmployee.Should().BeTrue();
 
-        var porPersona = await new GetEmployeeByPersonIdQueryHandler(d.Db).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
+        var porPersona = await new GetEmployeeByPersonIdQueryHandler(d.Db, d.Clock).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
         porPersona.IsSuccess.Should().BeTrue(porPersona.Error.Message);
         porPersona.Value.PublicId.Should().Be(segunda.Value, "la consulta por persona mira sólo la ficha viva");
         porPersona.Value.PersonPublicId.Should().Be(p.PublicId);
@@ -123,7 +128,7 @@ public class RegisterEmployeeCommandHandlerTests
         d.Db.Employees.Add(d.Ficha(p, activa: false));
         await d.Db.SaveChangesAsync();
 
-        var r = await new GetEmployeeByPersonIdQueryHandler(d.Db).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
+        var r = await new GetEmployeeByPersonIdQueryHandler(d.Db, d.Clock).Handle(new GetEmployeeByPersonIdQuery(p.PublicId), CancellationToken.None);
 
         r.Error.Code.Should().Be("Employee.NotFound", "la pantalla pasa a modo registro: reingreso");
     }

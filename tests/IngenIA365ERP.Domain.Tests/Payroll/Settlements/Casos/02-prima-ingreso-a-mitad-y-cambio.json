@@ -1,0 +1,20 @@
+{
+  "nombre": "Prima 2026-II con ingreso el 15-09 y cambio de salario el 01-11",
+  "descripcion": "Research R1: ingreso 15-09-2026 con 1.750.905 hasta 31-10 y 2.000.000 desde 01-11 → 106 días → 630.404,72. Promedio ponderado por tramos.",
+  "derivacion": "Tramo 1: 15-09 a 31-10 = 16 + 30 = 46 días; base 1.750.905 + auxilio 249.095 = 2.000.000; 2.000.000 / 30 × 30 × 46 / 360 = 255.555,5556. Tramo 2: 01-11 a 31-12 = 60 días; base 2.000.000 + 249.095 = 2.249.095; 2.249.095 × 60 / 360 = 374.849,1667. Suma = 630.404,7222 → 630.404,72 (106 días). Retención: 630.404,72 × 75 % = 472.803,54 = 9,03 UVT → 0.",
+  "tipo": "ServiceBonus",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-07-01",
+  "empleado": {
+    "nombre": "Ingreso a mitad de semestre",
+    "ingreso": "2026-09-15",
+    "salarios": [
+      { "desde": "2026-09-15", "mensual": 1750905 },
+      { "desde": "2026-11-01", "mensual": 2000000 }
+    ]
+  },
+  "esperado": {
+    "lineas": { "PRIMA": 630404.72, "RETEFTE_PRIMA": 0 },
+    "totales": { "devengos": 630404.72, "deducciones": 0, "provisiones": 0, "neto": 630404.72 }
+  }
+}

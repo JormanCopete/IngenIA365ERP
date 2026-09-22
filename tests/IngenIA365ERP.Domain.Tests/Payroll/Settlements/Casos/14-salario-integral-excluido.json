@@ -1,0 +1,54 @@
+{
+  "casos": [
+    {
+      "nombre": "Salario integral: excluido de la prima",
+      "descripcion": "FR-009, FR-013 y CST art. 132: la prima está incluida en el factor prestacional del salario integral.",
+      "derivacion": "Clase IntegralSalary → exclusión SalarioIntegral antes de cualquier cálculo; sin líneas.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Integral",
+        "clase": "IntegralSalary",
+        "ingreso": "2025-01-01",
+        "salarios": [ { "desde": "2025-01-01", "mensual": 20000000 } ]
+      },
+      "esperado": { "excluido": "SalarioIntegral", "omitidos": [ "PRIMA:SalarioIntegral" ] }
+    },
+    {
+      "nombre": "Salario integral: excluido de cesantías e intereses",
+      "descripcion": "FR-013: sin cesantías ni intereses.",
+      "derivacion": "Clase IntegralSalary → exclusión SalarioIntegral; sin líneas.",
+      "tipo": "Severance",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-01-01",
+      "empleado": {
+        "nombre": "Integral",
+        "clase": "IntegralSalary",
+        "ingreso": "2025-01-01",
+        "salarios": [ { "desde": "2025-01-01", "mensual": 20000000 } ]
+      },
+      "esperado": { "excluido": "SalarioIntegral", "omitidos": [ "CESANTIAS:SalarioIntegral", "INT_CESANTIAS:SalarioIntegral" ] }
+    },
+    {
+      "nombre": "Salario integral en la definitiva: vacaciones sí, prima y cesantías no, IBC al 70 %",
+      "descripcion": "Edge case de la spec: «sin prima, cesantías ni intereses; vacaciones sí; IBC al 70 %». El caso deriva las vacaciones y los aportes.",
+      "derivacion": "Días 01-01-2025 a 31-12-2026 = 720 → vacaciones causadas 720 × 15/360 = 30, ninguna disfrutada → 30 pendientes × 20.000.000/30 = 20.000.000. IBC = 20.000.000 × 70 % (SALARIO_INTEGRAL_BASE_PCT) = 14.000.000 (≤ 25 SMMLV): salud 4 % = 560.000, pensión 4 % = 560.000, FSP: 14.000.000 / 1.750.905 = 8,0 SMMLV → tramo 4–16 al 1 % = 140.000. Prima, cesantías e intereses omitidos por SalarioIntegral.",
+      "tipo": "Settlement",
+      "corte": "2026-12-31",
+      "empleado": {
+        "nombre": "Integral retirado",
+        "clase": "IntegralSalary",
+        "ingreso": "2025-01-01",
+        "salarios": [ { "desde": "2025-01-01", "mensual": 20000000 } ]
+      },
+      "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { "VACACIONES_COMP": 20000000, "SALUD_EMP": 560000, "PENSION_EMP": 560000, "FSP": 140000 },
+        "omitidos": [ "PRIMA:SalarioIntegral", "CESANTIAS:SalarioIntegral", "INT_CESANTIAS:SalarioIntegral" ],
+        "vacaciones": { "causados": 30, "pendientes": 30 }
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "casos": [
+    {
+      "nombre": "Disfrute parcial de 5 hábiles con 15 pendientes: el ajuste compara con la provisión de esos 5 días, no con toda la acumulada",
+      "descripcion": "FR-004 y SC-003. La provisión de vacaciones cubre todos los días pendientes; un disfrute parcial sólo cancela la parte que corresponde a sus días hábiles y deja el resto provisionado. Hasta el 2026-09-21 el ajuste era liquidado − provisión acumulada completa: aquí habría dado −800.000 (liberación) y el saldo de PROV_VACACIONES quedaba en cero con 10 días hábiles todavía pendientes.",
+      "derivacion": "Vinculación 01-01-2026 a 31-12-2026 = 360 días comerciales; causados = 360 × 15 / 360 = 15 hábiles, ninguno consumido → 15 pendientes. Día = 3.000.000 / 30 = 100.000. Disfrute del 01-01 al 07-01-2027: 5 hábiles (01 festivo, 03 domingo), 7 calendario y 7 comerciales → VACACIONES_LIQ = 7 × 100.000 = 700.000. Provisión acumulada 1.500.000 (15 días × 100.000); la de los 5 días liquidados = 1.500.000 × 5 / 15 = 500.000. Ajuste = 700.000 − 500.000 = 200.000 al gasto (los dos días no hábiles del descanso no estaban provisionados). Quedan provisionados 1.000.000 para los 10 días pendientes. VACACIONES_LIQ no forma IBC en el catálogo de prueba → sin aportes; retención ordinaria sobre 700.000 = 0. Devengos 700.000; provisiones (ajuste) 200.000; neto 700.000.",
+      "tipo": "Vacation",
+      "corte": "2026-12-31",
+      "empleado": {
+        "nombre": "Disfrute parcial",
+        "ingreso": "2026-01-01",
+        "salarios": [ { "desde": "2026-01-01", "mensual": 3000000 } ]
+      },
+      "movimientoALiquidar": { "tipo": "Enjoyment", "desde": "2027-01-01", "hasta": "2027-01-07", "diasHabiles": 5, "diasCalendario": 7 },
+      "provisiones": { "PROV_VACACIONES": 1500000 },
+      "esperado": {
+        "lineas": {
+          "VACACIONES_LIQ": 700000,
+          "VACACIONES_AJUSTE_PROV": 200000,
+          "RETEFTE": 0
+        },
+        "totales": { "devengos": 700000, "deducciones": 0, "provisiones": 200000, "neto": 700000 },
+        "explicaciones": [
+          "VACACIONES_AJUSTE_PROV: Días hábiles pendientes antes del movimiento",
+          "VACACIONES_AJUSTE_PROV: el resto sigue provisionado",
+          "VACACIONES_AJUSTE_PROV: Gasto adicional: $700.000 − $500.000 = $200.000"
+        ],
+        "vacaciones": { "causados": 15, "pendientes": 15 }
+      }
+    },
+    {
+      "nombre": "Compensación de 5 hábiles con 15 pendientes: la provisión de esos días coincide con lo pagado y el ajuste es cero",
+      "descripcion": "La compensación paga hábiles a valor día, igual que se provisionó: sin diferencia. El resto de la provisión sigue para los 10 días pendientes.",
+      "derivacion": "Mismo empleado: 15 causados, 15 pendientes, día 100.000. VACACIONES_COMP = 5 × 100.000 = 500.000. Provisión de los 5 días = 1.500.000 × 5 / 15 = 500.000. Ajuste = 500.000 − 500.000 = 0. Máximo compensable = 50 % de 15 = 7,5 ≥ 5. La compensación sí forma IBC: salud 4 % = 20.000, pensión 4 % = 20.000; FSP no aplica (500.000 < 4 SMMLV). Retención ordinaria: 500.000 − 40.000 = 460.000 − 25 % = 345.000 → 0. Devengos 500.000; deducciones 40.000; neto 460.000.",
+      "tipo": "Vacation",
+      "corte": "2026-12-31",
+      "empleado": {
+        "nombre": "Compensación parcial",
+        "ingreso": "2026-01-01",
+        "salarios": [ { "desde": "2026-01-01", "mensual": 3000000 } ]
+      },
+      "movimientoALiquidar": { "tipo": "Compensation", "desde": "2026-12-31", "diasHabiles": 5, "diasCalendario": 0 },
+      "provisiones": { "PROV_VACACIONES": 1500000 },
+      "esperado": {
+        "lineas": {
+          "VACACIONES_COMP": 500000,
+          "VACACIONES_AJUSTE_PROV": 0,
+          "SALUD_EMP": 20000,
+          "PENSION_EMP": 20000,
+          "FSP": 0,
+          "RETEFTE": 0
+        },
+        "totales": { "devengos": 500000, "deducciones": 40000, "provisiones": 0, "neto": 460000 },
+        "explicaciones": [ "VACACIONES_AJUSTE_PROV: Provisión de los días liquidados" ]
+      }
+    },
+    {
+      "nombre": "Disfrute de 16 hábiles con 15 pendientes (anticipado): consume todos los días y cancela toda la provisión",
+      "descripcion": "Cuando el movimiento consume los días pendientes o más, no hay días que sigan provisionados: la regla vuelve a la cancelación completa, como la definitiva.",
+      "derivacion": "Corte 01-01-2027: 361 días → 15,04 pendientes; disfrute del 02-01 al 20-01-2027: 16 hábiles (dato congelado), 19 calendario y 19 comerciales → VACACIONES_LIQ = 19 × 100.000 = 1.900.000. Consume más de los pendientes → provisión que cancela = toda, 1.500.000. Ajuste = 1.900.000 − 1.500.000 = 400.000 al gasto. Aviso de días anticipados. Neto 1.900.000.",
+      "tipo": "Vacation",
+      "corte": "2027-01-01",
+      "empleado": {
+        "nombre": "Disfrute anticipado",
+        "ingreso": "2026-01-01",
+        "salarios": [ { "desde": "2026-01-01", "mensual": 3000000 } ]
+      },
+      "movimientoALiquidar": { "tipo": "Enjoyment", "desde": "2027-01-02", "hasta": "2027-01-20", "diasHabiles": 16, "diasCalendario": 19 },
+      "provisiones": { "PROV_VACACIONES": 1500000 },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": {
+          "VACACIONES_LIQ": 1900000,
+          "VACACIONES_AJUSTE_PROV": 400000
+        },
+        "advertencias": [ "anticipados" ],
+        "explicaciones": [ "VACACIONES_AJUSTE_PROV: cancela toda la provisión" ]
+      }
+    }
+  ]
+}

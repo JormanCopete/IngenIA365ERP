@@ -186,3 +186,25 @@ public sealed class ListInvalidParameterizationsQueryHandler(IApplicationDbConte
         return Result.Success<IReadOnlyList<ParametrizacionInvalidaDto>>(lista);
     }
 }
+
+// ------------------------------------------------------------------ cuentas bancarias --
+
+/// <summary>Una cuenta del plan con banco: lo que la dispersión de nómina (feature 010, US8) y tesorería ofrecen como cuenta origen.</summary>
+public sealed record CuentaBancariaDelPlanDto(Guid AccountPublicId, string Code, string Name, Guid BankPublicId, string BankName, string? BankAccountNumber, string? BankTransferCode, bool IsActive);
+
+/// <summary>Las cuentas bancarias activas del plan, ordenadas por banco y código.</summary>
+public sealed record ListBankAccountsQuery(Guid? BankPublicId = null) : IRequest<Result<IReadOnlyList<CuentaBancariaDelPlanDto>>>;
+
+public sealed class ListBankAccountsQueryValidator : AbstractValidator<ListBankAccountsQuery>;
+
+public sealed class ListBankAccountsQueryHandler(IApplicationDbContext db) : IRequestHandler<ListBankAccountsQuery, Result<IReadOnlyList<CuentaBancariaDelPlanDto>>>
+{
+    public async Task<Result<IReadOnlyList<CuentaBancariaDelPlanDto>>> Handle(ListBankAccountsQuery request, CancellationToken ct)
+    {
+        var q = db.ChartOfAccounts.AsNoTracking().Include(a => a.Bank).Where(a => a.BankId != null && a.IsActive && !a.IsDeleted);
+        if (request.BankPublicId is { } bankId) q = q.Where(a => a.Bank!.PublicId == bankId);
+        var cuentas = await q.OrderBy(a => a.Bank!.Name).ThenBy(a => a.Code).ToListAsync(ct);
+        return Result.Success<IReadOnlyList<CuentaBancariaDelPlanDto>>(cuentas.Select(a => new CuentaBancariaDelPlanDto(
+            a.PublicId, a.Code, a.Name, a.Bank!.PublicId, a.Bank.Name, a.BankAccountNumber, a.Bank.TransferCode, a.IsActive)).ToList());
+    }
+}

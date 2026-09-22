@@ -198,6 +198,50 @@ autoriza. Estos valores están cargados con la lectura de la norma a septiembre 
 **deben confirmarse con la contadora** antes de la primera nómina que los use; si difieren,
 se corrigen con «Nueva vigencia» / «Nueva versión», nunca en el código.
 
+## 4d. Antes de la primera liquidación especial (feature 010, entrega N1)
+
+Prima, cesantías anuales, vacaciones y definitiva (`docs/manual/liquidaciones-especiales.md`)
+consumen la nómina ordinaria aprobada y necesitan, además de lo de §1, lo siguiente. Todo
+se comprueba **contra la base de la cooperativa**, no contra el repositorio.
+
+| Qué | Dónde se carga | Cómo se comprueba | Si falta |
+|---|---|---|---|
+| Cuentas de los **16 conceptos nuevos** (`PRIMA`, `PRIMA_AJUSTE_PROV`, `RETEFTE_PRIMA`, `CESANTIAS`, `INT_CESANTIAS`, `CESANTIAS_AJUSTE_PROV`, `INT_CESANTIAS_AJUSTE_PROV`, `RETEFTE_CESANTIAS`, `VACACIONES_LIQ`, `VACACIONES_COMP`, `VACACIONES_AJUSTE_PROV`, `SALARIO_PENDIENTE`, `INDEMNIZACION`, `RETEFTE_INDEMNIZACION`, `BONIF_RETIRO`, `AUSENCIA_VACACIONES`; la semilla los deja sin cuentas) | Nómina › Conceptos › Cuentas | `SELECT "ConceptCode" FROM dbo."PAY_ConceptDefinitionAccounts" WHERE "ConceptCode" IN (...)` | Aprobar responde `Payroll.Settlement.ConceptAccountsMissing` con la lista y no escribe nada |
+| **Parámetros legales** de las liquidaciones (`PRIMA_DIAS_ANIO`, `CESANTIAS_DIAS_ANIO`, `INT_CESANTIAS_PCT`, `VACACIONES_DIAS_ANIO`, `VACACIONES_COMPENSABLE_PCT`, `INDEMNIZACION_TABLA`, `INDEMNIZACION_UMBRAL_SMMLV`, `CESANTIAS_VENTANA_ESTABILIDAD_MESES`, topes y tablas de retención, fechas límite `*_FECHA_LIMITE*`) con vigencia del año | La semilla 2026 los trae (`PayrollLegalParametersSeeder`, con `Source`); el año nuevo se carga en Nómina › Parámetros legales | `GET /api/payroll/legal-parameters/missing?process=Settlements` vacío | Calcular responde `Payroll.Settlement.ParametersMissing` con los códigos |
+| **Políticas de la empresa** (11 claves) | `/nomina/politicas` (`PAY_CompanyPolicies`) | `SELECT "Key","Value","ValidFrom" FROM dbo."PAY_CompanyPolicies"` — la semilla deja 8 con defecto más `Exonerada114_1` y `AllowSameUserApproval` copiadas de `COR_SystemSettings`; **`ArranqueNominaFecha` no tiene defecto**: es la fecha desde la que la nómina corre aquí | Sin `ArranqueNominaFecha` el listado de saldos iniciales usa el primer período; sin `Exonerada114_1` se asume «no exonerada» |
+| **Festivos** del año a liquidar | `/nomina/festivos` (`PAY_Holidays`) | `SELECT extract(year from "Date"), count(*) FROM dbo."PAY_Holidays" GROUP BY 1` → 18 por año en 2026–2028 (`HolidaysSeeder`) | Un año sin filas avisa `Payroll.Holiday.YearNotLoaded` en la vista previa de hábiles |
+| **Motivos de retiro** | Sembrados (`TerminationReasonsSeeder`, 9); los propios en `/nomina/liquidacion-definitiva` › motivos | `SELECT "Code","GeneratesSeverancePay" FROM dbo."PAY_TerminationReasons"` | Registrar terminación responde `Payroll.Termination.ReasonNotFound` |
+| **Saldos iniciales de prestaciones** de quien ingresó antes de `ArranqueNominaFecha` (días de vacaciones pendientes, cesantías, intereses y prima acumulados **a la víspera del arranque**; en COOFLOPAL, al 30-11-2026) | `/nomina/saldos-iniciales`, validados por la contadora | `GET /api/payroll/benefit-balances?onlyMissing=true` vacío | La liquidación avisa `OpeningBalanceMissing` (no bloquea) y sale corta |
+| **Ficha ampliada**: fondo de cesantías **con persona vinculada** (FR-088), caja, clase ARL, bloques PILA y DIAN (tipo de cotizante, DIVIPOLA), etapa del aprendiz, banco de dispersión; **persona** con segundo apellido y otros nombres | `/nomina/empleados/{id}` y Personas | `GET /api/payroll/employees/{id}` trae `pila`, `dian`, `openingBalance`, `vacationBalance` | Cesantías anuales: `Accounting.Line.ThirdPartyRequired` si el fondo no tiene persona y la cuenta exige tercero |
+| **Período contable abierto** del mes del corte (30-06, 31-12, fecha de retiro, víspera del disfrute) | Contabilidad › Períodos | como en §1 | `Payroll.AccountingPeriodClosed` |
+
+Dos reglas que conviene saber antes de empezar: la política que rige es la **vigente a la
+fecha del proceso** (una prima de junio se liquida con la política de junio aunque se cambie
+en agosto), y **`AllowSameUserApproval` en `PAY_CompanyPolicies` manda** sobre el ajuste
+heredado de `COR_SystemSettings`: si la cooperativa la necesita en `true`, se registra la
+vigencia en `/nomina/politicas`.
+
+## 4e. Antes del primer archivo de dispersión bancaria (feature 010, entrega N4)
+
+La nómina paga por archivo plano (`docs/manual/dispersion-bancaria.md`); el formato es un dato
+de **Core** ligado al banco (D-42) y el motor es el mismo para cesantías y, después, tesorería.
+Lo que la cooperativa debe tener antes de generar el primero, y cómo comprobarlo contra su base:
+
+| Qué | Dónde se carga | Cómo se comprueba | Si falta |
+|---|---|---|---|
+| **Código de transferencia (ACH)** de cada banco destino de los empleados | Maestros › Bancos (`COR_Banks.TransferCode`; en SOLIDO era `codtras`) | `SELECT "LegacyCode","Name","TransferCode" FROM dbo."COR_Banks" WHERE "IsDeleted" = false` → ninguno en blanco entre los bancos de las fichas | el empleado queda en **pendientes** con `BankCodeMissing` |
+| **Cuenta bancaria del plan** del banco pagador (auxiliar bajo `111005` con banco y número) | Contabilidad › Plan de cuentas | `GET /api/accounting/accounts/bank-accounts` la lista con `bankTransferCode` | `SourceAccountRequired` / `SourceAccountNotFound` al generar |
+| **Empresa** con NIT, dígito y razón social | Maestros › Empresas | `SELECT "TaxId","TaxIdCheckDigit","Name" FROM dbo."COR_Companies"` | `Payroll.Disbursement.CompanyMissing` |
+| **Formato vigente** del banco pagador, o el genérico | Maestros › Formatos bancarios (`COR_BankFileFormats`); la semilla deja `CSV-GENERICO` activo y `AVVILLAS-1` inactivo sin campos sólo si hay un banco «VILLAS» | `SELECT "Code","BankId","Scope","ValidFrom","ValidTo","IsActive" FROM dbo."COR_BankFileFormats"` | `Payroll.Disbursement.NoFormat` con el banco en `data` |
+| Ficha del empleado: banco de dispersión, tipo y número de cuenta | Nómina › Empleados › Banca | relación de pago: columnas banco y cuenta | pendiente `NoBankAccount` |
+| Permisos `Payroll.Disbursement.View/Generate/MarkSent` y `Core.BankFileFormats.View/Manage` en los roles | los siembra la API al arrancar (`CorePermissionCatalogSeeder`, `PayrollPermissionCatalogSeeder`); a los roles propios se asignan en Administración › Roles | `SELECT "Code" FROM dbo."SEC_Permissions" WHERE "Code" LIKE 'Payroll.Disbursement.%' OR "Code" LIKE 'Core.BankFileFormats.%'` → 5 | 404 en la pantalla |
+
+El formato real de **AV Villas Empresas** lo carga el dueño con la estructura que publique el
+banco (T147): pegar el JSON en la pestaña JSON de Formatos bancarios, ligado al banco, vigente
+desde la fecha del primer pago, y activar; `AVVILLAS-1` se deja inactivo o se borra. Si el banco
+exige un origen que no está en `GET /api/core/bank-file-formats/sources`, eso sí es una tarea de
+programa (enum `BankFieldSource`, validador y `FlatFileWriterTests`).
+
 ## 5. Reaplicar la semilla
 
 Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien
@@ -208,6 +252,21 @@ borró por error algo de la semilla:
 
 Inserta lo que falte y **no toca** lo que la cooperativa ya ajustó (versiones propias,
 cuentas, vigencias registradas a mano). Es idempotente: correrla dos veces no duplica nada.
+
+Desde la feature 010 la reaplicación corre también los seeders de la entrega N1, en este
+orden: `PayrollLegalParametersSeeder` (parámetros nuevos con `Source` y las revisiones de
+vigencia, p. ej. `FSP_TABLA` con Ley 2381 de 2024 desde 2027-04-01), `PayrollConceptDefinitionsSeeder`
+(16 conceptos de liquidación; `AffectsVacationBase` y `DianElement` se conservan al versionar),
+`TerminationReasonsSeeder` (Order 72, 9 motivos), `HolidaysSeeder` (Order 74, Ley 51
+2026–2028 desde `FestivosLey51`; no toca decretados ni manuales) y `CompanyPoliciesSeeder`
+(Order 75, defectos de `CompanyPolicyKeys` y copia de `Payroll.ApplyEmployerExemption` /
+`Payroll.AllowSameUserApproval` desde `COR_SystemSettings` si la clave no existe). Los
+**permisos** (`Payroll.ServiceBonus.*`, `Severance.*`, `Vacations.*`, `Settlements.*`,
+`BenefitBalances.*`, `CompanyPolicies.*`, `Holidays.*` y los de N2–N4) **no los siembra el
+DbMigrator** —registra sólo Persistence—: los siembra la API al arrancar
+(`PhaseZeroSecuritySeeder`), así que tras desplegar hay que verificar `SEC_Permissions` en
+cada cooperativa (`SELECT DISTINCT "Resource" FROM dbo."SEC_Permissions" WHERE "Resource" LIKE 'Payroll.%'`
+→ 19 recursos).
 
 ## 6. Las migraciones de esta entrega
 
@@ -224,6 +283,9 @@ el mismo aprovisionador que usa la API en DEV y QA (P14 cerrado).
 | `NominaNovedadesYLiquidacion` | 14 tablas nuevas de nómina, columnas en empleados y períodos, plan `DEFAULT` insertado antes de las FK | Idempotente; reversible |
 | `NominaTablasPorRangos` | Unidad y marginalidad de las tablas por rangos, con relleno de las de retención y FSP | Idempotente; reversible |
 | `NominaDetalleDeCorrida` | Bases y notas por empleado en la corrida; FKs al comprobante contable | Reversible |
+| `NominaPrestacionesYDian` (feature 010, N1) | 9 tablas nuevas (`PAY_CompanyPolicies`, `PAY_Holidays`, `PAY_EmployeeBenefitOpeningBalances`, `PAY_VacationMovements`, `PAY_TerminationReasons`, `PAY_EmploymentTerminations`, `PAY_SettlementDeductions`, `PAY_WithholdingRateCalculations/Months`, `PAY_SeveranceFundDeposits`), `Kind`/`CutoffDate`/`PayDate`/`Year`/`Semester`/`EmployeeId` en las corridas (las previas quedan `Kind = 0`), columnas PILA/DIAN en la ficha, segundo apellido y otros nombres en la persona; copia dos políticas desde `COR_SystemSettings` y corrige el `Source` de los parámetros | Aditiva; `Down` con guarda. **Se corrigió en la rama antes de salir** (índice único de vacaciones por movimiento, `CreatedAt` con `now()`, textos de `Source`): una base que la aplicó antes del 2026-09-21 (sólo las locales) necesita recrear `UK_PAY_PayrollRuns_Vacation_Movement_Version` a mano |
+| `SettlementDeductionsUnicosEntreVivas` (feature 010, N1) | Los únicos de `PAY_SettlementDeductions` excluyen las filas retiradas en blando (recalcular la definitiva cuando una deuda reaparece) | Aditiva; reversible |
+| `NominaDispersionBancaria` (feature 010, N4) | `COR_BankFileFormats` y `COR_BankFileFormatFields` (Core, ligadas al banco, D-42), `PAY_BankDisbursementFiles` y `PAY_BankDisbursementFileLines`, `PAY_PayrollPayments.BankDisbursementFileId` | Aditiva; reversible. El scaffold arrastró un cambio de índice de vacaciones ya hecho por `NominaPrestacionesYDian` (las bases locales tenían el índice recreado a mano) y se quitó antes de salir: la versión de la rama sólo crea lo de N4. |
 | `RetiroDeVoucherTypeIdSombraEnDocumentos` | **Destructiva.** Quita de `ACC_Documents` la columna sombra `VoucherTypeId`, que duplicaba `VoucherTypeCode` y rompía todo comprobante contable creado por la API | **Backup de cada base de cooperativa y segundo revisor antes de aplicarla en un ambiente** (Principio XII); anotar las referencias en la cabecera de la migración. Su `Down` reconstruye la columna desde el código |
 
 La última no es de nómina: la destapó la prueba e2e de aprobación, y afecta a Contabilidad.

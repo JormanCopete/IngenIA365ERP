@@ -1,0 +1,277 @@
+@page "/nomina/dispersion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+@*
+    Feature 010 (US8, contracts/api.md §9.2): los archivos de dispersión bancaria generados desde
+    la relación de pago de cualquier corrida aprobada. Aquí se ven, se descargan, se marcan
+    «enviado» (todos los del archivo quedan pagados en una acción) o se anulan si no se
+    enviaron. Los formatos por banco viven en Maestros › Formatos bancarios (D-42).
+*@
+
+<PageTitle>Dispersión bancaria - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.Disbursement.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Dispersión bancaria</h3>
+    <div class="toolbar">
+        <SfNumericTextBox TValue="int" @bind-Value="_anio" Min="2000" Max="2100" Format="0" ShowSpinButton="true" Placeholder="Año de pago" FloatLabelType="FloatLabelType.Always" Width="130px" />
+        <select class="e-input" @bind="_estado">
+            <option value="">Todos los estados</option>
+            <option value="Generated">Generados</option>
+            <option value="Sent">Enviados</option>
+            <option value="Voided">Anulados</option>
+        </select>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+        <a class="enlace" href="/maestros/formatos-bancarios">Formatos por banco</a>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Cómo funciona</span>
+    <p>El archivo se genera desde la <strong>relación de pago</strong> de una liquidación aprobada (nómina, prima, cesantías, vacaciones o definitiva) con el formato vigente del banco. Quien no tiene cuenta o banco en la ficha queda en <strong>pendientes</strong> con el motivo. Cuando el banco recibe el archivo, «Marcar enviado» deja pagados a todos los del archivo en una sola acción y la liquidación ya no se reversa; un archivo generado que no se envió se anula.</p>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="ArchivoDeDispersionDto" DataSource="@_archivos" AllowPaging="true" AllowSorting="true">
+    <GridEvents TValue="ArchivoDeDispersionDto" RowSelected="@(async a => await AbrirAsync(a.Data.FilePublicId))" />
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="GeneratedAt" HeaderText="Generado" Width="140" Format="dd/MM/yyyy HH:mm" Type="ColumnType.DateTime" />
+        <GridColumn Field="RunLabel" HeaderText="Liquidación" Width="220" />
+        <GridColumn Field="FileName" HeaderText="Archivo" Width="200" />
+        <GridColumn Field="FormatCode" HeaderText="Formato" Width="130" />
+        <GridColumn Field="BankName" HeaderText="Banco" Width="150" />
+        <GridColumn Field="PaymentDate" HeaderText="Fecha de pago" Width="120" Format="dd/MM/yyyy" Type="ColumnType.Date" />
+        <GridColumn Field="LineCount" HeaderText="Líneas" Width="80" TextAlign="TextAlign.Right" />
+        <GridColumn Field="TotalAmount" HeaderText="Total" Width="130" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="ExcludedCount" HeaderText="Pendientes" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="EstadoTexto" HeaderText="Estado" Width="110" />
+    </GridColumns>
+</SfGrid>
+@if (!_carga.Activa && _archivos.Count == 0)
+{
+    <div class="sin-datos">Sin archivos de dispersión en @_anio. Se generan desde la pestaña «Relación de pago» de cada liquidación aprobada.</div>
+}
+</IndicadorDeCarga>
+
+@if (_detalle is not null)
+{
+    var a = _detalle.Summary;
+    <div class="info-card">
+        <span class="label">@a.FileName · @a.RunLabel · @a.EstadoTexto</span>
+        <p>
+            Formato <strong>@a.FormatCode</strong> (@a.FormatName) · banco @(a.BankName ?? "genérico") · cuenta origen @(_detalle.SourceAccountNumber ?? "—") ·
+            fecha de pago @a.PaymentDate.ToString("dd/MM/yyyy") · referencia @(a.Reference ?? "—") · generado por @a.GeneratedBy el @a.GeneratedAt.ToString("dd/MM/yyyy HH:mm") ·
+            SHA-256 <code>@a.FileSha256[..12]…</code>
+            @if (a.Enviado) { <span> · enviado el @a.SentAt?.ToString("dd/MM/yyyy HH:mm") por @a.SentBy, referencia del banco @(a.BankReference ?? "—")</span> }
+            @if (a.Status == "Voided") { <span> · anulado el @a.VoidedAt?.ToString("dd/MM/yyyy HH:mm") por @a.VoidedBy: @a.VoidReason</span> }
+        </p>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@DescargarAsync">Descargar archivo</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("xlsx"))" Title="Líneas y pendientes en Excel">Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("pdf"))">PDF</SfButton>
+            @if (a.Generado)
+            {
+                <PermissionGate Required="Payroll.Disbursement.MarkSent">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_accion.Activa" OnClick="@AbrirMarcarEnviado">Marcar enviado</SfButton>
+                </PermissionGate>
+                <PermissionGate Required="Payroll.Disbursement.Generate">
+                    <SfButton CssClass="e-danger e-outline" IconCss="e-icons e-close" Disabled="@_accion.Activa" OnClick="@(() => { _motivoAnulacion = string.Empty; _mostrarAnular = true; })">Anular</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_detalleCarga.Activa">
+    <SfTab>
+        <TabItems>
+            <TabItem>
+                <ChildContent><TabHeader Text="@($"Líneas ({_detalle.Lines.Count})")" /></ChildContent>
+                <ContentTemplate>
+                    <SfGrid TValue="LineaDeDispersionDto" DataSource="@_detalle.Lines" AllowSorting="true" Height="360">
+                        <GridColumns>
+                            <GridColumn Field="LineNumber" HeaderText="#" Width="60" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Name" HeaderText="Empleado" Width="220" />
+                            <GridColumn Field="Document" HeaderText="Documento" Width="120" />
+                            <GridColumn Field="BankName" HeaderText="Banco destino" Width="150" />
+                            <GridColumn Field="AccountType" HeaderText="Tipo" Width="90" />
+                            <GridColumn Field="AccountNumber" HeaderText="Cuenta" Width="140" />
+                            <GridColumn Field="Amount" HeaderText="Valor" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                            <GridColumn HeaderText="Pagado" Width="90" TextAlign="TextAlign.Center">
+                                <Template>@(((LineaDeDispersionDto)context).Paid ? "Sí" : "No")</Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="@($"Pendientes ({_detalle.Excluded.Count})")" /></ChildContent>
+                <ContentTemplate>
+                    @if (_detalle.Excluded.Count == 0)
+                    {
+                        <div class="sin-datos">Todos los empleados de la liquidación entraron al archivo.</div>
+                    }
+                    else
+                    {
+                        <p class="texto-tenue">Estos empleados no fueron al banco: complete la ficha (banco de dispersión, tipo y número de cuenta) o márquelos pagados a mano en la relación de pago de la liquidación.</p>
+                        <SfGrid TValue="ExcluidoDeDispersionDto" DataSource="@_detalle.Excluded" AllowSorting="true">
+                            <GridColumns>
+                                <GridColumn Field="Name" HeaderText="Empleado" Width="220" />
+                                <GridColumn Field="MotivoTexto" HeaderText="Motivo" Width="180" />
+                                <GridColumn Field="Reason" HeaderText="Detalle" Width="360" />
+                                <GridColumn Field="NetPay" HeaderText="Neto" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                            </GridColumns>
+                        </SfGrid>
+                    }
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Archivo" /></ChildContent>
+                <ContentTemplate>
+                    <p class="texto-tenue">El texto exacto de cada línea de detalle, tal como quedó escrito (la cabecera y los totales van en el archivo descargado).</p>
+                    <pre class="archivo-plano">@string.Join("\n", _detalle.Lines.Select(l => l.RecordText))</pre>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
+    </IndicadorDeCarga>
+}
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarEnviado" Header="Marcar el archivo como enviado al banco" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Marcando pagados…">
+            <div class="pagina">
+                <p>Todos los empleados del archivo quedarán <strong>pagados</strong> por transferencia con la fecha de pago y la referencia que indique; quien ya tenía marca se deja como estaba. Después de esto la liquidación no se reversa.</p>
+                <SfDatePicker TValue="DateTime" @bind-Value="_envio.SentAt" Placeholder="Fecha de envío al banco" FloatLabelType="FloatLabelType.Always" />
+                <SfDatePicker TValue="DateTime?" @bind-Value="_envio.PaidAt" Placeholder="Fecha de pago (vacía = la del archivo)" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_envio.BankReference" MaxLength="60" Placeholder="Referencia que devolvió el banco" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_envio.Notes" MaxLength="300" Multiline="true" Placeholder="Notas (opcional)" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarEnviado = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@MarcarEnviadoAsync">Marcar enviado</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAnular" Header="Anular el archivo" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Anulando…">
+            <div class="pagina">
+                <p>El archivo queda anulado y nadie queda pagado; sus empleados pueden ir a otro archivo.</p>
+                <SfTextBox @bind-Value="_motivoAnulacion" MaxLength="300" Multiline="true" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarAnular = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-danger" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoAnulacion))" OnClick="@AnularAsync">Anular</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [SupplyParameterFromQuery(Name = "archivo")] public Guid? Archivo { get; set; }
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
+    private List<ArchivoDeDispersionDto> _archivos = [];
+    private DetalleDeDispersionDto? _detalle;
+    private int _anio = DateTime.Today.Year;
+    private string _estado = string.Empty;
+    private bool _mostrarEnviado, _mostrarAnular;
+    private string _motivoAnulacion = string.Empty;
+    private FormEnvio _envio = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        if (Archivo is { } id)
+        {
+            await AbrirAsync(id);
+            if (_detalle is not null && _detalle.Summary.PaymentDate.Year != _anio) { _anio = _detalle.Summary.PaymentDate.Year; await CargarAsync(); }
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarDispersionesAsync(null, _anio, string.IsNullOrEmpty(_estado) ? null : _estado);
+        if (res.IsSuccess) _archivos = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los archivos de dispersión.");
+    }
+
+    private async Task AbrirAsync(Guid archivoId)
+    {
+        using var carga = _detalleCarga.Iniciar();
+        var res = await Nomina.DispersionAsync(archivoId);
+        if (res.IsSuccess) _detalle = res.Value;
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo abrir el archivo.");
+    }
+
+    private async Task DescargarAsync()
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.DescargarDispersionAsync(_detalle.Summary.FilePublicId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    private async Task ReporteAsync(string formato)
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.DescargarReporteDeDispersionAsync(_detalle.Summary.FilePublicId, formato);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar el reporte."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    private void AbrirMarcarEnviado()
+    {
+        _envio = new FormEnvio { SentAt = DateTime.Today, PaidAt = null, BankReference = null, Notes = null };
+        _mostrarEnviado = true;
+    }
+
+    private async Task MarcarEnviadoAsync()
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.MarcarDispersionEnviadaAsync(_detalle.Summary.FilePublicId, new MarcarEnviadoRequest(_envio.SentAt, _envio.BankReference, _envio.PaidAt, _envio.Notes));
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo marcar el envío."); return; }
+        var r = res.Value!;
+        await Notification.SuccessAsync($"Archivo enviado: {r.MarkedPaid} empleado(s) quedaron pagados con la referencia {r.Reference}" + (r.AlreadyMarked.Count > 0 ? $"; {r.AlreadyMarked.Count} ya tenían marca y se dejaron como estaban." : "."));
+        _mostrarEnviado = false;
+        await AbrirAsync(_detalle.Summary.FilePublicId);
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.AnularDispersionAsync(_detalle.Summary.FilePublicId, _motivoAnulacion.Trim());
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo anular el archivo."); return; }
+        await Notification.SuccessAsync("Archivo anulado.");
+        _mostrarAnular = false;
+        await AbrirAsync(_detalle.Summary.FilePublicId);
+        await CargarAsync();
+    }
+
+    private sealed class FormEnvio
+    {
+        public DateTime SentAt { get; set; } = DateTime.Today;
+        public DateTime? PaidAt { get; set; }
+        public string? BankReference { get; set; }
+        public string? Notes { get; set; }
+    }
+}

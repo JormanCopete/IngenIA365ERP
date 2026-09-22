@@ -53,7 +53,10 @@ public sealed class PayrollCalculationBatch
 /// <para>
 /// Un empleado está en el período si pertenece al plan, su fecha de efecto en el plan no
 /// es posterior al fin del período, ingresó antes del fin y no se retiró antes del
-/// inicio. El retiro dentro del período se liquida por los días hasta el retiro.
+/// inicio. Una ficha cerrada dentro del período sin definitiva se liquida por los días hasta
+/// el retiro; con definitiva aprobada dentro del período (o antes) el empleado no entra: ese
+/// tramo lo pagó la definitiva como <c>SALARIO_PENDIENTE</c> (D-29). Si la definitiva no lo
+/// pagó —no había período abierto al aprobarla—, la ordinaria lo liquida por días hasta el retiro.
 /// </para>
 /// </summary>
 public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPolicyReader policies)
@@ -78,6 +81,31 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             orderby p.LastName, p.FirstName
             select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email }
         ).ToListAsync(ct);
+
+        // Feature 010 (FR-005, FR-020, D-29): la verdad del retiro es PAY_EmploymentTerminations. Una
+        // definitiva aprobada (Settled) con fecha anterior al período saca al empleado aunque la ficha no
+        // se hubiera cerrado. Una con fecha DENTRO del período también lo saca si pagó el último tramo
+        // —salario, auxilio y novedades hasta el retiro— como SALARIO_PENDIENTE: liquidarlo aquí por días
+        // lo pagaba dos veces. Si no lo pagó (no había período abierto al aprobarla), el empleado entra por
+        // los días hasta el retiro. Una definitiva con fecha posterior al fin lo deja en éste, completo.
+        var candidatos = empleados.Select(x => x.Employee.Id).ToList();
+        var retiros = await db.EmploymentTerminations.AsNoTracking()
+            .Where(t => candidatos.Contains(t.EmployeeId) && t.Status == TerminationStatus.Settled)
+            .GroupBy(t => t.EmployeeId)
+            .Select(g => new { EmployeeId = g.Key, Fecha = g.Max(t => t.TerminationDate) })
+            .ToDictionaryAsync(x => x.EmployeeId, x => x.Fecha.ToDateTime(TimeOnly.MinValue), ct);
+        var conTramoPagado = retiros.Count == 0
+            ? new HashSet<int>()
+            : (await (
+                from l in db.PayrollRunLines.AsNoTracking()
+                join re in db.PayrollRunEmployees.AsNoTracking() on l.PayrollRunEmployeeId equals re.Id
+                join r in db.PayrollRuns.AsNoTracking() on re.PayrollRunId equals r.Id
+                where candidatos.Contains(re.EmployeeId) && r.Kind == PayrollRunKind.Settlement && r.Status == PayrollRunStatus.Approved
+                      && l.ConceptCode == WellKnownConceptCodes.PendingSalary
+                select re.EmployeeId).Distinct().ToListAsync(ct)).ToHashSet();
+        empleados = empleados
+            .Where(x => !retiros.TryGetValue(x.Employee.Id, out var f) || f > end || (f >= start && !conTramoPagado.Contains(x.Employee.Id)))
+            .ToList();
 
         var ids = empleados.Select(x => x.Employee.Id).ToList();
         var documentos = empleados.Select(x => x.TaxId).ToList();
@@ -145,7 +173,8 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             .ToListAsync(ct);
         var deduccionesPorEmpleado = deducciones.ToLookup(d => d.EmployeeId);
 
-        var politicas = (await policies.ReadAsync(ct)).ForCalculation();
+        // Las políticas rigen por vigencia: las del fin del período, no las de hoy (R4).
+        var politicas = (await policies.ReadAsync(DateOnly.FromDateTime(end), ct)).ForCalculation();
 
         var cargados = new List<LoadedEmployee>(empleados.Count);
         foreach (var x in empleados)
@@ -192,7 +221,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                 // Un cambio de plan con fecha de efecto dentro del período: el empleado
                 // entra al plan desde esa fecha, nunca se le liquidan días dos veces.
                 JoinDate = e.PayrollPlanEffectiveFrom is { } ef && ef > e.JoinDate ? ef.Date : e.JoinDate.Date,
-                TerminationDate = e.TerminationDate < end ? e.TerminationDate.Date : null,
+                TerminationDate = FechaDeRetiro(e, retiros.TryGetValue(e.Id, out var liquidado) ? liquidado : null, end),
                 SalaryHistory = historial,
                 Affiliations = new AffiliationsInput
                 {
@@ -223,5 +252,18 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             Policies = politicas,
             NoveltyIds = noveltyIds,
         };
+    }
+
+    /// <summary>
+    /// La fecha de retiro que manda dentro del período: la de la ficha (cerrada por el camino anterior, sin
+    /// definitiva) o la de una definitiva aprobada que no pagó el tramo, la menor; el motor liquida por días
+    /// hasta ella. Con definitiva que sí lo pagó el empleado ya no llega aquí (D-29). Nula si el retiro no cae
+    /// antes del fin.
+    /// </summary>
+    private static DateTime? FechaDeRetiro(Employee e, DateTime? liquidado, DateTime end)
+    {
+        var ficha = e.TerminationDate < end ? e.TerminationDate.Date : (DateTime?)null;
+        if (liquidado is { } l && l.Date < end && (ficha is null || l.Date < ficha)) return l.Date;
+        return ficha;
     }
 }

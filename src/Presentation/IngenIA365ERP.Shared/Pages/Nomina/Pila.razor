@@ -1,0 +1,419 @@
+@page "/nomina/pila"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+@inject NavigationManager Nav
+
+@*
+    Feature 010 (US5, contracts/api.md §7): la planilla PILA del mes. Datos del aportante,
+    validación previa con inconsistencias enlazadas (FR-025), generación versionada (FR-026),
+    cuadre con la nómina antes de descargar (FR-027), detalle por línea con los 98 campos y la
+    explicación de cada uno, y la marca de «cargada» con el radicado del operador.
+*@
+
+<PageTitle>Planilla PILA - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.Pila.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Planilla PILA</h3>
+    <div class="toolbar">
+        <SfNumericTextBox TValue="int" @bind-Value="_anio" Min="2000" Max="2100" Format="0" ShowSpinButton="true" Placeholder="Año" FloatLabelType="FloatLabelType.Always" Width="110px" />
+        <SfNumericTextBox TValue="int" @bind-Value="_mes" Min="1" Max="12" Format="0" ShowSpinButton="true" Placeholder="Mes" FloatLabelType="FloatLabelType.Always" Width="90px" />
+        <PermissionGate Required="Payroll.Pila.Generate">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@_accion.Activa" OnClick="@ValidarAsync" Title="Revisa fichas, catálogos y parámetros sin guardar nada">Validar</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-export" Disabled="@(_accion.Activa || _validacion is null || !_validacion.CanGenerate)" OnClick="@GenerarAsync">Generar</SfButton>
+        </PermissionGate>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Versiones</SfButton>
+        <PermissionGate Required="Payroll.Pila.Manage">
+            <SfButton CssClass="e-flat" IconCss="e-icons e-settings" OnClick="@AbrirAjustesAsync">Datos del aportante</SfButton>
+        </PermissionGate>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Cómo funciona</span>
+    <p>La planilla se arma con las <strong>nóminas aprobadas</strong> imputadas al mes (más vacaciones y definitivas con corte en el mes), las fichas y los códigos PILA de EPS, fondo, ARL y caja. <strong>Validar</strong> lista lo que el operador rechazaría (bloqueante) o alertaría, con el enlace a la ficha o al catálogo. <strong>Generar</strong> deja el archivo <code>.txt</code> de la Resolución 2388 con su cuadre contra la nómina por subsistema; regenerar crea una versión nueva. Cuando el operador la recibe, <strong>Marcar cargada</strong> con el número de radicación.
+        @if (_fechaLimite?.DueDate is { } fl) { <span> Fecha límite de pago propuesta para @_anio-@_mes.ToString("00"): <strong>@fl.ToString("dd/MM/yyyy")</strong> (@_fechaLimite.Note).</span> }
+        @if (_ajustes is { Complete: false }) { <span class="texto-alerta"> Faltan datos del aportante: @string.Join(", ", _ajustes.Missing).</span> }
+    </p>
+</div>
+
+@if (_validacion is not null)
+{
+    <IndicadorDeCarga Cargando="@_accion.Activa">
+    <div class="info-card">
+        <span class="label">Validación de @_anio-@_mes.ToString("00"): @(_validacion.CanGenerate ? "se puede generar" : "hay bloqueantes") · @_validacion.Contributors cotizante(s), @_validacion.Lines línea(s) · @_validacion.Blocking bloqueante(s), @_validacion.Warnings alerta(s)</span>
+        <p class="texto-tenue">Fuentes: @string.Join("; ", _validacion.Sources.Select(s => $"{s.Label} (v{s.Version})"))</p>
+        @if (_validacion.Issues.Count == 0)
+        {
+            <div class="sin-datos">Sin inconsistencias.</div>
+        }
+        else
+        {
+            <SfGrid TValue="InconsistenciaPilaDto" DataSource="@_validacion.Issues" AllowSorting="true" Height="260">
+                <GridColumns>
+                    <GridColumn Field="SeveridadTexto" HeaderText="Severidad" Width="110" />
+                    <GridColumn Field="Code" HeaderText="Código" Width="230" />
+                    <GridColumn Field="Field" HeaderText="Campo" Width="80" TextAlign="TextAlign.Right" />
+                    <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="200" />
+                    <GridColumn Field="Message" HeaderText="Mensaje" Width="420" />
+                    <GridColumn HeaderText="Corregir" Width="110">
+                        <Template>
+                            @{ var i = (InconsistenciaPilaDto)context; }
+                            @if (!string.IsNullOrEmpty(i.Link)) { <a class="enlace" href="@i.Link">Ir</a> }
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </SfGrid>
+            @if (_validacion.CanGenerate && _validacion.Warnings > 0)
+            {
+                <label class="texto-tenue"><input type="checkbox" @bind="_reconocerAlertas" /> Reconozco las alertas y quiero generar de todos modos.</label>
+            }
+        }
+    </div>
+    </IndicadorDeCarga>
+}
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="GeneracionPilaDto" DataSource="@_generaciones" AllowPaging="true" AllowSorting="true">
+    <GridEvents TValue="GeneracionPilaDto" RowSelected="@(async g => await AbrirAsync(g.Data.GenerationPublicId))" />
+    <GridPageSettings PageSize="12" />
+    <GridColumns>
+        <GridColumn Field="Period" HeaderText="Período" Width="90" />
+        <GridColumn Field="Version" HeaderText="Versión" Width="80" TextAlign="TextAlign.Right" />
+        <GridColumn Field="EstadoTexto" HeaderText="Estado" Width="150" />
+        <GridColumn Field="GeneratedAt" HeaderText="Generada" Width="140" Format="dd/MM/yyyy HH:mm" Type="ColumnType.DateTime" />
+        <GridColumn Field="GeneratedBy" HeaderText="Por" Width="150" />
+        <GridColumn Field="Contributors" HeaderText="Cotizantes" Width="100" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Lines" HeaderText="Líneas" Width="80" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Totals.Total" HeaderText="Total aportes" Width="130" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn HeaderText="Cuadre" Width="90"><Template>@(((GeneracionPilaDto)context).Balanced ? "Cuadra" : "Difiere")</Template></GridColumn>
+        <GridColumn Field="Blocking" HeaderText="Bloq." Width="70" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Warnings" HeaderText="Alertas" Width="80" TextAlign="TextAlign.Right" />
+        <GridColumn Field="OperatorReference" HeaderText="Radicado" Width="130" />
+    </GridColumns>
+</SfGrid>
+@if (!_carga.Activa && _generaciones.Count == 0)
+{
+    <div class="sin-datos">Sin generaciones en @_anio. Valide y genere la planilla del mes.</div>
+}
+</IndicadorDeCarga>
+
+@if (_detalle is not null)
+{
+    var g = _detalle.Summary;
+    <div class="info-card">
+        <span class="label">PILA @g.Period · versión @g.Version · @g.EstadoTexto</span>
+        <p>
+            Layout <strong>@g.LayoutCode</strong> · @g.Contributors cotizante(s), @g.Lines línea(s) · generada por @g.GeneratedBy el @g.GeneratedAt.ToString("dd/MM/yyyy HH:mm")
+            · exoneración art. 114-1: @(_detalle.ExemptionApplied ? "aplicada" : "no aplica") · archivo @(g.FileName ?? "(sin archivo)")
+            @if (g.Cargada) { <span> · cargada el @g.UploadedAt?.ToString("dd/MM/yyyy") por @g.UploadedBy, radicado @g.OperatorReference@(g.PaidAt is { } pa ? $", pagada el {pa:dd/MM/yyyy}" : "")</span> }
+        </p>
+        <div class="toolbar">
+            @if (g.FileName is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@DescargarAsync">Descargar .txt</SfButton>
+            }
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("pila-lineas", "xlsx"))">Líneas Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("pila-cuadre", "pdf"))">Cuadre PDF</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("pila-inconsistencias", "xlsx"))">Inconsistencias Excel</SfButton>
+            @if (g.Generada)
+            {
+                <PermissionGate Required="Payroll.Pila.MarkUploaded">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_accion.Activa" OnClick="@(() => { _cargada = new FormCargada(); _mostrarCargada = true; })">Marcar cargada</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_detalleCarga.Activa">
+    <div class="info-card">
+        <span class="label">Cuadre contra la nómina por subsistema (FR-027): @(_detalle.Reconciliation.Balanced ? "cuadra" : "hay diferencia")</span>
+        @if (!_detalle.Reconciliation.Balanced) { <p class="texto-alerta">@_detalle.Reconciliation.Note</p> }
+        <SfGrid TValue="CuadrePilaFilaDto" DataSource="@_detalle.Reconciliation.BySubsystem">
+            <GridColumns>
+                <GridColumn Field="SubsistemaTexto" HeaderText="Subsistema" Width="200" />
+                <GridColumn Field="FileTotal" HeaderText="Archivo" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+                <GridColumn Field="LedgerTotal" HeaderText="Nómina (NM)" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+                <GridColumn Field="Difference" HeaderText="Diferencia" Width="140" Format="N0" TextAlign="TextAlign.Right" />
+            </GridColumns>
+        </SfGrid>
+    </div>
+    <SfTab>
+        <TabItems>
+            <TabItem>
+                <ChildContent><TabHeader Text="@($"Líneas ({_detalle.Lines.Count})")" /></ChildContent>
+                <ContentTemplate>
+                    <p class="texto-tenue">Seleccione una línea para ver sus 98 campos con la explicación de cada valor.</p>
+                    <SfGrid TValue="LineaPilaDto" DataSource="@_detalle.Lines" AllowSorting="true" Height="360">
+                        <GridEvents TValue="LineaPilaDto" RowSelected="@(async l => await ExplicarAsync(l.Data.LineNumber))" />
+                        <GridColumns>
+                            <GridColumn Field="LineNumber" HeaderText="#" Width="60" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="EmployeeName" HeaderText="Cotizante" Width="220" />
+                            <GridColumn Field="Document" HeaderText="Documento" Width="110" />
+                            <GridColumn Field="ContributorType" HeaderText="Tipo" Width="60" />
+                            <GridColumn Field="NovedadesTexto" HeaderText="Novedades" Width="110" />
+                            <GridColumn Field="DaysPension" HeaderText="Días" Width="60" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="IbcCcf" HeaderText="IBC" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Pension" HeaderText="Pensión" Width="100" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Fsp" HeaderText="FSP" Width="90" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Health" HeaderText="Salud" Width="100" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Arl" HeaderText="ARL" Width="90" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Ccf" HeaderText="CCF" Width="90" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Sena" HeaderText="SENA" Width="90" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Icbf" HeaderText="ICBF" Width="90" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Total" HeaderText="Total" Width="110" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn HeaderText="Exon." Width="70"><Template>@(((LineaPilaDto)context).Exempt ? "S" : "N")</Template></GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                    @if (_explicacion is not null)
+                    {
+                        <div class="info-card">
+                            <span class="label">Línea @_explicacion.LineNumber · @_explicacion.EmployeeName · campo a campo</span>
+                            <pre class="archivo-plano">@_explicacion.RecordText</pre>
+                            <SfGrid TValue="ExplicacionDeCampoPilaDto" DataSource="@_explicacion.Fields" Height="320">
+                                <GridColumns>
+                                    <GridColumn Field="Field" HeaderText="#" Width="60" TextAlign="TextAlign.Right" />
+                                    <GridColumn Field="Name" HeaderText="Campo" Width="260" />
+                                    <GridColumn Field="Value" HeaderText="Valor" Width="140" />
+                                    <GridColumn Field="Source" HeaderText="Origen" Width="110" />
+                                    <GridColumn Field="Detail" HeaderText="De dónde sale" Width="520" />
+                                </GridColumns>
+                            </SfGrid>
+                        </div>
+                    }
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="@($"Inconsistencias ({_detalle.Issues.Count})")" /></ChildContent>
+                <ContentTemplate>
+                    @if (_detalle.Issues.Count == 0) { <div class="sin-datos">Sin inconsistencias.</div> }
+                    else
+                    {
+                        <SfGrid TValue="InconsistenciaPilaDto" DataSource="@_detalle.Issues" AllowSorting="true">
+                            <GridColumns>
+                                <GridColumn Field="SeveridadTexto" HeaderText="Severidad" Width="110" />
+                                <GridColumn Field="Code" HeaderText="Código" Width="230" />
+                                <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="200" />
+                                <GridColumn Field="Message" HeaderText="Mensaje" Width="460" />
+                                <GridColumn HeaderText="Corregir" Width="100">
+                                    <Template>@{ var i = (InconsistenciaPilaDto)context; } @if (!string.IsNullOrEmpty(i.Link)) { <a class="enlace" href="@i.Link">Ir</a> }</Template>
+                                </GridColumn>
+                            </GridColumns>
+                        </SfGrid>
+                    }
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Fuentes" /></ChildContent>
+                <ContentTemplate>
+                    <ul>@foreach (var s in _detalle.Sources) { <li>@s.Label — @s.Kind v@s.Version (@s.Status)</li> }</ul>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
+    </IndicadorDeCarga>
+}
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarAjustes" Header="Datos del aportante (registro tipo 1)" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+            <div class="pagina">
+                <p class="texto-tenue">El NIT y la razón social salen de Maestros › Empresas (termina en @(_ajustes?.NitLastTwoDigits ?? "—")). Aquí va lo que sólo la planilla necesita.</p>
+                <div class="fila-campos">
+                    <SfTextBox @bind-Value="_form.ContributorType" MaxLength="2" Placeholder="Tipo de aportante (1 = empleador)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.ContributorClass" MaxLength="1" Placeholder="Clase (A ≥ 200 cotizantes, B < 200, C, D, I)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.PresentationForm" MaxLength="1" Placeholder="Forma de presentación (U única / S sucursal)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div class="fila-campos">
+                    <SfTextBox @bind-Value="_form.BranchCode" MaxLength="10" Placeholder="Código de sucursal (si S)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.BranchName" MaxLength="40" Placeholder="Nombre de sucursal (si S)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div class="fila-campos">
+                    <SfTextBox @bind-Value="_form.ArlPilaCode" MaxLength="6" Placeholder="Código PILA de la ARL del aportante *" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.OperatorCode" MaxLength="2" Placeholder="Código del operador (campo 22) *" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.OperatorName" MaxLength="40" Placeholder="Operador (informativo)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div class="fila-campos">
+                    <SfTextBox @bind-Value="_form.DivipolaDepartment" MaxLength="2" Placeholder="Departamento DIVIPOLA de la sede" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.DivipolaMunicipality" MaxLength="3" Placeholder="Municipio DIVIPOLA de la sede" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_form.EconomicActivityCode" MaxLength="7" Placeholder="Actividad económica ARL (Decreto 768/2022)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <p class="texto-tenue">La ubicación laboral y la actividad económica de la sede son el defecto de cada ficha (campos 9, 10 y 98).</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarAjustes = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@GuardarAjustesAsync">Guardar</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCargada" Header="Marcar la planilla como cargada en el operador" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Marcando…">
+            <div class="pagina">
+                <p>Anote el número de radicación o de planilla que asignó el operador. Después de esto el período no se regenera: una corrección se digita en el operador (planilla N).</p>
+                <SfDatePicker TValue="DateTime" @bind-Value="_cargada.UploadedAt" Placeholder="Fecha de cargue" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_cargada.OperatorReference" MaxLength="40" Placeholder="Número de radicación / planilla *" FloatLabelType="FloatLabelType.Always" />
+                <SfDatePicker TValue="DateTime?" @bind-Value="_cargada.PaidAt" Placeholder="Fecha de pago (opcional)" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarCargada = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_cargada.OperatorReference))" OnClick="@MarcarCargadaAsync">Marcar cargada</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [SupplyParameterFromQuery(Name = "ajustes")] public int? Ajustes { get; set; }
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
+    private List<GeneracionPilaDto> _generaciones = [];
+    private DetalleDePilaDto? _detalle;
+    private ExplicacionDeLineaPilaDto? _explicacion;
+    private ValidacionPilaDto? _validacion;
+    private FechaLimitePilaDto? _fechaLimite;
+    private DatosDelAportanteDto? _ajustes;
+    private DatosDelAportanteRequest _form = new();
+    private int _anio = DateTime.Today.AddMonths(-1).Year;
+    private int _mes = DateTime.Today.AddMonths(-1).Month;
+    private bool _reconocerAlertas, _mostrarAjustes, _mostrarCargada;
+    private FormCargada _cargada = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        var ajustes = await Nomina.DatosDelAportanteAsync();
+        if (ajustes.IsSuccess) _ajustes = ajustes.Value;
+        if (Ajustes == 1) await AbrirAjustesAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarPilaAsync(_anio);
+        if (res.IsSuccess) _generaciones = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar las planillas.");
+        var fl = await Nomina.FechaLimitePilaAsync(_anio, _mes);
+        _fechaLimite = fl.IsSuccess ? fl.Value : null;
+    }
+
+    private async Task ValidarAsync()
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        _validacion = null; _reconocerAlertas = false;
+        var res = await Nomina.ValidarPilaAsync(_anio, _mes);
+        if (res.IsSuccess) _validacion = res.Value;
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo validar la planilla.");
+        var fl = await Nomina.FechaLimitePilaAsync(_anio, _mes);
+        _fechaLimite = fl.IsSuccess ? fl.Value : null;
+    }
+
+    private async Task GenerarAsync()
+    {
+        if (_accion.Activa || _validacion is null) return;
+        if (_validacion.Warnings > 0 && !_reconocerAlertas) { await Notification.WarningAsync("Hay alertas: reconózcalas para generar."); return; }
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.GenerarPilaAsync(_anio, _mes, _reconocerAlertas);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo generar la planilla."); return; }
+        var g = res.Value!;
+        await Notification.SuccessAsync(g.Status == 1
+            ? $"Planilla generada (versión {g.Version}): {g.Contributors} cotizante(s), {g.Lines} línea(s), total {g.Totals.Total:N0}. {(g.Reconciliation.Balanced ? "Cuadra con la nómina." : "Hay diferencia con la nómina: revísela antes de descargar.")}"
+            : $"La planilla quedó con {g.Issues.Count(i => i.Bloqueante)} inconsistencia(s) bloqueante(s): corríjalas y vuelva a generar.");
+        _validacion = null;
+        await CargarAsync();
+        await AbrirAsync(g.GenerationPublicId);
+    }
+
+    private async Task AbrirAsync(Guid id)
+    {
+        using var carga = _detalleCarga.Iniciar();
+        _explicacion = null;
+        var res = await Nomina.PilaAsync(id);
+        if (res.IsSuccess) _detalle = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo abrir la planilla.");
+    }
+
+    private async Task ExplicarAsync(int linea)
+    {
+        if (_detalle is null) return;
+        var res = await Nomina.ExplicacionDeLineaPilaAsync(_detalle.Summary.GenerationPublicId, linea);
+        if (res.IsSuccess) _explicacion = res.Value;
+    }
+
+    private async Task DescargarAsync()
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var reconocer = false;
+        if (!_detalle.Reconciliation.Balanced)
+        {
+            // FR-027: la diferencia se ve arriba; descargar con diferencia es una decisión explícita.
+            await Notification.WarningAsync("El archivo no cuadra con la nómina: se descarga reconociendo la diferencia mostrada en el cuadre.");
+            reconocer = true;
+        }
+        var res = await Nomina.DescargarPilaAsync(_detalle.Summary.GenerationPublicId, reconocer);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar la planilla."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    private async Task ReporteAsync(string vista, string formato)
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.DescargarReportePilaAsync(vista, _detalle.Summary.GenerationPublicId, formato);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar el reporte."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    private async Task AbrirAjustesAsync()
+    {
+        var res = await Nomina.DatosDelAportanteAsync();
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron leer los datos del aportante."); return; }
+        _ajustes = res.Value;
+        _form = DatosDelAportanteRequest.Desde(res.Value!);
+        _mostrarAjustes = true;
+    }
+
+    private async Task GuardarAjustesAsync()
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.GuardarDatosDelAportanteAsync(_form);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron guardar los datos del aportante."); return; }
+        _ajustes = res.Value;
+        _mostrarAjustes = false;
+        await Notification.SuccessAsync(_ajustes!.Complete ? "Datos del aportante guardados." : $"Guardado; aún falta: {string.Join(", ", _ajustes.Missing)}.");
+    }
+
+    private async Task MarcarCargadaAsync()
+    {
+        if (_detalle is null || _accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.MarcarPilaCargadaAsync(_detalle.Summary.GenerationPublicId,
+            new MarcarCargadaRequest(_cargada.UploadedAt, _cargada.OperatorReference.Trim(), DateOnly.FromDateTime(_cargada.UploadedAt), _cargada.PaidAt is { } p ? DateOnly.FromDateTime(p) : null));
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo marcar la planilla."); return; }
+        await Notification.SuccessAsync($"Planilla marcada como cargada con el radicado {res.Value!.OperatorReference}.");
+        _mostrarCargada = false;
+        await AbrirAsync(_detalle.Summary.GenerationPublicId);
+        await CargarAsync();
+    }
+
+    private sealed class FormCargada
+    {
+        public DateTime UploadedAt { get; set; } = DateTime.Today;
+        public string OperatorReference { get; set; } = string.Empty;
+        public DateTime? PaidAt { get; set; }
+    }
+}

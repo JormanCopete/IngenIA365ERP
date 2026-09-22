@@ -29,7 +29,7 @@ public class PaymentCommandsTests
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var apr = new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit);
+        var apr = new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker);
         var a = await apr.Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
         a.IsSuccess.Should().BeTrue(a.Error.Message);
         return r.Value.RunPublicId;

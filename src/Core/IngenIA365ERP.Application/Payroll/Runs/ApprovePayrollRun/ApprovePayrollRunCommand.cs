@@ -58,7 +58,8 @@ public sealed class ApprovePayrollRunCommandHandler(
     IPermissionChecker permissions,
     IDateTimeService clock,
     ICurrentUserService user,
-    PayrollAuditEmitter audit)
+    PayrollAuditEmitter audit,
+    IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<ApprovePayrollRunCommand, Result<ApproveRunResultDto>>
 {
     public const string AuthorizeExceptionPermission = "Payroll.Runs.AuthorizeException";
@@ -68,6 +69,9 @@ public sealed class ApprovePayrollRunCommandHandler(
         var run = await db.PayrollRuns.Include(r => r.PayPeriod).FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null)
             return Fallo("Payroll.RunNotFound", "No existe la corrida indicada.");
+        // Feature 010: una prima o una definitiva se aprueba por su ruta con su permiso; si no, Payroll.Runs.Approve las aprobaría todas.
+        if (run.EsEspecial)
+            return Result.Failure<ApproveRunResultDto>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
         if (run.Status == PayrollRunStatus.Stale)
             return Fallo("Payroll.RunStale", "El borrador está desactualizado: cambió una novedad, un salario, un concepto o un parámetro desde el cálculo. Recalcule antes de aprobar.");
         if (run.Status != PayrollRunStatus.Draft)
@@ -118,7 +122,7 @@ public sealed class ApprovePayrollRunCommandHandler(
                 "Autorizar una excepción a un bloqueo exige el permiso Payroll.Runs.AuthorizeException.");
 
         // --- segregación de funciones (FR-020, FR-021) ---
-        var politica = await policies.ReadAsync(ct);
+        var politica = await policies.ReadAsync(DateOnly.FromDateTime(period.EndDate), ct);
         var yo = user.UserName ?? string.Empty;
         var actores = await db.PayrollNovelties.AsNoTracking()
             .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active)
@@ -178,6 +182,11 @@ public sealed class ApprovePayrollRunCommandHandler(
                 r.UpdatedBy = yo;
             }
         }
+
+        // Feature 010 (revisión N1): las provisiones y bases de un borrador de prima, cesantías, vacaciones o
+        // definitiva de estos empleados con corte desde este período cambian con esta aprobación: quedan Stale.
+        await staleMarker.MarkSettlementDraftsStaleAsync(idsEmpleados, DateOnly.FromDateTime(period.StartDate),
+            $"aprobación de la nómina ordinaria {period.StartDate:yyyy-MM-dd} a {period.EndDate:yyyy-MM-dd}", ct);
 
         await db.SaveChangesAsync(ct);
 

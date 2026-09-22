@@ -3,7 +3,6 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.EmployeeTax;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployeeWithPerson;
-using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.TerminateEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.UpdateEmployee;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Queries;
 using MediatR;
@@ -83,13 +82,9 @@ public class EmployeesEndpoints : ICarterModule
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
         }).WithName("UpdateEmployee").RequirePermission("Payroll.Employees.Update");
 
-        group.MapPost("/{id:guid}/terminate", async (Guid id, TerminateEmployeeRequest request, ISender sender) =>
-        {
-            var command = new TerminateEmployeeCommand(id, request.TerminationDate, request.TerminationCause);
-            var result = await sender.Send(command);
-            return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("TerminateEmployee").RequirePermission("Payroll.Employees.Terminate");
+        // Feature 010 (US3): «Terminar contrato» ya no vive aquí. POST /{id}/terminate cerraba la ficha con
+        // un motivo de texto libre y sin liquidación; hoy el retiro se registra en
+        // POST /api/payroll/settlements/terminations (catálogo de motivos, definitiva en borrador) y la
+        // ficha se cierra al aprobar la definitiva. Se retiró sin alias: responde 404.
     }
 }
-
-public record TerminateEmployeeRequest(DateTime TerminationDate, string? TerminationCause);

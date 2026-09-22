@@ -45,7 +45,9 @@ public sealed record ConceptDefinitionDto(
     DateTime ValidFrom,
     DateTime? ValidTo,
     bool IsActive,
-    bool HasAccounts)
+    bool HasAccounts,
+    bool AffectsVacationBase,
+    string? DianElement)
 {
     /// <summary>Se registra como novedad: no es automático o admite datos de la novedad.</summary>
     public bool RegistrableComoNovedad => !IsAutomatic || RequiresAmount || RequiresQuantity || RequiresDates;
@@ -62,7 +64,8 @@ public static class ConceptDefinitionMapper
         c.AllowsRepeatInPeriod, c.MaxQuantity, c.MaxAmount,
         c.ApplicableClasses, ClassNames(c.ApplicableClasses),
         c.RequiresDates, c.RequiresQuantity, c.RequiresAmount, c.IsAutomatic, c.ReducesWorkedDays,
-        c.Origin.ToString(), c.LegacyConceptId, c.ValidFrom, c.ValidTo, c.IsActive, hasAccounts);
+        c.Origin.ToString(), c.LegacyConceptId, c.ValidFrom, c.ValidTo, c.IsActive, hasAccounts,
+        c.AffectsVacationBase, c.DianElement);
 
     public static IReadOnlyList<string> ClassNames(int mask)
     {

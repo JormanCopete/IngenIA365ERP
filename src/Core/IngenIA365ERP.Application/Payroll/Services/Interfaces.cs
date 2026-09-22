@@ -15,6 +15,17 @@ public interface IPayrollRunStaleMarker
 
     /// <summary>Toda corrida <c>Draft</c> viva pasa a <c>Stale</c> (cambió un concepto o un parámetro legal).</summary>
     Task<int> MarkAllDraftsStaleAsync(string reason, CancellationToken ct);
+
+    /// <summary>
+    /// Feature 010 (revisión N1): los borradores de las liquidaciones especiales (prima, cesantías,
+    /// vacaciones, definitiva) no tienen período, así que <see cref="MarkStaleAsync"/> nunca los alcanza.
+    /// Pasan a <c>Stale</c> los borradores que incluyen a alguno de los empleados y cuyo corte es igual o
+    /// posterior a la fecha desde la que cambió el insumo: se aprobó o reversó una ordinaria de su rango
+    /// (sus provisiones y bases cambian), cambió un salario con efecto dentro del rango, o cambió el saldo
+    /// inicial del empleado. Aprobar un borrador así contabilizaría un ajuste de provisión viejo y el
+    /// saldo de la provisión no volvería a cero.
+    /// </summary>
+    Task<int> MarkSettlementDraftsStaleAsync(IReadOnlyCollection<int> employeeIds, DateOnly affectsFrom, string reason, CancellationToken ct);
 }
 
 /// <summary>
@@ -109,4 +120,53 @@ public sealed record PayslipDispatchResult(
 public interface IPayslipEmailDispatcher
 {
     Task<PayslipDispatchResult> DispatchAsync(Guid runPublicId, IReadOnlyList<Guid>? employeePublicIds, CancellationToken ct);
+}
+
+// -------------------------------------------- documento de liquidación definitiva --
+
+/// <summary>Un rubro del documento: código, nombre, base y días con los que se calculó, y el valor.</summary>
+public sealed record SettlementDocumentLineModel(string Code, string Name, ConceptNature Nature, decimal? BaseAmount, decimal? Days, decimal Amount, string Summary);
+
+/// <summary>Un descuento del documento: obligación, propuesto, aplicado y motivo si se bajó.</summary>
+public sealed record SettlementDocumentDeductionModel(string Description, decimal Proposed, decimal Applied, string? Reason, decimal? RemainingAfter);
+
+/// <summary>
+/// Todo lo que el documento de liquidación definitiva para firma imprime (feature 010, FR-020).
+/// Lo arma Application (<c>SettlementDocumentModelBuilder</c>); lo pinta el renderizador QuestPDF de
+/// la API. Antes de aprobar sale con la marca «BORRADOR».
+/// </summary>
+public sealed record SettlementDocumentModel(
+    string CooperativeName,
+    string? CooperativeTaxId,
+    string EmployeeName,
+    string EmployeeDocumentType,
+    string EmployeeDocument,
+    string? EmployeePosition,
+    DateTime HireDate,
+    DateOnly TerminationDate,
+    string ReasonName,
+    string? ReasonLegalBasis,
+    bool GeneratesSeverancePay,
+    string ContractType,
+    DateOnly? ContractEndDate,
+    decimal BaseSalary,
+    int DaysOfService,
+    IReadOnlyList<SettlementDocumentLineModel> Earnings,
+    IReadOnlyList<SettlementDocumentLineModel> Deductions,
+    IReadOnlyList<SettlementDocumentDeductionModel> PortfolioDeductions,
+    IReadOnlyList<string> Omitted,
+    decimal TotalEarnings,
+    decimal TotalDeductions,
+    decimal NetPay,
+    bool IsDraft,
+    int RunVersion,
+    DateTime? ApprovedAt,
+    string? ApprovedBy,
+    string? AccountingDocumentNumber,
+    DateTime GeneratedAt);
+
+/// <summary>Pinta el documento de liquidación definitiva. Vive en la API (QuestPDF sólo se conoce allí), como <see cref="IPayslipPdfRenderer"/>.</summary>
+public interface ISettlementDocumentRenderer
+{
+    byte[] Render(SettlementDocumentModel document);
 }

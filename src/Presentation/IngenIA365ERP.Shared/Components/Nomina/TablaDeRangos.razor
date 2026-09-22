@@ -8,7 +8,7 @@
 <div class="tabla-de-rangos">
     <table class="data-grid">
         <thead>
-            <tr><th>Desde (@Unidad)</th><th>Hasta (@Unidad)</th><th>Tarifa %</th><th>Fijo (@Unidad)</th>@if (!SoloLectura) { <th></th> }</tr>
+            <tr><th>Desde (@Unidad)</th><th>Hasta (@Unidad)</th><th>@(EtiquetaTarifa ?? "Tarifa %")</th><th>@(EtiquetaFijo ?? $"Fijo ({Unidad})")</th>@if (!SoloLectura) { <th></th> }</tr>
         </thead>
         <tbody>
             @foreach (var (fila, i) in _filas.Select((f, i) => (f, i)))
@@ -40,6 +40,10 @@
     [Parameter] public EventCallback<IReadOnlyList<TramoDto>> TramosChanged { get; set; }
     [Parameter] public string Unidad { get; set; } = "UVT";
     [Parameter] public bool SoloLectura { get; set; }
+
+    /// <summary>Feature 010 (D-08): rótulos de las dos columnas del tramo cuando no son tarifa y fijo (días de indemnización, % no gravado, día hábil).</summary>
+    [Parameter] public string? EtiquetaTarifa { get; set; }
+    [Parameter] public string? EtiquetaFijo { get; set; }
 
     private List<Fila> _filas = [];
     private IReadOnlyList<TramoDto>? _ultimoRecibido;

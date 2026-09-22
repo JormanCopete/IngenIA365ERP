@@ -21,6 +21,13 @@ public class AccountsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Accounts.View");
 
+        // Feature 010 (US8): las cuentas bancarias del plan, para elegir la cuenta origen de un archivo de pagos.
+        group.MapGet("/bank-accounts", async ([FromQuery] Guid? bankId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListBankAccountsQuery(bankId), ct))
+            .WithName("Accounting_Accounts_BankAccounts")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Accounts.View");
+
         group.MapGet("/search", async ([FromQuery] string q, [FromQuery] string? module, [FromQuery] bool? onlyMovement, ISender sender, CancellationToken ct) =>
                 await sender.Send(new SearchAccountsQuery(q ?? string.Empty, module, onlyMovement ?? true), ct))
             .WithName("Accounting_Accounts_Search")

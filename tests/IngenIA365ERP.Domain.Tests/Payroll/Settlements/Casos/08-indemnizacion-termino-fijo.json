@@ -1,0 +1,20 @@
+{
+  "nombre": "Indemnización en contrato a término fijo: el tiempo que faltaba (195 días × 80.000 = 15.600.000)",
+  "descripcion": "Research R14: término fijo terminado sin justa causa el 15-06-2026 con vencimiento el 31-12-2026 (CST art. 64). El caso sólo deriva la indemnización y su retención.",
+  "derivacion": "Días que faltaban del 16-06-2026 al 31-12-2026 (30/360): 15 de junio (16 al 30) + 6 meses × 30 = 195. Salario 2.400.000 / 30 = 80.000 por día. Indemnización = 195 × 80.000 = 15.600.000. Sin mínimo: el mínimo de INDEMNIZACION_OBRA_MINIMO_DIAS es sólo para obra o labor. Retención 401-3: ingreso mensual 2.400.000 + 249.095 = 2.649.095 = 50,58 UVT ≤ 204 → 0.",
+  "tipo": "Settlement",
+  "corte": "2026-06-15",
+  "empleado": {
+    "nombre": "Término fijo terminado antes de tiempo",
+    "ingreso": "2026-01-01",
+    "salarios": [ { "desde": "2026-01-01", "mensual": 2400000 } ],
+    "tipoContrato": "FixedTerm",
+    "finContrato": "2026-12-31"
+  },
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "esperado": {
+    "soloLineasListadas": true,
+    "lineas": { "INDEMNIZACION": 15600000, "RETEFTE_INDEMNIZACION": 0 },
+    "explicaciones": [ "INDEMNIZACION: 195 días" ]
+  }
+}

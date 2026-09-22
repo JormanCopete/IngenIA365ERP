@@ -1,0 +1,18 @@
+{
+  "nombre": "Cesantías 2026 con salario estable todo el año",
+  "descripcion": "Research R1: 2.500.000 + 249.095 = 2.749.095 × 360/360 = 2.749.095. Intereses 12 % sobre 360 días.",
+  "derivacion": "El salario no cambió en los últimos 3 meses (CESANTIAS_VENTANA_ESTABILIDAD_MESES): base = último salario 2.500.000 + auxilio 249.095 (2.500.000 ≤ 3.501.810) = 2.749.095. Días 01-01 a 31-12 = 360. Cesantías = 2.749.095 / 30 × 30 × 360 / 360 = 2.749.095. Intereses = 2.749.095 × 12 % × 360 / 360 = 329.891,40. Retención sobre intereses: ingreso promedio 6 meses = 2.749.095 = 52,49 UVT ≤ 350 → exentos → 0. Las cesantías van al fondo: no se retienen.",
+  "tipo": "Severance",
+  "corte": "2026-12-31",
+  "inicioPeriodo": "2026-01-01",
+  "empleado": {
+    "nombre": "Salario estable",
+    "ingreso": "2024-01-01",
+    "salarios": [ { "desde": "2024-01-01", "mensual": 2500000 } ]
+  },
+  "esperado": {
+    "lineas": { "CESANTIAS": 2749095, "INT_CESANTIAS": 329891.40, "RETEFTE_CESANTIAS": 0 },
+    "totales": { "devengos": 3078986.40, "deducciones": 0, "provisiones": 0, "neto": 3078986.40 },
+    "omitidos": [ "CESANTIAS_AJUSTE_PROV:SinProvisionInformada", "INT_CESANTIAS_AJUSTE_PROV:SinProvisionInformada" ]
+  }
+}

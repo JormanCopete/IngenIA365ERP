@@ -38,6 +38,43 @@ else if (_resumen is not null)
     </div>
 }
 
+@* ------------------------------------------- lo que le falta a cada proceso (feature 010) --- *@
+<div class="info-card">
+    <span class="label">Parámetros por proceso</span>
+    <p>Cada proceso exige su propia lista: la nómina ordinaria no se niega porque falte un código de prestaciones, pero la prima o la PILA sí. Elegí el proceso para ver qué falta a la fecha de arriba.</p>
+    <div class="toolbar">
+        <label class="campo">
+            Proceso
+            <select class="e-input" @bind="_proceso" @bind:after="CargarFaltantesAsync">
+                <option value="Settlements">Prestaciones (prima, cesantías, vacaciones, definitiva)</option>
+                <option value="Pila">PILA</option>
+                <option value="WithholdingRates">Procedimiento 2 (porcentaje fijo)</option>
+                <option value="ElectronicPayroll">Nómina electrónica</option>
+                <option value="Ordinary">Nómina ordinaria</option>
+            </select>
+        </label>
+    </div>
+    <IndicadorDeCarga Cargando="@_cargaFaltantes.Activa" Texto="Comprobando vigencias…">
+        @if (_faltantes is not null)
+        {
+            @if (_faltantes.Missing.Count == 0)
+            {
+                <p><strong>Completo:</strong> todo lo que exige @NombreDeProceso(_faltantes.Process) tiene vigencia al @_faltantes.AsOf.ToString("dd/MM/yyyy").</p>
+            }
+            else
+            {
+                <p><strong>Faltan @_faltantes.Missing.Count código(s)</strong> para @NombreDeProceso(_faltantes.Process) al @_faltantes.AsOf.ToString("dd/MM/yyyy"): el cálculo se negará hasta registrarlos.</p>
+                <ul>
+                    @foreach (var f in _faltantes.Missing)
+                    {
+                        <li><strong>@f.Code</strong> · @f.Description @if (!string.IsNullOrWhiteSpace(f.Source)) { <span class="texto-tenue">· @f.Source</span> }</li>
+                    }
+                </ul>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
 <IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid TValue="ParametroLegalDto" DataSource="@(_resumen?.Items ?? [])" AllowSorting="true" AllowPaging="true">
     <GridPageSettings PageSize="50" />
@@ -75,7 +112,7 @@ else if (_resumen is not null)
                         <p><strong>@v.ValorTexto</strong> · @v.Source <span class="texto-tenue">· registrado por @v.CreatedBy</span></p>
                         @if (v.EsTabla)
                         {
-                            <TablaDeRangos Tramos="@v.Ranges" Unidad="@(v.RangeUnitParameterCode ?? "pesos")" SoloLectura="true" />
+                            <TablaDeRangos Tramos="@v.Ranges" Unidad="@(v.RangeUnitParameterCode ?? "pesos")" EtiquetaTarifa="@v.EtiquetaTarifa" EtiquetaFijo="@v.EtiquetaFijo" SoloLectura="true" />
                             <p class="texto-tenue">@(v.RangeIsMarginal ? "Tarifa marginal sobre el exceso del tramo más el fijo." : "Tarifa del tramo sobre toda la base.")</p>
                         }
                     </div>
@@ -105,6 +142,7 @@ else if (_resumen is not null)
                                 <option value="Amount">Valor</option>
                                 <option value="Percent">Porcentaje</option>
                                 <option value="RangeTable">Tabla por rangos</option>
+                                <option value="DateInYear">Fecha del año (MMDD)</option>
                             </select>
                         </label>
                     }
@@ -118,7 +156,7 @@ else if (_resumen is not null)
                     <SfDatePicker TValue="DateTime" @bind-Value="_nueva.ValidFrom" Placeholder="Rige desde" FloatLabelType="FloatLabelType.Always" />
                     @if (_nueva.Kind != "RangeTable")
                     {
-                        <SfNumericTextBox TValue="decimal?" @bind-Value="_nueva.Value" Placeholder="@(_nueva.Kind == "Percent" ? "Porcentaje" : "Valor")" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
+                        <SfNumericTextBox TValue="decimal?" @bind-Value="_nueva.Value" Placeholder="@(_nueva.Kind == "Percent" ? "Porcentaje" : _nueva.Kind == "DateInYear" ? "Fecha como MMDD (1220 = 20 de diciembre)" : "Valor")" FloatLabelType="FloatLabelType.Always" Decimals="4" Min="0" />
                         <ValidationMessage For="() => _nueva.Value" />
                     }
                     else
@@ -128,7 +166,7 @@ else if (_resumen is not null)
                             <SfTextBox @bind-Value="_nueva.RangeUnitParameterCode" MaxLength="40" Placeholder="Unidad de los tramos (código de parámetro: UVT, SMMLV; vacío = pesos)" FloatLabelType="FloatLabelType.Always" />
                             <label class="campo-check"><input type="checkbox" @bind="_nueva.RangeIsMarginal" /> Tarifa marginal sobre el exceso del tramo (retención); sin marcar, la tarifa aplica a toda la base (fondo de solidaridad)</label>
                         }
-                        <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" />
+                        <TablaDeRangos @ref="_tabla" Tramos="@_nueva.Ranges" TramosChanged="@(t => _nueva.Ranges = t)" Unidad="@(_nueva.RangeUnitParameterCode ?? _base?.RangeUnitParameterCode ?? "pesos")" EtiquetaTarifa="@_base?.EtiquetaTarifa" EtiquetaFijo="@_base?.EtiquetaFijo" />
                     }
                     <SfTextBox @bind-Value="_nueva.Source" MaxLength="200" Placeholder="Norma que lo fija (decreto, resolución, ley)" FloatLabelType="FloatLabelType.Always" />
                     <ValidationMessage For="() => _nueva.Source" />
@@ -146,7 +184,10 @@ else if (_resumen is not null)
 @code {
     // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
     private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _cargaFaltantes = new();
     private ResumenParametrosLegalesDto? _resumen;
+    private ParametrosFaltantesDto? _faltantes;
+    private string _proceso = "Settlements";
     private DateTime _vigenteA = DateTime.Today;
     private bool _mostrarVersiones, _mostrarNueva, _guardando;
     private ParametroLegalDto? _versionesDe, _base;
@@ -159,11 +200,33 @@ else if (_resumen is not null)
 
     private async Task CargarAsync()
     {
-        using var carga = _carga.Iniciar();
-        var res = await Nomina.ListarParametrosLegalesAsync(_vigenteA);
-        if (res.IsSuccess) _resumen = res.Value;
-        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los parámetros legales.");
+        using (var carga = _carga.Iniciar())
+        {
+            var res = await Nomina.ListarParametrosLegalesAsync(_vigenteA);
+            if (res.IsSuccess) _resumen = res.Value;
+            else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los parámetros legales.");
+        }
+        await CargarFaltantesAsync();
     }
+
+    /// <summary>Feature 010 (T006): los códigos que el proceso elegido exige y no tienen vigencia a la fecha.</summary>
+    private async Task CargarFaltantesAsync()
+    {
+        using var carga = _cargaFaltantes.Iniciar();
+        var res = await Nomina.ParametrosFaltantesAsync(_proceso, _vigenteA);
+        if (res.IsSuccess) _faltantes = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo comprobar qué parámetros faltan.");
+    }
+
+    private static string NombreDeProceso(string proceso) => proceso switch
+    {
+        "Settlements" => "las liquidaciones de prestaciones",
+        "Pila" => "la PILA",
+        "WithholdingRates" => "el procedimiento 2",
+        "ElectronicPayroll" => "la nómina electrónica",
+        "Ordinary" => "la nómina ordinaria",
+        _ => proceso,
+    };
 
     private async Task AbrirVersiones(ParametroLegalDto p)
     {

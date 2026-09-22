@@ -14,6 +14,7 @@ public record WorkRiskProviderDto
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
+    public string? PilaCode { get; init; }
     public decimal Factor { get; init; }
     public Guid? PersonPublicId { get; init; }
     public string? PersonName { get; init; }
@@ -66,7 +67,7 @@ public class ListWorkRiskProvidersQueryHandler(IApplicationDbContext context)
                 Name = e.Name,
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
-                CheckDigit = e.CheckDigit,
+                PilaCode = e.PilaCode, CheckDigit = e.CheckDigit,
                 Factor = e.Factor, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .ToListAsync(cancellationToken);
@@ -96,7 +97,7 @@ public class GetWorkRiskProviderByIdQueryHandler(IApplicationDbContext context)
                 Name = e.Name,
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
-                CheckDigit = e.CheckDigit,
+                PilaCode = e.PilaCode, CheckDigit = e.CheckDigit,
                 Factor = e.Factor, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .FirstOrDefaultAsync(cancellationToken);

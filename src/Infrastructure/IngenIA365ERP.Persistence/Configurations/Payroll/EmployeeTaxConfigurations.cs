@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Enums.Payroll;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -17,6 +18,11 @@ public class EmployeeWithholdingRateConfiguration : IEntityTypeConfiguration<Emp
         builder.HasIndex(e => e.PublicId).IsUnique();
 
         builder.Property(e => e.RatePercent).HasPrecision(6, 3);
+
+        // Feature 010 (R8): de dónde salió la vigencia. Default 0 (Manual) en la base: las
+        // existentes fueron todas digitadas y no hay migración de datos que lo diga.
+        builder.Property(e => e.Origin).HasDefaultValue(WithholdingRateOrigin.Manual);
+        builder.HasOne<WithholdingRateCalculation>().WithMany().HasForeignKey(e => e.SourceCalculationId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.EmployeeId, e.ValidFrom }).HasDatabaseName("IX_PAY_EmployeeWithholdingRates_Employee_ValidFrom");
 

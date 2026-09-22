@@ -74,8 +74,10 @@ public sealed class ExportRunQueryHandler(IApplicationDbContext db, PayrollAudit
               .AppendLine();
         }
 
-        var periodo = run.PayPeriod!;
-        var nombre = $"nomina_{periodo.StartDate:yyyyMMdd}_{periodo.EndDate:yyyyMMdd}_v{run.Version}.csv";
+        // Feature 010: una liquidación especial no tiene período; el archivo se nombra por tipo y corte.
+        var nombre = run.PayPeriod is { } periodo
+            ? $"nomina_{periodo.StartDate:yyyyMMdd}_{periodo.EndDate:yyyyMMdd}_v{run.Version}.csv"
+            : $"{run.Kind.ToString().ToLowerInvariant()}_{run.CutoffDate:yyyyMMdd}_v{run.Version}.csv";
         await audit.EmitAsync(AuditEventTypes.PayrollRunExported, "PayrollRun", run.PublicId, null,
             new { file = nombre, rows = filas.Count, employees = filas.Select(f => f.TaxId).Distinct().Count() }, ct);
 

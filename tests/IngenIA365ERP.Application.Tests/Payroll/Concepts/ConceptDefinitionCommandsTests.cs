@@ -115,6 +115,62 @@ public class ConceptDefinitionCommandsTests
         versiones[1].Origin.Should().Be(ConceptOrigin.Seed, "la versión hereda el origen");
     }
 
+    /// <summary>Revisión de N1 (D-37): las dos columnas de la 010 van en el contrato, y al revisar se heredan si no se mandan.</summary>
+    [Fact]
+    public async Task La_base_de_vacaciones_y_la_ruta_dian_se_fijan_en_un_concepto_propio_y_se_heredan_al_revisar()
+    {
+        var d = new NominaTestData();
+        var crear = new CreateConceptDefinitionCommandHandler(d.Db, d.Clock, d.User, d.StaleMarker);
+        var revisar = new ReviseConceptDefinitionCommandHandler(d.Db, d.Clock, d.User, d.StaleMarker);
+
+        var propio = await crear.Handle(new CreateConceptDefinitionCommand(Bonificacion("BONO_SAL_COOP") with
+        {
+            AffectsSalaryBase = true, AffectsBenefitsBase = true, AffectsVacationBase = true, DianElement = "Devengados/Bonificaciones/BonificacionS",
+        }), CancellationToken.None);
+        propio.IsSuccess.Should().BeTrue(propio.Error.Message);
+        var creado = await d.Db.PayrollConceptDefinitions.SingleAsync(c => c.PublicId == propio.Value);
+        creado.AffectsVacationBase.Should().BeTrue("un concepto salarial propio entra a la base de vacaciones si la cooperativa lo dice");
+        creado.DianElement.Should().Be("Devengados/Bonificaciones/BonificacionS");
+
+        // COMISION sembrada: base de vacaciones y ruta DIAN puestas por la semilla.
+        var comision = await d.Db.PayrollConceptDefinitions.SingleAsync(c => c.Code == "COMISION");
+        comision.AffectsVacationBase = true;
+        comision.DianElement = "Devengados/Comisiones/Comision";
+        await d.Db.SaveChangesAsync();
+
+        // Revisar sólo el nombre, sin mandar las dos columnas: se heredan.
+        var r1 = await revisar.Handle(new ReviseConceptDefinitionCommand("COMISION", new ConceptDefinitionInput
+        {
+            Code = "COMISION", Name = "Comisiones por ventas", Nature = comision.Nature, CalculationKind = comision.CalculationKind, RequiresAmount = true,
+            AffectsSalaryBase = true, AffectsContributionBase = true, AffectsBenefitsBase = true, AffectsWithholdingBase = true, ValidFrom = new DateTime(2026, 10, 1),
+        }), CancellationToken.None);
+        r1.IsSuccess.Should().BeTrue(r1.Error.Message);
+        var v2 = await d.Db.PayrollConceptDefinitions.SingleAsync(c => c.PublicId == r1.Value);
+        v2.AffectsVacationBase.Should().BeTrue("la revisión hereda la base de vacaciones: la comisión de octubre entra al promedio de vacaciones");
+        v2.DianElement.Should().Be("Devengados/Comisiones/Comision");
+
+        // Revisar mandando las dos: lo que se manda vale; la cadena vacía quita la ruta.
+        var r2 = await revisar.Handle(new ReviseConceptDefinitionCommand("COMISION", new ConceptDefinitionInput
+        {
+            Code = "COMISION", Name = "Comisiones", Nature = comision.Nature, CalculationKind = comision.CalculationKind, RequiresAmount = true,
+            AffectsSalaryBase = true, AffectsVacationBase = false, DianElement = string.Empty, ValidFrom = new DateTime(2026, 11, 1),
+        }), CancellationToken.None);
+        r2.IsSuccess.Should().BeTrue(r2.Error.Message);
+        var v3 = await d.Db.PayrollConceptDefinitions.SingleAsync(c => c.PublicId == r2.Value);
+        v3.AffectsVacationBase.Should().BeFalse();
+        v3.DianElement.Should().BeNull();
+    }
+
+    [Fact]
+    public void La_ruta_dian_tiene_forma_de_ruta_del_xml()
+    {
+        var validador = new ConceptDefinitionInputValidator();
+        validador.Validate(Bonificacion() with { DianElement = "Devengados/Basico" }).IsValid.Should().BeTrue();
+        validador.Validate(Bonificacion() with { DianElement = "Devengados/Cesantias/@PagoIntereses" }).IsValid.Should().BeTrue();
+        validador.Validate(Bonificacion() with { DianElement = "salario básico" }).IsValid.Should().BeFalse();
+        validador.Validate(Bonificacion() with { DianElement = new string('A', 61) }).IsValid.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Revisar_con_vigencia_anterior_a_la_actual_se_rechaza()
     {

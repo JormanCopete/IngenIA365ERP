@@ -38,6 +38,11 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<ResumenParametrosLegalesDto>> ListarParametrosLegalesAsync(DateTime? vigenteA = null, CancellationToken ct = default) =>
         EnviarAsync<ResumenParametrosLegalesDto>(HttpMethod.Get, "/api/payroll/legal-parameters" + (vigenteA is { } d ? $"?asOf={d:yyyy-MM-dd}" : string.Empty), null, ct);
 
+    /// <summary>Feature 010 (T006): los códigos requeridos por un proceso sin vigencia a la fecha.</summary>
+    public Task<InvitationApiResult<ParametrosFaltantesDto>> ParametrosFaltantesAsync(string proceso, DateTime? vigenteA = null, CancellationToken ct = default) =>
+        EnviarAsync<ParametrosFaltantesDto>(HttpMethod.Get,
+            $"/api/payroll/legal-parameters/missing?process={Uri.EscapeDataString(proceso)}" + (vigenteA is { } d ? $"&asOf={d:yyyy-MM-dd}" : string.Empty), null, ct);
+
     public Task<InvitationApiResult<IReadOnlyList<ParametroLegalDto>>> VersionesDeParametroAsync(string codigo, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<ParametroLegalDto>>(HttpMethod.Get, $"/api/payroll/legal-parameters/{Uri.EscapeDataString(codigo)}/versions", null, ct);
 
@@ -61,7 +66,8 @@ public sealed record DefinicionConceptoRequest(
     string? UnitKind, decimal? UnitFactor, string? TableParameterCode, string? ComponentConceptCodes,
     bool AffectsSalaryBase, bool AffectsContributionBase, bool AffectsBenefitsBase, bool AffectsWithholdingBase, bool IsBenefitRelated,
     bool AllowsRepeatInPeriod, decimal? MaxQuantity, decimal? MaxAmount, int ApplicableClasses,
-    bool RequiresDates, bool RequiresQuantity, bool RequiresAmount, bool IsAutomatic, bool ReducesWorkedDays, DateTime ValidFrom);
+    bool RequiresDates, bool RequiresQuantity, bool RequiresAmount, bool IsAutomatic, bool ReducesWorkedDays, DateTime ValidFrom,
+    bool? AffectsVacationBase = null, string? DianElement = null);
 
 public sealed record CuentaDeConceptoRequest(Guid? CostCenterPublicId, string DebitAccountCode, string CreditAccountCode);
 
@@ -89,13 +95,49 @@ public sealed record ParametroLegalDto(
     Guid PublicId, string Code, string Name, string Kind, decimal? Value, DateTime ValidFrom, DateTime? ValidTo, string? Source,
     string? RangeUnitParameterCode, bool RangeIsMarginal, IReadOnlyList<TramoDto> Ranges, bool IsRequired, int VersionCount, string? CreatedBy, DateTime CreatedAt)
 {
-    public string TipoTexto => Kind switch { "Amount" => "Valor", "Percent" => "Porcentaje", "RangeTable" => "Tabla por rangos", _ => Kind };
+    public string TipoTexto => Kind switch { "Amount" => "Valor", "Percent" => "Porcentaje", "RangeTable" => "Tabla por rangos", "DateInYear" => "Fecha del año", _ => Kind };
     public bool EsTabla => Kind == "RangeTable";
-    public string ValorTexto => EsTabla ? $"{Ranges.Count} tramo(s)" : Kind == "Percent" ? $"{Value:0.###} %" : Value?.ToString("N2") ?? string.Empty;
+    public string ValorTexto => EsTabla ? $"{Ranges.Count} tramo(s)"
+        : Kind == "Percent" ? $"{Value:0.###} %"
+        : Kind == "DateInYear" ? FechaDelAño(Value)
+        : Value?.ToString("N2") ?? string.Empty;
+
+    /// <summary>Feature 010 (D-07): el valor de una fecha del año es MMDD (1220 → «20/12»).</summary>
+    private static string FechaDelAño(decimal? mmdd)
+    {
+        if (mmdd is null) return string.Empty;
+        var n = (int)mmdd.Value;
+        return $"{n % 100:00}/{n / 100:00}";
+    }
+
+    /// <summary>
+    /// Feature 010 (D-08): qué significan las dos columnas de cada tramo. En la tabla de indemnización
+    /// del art. 64 CST son días (del primer año y por cada año adicional), en la de cesantías gravadas el
+    /// porcentaje NO gravado, y en el plazo PILA el día hábil; en las demás, tarifa y fijo.
+    /// </summary>
+    public string EtiquetaTarifa => Code switch
+    {
+        "INDEMNIZACION_TABLA" => "Días por año adicional",
+        "CESANTIAS_GRAVADA_TABLA_UVT" => "% no gravado",
+        "PILA_PLAZO_PAGO_POR_NIT" => "—",
+        _ => "Tarifa %",
+    };
+
+    public string EtiquetaFijo => Code switch
+    {
+        "INDEMNIZACION_TABLA" => "Días del 1.er año",
+        "CESANTIAS_GRAVADA_TABLA_UVT" => "—",
+        "PILA_PLAZO_PAGO_POR_NIT" => "Día hábil del mes",
+        _ => $"Fijo ({RangeUnitParameterCode ?? "pesos"})",
+    };
     public string VigenciaTexto => ValidTo is { } h ? $"{ValidFrom:dd/MM/yyyy} – {h:dd/MM/yyyy}" : $"desde {ValidFrom:dd/MM/yyyy}";
 }
 
 public sealed record ResumenParametrosLegalesDto(DateTime AsOf, IReadOnlyList<ParametroLegalDto> Items, IReadOnlyList<string> MissingThisYear, IReadOnlyList<string> MissingNextYear);
+
+/// <summary>Feature 010: lo que le falta a un proceso a una fecha (contracts: <c>GET /legal-parameters/missing</c>).</summary>
+public sealed record ParametroFaltanteDto(string Code, string Description, string? Source);
+public sealed record ParametrosFaltantesDto(string Process, DateTime AsOf, IReadOnlyList<ParametroFaltanteDto> Missing);
 
 public sealed record NuevaVigenciaRequest(
     DateTime ValidFrom, decimal? Value, IReadOnlyList<TramoDto>? Ranges, string Source,

@@ -11,12 +11,22 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// <c>AuditBehavior</c> genérico guarda el comando tal cual; esto guarda además la
 /// entidad, y los valores antes y después. Si la escritura falla no tumba el comando,
 /// pero lo deja en el log con la acción y el motivo (nunca en silencio, Principio IX).
+///
+/// <para>
+/// La base de auditoría de cada cooperativa se nombra por el <c>PublicId</c> del tenant
+/// (<see cref="ICurrentTenantService.TenantId"/>), que es lo que la consola consulta. Hasta el
+/// 2026-09-21 este emisor escribía con <see cref="ICurrentUserService.TenantId"/> —el Id interno— y
+/// todos los eventos explícitos de nómina caían en una base que nadie leía; la e2e de la definitiva
+/// (feature 010, US3) lo destapó al buscar <c>Payroll.Settlement.DeductionAdjusted</c>. El servicio
+/// de tenant es opcional para que las pruebas que construyen el emisor a mano sigan compilando.
+/// </para>
 /// </summary>
 public sealed class PayrollAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
     IDateTimeService clock,
-    ILogger<PayrollAuditEmitter> logger)
+    ILogger<PayrollAuditEmitter> logger,
+    ICurrentTenantService? tenant = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -25,7 +35,7 @@ public sealed class PayrollAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: currentUser.TenantId ?? string.Empty,
+                TenantId: tenant?.TenantId ?? currentUser.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

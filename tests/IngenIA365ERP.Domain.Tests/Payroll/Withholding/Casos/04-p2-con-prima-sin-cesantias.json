@@ -1,0 +1,104 @@
+{
+  // Caso dorado 04 del procedimiento 2 (feature 010, US7): la prima suma (mes trece); cesantías e intereses quedan fuera desde el cargador.
+  "nombre": "La prima entra a la sumatoria; las cesantías y sus intereses no",
+  "derivacion": "Doce meses de 12.000.000 (aportes 1.080.000) y prima de 6.000.000 en junio; las cesantías consignadas en febrero y los intereses de enero NO están en los meses porque el cargador los excluye (ET art. 386). Sumatoria 150.000.000, aportes 12.960.000, neto 137.040.000, exenta 34.260.000, base 102.780.000 ÷ 13 = 7.906.153,85 = 150,9557 UVT → (150,9557 − 150) × 28 % + 10 UVT = 537.755,08 → 6,80 %.",
+  "year": 2026,
+  "semester": 2,
+  "mesDeCalculo": "2026-12-01",
+  "secuencia": "DepurateThenDivide",
+  "meses": [
+    {
+      "year": 2025,
+      "month": 12,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 4,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "bruto": 18000000,
+      "aportes": 1080000,
+      "especial": true
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "bruto": 12000000,
+      "aportes": 1080000,
+      "especial": false
+    }
+  ],
+  "deducciones": [],
+  "esperado": {
+    "mesesConsiderados": 12,
+    "divisor": 13,
+    "basePromedio": 7906153.85,
+    "promedioUvt": 150.9557,
+    "retencionTeorica": 537755.08,
+    "porcentaje": 6.8
+  }
+}

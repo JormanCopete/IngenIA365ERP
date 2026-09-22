@@ -1,0 +1,195 @@
+@*
+    DialogoDeTerminacion — «Registrar terminación» (feature 010, US3, FR-018; contracts/api.md §3.4).
+    Empleado (buscado aquí o dado por la ficha), fecha de retiro, motivo del catálogo, tipo de
+    contrato DIAN, fecha de fin del contrato cuando el motivo la exige y notas. Registrar crea la
+    terminación y la liquidación definitiva en borrador en una sola acción y avisa a quien lo abrió
+    con la corrida creada; la ficha sigue vigente hasta aprobar. El error FR-021 (fecha en un
+    período aprobado) se muestra explicado en el mismo diálogo. Lo usan la pantalla de la definitiva,
+    la ficha del empleado y la lista de empleados: un solo sitio que registra el retiro.
+*@
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+<SfDialog Visible="@Visible" VisibleChanged="@CambioVisible" Header="Registrar terminación del contrato" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaMotivos.Activa)" Texto="@(_guardado.Activa ? "Registrando la terminación y calculando la liquidación…" : "Cargando…")">
+            <div class="pagina">
+                <div class="info-card">
+                    <span class="label">Qué pasa al registrar</span>
+                    <p>Se crea la terminación y la <strong>liquidación definitiva en borrador</strong> con todos los rubros explicados y los descuentos propuestos desde Cartera. La ficha <strong>sigue vigente</strong> hasta que la liquidación se apruebe; descartar el borrador anula la terminación.</p>
+                </div>
+
+                <label>Empleado <span class="obligatorio">*</span></label>
+                @if (EmpleadoPublicId is not null)
+                {
+                    <p><strong>@EmpleadoNombre</strong></p>
+                }
+                else if (_empleado is null)
+                {
+                    <SfTextBox @bind-Value="_buscar" Placeholder="Nombre o documento" ShowClearButton="true"
+                               ValueChange="@(async (Syncfusion.Blazor.Inputs.ChangedEventArgs _) => await BuscarAsync())" />
+                    @if (_encontrados.Count > 0)
+                    {
+                        <div class="picker-resultados">
+                            @foreach (var e in _encontrados)
+                            {
+                                <div class="picker-opcion" @onclick="() => Elegir(e)">
+                                    <span class="e-badge e-badge-info">@e.IdentificationNumber</span> <strong>@e.FullName</strong>
+                                    <small class="texto-tenue"> ingreso @e.HireDate.ToString("dd/MM/yyyy") · salario @e.Salary.ToString("N0")</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p><strong>@_empleado.FullName</strong> <small class="texto-tenue">@_empleado.IdentificationNumber · ingreso @_empleado.HireDate.ToString("dd/MM/yyyy")</small>
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" type="button" OnClick="@(() => _empleado = null)" Title="Cambiar" /></p>
+                }
+
+                <div class="rejilla-campos">
+                    <div>
+                        <SfDatePicker TValue="DateTime" @bind-Value="_fecha" Placeholder="Fecha de retiro" FloatLabelType="FloatLabelType.Always" Format="dd/MM/yyyy" Max="DateTime.Today" />
+                    </div>
+                    <div>
+                        <SfDropDownList TValue="string" TItem="MotivoDeRetiroDto" DataSource="@_motivos" @bind-Value="_motivoCodigo" Placeholder="Motivo del retiro" FloatLabelType="FloatLabelType.Always" AllowFiltering="true">
+                            <DropDownListFieldSettings Value="Code" Text="Name" />
+                        </SfDropDownList>
+                    </div>
+                    <div>
+                        <SfDropDownList TValue="string" TItem="OpcionContrato" DataSource="@_contratos" @bind-Value="_contrato" Placeholder="Tipo de contrato (DIAN)" FloatLabelType="FloatLabelType.Always">
+                            <DropDownListFieldSettings Value="Nombre" Text="Texto" />
+                        </SfDropDownList>
+                    </div>
+                    @if (PideFechaDeFin)
+                    {
+                        <div>
+                            <SfDatePicker TValue="DateTime?" @bind-Value="_finContrato" Placeholder="Hasta cuándo iba el contrato" FloatLabelType="FloatLabelType.Always" Format="dd/MM/yyyy" />
+                        </div>
+                    }
+                </div>
+                @if (Motivo is { } m)
+                {
+                    <p class="hint">
+                        @(m.GeneratesSeverancePay ? "Este motivo genera indemnización (CST art. 64): con término fijo u obra hace falta la fecha en que iba a terminar el contrato para calcular el tiempo faltante." : "Este motivo no genera indemnización; la liquidación lo dice en la explicación.")
+                        @if (!string.IsNullOrWhiteSpace(m.LegalBasis)) { <span> Base legal: @m.LegalBasis.</span> }
+                    </p>
+                }
+                <SfTextBox @bind-Value="_notas" MaxLength="500" Multiline="true" Placeholder="Notas (opcional)" FloatLabelType="FloatLabelType.Always" />
+
+                @if (_errorExplicado is not null)
+                {
+                    <div class="info-card alerta">
+                        <span class="label">@_tituloError</span>
+                        <p>@_errorExplicado</p>
+                    </div>
+                }
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" type="button" OnClick="@Cerrar">Cancelar</SfButton>
+                <SfButton CssClass="e-primary" type="button" Disabled="@(!PuedeRegistrar)" OnClick="@RegistrarAsync">Registrar y liquidar</SfButton>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    /// <summary>Con empleado dado (la ficha) no se busca; sin él, el diálogo lo busca.</summary>
+    [Parameter] public Guid? EmpleadoPublicId { get; set; }
+    [Parameter] public string? EmpleadoNombre { get; set; }
+    /// <summary>Tipo de contrato DIAN de la ficha (1..5) para proponerlo.</summary>
+    [Parameter] public int? ContratoDeLaFicha { get; set; }
+    [Parameter] public EventCallback<TerminacionRegistradaDto> OnRegistrada { get; set; }
+
+    private readonly EstadoDeCarga _guardado = new(), _cargaMotivos = new();
+    private List<MotivoDeRetiroDto> _motivos = [];
+    private readonly List<OpcionContrato> _contratos = TiposDeContratoDian.Todos.Select(t => new OpcionContrato(t.Nombre, t.Texto)).ToList();
+    private string _buscar = string.Empty;
+    private List<EmpleadoResumenDto> _encontrados = [];
+    private EmpleadoResumenDto? _empleado;
+    private DateTime _fecha = DateTime.Today;
+    private string? _motivoCodigo, _contrato, _notas, _errorExplicado, _tituloError;
+    private DateTime? _finContrato;
+    private bool _cargado;
+
+    private sealed record OpcionContrato(string Nombre, string Texto);
+
+    private MotivoDeRetiroDto? Motivo => _motivos.FirstOrDefault(m => m.Code == _motivoCodigo);
+    private bool PideFechaDeFin => Motivo is { RequiresContractEndDate: true } && TiposDeContratoDian.ExigeFechaDeFin(_contrato);
+    private Guid? EmpleadoElegido => EmpleadoPublicId ?? _empleado?.PublicId;
+    private bool PuedeRegistrar => !_guardado.Activa && EmpleadoElegido is not null && !string.IsNullOrWhiteSpace(_motivoCodigo) && (!PideFechaDeFin || _finContrato is not null);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !_cargado)
+        {
+            _cargado = true;
+            _contrato = TiposDeContratoDian.Nombre(ContratoDeLaFicha) ?? "Indefinite";
+            using var carga = _cargaMotivos.Iniciar();
+            var res = await Nomina.ListarMotivosDeRetiroAsync();
+            if (res.IsSuccess) _motivos = (res.Value ?? []).ToList();
+            else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar los motivos de retiro.");
+        }
+    }
+
+    /// <summary>Deja el diálogo como nuevo: sin empleado, sin resultados del anterior (la lección del 2026-09-19 en Novedades), sin error.</summary>
+    public void Reiniciar()
+    {
+        _empleado = null; _encontrados = []; _buscar = string.Empty;
+        _fecha = DateTime.Today; _motivoCodigo = null; _finContrato = null; _notas = null;
+        _errorExplicado = null; _tituloError = null;
+        _contrato = TiposDeContratoDian.Nombre(ContratoDeLaFicha) ?? "Indefinite";
+    }
+
+    private async Task BuscarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscar) || _buscar.Trim().Length < 2) { _encontrados = []; return; }
+        var res = await Nomina.BuscarEmpleadosAsync(_buscar);
+        _encontrados = res.IsSuccess ? (res.Value?.Items ?? []).ToList() : [];
+        if (!res.IsSuccess) await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo buscar el empleado.");
+    }
+
+    private void Elegir(EmpleadoResumenDto e) { _empleado = e; _encontrados = []; _buscar = string.Empty; }
+
+    private async Task RegistrarAsync()
+    {
+        if (!PuedeRegistrar) return;
+        _errorExplicado = null;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.RegistrarTerminacionAsync(new RegistrarTerminacionRequest(
+            EmpleadoElegido!.Value, DateOnly.FromDateTime(_fecha), _motivoCodigo!, _contrato,
+            PideFechaDeFin && _finContrato is { } fin ? DateOnly.FromDateTime(fin) : null,
+            string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()));
+        if (!res.IsSuccess)
+        {
+            _tituloError = res.ErrorCode switch
+            {
+                "Payroll.Termination.PeriodApproved" => "La fecha cae en un período ya aprobado (FR-021)",
+                "Payroll.Termination.PendingSettlement" => "Ya hay una liquidación definitiva de este empleado",
+                "Payroll.Termination.EmployeeAlreadyTerminated" => "El empleado ya está retirado",
+                "Payroll.Settlement.ParametersMissing" => "Faltan parámetros legales",
+                "Generic.NotFound" => "Sin permiso",
+                _ => "No se pudo registrar la terminación",
+            };
+            _errorExplicado = res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "Error desconocido.";
+            return;
+        }
+        await Notification.SuccessAsync($"Terminación registrada: liquidación definitiva v{res.Value!.Version} en borrador.");
+        await OnRegistrada.InvokeAsync(res.Value);
+        await CambioVisible(false);
+    }
+
+    private Task Cerrar() => CambioVisible(false);
+
+    private async Task CambioVisible(bool visible)
+    {
+        Visible = visible;
+        if (!visible) { Reiniciar(); _cargado = false; }
+        await VisibleChanged.InvokeAsync(visible);
+    }
+}

@@ -29,11 +29,36 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Core", "PeopleEndpoints.cs"),
         Path.Combine("Endpoints", "Core", "PeopleDetailEndpoints.cs"),
         Path.Combine("Endpoints", "Core", "AssociatesEndpoints.cs"),
-        Path.Combine("Endpoints", "Payroll", "EmployeesEndpoints.cs"),
+        // Feature 010 (R12): toda la nómina, para que los archivos nuevos —prima, cesantías,
+        // vacaciones, definitivas, políticas, festivos, saldos, PILA, DIAN, dispersión— entren
+        // solos al aparecer. Hasta entonces la lista sólo tenía EmployeesEndpoints.cs (008).
+        Path.Combine("Endpoints", "Payroll", "*.cs"),
         // Feature 009: todo el módulo contable y su centro de informes.
         Path.Combine("Endpoints", "Accounting", "*.cs"),
         Path.Combine("Endpoints", "Reports", "Accounting*.cs"),
     ];
+
+    /// <summary>
+    /// Catálogos de nómina heredados de SOLIDO (EPS, ARL, fondos, cajas, causas y parámetros de
+    /// retención, conceptos heredados, cuentas por concepto heredadas, autoaportes): sus rutas
+    /// llevan sólo <c>RequireAuthorization()</c> del grupo y no un permiso propio. Es deuda
+    /// conocida que no abre esta feature; quedan fuera <b>por nombre</b>, para que cualquier
+    /// archivo nuevo de la carpeta sí entre. Al ponerles permiso se borran de aquí.
+    /// </summary>
+    private static readonly HashSet<string> CatalogosHeredadosSinPermiso = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AutoContributionParamsEndpoints.cs",
+        "ConceptAccountsEndpoints.cs",
+        "FamilyCompensationFundsEndpoints.cs",
+        "HealthInsuranceProvidersEndpoints.cs",
+        "PayrollConceptsEndpoints.cs",
+        "PensionProvidersEndpoints.cs",
+        "SeveranceProvidersEndpoints.cs",
+        "WithholdingCausesEndpoints.cs",
+        "WithholdingParametersEndpoints.cs",
+        "WorkRiskProvidersEndpoints.cs",
+        "WorkRiskRatesEndpoints.cs",
+    };
 
     private static readonly Regex InicioDeRuta = new(@"\.Map(Get|Post|Put|Delete|Patch)\(", RegexOptions.Compiled);
 
@@ -53,7 +78,10 @@ public class LosEndpointsProtegidosExigenPermiso
             var carpeta = Path.Combine(Api, Path.GetDirectoryName(patron)!);
             if (!Directory.Exists(carpeta)) continue;
             foreach (var f in Directory.EnumerateFiles(carpeta, nombre).OrderBy(f => f, StringComparer.Ordinal))
+            {
+                if (CatalogosHeredadosSinPermiso.Contains(Path.GetFileName(f))) continue;
                 yield return Path.GetRelativePath(Api, f);
+            }
         }
     }
 
@@ -90,6 +118,20 @@ public class LosEndpointsProtegidosExigenPermiso
 
         Assert.True(sinPermiso.Count == 0,
             $"Rutas de {relativo} sin .RequirePermission( (features 008 y 009):\n  " + string.Join("\n  ", sinPermiso));
+    }
+
+    [Fact]
+    public void La_deuda_heredada_de_nomina_sigue_siendo_la_que_dice_la_lista()
+    {
+        // Si un catálogo heredado recibe permiso, sale de la lista y entra al recorrido; si el
+        // archivo desaparece, la lista se limpia. Ninguna de las dos cosas debe pasar en silencio.
+        var carpeta = Path.Combine(Api, "Endpoints", "Payroll");
+        foreach (var nombre in CatalogosHeredadosSinPermiso)
+        {
+            var ruta = Path.Combine(carpeta, nombre);
+            Assert.True(File.Exists(ruta), $"{nombre} ya no existe: quitálo de CatalogosHeredadosSinPermiso.");
+            Assert.DoesNotContain(".RequirePermission(", File.ReadAllText(ruta), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

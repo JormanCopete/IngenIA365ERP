@@ -1,0 +1,26 @@
+// Festivos de Colombia 2027 (Ley 51 de 1983), calculados a mano y contrastados con el calendario
+// publicado: 18 festivos. Pascua: domingo 28 de marzo. San Pedro cae martes → lunes 5 de julio.
+{
+  "anio": 2027,
+  "pascua": "2027-03-28",
+  "festivos": [
+    { "fecha": "2027-01-01", "nombre": "Año Nuevo", "origen": "Fijo" },
+    { "fecha": "2027-01-11", "nombre": "Reyes Magos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-03-22", "nombre": "San José", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-03-25", "nombre": "Jueves Santo", "origen": "Pascua" },
+    { "fecha": "2027-03-26", "nombre": "Viernes Santo", "origen": "Pascua" },
+    { "fecha": "2027-05-01", "nombre": "Día del Trabajo", "origen": "Fijo" },
+    { "fecha": "2027-05-10", "nombre": "Ascensión del Señor", "origen": "Pascua" },
+    { "fecha": "2027-05-31", "nombre": "Corpus Christi", "origen": "Pascua" },
+    { "fecha": "2027-06-07", "nombre": "Sagrado Corazón de Jesús", "origen": "Pascua" },
+    { "fecha": "2027-07-05", "nombre": "San Pedro y San Pablo", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-07-20", "nombre": "Día de la Independencia", "origen": "Fijo" },
+    { "fecha": "2027-08-07", "nombre": "Batalla de Boyacá", "origen": "Fijo" },
+    { "fecha": "2027-08-16", "nombre": "Asunción de la Virgen", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-10-18", "nombre": "Día de la Raza", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-11-01", "nombre": "Todos los Santos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-11-15", "nombre": "Independencia de Cartagena", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2027-12-08", "nombre": "Inmaculada Concepción", "origen": "Fijo" },
+    { "fecha": "2027-12-25", "nombre": "Navidad", "origen": "Fijo" }
+  ]
+}
