@@ -48,6 +48,11 @@ parametrizarlas** (paso 5) después de iniciar la contabilidad.
 `Contabilidad › Configuración inicial` (`POST /api/accounting/setup/initialize`, permiso
 `Accounting.Setup.Manage`):
 
+0. **Antes, una sucursal.** La sucursal principal es obligatoria y una cooperativa nueva no tiene
+   ninguna (`COR_Branches` vacía: así estaba `cooflopal` el 2026-09-22 y el desplegable salía vacío).
+   Se crea en `Maestros › Agencias` (`/maestros/agencias`, `POST /api/core/branches`), por ejemplo
+   «Principal»; la pantalla de configuración lo avisa y enlaza cuando no hay ninguna.
+
 1. Catálogo: `PUC-SOLIDARIO` para cooperativas vigiladas por Supersolidaria; `PUC-COMERCIAL`
    para las demás. **El contador lo valida antes** (`POST /catalogs/{code}/validate` deja
    `ValidatedAt/By`); la inicialización sin catálogo validado se admite en DEV/QA pero no
