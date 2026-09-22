@@ -473,11 +473,12 @@ public static class ManualCatalogo
             "El catálogo contable (PUC) de la cooperativa: clases, grupos, cuentas y subcuentas con su naturaleza y nivel.",
             [
                 P("Contabilidad → Plan de Cuentas", "Se ve como árbol o lista. «Buscar» por código o nombre.", "/contabilidad/plan-de-cuentas", "Abrir Plan de Cuentas"),
+                P("Cargar muchas de una vez", "«Plantilla Excel» baja la hoja con las columnas (código, nombre, a qué módulos aplica y qué exige cada línea); «Importar cuentas» la sube. Si una fila falla, la pantalla dice fila, columna y problema, y no se guarda nada. Una cuenta que ya existe se actualiza: con movimientos sólo cambia de nombre.", "/contabilidad/plan-de-cuentas", "Abrir Plan de Cuentas"),
                 P("Crear una cuenta", "«Nuevo»: código (el nivel lo da la longitud), nombre, naturaleza (débito o crédito) y si admite movimientos. Sólo las de último nivel reciben movimientos."),
                 P("Editar", "El nombre y las marcas se pueden cambiar; el código de una cuenta con movimientos no."),
                 P("Cuentas de los módulos", "Cartera, inventario y nómina necesitan saber contra qué cuentas contabilizan: eso se define en las pantallas «Cuentas …» de cada módulo, no aquí."),
             ],
-            ["plan de cuentas", "puc", "cuenta contable", "codigo", "naturaleza", "catalogo contable"], ["Cooperativa activa.", "Permiso de contabilidad."],
+            ["plan de cuentas", "puc", "cuenta contable", "codigo", "naturaleza", "catalogo contable", "importar cuentas", "carga masiva", "auxiliares"], ["Cooperativa activa.", "Permiso de contabilidad."],
             ["comprobante-contable", "contabilidad-libro-auxiliar"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("comprobante-contable", "Comprobante contable", Modulos.Contabilidad, "/contabilidad/comprobantes",
@@ -531,10 +532,12 @@ public static class ManualCatalogo
             [
                 P("Antes", "Contabilidad iniciada, ejercicio abierto y las auxiliares de movimiento creadas con sus reglas (tercero, documento cruce, centro de costo). Las personas de cartera y proveedores tienen que existir en Personas.", "/contabilidad/plan-de-cuentas", "Abrir Plan de cuentas"),
                 P("Contabilidad → Saldos de apertura", "«Plantilla Excel» descarga la hoja con los encabezados; el contador la llena desde SOLIDO con una fila por auxiliar (y por tercero y documento donde la cuenta lo exige): importes sin miles y con hasta dos decimales.", "/contabilidad/apertura", "Abrir Saldos de apertura"),
-                P("Importar", "Cada fila se valida con las reglas de su cuenta. Si una falla, la pantalla muestra fila, columna y problema, y no se guarda nada: corregí el archivo y volvé a importar. Sin errores queda un borrador AP fechado la víspera del primer período; no tiene que cuadrar para importarse."),
-                P("Contabilizar", "Revisá el borrador en Comprobantes y contabilizalo (cuatro ojos si la empresa lo exige). Queda como la única apertura vigente: para cargar otra, reversá ésta primero. En el balance de prueba la apertura es saldo inicial, no movimiento del mes."),
+                P("Elegí la fecha", "Es el corte de tus saldos anteriores. Se propone la víspera del primer período y podés moverla hasta el fin del primer ejercicio; lo único que no se admite es un mes ya cerrado. Cualquiera sea, la apertura es saldo inicial y nunca movimiento del mes."),
+                P("Importar", "Cada fila se valida con las reglas de su cuenta. Si una falla, la pantalla muestra fila, columna y problema, y no se guarda nada: corregí el archivo y volvé a importar. Sin errores queda un borrador; no tiene que cuadrar para importarse."),
+                P("Corregir mientras sea borrador", "«Editar» abre el comprobante y ahí agregás, cambiás o quitás cuentas línea a línea; «Cambiar la fecha» la mueve sin tocar las líneas; «Descartar» lo elimina; y volver a importar reemplaza todas las líneas por las del archivo nuevo."),
+                P("Contabilizar", "Revisá el borrador y contabilizalo (cuatro ojos si la empresa lo exige). Queda como la única apertura vigente: para cargar otra, reversá ésta primero. Desde ahí ya no se edita. En el balance de prueba la apertura es saldo inicial, no movimiento del mes."),
             ],
-            ["apertura", "saldos iniciales", "saldos de apertura", "migración", "solido", "plantilla", "importar saldos"], ["Cooperativa activa.", "Permiso Accounting.Opening.Manage."],
+            ["apertura", "saldos iniciales", "saldos de apertura", "migración", "solido", "plantilla", "importar saldos", "fecha de corte"], ["Cooperativa activa.", "Permiso Accounting.Opening.Manage."],
             ["comprobante-contable", "plan-de-cuentas", "cierre-de-periodo", "contabilidad-informes"], [], TipoDeTema.Proceso));
 
         // Feature 009 E2 (US9): la ruta es /contabilidad/presupuesto (singular, la de T140); hasta el

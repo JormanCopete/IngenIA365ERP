@@ -65,6 +65,12 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<IReadOnlyList<EventoDeCuentaDto>>> HistorialDeCuentaAsync(Guid id, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<EventoDeCuentaDto>>(HttpMethod.Get, $"{Base}/accounts/{id}/history", null, ct);
 
+    public Task<InvitationApiResult<ArchivoDescargado>> PlantillaDeCuentasAsync(CancellationToken ct = default) =>
+        DescargarAsync($"{Base}/accounts/template.xlsx", ct);
+
+    public Task<ResultadoContable<ImportacionDeCuentasDto>> ImportarCuentasAsync(string archivo, byte[] contenido, CancellationToken ct = default) =>
+        SubirAsync<ImportacionDeCuentasDto>($"{Base}/accounts/import", archivo, contenido, null, ct);
+
     public Task<InvitationApiResult<CreadoDto>> CrearCuentaAsync(CuentaRequest request, CancellationToken ct = default) =>
         EnviarAsync<CreadoDto>(HttpMethod.Post, $"{Base}/accounts", request, ct);
 
@@ -184,8 +190,9 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<ArchivoDescargado>> PlantillaDeAperturaAsync(CancellationToken ct = default) =>
         DescargarAsync($"{Base}/opening/template.xlsx", ct);
 
-    public Task<ResultadoContable<AperturaImportadaDto>> ImportarAperturaAsync(string archivo, byte[] contenido, CancellationToken ct = default) =>
-        SubirAsync<AperturaImportadaDto>($"{Base}/opening/import", archivo, contenido, null, ct);
+    public Task<ResultadoContable<AperturaImportadaDto>> ImportarAperturaAsync(string archivo, byte[] contenido, DateOnly? fecha = null, CancellationToken ct = default) =>
+        SubirAsync<AperturaImportadaDto>($"{Base}/opening/import", archivo, contenido,
+            fecha is { } f ? new Dictionary<string, string> { ["date"] = f.ToString("yyyy-MM-dd") } : null, ct);
 
     // -------------------------------------------------------------------------------- común --
 

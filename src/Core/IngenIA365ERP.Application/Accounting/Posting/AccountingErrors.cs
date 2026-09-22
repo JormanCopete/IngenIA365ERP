@@ -179,6 +179,11 @@ public static class AccountingErrors
     public static readonly Error AccountParentNotFound = new("Accounting.Account.ParentNotFound", "La cuenta padre no existe.");
     public static readonly Error AccountNotMovement = new("Accounting.Account.NotMovement",
         "Las reglas sólo se configuran en cuentas de movimiento.");
+    /// <summary>Carga masiva de auxiliares (E2, 2026-09-22): todas las filas malas juntas; nada se guarda.</summary>
+    public static Error AccountsInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+        new ErrorConDatos("Accounting.Accounts.Invalid",
+            $"El archivo tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}); no se guardó nada.",
+            new { errors = errores });
 
     // ---- configuración ----
     public static readonly Error SetupAlreadyInitialized = new("Accounting.Setup.AlreadyInitialized", "La contabilidad ya está iniciada.");
@@ -211,6 +216,11 @@ public static class AccountingErrors
             new { errors = errores });
     public static Error OpeningDateInvalid(DateOnly esperada) =>
         new("Accounting.Opening.DateInvalid", $"La apertura se fecha el día anterior al primer período: {esperada:yyyy-MM-dd}.");
+    public static Error OpeningDateOutOfRange(DateOnly propuesta, DateOnly fin) =>
+        new("Accounting.Opening.DateOutOfRange",
+            $"La apertura se fecha entre el {propuesta:yyyy-MM-dd} (la víspera del primer período) y el {fin:yyyy-MM-dd} (el fin del primer ejercicio): después de esa fecha un saldo ya no es inicial.");
+    public static Error OpeningDateClosed(DateOnly fecha) =>
+        new("Accounting.Opening.DateClosed", $"El período de {fecha:yyyy-MM} está cerrado: reábralo o elija otra fecha para la apertura.");
 
     // ---- concurrencia ----
     public static readonly Error StaleRowVersion = Error.StaleRowVersion;

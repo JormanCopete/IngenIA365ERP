@@ -57,7 +57,8 @@ public class ImportOpeningBalancesCommandHandlerTests
         public static string?[] Fila(string cuenta, decimal debito, decimal credito, string? tercero = null, string? tipo = null, string? numero = null, string? centro = null, string? sucursal = null) =>
             [cuenta, tercero, tipo, numero, centro, sucursal, debito == 0m ? "" : debito.ToString(System.Globalization.CultureInfo.InvariantCulture), credito == 0m ? "" : credito.ToString(System.Globalization.CultureInfo.InvariantCulture), "detalle"];
 
-        public Task<Result<AperturaImportadaDto>> ImportarAsync() => Importador().Handle(new ImportOpeningBalancesCommand("apertura.csv", [1, 2, 3]), CancellationToken.None);
+        public Task<Result<AperturaImportadaDto>> ImportarAsync(DateOnly? fecha = null) =>
+            Importador().Handle(new ImportOpeningBalancesCommand("apertura.csv", [1, 2, 3], fecha), CancellationToken.None);
 
         public Task<Result<ContabilizadoDto>> ContabilizarAsync(Guid borrador) =>
             new PostDocumentCommandHandler(D.Db, D.User, D.Poster).Handle(new PostDocumentCommand(borrador), CancellationToken.None);
@@ -183,11 +184,11 @@ public class ImportOpeningBalancesCommandHandlerTests
     }
 
     [Fact]
-    public async Task La_apertura_digitada_toma_la_fecha_que_le_toca_y_no_la_digitada()
+    public async Task La_apertura_digitada_sin_fecha_toma_la_propuesta()
     {
         var e = new Escenario();
         var r = await new SaveDraftDocumentCommandHandler(e.D.Db, e.D.Clock, e.D.User, e.D.Alcance, e.D.Poster).Handle(
-            new SaveDraftDocumentCommand(null, "AP", new DateOnly(2026, 3, 1), "Apertura digitada",
+            new SaveDraftDocumentCommand(null, "AP", default, "Apertura digitada",
                 [new LineaDeBorradorInput(e.Caja.Code, null, null, null, null, null, 500m, 0m, null, null), new LineaDeBorradorInput(e.Aportes.Code, null, null, null, null, null, 0m, 500m, null, null)]),
             CancellationToken.None);
 
@@ -198,6 +199,72 @@ public class ImportOpeningBalancesCommandHandlerTests
         borrador.Date.Should().Be(new DateOnly(2025, 12, 31));
         borrador.PeriodId.Should().BeNull();
         (await e.ContabilizarAsync(borrador.PublicId)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task La_fecha_se_elige_dentro_del_primer_ejercicio_y_nunca_en_un_mes_cerrado()
+    {
+        var e = new Escenario();
+        e.Archivo(Escenario.Fila(e.Caja.Code, 3000m, 0m), Escenario.Fila(e.Aportes.Code, 0m, 3000m));
+
+        // El corte real de la contabilidad anterior: 31 de marzo de 2026, un período abierto.
+        var elegida = new DateOnly(2026, 3, 31);
+        var r = await e.ImportarAsync(elegida);
+
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        r.Value.Date.Should().Be(elegida);
+        var borrador = await e.D.Db.AccountingDocuments.Include(d => d.Lines).SingleAsync(d => d.PublicId == r.Value.DraftPublicId);
+        borrador.Date.Should().Be(elegida);
+        borrador.PeriodId.Should().BeNull("aunque caiga dentro de marzo, la apertura no es movimiento del mes");
+        borrador.Lines.Should().OnlyContain(l => l.Date == elegida);
+
+        // Enero y febrero están cerrados en el escenario: ahí no se puede fechar.
+        (await e.ImportarAsync(new DateOnly(2026, 1, 31))).Error.Code.Should().Be("Accounting.Opening.DateClosed");
+        // Ni después del fin del primer ejercicio.
+        (await e.ImportarAsync(new DateOnly(2027, 1, 15))).Error.Code.Should().Be("Accounting.Opening.DateOutOfRange");
+        (await e.ContabilizarAsync(borrador.PublicId)).IsSuccess.Should().BeTrue("la fecha elegida es válida y el borrador cuadra");
+    }
+
+    [Fact]
+    public async Task Volver_a_importar_reemplaza_las_lineas_del_borrador_y_conserva_su_identidad()
+    {
+        var e = new Escenario();
+        e.Archivo(Escenario.Fila(e.Caja.Code, 1000m, 0m), Escenario.Fila(e.Aportes.Code, 0m, 1000m));
+        var primera = await e.ImportarAsync();
+        primera.Value.Replaced.Should().BeFalse();
+
+        e.Archivo(Escenario.Fila(e.Caja.Code, 7000m, 0m), Escenario.Fila(e.Cartera.Code, 500m, 0m, tercero: e.D.Tercero.TaxId, tipo: "FV", numero: "9"), Escenario.Fila(e.Aportes.Code, 0m, 7500m));
+        var segunda = await e.ImportarAsync(new DateOnly(2026, 4, 30));
+
+        segunda.IsSuccess.Should().BeTrue(segunda.Error?.Message);
+        segunda.Value.Replaced.Should().BeTrue();
+        segunda.Value.DraftPublicId.Should().Be(primera.Value.DraftPublicId, "es el mismo borrador: conserva su PublicId y sus adjuntos");
+        segunda.Value.Lines.Should().Be(3);
+        (await e.D.Db.AccountingDocuments.CountAsync(d => !d.IsDeleted && d.Kind == DocumentKind.Opening)).Should().Be(1);
+        var borrador = await e.D.Db.AccountingDocuments.Include(d => d.Lines).SingleAsync(d => d.PublicId == primera.Value.DraftPublicId);
+        borrador.Date.Should().Be(new DateOnly(2026, 4, 30));
+        borrador.TotalDebit.Should().Be(7500m);
+        borrador.Lines.Count(l => !l.IsDeleted).Should().Be(3);
+        borrador.Lines.Count(l => l.IsDeleted).Should().Be(2, "las viejas se dan de baja, nunca se borran (Principio XI)");
+    }
+
+    [Fact]
+    public async Task El_borrador_digitado_acepta_la_fecha_que_se_le_indique_y_rechaza_la_que_no_corresponde()
+    {
+        var e = new Escenario();
+        var handler = new SaveDraftDocumentCommandHandler(e.D.Db, e.D.Clock, e.D.User, e.D.Alcance, e.D.Poster);
+        LineaDeBorradorInput[] Lineas() =>
+        [
+            new(e.Caja.Code, null, null, null, null, null, 500m, 0m, null, null),
+            new(e.Aportes.Code, null, null, null, null, null, 0m, 500m, null, null),
+        ];
+
+        var elegida = await handler.Handle(new SaveDraftDocumentCommand(null, "AP", new DateOnly(2026, 4, 15), "Apertura", Lineas()), CancellationToken.None);
+        elegida.IsSuccess.Should().BeTrue(elegida.Error?.Message);
+        (await e.D.Db.AccountingDocuments.SingleAsync(d => d.PublicId == elegida.Value.PublicId)).Date.Should().Be(new DateOnly(2026, 4, 15));
+
+        var cerrado = await handler.Handle(new SaveDraftDocumentCommand(null, "AP", new DateOnly(2026, 2, 10), "Apertura", Lineas()), CancellationToken.None);
+        cerrado.Error.Code.Should().Be("Accounting.Opening.DateClosed");
     }
 
     [Fact]

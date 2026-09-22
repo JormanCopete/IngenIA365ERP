@@ -523,6 +523,18 @@ sobre la 010) y 211 de integración con Docker (210 pasan, 1 omitida). Receta:
 cinco e2e marcadas en `specs/009-contabilidad-niif/tasks.md`; de E1 y E2 sólo queda **T096**, que
 es del dueño.
 
+**Mejoras de implantación (2026-09-22, pedidas por el dueño al arrancar COOFLOPAL, en `develop`)**:
+**carga masiva de auxiliares** desde plantilla xlsx (`Contabilidad › Plan de cuentas`, botones
+«Plantilla Excel» e «Importar cuentas»; `POST /api/accounting/accounts/import`) con las mismas
+reglas que crear una a una —padre por prefijo más largo, cuentas propias sólo donde el catálogo no
+trae hijos, código existente = actualización, con movimientos sólo el nombre— y todo-o-nada con
+`row`/`column` por fila; y la **apertura con fecha elegible** (la víspera del primer período es sólo
+la propuesta; se mueve hasta el fin del primer ejercicio y nunca a un mes cerrado) que se **edita
+entera mientras sea borrador**: agregar, cambiar y quitar cuentas desde el comprobante, cambiar la
+fecha, descartarlo, y volver a importar reemplaza sus líneas conservando el mismo comprobante. Con
+esto una cooperativa que llega de SOLIDO carga cuentas y saldos al corte real sin digitar de a una.
+Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a.
+
 **Lo que sigue pendiente (del dueño o de otra rama)**: ~~merge a `develop` y despliegue~~ hecho el
 2026-09-22 (`develop` `857d0e5`, `release 0a309f3`, arriba); QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
 dos PUC por el contador** (T096, bloqueante para usar la contabilidad en producción) y de que en el

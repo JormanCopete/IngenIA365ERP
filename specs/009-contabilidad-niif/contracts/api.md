@@ -98,23 +98,42 @@ reversión (de cualquier clase) tampoco (`.IsReversal`). Auditoría: `Accounting
 Soportes: `POST /api/attachments` con `ownerEntityType = "AccountingDocument"` (permisos de
 adjuntos existentes); se listan en `GET /{id}`.
 
-## 7. Apertura — `/api/accounting/opening` (entregada en E2, 2026-09-21)
+### 3b. Carga masiva de auxiliares (E2, 2026-09-22)
 
 | Ruta | Permiso | Notas |
 |---|---|---|
-| `GET /` | Opening.Manage | `{ expectedDate, firstFiscalYear, posted?, drafts[], reversed[] }`: la fecha que le toca (víspera del primer período), la vigente, los borradores AP pendientes y las reversadas (con `reversedByPublicId`) |
+| `GET /api/accounting/accounts/template.xlsx` | Accounts.Manage | hoja «Datos» con los encabezados en la fila 1 (`cuenta, nombre, aplicaA, exigeTercero, exigeDocumento, exigeCentro, exigeSucursal, banco, numeroCuenta, claseImpuesto, conceptoTributario, exigeBase, tarifa, tarifaDesde`) y hoja «Instrucciones» |
+| `POST /api/accounting/accounts/import` | Accounts.Manage | multipart `archivo` (xlsx o CSV) → 200 `{ created, updated, unchanged, errors: [] }`; 422 `Accounting.Accounts.Invalid` con `data.errors[] { row, column, code, message }` y **nada guardado** |
+
+Cada fila pasa por las reglas de `CreateAccountCommand`/`UpdateAccountCommand` (no hay una segunda
+puerta): nivel ≤ el de movimiento, longitud por nivel, padre = la cuenta viva cuyo código es el
+prefijo más largo (puede venir en el mismo archivo; se ordenan de menor a mayor código), cuentas
+propias sólo donde el catálogo no trae hijos, módulos de `ModuloContable`, banco y clase de impuesto
+existentes, `tarifa` en porcentaje con su `tarifaDesde`. Un código que ya existe **actualiza** la
+cuenta; con movimientos sólo el nombre (422 `Accounting.Account.Locked`), y una del catálogo no se
+edita (`.FromCatalog`). Una cuenta que no recibe movimiento no admite reglas (`.NotMovement`).
+Auditoría: `Accounting.Accounts.Imported`.
+
+## 7. Apertura — `/api/accounting/opening` (entregada en E2, 2026-09-21; fecha elegible desde el 2026-09-22)
+
+| Ruta | Permiso | Notas |
+|---|---|---|
+| `GET /` | Opening.Manage | `{ expectedDate, maxDate, firstFiscalYear, posted?, drafts[], reversed[] }`: la fecha propuesta (víspera del primer período), hasta cuándo se puede mover (fin del primer ejercicio), la vigente, los borradores AP pendientes y las reversadas (con `reversedByPublicId`) |
 | `GET /template.xlsx` | Opening.Manage | hoja «Datos» con **sólo los encabezados en la fila 1** —`cuenta, tercero (documento), tipoDocumento, numeroDocumento, centroCosto, sucursal, debito, credito, detalle`— y hoja «Instrucciones» |
-| `POST /import` | Opening.Manage | multipart `archivo` (xlsx o CSV) → 201 `{ draftPublicId, lines, totalDebit, totalCredit, errors: [] }` (borrador `AP`, `Kind = Opening`, fechado la víspera del primer período, sin período); 422 `Accounting.Opening.Invalid` con `data.errors[] { row, column, code, message }` y **nada guardado**; 422 `Accounting.Opening.AlreadyExists` con `data: { openingDocumentPublicId, number, date }`; 400 `Archivo.ColumnaFaltante` / `Archivo.Vacio` |
+| `POST /import` | Opening.Manage | multipart `archivo` (xlsx o CSV) y `date` opcional (`yyyy-MM-dd`; por defecto la propuesta) → 201 `{ draftPublicId, lines, totalDebit, totalCredit, date, replaced, errors: [] }` (borrador `AP`, `Kind = Opening`, sin período). Si ya hay un borrador de apertura **se reemplazan sus líneas** y `replaced` es `true` (mismo `publicId`; las viejas quedan de baja). 422 `Accounting.Opening.Invalid` con `data.errors[]` y **nada guardado**; 422 `.AlreadyExists` con `data: { openingDocumentPublicId, number, date }`; 422 `.DateOutOfRange` / `.DateClosed`; 400 `Archivo.ColumnaFaltante` / `Archivo.Vacio` / `Validation.Date` |
 
 Reglas: cada fila pasa por las reglas de cuenta del contrato (FR-014) salvo «habilitada para el
 módulo» (la apertura trae saldos de donde vengan); tercero por documento de identidad, sucursal y
 centro por código, sigla o nombre; importes sin miles y con hasta dos decimales. El descuadre **no**
 es error de importación (el borrador se guarda; contabilizar sí exige cuadre). El borrador se
-contabiliza y se reversa por `/documents` como cualquier manual; `POST /documents/drafts` con
-`voucherTypeCode = "AP"` también crea una apertura digitada (la fecha digitada se ignora: toma la
-esperada). Al contabilizar queda en `setup.openingDocumentPublicId` y es la única vigente; su
-reversión es también `Kind = Opening` y de la misma fecha, y suelta la referencia (FR-087).
-Auditoría: `Accounting.Opening.Imported`.
+contabiliza, se edita y se reversa por `/documents` como cualquier manual: mientras sea borrador se
+agregan, cambian y quitan líneas con `PUT /documents/drafts/{id}` (`voucherTypeCode = "AP"`, la fecha
+que se envíe) y se descarta con `DELETE`. `POST /documents/drafts` con `voucherTypeCode = "AP"` crea
+una apertura digitada; sin fecha toma la propuesta. **La fecha** se valida siempre igual
+(`AccountingPoster.FechaDeAperturaInvalidaAsync`): dentro del primer ejercicio y fuera de un mes
+cerrado. Al contabilizar queda en `setup.openingDocumentPublicId` y es la única vigente; su reversión
+es también `Kind = Opening` y de la misma fecha, y suelta la referencia (FR-087). Auditoría:
+`Accounting.Opening.Imported`.
 
 ## 8. Informes — `/api/reports/accounting/{vista}?format=json|xlsx|pdf|docx&…filtros`
 

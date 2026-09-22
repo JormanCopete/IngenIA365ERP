@@ -299,10 +299,13 @@ public sealed record ReversadoDto(Guid ReversalPublicId, long Number);
 
 // ------------------------------------------------------------------------------- apertura --
 
-public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, decimal TotalDebit, decimal TotalCredit, IReadOnlyList<ErrorDeFilaDto> Errors);
+public sealed record AperturaImportadaDto(Guid DraftPublicId, int Lines, decimal TotalDebit, decimal TotalCredit, DateOnly Date, bool Replaced, IReadOnlyList<ErrorDeFilaDto> Errors);
+
+/// <summary>Carga masiva de auxiliares (E2, 2026-09-22): cuántas se crearon, se actualizaron y ya estaban como el archivo pide.</summary>
+public sealed record ImportacionDeCuentasDto(int Created, int Updated, int Unchanged, IReadOnlyList<ErrorDeFilaDto> Errors);
 
 public sealed record AperturaResumenDto(Guid PublicId, long? Number, DateOnly Date, string Status, decimal TotalDebit, decimal TotalCredit, int Lines,
     string RegisteredBy, DateTime? PostedAt, string? PostedBy, Guid? ReversedByPublicId);
 
 /// <summary><c>GET /api/accounting/opening</c> (E2, US13): la fecha que le toca a la apertura, la vigente, los borradores pendientes y las reversadas.</summary>
-public sealed record EstadoDeAperturaDto(DateOnly ExpectedDate, int FirstFiscalYear, AperturaResumenDto? Posted, IReadOnlyList<AperturaResumenDto> Drafts, IReadOnlyList<AperturaResumenDto> Reversed);
+public sealed record EstadoDeAperturaDto(DateOnly ExpectedDate, DateOnly MaxDate, int FirstFiscalYear, AperturaResumenDto? Posted, IReadOnlyList<AperturaResumenDto> Drafts, IReadOnlyList<AperturaResumenDto> Reversed);

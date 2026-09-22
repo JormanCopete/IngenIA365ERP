@@ -37,8 +37,10 @@
     {
         <div class="info-card">
             <span class="label">Cómo funciona</span>
-            <p>El comprobante de apertura se fecha el <strong>@_estado.ExpectedDate.ToString("yyyy-MM-dd")</strong>, la víspera del primer período del ejercicio @_estado.FirstFiscalYear, y en consultas e informes es <em>saldo inicial</em>, no movimiento del mes.
-               Descargue la plantilla, llénela con una fila por cuenta de movimiento (y por tercero y documento donde la cuenta lo exige) e impórtela: si una fila falla, se indica cuál y no se guarda nada. El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.</p>
+            <p>Se propone fecharlo el <strong>@_estado.ExpectedDate.ToString("yyyy-MM-dd")</strong> (la víspera del primer período del ejercicio @_estado.FirstFiscalYear), pero puede elegir el corte real de su contabilidad anterior hasta el <strong>@_estado.MaxDate.ToString("yyyy-MM-dd")</strong>.
+               En consultas e informes la apertura es <em>saldo inicial</em>, no movimiento del mes, cualquiera sea su fecha.
+               Descargue la plantilla, llénela con una fila por cuenta de movimiento (y por tercero y documento donde la cuenta lo exige) e impórtela: si una fila falla, se indica cuál y no se guarda nada. El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.
+               Mientras el comprobante sea borrador todo se puede corregir —agregar, cambiar o quitar cuentas, y la fecha—; una vez contabilizado, sólo se reversa.</p>
         </div>
 
         @if (_estado.Posted is { } vigente)
@@ -60,18 +62,23 @@
 
         @if (_estado.Drafts.Count > 0)
         {
-            <h4>Borradores pendientes</h4>
-            <p class="texto-apoyo">Revíselos línea a línea y contabilícelos desde el comprobante (permiso de contabilizar; cuatro ojos si la empresa lo exige). Un borrador que ya no sirve se descarta desde el mismo comprobante.</p>
-            <table class="data-grid filas-clicables">
-                <thead><tr><th>Fecha</th><th>Descripción</th><th class="num">Líneas</th><th class="num">Débitos</th><th class="num">Créditos</th><th class="num">Diferencia</th><th>Registró</th></tr></thead>
+            <h4>Borrador en preparación</h4>
+            <p class="texto-apoyo">«Editar» abre el comprobante: ahí se agregan, cambian y quitan cuentas línea a línea, con las reglas de cada una, y se contabiliza cuando cuadre (permiso de contabilizar; cuatro ojos si la empresa lo exige). «Cambiar la fecha» la mueve sin tocar las líneas. Volver a importar reemplaza todas las líneas por las del archivo nuevo.</p>
+            <table class="data-grid">
+                <thead><tr><th>Fecha</th><th class="num">Líneas</th><th class="num">Débitos</th><th class="num">Créditos</th><th class="num">Diferencia</th><th>Registró</th><th>Acciones</th></tr></thead>
                 <tbody>
                     @foreach (var d in _estado.Drafts)
                     {
-                        <tr class="clicable" tabindex="0" @onclick="@(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{d.PublicId}"))">
-                            <td>@d.Date.ToString("yyyy-MM-dd")</td><td>Borrador de apertura</td><td class="num">@d.Lines</td>
+                        <tr>
+                            <td>@d.Date.ToString("yyyy-MM-dd")</td><td class="num">@d.Lines</td>
                             <td class="num">@d.TotalDebit.ToString("N2")</td><td class="num">@d.TotalCredit.ToString("N2")</td>
                             <td class="num">@((d.TotalDebit - d.TotalCredit) == 0 ? "cuadra" : (d.TotalDebit - d.TotalCredit).ToString("N2"))</td>
                             <td>@d.RegisteredBy</td>
+                            <td class="acciones">
+                                <button type="button" class="enlace" @onclick="@(() => Navigation.NavigateTo($"/contabilidad/comprobantes/{d.PublicId}"))">Editar</button>
+                                <button type="button" class="enlace" @onclick="@(() => { _aFechar = d; _nuevaFecha = d.Date.ToDateTime(TimeOnly.MinValue); })">Cambiar la fecha</button>
+                                <button type="button" class="enlace" @onclick="@(() => _aDescartar = d)">Descartar</button>
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -104,6 +111,14 @@
             <div class="pagina">
                 <p class="texto-apoyo">Excel o CSV con las columnas de la plantilla: <code>cuenta</code>, <code>tercero</code>, <code>tipoDocumento</code>, <code>numeroDocumento</code>, <code>centroCosto</code>, <code>sucursal</code>, <code>debito</code>, <code>credito</code>, <code>detalle</code>.
                    Cada fila se valida con las reglas de su cuenta; con un solo error no se guarda nada.</p>
+                <label class="campo">Fecha del comprobante
+                    <SfDatePicker TValue="DateTime" @bind-Value="_fecha" Format="yyyy-MM-dd" Min="_minimo" Max="_maximo" />
+                    <span class="hint">El corte de los saldos que trae el archivo. Se propone la víspera del primer período; el tope es el fin del primer ejercicio.</span>
+                </label>
+                @if (_estado?.Drafts.Count > 0)
+                {
+                    <p class="texto-alerta">Ya hay un borrador de apertura: al importar, sus @(_estado.Drafts[0].Lines) línea(s) se reemplazan por las del archivo.</p>
+                }
                 <InputFile OnChange="@ArchivoElegido" accept=".xlsx,.csv,.txt" />
                 @if (_errores.Count > 0)
                 {
@@ -126,6 +141,33 @@
         <DialogButton Content="Importar" IsPrimary="true" OnClick="@ImportarAsync" Disabled="@(_guardado.Activa || _archivo is null)" />
     </DialogButtons>
 </SfDialog>
+
+<SfDialog Visible="@(_aFechar is not null)" Header="Cambiar la fecha de la apertura" Width="460px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) _aFechar = null; })">
+    <DialogTemplates>
+        <Content>
+            <p>La fecha es el corte de los saldos. Las líneas no cambian; todas quedan con la fecha nueva.</p>
+            <label class="campo">Fecha
+                <SfDatePicker TValue="DateTime" @bind-Value="_nuevaFecha" Format="yyyy-MM-dd" Min="_minimo" Max="_maximo" />
+            </label>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_ocupado" OnClick="@CambiarFechaAsync">Guardar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _aFechar = null)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog Visible="@(_aDescartar is not null)" Header="Descartar el borrador de apertura" Width="460px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) _aDescartar = null; })">
+    <DialogTemplates>
+        <Content>
+            <p>Se descarta el borrador con sus @(_aDescartar?.Lines) línea(s). No afecta a ningún saldo: todavía no está contabilizado. Puede volver a importar el archivo cuando quiera.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-danger" Disabled="@_ocupado" OnClick="@DescartarAsync">Descartar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _aDescartar = null)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -135,6 +177,9 @@
     private bool _cargado, _ocupado, _importando;
     private IBrowserFile? _archivo;
     private List<ErrorDeFilaDto> _errores = [];
+    private DateTime _fecha = DateTime.Today, _nuevaFecha = DateTime.Today;
+    private DateTime _minimo = DateTime.Today, _maximo = DateTime.Today;
+    private AperturaResumenDto? _aFechar, _aDescartar;
 
     protected override Task OnInitializedAsync() => CargarAsync();
 
@@ -151,6 +196,47 @@
             return;
         }
         _estado = r.Value;
+        _fecha = (_estado.Drafts.FirstOrDefault()?.Date ?? _estado.ExpectedDate).ToDateTime(TimeOnly.MinValue);
+        _minimo = _estado.ExpectedDate.ToDateTime(TimeOnly.MinValue);
+        _maximo = _estado.MaxDate.ToDateTime(TimeOnly.MinValue);
+    }
+
+    /// <summary>Mueve la fecha del borrador sin tocar sus líneas: se reenvía tal cual con la fecha nueva.</summary>
+    private async Task CambiarFechaAsync()
+    {
+        if (_aFechar is null) return;
+        _ocupado = true;
+        try
+        {
+            var comprobante = await Contabilidad.ObtenerComprobanteAsync(_aFechar.PublicId);
+            if (!comprobante.IsSuccess) { await Notification.ErrorAsync(comprobante.ErrorMessage ?? "No se pudo leer el borrador."); return; }
+            var lineas = comprobante.Value!.Lines
+                .Select(l => new LineaDeBorradorRequest(l.AccountCode, l.BranchPublicId, l.CostCenterPublicId, l.PersonPublicId,
+                    l.CrossDocumentType, l.CrossDocumentNumber, l.Debit, l.Credit, l.Detail, l.TaxBase))
+                .ToList();
+            var guardado = await Contabilidad.ActualizarBorradorAsync(_aFechar.PublicId, new BorradorRequest(comprobante.Value.VoucherTypeCode,
+                DateOnly.FromDateTime(_nuevaFecha), comprobante.Value.Description, lineas));
+            if (!guardado.IsSuccess) { await Notification.ErrorAsync(guardado.ErrorMessage ?? "No se pudo cambiar la fecha."); return; }
+            _aFechar = null;
+            await Notification.SuccessAsync($"La apertura quedó fechada el {_nuevaFecha:yyyy-MM-dd}.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (_aDescartar is null) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.DescartarBorradorAsync(_aDescartar.PublicId);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar el borrador."); return; }
+            _aDescartar = null;
+            await Notification.SuccessAsync("Borrador descartado.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
     }
 
     private async Task DescargarPlantillaAsync()
@@ -188,7 +274,7 @@
             await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
             return;
         }
-        var r = await Contabilidad.ImportarAperturaAsync(_archivo.Name, bytes);
+        var r = await Contabilidad.ImportarAperturaAsync(_archivo.Name, bytes, DateOnly.FromDateTime(_fecha));
         if (!r.IsSuccess)
         {
             _errores = r.ErroresDeFila();
@@ -197,9 +283,10 @@
         }
         var v = r.Value!;
         var diferencia = v.TotalDebit - v.TotalCredit;
+        var que = v.Replaced ? "actualizado" : "creado";
         await Notification.SuccessAsync(diferencia == 0
-            ? $"Borrador de apertura creado con {v.Lines} líneas; cuadra. Revíselo y contabilícelo."
-            : $"Borrador de apertura creado con {v.Lines} líneas; no cuadra (diferencia {diferencia:N2}): corríjalo antes de contabilizar.");
+            ? $"Borrador de apertura {que} con {v.Lines} líneas al {v.Date:yyyy-MM-dd}; cuadra. Revíselo y contabilícelo."
+            : $"Borrador de apertura {que} con {v.Lines} líneas al {v.Date:yyyy-MM-dd}; no cuadra (diferencia {diferencia:N2}): corríjalo antes de contabilizar.");
         _importando = false;
         _archivo = null;
         Navigation.NavigateTo($"/contabilidad/comprobantes/{v.DraftPublicId}");

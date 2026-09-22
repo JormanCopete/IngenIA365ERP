@@ -241,15 +241,24 @@ public class AccountingPosterTests
     }
 
     [Fact]
-    public async Task La_apertura_solo_se_fecha_el_dia_anterior_al_primer_periodo_y_no_lleva_periodo()
+    public async Task La_apertura_se_fecha_dentro_del_primer_ejercicio_fuera_de_un_mes_cerrado_y_no_lleva_periodo()
     {
         var d = new ContabilidadTestData();
         var caja = d.Cuenta("110505");
         var capital = d.Cuenta("310505", AccountNature.Credit);
 
-        var malFechada = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, capital, fecha: Marzo15, tipo: "AP", kind: DocumentKind.Opening), CancellationToken.None);
-        malFechada.Error.Code.Should().Be("Accounting.Opening.DateInvalid");
-        malFechada.Error.Message.Should().Contain("2025-12-31");
+        // Desde E2 (2026-09-22) la fecha la elige quien implanta: el corte real casi nunca cae la
+        // víspera del primer período. Marzo está abierto, así que una apertura al 15 de marzo vale.
+        var enMarzo = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, capital, fecha: Marzo15, tipo: "AP", kind: DocumentKind.Opening), CancellationToken.None);
+        enMarzo.IsSuccess.Should().BeTrue(enMarzo.Error.Message);
+        enMarzo.Value.PeriodId.Should().BeNull("aunque caiga dentro de marzo, no es movimiento del mes");
+        enMarzo.Value.Date.Should().Be(Marzo15);
+
+        // Enero está cerrado y 2027 queda fuera del primer ejercicio.
+        var enCerrado = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, capital, fecha: new DateOnly(2026, 1, 20), tipo: "AP", kind: DocumentKind.Opening), CancellationToken.None);
+        enCerrado.Error.Code.Should().Be("Accounting.Opening.DateClosed");
+        var muyTarde = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, capital, fecha: new DateOnly(2027, 2, 1), tipo: "AP", kind: DocumentKind.Opening), CancellationToken.None);
+        muyTarde.Error.Code.Should().Be("Accounting.Opening.DateOutOfRange");
 
         var conCg = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, capital, fecha: new DateOnly(2025, 12, 31), tipo: "CG", kind: DocumentKind.Opening), CancellationToken.None);
         conCg.Error.Code.Should().Be("Accounting.VoucherType.NotAllowedForModule");

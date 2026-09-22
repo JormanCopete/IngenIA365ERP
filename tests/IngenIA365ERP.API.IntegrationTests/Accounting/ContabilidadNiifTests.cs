@@ -109,6 +109,70 @@ public class ContabilidadNiifTests(CentralIdentityApiFixture fx)
         reloj.Elapsed.Should().BeLessThan(TimeSpan.FromMinutes(1), "SC-001");
     }
 
+    [Fact]
+    public async Task Las_auxiliares_se_cargan_en_masa_desde_la_plantilla_y_una_fila_mala_no_guarda_nada()
+    {
+        var coop = await CooperativaAisladaAsync(fx, "cuentas", 2026);
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        string[] encabezados = ["cuenta", "nombre", "aplicaA", "exigeTercero", "exigeDocumento", "exigeCentro", "exigeSucursal", "banco", "numeroCuenta", "claseImpuesto", "conceptoTributario", "exigeBase", "tarifa", "tarifaDesde"];
+        string Csv(params string[][] filas) => string.Join('\n', new[] { string.Join(';', encabezados) }.Concat(filas.Select(f => string.Join(';', f)))) + "\n";
+        string[] Fila(string cuenta, string nombre, string modulos = "CNT", string tercero = "", string cruce = "", string impuesto = "", string concepto = "", string baseGravable = "", string tarifa = "", string desde = "") =>
+            [cuenta, nombre, modulos, tercero, cruce, "", "", "", "", impuesto, concepto, baseGravable, tarifa, desde];
+
+        // (a) la plantilla: catorce encabezados en la fila 1
+        var plantilla = await EnviarAsync(http, admin, HttpMethod.Get, "/api/accounting/accounts/template.xlsx", null);
+        plantilla.StatusCode.Should().Be(HttpStatusCode.OK, $"«{await plantilla.Content.ReadAsStringAsync()}»");
+        using (var libro = new ClosedXML.Excel.XLWorkbook(new MemoryStream(await plantilla.Content.ReadAsByteArrayAsync())))
+        {
+            var hoja = libro.Worksheets.First();
+            Enumerable.Range(1, encabezados.Length).Select(i => hoja.Cell(1, i).GetString()).Should().Equal(encabezados);
+        }
+
+        // (b) con una fila mala no se guarda nada
+        var malo = await ImportarCuentasAsync(http, admin, Csv(
+            Fila("11050501", "Caja general"),
+            Fila("99999999", "Sin padre en el plan")));
+        malo.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, $"«{await malo.Content.ReadAsStringAsync()}»");
+        var cuerpo = await LeerAsync(malo);
+        cuerpo.GetProperty("code").GetString().Should().Be("Accounting.Accounts.Invalid");
+        cuerpo.GetProperty("data").GetProperty("errors").EnumerateArray().Should().ContainSingle(e => e.GetProperty("row").GetInt32() == 3);
+        (await GetAsync(http, admin, "/api/accounting/accounts/search?q=11050501&onlyMovement=false")).GetArrayLength().Should().Be(0, "nada a medias");
+
+        // (c) el archivo bueno: auxiliares con sus reglas, una cuenta propia y su auxiliar, y una de impuesto
+        var bueno = await ImportarCuentasAsync(http, admin, Csv(
+            Fila("11050501", "Caja general"),
+            Fila("16050501", "Créditos de consumo", "CNT CAR", tercero: "sí", cruce: "sí"),
+            Fila("350505", "Excedentes del ejercicio", ""),
+            Fila("35050501", "Excedente del ejercicio", "CNT"),
+            Fila("24358501", "Retención por honorarios", "CNT", impuesto: "Withholding", concepto: "2365", baseGravable: "sí", tarifa: "11", desde: "2026-01-01")));
+        bueno.StatusCode.Should().Be(HttpStatusCode.OK, $"«{await bueno.Content.ReadAsStringAsync()}»");
+        var resumen = await LeerAsync(bueno);
+        resumen.GetProperty("created").GetInt32().Should().Be(5);
+
+        var cartera = (await GetAsync(http, admin, "/api/accounting/accounts/search?q=16050501&onlyMovement=false")).EnumerateArray().Single();
+        cartera.GetProperty("requiresThirdParty").GetBoolean().Should().BeTrue();
+        cartera.GetProperty("requiresCrossDocument").GetBoolean().Should().BeTrue();
+        var retencionId = (await GetAsync(http, admin, "/api/accounting/accounts/search?q=24358501&onlyMovement=false")).EnumerateArray().Single().GetProperty("publicId").GetGuid();
+        var retencion = await GetAsync(http, admin, $"/api/accounting/accounts/{retencionId}");
+        retencion.GetProperty("tax").GetProperty("kind").GetString().Should().Be("Withholding");
+        retencion.GetProperty("tax").GetProperty("rates").EnumerateArray().Single().GetProperty("rate").GetDecimal().Should().Be(0.11m);
+
+        // (d) el mismo archivo otra vez no duplica; cambiar el nombre actualiza
+        var otraVez = await ImportarCuentasAsync(http, admin, Csv(Fila("11050501", "Caja general")));
+        (await LeerAsync(otraVez)).GetProperty("unchanged").GetInt32().Should().Be(1);
+        var renombrada = await ImportarCuentasAsync(http, admin, Csv(Fila("11050501", "Caja principal")));
+        (await LeerAsync(renombrada)).GetProperty("updated").GetInt32().Should().Be(1);
+
+        // (e) con movimientos, las reglas quedan fijas
+        await ContabilizarAsync(http, admin, new DateOnly(2026, 5, 4), "Aporte inicial",
+            [Linea("11050501", coop.SucursalPrincipal, 100_000m, 0m), Linea("35050501", coop.SucursalPrincipal, 0m, 100_000m)]);
+        var bloqueada = await ImportarCuentasAsync(http, admin, Csv(Fila("11050501", "Caja principal", "CNT NOM")));
+        bloqueada.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await LeerAsync(bloqueada)).GetProperty("data").GetProperty("errors").EnumerateArray()
+            .Should().ContainSingle(e => e.GetProperty("code").GetString() == "Accounting.Account.Locked");
+    }
+
     // ----------------------------------------------------------------------------- US2 (T066) --
 
     [Fact]
@@ -340,6 +404,17 @@ public class ContabilidadNiifTests(CentralIdentityApiFixture fx)
     }
 
     // -------------------------------------------------------------------------------- ayudantes --
+
+    private static async Task<HttpResponseMessage> ImportarCuentasAsync(HttpClient http, string token, string csv)
+    {
+        using var contenido = new MultipartFormDataContent();
+        var archivo = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+        archivo.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        contenido.Add(archivo, "archivo", "cuentas.csv");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/accounting/accounts/import") { Content = contenido };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await http.SendAsync(req);
+    }
 
     private static async Task<HttpResponseMessage> ImportarCatalogoAsync(HttpClient http, string token, string nombre, string csv)
     {

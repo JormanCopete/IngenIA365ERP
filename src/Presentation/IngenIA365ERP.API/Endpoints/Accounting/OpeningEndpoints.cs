@@ -10,8 +10,10 @@ namespace IngenIA365ERP.API.Endpoints.Accounting;
 /// <summary>
 /// Saldos de apertura (feature 009 E2, US13; contracts/api.md §7). La plantilla es un <c>.xlsx</c>
 /// con los encabezados en la fila 1 y las instrucciones en otra hoja; importar deja un borrador
-/// <c>AP</c> que se contabiliza y se reversa por <c>/api/accounting/documents</c>, como cualquier
-/// comprobante. Todo bajo <c>Accounting.Opening.Manage</c>; sin permiso, 404 como el resto.
+/// <c>AP</c> —con la fecha elegida, o la propuesta si no se indica— que se edita, se contabiliza y
+/// se reversa por <c>/api/accounting/documents</c>, como cualquier comprobante. Volver a importar
+/// reemplaza las líneas del borrador que haya. Todo bajo <c>Accounting.Opening.Manage</c>; sin
+/// permiso, 404 como el resto.
 /// </summary>
 public class OpeningEndpoints : ICarterModule
 {
@@ -46,16 +48,24 @@ public class OpeningEndpoints : ICarterModule
             .RequirePermission("Accounting.Opening.Manage");
     }
 
-    private static async Task<object?> ImportarAsync([FromForm] IFormFile archivo, ISender sender, HttpContext http, CancellationToken ct)
+    private static async Task<object?> ImportarAsync([FromForm] IFormFile archivo, [FromForm] string? date, ISender sender, HttpContext http, CancellationToken ct)
     {
         if (archivo is null || archivo.Length == 0)
             return Results.Json(new { code = "Archivo.Vacio", message = "No se recibió un archivo.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status400BadRequest);
         if (archivo.Length > MaxBytes)
             return Results.Json(new { code = "Archivo.DemasiadoGrande", message = "El archivo pesa más de 10 MB.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status413PayloadTooLarge);
 
+        DateOnly? fecha = null;
+        if (!string.IsNullOrWhiteSpace(date))
+        {
+            if (!DateOnly.TryParse(date, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d))
+                return Results.Json(new { code = "Validation.Date", message = "La fecha va en formato yyyy-MM-dd.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status400BadRequest);
+            fecha = d;
+        }
+
         using var ms = new MemoryStream();
         await archivo.CopyToAsync(ms, ct);
-        var result = await sender.Send(new ImportOpeningBalancesCommand(archivo.FileName, ms.ToArray()), ct);
+        var result = await sender.Send(new ImportOpeningBalancesCommand(archivo.FileName, ms.ToArray(), fecha), ct);
         return result.IsSuccess ? Results.Created($"/api/accounting/documents/{result.Value.DraftPublicId}", result.Value) : result;
     }
 }

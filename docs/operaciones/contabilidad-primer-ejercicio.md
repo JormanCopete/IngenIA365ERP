@@ -66,7 +66,35 @@ Deja copiados los niveles 1–4 del catálogo en `ACC_ChartOfAccounts` (`Origin 
 ejercicio con sus doce períodos abiertos y la configuración. **Catálogo y nivel de movimiento
 sólo cambian mientras no exista ninguna auxiliar ni ningún movimiento.**
 
-## 4. Auxiliares mínimas
+## 4. Auxiliares
+
+**En masa, desde la plantilla** (`Contabilidad › Plan de cuentas`, botones «Plantilla Excel» e
+«Importar cuentas», permiso `Accounting.Accounts.Manage`; API `GET /api/accounting/accounts/template.xlsx`
+y `POST /api/accounting/accounts/import`). Una cooperativa arranca con cientos de auxiliares: la
+plantilla lleva `cuenta, nombre, aplicaA, exigeTercero, exigeDocumento, exigeCentro, exigeSucursal,
+banco, numeroCuenta, claseImpuesto, conceptoTributario, exigeBase, tarifa, tarifaDesde` y cada fila
+pasa por **las mismas reglas que crear una cuenta a mano** (nivel, longitud por nivel, padre, cuentas
+propias sólo donde el catálogo no trae hijos, módulos válidos, banco y clase de impuesto existentes).
+Con un solo error responde 422 `Accounting.Accounts.Invalid` con `data.errors[] { row, column, code,
+message }` y **no guarda nada**. Notas:
+
+- El **padre** se deduce del código: la cuenta viva cuyo código es el prefijo más largo. Una cuenta
+  propia (350505 bajo 3505 EXCEDENTES) puede ir en el mismo archivo que su auxiliar (35050501): el
+  importador las ordena de menor a mayor código.
+- Una fila cuyo código **ya existe actualiza** esa cuenta (nombre y reglas): así el archivo es
+  idempotente y se corrige subiéndolo otra vez. Si la cuenta **ya tiene movimientos** sólo puede
+  cambiar el nombre; cualquier cambio de regla es `Accounting.Account.Locked` con la fecha del
+  primer movimiento. Una cuenta del catálogo no se edita (`Accounting.Account.FromCatalog`).
+- `aplicaA` son códigos separados por espacios o comas: `CNT NOM CAR INV TES CDT ACT`. Las columnas
+  `exige*` son «sí» o vacío. `tarifa` va en porcentaje (11 = 11 %) con su `tarifaDesde`.
+- Las cuentas que no reciben movimiento (las propias de nivel 2 a 4) van con las columnas de reglas
+  vacías: las reglas viven en la auxiliar.
+
+La respuesta dice cuántas se crearon, cuántas se actualizaron y cuántas ya estaban como el archivo
+pide. Piense bien las cinco casillas de «cada línea exige» **antes** de cargar la apertura y la
+primera nómina: con movimientos quedan bloqueadas.
+
+### 4b. Auxiliares mínimas
 
 `Contabilidad › Plan de cuentas`: elegir la subcuenta de nivel 4 y «Nueva auxiliar bajo la
 seleccionada». **Donde el CUIF no trae subcuentas** (reservas 32xx, fondos sociales 26xx y 33xx,
@@ -119,6 +147,12 @@ las conciliaciones cerradas del mes.
 `Accounting.Opening.Manage`; API `/api/accounting/opening`). Es lo primero que hace una
 cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear las auxiliares:
 
+0. **Elegir la fecha del corte.** Se propone la víspera del primer período (el 31 de diciembre
+   anterior al primer ejercicio) y se puede mover hasta el **fin del primer ejercicio**: el corte
+   real de la contabilidad anterior casi nunca cae en la víspera. Dos límites y nada más: no
+   después del fin del primer ejercicio (`Accounting.Opening.DateOutOfRange`) y no dentro de un mes
+   **cerrado** (`Accounting.Opening.DateClosed`). Cualquiera sea la fecha, en consultas e informes
+   la apertura es saldo inicial y **nunca** movimiento del mes, y su comprobante no lleva período.
 1. Descargar la plantilla (`GET /template.xlsx`): la hoja «Datos» trae sólo los encabezados en la
    fila 1 —`cuenta, tercero, tipoDocumento, numeroDocumento, centroCosto, sucursal, debito,
    credito, detalle`— y la hoja «Instrucciones» explica cada columna. El contador la llena desde
@@ -133,14 +167,19 @@ cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear 
    borrador `AP` (`Kind = Opening`) **fechado la víspera del primer período** (el 31 de diciembre
    anterior al primer ejercicio): es la única fecha que el contrato admite fuera de un período abierto.
    El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.
-3. Revisar el borrador en Comprobantes y contabilizarlo (`Accounting.Vouchers.Post`, cuatro ojos si
+3. **Corregir todo lo que haga falta mientras sea borrador**: «Editar» abre el comprobante y ahí se
+   agregan, cambian y quitan cuentas línea a línea con las reglas de cada una; «Cambiar la fecha» la
+   mueve sin tocar las líneas; «Descartar» lo elimina; y **volver a importar reemplaza las líneas**
+   del borrador que haya (conserva su identidad y sus adjuntos, y las viejas quedan de baja, nunca
+   borradas). Una vez contabilizado ya no se edita: se reversa.
+4. Revisar el borrador en Comprobantes y contabilizarlo (`Accounting.Vouchers.Post`, cuatro ojos si
    la empresa lo exige). Queda referenciado en la configuración (`openingDocumentPublicId`) y
    **es la única apertura vigente**: otra importación o un borrador `AP` digitado responden 422
    `Accounting.Opening.AlreadyExists` con `data.openingDocumentPublicId` hasta reversarla; la
    reversión también es de clase Apertura y de la misma fecha, y libera el cupo. Las dos quedan
    referenciadas y auditadas (`Accounting.Opening.Imported`).
-4. Comprobar: el balance de prueba del primer mes muestra la apertura como **saldo inicial**, no
-   como movimiento; el estado de cuenta del tercero muestra sus documentos pendientes.
+5. Comprobar: el balance de prueba del mes siguiente al corte muestra la apertura como **saldo
+   inicial**, no como movimiento; el estado de cuenta del tercero muestra sus documentos pendientes.
 
 **Cierre del ejercicio** (`Contabilidad › Períodos`, botón «Cerrar el ejercicio», permiso
 `Accounting.Periods.CloseYear`; API `POST /api/accounting/periods/years/{year}/close`):
@@ -231,7 +270,9 @@ por cuenta y agregado hacia arriba por niveles; un clic abre el libro auxiliar d
 | `Accounting.Document.FourEyes` | Quien registró el borrador intenta contabilizarlo | Configuración: cuatro ojos |
 | `Accounting.Opening.Invalid` con `data.errors` | Filas del archivo de apertura con problemas; no se guardó nada | Paso 7a.2 |
 | `Accounting.Opening.AlreadyExists` | Ya hay una apertura contabilizada y no reversada | Paso 7a.3 |
-| `Accounting.Opening.DateInvalid` | Un borrador AP con otra fecha: la apertura va la víspera del primer período | Paso 7a.2 |
+| `Accounting.Opening.DateOutOfRange` / `.DateClosed` | La fecha elegida pasa del primer ejercicio, o cae en un mes cerrado | Paso 7a.0 |
+| `Accounting.Accounts.Invalid` con `data.errors` | Filas del archivo de auxiliares con problemas; no se guardó nada | Paso 4 |
+| `Accounting.Account.Locked` al importar cuentas | La cuenta ya tiene movimientos: sólo cambia el nombre | Paso 4 |
 | `Accounting.FiscalYear.PeriodsOpen` / `.PreviousOpen` / `.ResultAccountMissing` | Falta cerrar meses, el año anterior o definir la cuenta de resultado | Paso 7a (cierre) |
 | `Accounting.Document.IsClosing` | Se intentó reversar el CI desde Comprobantes | Reabrir el ejercicio en Períodos |
 | Buscador de cuentas vacío en otro módulo | Rol sin `Accounting.Accounts.View` | `LecturaDeMaestros` en `BuiltInRolesSeeder` |

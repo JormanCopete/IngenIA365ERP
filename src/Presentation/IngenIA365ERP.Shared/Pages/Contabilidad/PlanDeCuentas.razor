@@ -1,8 +1,10 @@
 @page "/contabilidad/plan-de-cuentas"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
 @inject ContabilidadClient Contabilidad
 @inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
 
 <PageTitle>Plan de cuentas - IngenIA365ERP</PageTitle>
 
@@ -17,6 +19,9 @@
         <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Actualizar</SfButton>
         <PermissionGate Required="Accounting.Accounts.Manage">
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva" Disabled="@(!PuedeColgar(_seleccion))" title="@MotivoNoColgar(_seleccion)">@(_seleccion is { Level: < 4 } ? "Nueva cuenta propia bajo la seleccionada" : "Nueva auxiliar bajo la seleccionada")</SfButton>
+            @* Implantación: una cooperativa arranca con cientos de auxiliares y crearlas de a una no es viable (E2, 2026-09-22). *@
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@DescargarPlantillaAsync">Plantilla Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" Disabled="@_ocupado" OnClick="@(() => { _erroresDeCarga = []; _archivo = null; _importando = true; })">Importar cuentas</SfButton>
         </PermissionGate>
     </div>
 </div>
@@ -151,10 +156,44 @@
 </SfDialog>
 
 <ConfirmDialog @bind-Visible="_confirmarEliminar" OnConfirm="EliminarAsync" Message="@($"¿Eliminar la cuenta {_ficha?.Code}? Sólo se elimina una auxiliar sin movimientos, sin hijas y sin parametrizaciones.")" />
+
+<SfDialog @bind-Visible="_importando" Header="Importar cuentas auxiliares" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaImportacion.Activa" Texto="Validando el archivo…">
+            <div class="pagina">
+                <p class="texto-apoyo">Excel o CSV con las columnas de la plantilla: <code>cuenta</code>, <code>nombre</code>, <code>aplicaA</code>, <code>exigeTercero</code>, <code>exigeDocumento</code>, <code>exigeCentro</code>, <code>exigeSucursal</code>, <code>banco</code>, <code>numeroCuenta</code>, <code>claseImpuesto</code>, <code>conceptoTributario</code>, <code>exigeBase</code>, <code>tarifa</code>, <code>tarifaDesde</code>.
+                   Cada fila se valida con las mismas reglas que crear una cuenta a mano; con un solo error no se guarda nada. Una cuenta que ya existe se actualiza, y si tiene movimientos sólo puede cambiar de nombre.</p>
+                <InputFile OnChange="@ArchivoDeCuentasElegido" accept=".xlsx,.csv,.txt" />
+                @if (_erroresDeCarga.Count > 0)
+                {
+                    <p class="texto-alerta">@_erroresDeCarga.Count error(es). Corrija el archivo y vuelva a importarlo.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _erroresDeCarga) { <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _importando = false)" />
+        <DialogButton Content="Importar" IsPrimary="true" OnClick="@ImportarCuentasAsync" Disabled="@(_cargaImportacion.Activa || _archivo is null)" />
+    </DialogButtons>
+</SfDialog>
+
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaHistorial = new(), _cargaFicha = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaHistorial = new(), _cargaFicha = new(), _cargaImportacion = new();
+    private bool _ocupado, _importando;
+    private IBrowserFile? _archivo;
+    private List<ErrorDeFilaDto> _erroresDeCarga = [];
     private ArbolDeCuentas? _arbol;
     private List<CuentaNodoDto> _nodos = [];
     private bool _soloActivas;
@@ -328,5 +367,54 @@
         var r = await Contabilidad.HistorialDeCuentaAsync(_ficha.PublicId);
         _historial = r.IsSuccess ? [.. r.Value!] : [];
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el historial.");
+    }
+
+    private async Task DescargarPlantillaAsync()
+    {
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.PlantillaDeCuentasAsync();
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private void ArchivoDeCuentasElegido(InputFileChangeEventArgs e)
+    {
+        _archivo = e.File;
+        _erroresDeCarga = [];
+    }
+
+    private async Task ImportarCuentasAsync()
+    {
+        if (_archivo is null) return;
+        using var carga = _cargaImportacion.Iniciar();
+        _erroresDeCarga = [];
+        byte[] bytes;
+        try
+        {
+            using var ms = new MemoryStream();
+            await _archivo.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (IOException ex)
+        {
+            await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        var r = await Contabilidad.ImportarCuentasAsync(_archivo.Name, bytes);
+        if (!r.IsSuccess)
+        {
+            _erroresDeCarga = r.ErroresDeFila();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo importar el archivo.");
+            return;
+        }
+        var v = r.Value!;
+        await Notification.SuccessAsync($"{v.Created} cuenta(s) creada(s), {v.Updated} actualizada(s) y {v.Unchanged} ya estaban como el archivo pide.");
+        _importando = false;
+        _archivo = null;
+        await CargarAsync();
     }
 }

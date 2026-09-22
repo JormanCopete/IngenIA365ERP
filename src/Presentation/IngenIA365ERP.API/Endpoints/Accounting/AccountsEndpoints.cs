@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.API.Reports.Exportadores;
 using IngenIA365ERP.Application.Accounting.Accounts;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,24 @@ public class AccountsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Accounts.View");
 
+        // Carga masiva (E2, 2026-09-22): plantilla con los encabezados en la fila 1 e importación
+        // todo-o-nada, la misma mecánica de la apertura. Mismo permiso que crear una a una.
+        group.MapGet("/template.xlsx", async (ISender sender, HttpContext http, CancellationToken ct) =>
+            {
+                var tabla = await sender.Send(new GetAccountTemplateQuery(), ct);
+                if (tabla.IsFailure) return ErrorEnvelopeFilter.Translate(http, tabla);
+                var archivo = PlantillaDeImportacion.Xlsx(tabla.Value, "plantilla-cuentas-auxiliares");
+                return Results.File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo);
+            })
+            .WithName("Accounting_Accounts_Template")
+            .RequirePermission("Accounting.Accounts.Manage");
+
+        group.MapPost("/import", ImportarAsync)
+            .WithName("Accounting_Accounts_Import")
+            .DisableAntiforgery()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Accounts.Manage");
+
         group.MapPost("/", async (CreateAccountCommand command, ISender sender, CancellationToken ct) =>
             {
                 var result = await sender.Send(command, ct);
@@ -57,6 +76,7 @@ public class AccountsEndpoints : ICarterModule
             .WithName("Accounting_Accounts_Create")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Accounts.Manage");
+
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateAccountCommand command, ISender sender, CancellationToken ct) =>
                 await sender.Send(command with { PublicId = id }, ct))
@@ -78,5 +98,17 @@ public class AccountsEndpoints : ICarterModule
             .WithName("Accounting_Accounts_Delete")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Accounts.Manage");
+    }
+
+    private static async Task<object?> ImportarAsync([FromForm] IFormFile archivo, ISender sender, HttpContext http, CancellationToken ct)
+    {
+        if (archivo is null || archivo.Length == 0)
+            return Results.Json(new { code = "Archivo.Vacio", message = "No se recibió un archivo.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status400BadRequest);
+        if (archivo.Length > OpeningEndpoints.MaxBytes)
+            return Results.Json(new { code = "Archivo.DemasiadoGrande", message = "El archivo pesa más de 10 MB.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status413PayloadTooLarge);
+
+        using var ms = new MemoryStream();
+        await archivo.CopyToAsync(ms, ct);
+        return await sender.Send(new ImportAccountsCommand(archivo.FileName, ms.ToArray()), ct);
     }
 }
