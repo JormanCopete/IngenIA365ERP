@@ -40,6 +40,27 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release c388a17`** (2026-09-22 01:05–01:15 UTC, GitOps `8f8449b`, autorizado por el dueño con
+«realiza commit, merge a develop e integrar produccion»; segundo revisor Jorman Copete): la feature 010
+completa salvo N3 — **N1** (prima, cesantías anuales, vacaciones, liquidación definitiva, políticas,
+festivos, saldos iniciales, ficha PILA/DIAN), **N4** (dispersión bancaria con formatos por banco en
+Core) y **N2** (planilla PILA y procedimiento 2). Cuatro migraciones **aditivas** por el Job PreSync:
+`NominaPrestacionesYDian`, `SettlementDeductionsUnicosEntreVivas`, `NominaDispersionBancaria`,
+`NominaPilaYNominaElectronica` (`cooflopal` e `ingenia365erp`: 22 → 26). Respaldos previos
+`/root/respaldos/{ingenia365erp_admin,ingenia365erp,cooflopal}-20260921-pre-f010.dump`. Verificado
+contra la base: 15 corridas previas con `Kind = 0`, 11 empleados activos, permisos sembrados por la
+API al arrancar (Payroll.Settlements 6, ServiceBonus 4, Pila 4, WithholdingRate 3, Disbursement 4,
+Core.BankFileFormats 2), 2 formatos bancarios (`CSV-GENERICO`, `AVVILLAS-1`), 11 políticas, 54
+festivos, 9 motivos de retiro; imágenes por digest iguales al overlay (api `be0ffb7f`); `/health/ready`
+200, `app.ingenia365.com` 200, 0 `[ERR]` en la API tras el relevo. Antes, el mismo día, `develop`
+`c7ddd8d` desplegó en DEV y QA por AutoMigrate (`coop_prueba` con las cuatro migraciones). El primer
+CI de `develop` cayó porque git normalizaba a LF los `.esperado.txt` de la PILA (ancho fijo con CRLF):
+`.gitattributes` con `*.esperado.txt -text`. **Lo que sigue en la cooperativa** (runbooks §4d/§4e y
+`pila-primera-planilla.md`): cuentas de los 16 conceptos nuevos, saldos iniciales de prestaciones,
+clase ARL y banco de dispersión en cada ficha, código ACH de los bancos, códigos PILA de EPS/fondos/
+ARL/cajas, datos del aportante, cotejo del layout con el anexo v30 y validador de Aportes en Línea (T094),
+layout de AV Villas (T147), QA por rol y validación de la contadora (T077, T107).
+
 **`release fb8f016`** (2026-09-19 20:12–20:15 UTC, GitOps `56be5ec`, autorizado por el dueño con
 «empújalo a PDN»): recurrentes de nómina sin duplicados. En `cooflopal` la contadora quedó con la
 misma deducción registrada dos veces (Ids 2 y 3, 16:17 y 16:25 UTC, sin ninguna búsqueda de
@@ -436,7 +457,7 @@ Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de l
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-#### P16 — Feature 010 (nómina completa): N1 en `develop`; N2 y N4 terminadas en la rama; N3 pendiente
+#### P16 — Feature 010 (nómina completa): N1, N2 y N4 en `develop` y en **producción** (`release c388a17`, 2026-09-22); N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
 definitiva, con políticas por empresa, festivos, saldos iniciales y ficha PILA/DIAN— está
