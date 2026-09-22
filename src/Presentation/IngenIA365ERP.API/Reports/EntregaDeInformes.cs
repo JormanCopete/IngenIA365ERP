@@ -7,41 +7,59 @@ namespace IngenIA365ERP.API.Reports;
 
 /// <summary>
 /// Punto único de entrega de informes (nómina, contabilidad): JSON para la pantalla, archivo
-/// para descargar. El error va en el sobre de siempre y con el estado del contrato
-/// (<see cref="ErrorEnvelopeFilter.EstadoDe"/>: <c>*.NotFound</c> 404, negocio 422, <c>Validation.*</c>
-/// 400), porque el endpoint ya devuelve un <c>IResult</c> y el filtro no lo toca. Hasta el 2026-09-21
-/// respondía 400 a cualquier fallo —<c>Payroll.Run.NotFound</c> y <c>Payroll.Settlement.KindMismatch</c>
-/// incluidos— y la pantalla no podía distinguir «no existe» de «parámetro inválido». Vivía como método
-/// privado de <c>PayrollReportsEndpoints</c> (feature 006); la 009 lo comparte.
+/// para descargar. El error va en el sobre de siempre. Vivía como método privado de
+/// <c>PayrollReportsEndpoints</c> (feature 006); la 009 lo comparte.
+///
+/// <para>
+/// Hasta la E2 de la 009 (2026-09-20) todo fallo del handler salía <b>400</b>: un tercero o una
+/// cuenta que no existen (<c>*.NotFound</c>) se confundían con un formato mal escrito, y un
+/// informe sobre una contabilidad sin iniciar tampoco se distinguía. Ahora el status sigue la
+/// misma regla que <see cref="ErrorEnvelopeFilter"/> (<c>Validation.*</c> 400, <c>*.NotFound</c>
+/// 404, el resto 422) y el cuerpo conserva <c>errorCode</c> —lo leen las pantallas de nómina—
+/// además de <c>code</c>, <c>message</c> y <c>data</c> cuando el error la trae.
+/// </para>
 /// </summary>
 public static class EntregaDeInformes
 {
-    public const string Json = "json";
-    public static readonly string[] FormatosDeArchivo = ["xlsx", "pdf", "docx"];
+    public const string Json = FormatosDeInforme.Json;
+    public static readonly string[] FormatosDeArchivo = FormatosDeInforme.DeArchivo;
 
-    /// <summary>Formato normalizado (<c>json</c> si viene vacío).</summary>
-    public static string Normalizar(string? formato) => (formato ?? Json).Trim().ToLowerInvariant();
+    /// <summary>
+    /// Formato normalizado (<c>json</c> si viene nulo o vacío). Es la regla de
+    /// <see cref="FormatosDeInforme"/>, la misma con la que los handlers deciden si auditan una
+    /// exportación: aquí se entrega y se exige el permiso, allá se deja el rastro, y los dos lados
+    /// tienen que ver el mismo formato o la auditoría miente (hallazgo 8 de la revisión E2).
+    /// </summary>
+    public static string Normalizar(string? formato) => FormatosDeInforme.Normalizar(formato);
 
     /// <summary>Verdadero cuando el formato pide un archivo (y por tanto es una exportación auditable).</summary>
-    public static bool EsExportacion(string? formato) => Normalizar(formato) != Json;
+    public static bool EsExportacion(string? formato) => FormatosDeInforme.EsExportacion(formato);
 
-    public static bool EsFormatoValido(string? formato)
-    {
-        var f = Normalizar(formato);
-        return f == Json || FormatosDeArchivo.Contains(f);
-    }
+    public static bool EsFormatoValido(string? formato) => FormatosDeInforme.EsValido(formato);
 
     public static Task<IResult> EntregarAsync(Result<TablaExportable> resultado, string? formato, string nombreBase, HttpContext? http = null)
     {
         if (resultado.IsFailure)
-            return Task.FromResult(Results.Json(
-                new { code = resultado.Error.Code, errorCode = resultado.Error.Code, message = resultado.Error.Message, traceId = http?.TraceIdentifier },
-                statusCode: ErrorEnvelopeFilter.EstadoDe(resultado.Error.Code)));
+            return Task.FromResult(Fallo(resultado.Error, http));
         var f = Normalizar(formato);
         if (f == Json) return Task.FromResult(Results.Ok(resultado.Value));
         if (!FormatosDeArchivo.Contains(f))
-            return Task.FromResult(Results.BadRequest(new { code = "Reportes.FormatoInvalido", errorCode = "Reportes.FormatoInvalido", message = "Formatos: json, xlsx, pdf, docx." }));
+            return Task.FromResult(Fallo(new Error("Reportes.FormatoInvalido", "Formatos: json, xlsx, pdf, docx."), http, StatusCodes.Status400BadRequest));
         var archivo = ExportadorDeTablas.Exportar(resultado.Value, f, $"{nombreBase}-{DateTime.UtcNow:yyyyMMdd-HHmm}");
         return Task.FromResult(Results.File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo));
+    }
+
+    /// <summary>
+    /// El sobre del fallo: <c>{ code, errorCode, message, data? }</c> con el status que dicta el código.
+    /// Un formato desconocido es una petición mal formada y sigue siendo 400 (la prueba de
+    /// integración de nómina lo afirma y su código no cambia): se le fija el status a mano.
+    /// </summary>
+    private static IResult Fallo(Error error, HttpContext? http = null, int? statusFijo = null)
+    {
+        var code = string.IsNullOrEmpty(error.Code) ? "Generic.Failure" : error.Code;
+        var status = statusFijo ?? ErrorEnvelopeFilter.EstadoDe(code);
+        return error is ErrorConDatos conDatos
+            ? Results.Json(new { code, errorCode = code, message = error.Message, data = conDatos.Data, traceId = http?.TraceIdentifier }, statusCode: status)
+            : Results.Json(new { code, errorCode = code, message = error.Message, traceId = http?.TraceIdentifier }, statusCode: status);
     }
 }

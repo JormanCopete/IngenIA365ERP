@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -40,7 +41,7 @@ public class ReversePayrollRunCommandHandlerTests
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         var poster = d.Contabilizador(Contadora);
-        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
+        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
         var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
             .Handle(new ApprovePayrollRunCommand(calc.Value.RunPublicId, Confirm: true), CancellationToken.None);
         apr.IsSuccess.Should().BeTrue(apr.Error.Message);
@@ -49,7 +50,7 @@ public class ReversePayrollRunCommandHandlerTests
 
     private static ReversePayrollRunCommandHandler Reversor(NominaTestData d) =>
         new(d.Db, d.Contabilizador(Gerente), d.Clock, Gerente,
-            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker);
+            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker);
 
     [Fact]
     public async Task Reversar_deja_asiento_espejo_corrida_reversada_periodo_abierto_y_novedades_intactas()
@@ -102,7 +103,7 @@ public class ReversePayrollRunCommandHandlerTests
     {
         var d = new NominaTestData();
         var runId = await Aprobada(d);
-        var marca = await new MarkPaymentsCommandHandler(d.Db, d.Clock, Contadora, new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance))
+        var marca = await new MarkPaymentsCommandHandler(d.Db, d.Clock, Contadora, new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual))
             .Handle(new MarkPaymentsCommand(runId, null, new DateTime(2026, 3, 30), PayrollPaymentMethod.Transfer, null), CancellationToken.None);
         marca.Value.Should().Be(1);
 
@@ -113,7 +114,7 @@ public class ReversePayrollRunCommandHandlerTests
         (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == runId)).Status.Should().Be(PayrollRunStatus.Approved);
 
         // Retirada la marca, se puede.
-        await new RevertPaymentMarkCommandHandler(d.Db, d.Clock, Contadora, new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance))
+        await new RevertPaymentMarkCommandHandler(d.Db, d.Clock, Contadora, new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual))
             .Handle(new RevertPaymentMarkCommand(runId, d.Ana.PublicId, "transferencia devuelta"), CancellationToken.None);
         (await Reversor(d).Handle(new ReversePayrollRunCommand(runId, "error"), CancellationToken.None)).IsSuccess.Should().BeTrue();
     }

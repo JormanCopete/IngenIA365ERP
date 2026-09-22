@@ -142,7 +142,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
     DbSet<BankStatementColumnMap> IApplicationDbContext.BankStatementColumnMaps => throw new NotImplementedException();
     DbSet<BankStatementLine> IApplicationDbContext.BankStatementLines => throw new NotImplementedException();
-    DbSet<BudgetLine> IApplicationDbContext.BudgetLines => throw new NotImplementedException();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
     DbSet<WithholdingCertificate> IApplicationDbContext.WithholdingCertificates => throw new NotImplementedException();
     DbSet<WithholdingCertificateLine> IApplicationDbContext.WithholdingCertificateLines => throw new NotImplementedException();
     DbSet<TaxForm> IApplicationDbContext.TaxForms => throw new NotImplementedException();
@@ -161,7 +161,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<AccountingDocument> AccountingDocuments => Set<AccountingDocument>();
     // La reapertura de un período deja «desactualizadas» las conciliaciones cerradas del mes (US3); las líneas del extracto son de E3.
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
-    DbSet<Budget> IApplicationDbContext.Budgets => throw new NotImplementedException();
+    public DbSet<Budget> Budgets => Set<Budget>();
     // Feature 010: la definitiva lee Cartera por persona (FR-018a) y, al aprobar, recauda de verdad
     // (RecaudoDeCredito: cuotas pendientes, transacción RC y comprobante por el contrato).
     public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
@@ -324,6 +324,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<FinancialStatementItem>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<ChartOfAccount>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<AccountTaxRate>(b => b.Ignore("RowVersion"));
+        // Feature 009 E2: la empresa (encabezado de los informes) y el presupuesto.
+        modelBuilder.Entity<Company>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Budget>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<BudgetLine>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CrossDocumentType>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<FiscalYear>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollDeductionEntry>(b => b.Ignore("RowVersion"));

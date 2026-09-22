@@ -12,6 +12,8 @@ public record BranchDto
     public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
+    /// <summary>Oficina de <c>ADM_Branches</c> vinculada (feature 009, R7), o nulo.</summary>
+    public Guid? TenantBranchPublicId { get; init; }
 }
 
 // List Query
@@ -56,7 +58,8 @@ public class ListBranchesQueryHandler(IApplicationDbContext context)
                 PublicId = e.PublicId,
                 Code = e.LegacyCode,
                 Name = e.Name,
-                ShortName = e.ShortName
+                ShortName = e.ShortName,
+                TenantBranchPublicId = e.TenantBranchPublicId
             })
             .ToListAsync(cancellationToken);
 
@@ -83,7 +86,8 @@ public class GetBranchByIdQueryHandler(IApplicationDbContext context)
                 PublicId = e.PublicId,
                 Code = e.LegacyCode,
                 Name = e.Name,
-                ShortName = e.ShortName
+                ShortName = e.ShortName,
+                TenantBranchPublicId = e.TenantBranchPublicId
             })
             .FirstOrDefaultAsync(cancellationToken);
 

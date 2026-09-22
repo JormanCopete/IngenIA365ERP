@@ -1,0 +1,587 @@
+@page "/contabilidad/presupuesto"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Presupuesto y ejecución - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US9 (FR-061..FR-064): el presupuesto anual por cuenta de movimiento —opcional
+   por sucursal y centro de costo— con doce cuotas, y su ejecución contra lo contabilizado. El
+   presupuesto es versionado: el borrador se corrige en su sitio; el aprobado no se toca, cada
+   cambio pide motivo y deja la versión anterior como reemplazada, y la ejecución compara con la
+   vigente y muestra aparte la inicial (versión 1). Guardar, aprobar, copiar y distribuir son del
+   permiso Budget.Manage; consultar y ver la ejecución, de Budget.View. *@
+<PermissionGate Required="Accounting.Budget.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Presupuesto y ejecución presupuestal</h3>
+        <div class="toolbar">
+            <label class="campo">Año
+                <select class="e-input" value="@_anio" @onchange="@(e => CambiarAnioAsync(int.TryParse(e.Value?.ToString(), out var a) ? a : _anio))">
+                    @foreach (var a in _anios) { <option value="@a">@a</option> }
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="toolbar" role="tablist">
+        <SfButton CssClass="@(_pestana == "presupuesto" ? "e-primary" : "e-outline")" role="tab" OnClick="@(() => _pestana = "presupuesto")">Presupuesto</SfButton>
+        <SfButton CssClass="@(_pestana == "ejecucion" ? "e-primary" : "e-outline")" role="tab" OnClick="@(() => CambiarAEjecucionAsync())">Ejecución</SfButton>
+    </div>
+
+    @if (_pestana == "presupuesto")
+    {
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_presupuesto is { } p)
+            {
+                <div class="toolbar">
+                    <div class="info-card">
+                        <span class="label">Versión vigente</span>
+                        <strong>@(p.Existe ? $"v{p.Version} · {p.EstadoTexto}" : "Sin presupuesto para este año")</strong>
+                        @if (p.EstaAprobado && p.ApprovedAt is { } aprobado)
+                        {
+                            <span class="texto-tenue">Aprobado por @p.ApprovedBy el @aprobado.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(p.ChangeReason)) { <span class="texto-tenue">Motivo: @p.ChangeReason</span> }
+                        @if (_versionVista is { } v) { <span class="badge">Viendo la versión @v (sólo lectura)</span> }
+                    </div>
+                    <div class="acciones">
+                        @if (_versionVista is not null)
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-arrow-left" OnClick="@(() => CargarAsync(null))">Volver a la vigente</SfButton>
+                        }
+                        @if (p.Versions.Count > 0)
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-history" OnClick="@(() => _mostrarVersiones = true)">Versiones (@p.Versions.Count)</SfButton>
+                        }
+                        <PermissionGate Required="Accounting.Budget.Manage">
+                            @if (_versionVista is null)
+                            {
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-copy" Disabled="@(p.EstaAprobado)" OnClick="@(() => _mostrarCopia = true)">Copiar del año anterior</SfButton>
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@(!_sucio || _lineas.Count == 0)" OnClick="@GuardarPedidoAsync">Guardar</SfButton>
+                                @if (p.EsBorrador)
+                                {
+                                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_sucio" OnClick="@AprobarAsync">Aprobar</SfButton>
+                                }
+                            }
+                        </PermissionGate>
+                    </div>
+                </div>
+
+                <PermissionGate Required="Accounting.Budget.Manage">
+                    @if (_versionVista is null)
+                    {
+                        <div class="toolbar">
+                            <label class="campo campo-largo">Agregar cuenta de movimiento
+                                <BuscadorDeCuenta @bind-Cuenta="_cuentaNueva" Placeholder="Código o nombre" />
+                            </label>
+                            <label class="campo">Sucursal (opcional)
+                                <select class="e-input" @bind="_sucursalNueva">
+                                    <option value="">Toda la empresa</option>
+                                    @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Centro de costo (opcional)
+                                <select class="e-input" @bind="_centroNuevo">
+                                    <option value="">Todos</option>
+                                    @foreach (var c in _centros) { <option value="@c.PublicId">@c.Name</option> }
+                                </select>
+                            </label>
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_cuentaNueva is null)" OnClick="@AgregarLineaAsync">Agregar</SfButton>
+                        </div>
+                    }
+                </PermissionGate>
+
+                @if (_lineas.Count == 0)
+                {
+                    <div class="info-card"><span class="label">Sin líneas</span><p>Agregue cuentas de movimiento con sus doce cuotas, o copie el presupuesto del año anterior con un porcentaje de ajuste.</p></div>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid grilla-presupuesto">
+                            <thead>
+                                <tr>
+                                    <th>Cuenta</th>
+                                    <th>Sucursal / centro</th>
+                                    @for (var m = 0; m < 12; m++) { <th class="numero">@Mes(m)</th> }
+                                    <th class="numero">Total</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in _lineas)
+                                {
+                                    var linea = l;
+                                    <tr>
+                                        <td><span class="codigo">@linea.AccountCode</span> @linea.AccountName</td>
+                                        <td class="texto-tenue">@(linea.BranchName ?? "Toda la empresa")@(linea.CostCenterName is { } cc ? $" · {cc}" : "")</td>
+                                        @for (var m = 0; m < 12; m++)
+                                        {
+                                            var mes = m;
+                                            <td class="numero">
+                                                @if (_versionVista is null && _puedeEditar)
+                                                {
+                                                    <input class="e-input importe" type="number" step="1" min="0" value="@linea.Amounts[mes].ToString(CultureInfo.InvariantCulture)"
+                                                           @onchange="@(e => Cambiar(linea, mes, e.Value?.ToString()))" aria-label="@($"{linea.AccountCode} {Mes(mes)}")" />
+                                                }
+                                                else
+                                                {
+                                                    @Moneda(linea.Amounts[mes])
+                                                }
+                                            </td>
+                                        }
+                                        <td class="numero"><strong>@Moneda(linea.Total)</strong></td>
+                                        <td class="linea-acciones">
+                                            @if (_versionVista is null && _puedeEditar)
+                                            {
+                                                <button type="button" class="enlace" title="Distribuir el total en los doce meses" @onclick="@(() => AbrirDistribucion(linea))">Distribuir</button>
+                                                <button type="button" class="enlace" title="Quitar la línea" @onclick="@(() => Quitar(linea))">×</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="resaltada">
+                                    <td>Totales</td>
+                                    <td></td>
+                                    @for (var m = 0; m < 12; m++) { var mes = m; <td class="numero">@Moneda(_lineas.Sum(x => x.Amounts[mes]))</td> }
+                                    <td class="numero">@Moneda(_lineas.Sum(x => x.Total))</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    @if (_sucio) { <p class="hint">Hay cambios sin guardar. @(p.EstaAprobado ? "Guardar sobre un presupuesto aprobado pide un motivo y crea la versión siguiente." : "")</p> }
+                }
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <FiltrosDeInforme Modelo="@_filtrosEjecucion" Aplicar="@AplicarEjecucionAsync" Ocupado="@_cargaEjecucion.Activa"
+                          MostrarFechas="false" MostrarCuenta="false" MostrarTercero="false" MostrarDocumentoCruce="false"
+                          MostrarComprobante="false" MostrarNivel="true" MostrarIncluirCierre="false">
+            <ControlesFijos>
+                <label class="campo">Mes
+                    <select class="e-input" @bind="_mes">
+                        @for (var m = 1; m <= 12; m++) { <option value="@m">@Mes(m - 1)</option> }
+                    </select>
+                </label>
+            </ControlesFijos>
+        </FiltrosDeInforme>
+        <div class="page-header">
+            <p class="texto-tenue">Ejecutado del mes y acumulado a @Mes(_mes - 1) de @_anio contra el presupuesto vigente; la última columna es el presupuesto inicial (versión 1). Un clic en la cuenta abre su libro auxiliar del mes.</p>
+            <div class="toolbar">
+                @if (_ejecucion is not null)
+                {
+                    <PermissionGate Required="Accounting.Reports.Export">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_cargaEjecucion.Activa" OnClick="@(() => DescargarEjecucionAsync("xlsx"))">Excel</SfButton>
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_cargaEjecucion.Activa" OnClick="@(() => DescargarEjecucionAsync("pdf"))">PDF</SfButton>
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_cargaEjecucion.Activa" OnClick="@(() => DescargarEjecucionAsync("docx"))">Word</SfButton>
+                    </PermissionGate>
+                }
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaEjecucion.Activa">
+            <TablaDeReporte Tabla="@_ejecucion" FilasClicables="true" EsClicable="@(f => _ejecucion is not null && TablaDeReporte.Oculto(_ejecucion, f, "_nodo") is not null)"
+                            FilaElegida="@AbrirAuxiliarDelMesAsync" TextoSinTabla="Elija el mes y pulse «Consultar»." TextoSinFilas="Sin presupuesto ni movimientos para este año." />
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="Motivo del cambio" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">El presupuesto @_anio está aprobado. Guardar crea la versión @((_presupuesto?.Version ?? 0) + 1), aprobada, y deja la actual como reemplazada; el motivo queda en el historial.</p>
+                <SfTextBox @bind-Value="_motivo" Placeholder="Motivo *" Multiline="true" FloatLabelType="FloatLabelType.Always" />
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _mostrarMotivo = false)" />
+        <DialogButton Content="Guardar versión" IsPrimary="true" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => GuardarAsync(_motivo))" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCopia" Header="Copiar del año anterior" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Copiando…">
+                <p class="texto-apoyo">Toma la versión vigente del año elegido, la ajusta en el porcentaje y la deja como borrador de @_anio (reemplaza el borrador actual si lo hay). Los valores se redondean a pesos.</p>
+                <div class="toolbar">
+                    <label class="campo">Copiar de <input class="e-input" type="number" @bind="_anioOrigen" /></label>
+                    <label class="campo">Ajuste % <input class="e-input" type="number" step="0.01" @bind="_porcentaje" /></label>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _mostrarCopia = false)" />
+        <DialogButton Content="Copiar" IsPrimary="true" Disabled="@_guardado.Activa" OnClick="@CopiarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDistribucion" Header="@($"Distribuir {_lineaADistribuir?.AccountCode}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Distribuyendo…">
+                <p class="texto-apoyo">Reparte un total en los doce meses y lo guarda en el servidor. @(_sucio ? "Hay cambios sin guardar en otras filas: guárdelos primero o se perderán." : "")</p>
+                <div class="toolbar">
+                    <label class="campo">Total <input class="e-input importe" type="number" step="1" min="0" @bind="_distribucionTotal" /></label>
+                    <label class="campo">Modo
+                        <select class="e-input" @bind="_distribucionModo">
+                            <option value="equal">Por igual (resto en diciembre)</option>
+                            <option value="percent">Porcentajes (suman 100)</option>
+                            <option value="manual">Valores (suman el total)</option>
+                        </select>
+                    </label>
+                </div>
+                @if (_distribucionModo != "equal")
+                {
+                    <div class="toolbar">
+                        @for (var m = 0; m < 12; m++)
+                        {
+                            var mes = m;
+                            <label class="campo">@Mes(mes) <input class="e-input importe" type="number" step="0.01" value="@_distribucionValores[mes].ToString(CultureInfo.InvariantCulture)" @onchange="@(e => _distribucionValores[mes] = Decimal(e.Value?.ToString()))" /></label>
+                        }
+                    </div>
+                    <p class="hint">Suma: @_distribucionValores.Sum().ToString("N2", Cultura) @(_distribucionModo == "percent" ? "%" : "")</p>
+                }
+                @if (_presupuesto?.EstaAprobado == true)
+                {
+                    <SfTextBox @bind-Value="_motivo" Placeholder="Motivo (el presupuesto está aprobado) *" FloatLabelType="FloatLabelType.Always" />
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _mostrarDistribucion = false)" />
+        <DialogButton Content="Distribuir" IsPrimary="true" Disabled="@(_guardado.Activa || _sucio || _distribucionTotal <= 0 || (_presupuesto?.EstaAprobado == true && string.IsNullOrWhiteSpace(_motivo)))" OnClick="@DistribuirAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarVersiones" Header="@($"Versiones del presupuesto {_anio}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_presupuesto is { } p && p.Versions.Count > 0)
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Versión</th><th>Estado</th><th>Creada</th><th>Aprobada</th><th>Motivo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var v in p.Versions.OrderByDescending(x => x.Version))
+                        {
+                            var version = v;
+                            <tr class="@(version.Version == p.Version && _versionVista is null ? "resaltada" : "")">
+                                <td>v@(version.Version)</td>
+                                <td>@EstadoTexto(version.Status)</td>
+                                <td>@version.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @version.CreatedBy</td>
+                                <td>@(version.ApprovedAt is { } a ? $"{a.ToLocalTime():dd/MM/yyyy HH:mm} · {version.ApprovedBy}" : "")</td>
+                                <td class="texto-tenue">@version.ChangeReason</td>
+                                <td><button type="button" class="enlace" @onclick="@(async () => { _mostrarVersiones = false; await CargarAsync(version.Version); })">Ver</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else { <p class="muted">Sin versiones.</p> }
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _mostrarVersiones = false)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-CO");
+
+    /// <summary>Una fila de la grilla: la cuenta (y su sucursal y centro si los lleva) con sus doce cuotas.</summary>
+    private sealed class LineaEditable
+    {
+        public Guid AccountPublicId { get; init; }
+        public string AccountCode { get; init; } = "";
+        public string AccountName { get; init; } = "";
+        public Guid? BranchPublicId { get; init; }
+        public string? BranchName { get; init; }
+        public Guid? CostCenterPublicId { get; init; }
+        public string? CostCenterName { get; init; }
+        public decimal[] Amounts { get; } = new decimal[12];
+        public decimal Total => Amounts.Sum();
+        public LineaPresupuestoInput Input() => new(AccountPublicId, BranchPublicId, CostCenterPublicId, Amounts);
+        public bool MismaClave(Guid cuenta, Guid? sucursal, Guid? centro) => AccountPublicId == cuenta && BranchPublicId == sucursal && CostCenterPublicId == centro;
+    }
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaEjecucion = new();
+    private string _pestana = "presupuesto";
+    private int _anio = DateTime.Today.Year;
+    private List<int> _anios = [];
+    private PresupuestoDto? _presupuesto;
+    private int? _versionVista;
+    private readonly List<LineaEditable> _lineas = [];
+    private bool _sucio;
+    private List<ItemCrudo> _sucursales = [], _centros = [];
+    private CuentaBuscadaDto? _cuentaNueva;
+    private string _sucursalNueva = "", _centroNuevo = "";
+    private bool _mostrarMotivo, _mostrarCopia, _mostrarDistribucion, _mostrarVersiones;
+    private string _motivo = "";
+    private int _anioOrigen;
+    private decimal _porcentaje;
+    private LineaEditable? _lineaADistribuir;
+    private decimal _distribucionTotal;
+    private string _distribucionModo = "equal";
+    private readonly decimal[] _distribucionValores = new decimal[12];
+    private FiltrosDeInformeModelo _filtrosEjecucion = new();
+    private FiltrosDeInformeModelo _filtrosEjecucionAplicados = new();
+    private int _mes = DateTime.Today.Month;
+    private TablaReporteDto? _ejecucion;
+    private bool _iniciado;
+
+    /// <summary>La grilla se edita mientras no se esté viendo una versión vieja; el permiso lo aplica el <c>PermissionGate</c> de los botones y la API.</summary>
+    private bool _puedeEditar => _versionVista is null;
+
+    [SupplyParameterFromQuery(Name = "year")] public int? Year { get; set; }
+    [SupplyParameterFromQuery(Name = "month")] public int? Month { get; set; }
+    [SupplyParameterFromQuery(Name = "pestana")] public string? Pestana { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        if (Year is { } y) _anio = y;
+        if (Month is { } m && m is >= 1 and <= 12) _mes = m;
+        if (Pestana is "ejecucion") _pestana = "ejecucion";
+        _anioOrigen = _anio - 1;
+        _filtrosEjecucion = FiltrosDeInformeModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
+        _filtrosEjecucionAplicados = _filtrosEjecucion.Copia();
+
+        using var carga = _carga.Iniciar();
+        var ejercicios = Contabilidad.ListarEjerciciosAsync();
+        var sucursales = Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        await Task.WhenAll(ejercicios, sucursales, centros);
+        _sucursales = sucursales.Result;
+        _centros = centros.Result;
+        // Los ejercicios abiertos en Períodos más el actual y el siguiente: presupuestar el año que viene es lo normal.
+        var lista = ejercicios.Result.IsSuccess ? ejercicios.Result.Value!.ToList() : [];
+        lista.Add(DateTime.Today.Year);
+        lista.Add(DateTime.Today.Year + 1);
+        lista.Add(_anio);
+        _anios = lista.Distinct().OrderByDescending(a => a).ToList();
+        await CargarAsync(null);
+        if (_pestana == "ejecucion") await CargarEjecucionAsync();
+    }
+
+    private async Task CambiarAnioAsync(int anio)
+    {
+        if (anio == _anio) return;
+        _anio = anio;
+        _anioOrigen = anio - 1;
+        _ejecucion = null;
+        await CargarAsync(null);
+        if (_pestana == "ejecucion") await CargarEjecucionAsync();
+    }
+
+    private async Task CambiarAEjecucionAsync()
+    {
+        _pestana = "ejecucion";
+        if (_ejecucion is null) await CargarEjecucionAsync();
+    }
+
+    private async Task CargarAsync(int? version)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ObtenerPresupuestoAsync(_anio, version);
+        if (!r.IsSuccess)
+        {
+            _presupuesto = null;
+            _lineas.Clear();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el presupuesto.");
+            return;
+        }
+        Mostrar(r.Value!);
+        _versionVista = version;
+    }
+
+    private void Mostrar(PresupuestoDto p)
+    {
+        _presupuesto = p;
+        _lineas.Clear();
+        foreach (var l in p.Lines)
+        {
+            var linea = new LineaEditable
+            {
+                AccountPublicId = l.AccountPublicId, AccountCode = l.AccountCode, AccountName = l.AccountName,
+                BranchPublicId = l.BranchPublicId, BranchName = l.BranchName, CostCenterPublicId = l.CostCenterPublicId, CostCenterName = l.CostCenterName,
+            };
+            for (var m = 0; m < 12 && m < l.Amounts.Count; m++) linea.Amounts[m] = l.Amounts[m];
+            _lineas.Add(linea);
+        }
+        _sucio = false;
+        _motivo = "";
+    }
+
+    private Task AgregarLineaAsync()
+    {
+        if (_cuentaNueva is null) return Task.CompletedTask;
+        var sucursal = Guid.TryParse(_sucursalNueva, out var s) ? s : (Guid?)null;
+        var centro = Guid.TryParse(_centroNuevo, out var c) ? c : (Guid?)null;
+        if (_lineas.Any(l => l.MismaClave(_cuentaNueva.PublicId, sucursal, centro)))
+            return Notification.WarningAsync("Esa cuenta ya está en el presupuesto con la misma sucursal y centro.");
+        _lineas.Add(new LineaEditable
+        {
+            AccountPublicId = _cuentaNueva.PublicId, AccountCode = _cuentaNueva.Code, AccountName = _cuentaNueva.Name,
+            BranchPublicId = sucursal, BranchName = _sucursales.FirstOrDefault(x => x.PublicId == sucursal)?.Name,
+            CostCenterPublicId = centro, CostCenterName = _centros.FirstOrDefault(x => x.PublicId == centro)?.Name,
+        });
+        _cuentaNueva = null;
+        _sucio = true;
+        return Task.CompletedTask;
+    }
+
+    private void Quitar(LineaEditable linea)
+    {
+        _lineas.Remove(linea);
+        _sucio = true;
+    }
+
+    private void Cambiar(LineaEditable linea, int mes, string? texto)
+    {
+        var valor = Decimal(texto);
+        if (valor < 0) valor = 0;
+        valor = Math.Round(valor, 0, MidpointRounding.AwayFromZero);
+        if (linea.Amounts[mes] == valor) return;
+        linea.Amounts[mes] = valor;
+        _sucio = true;
+    }
+
+    private Task GuardarPedidoAsync()
+    {
+        if (_presupuesto?.EstaAprobado == true) { _motivo = ""; _mostrarMotivo = true; return Task.CompletedTask; }
+        return GuardarAsync(null);
+    }
+
+    private async Task GuardarAsync(string? motivo)
+    {
+        if (_presupuesto is null) return;
+        using var guardado = _guardado.Iniciar();
+        using var carga = _carga.Iniciar();
+        var lineas = _lineas.Select(l => l.Input()).ToList();
+        var r = _presupuesto.Existe
+            ? await Contabilidad.ActualizarPresupuestoAsync(_anio, lineas, motivo)
+            : await Contabilidad.CrearPresupuestoAsync(_anio, lineas);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el presupuesto."); return; }
+        _mostrarMotivo = false;
+        Mostrar(r.Value!);
+        _versionVista = null;
+        _ejecucion = null;
+        await Notification.SuccessAsync(motivo is null ? "Presupuesto guardado." : $"Versión {r.Value!.Version} creada.");
+    }
+
+    private async Task AprobarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.AprobarPresupuestoAsync(_anio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar."); return; }
+        Mostrar(r.Value!);
+        await Notification.SuccessAsync($"Presupuesto {_anio} aprobado.");
+    }
+
+    private async Task CopiarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.CopiarPresupuestoAsync(_anio, _anioOrigen, _porcentaje);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo copiar."); return; }
+        _mostrarCopia = false;
+        Mostrar(r.Value!);
+        _versionVista = null;
+        await Notification.SuccessAsync($"Presupuesto de {_anioOrigen} copiado a {_anio} con {_porcentaje.ToString("0.##", Cultura)} % de ajuste.");
+    }
+
+    private void AbrirDistribucion(LineaEditable linea)
+    {
+        _lineaADistribuir = linea;
+        _distribucionTotal = linea.Total;
+        _distribucionModo = "equal";
+        Array.Clear(_distribucionValores);
+        _motivo = "";
+        _mostrarDistribucion = true;
+    }
+
+    private async Task DistribuirAsync()
+    {
+        if (_lineaADistribuir is null) return;
+        using var guardado = _guardado.Iniciar();
+        var input = new DistribucionInput(_lineaADistribuir.AccountPublicId, _lineaADistribuir.BranchPublicId, _lineaADistribuir.CostCenterPublicId,
+            _distribucionTotal, _distribucionModo, _distribucionModo == "equal" ? null : _distribucionValores.ToList(),
+            string.IsNullOrWhiteSpace(_motivo) ? null : _motivo);
+        var r = await Contabilidad.DistribuirPresupuestoAsync(_anio, input);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo distribuir."); return; }
+        _mostrarDistribucion = false;
+        Mostrar(r.Value!);
+        _versionVista = null;
+        _ejecucion = null;
+    }
+
+    // ------------------------------------------------------------------------------ ejecución --
+
+    private async Task AplicarEjecucionAsync(FiltrosDeInformeModelo f)
+    {
+        _filtrosEjecucionAplicados = f;
+        await CargarEjecucionAsync();
+    }
+
+    private string QueryEjecucion() =>
+        FiltrosDeInformeModelo.Unir(_filtrosEjecucionAplicados.ToQuery(), $"year={_anio}&month={_mes}");
+
+    private async Task CargarEjecucionAsync()
+    {
+        using var carga = _cargaEjecucion.Iniciar();
+        var r = await Contabilidad.EjecucionPresupuestalAsync(QueryEjecucion());
+        if (!r.IsSuccess) { _ejecucion = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la ejecución."); return; }
+        _ejecucion = r.Value;
+    }
+
+    private async Task DescargarEjecucionAsync(string formato)
+    {
+        using var carga = _cargaEjecucion.Iniciar();
+        var r = await Contabilidad.DescargarEjecucionPresupuestalAsync(QueryEjecucion(), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>El libro auxiliar de la cuenta en el mes consultado, con la sucursal y el centro del filtro.</summary>
+    private Task AbrirAuxiliarDelMesAsync(FilaReporteDto fila)
+    {
+        if (_ejecucion is null || TablaDeReporte.Oculto(_ejecucion, fila, "_nodo") is not { } nodo) return Task.CompletedTask;
+        var f = new FiltrosDeInformeModelo
+        {
+            From = new DateOnly(_anio, _mes, 1),
+            To = new DateOnly(_anio, _mes, DateTime.DaysInMonth(_anio, _mes)),
+            Branch = _filtrosEjecucionAplicados.Branch,
+            CostCenter = _filtrosEjecucionAplicados.CostCenter,
+        };
+        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{FiltrosDeInformeModelo.Unir(f.ToQuery(), $"node={Uri.EscapeDataString(nodo)}")}");
+        return Task.CompletedTask;
+    }
+
+    // --------------------------------------------------------------------------------- comunes --
+
+    private static string Mes(int indice) => Cultura.TextInfo.ToTitleCase(Cultura.DateTimeFormat.GetAbbreviatedMonthName(indice + 1).TrimEnd('.'));
+    private static string Moneda(decimal v) => v.ToString("N0", Cultura);
+    private static decimal Decimal(string? s) => decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d
+        : decimal.TryParse(s, NumberStyles.Number, Cultura, out var d2) ? d2 : 0m;
+    private static string EstadoTexto(string status) => status switch { "Draft" => "Borrador", "Approved" => "Aprobado", "Superseded" => "Reemplazado", _ => status };
+}

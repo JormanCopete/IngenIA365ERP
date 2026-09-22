@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Accounting.Documents;
 using IngenIA365ERP.Application.Accounting.Periods;
 using IngenIA365ERP.Application.Accounting.Reports;
@@ -29,7 +30,7 @@ public class PeriodCommandsTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
         }
 
         public ClosePeriodCommandHandler Cerrador() => new(D.Db, D.Clock, D.User, Emisor);

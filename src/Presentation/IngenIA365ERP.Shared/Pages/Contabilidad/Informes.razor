@@ -1,0 +1,159 @@
+@page "/contabilidad/informes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Informes contables - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US5 (FR-044, FR-045, FR-048): los libros y relaciones sobre una sola pantalla
+   —balance de prueba, libro diario, libro mayor y balances, relación de comprobantes, documentos
+   cruce pendientes y saldo diario promedio— con los mismos filtros y las tres exportaciones. En el
+   balance de prueba y en el libro mayor, un clic en la cuenta abre el libro auxiliar con esos
+   filtros. El Centro de Reportes llega aquí con `?vista=`. *@
+<PermissionGate Required="Accounting.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Informes contables</h3>
+        <div class="toolbar">
+            @if (_tabla is not null)
+            {
+                <PermissionGate Required="Accounting.Reports.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    @* Qué filtros propios muestra cada vista lo decide FiltrosPorVista; «incluir cierre» se muestra en
+       todas porque la API lo honra en todas (hasta el 2026-09-20 se escondía en dos y viajaba igual). *@
+    <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa"
+                      MostrarNivel="@FiltrosPorVista.MuestraNivel(_vista)"
+                      MostrarConTerceros="@FiltrosPorVista.MuestraConTerceros(_vista)">
+        <ControlesFijos>
+            <label class="campo">Informe
+                <select class="e-input" value="@_vista" @onchange="@(e => CambiarVista(e.Value?.ToString()))">
+                    @foreach (var (clave, nombre, _) in VistasDisponibles) { <option value="@clave">@nombre</option> }
+                </select>
+            </label>
+        </ControlesFijos>
+    </FiltrosDeInforme>
+
+    <p class="texto-tenue">@Descripcion(_vista)</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <TablaDeReporte Tabla="@_tabla" FilasClicables="@AbreAuxiliar(_vista)" EsClicable="@(f => _tabla is not null && TablaDeReporte.Oculto(_tabla, f, "_nodo") is not null)"
+                        FilaElegida="@AbrirAuxiliarAsync" TextoSinTabla="@TextoVacio()" />
+        @if (_tabla is not null && _tabla.Filas.Count > 0 && AbreAuxiliar(_vista))
+        {
+            <p class="hint">Un clic en una cuenta abre el libro auxiliar con estos mismos filtros.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>Vista de la API, nombre en pantalla y qué necesita para consultarse.</summary>
+    private static readonly (string Clave, string Nombre, string Descripcion)[] VistasDisponibles =
+    [
+        (ContabilidadClient.Vistas.BalanceDePrueba, "Balance de prueba", "Saldo inicial, débitos, créditos y saldo final por cuenta al nivel elegido; con «Con terceros» abre cada auxiliar por tercero. Los débitos y los créditos deben sumar igual."),
+        (ContabilidadClient.Vistas.LibroDiario, "Libro diario", "Los comprobantes contabilizados del rango con todas sus líneas, en orden de fecha y número."),
+        (ContabilidadClient.Vistas.LibroMayor, "Libro mayor y balances", "Saldo anterior, movimientos del período y nuevo saldo por cuenta al nivel elegido (por defecto, subcuenta)."),
+        (ContabilidadClient.Vistas.RelacionDeComprobantes, "Relación de comprobantes", "Un renglón por comprobante: fecha, tipo, número, origen, estado, totales y quién registró y contabilizó."),
+        (ContabilidadClient.Vistas.DocumentosPendientes, "Documentos cruce con saldo pendiente", "Facturas, recibos y demás documentos cruce cuyo saldo a la fecha «Hasta» no es cero, por cuenta y tercero."),
+        (ContabilidadClient.Vistas.SaldoDiarioPromedio, "Saldo diario promedio", "Saldo día por día de UNA cuenta (elija la rama del plan en los filtros) y su promedio en el rango."),
+    ];
+
+    private readonly EstadoDeCarga _carga = new();
+    private FiltrosDeInformeModelo _filtros = new();
+    private FiltrosDeInformeModelo _aplicados = new();
+    private TablaReporteDto? _tabla;
+    private string _vista = ContabilidadClient.Vistas.BalanceDePrueba;
+    private bool _iniciado;
+
+    [SupplyParameterFromQuery(Name = "vista")] public string? Vista { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        if (!string.IsNullOrWhiteSpace(Vista) && VistasDisponibles.Any(v => v.Clave == Vista)) _vista = Vista;
+        _filtros = FiltrosDeInformeModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
+        _filtros.To ??= DateOnly.FromDateTime(DateTime.Today);
+        _filtros.From ??= new DateOnly(_filtros.To.Value.Year, 1, 1);
+        _aplicados = _filtros.Copia();
+        // El saldo diario promedio exige una cuenta: sin ella no se consulta solo al entrar.
+        if (_vista != ContabilidadClient.Vistas.SaldoDiarioPromedio || _aplicados.AccountPublicId is not null) await CargarAsync();
+    }
+
+    private void CambiarVista(string? vista)
+    {
+        if (string.IsNullOrWhiteSpace(vista) || vista == _vista) return;
+        _vista = vista;
+        _tabla = null;
+        // Lo que la vista nueva no muestra se apaga en los dos modelos: en el que se edita y en el
+        // aplicado, que es el que arma la query de la consulta y de la exportación.
+        FiltrosPorVista.AjustarAlCambiarVista(_filtros, vista);
+        FiltrosPorVista.AjustarAlCambiarVista(_aplicados, vista);
+    }
+
+    private async Task AplicarAsync(FiltrosDeInformeModelo f)
+    {
+        _aplicados = f;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (_vista == ContabilidadClient.Vistas.SaldoDiarioPromedio && _aplicados.AccountPublicId is null)
+        {
+            _tabla = null;
+            await Notification.WarningAsync("El saldo diario promedio es de una cuenta: elija la rama del plan en los filtros.");
+            return;
+        }
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.InformeAsync(_vista, _aplicados.ToQuery());
+        if (!r.IsSuccess)
+        {
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el informe.");
+            return;
+        }
+        _tabla = r.Value;
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.DescargarInformeAsync(_vista, _aplicados.ToQuery(), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static bool AbreAuxiliar(string vista) => vista is "trial-balance" or "general-ledger" or "pending-documents";
+
+    private Task AbrirAuxiliarAsync(FilaReporteDto fila)
+    {
+        if (_tabla is null || TablaDeReporte.Oculto(_tabla, fila, "_nodo") is not { } nodo) return Task.CompletedTask;
+        // Al libro auxiliar van los filtros aplicados salvo el nivel y «con terceros», que son de esta vista.
+        var f = _aplicados.Copia();
+        f.Level = null;
+        f.WithThirdParties = false;
+        var query = FiltrosDeInformeModelo.Unir(f.ToQuery(), $"node={Uri.EscapeDataString(nodo)}");
+        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{query}");
+        return Task.CompletedTask;
+    }
+
+    private static string Descripcion(string vista) => VistasDisponibles.FirstOrDefault(v => v.Clave == vista).Descripcion ?? string.Empty;
+
+    private string TextoVacio() => _vista == ContabilidadClient.Vistas.SaldoDiarioPromedio && _aplicados.AccountPublicId is null
+        ? "Elija la cuenta en «Filtros» (rama del plan) y pulse «Consultar»."
+        : "Elija el rango y pulse «Consultar».";
+}

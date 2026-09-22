@@ -24,7 +24,9 @@ public static class ExportadorDeTablas
 {
     private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-CO");
 
-    public static ArchivoExportado Exportar(TablaExportable tabla, string formato, string nombreBase) => formato.ToLowerInvariant() switch
+    public static ArchivoExportado Exportar(TablaExportable tabla, string formato, string nombreBase) => Exportar2(tabla.SinOcultas(), formato, nombreBase);
+
+    private static ArchivoExportado Exportar2(TablaExportable tabla, string formato, string nombreBase) => formato.ToLowerInvariant() switch
     {
         "xlsx" => new(Excel(tabla), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", nombreBase + ".xlsx"),
         "docx" => new(Word(tabla), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", nombreBase + ".docx"),
@@ -37,15 +39,17 @@ public static class ExportadorDeTablas
         null => string.Empty,
         decimal d when tipo == TipoDeColumna.Moneda => d.ToString("N0", Cultura),
         decimal d when tipo == TipoDeColumna.Decimal => d.ToString("0.##", Cultura),
+        decimal d when tipo == TipoDeColumna.Porcentaje => d.ToString("N2", Cultura) + " %",
         decimal d => d.ToString("N2", Cultura),
         int i => i.ToString(Cultura),
         long l => l.ToString(Cultura),
         DateTime f => tipo == TipoDeColumna.Fecha ? f.ToString("dd/MM/yyyy", Cultura) : f.ToString("dd/MM/yyyy HH:mm", Cultura),
+        DateOnly f => f.ToString("dd/MM/yyyy", Cultura),
         bool b => b ? "Sí" : "No",
         _ => valor.ToString() ?? string.Empty,
     };
 
-    private static bool EsNumerica(TipoDeColumna t) => t is TipoDeColumna.Entero or TipoDeColumna.Moneda or TipoDeColumna.Decimal;
+    private static bool EsNumerica(TipoDeColumna t) => t is TipoDeColumna.Entero or TipoDeColumna.Moneda or TipoDeColumna.Decimal or TipoDeColumna.Porcentaje;
 
     // ------------------------------------------------------------------ Excel --
 
@@ -170,13 +174,17 @@ public static class ExportadorDeTablas
             case null: celda.Value = Blank.Value; break;
             case decimal d:
                 celda.Value = d;
-                celda.Style.NumberFormat.Format = tipo == TipoDeColumna.Moneda ? "#,##0" : "#,##0.##";
+                celda.Style.NumberFormat.Format = tipo switch { TipoDeColumna.Moneda => "#,##0", TipoDeColumna.Porcentaje => @"#,##0.00 ""%""", _ => "#,##0.##" };
                 break;
             case int i: celda.Value = i; break;
             case long l: celda.Value = l; break;
             case DateTime f:
                 celda.Value = f;
                 celda.Style.DateFormat.Format = tipo == TipoDeColumna.Fecha ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm";
+                break;
+            case DateOnly f:
+                celda.Value = f.ToDateTime(TimeOnly.MinValue);
+                celda.Style.DateFormat.Format = "dd/MM/yyyy";
                 break;
             default: celda.Value = valor.ToString(); break;
         }

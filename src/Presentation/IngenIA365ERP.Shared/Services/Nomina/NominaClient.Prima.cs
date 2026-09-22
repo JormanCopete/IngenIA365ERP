@@ -1,3 +1,4 @@
+using IngenIA365ERP.Shared.Services.Reportes;
 using IngenIA365ERP.Shared.Services.Security;
 
 namespace IngenIA365ERP.Shared.Services.Nomina;

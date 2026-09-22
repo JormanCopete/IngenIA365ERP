@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Payroll.Runs.ApprovePayrollRun;
 using IngenIA365ERP.Application.Payroll.Runs.CalculatePayrollRun;
 using IngenIA365ERP.Application.Payroll.Runs.Queries;
@@ -24,7 +25,7 @@ public class ComparisonAndBalanceQueriesTests
     {
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
         var h = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker);
+            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker);
         var r = await h.Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
     }

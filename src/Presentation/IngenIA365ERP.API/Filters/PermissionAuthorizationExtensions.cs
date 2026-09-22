@@ -37,6 +37,20 @@ public static class PermissionAuthorizationExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Exige un segundo permiso sólo cuando la petición pide un archivo (<c>?format=xlsx|pdf|docx</c>).
+    /// Feature 009 E2: los informes contables viven en una sola ruta por vista y el contrato separa
+    /// <c>Reports.View</c> (pantalla) de <c>Reports.Export</c> (descarga). Se encadena después de
+    /// <see cref="RequirePermission(RouteHandlerBuilder, string)"/>, que sigue cubriendo el de ver.
+    /// </summary>
+    public static RouteHandlerBuilder RequirePermissionWhenExporting(
+        this RouteHandlerBuilder builder, string permissionCode)
+    {
+        builder.WithMetadata(new RequirePermissionWhenExportingAttribute(permissionCode));
+        builder.AddEndpointFilter<PermisoDeExportacionFilter>();
+        return builder;
+    }
+
     /// <summary>Versión para <see cref="RouteGroupBuilder"/> — aplica a todos los endpoints del grupo.</summary>
     public static RouteGroupBuilder RequirePermission(
         this RouteGroupBuilder builder, string permissionCode)

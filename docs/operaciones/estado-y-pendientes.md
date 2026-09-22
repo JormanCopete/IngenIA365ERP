@@ -40,6 +40,27 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release c388a17`** (2026-09-22 01:05–01:15 UTC, GitOps `8f8449b`, autorizado por el dueño con
+«realiza commit, merge a develop e integrar produccion»; segundo revisor Jorman Copete): la feature 010
+completa salvo N3 — **N1** (prima, cesantías anuales, vacaciones, liquidación definitiva, políticas,
+festivos, saldos iniciales, ficha PILA/DIAN), **N4** (dispersión bancaria con formatos por banco en
+Core) y **N2** (planilla PILA y procedimiento 2). Cuatro migraciones **aditivas** por el Job PreSync:
+`NominaPrestacionesYDian`, `SettlementDeductionsUnicosEntreVivas`, `NominaDispersionBancaria`,
+`NominaPilaYNominaElectronica` (`cooflopal` e `ingenia365erp`: 22 → 26). Respaldos previos
+`/root/respaldos/{ingenia365erp_admin,ingenia365erp,cooflopal}-20260921-pre-f010.dump`. Verificado
+contra la base: 15 corridas previas con `Kind = 0`, 11 empleados activos, permisos sembrados por la
+API al arrancar (Payroll.Settlements 6, ServiceBonus 4, Pila 4, WithholdingRate 3, Disbursement 4,
+Core.BankFileFormats 2), 2 formatos bancarios (`CSV-GENERICO`, `AVVILLAS-1`), 11 políticas, 54
+festivos, 9 motivos de retiro; imágenes por digest iguales al overlay (api `be0ffb7f`); `/health/ready`
+200, `app.ingenia365.com` 200, 0 `[ERR]` en la API tras el relevo. Antes, el mismo día, `develop`
+`c7ddd8d` desplegó en DEV y QA por AutoMigrate (`coop_prueba` con las cuatro migraciones). El primer
+CI de `develop` cayó porque git normalizaba a LF los `.esperado.txt` de la PILA (ancho fijo con CRLF):
+`.gitattributes` con `*.esperado.txt -text`. **Lo que sigue en la cooperativa** (runbooks §4d/§4e y
+`pila-primera-planilla.md`): cuentas de los 16 conceptos nuevos, saldos iniciales de prestaciones,
+clase ARL y banco de dispersión en cada ficha, código ACH de los bancos, códigos PILA de EPS/fondos/
+ARL/cajas, datos del aportante, cotejo del layout con el anexo v30 y validador de Aportes en Línea (T094),
+layout de AV Villas (T147), QA por rol y validación de la contadora (T077, T107).
+
 **`release fb8f016`** (2026-09-19 20:12–20:15 UTC, GitOps `56be5ec`, autorizado por el dueño con
 «empújalo a PDN»): recurrentes de nómina sin duplicados. En `cooflopal` la contadora quedó con la
 misma deducción registrada dos veces (Ids 2 y 3, 16:17 y 16:25 UTC, sin ninguna búsqueda de
@@ -401,7 +422,7 @@ sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)»
 Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
 copia del mismo manifiesto sin anotaciones de Argo y se borró después.
 
-#### P15 — Feature 009 (contabilidad NIIF): E1 en DEV y QA; pendiente QA por rol, contador y producción
+#### P15 — Feature 009 (contabilidad NIIF): E1 en **producción** (`release ff25948`, 2026-09-19); E2 completa en la rama `009-e2-consultas-presupuesto` (2026-09-21), pendiente merge, QA y validación del contador
 
 La **entrega E1 está en `develop`** (merge `6d0c89d`, 2026-09-15) y desplegada en **DEV y QA**
 por el pipeline (`gitops` `9c614c8`, imágenes `api@8f36b0b7…`, `web@0c2fc64c…`). En los dos
@@ -436,7 +457,69 @@ Producción sólo con «sí, empujalo», `pg_dump` previo y el diagnóstico de l
 E2 (consultas, cierres, apertura), E3 (cartera, inventario, tesorería, CDT sobre el
 contrato) y E4 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-#### P16 — Feature 010 (nómina completa): N1 en `develop`; N2 y N4 terminadas en la rama; N3 pendiente
+**E2 consultas e informes + presupuesto — hecha en la rama `009-e2-consultas-presupuesto`
+(2026-09-20), sin merge a develop ni despliegue hasta que el dueño lo pida.** Pedido del dueño
+tras revisar el módulo: los reportes contables de `/reportes` no funcionaban (cinco tarjetas a
+rutas sin página), no había presupuesto ni consulta consolidada del tercero. Entrega: US5
+completa (T097–T107) y US9 (T137–T140): trece vistas en `/api/reports/accounting/{vista}`
+sobre `MovimientosContables` (único punto de lectura del libro), libro auxiliar con
+profundización hasta la línea, balance de prueba, libros diario y mayor, relación de
+comprobantes, estado de cuenta del tercero, documentos cruce pendientes, saldo diario promedio,
+ESF/ERI/ECP/EFE por rubro NIIF con comparativo, presupuesto versionado en pesos con ejecución;
+pantallas `/contabilidad/libro-auxiliar`, `/informes`, `/estados-financieros`, `/terceros`,
+`/presupuesto`; Centro de Reportes y manual apuntando a rutas reales (la prueba de arquitectura
+ahora también revisa los `NavigateTo` del centro y `ManualCatalogoTests` cada ruta y slug del
+manual, que destapó 16 temas contables heredados rotos). Revisión adversarial de tres lentes con
+19 hallazgos confirmados y corregidos (los graves: el cierre de años anteriores no formaba el
+saldo inicial; los rubros se medían por la naturaleza de la cuenta y 3510/1899/6220 descuadraban
+el ESF; el EFE anual restaba el resultado del año anterior; rangos de fecha sin tope; el
+presupuesto sin alcance de sucursal). Pruebas: 1.231 sin contenedores (+166) y 21 e2e nuevas en la
+colección «Contabilidad e2e» (191 de integración con Docker: 190 pasan, 1 omitida), que
+destaparon dos defectos ajenos al módulo, ya corregidos: los emisores explícitos de auditoría
+(contabilidad y nómina) escribían con el Id interno de la cooperativa en vez del PublicId y sus
+eventos nunca llegaban a la consola; y el vínculo sucursal contable → oficina
+(`COR_Branches.TenantBranchPublicId`), del que depende el alcance de sucursal, no lo escribía
+ningún comando (ya lo aceptan `POST/PUT /api/core/branches`; falta el campo en la pantalla de
+Agencias). Receta:
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7b y §7c.
+
+**E2 completa — US6 cierre del ejercicio y US13 saldos de apertura, más las e2e que E1 dejó
+pendientes (2026-09-21, misma rama, tras traer `develop` con la feature 010).** El cierre
+(`POST /api/accounting/periods/years/{year}/close`, permiso `Accounting.Periods.CloseYear`) exige
+los doce meses cerrados, el anterior cerrado y la cuenta de resultado del ejercicio, y genera por el
+contrato un `CI` del 31/12 (`Kind = Closing`, en período cerrado: el poster lo admite sólo por su
+clase) que cancela las clases 4 a 7 por sucursal y centro de costo y lleva el excedente a la cuenta
+de resultado; reabrir con motivo lo reversa en su misma fecha y clase y deja los meses cerrados; el
+`CI` no se reversa desde Comprobantes. La apertura (`/api/accounting/opening`, pantalla
+`/contabilidad/apertura`, permiso `Accounting.Opening.Manage`): plantilla xlsx con los encabezados
+en la fila 1, importación que valida cada fila con las reglas de cuenta y con un error no guarda
+nada, borrador `AP` fechado la víspera del primer período, una sola vigente hasta reversarla; el
+dueño decidió saldos digitados para COOFLOPAL y la digitación también entra por `POST /drafts` con
+tipo `AP`. Las reglas de línea conocen ahora la clase del documento (al cierre no se le exige
+cuenta habilitada, tercero, cruce ni base; a la apertura sólo se le perdona el módulo). E2E nuevas:
+`CierreDeEjercicioTests` y `AperturaTests` en cooperativas aisladas del mismo host (primer
+ejercicio 2025 y 2026), `ContabilidadNiifTests` (T056, T066, T077, T091 sobre la compartida) y
+`ContabilidadDeNominaTests` (T084, colección Nómina, junio y julio de 2027). Los emisores de
+auditoría, que `develop` había corregido por su lado el mismo día, ya no caen al Id interno ni
+siquiera sin cooperativa activa (era una base fantasma). Pruebas: 1.656 sin contenedores (+177
+sobre la 010) y 211 de integración con Docker (210 pasan, 1 omitida). Receta:
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7a. Tareas: T109–T118 y las
+cinco e2e marcadas en `specs/009-contabilidad-niif/tasks.md`; de E1 y E2 sólo queda **T096**, que
+es del dueño.
+
+**Lo que sigue pendiente (del dueño o de otra rama)**: merge de `009-e2-consultas-presupuesto` a
+`develop` y despliegue a DEV/QA; QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
+dos PUC por el contador** (T096, bloqueante para usar la contabilidad en producción) y de que en el
+CUIF las contras de activo (1408, 1499…) y los gastos por deterioro/depreciación (5115, 5120, 5415,
+5420) estén alineados para que la «Diferencia» del EFE sea cero; definir en cada cooperativa la
+cuenta de resultado del ejercicio (una auxiliar bajo 3505, donde el CUIF no trae hijos) antes del
+primer cierre anual; el campo `tenantBranchPublicId` en la pantalla Maestros › Agencias; los eventos
+de auditoría explícitos ya escritos en producción quedaron en bases Mongo `…_Audit_<id interno>` y
+no se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-008, un millón de
+líneas) sin escribir; MAUI no registra los clientes contables (pantallas contables inertes en la app
+de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
+(conciliación, impuestos, exógena, activos) van en ramas posteriores.
+#### P16 — Feature 010 (nómina completa): N1, N2 y N4 en `develop` y en **producción** (`release c388a17`, 2026-09-22); N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
 definitiva, con políticas por empresa, festivos, saldos iniciales y ficha PILA/DIAN— está

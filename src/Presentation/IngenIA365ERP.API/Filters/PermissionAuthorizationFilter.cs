@@ -80,6 +80,21 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
     }
 
     /// <summary>
+    /// ¿Quien hace la peticion tiene este permiso? El mismo camino que recorre el filtro
+    /// —atajo del maestro, claims <c>perm</c>, resolucion contra la cooperativa activa—
+    /// expuesto para quien tenga que decidir un permiso <b>despues</b> de leer la peticion:
+    /// los informes contables (feature 009 E2) exigen <c>Reports.Export</c> solo cuando
+    /// <c>format</c> pide un archivo, y eso no se sabe con un atributo fijo en la ruta.
+    /// Nunca propaga: ante cualquier problema responde falso (fallar cerrado).
+    /// </summary>
+    public static async Task<bool> TieneAsync(HttpContext http, string permissionCode)
+    {
+        if (RequireMasterAdminAttribute.Check(http).IsAllowed) return true;
+        if (http.User.HasClaim(c => c.Type == "perm" && c.Value == permissionCode)) return true;
+        return await TienePermisosResueltosAsync(http, [new RequirePermissionAttribute(permissionCode)]);
+    }
+
+    /// <summary>
     /// Resolución por petición. Devuelve false ante cualquier problema —nunca
     /// propaga— porque una excepción aquí subiría como 500 y delataría que el
     /// endpoint existe, que es justo lo que la indistinguibilidad 404 evita.
