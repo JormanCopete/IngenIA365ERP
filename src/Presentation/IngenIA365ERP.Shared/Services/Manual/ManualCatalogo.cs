@@ -519,10 +519,23 @@ public static class ManualCatalogo
                 P("Antes", "Todos los módulos deben haber contabilizado el mes: causación de intereses, liquidación de nómina, movimientos de inventario. Revisá el balance de prueba: debe cuadrar.", "/contabilidad/informes?vista=trial-balance", "Abrir Balance de Prueba"),
                 P("Contabilidad → Períodos", "Cada mes tiene su botón «Cerrar». La pantalla cuenta los comprobantes en borrador fechados en el mes; no cierra con pendientes.", "/contabilidad/periodos", "Abrir Períodos contables"),
                 P("Cerrar", "El período pasa a cerrado. Un comprobante con fecha en un período cerrado es rechazado. Reabrir requiere permiso y queda en auditoría."),
-                P("Cierre anual", "Además genera el comprobante de cierre de ingresos y gastos contra la cuenta de resultados. Hacelo una vez conciliados los doce meses."),
+                P("Cierre anual", "Con los doce meses cerrados, el anterior cerrado y la cuenta de resultado definida en Configuración inicial, «Cerrar el ejercicio» genera el comprobante CI del 31 de diciembre: cancela ingresos, costos y gastos contra la cuenta de resultado, sucursal por sucursal. Los informes lo dejan fuera salvo que pidás «incluir cierre»; el balance del año siguiente arranca sin resultados."),
+                P("Reabrir el ejercicio", "Si faltó algo, «Reabrir el ejercicio» pide motivo, reversa el CI en su misma fecha y deja el año abierto con los meses todavía cerrados: reabrí el mes que necesités corregir, corregí, y volvé a cerrar mes y año."),
             ],
-            ["cierre", "periodo", "mes", "año", "reabrir", "cierre anual", "resultados"], ["Cooperativa activa.", "Permiso de cierre."],
-            ["contabilidad-periodos", "comprobante-contable", "contabilidad-informes"], [], TipoDeTema.Proceso));
+            ["cierre", "periodo", "mes", "año", "reabrir", "cierre anual", "resultados", "excedente", "comprobante de cierre"], ["Cooperativa activa.", "Permiso de cierre."],
+            ["contabilidad-periodos", "comprobante-contable", "contabilidad-informes", "saldos-de-apertura"], [], TipoDeTema.Proceso));
+
+        // Feature 009 E2 (US13): la carga única de saldos con que la cooperativa arranca en el ERP.
+        t.Add(Proceso("saldos-de-apertura", "Saldos de apertura", Modulos.Contabilidad, "/contabilidad/apertura",
+            "Cargar una sola vez los saldos con que la cooperativa arranca en el ERP: se importan desde una plantilla, se revisan como borrador y se contabilizan como cualquier comprobante.",
+            [
+                P("Antes", "Contabilidad iniciada, ejercicio abierto y las auxiliares de movimiento creadas con sus reglas (tercero, documento cruce, centro de costo). Las personas de cartera y proveedores tienen que existir en Personas.", "/contabilidad/plan-de-cuentas", "Abrir Plan de cuentas"),
+                P("Contabilidad → Saldos de apertura", "«Plantilla Excel» descarga la hoja con los encabezados; el contador la llena desde SOLIDO con una fila por auxiliar (y por tercero y documento donde la cuenta lo exige): importes sin miles y con hasta dos decimales.", "/contabilidad/apertura", "Abrir Saldos de apertura"),
+                P("Importar", "Cada fila se valida con las reglas de su cuenta. Si una falla, la pantalla muestra fila, columna y problema, y no se guarda nada: corregí el archivo y volvé a importar. Sin errores queda un borrador AP fechado la víspera del primer período; no tiene que cuadrar para importarse."),
+                P("Contabilizar", "Revisá el borrador en Comprobantes y contabilizalo (cuatro ojos si la empresa lo exige). Queda como la única apertura vigente: para cargar otra, reversá ésta primero. En el balance de prueba la apertura es saldo inicial, no movimiento del mes."),
+            ],
+            ["apertura", "saldos iniciales", "saldos de apertura", "migración", "solido", "plantilla", "importar saldos"], ["Cooperativa activa.", "Permiso Accounting.Opening.Manage."],
+            ["comprobante-contable", "plan-de-cuentas", "cierre-de-periodo", "contabilidad-informes"], [], TipoDeTema.Proceso));
 
         // Feature 009 E2 (US9): la ruta es /contabilidad/presupuesto (singular, la de T140); hasta el
         // 2026-09-20 el manual anunciaba /contabilidad/presupuestos, que nunca existió.

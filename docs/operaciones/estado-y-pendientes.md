@@ -422,7 +422,7 @@ sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)»
 Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
 copia del mismo manifiesto sin anotaciones de Argo y se borró después.
 
-#### P15 — Feature 009 (contabilidad NIIF): E1 en DEV y QA; pendiente QA por rol, contador y producción
+#### P15 — Feature 009 (contabilidad NIIF): E1 en **producción** (`release ff25948`, 2026-09-19); E2 completa en la rama `009-e2-consultas-presupuesto` (2026-09-21), pendiente merge, QA y validación del contador
 
 La **entrega E1 está en `develop`** (merge `6d0c89d`, 2026-09-15) y desplegada en **DEV y QA**
 por el pipeline (`gitops` `9c614c8`, imágenes `api@8f36b0b7…`, `web@0c2fc64c…`). En los dos
@@ -483,18 +483,42 @@ ningún comando (ya lo aceptan `POST/PUT /api/core/branches`; falta el campo en 
 Agencias). Receta:
 [contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7b y §7c.
 
-Queda pendiente de E2: **US6 cierre y reapertura del ejercicio** (T109–T112; el comprobante `CI`
-por `AccountingPoster` con `Kind = Closing`; las consultas ya lo tratan bien) y **US13 apertura
-importada** (T113–T117; las consultas ya tratan el `AP` como saldo inicial; el dueño decidió
-saldos digitados para COOFLOPAL, así que la importación baja de prioridad). También: el campo
-`tenantBranchPublicId` en la pantalla Maestros › Agencias; los eventos de auditoría explícitos ya
-escritos en producción quedaron en bases Mongo `…_Audit_<id interno>` (p. ej. `…_Audit_1`) y no
-se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-008, un millón de
-líneas) sin escribir; MAUI no
-registra los clientes contables (pantallas contables inertes en la app de escritorio, ya desde
-E1); validar con el contador que en el CUIF las contras de activo (1408, 1499…) y los gastos
-por deterioro/depreciación (5115, 5120, 5415, 5420) estén alineados para que la «Diferencia» del
-EFE sea cero.
+**E2 completa — US6 cierre del ejercicio y US13 saldos de apertura, más las e2e que E1 dejó
+pendientes (2026-09-21, misma rama, tras traer `develop` con la feature 010).** El cierre
+(`POST /api/accounting/periods/years/{year}/close`, permiso `Accounting.Periods.CloseYear`) exige
+los doce meses cerrados, el anterior cerrado y la cuenta de resultado del ejercicio, y genera por el
+contrato un `CI` del 31/12 (`Kind = Closing`, en período cerrado: el poster lo admite sólo por su
+clase) que cancela las clases 4 a 7 por sucursal y centro de costo y lleva el excedente a la cuenta
+de resultado; reabrir con motivo lo reversa en su misma fecha y clase y deja los meses cerrados; el
+`CI` no se reversa desde Comprobantes. La apertura (`/api/accounting/opening`, pantalla
+`/contabilidad/apertura`, permiso `Accounting.Opening.Manage`): plantilla xlsx con los encabezados
+en la fila 1, importación que valida cada fila con las reglas de cuenta y con un error no guarda
+nada, borrador `AP` fechado la víspera del primer período, una sola vigente hasta reversarla; el
+dueño decidió saldos digitados para COOFLOPAL y la digitación también entra por `POST /drafts` con
+tipo `AP`. Las reglas de línea conocen ahora la clase del documento (al cierre no se le exige
+cuenta habilitada, tercero, cruce ni base; a la apertura sólo se le perdona el módulo). E2E nuevas:
+`CierreDeEjercicioTests` y `AperturaTests` en cooperativas aisladas del mismo host (primer
+ejercicio 2025 y 2026), `ContabilidadNiifTests` (T056, T066, T077, T091 sobre la compartida) y
+`ContabilidadDeNominaTests` (T084, colección Nómina, junio y julio de 2027). Los emisores de
+auditoría, que `develop` había corregido por su lado el mismo día, ya no caen al Id interno ni
+siquiera sin cooperativa activa (era una base fantasma). Pruebas: 1.656 sin contenedores (+177
+sobre la 010) y 211 de integración con Docker (210 pasan, 1 omitida). Receta:
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7a. Tareas: T109–T118 y las
+cinco e2e marcadas en `specs/009-contabilidad-niif/tasks.md`; de E1 y E2 sólo queda **T096**, que
+es del dueño.
+
+**Lo que sigue pendiente (del dueño o de otra rama)**: merge de `009-e2-consultas-presupuesto` a
+`develop` y despliegue a DEV/QA; QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
+dos PUC por el contador** (T096, bloqueante para usar la contabilidad en producción) y de que en el
+CUIF las contras de activo (1408, 1499…) y los gastos por deterioro/depreciación (5115, 5120, 5415,
+5420) estén alineados para que la «Diferencia» del EFE sea cero; definir en cada cooperativa la
+cuenta de resultado del ejercicio (una auxiliar bajo 3505, donde el CUIF no trae hijos) antes del
+primer cierre anual; el campo `tenantBranchPublicId` en la pantalla Maestros › Agencias; los eventos
+de auditoría explícitos ya escritos en producción quedaron en bases Mongo `…_Audit_<id interno>` y
+no se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-008, un millón de
+líneas) sin escribir; MAUI no registra los clientes contables (pantallas contables inertes en la app
+de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
+(conciliación, impuestos, exógena, activos) van en ramas posteriores.
 #### P16 — Feature 010 (nómina completa): N1, N2 y N4 en `develop` y en **producción** (`release c388a17`, 2026-09-22); N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación

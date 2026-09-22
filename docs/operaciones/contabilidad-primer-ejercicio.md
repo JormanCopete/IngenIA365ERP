@@ -106,8 +106,62 @@ WHERE v."Code" = 'NM' GROUP BY d."Id", d."Number", d."Date", d."Status", d."Orig
 
 `Contabilidad › Períodos`: cerrar exige que no queden borradores fechados en el mes (la
 respuesta los lista); reabrir pide motivo, queda en la auditoría y deja «desactualizadas»
-las conciliaciones cerradas del mes. El cierre del ejercicio (`CI`) y la apertura importada
-(`AP`) **siguen pendientes** (US6 y US13; el cliente ya tiene los métodos, la API no).
+las conciliaciones cerradas del mes.
+
+## 7a. Saldos de apertura y cierre del ejercicio (E2, 2026-09-21)
+
+**Apertura** (`Contabilidad › Saldos de apertura`, `/contabilidad/apertura`, permiso
+`Accounting.Opening.Manage`; API `/api/accounting/opening`). Es lo primero que hace una
+cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear las auxiliares:
+
+1. Descargar la plantilla (`GET /template.xlsx`): la hoja «Datos» trae sólo los encabezados en la
+   fila 1 —`cuenta, tercero, tipoDocumento, numeroDocumento, centroCosto, sucursal, debito,
+   credito, detalle`— y la hoja «Instrucciones» explica cada columna. El contador la llena desde
+   SOLIDO: una fila por auxiliar de movimiento, y por tercero y documento cruce donde la cuenta lo
+   exige (cartera, proveedores). `tercero` es el documento de identidad de la persona (tiene que
+   existir en Personas), `sucursal` su código, sigla o nombre (vacía = la principal), importes sin
+   separador de miles y con hasta dos decimales.
+2. Importar (`POST /import`, multipart `archivo`; también admite CSV). Cada fila se valida con las
+   reglas de su cuenta (FR-014): agrupación, tercero inexistente, documento cruce faltante, más de
+   dos decimales, cuenta que no existe. **Con un solo error responde 422 `Accounting.Opening.Invalid`
+   con `data.errors[] { row, column, code, message }` y no guarda nada.** Sin errores, 201 con el
+   borrador `AP` (`Kind = Opening`) **fechado la víspera del primer período** (el 31 de diciembre
+   anterior al primer ejercicio): es la única fecha que el contrato admite fuera de un período abierto.
+   El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.
+3. Revisar el borrador en Comprobantes y contabilizarlo (`Accounting.Vouchers.Post`, cuatro ojos si
+   la empresa lo exige). Queda referenciado en la configuración (`openingDocumentPublicId`) y
+   **es la única apertura vigente**: otra importación o un borrador `AP` digitado responden 422
+   `Accounting.Opening.AlreadyExists` con `data.openingDocumentPublicId` hasta reversarla; la
+   reversión también es de clase Apertura y de la misma fecha, y libera el cupo. Las dos quedan
+   referenciadas y auditadas (`Accounting.Opening.Imported`).
+4. Comprobar: el balance de prueba del primer mes muestra la apertura como **saldo inicial**, no
+   como movimiento; el estado de cuenta del tercero muestra sus documentos pendientes.
+
+**Cierre del ejercicio** (`Contabilidad › Períodos`, botón «Cerrar el ejercicio», permiso
+`Accounting.Periods.CloseYear`; API `POST /api/accounting/periods/years/{year}/close`):
+
+- Exige los **doce meses cerrados** (422 `Accounting.FiscalYear.PeriodsOpen` con `data.openMonths`),
+  el **ejercicio anterior cerrado** (`.PreviousOpen`) y la **cuenta de resultado del ejercicio** en
+  Configuración inicial (`.ResultAccountMissing`; una auxiliar de movimiento activa, por ejemplo
+  bajo 3505 EXCEDENTES, donde el CUIF no trae hijos y la empresa crea la de 6 dígitos y debajo la
+  auxiliar).
+- Genera el comprobante **`CI` del 31 de diciembre** —el mes está cerrado y el contrato lo admite
+  sólo por ser de clase Cierre— que cancela lo acumulado en las clases 4 a 7 **por sucursal y centro
+  de costo** y lleva el excedente o la pérdida a la cuenta de resultado, sucursal por sucursal. Las
+  exigencias de quien digita (cuenta habilitada para el módulo, tercero, documento cruce) no aplican
+  al cierre: cancela lo que ya pasó por la cuenta. Sin resultados que cancelar, el ejercicio cierra
+  sin comprobante. Auditado (`Accounting.FiscalYear.Closed`).
+- En las consultas, el cierre del ejercicio consultado queda **fuera salvo `includeClosing=true`**
+  (el estado de resultados del año lo sigue mostrando) y los de ejercicios anteriores cuentan
+  siempre (el balance del 1 de enero siguiente ya no trae resultados). El `CI` **no se reversa
+  desde Comprobantes** (`Accounting.Document.IsClosing`): se **reabre el ejercicio**
+  (`POST /years/{year}/reopen` con `{ reason }`), que lo reversa en su misma fecha y de su misma
+  clase, deja el año abierto **con los meses todavía cerrados** (cada mes se reabre aparte) y queda
+  auditado (`Accounting.FiscalYear.Reopened`). Sólo se reabre el último cerrado
+  (`Accounting.FiscalYear.NotLast`).
+- Abrir el ejercicio siguiente (`POST /years` con `{ year }`) no exige cerrar el actual: enero
+  arranca antes de que diciembre esté cerrado. Los saldos no se «trasladan»: no hay saldos
+  guardados, todo es la suma de lo contabilizado.
 
 ## 7b. Consultas e informes (E2, 2026-09-20)
 
@@ -170,4 +224,9 @@ por cuenta y agregado hacia arriba por niveles; un clic abre el libro auxiliar d
 | `Accounting.Line.AccountNotEnabledForModule` | Auxiliar sin «aplica a Nómina» | Paso 4 |
 | `Accounting.Period.Closed` | Mes cerrado; la nómina fecha al último día del período | Paso 7 |
 | `Accounting.Document.FourEyes` | Quien registró el borrador intenta contabilizarlo | Configuración: cuatro ojos |
+| `Accounting.Opening.Invalid` con `data.errors` | Filas del archivo de apertura con problemas; no se guardó nada | Paso 7a.2 |
+| `Accounting.Opening.AlreadyExists` | Ya hay una apertura contabilizada y no reversada | Paso 7a.3 |
+| `Accounting.Opening.DateInvalid` | Un borrador AP con otra fecha: la apertura va la víspera del primer período | Paso 7a.2 |
+| `Accounting.FiscalYear.PeriodsOpen` / `.PreviousOpen` / `.ResultAccountMissing` | Falta cerrar meses, el año anterior o definir la cuenta de resultado | Paso 7a (cierre) |
+| `Accounting.Document.IsClosing` | Se intentó reversar el CI desde Comprobantes | Reabrir el ejercicio en Períodos |
 | Buscador de cuentas vacío en otro módulo | Rol sin `Accounting.Accounts.View` | `LecturaDeMaestros` en `BuiltInRolesSeeder` |

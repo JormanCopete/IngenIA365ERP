@@ -72,8 +72,12 @@ con `VoucherTypes.View/Manage`; los sembrados no cambian de `usage` ni se elimin
 | `POST /years` | Periods.CloseYear | abre el ejercicio `{ year }` (anterior cerrado o primero) |
 | `POST /{year}/{month}/close` | Periods.Close | 422 `Accounting.Period.HasDrafts` con `data: { drafts[] }` |
 | `POST /{year}/{month}/reopen` | Periods.Reopen | `{ reason }` obligatorio; marca conciliaciones `Outdated` |
-| `POST /years/{year}/close` | Periods.CloseYear | 422 `Accounting.FiscalYear.PeriodsOpen`, `.PreviousOpen`, `.ResultAccountMissing`; → `{ closingDocumentPublicId }` |
-| `POST /years/{year}/reopen` | Periods.CloseYear | `{ reason }`; reversa el cierre |
+| `POST /years/{year}/close` | Periods.CloseYear | 422 `Accounting.FiscalYear.PeriodsOpen` (`data.openMonths[]`), `.PreviousOpen`, `.ResultAccountMissing`, `.AlreadyClosed`, `.NotFound`; → `{ year, closingDocumentPublicId?, number?, lines, result }` (comprobante `CI` del 31/12, `Kind = Closing`, por sucursal y centro de costo; nulo si no había resultados que cancelar). E2, 2026-09-21 |
+| `POST /years/{year}/reopen` | Periods.CloseYear | `{ reason }` obligatorio; reversa el cierre **en su misma fecha y clase** (también `Closing`), deja el año abierto con los meses cerrados; 422 `.NotClosed`, `.NotLast` (el siguiente ya está cerrado); → mismo cuerpo con el reverso |
+
+El `CI` no se reversa por `/documents/{id}/reverse` (422 `Accounting.Document.IsClosing`); una
+reversión (de cualquier clase) tampoco (`.IsReversal`). Auditoría: `Accounting.FiscalYear.Closed` /
+`.Reopened`.
 
 ## 6. Comprobantes — `/api/accounting/documents`
 
@@ -94,13 +98,23 @@ con `VoucherTypes.View/Manage`; los sembrados no cambian de `usage` ni se elimin
 Soportes: `POST /api/attachments` con `ownerEntityType = "AccountingDocument"` (permisos de
 adjuntos existentes); se listan en `GET /{id}`.
 
-## 7. Apertura — `/api/accounting/opening`
+## 7. Apertura — `/api/accounting/opening` (entregada en E2, 2026-09-21)
 
-`GET /template.xlsx` (Opening.Manage): plantilla con columnas `cuenta, tercero (documento),
-tipoDocumento, numeroDocumento, centroCosto, sucursal, debito, credito, detalle` ·
-`POST /import` (multipart) → 201 `{ draftPublicId, lines, errors[] }` (borrador tipo `AP`, o 422
-`Accounting.Opening.Invalid` con errores por fila; nada a medias) · contabilizar y reversar por
-`/documents`. 422 `Accounting.Opening.AlreadyExists` con `data: { openingDocumentPublicId }`.
+| Ruta | Permiso | Notas |
+|---|---|---|
+| `GET /` | Opening.Manage | `{ expectedDate, firstFiscalYear, posted?, drafts[], reversed[] }`: la fecha que le toca (víspera del primer período), la vigente, los borradores AP pendientes y las reversadas (con `reversedByPublicId`) |
+| `GET /template.xlsx` | Opening.Manage | hoja «Datos» con **sólo los encabezados en la fila 1** —`cuenta, tercero (documento), tipoDocumento, numeroDocumento, centroCosto, sucursal, debito, credito, detalle`— y hoja «Instrucciones» |
+| `POST /import` | Opening.Manage | multipart `archivo` (xlsx o CSV) → 201 `{ draftPublicId, lines, totalDebit, totalCredit, errors: [] }` (borrador `AP`, `Kind = Opening`, fechado la víspera del primer período, sin período); 422 `Accounting.Opening.Invalid` con `data.errors[] { row, column, code, message }` y **nada guardado**; 422 `Accounting.Opening.AlreadyExists` con `data: { openingDocumentPublicId, number, date }`; 400 `Archivo.ColumnaFaltante` / `Archivo.Vacio` |
+
+Reglas: cada fila pasa por las reglas de cuenta del contrato (FR-014) salvo «habilitada para el
+módulo» (la apertura trae saldos de donde vengan); tercero por documento de identidad, sucursal y
+centro por código, sigla o nombre; importes sin miles y con hasta dos decimales. El descuadre **no**
+es error de importación (el borrador se guarda; contabilizar sí exige cuadre). El borrador se
+contabiliza y se reversa por `/documents` como cualquier manual; `POST /documents/drafts` con
+`voucherTypeCode = "AP"` también crea una apertura digitada (la fecha digitada se ignora: toma la
+esperada). Al contabilizar queda en `setup.openingDocumentPublicId` y es la única vigente; su
+reversión es también `Kind = Opening` y de la misma fecha, y suelta la referencia (FR-087).
+Auditoría: `Accounting.Opening.Imported`.
 
 ## 8. Informes — `/api/reports/accounting/{vista}?format=json|xlsx|pdf|docx&…filtros`
 

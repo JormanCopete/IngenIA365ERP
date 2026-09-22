@@ -213,8 +213,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `docs/manual/contabilidad-contrato-de-contabilizacion.md` y
   `docs/operaciones/contabilidad-primer-ejercicio.md`.
   **E2 consultas e informes + presupuesto (rama `009-e2-consultas-presupuesto`, 2026-09-20; US5
-  completa y US9 adelantada de E4; US6 cierre de ejercicio y US13 apertura importada siguen
-  pendientes)**: todo saldo es una suma sobre `ACC_JournalEntries` con `IsPosted` por **un solo
+  completa y US9 adelantada de E4; US6 y US13 el 2026-09-21, abajo)**: todo saldo es una suma sobre `ACC_JournalEntries` con `IsPosted` por **un solo
   punto de lectura**, `MovimientosContables` (`Application/Accounting/Reports`): alcance de
   sucursal, todos los filtros combinables (`FiltrosDeInforme`), la **apertura siempre es saldo
   inicial**, el **cierre del ejercicio consultado queda fuera salvo `includeClosing`** (los de años
@@ -250,6 +249,31 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   alcance de sucursal FR-035) no lo escribía ningún comando: `CreateBranch`/`UpdateBranch` ya lo
   aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`); la pantalla de Agencias
   todavía no lo ofrece.
+  **E2 cierre del ejercicio y saldos de apertura (2026-09-21, US6 y US13; con esto E2 está completa
+  y las cinco e2e que E1 dejó pendientes —T056, T066, T077, T084, T091— escritas y verdes)**: el
+  **cierre** (`CloseFiscalYearCommand`, `POST /api/accounting/periods/years/{year}/close`) exige los
+  doce meses cerrados, el anterior cerrado y `AccountingSetup.ResultAccountId`, y genera por el
+  contrato un `CI` (`Kind = Closing`) **fechado el 31/12 en período cerrado** —el poster lo admite
+  sólo por su clase, y también le perdona «fecha futura» y el alcance de sucursal— que cancela lo
+  acumulado en las clases 4 a 7 **por sucursal y centro de costo** y lleva el excedente a la cuenta de
+  resultado sucursal por sucursal; sin resultados cierra sin comprobante. `ContextoDeReglas` lleva
+  ahora el `DocumentKind`: al cierre no se le exige cuenta activa/habilitada, tercero, cruce ni base
+  gravable (cancela lo que ya pasó), a la apertura sólo se le perdona «habilitada para el módulo».
+  Reabrir (`/reopen` con motivo) reversa el CI **en su misma fecha y de su misma clase** (el reverso
+  es `Closing`: las consultas lo tratan igual y todo sigue neteando), deja los meses cerrados y sólo
+  admite el último ejercicio cerrado (`NotLast`); el CI no se reversa desde Comprobantes
+  (`Accounting.Document.IsClosing`) y una reversión de cualquier clase tampoco (`ReversesDocumentId`).
+  La **apertura** (`Application/Accounting/Opening`, `/api/accounting/opening`, pantalla
+  `/contabilidad/apertura`, permiso `Accounting.Opening.Manage`) importa la plantilla —`PlantillaDeImportacion`
+  escribe **sólo encabezados en la fila 1** y las instrucciones en otra hoja, porque el exportador de
+  informes pone el título arriba y el lector no lo entendería— o se digita con `voucherTypeCode = "AP"`;
+  cada fila pasa por las reglas de cuenta y **con un error no se guarda nada** (422 `Opening.Invalid`
+  con `row`/`column`), el descuadre no es error de importación, el borrador queda `Kind = Opening`
+  **fechado la víspera del primer período y sin período**, se contabiliza por `/documents` (una sola
+  vigente: `Opening.AlreadyExists`; `PostDocumentCommand` la referencia en `OpeningDocumentId`) y su
+  reversión es también `Opening` de la misma fecha y suelta la referencia. Las e2e que cambian todo el
+  libro corren en **cooperativas aisladas del mismo host** (`ContabilidadE2E.CooperativaAisladaAsync`:
+  «cierre» con primer ejercicio 2025, «apertura» con 2026), no en la compartida. Receta: runbook §7a.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -422,11 +446,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 738 (2026-09-21; la 010 sumó 52 en N1, 15 en N4 y 21 en N2: 11 de PILA, 6 de procedimiento 2 y 4 de reportes) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 176 con `@page` (2026-09-21; la 010 sumó 7 en N1, 2 en N4 y 2 en N2: `/nomina/pila`, `/nomina/retencion-procedimiento-2`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Rutas REST | 763 (2026-09-21, tras el merge de E2 contable: 13 vistas de informes, 6 de presupuesto, 2 de cierre del ejercicio y 3 de apertura, más las 738 de la 010) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.479 el 2026-09-21 (223 Domain, 1.075 Application, 109 Architecture, 70 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 164 el 2026-09-21 con Docker: 163 pasan, 1 omitida | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.656 el 2026-09-21 (223 Domain, 1.217 Application, 113 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 211 el 2026-09-21 con Docker: 210 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
