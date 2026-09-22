@@ -14,6 +14,9 @@ public record UpdateFamilyCompensationFundCommand : IRequest<Result>
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
+
+    /// <summary>Feature 010 (US5): código de la administradora en el listado del operador de la PILA (6 posiciones).</summary>
+    public string? PilaCode { get; init; }
     /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
     public Guid? PersonPublicId { get; init; }
 }
@@ -45,6 +48,7 @@ public class UpdateFamilyCompensationFundCommandHandler(
         entity.ShortName = request.ShortName ?? string.Empty;
         entity.TaxId = request.TaxId;
         entity.CheckDigit = request.CheckDigit;
+        entity.PilaCode = string.IsNullOrWhiteSpace(request.PilaCode) ? null : request.PilaCode.Trim().ToUpperInvariant();
         var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
         if (persona.IsFailure) return Result.Failure(persona.Error);
         entity.PersonId = persona.Value;

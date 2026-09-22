@@ -30,7 +30,7 @@ public class PeriodCommandsTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
         }
 
         public ClosePeriodCommandHandler Cerrador() => new(D.Db, D.Clock, D.User, Emisor);

@@ -28,6 +28,13 @@ public sealed class Bases
     public decimal? WithholdingBase { get; set; }
     public decimal? TransportAllowanceBase { get; set; }
 
+    /// <summary>
+    /// Feature 010 (D-01): lo que el IBC recuperó por los días de <c>AUSENCIA_VACACIONES</c>
+    /// —días que la liquidación de vacaciones ya pagó y aquí no son salario pero sí cotizan—.
+    /// El aporte a ARL lo descuenta cuando la cooperativa no cotiza ARL en vacaciones.
+    /// </summary>
+    public decimal VacationLeaveContribution { get; set; }
+
     public decimal? Get(CalculationBase kind) => kind switch
     {
         CalculationBase.BasicSalary => BasicSalary,

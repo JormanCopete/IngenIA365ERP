@@ -68,6 +68,26 @@ public class ReintentoPorConcurrenciaBehaviorTests
         db.DidNotReceive().DescartarCambios();
     }
 
+    /// <summary>
+    /// Feature 010 (revisión N1): las cuatro liquidaciones especiales contabilizan por el mismo <c>NM</c> que
+    /// la ordinaria y la prima, así que aprobar y reversar cada una se reintenta entero como aquéllas; hasta el
+    /// 2026-09-21 cesantías, vacaciones y definitiva salían 409 en la carrera por el consecutivo. La definitiva
+    /// puede serlo porque su recaudo de Cartera ya no anida un comando reintentable (<c>RecaudoDeCredito</c>).
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.ServiceBonus.ApproveServiceBonusCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.ServiceBonus.ReverseServiceBonusCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Severance.ApproveSeveranceCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Severance.ReverseSeveranceCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Vacation.ApproveVacationCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Vacation.ReverseVacationCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Settlement.ApproveSettlementCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Settlements.Settlement.ReverseSettlementCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Runs.ApprovePayrollRun.ApprovePayrollRunCommand))]
+    [InlineData(typeof(IngenIA365ERP.Application.Payroll.Runs.ReversePayrollRun.ReversePayrollRunCommand))]
+    public void Aprobar_y_reversar_toda_corrida_de_nomina_es_reintentable(Type comando) =>
+        typeof(IReintentableAnteConcurrencia).IsAssignableFrom(comando).Should().BeTrue($"{comando.Name} contabiliza con el consecutivo NM y debe repetirse entero ante una carrera");
+
     /// <summary>El behavior pide el contexto por el proveedor de servicios, y sólo al reintentar.</summary>
     private static IServiceProvider Servicios(IApplicationDbContext db)
     {

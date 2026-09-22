@@ -14,6 +14,8 @@ public record PensionProviderDto
     public string? ShortName { get; init; }
     public string TaxId { get; init; } = string.Empty;
     public int CheckDigit { get; init; }
+    public string? PilaCode { get; init; }
+    public bool IsAccai { get; init; }
     public Guid? PersonPublicId { get; init; }
     public string? PersonName { get; init; }
 }
@@ -65,7 +67,7 @@ public class ListPensionProvidersQueryHandler(IApplicationDbContext context)
                 Name = e.Name,
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
-                CheckDigit = e.CheckDigit, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
+                PilaCode = e.PilaCode, IsAccai = e.IsAccai, CheckDigit = e.CheckDigit, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .ToListAsync(cancellationToken);
 
@@ -94,7 +96,7 @@ public class GetPensionProviderByIdQueryHandler(IApplicationDbContext context)
                 Name = e.Name,
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
-                CheckDigit = e.CheckDigit, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
+                PilaCode = e.PilaCode, IsAccai = e.IsAccai, CheckDigit = e.CheckDigit, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .FirstOrDefaultAsync(cancellationToken);
 

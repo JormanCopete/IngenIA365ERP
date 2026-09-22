@@ -88,7 +88,7 @@ public class DiscardPayrollRunCommandHandlerTests
         var runId = await Calculada(d);
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 11);
         var apr = await new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-                new PayrollAuditEmitter(d.Audit, contadora, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance))
+                new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
         apr.IsSuccess.Should().BeTrue(apr.Error.Message);
 

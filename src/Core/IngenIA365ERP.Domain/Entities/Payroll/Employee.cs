@@ -102,13 +102,89 @@ public class Employee : AuditableEntity
 
     // === BANCA NOMINA (decision P5a) ===
 
+    /// <summary>Código del banco en el legado (nvarchar(4)). Se conserva; la dispersión usa <see cref="DisbursementBankId"/>.</summary>
     [MaxLength(4)]
     public string? PayrollBankId { get; set; }
 
+    /// <summary>1 ahorros, 2 corriente. Sin cambio de columna; <see cref="BankAccountType"/> es su nombre en Domain (feature 010).</summary>
     public int PayrollBankAccountType { get; set; }
 
+    /// <summary>Alias de <see cref="PayrollBankAccountType"/> (data-model 010 §1.4). No se mapea: misma columna.</summary>
+    public int BankAccountType
+    {
+        get => PayrollBankAccountType;
+        set => PayrollBankAccountType = value;
+    }
+
+    /// <summary>«Empleado sin cuenta» = NULL o vacío: queda en pendientes de la dispersión.</summary>
     [MaxLength(25)]
     public string? PayrollBankAccountNumber { get; set; }
+
+    /// <summary>
+    /// Feature 010 (R11): banco destino de la dispersión, FK a <c>COR_Banks</c> (código ACH en
+    /// <c>Bank.TransferCode</c>). Reemplaza al uso de <see cref="PayrollBankId"/>; la migración lo
+    /// rellena por dato con <c>COR_Banks.LegacyCode = PayrollBankId</c>.
+    /// </summary>
+    public int? DisbursementBankId { get; set; }
+
+    // === PILA Y NOMINA ELECTRONICA (feature 010, data-model §1.4) ===
+    // Sólo lo laboral (Principio V): la identificación y el domicilio siguen en Person.
+
+    /// <summary>
+    /// Tipo de cotizante PILA (campo 5) y <c>TipoTrabajador</c> DIAN (D-05: la DIAN adoptó los
+    /// mismos códigos). Vacío = lo deriva la regla paramétrica desde <see cref="EmployeeClass"/> y
+    /// <see cref="ApprenticeStage"/>.
+    /// </summary>
+    [MaxLength(2)]
+    public string? PilaContributorType { get; set; }
+
+    /// <summary>Subtipo de cotizante PILA (campo 6) y <c>SubTipoTrabajador</c> DIAN.</summary>
+    [MaxLength(2)]
+    public string? PilaContributorSubType { get; set; }
+
+    /// <summary>PILA campo 79; DIAN <c>AltoRiesgoPension</c>.</summary>
+    public bool HighRiskPension { get; set; }
+
+    /// <summary>DIAN <c>TipoContrato</c>. El <see cref="ContractType"/> heredado es otro código y no se reinterpreta.</summary>
+    public Enums.Payroll.DianContractType? DianContractType { get; set; }
+
+    /// <summary>
+    /// DIAN <c>Pago/Metodo</c> (tabla 5.3.3.2). Vacío = se deriva de <see cref="PaymentMethod"/>
+    /// por la política <c>DianMedioPagoMapa</c>; si viene, manda.
+    /// </summary>
+    [MaxLength(3)]
+    public string? DianPaymentMethodCode { get; set; }
+
+    /// <summary>Etapa del aprendiz (Ley 2466 de 2025). Obligatoria si la clase es aprendiz o pasante.</summary>
+    public Enums.Payroll.ApprenticeStage? ApprenticeStage { get; set; }
+
+    /// <summary>Régimen de transición de la Ley 2381 de 2024. <c>Unknown</c> es alerta PILA desde abril de 2027.</summary>
+    public Enums.Payroll.PensionTransitionRegime PensionTransitionRegime { get; set; } = Enums.Payroll.PensionTransitionRegime.Unknown;
+
+    /// <summary>PILA campo 8: extranjero no obligado a cotizar a pensión.</summary>
+    public bool ForeignNotRequiredToContributePension { get; set; }
+
+    /// <summary>PILA campo 9: colombiano en el exterior.</summary>
+    public bool ColombianAbroad { get; set; }
+
+    /// <summary>
+    /// Municipio DANE del lugar de trabajo (departamento = 2 primeros dígitos, municipio = 3
+    /// últimos): PILA campos 9-10 y DIAN <c>LugarTrabajo</c>. Vacío = el de la empresa.
+    /// </summary>
+    [MaxLength(5)]
+    public string? WorkMunicipalityDaneCode { get; set; }
+
+    /// <summary>DIAN <c>LugarTrabajoDireccion</c>. Vacío = dirección de la empresa.</summary>
+    [MaxLength(120)]
+    public string? WorkAddress { get; set; }
+
+    /// <summary>PILA campo 98 (Decreto 768 de 2022). Vacío = el de la empresa.</summary>
+    [MaxLength(7)]
+    public string? EconomicActivityCode { get; set; }
+
+    /// <summary>PILA campo 62.</summary>
+    [MaxLength(9)]
+    public string? WorkCenterCode { get; set; }
 
     // === BONIFICACIONES Y PROVISIONES ===
 

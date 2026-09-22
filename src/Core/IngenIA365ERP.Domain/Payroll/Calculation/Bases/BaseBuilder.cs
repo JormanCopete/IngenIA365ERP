@@ -33,6 +33,10 @@ public static class BaseBuilder
         // --- Base de aportes (IBC) ---
         var ibc = Suma(c => c.AffectsContributionBase);
         pasos.Add(new ExplanationStep("Devengos que forman el IBC", ibc, null));
+        // Feature 010 (D-01, R6): los días de AUSENCIA_VACACIONES no son salario aquí —los pagó la
+        // liquidación de vacaciones—, pero los aportes se causan completos sobre el salario vigente
+        // al iniciar el descanso (Decreto 780/2016 art. 3.2.5.1): el IBC los recupera.
+        ibc += VacationLeaveContribution(ctx, pasos);
         if (ctx.Employee.Class == EmployeeClass.IntegralSalary)
         {
             var pct = ctx.Parameters.Fraction(LegalParameterCodes.IntegralSalaryBasePct);
@@ -60,6 +64,35 @@ public static class BaseBuilder
         pasos.Add(new ExplanationStep(RuleBases.Label(CalculationBase.TransportAllowanceBase), salarioCierre, null));
 
         return pasos;
+    }
+
+    /// <summary>
+    /// El IBC de los días de vacaciones pagados por la liquidación (novedad informativa
+    /// <c>AUSENCIA_VACACIONES</c> con fechas): días comerciales dentro del período × salario
+    /// mensual vigente al iniciar el descanso / 30. Queda en
+    /// <see cref="Rules.Bases.VacationLeaveContribution"/> para que la ARL lo descuente si la
+    /// cooperativa no cotiza riesgos en vacaciones. Cero si no hay novedad de ésas.
+    /// </summary>
+    public static decimal VacationLeaveContribution(RuleContext ctx, List<ExplanationStep> pasos)
+    {
+        var total = 0m;
+        foreach (var n in ctx.Input.Novelties.Where(n =>
+                     n.ConceptCode.Equals(WellKnownConceptCodes.VacationLeave, StringComparison.OrdinalIgnoreCase)
+                     && n.StartDate is not null && n.EndDate is not null))
+        {
+            var desde = n.StartDate!.Value;
+            var hasta = n.EndDate!.Value;
+            var dias = SalaryTranches.DaysWithinPeriod(ctx.Period, desde, hasta);
+            if (dias <= 0) continue;
+            var salario = SalaryTranches.SalaryAt(ctx.Tranches, desde);
+            var valor = salario / CalendarConventions.DaysPerMonth * dias;
+            pasos.Add(new ExplanationStep(
+                $"+ IBC de {dias} días de vacaciones ya pagados en la liquidación ({Fmt.Date(desde)} a {Fmt.Date(hasta)}): " +
+                $"salario {Fmt.Money(salario)} / {CalendarConventions.DaysPerMonth} × {dias}", valor, null));
+            total += valor;
+        }
+        ctx.Bases.VacationLeaveContribution = total;
+        return total;
     }
 
     /// <summary>

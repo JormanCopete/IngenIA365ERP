@@ -44,6 +44,14 @@ public sealed class PersonaFormularioModelo
     [MaxLength(150)]
     public string LastName { get; set; } = "";
 
+    /// <summary>Feature 010 (D-06): segundo apellido separado, para la DIAN y la PILA.</summary>
+    [MaxLength(150)]
+    public string? SecondLastName { get; set; }
+
+    /// <summary>Feature 010 (D-06): los nombres que siguen al primero.</summary>
+    [MaxLength(150)]
+    public string? OtherNames { get; set; }
+
     [MaxLength(150)]
     public string? BusinessName { get; set; }
 
@@ -107,6 +115,8 @@ public sealed class PersonaFormularioModelo
         IdIssueDateDt = p.IdIssueDate?.ToDateTime(TimeOnly.MinValue),
         FirstName = p.FirstName,
         LastName = p.LastName,
+        SecondLastName = p.SecondLastName,
+        OtherNames = p.OtherNames,
         BusinessName = p.BusinessName,
         PersonType = p.PersonType,
         Address = p.Address,
@@ -140,6 +150,8 @@ public sealed class PersonaFormularioModelo
         IdIssueDate = IdIssueDateDt is { } exp ? DateOnly.FromDateTime(exp) : null,
         FirstName = FirstName.Trim(),
         LastName = LastName.Trim(),
+        SecondLastName = Vacio(SecondLastName),
+        OtherNames = Vacio(OtherNames),
         BusinessName = Vacio(BusinessName),
         PersonType = Vacio(PersonType),
         Address = Vacio(Address),
@@ -178,6 +190,50 @@ public sealed class PersonaFormularioModelo
             avisos.Add("La fecha de nacimiento debe ser anterior a hoy.");
         return avisos;
     }
+
+    /// <summary>
+    /// Si hay algo que proponer: los apellidos o los nombres traen más de una palabra y el campo
+    /// separado correspondiente está vacío. Es lo que enciende el botón «Proponer partición».
+    /// </summary>
+    public bool PuedeProponerParticion =>
+        (string.IsNullOrWhiteSpace(SecondLastName) && Palabras(LastName).Length > 1)
+        || (string.IsNullOrWhiteSpace(OtherNames) && Palabras(FirstName).Length > 1);
+
+    /// <summary>
+    /// Feature 010 (D-06): <b>propone</b> partir «Apellidos» y «Nombres» por el primer espacio —la
+    /// primera palabra se queda y el resto pasa a «Segundo apellido» / «Otros nombres»— y la persona
+    /// confirma o corrige antes de guardar. Es una propuesta y no una migración porque partir
+    /// «De la Hoz Mejía» por el espacio se equivoca; por eso nada lo hace por dato ni al guardar.
+    /// Sólo toca los campos separados que están vacíos. Devuelve si cambió algo.
+    /// </summary>
+    public bool ProponerParticion()
+    {
+        var cambio = false;
+        if (string.IsNullOrWhiteSpace(SecondLastName))
+        {
+            var apellidos = Palabras(LastName);
+            if (apellidos.Length > 1)
+            {
+                LastName = apellidos[0];
+                SecondLastName = string.Join(' ', apellidos.Skip(1));
+                cambio = true;
+            }
+        }
+        if (string.IsNullOrWhiteSpace(OtherNames))
+        {
+            var nombres = Palabras(FirstName);
+            if (nombres.Length > 1)
+            {
+                FirstName = nombres[0];
+                OtherNames = string.Join(' ', nombres.Skip(1));
+                cambio = true;
+            }
+        }
+        return cambio;
+    }
+
+    private static string[] Palabras(string? s) =>
+        (s ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

@@ -1,0 +1,905 @@
+@page "/nomina/vacaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Components.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
+@inject DescargaDeArchivos Descargas
+
+@*
+    Feature 010 US4 (R6, FR-014 a FR-017; contracts/api.md §5 y §3.3). El saldo de vacaciones es
+    DERIVADO —causado + saldo inicial − disfrutado − compensado − pagado al retiro ± ajustes— y nunca se
+    guarda. Registrar un disfrute exige ver antes cuántos hábiles son con la semana laboral de la
+    empresa y el calendario de festivos (vista previa obligatoria, FR-015); al guardar nacen el
+    movimiento y la liquidación en borrador en una sola acción; aprobarla contabiliza contra la
+    provisión y deja la ausencia en cada período que cubre (D-01). La compensación en dinero tiene tope
+    (FR-016) y la pantalla lo muestra antes de pedirla.
+*@
+
+<PageTitle>Vacaciones - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.Vacations.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Vacaciones</h3>
+    <div>
+        <SfDatePicker TValue="DateTime" @bind-Value="_alDia" Placeholder="Saldo al día" Width="150px" />
+        <SfTextBox @bind-Value="_buscar" Placeholder="Buscar por nombre o documento" ShowClearButton="true" Width="240px"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs _) => CargarSaldosAsync())" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarTodoAsync">Ver</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@(() => DescargarSaldosAsync("xlsx"))" Title="Saldos en Excel">Excel</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" OnClick="@(() => DescargarSaldosAsync("pdf"))" Title="Saldos en PDF">PDF</SfButton>
+        @* Registrar cruza dos endpoints: la vista previa obligatoria de hábiles es Register y el registro
+           que crea la liquidación es Calculate. El botón exige los dos (D-40): hasta el 2026-09-21 iba
+           sólo detrás de Calculate y un rol sin Register abría el diálogo y nunca podía terminar. *@
+        <PermissionGate Required="Payroll.Vacations.Register">
+            <PermissionGate Required="Payroll.Vacations.Calculate">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirRegistro(null))">Registrar disfrute o compensación</SfButton>
+            </PermissionGate>
+        </PermissionGate>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Saldo derivado, nunca digitado</span>
+    <p>Días hábiles causados (días trabajados por el calendario comercial, menos suspensiones del contrato, por los días de vacaciones por año del parámetro legal, sobre 360), más el saldo inicial, menos lo disfrutado, compensado y pagado al retiro, más o menos los ajustes con motivo. Los hábiles de un disfrute se cuentan con la semana laboral de la empresa (Nómina › Políticas) y el calendario de festivos, y quedan congelados en el movimiento.</p>
+</div>
+
+<SfTab @bind-SelectedItem="_pestana">
+    <TabItems>
+        <TabItem>
+            <ChildContent><TabHeader Text="Saldos por empleado" IconCss="e-icons e-people" /></ChildContent>
+            <ContentTemplate>
+                <div class="contenido-tab">
+                <IndicadorDeCarga Cargando="@_carga.Activa">
+                <SfGrid TValue="SaldoVacacionesDto" DataSource="@_saldos" AllowSorting="true" AllowPaging="true">
+                    <GridPageSettings PageSize="25" />
+                    <GridColumns>
+                        <GridColumn Field="Name" HeaderText="Empleado" Width="200" />
+                        <GridColumn Field="Document" HeaderText="Documento" Width="110" />
+                        <GridColumn Field="HireDate" HeaderText="Ingreso" Width="105" Format="dd/MM/yyyy" Type="ColumnType.Date" />
+                        <GridColumn Field="WorkedDays" HeaderText="Trabajados" Width="100" TextAlign="TextAlign.Right" />
+                        <GridColumn HeaderText="Causados" Width="95" TextAlign="TextAlign.Right"><Template>@(((SaldoVacacionesDto)context).AccruedDays.ToString("0.##"))</Template></GridColumn>
+                        <GridColumn HeaderText="Inicial" Width="85" TextAlign="TextAlign.Right"><Template>@(((SaldoVacacionesDto)context).OpeningDays.ToString("0.##"))</Template></GridColumn>
+                        <GridColumn HeaderText="Disfrutados" Width="100" TextAlign="TextAlign.Right"><Template>@(((SaldoVacacionesDto)context).EnjoyedDays.ToString("0.##"))</Template></GridColumn>
+                        <GridColumn HeaderText="Compensados" Width="110" TextAlign="TextAlign.Right"><Template>@(((SaldoVacacionesDto)context).CompensatedDays.ToString("0.##"))</Template></GridColumn>
+                        <GridColumn HeaderText="Ajustes" Width="85" TextAlign="TextAlign.Right"><Template>@(((SaldoVacacionesDto)context).AdjustedDays.ToString("+0.##;-0.##;0"))</Template></GridColumn>
+                        <GridColumn HeaderText="Pendientes" Width="100" TextAlign="TextAlign.Right">
+                            <Template>
+                                @{
+                                    var s = (SaldoVacacionesDto)context;
+                                    <span class="@(s.PendingDays < 0 ? "e-badge e-badge-danger" : s.PendingDays > 30 ? "e-badge e-badge-warning" : "e-badge e-badge-success")">@s.PendingDays.ToString("0.##")</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn HeaderText="Último disfrute" Width="115"><Template>@(((SaldoVacacionesDto)context).LastEnjoymentTo?.ToString("dd/MM/yyyy") ?? "—")</Template></GridColumn>
+                        <GridColumn HeaderText="Acciones" Width="170" TextAlign="TextAlign.Center">
+                            <Template>
+                                @{
+                                    var s = (SaldoVacacionesDto)context;
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-description" Title="Saldo explicado y movimientos" OnClick="@(() => AbrirFichaAsync(s))" />
+                                    <PermissionGate Required="Payroll.Vacations.Register">
+                                        <PermissionGate Required="Payroll.Vacations.Calculate">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Registrar disfrute o compensación" OnClick="@(() => AbrirRegistro(s))" />
+                                        </PermissionGate>
+                                    </PermissionGate>
+                                    <PermissionGate Required="Payroll.Vacations.Register">
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Ajuste con motivo" OnClick="@(() => AbrirAjuste(s))" />
+                                    </PermissionGate>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-user" Title="Abrir la ficha" OnClick="@(() => Nav.NavigateTo($"/nomina/empleados/{s.EmployeePublicId}"))" />
+                                }
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </SfGrid>
+                </IndicadorDeCarga>
+                </div>
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Liquidaciones" IconCss="e-icons e-table" /></ChildContent>
+            <ContentTemplate>
+                <div class="contenido-tab">
+                <div class="toolbar">
+                    <SfNumericTextBox TValue="int?" @bind-Value="_anio" Placeholder="Año del corte" Width="130px" Format="0" ShowSpinButton="false" />
+                    <select class="e-input" @bind="_estado">
+                        <option value="">Vivas (sin reemplazadas)</option>
+                        <option value="Draft">Borrador</option>
+                        <option value="Approved">Aprobadas</option>
+                        <option value="Reversed">Reversadas</option>
+                        <option value="Superseded">Reemplazadas o descartadas</option>
+                    </select>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarLiquidacionesAsync">Ver</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaLiquidaciones.Activa">
+                <SfGrid TValue="LiquidacionVacacionesDto" DataSource="@_liquidaciones" AllowSorting="true" AllowPaging="true">
+                    <GridPageSettings PageSize="25" />
+                    <GridColumns>
+                        <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="190" />
+                        <GridColumn Field="TipoTexto" HeaderText="Tipo" Width="120" />
+                        <GridColumn Field="FechasTexto" HeaderText="Fechas" Width="190" />
+                        <GridColumn HeaderText="Hábiles" Width="80" TextAlign="TextAlign.Right"><Template>@(((LiquidacionVacacionesDto)context).WorkingDays.ToString("0.##"))</Template></GridColumn>
+                        <GridColumn Field="CalendarDays" HeaderText="Calendario" Width="95" TextAlign="TextAlign.Right" />
+                        <GridColumn Field="Amount" HeaderText="Neto" Width="120" Format="N0" TextAlign="TextAlign.Right" />
+                        <GridColumn HeaderText="Estado" Width="120">
+                            <Template>
+                                @{
+                                    var l = (LiquidacionVacacionesDto)context;
+                                    <span class="@(l.EstaAprobada ? "e-badge e-badge-success" : l.EsBorrador ? "e-badge e-badge-info" : "e-badge")">@l.EstadoTexto v@l.Version</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="CutoffDate" HeaderText="Corte" Width="100" Format="dd/MM/yyyy" Type="ColumnType.Date" />
+                        <GridColumn Field="AccountingDocumentNumber" HeaderText="Comprobante" Width="120" />
+                        <GridColumn HeaderText="Acciones" Width="210" TextAlign="TextAlign.Center">
+                            <Template>
+                                @{
+                                    var l = (LiquidacionVacacionesDto)context;
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-description" Title="Detalle con explicación" OnClick="@(() => AbrirDetalleAsync(l))" />
+                                    @if (l.SePuedeAprobar)
+                                    {
+                                        <PermissionGate Required="Payroll.Vacations.Approve">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-check" Title="Aprobar" OnClick="@(() => AbrirAprobacion(l))" />
+                                        </PermissionGate>
+                                    }
+                                    @if (l.EsBorrador)
+                                    {
+                                        <PermissionGate Required="Payroll.Vacations.Calculate">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-repeat" Title="@(l.EstaDesactualizada ? "Desactualizado: recalcular antes de aprobar" : "Recalcular (versión nueva)")" OnClick="@(() => RecalcularAsync(l))" />
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" Title="Descartar el borrador y anular el movimiento" OnClick="@(() => AbrirMotivo(l, descartar: true))" />
+                                        </PermissionGate>
+                                    }
+                                    @if (l.EstaAprobada)
+                                    {
+                                        <PermissionGate Required="Payroll.Vacations.Reverse">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-undo" Title="Reversar (asiento espejo)" OnClick="@(() => AbrirMotivo(l, descartar: false))" />
+                                        </PermissionGate>
+                                        <PermissionGate Required="Payroll.Disbursement.Generate">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-export" Title="Archivo de dispersión para el banco" OnClick="@(() => { _corridaDispersion = l.RunPublicId; _mostrarDispersion = true; })" />
+                                        </PermissionGate>
+                                    }
+                                }
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </SfGrid>
+                </IndicadorDeCarga>
+                </div>
+            </ContentTemplate>
+        </TabItem>
+    </TabItems>
+</SfTab>
+</PermissionGate>
+
+@* --------------------------------------------------------------- ficha de saldo --- *@
+<SfDialog @bind-Visible="_mostrarFicha" Header="@($"Vacaciones de {_fichaDe?.Name}")" Width="900px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaFicha.Activa">
+            <div class="pagina">
+                @if (_ficha is not null)
+                {
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="label">Causados</span><strong>@_ficha.Balance.AccruedDays.ToString("0.##")</strong></div>
+                        <div class="kpi-card"><span class="label">Saldo inicial</span><strong>@_ficha.Balance.OpeningDays.ToString("0.##")</strong></div>
+                        <div class="kpi-card"><span class="label">Disfrutados</span><strong>@_ficha.Balance.EnjoyedDays.ToString("0.##")</strong></div>
+                        <div class="kpi-card"><span class="label">Compensados</span><strong>@_ficha.Balance.CompensatedDays.ToString("0.##")</strong></div>
+                        <div class="kpi-card"><span class="label">Pendientes</span><strong>@_ficha.Balance.PendingDays.ToString("0.##")</strong></div>
+                        @if (_ficha.MaxCompensableDays is { } max)
+                        {
+                            <div class="kpi-card"><span class="label">Compensables en dinero</span><strong>@max.ToString("0.##")</strong><span class="texto-tenue">@(_ficha.CompensablePercent?.ToString("0.##")) % de lo causado</span></div>
+                        }
+                    </div>
+                    <span class="label">Cómo se llega al saldo (al @_ficha.Balance.AsOf.ToString("dd/MM/yyyy"))</span>
+                    <ol class="explicacion-pasos">
+                        @foreach (var p in _ficha.Explanation)
+                        {
+                            <li><span>@p.Label</span> @if (p.Value is { } v) { <strong class="monto">@v.ToString("0.##")</strong> } else if (p.Text is not null) { <em class="texto-tenue">@p.Text</em> }</li>
+                        }
+                    </ol>
+                }
+                <span class="label">Movimientos</span>
+                @if (_movimientos.Count == 0)
+                {
+                    <div class="sin-datos">Sin movimientos registrados.</div>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Tipo</th><th>Fechas</th><th class="monto">Hábiles</th><th class="monto">Calendario</th><th>Estado</th><th>Liquidación</th><th>Registró</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _movimientos)
+                            {
+                                <tr class="@(m.Status == 2 ? "texto-tenue" : "")">
+                                    <td>@m.TipoTexto</td>
+                                    <td>@m.StartDate.ToString("dd/MM/yyyy")@(m.EndDate is { } h ? $" – {h:dd/MM/yyyy}" : "")@if (!string.IsNullOrWhiteSpace(m.Notes)) { <span class="texto-tenue"> · @m.Notes</span> }</td>
+                                    <td class="monto">@m.BusinessDays.ToString("+0.##;-0.##;0")</td>
+                                    <td class="monto">@(m.CalendarDays > 0 ? m.CalendarDays.ToString() : "")</td>
+                                    <td>@m.EstadoTexto @if (m.Status == 2) { <span class="texto-tenue">(@m.CancelReason)</span> }</td>
+                                    <td>@(m.RunStatus is null ? "—" : $"{m.RunStatus}{(m.Amount is { } a ? $" · {a:N0}" : "")}")</td>
+                                    <td class="texto-tenue">@m.CreatedBy · @m.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (m.EsAnulable)
+                                        {
+                                            <PermissionGate Required="Payroll.Vacations.Register">
+                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" Title="Anular con motivo" OnClick="@(() => AbrirAnulacion(m))" />
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------- registrar disfrute/compensación --- *@
+<SfDialog @bind-Visible="_mostrarRegistro" Header="Registrar disfrute o compensación" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="pagina">
+                @if (_registroDe is null)
+                {
+                    <SfTextBox @bind-Value="_buscarEmpleado" Placeholder="Empleado (nombre o documento)" FloatLabelType="FloatLabelType.Always" ShowClearButton="true"
+                               ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs _) => BuscarEmpleadosAsync())" />
+                    @if (_empleadosEncontrados.Count > 0)
+                    {
+                        <ul class="lista-resultados">
+                            @foreach (var e in _empleadosEncontrados)
+                            {
+                                <li><a href="javascript:void(0)" @onclick="@(() => ElegirEmpleado(e))">@e.FullName · @e.IdentificationNumber</a></li>
+                            }
+                        </ul>
+                    }
+                }
+                else
+                {
+                    <div class="info-card">
+                        <span class="label">@_registroDe.Name · @_registroDe.Document</span>
+                        <p>Pendientes al @_registroDe.AsOf.ToString("dd/MM/yyyy"): <strong>@_registroDe.PendingDays.ToString("0.##")</strong> días hábiles (causados @_registroDe.AccruedDays.ToString("0.##"), inicial @_registroDe.OpeningDays.ToString("0.##"), disfrutados @_registroDe.EnjoyedDays.ToString("0.##"), compensados @_registroDe.CompensatedDays.ToString("0.##")).
+                        @if (_maximoCompensable is { } max) { <span> Compensables en dinero: <strong>@max.ToString("0.##")</strong>.</span> }</p>
+                    </div>
+                }
+
+                <div class="toolbar">
+                    <label class="campo-check"><input type="radio" name="tipo" checked="@(_esDisfrute)" @onchange="@(() => CambiarTipo(true))" /> Disfrute (fechas)</label>
+                    <label class="campo-check"><input type="radio" name="tipo" checked="@(!_esDisfrute)" @onchange="@(() => CambiarTipo(false))" /> Compensación en dinero (días hábiles)</label>
+                </div>
+
+                @if (_esDisfrute)
+                {
+                    <div class="rejilla-campos">
+                        <div><SfDatePicker TValue="DateTime?" @bind-Value="_desde" Placeholder="Desde *" FloatLabelType="FloatLabelType.Always" ValueChange="@((Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime?> _) => InvalidarVista())" /></div>
+                        <div><SfDatePicker TValue="DateTime?" @bind-Value="_hasta" Placeholder="Hasta *" FloatLabelType="FloatLabelType.Always" ValueChange="@((Syncfusion.Blazor.Calendars.ChangedEventArgs<DateTime?> _) => InvalidarVista())" /></div>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-eye" type="button" OnClick="@VerHabilesAsync" Disabled="@(_desde is null || _hasta is null || _cargaVista.Activa)">Ver días hábiles</SfButton>
+                        <span class="texto-tenue">La vista previa es obligatoria: se guarda con los hábiles que se muestran aquí.</span>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_cargaVista.Activa" Texto="Contando…">
+                    @if (_vista is not null)
+                    {
+                        <div class="info-card">
+                            <span class="label">@_vista.WorkingDays días hábiles · @_vista.CalendarDays calendario (semana de @_vista.SemanaTexto)</span>
+                            @if (_vista.Skipped.Count > 0)
+                            {
+                                <p>Se saltan: @string.Join(", ", _vista.Skipped.Select(s => $"{s.Date:dd/MM} ({s.Text})")).</p>
+                            }
+                            else
+                            {
+                                <p>Ningún domingo ni festivo en el rango.</p>
+                            }
+                            @foreach (var aviso in _vista.Avisos)
+                            {
+                                <p class="texto-tenue">@aviso.Message</p>
+                            }
+                            @if (_vista.WorkingDays == 0)
+                            {
+                                <p class="texto-tenue">Sin días hábiles: el rango no se puede registrar.</p>
+                            }
+                            else if (_registroDe is not null && _vista.WorkingDays > _registroDe.PendingDays)
+                            {
+                                <p class="texto-tenue">Consume más de lo pendiente: quedarían @((_registroDe.PendingDays - _vista.WorkingDays).ToString("0.##")) días (vacaciones anticipadas).</p>
+                            }
+                        </div>
+                    }
+                    </IndicadorDeCarga>
+                }
+                else
+                {
+                    <div class="rejilla-campos">
+                        <div><SfNumericTextBox TValue="decimal?" @bind-Value="_diasCompensacion" Placeholder="Días hábiles a compensar *" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0.5m" Format="0.##" /></div>
+                        <div><SfDatePicker TValue="DateTime?" @bind-Value="_fechaPago" Placeholder="Fecha de pago (hoy si se deja vacía)" FloatLabelType="FloatLabelType.Always" /></div>
+                    </div>
+                    @if (_maximoCompensable is { } max && _diasCompensacion is { } dias && dias > max)
+                    {
+                        <p class="texto-tenue">Supera el máximo compensable (@max.ToString("0.##")): la ley sólo permite pagar en dinero una parte de lo causado (CST art. 189).</p>
+                    }
+                }
+
+                <SfTextBox @bind-Value="_notas" MaxLength="300" Multiline="true" Placeholder="Notas" FloatLabelType="FloatLabelType.Always" />
+
+                @if (_pideRetroactivo)
+                {
+                    <div class="info-card alerta">
+                        <span class="label">Un período cubierto ya está aprobado</span>
+                        <p>La nómina de ese período es inmutable. La novedad de esos días puede quedar como ajuste retroactivo en el período abierto siguiente.</p>
+                        <label class="campo-check"><input type="checkbox" @bind="_aceptaRetroactivo" /> Acepto el ajuste retroactivo.</label>
+                    </div>
+                }
+
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarRegistro = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" OnClick="@RegistrarAsync" Disabled="@(!PuedeRegistrar)">Registrar y calcular</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------- resultado del registro --- *@
+<SfDialog @bind-Visible="_mostrarResultado" Header="Liquidación de vacaciones en borrador" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_resultado is not null)
+            {
+                <div class="pagina">
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="label">Hábiles</span><strong>@_resultado.WorkingDays.ToString("0.##")</strong></div>
+                        <div class="kpi-card"><span class="label">Calendario</span><strong>@_resultado.CalendarDays</strong></div>
+                        <div class="kpi-card"><span class="label">Valor</span><strong>@_resultado.Amount.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Neto</span><strong>@_resultado.Totals.Net.ToString("N0")</strong></div>
+                    </div>
+                    <p class="texto-tenue">Corte @_resultado.CutoffDate.ToString("dd/MM/yyyy") · versión @_resultado.Version. El borrador se aprueba en la pestaña Liquidaciones.</p>
+                    @if (_resultado.Novelties.Count > 0)
+                    {
+                        <span class="label">Al aprobar quedará en la nómina ordinaria</span>
+                        <ul>
+                            @foreach (var n in _resultado.Novelties)
+                            {
+                                <li>@n.ConceptCode · período @n.PeriodLabel: @n.Days día(s) del @n.From.ToString("dd/MM") al @n.To.ToString("dd/MM")@(n.Retroactive ? " (ajuste retroactivo)" : "")</li>
+                            }
+                        </ul>
+                    }
+                    @if (_resultado.Warnings.Count > 0)
+                    {
+                        <span class="label">Avisos</span>
+                        <ul>@foreach (var w in _resultado.Warnings) { <li>@w.Message</li> }</ul>
+                    }
+                    @if (_resultado.Blockers.Count > 0)
+                    {
+                        <span class="label">Bloqueos</span>
+                        <ul>@foreach (var b in _resultado.Blockers) { <li>@b.BanderaTexto: @b.Detail</li> }</ul>
+                    }
+                    @if (_resultado.Excluded.Count > 0)
+                    {
+                        <span class="label">Sin derecho</span>
+                        <ul>@foreach (var x in _resultado.Excluded) { <li>@x.Name: @x.Reason</li> }</ul>
+                    }
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------------ ajuste --- *@
+<SfDialog @bind-Visible="_mostrarAjuste" Header="@($"Ajuste al saldo de {_ajusteDe?.Name}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="pagina">
+                <p class="texto-tenue">Positivo suma al saldo (días reconocidos por acuerdo); negativo lo resta (días tomados sin registro). Queda auditado con su motivo.</p>
+                <SfNumericTextBox TValue="decimal?" @bind-Value="_diasAjuste" Placeholder="Días hábiles (con signo) *" FloatLabelType="FloatLabelType.Always" Decimals="2" Format="+0.##;-0.##;0" />
+                <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAjuste = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" OnClick="@AjustarAsync" Disabled="@(_guardado.Activa || _diasAjuste is null or 0m || string.IsNullOrWhiteSpace(_motivo))">Registrar ajuste</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------- aprobación --- *@
+<SfDialog @bind-Visible="_mostrarAprobacion" Header="Aprobar la liquidación de vacaciones" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Aprobando…">
+            @if (_aprobando is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card">
+                        <span class="label">Qué se aprueba</span>
+                        <p><strong>@_aprobando.EmployeeName</strong> · @_aprobando.TipoTexto @_aprobando.FechasTexto: @_aprobando.WorkingDays.ToString("0.##") hábiles, neto <strong>@_aprobando.Amount.ToString("N0")</strong>, borrador v@_aprobando.Version.</p>
+                        <p class="texto-tenue">Al aprobar se genera el comprobante VacationRun contra la provisión de vacaciones en la misma operación, el movimiento queda liquidado y la ausencia entra a la nómina de cada período que cubre el disfrute.</p>
+                    </div>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_fechaComprobante" Placeholder="Fecha del comprobante (por defecto el corte)" FloatLabelType="FloatLabelType.Always" />
+                    <label class="campo-check"><input type="checkbox" @bind="_confirmar" /> Confirmo aprobar esta liquidación.</label>
+                    @if (_pideSegundaConfirmacion)
+                    {
+                        <div class="info-card">
+                            <span class="label">Segunda confirmación</span>
+                            <p>Quien calculó es quien aprueba. La cooperativa lo permite, pero queda registrado como aprobado sin segregación de funciones.</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_confirmarSinSegregacion" /> Confirmo aprobar sin segregación de funciones.</label>
+                        </div>
+                    }
+                    @if (_pideRetroactivoAprobar)
+                    {
+                        <div class="info-card alerta">
+                            <span class="label">Un período cubierto ya está aprobado</span>
+                            <p>La novedad de esos días quedará como ajuste retroactivo en el período abierto siguiente.</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_aceptaRetroactivoAprobar" /> Acepto el ajuste retroactivo.</label>
+                        </div>
+                    }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAprobacion = false)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" type="button" OnClick="@AprobarAsync" Disabled="@(!_confirmar || _guardado.Activa)">Aprobar</SfButton>
+                    </div>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------ recalcular con ajuste retroactivo --- *@
+<SfDialog @bind-Visible="_mostrarRecalculoRetroactivo" Header="Recalcular la liquidación de vacaciones" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Recalculando…">
+            @if (_recalculando is not null)
+            {
+                <div class="pagina">
+                    <div class="info-card alerta">
+                        <span class="label">Un período cubierto ya está aprobado</span>
+                        <p><strong>@_recalculando.EmployeeName</strong> · @_recalculando.TipoTexto @_recalculando.FechasTexto. La nómina de ese período es inmutable: la versión nueva deja la novedad de esos días como ajuste retroactivo en el período abierto siguiente, igual que al registrar o aprobar.</p>
+                        <label class="campo-check"><input type="checkbox" @bind="_aceptaRetroactivoRecalcular" /> Acepto el ajuste retroactivo.</label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarRecalculoRetroactivo = false)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" type="button" OnClick="@(() => RecalcularAsync(_recalculando, aceptarRetroactivo: true))" Disabled="@(!_aceptaRetroactivoRecalcular || _guardado.Activa)">Recalcular</SfButton>
+                    </div>
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------- motivo (reversar, descartar, anular) --- *@
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@_tituloMotivo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="pagina">
+                <p class="texto-tenue">@_textoMotivo</p>
+                <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" OnClick="@ConfirmarMotivoAsync" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))">Confirmar</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------- detalle de la corrida --- *@
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Detalle" : $"{_detalle.EmployeeName} · {_detalle.Document}")" Width="920px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+            @if (_detalle is not null)
+            {
+                <div class="pagina">
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="label">Días</span><strong>@_detalle.DaysWorked</strong></div>
+                        <div class="kpi-card"><span class="label">Devengado</span><strong>@_detalle.Totals.Earnings.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Deducido</span><strong>@_detalle.Totals.Deductions.ToString("N0")</strong></div>
+                        <div class="kpi-card"><span class="label">Neto</span><strong>@_detalle.Totals.Net.ToString("N0")</strong></div>
+                    </div>
+                    @if (_detalle.Refusals.Count > 0)
+                    {
+                        <div class="info-card alerta"><span class="label">El motor avisa</span><ul>@foreach (var r in _detalle.Refusals) { <li>@r</li> }</ul></div>
+                    }
+                    @if (_detalle.Skips.Count > 0)
+                    {
+                        <span class="label">Rubros omitidos</span>
+                        <ul>@foreach (var s in _detalle.Skips) { <li class="texto-tenue">@s</li> }</ul>
+                    }
+                    <span class="label">Líneas</span>
+                    @foreach (var grupo in _detalle.Lines.GroupBy(l => l.NaturalezaTexto))
+                    {
+                        <h4>@grupo.Key</h4>
+                        <table class="data-grid">
+                            <thead><tr><th></th><th>Concepto</th><th class="monto">Cantidad</th><th class="monto">Base</th><th class="monto">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in grupo)
+                                {
+                                    <tr>
+                                        <td><SfButton CssClass="e-flat e-small" IconCss="@(_lineaAbierta == l.PublicId ? "e-icons e-chevron-up" : "e-icons e-chevron-down")" OnClick="@(() => _lineaAbierta = _lineaAbierta == l.PublicId ? null : l.PublicId)" /></td>
+                                        <td>@l.ConceptCode · @l.ConceptName @(l.AffectsAccounting ? string.Empty : " (sin asiento)")</td>
+                                        <td class="monto">@(l.Quantity?.ToString("0.##"))</td>
+                                        <td class="monto">@(l.BaseAmount?.ToString("N2"))</td>
+                                        <td class="monto"><strong>@l.Amount.ToString("N0")</strong></td>
+                                    </tr>
+                                    @if (_lineaAbierta == l.PublicId)
+                                    {
+                                        <tr><td colspan="5"><ExplicacionDeLinea Explicacion="@l.Explanation" /></td></tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<GenerarDispersion @bind-Visible="_mostrarDispersion" RunPublicId="@_corridaDispersion" Etiqueta="Liquidación de vacaciones" />
+
+@code {
+    // Feature 010 (US8): el archivo de dispersión se genera desde esta relación de pago.
+    private bool _mostrarDispersion;
+    private Guid _corridaDispersion;
+    /// <summary>Llegar con <c>?corrida=</c> (desde el comprobante contable, «Ver en Nómina») abre la pestaña Liquidaciones en el año del corte y el detalle de esa corrida.</summary>
+    [SupplyParameterFromQuery(Name = "corrida")] public Guid? Corrida { get; set; }
+
+    private int _pestana;
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _cargaLiquidaciones = new(), _cargaFicha = new(), _cargaVista = new(), _cargaDetalle = new(), _guardado = new();
+
+    private List<SaldoVacacionesDto> _saldos = [];
+    private List<LiquidacionVacacionesDto> _liquidaciones = [];
+    private DateTime _alDia = DateTime.Today;
+    private string? _buscar;
+    private int? _anio;
+    private string _estado = string.Empty;
+
+    // ficha
+    private bool _mostrarFicha;
+    private SaldoVacacionesDto? _fichaDe;
+    private SaldoVacacionesDetalleDto? _ficha;
+    private List<MovimientoVacacionesDto> _movimientos = [];
+
+    // registro
+    private bool _mostrarRegistro, _esDisfrute = true, _pideRetroactivo, _aceptaRetroactivo;
+    private SaldoVacacionesDto? _registroDe;
+    private decimal? _maximoCompensable;
+    private string? _buscarEmpleado;
+    private List<EmpleadoResumenDto> _empleadosEncontrados = [];
+    private DateTime? _desde, _hasta, _fechaPago;
+    private decimal? _diasCompensacion;
+    private string? _notas;
+    private VistaPreviaHabilesDto? _vista;
+    private bool _mostrarResultado;
+    private VacacionesCalculadasDto? _resultado;
+
+    // ajuste
+    private bool _mostrarAjuste;
+    private SaldoVacacionesDto? _ajusteDe;
+    private decimal? _diasAjuste;
+
+    // aprobación
+    private bool _mostrarAprobacion, _confirmar, _pideSegundaConfirmacion, _confirmarSinSegregacion, _pideRetroactivoAprobar, _aceptaRetroactivoAprobar;
+    private LiquidacionVacacionesDto? _aprobando;
+    private DateTime? _fechaComprobante;
+
+    // recálculo con ajuste retroactivo (mismo aviso que registro y aprobación)
+    private bool _mostrarRecalculoRetroactivo, _aceptaRetroactivoRecalcular;
+    private LiquidacionVacacionesDto? _recalculando;
+
+    // motivo
+    private bool _mostrarMotivo;
+    private string _tituloMotivo = string.Empty, _textoMotivo = string.Empty, _motivo = string.Empty;
+    private Func<string, Task<InvitationApiResult<EmptyResponse>>>? _accionConMotivo;
+
+    // detalle
+    private bool _mostrarDetalle;
+    private DetalleEmpleadoCorridaDto? _detalle;
+    private Guid? _lineaAbierta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ResumenCorridaDto? desdeEnlace = null;
+        if (Corrida is { } id)
+        {
+            var r = await Nomina.ResumenAsync(id);
+            if (r.IsSuccess) { desdeEnlace = r.Value; _anio = desdeEnlace!.CutoffDate?.Year; _pestana = 1; }
+        }
+        await CargarTodoAsync();
+        if (desdeEnlace is { EmployeePublicId: { } empleado }) await AbrirDetalleAsync(desdeEnlace.PublicId, empleado);
+    }
+
+    private async Task CargarTodoAsync()
+    {
+        await CargarSaldosAsync();
+        await CargarLiquidacionesAsync();
+    }
+
+    private async Task CargarSaldosAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.SaldosDeVacacionesAsync(DateOnly.FromDateTime(_alDia), _buscar);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los saldos de vacaciones.");
+            return;
+        }
+        _saldos = (res.Value ?? []).ToList();
+    }
+
+    private async Task CargarLiquidacionesAsync()
+    {
+        using var carga = _cargaLiquidaciones.Iniciar();
+        var res = await Nomina.LiquidacionesDeVacacionesAsync(null, _anio, string.IsNullOrWhiteSpace(_estado) ? null : _estado);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron cargar las liquidaciones de vacaciones.");
+            return;
+        }
+        _liquidaciones = (res.Value ?? []).ToList();
+    }
+
+    private async Task DescargarSaldosAsync(string formato)
+    {
+        var res = await Nomina.DescargarSaldosDeVacacionesAsync(DateOnly.FromDateTime(_alDia), formato, _buscar);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar el reporte."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+
+    // ------------------------------------------------------------------ ficha --
+
+    private async Task AbrirFichaAsync(SaldoVacacionesDto s)
+    {
+        _fichaDe = s; _ficha = null; _movimientos = [];
+        _mostrarFicha = true;
+        await CargarFichaAsync();
+    }
+
+    private async Task CargarFichaAsync()
+    {
+        if (_fichaDe is null) return;
+        using var carga = _cargaFicha.Iniciar();
+        var saldo = await Nomina.SaldoDeVacacionesAsync(_fichaDe.EmployeePublicId, DateOnly.FromDateTime(_alDia));
+        var movs = await Nomina.MovimientosDeVacacionesAsync(_fichaDe.EmployeePublicId);
+        if (!saldo.IsSuccess || !movs.IsSuccess)
+        {
+            await Notification.ErrorAsync(saldo.ErrorMessage ?? movs.ErrorMessage ?? "No se pudo cargar el saldo.");
+            return;
+        }
+        _ficha = saldo.Value;
+        _movimientos = (movs.Value ?? []).ToList();
+    }
+
+    private void AbrirAnulacion(MovimientoVacacionesDto m)
+    {
+        _motivo = string.Empty;
+        _tituloMotivo = "Anular el movimiento";
+        _textoMotivo = m.RunStatus is "Draft" or "Stale"
+            ? "El movimiento tiene una liquidación en borrador: se descarta con él. Las fechas quedan libres."
+            : "El movimiento queda anulado con su motivo; el saldo se recalcula al instante.";
+        _accionConMotivo = async motivo =>
+        {
+            var r = await Nomina.AnularMovimientoDeVacacionesAsync(m.MovementPublicId, motivo);
+            if (r.IsSuccess) { await CargarFichaAsync(); await CargarTodoAsync(); }
+            return r;
+        };
+        _mostrarMotivo = true;
+    }
+
+    // ---------------------------------------------------------------- registro --
+
+    private void AbrirRegistro(SaldoVacacionesDto? s)
+    {
+        _registroDe = s;
+        _maximoCompensable = null;
+        _buscarEmpleado = null;
+        _empleadosEncontrados = [];
+        _esDisfrute = true;
+        _desde = _hasta = _fechaPago = null;
+        _diasCompensacion = null;
+        _notas = null;
+        _vista = null;
+        _pideRetroactivo = _aceptaRetroactivo = false;
+        _mostrarRegistro = true;
+        if (s is not null) _ = CargarMaximoAsync(s.EmployeePublicId);
+    }
+
+    private async Task CargarMaximoAsync(Guid empleadoId)
+    {
+        var r = await Nomina.SaldoDeVacacionesAsync(empleadoId, DateOnly.FromDateTime(_alDia));
+        if (r.IsSuccess) { _maximoCompensable = r.Value!.MaxCompensableDays; _registroDe = r.Value.Balance; StateHasChanged(); }
+    }
+
+    private async Task BuscarEmpleadosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarEmpleado)) { _empleadosEncontrados = []; return; }
+        var r = await Nomina.BuscarEmpleadosAsync(_buscarEmpleado);
+        _empleadosEncontrados = r.IsSuccess ? (r.Value?.Items ?? []).ToList() : [];
+    }
+
+    private async Task ElegirEmpleado(EmpleadoResumenDto e)
+    {
+        _empleadosEncontrados = [];
+        var r = await Nomina.SaldoDeVacacionesAsync(e.PublicId, DateOnly.FromDateTime(_alDia));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el saldo del empleado."); return; }
+        _registroDe = r.Value!.Balance;
+        _maximoCompensable = r.Value.MaxCompensableDays;
+    }
+
+    private void CambiarTipo(bool disfrute) { _esDisfrute = disfrute; _vista = null; _pideRetroactivo = false; }
+
+    private void InvalidarVista() => _vista = null;
+
+    private async Task VerHabilesAsync()
+    {
+        if (_desde is null || _hasta is null) return;
+        using var carga = _cargaVista.Iniciar();
+        var r = await Nomina.DiasHabilesAsync(DateOnly.FromDateTime(_desde.Value), DateOnly.FromDateTime(_hasta.Value), _registroDe?.EmployeePublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron contar los días hábiles."); return; }
+        _vista = r.Value;
+    }
+
+    private bool PuedeRegistrar =>
+        !_guardado.Activa && _registroDe is not null
+        && (_esDisfrute ? _vista is { WorkingDays: > 0 } && _desde is not null && _hasta is not null : _diasCompensacion is > 0m)
+        && (!_pideRetroactivo || _aceptaRetroactivo);
+
+    private async Task RegistrarAsync()
+    {
+        if (!PuedeRegistrar || _registroDe is null) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new RegistrarVacacionesRequest(
+            _registroDe.EmployeePublicId,
+            _esDisfrute ? "Enjoyment" : "Compensation",
+            _esDisfrute ? DateOnly.FromDateTime(_desde!.Value) : null,
+            _esDisfrute ? DateOnly.FromDateTime(_hasta!.Value) : null,
+            _esDisfrute ? null : _diasCompensacion,
+            _esDisfrute || _fechaPago is null ? null : DateOnly.FromDateTime(_fechaPago.Value),
+            string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(),
+            _aceptaRetroactivo);
+        var res = await Nomina.RegistrarVacacionesAsync(request);
+        if (!res.IsSuccess)
+        {
+            if (res.ErrorCode == "Payroll.Vacation.PeriodApproved") { _pideRetroactivo = true; }
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo registrar.");
+            return;
+        }
+        _resultado = res.Value;
+        _mostrarRegistro = false;
+        _mostrarResultado = true;
+        await Notification.SuccessAsync("Movimiento registrado y liquidación calculada en borrador.");
+        await CargarTodoAsync();
+    }
+
+    // ------------------------------------------------------------------ ajuste --
+
+    private void AbrirAjuste(SaldoVacacionesDto s)
+    {
+        _ajusteDe = s; _diasAjuste = null; _motivo = string.Empty;
+        _mostrarAjuste = true;
+    }
+
+    private async Task AjustarAsync()
+    {
+        if (_ajusteDe is null || _diasAjuste is null or 0m || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.AjustarVacacionesAsync(_ajusteDe.EmployeePublicId, _diasAjuste.Value, _motivo.Trim());
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo registrar el ajuste."); return; }
+        await Notification.SuccessAsync("Ajuste registrado.");
+        _mostrarAjuste = false;
+        await CargarSaldosAsync();
+    }
+
+    // -------------------------------------------------------------- aprobación --
+
+    private void AbrirAprobacion(LiquidacionVacacionesDto l)
+    {
+        _aprobando = l;
+        _fechaComprobante = null;
+        _confirmar = _pideSegundaConfirmacion = _confirmarSinSegregacion = _pideRetroactivoAprobar = _aceptaRetroactivoAprobar = false;
+        _mostrarAprobacion = true;
+    }
+
+    private async Task AprobarAsync()
+    {
+        if (_aprobando is null || !_confirmar) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.AprobarVacacionesAsync(_aprobando.RunPublicId, new AprobarLiquidacionRequest(
+            true, _fechaComprobante is { } f ? DateOnly.FromDateTime(f) : null, ConfirmEmpty: false,
+            ConfirmWithoutSegregation: _confirmarSinSegregacion, AcceptRetroactive: _aceptaRetroactivoAprobar));
+        if (!res.IsSuccess)
+        {
+            if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && !_confirmarSinSegregacion) _pideSegundaConfirmacion = true;
+            if (res.ErrorCode == "Payroll.Vacation.PeriodApproved") _pideRetroactivoAprobar = true;
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo aprobar.");
+            return;
+        }
+        await Notification.SuccessAsync(string.IsNullOrEmpty(res.Value!.Number)
+            ? "Liquidación aprobada (sin comprobante: la nómina ordinaria paga los días)."
+            : $"Liquidación aprobada. Comprobante {res.Value.Number} del {res.Value.PostingDate:dd/MM/yyyy}.");
+        _mostrarAprobacion = false;
+        await CargarTodoAsync();
+    }
+
+    private async Task RecalcularAsync(LiquidacionVacacionesDto l, bool aceptarRetroactivo = false)
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.RecalcularVacacionesAsync(l.RunPublicId, aceptarRetroactivo);
+        if (!res.IsSuccess)
+        {
+            // Entre el registro y el recálculo se aprobó la nómina de un período que cubre el disfrute:
+            // la API lo dice con PeriodApproved y admite AcceptRetroactive, como al registrar y al
+            // aprobar. Hasta el 2026-09-21 la pantalla sólo mostraba el mensaje y la única salida era
+            // descartar el borrador y registrar de nuevo, perdiendo la versión.
+            if (res.ErrorCode == "Payroll.Vacation.PeriodApproved" && !aceptarRetroactivo)
+            {
+                _recalculando = l;
+                _aceptaRetroactivoRecalcular = false;
+                _mostrarRecalculoRetroactivo = true;
+            }
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo recalcular.");
+            return;
+        }
+        _mostrarRecalculoRetroactivo = false;
+        _resultado = res.Value;
+        _mostrarResultado = true;
+        await CargarLiquidacionesAsync();
+    }
+
+    private void AbrirMotivo(LiquidacionVacacionesDto l, bool descartar)
+    {
+        _motivo = string.Empty;
+        _tituloMotivo = descartar ? "Descartar el borrador" : "Reversar la liquidación";
+        _textoMotivo = descartar
+            ? "El borrador queda descartado y el movimiento anulado; las fechas quedan libres para registrarlo de nuevo."
+            : "Se genera el asiento espejo, el movimiento vuelve a registrado y las novedades de ausencia de los períodos aún abiertos se anulan. Si hay pagos marcados, retírelos primero.";
+        _accionConMotivo = async motivo =>
+        {
+            if (descartar) return SinCuerpo(await Nomina.DescartarVacacionesAsync(l.RunPublicId, motivo));
+            return SinCuerpo(await Nomina.ReversarVacacionesAsync(l.RunPublicId, motivo));
+        };
+        _mostrarMotivo = true;
+    }
+
+    /// <summary>Reversar y descartar responden cuerpos distintos; el diálogo de motivo sólo necesita saber si salió bien.</summary>
+    private static InvitationApiResult<EmptyResponse> SinCuerpo<T>(InvitationApiResult<T> r) =>
+        r.IsSuccess ? InvitationApiResult<EmptyResponse>.Success(new EmptyResponse()) : InvitationApiResult<EmptyResponse>.Failure(r.ErrorCode ?? "Error", r.ErrorMessage ?? "No se pudo completar.", r.StatusCode ?? 0);
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (_accionConMotivo is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await _accionConMotivo(_motivo.Trim());
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo completar."); return; }
+        await Notification.SuccessAsync("Listo.");
+        _mostrarMotivo = false;
+        await CargarTodoAsync();
+    }
+
+    // ----------------------------------------------------------------- detalle --
+
+    private Task AbrirDetalleAsync(LiquidacionVacacionesDto l) => AbrirDetalleAsync(l.RunPublicId, l.EmployeePublicId);
+
+    private async Task AbrirDetalleAsync(Guid corridaId, Guid empleadoId)
+    {
+        _detalle = null; _lineaAbierta = null;
+        _mostrarDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var res = await Nomina.DetalleEmpleadoAsync(corridaId, empleadoId);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el detalle."); return; }
+        _detalle = res.Value;
+    }
+}

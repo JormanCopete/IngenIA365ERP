@@ -59,7 +59,7 @@ public class LedgerQueryTests
             Contabilizar(new PostingRequest("CI", new DateOnly(2026, 3, 18), "Cierre", ContabilidadTestData.Manual(),
                 [PostingLine.Debito(Ingreso.Id, 100m), PostingLine.Credito(Caja.Id, 100m)], DocumentKind.Closing));
 
-            var emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            var emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             Handler = new LedgerQueryHandler(D.Db, D.Alcance, D.Clock, D.User, emisor);
         }
 
@@ -354,7 +354,7 @@ public class LedgerQueryTests
         var e = new Escenario();
         var escritor = Substitute.For<IAuditAppendOnlyWriter>();
         var handler = new LedgerQueryHandler(e.D.Db, e.D.Alcance, e.D.Clock, e.D.User,
-            new AccountingAuditEmitter(escritor, e.D.User, CooperativaDePrueba.Actual, e.D.Clock, NullLogger<AccountingAuditEmitter>.Instance));
+            new AccountingAuditEmitter(escritor, e.D.User, e.D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual));
 
         var json = await handler.Handle(new LedgerQuery(e.Filtros(), "account:1"), CancellationToken.None);
         json.IsSuccess.Should().BeTrue();

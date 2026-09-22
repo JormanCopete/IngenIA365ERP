@@ -288,6 +288,11 @@ table.tabla th.monto,
     color: var(--texto-tenue);
 }
 
+/* Feature 010 (N2): aviso en línea que pide atención sin ser error (cuadre de la PILA, datos del aportante). */
+.texto-alerta {
+    color: var(--alerta-texto);
+}
+
 /* --- 6. Botones ----------------------------------------------------------- */
 
 /* Los botones nativos que no pasan por SyncFusion. `.primary` está en 14
@@ -1080,3 +1085,10 @@ input[type="checkbox"], input[type="radio"] {
 .grilla-presupuesto .codigo { font-family: var(--fuente-mono); font-weight: var(--peso-medio); margin-right: var(--gap-xs); }
 .grilla-presupuesto td.linea-acciones { white-space: nowrap; }
 .grilla-presupuesto td.linea-acciones .enlace { padding: 0 var(--pad-xs); }
+/* Feature 010 (N4): archivos planos bancarios — la vista previa se lee en monoespaciada, sin cortar líneas. */
+.archivo-plano { font-family: var(--fuente-mono); font-size: var(--texto-sm); white-space: pre; overflow-x: auto; margin: var(--pad-sm) 0 0; padding: var(--pad-sm) var(--pad-md); background: var(--superficie-2); border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.fila-campos { display: flex; flex-wrap: wrap; gap: var(--gap-md); align-items: flex-end; }
+.campos-formato { width: 100%; border-collapse: collapse; font-size: var(--texto-sm); }
+.campos-formato th, .campos-formato td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde-suave, var(--borde)); vertical-align: middle; }
+.campos-formato input, .campos-formato select { width: 100%; min-width: 4rem; }
+.campos-formato .estrecha { width: 4.5rem; }

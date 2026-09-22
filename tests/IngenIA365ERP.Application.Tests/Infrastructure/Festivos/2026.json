@@ -1,0 +1,26 @@
+// Festivos de Colombia 2026 (Ley 51 de 1983), calculados a mano y contrastados con el calendario
+// publicado: 18 festivos. Pascua: domingo 5 de abril. El 1 de noviembre es domingo → lunes 2.
+{
+  "anio": 2026,
+  "pascua": "2026-04-05",
+  "festivos": [
+    { "fecha": "2026-01-01", "nombre": "Año Nuevo", "origen": "Fijo" },
+    { "fecha": "2026-01-12", "nombre": "Reyes Magos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-03-23", "nombre": "San José", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-04-02", "nombre": "Jueves Santo", "origen": "Pascua" },
+    { "fecha": "2026-04-03", "nombre": "Viernes Santo", "origen": "Pascua" },
+    { "fecha": "2026-05-01", "nombre": "Día del Trabajo", "origen": "Fijo" },
+    { "fecha": "2026-05-18", "nombre": "Ascensión del Señor", "origen": "Pascua" },
+    { "fecha": "2026-06-08", "nombre": "Corpus Christi", "origen": "Pascua" },
+    { "fecha": "2026-06-15", "nombre": "Sagrado Corazón de Jesús", "origen": "Pascua" },
+    { "fecha": "2026-06-29", "nombre": "San Pedro y San Pablo", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-07-20", "nombre": "Día de la Independencia", "origen": "Fijo" },
+    { "fecha": "2026-08-07", "nombre": "Batalla de Boyacá", "origen": "Fijo" },
+    { "fecha": "2026-08-17", "nombre": "Asunción de la Virgen", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-10-12", "nombre": "Día de la Raza", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-11-02", "nombre": "Todos los Santos", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-11-16", "nombre": "Independencia de Cartagena", "origen": "TrasladadoAlLunes" },
+    { "fecha": "2026-12-08", "nombre": "Inmaculada Concepción", "origen": "Fijo" },
+    { "fecha": "2026-12-25", "nombre": "Navidad", "origen": "Fijo" }
+  ]
+}

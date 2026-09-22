@@ -172,7 +172,7 @@ public class FiltroPorRubroYFormatoTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Audit, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             (string Code, string Name, byte Grupo, string? Parent)[] rubros =
             [
                 ("ESF-A", "Activo", 2, null),

@@ -40,7 +40,7 @@ public class BudgetExecutionQueryTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Auditoria, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Auditoria, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             Clase5 = Agrupacion("5", 1, null);
             Grupo51 = Agrupacion("51", 2, Clase5);
             Cuenta5105 = Agrupacion("5105", 3, Grupo51);

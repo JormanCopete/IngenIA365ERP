@@ -42,7 +42,8 @@ public sealed class ReversePayrollRunCommandHandler(
     PayrollAccountingPoster poster,
     IDateTimeService clock,
     ICurrentUserService user,
-    PayrollAuditEmitter audit)
+    PayrollAuditEmitter audit,
+    IPayrollRunStaleMarker staleMarker)
     : IRequestHandler<ReversePayrollRunCommand, Result<ReverseRunResultDto>>
 {
     public async Task<Result<ReverseRunResultDto>> Handle(ReversePayrollRunCommand request, CancellationToken ct)
@@ -53,6 +54,8 @@ public sealed class ReversePayrollRunCommandHandler(
         var run = await db.PayrollRuns.Include(r => r.PayPeriod).Include(r => r.AccountingDocument)
             .FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Fallo("Payroll.RunNotFound", "No existe la corrida indicada.");
+        // Feature 010: las liquidaciones especiales se reversan por su ruta con su permiso.
+        if (run.EsEspecial) return Result.Failure<ReverseRunResultDto>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
         if (run.Status != PayrollRunStatus.Approved)
             return Fallo("Payroll.RunNotApproved", $"La corrida está {run.Status}: sólo se reversa una liquidación aprobada.");
         var period = run.PayPeriod!;
@@ -111,6 +114,12 @@ public sealed class ReversePayrollRunCommandHandler(
                 r.UpdatedBy = yo;
             }
         }
+
+        // Feature 010 (revisión N1): la reversión quita provisiones y bases que un borrador de liquidación
+        // especial de estos empleados ya tomó; queda Stale para que se recalcule antes de aprobarlo.
+        var idsEmpleados = await db.PayrollRunEmployees.AsNoTracking().Where(re => re.PayrollRunId == run.Id).Select(re => re.EmployeeId).ToListAsync(ct);
+        await staleMarker.MarkSettlementDraftsStaleAsync(idsEmpleados, DateOnly.FromDateTime(period.StartDate),
+            $"reversión de la nómina ordinaria {period.StartDate:yyyy-MM-dd} a {period.EndDate:yyyy-MM-dd}", ct);
 
         await db.SaveChangesAsync(ct);
 

@@ -37,14 +37,14 @@ public static class EntregaDeInformes
 
     public static bool EsFormatoValido(string? formato) => FormatosDeInforme.EsValido(formato);
 
-    public static Task<IResult> EntregarAsync(Result<TablaExportable> resultado, string? formato, string nombreBase)
+    public static Task<IResult> EntregarAsync(Result<TablaExportable> resultado, string? formato, string nombreBase, HttpContext? http = null)
     {
         if (resultado.IsFailure)
-            return Task.FromResult(Fallo(resultado.Error));
+            return Task.FromResult(Fallo(resultado.Error, http));
         var f = Normalizar(formato);
         if (f == Json) return Task.FromResult(Results.Ok(resultado.Value));
         if (!FormatosDeArchivo.Contains(f))
-            return Task.FromResult(Fallo(new Error("Reportes.FormatoInvalido", "Formatos: json, xlsx, pdf, docx."), StatusCodes.Status400BadRequest));
+            return Task.FromResult(Fallo(new Error("Reportes.FormatoInvalido", "Formatos: json, xlsx, pdf, docx."), http, StatusCodes.Status400BadRequest));
         var archivo = ExportadorDeTablas.Exportar(resultado.Value, f, $"{nombreBase}-{DateTime.UtcNow:yyyyMMdd-HHmm}");
         return Task.FromResult(Results.File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo));
     }
@@ -54,12 +54,12 @@ public static class EntregaDeInformes
     /// Un formato desconocido es una petición mal formada y sigue siendo 400 (la prueba de
     /// integración de nómina lo afirma y su código no cambia): se le fija el status a mano.
     /// </summary>
-    private static IResult Fallo(Error error, int? statusFijo = null)
+    private static IResult Fallo(Error error, HttpContext? http = null, int? statusFijo = null)
     {
         var code = string.IsNullOrEmpty(error.Code) ? "Generic.Failure" : error.Code;
-        var status = statusFijo ?? ErrorEnvelopeFilter.EstadoHttpDe(code);
+        var status = statusFijo ?? ErrorEnvelopeFilter.EstadoDe(code);
         return error is ErrorConDatos conDatos
-            ? Results.Json(new { code, errorCode = code, message = error.Message, data = conDatos.Data }, statusCode: status)
-            : Results.Json(new { code, errorCode = code, message = error.Message }, statusCode: status);
+            ? Results.Json(new { code, errorCode = code, message = error.Message, data = conDatos.Data, traceId = http?.TraceIdentifier }, statusCode: status)
+            : Results.Json(new { code, errorCode = code, message = error.Message, traceId = http?.TraceIdentifier }, statusCode: status);
     }
 }

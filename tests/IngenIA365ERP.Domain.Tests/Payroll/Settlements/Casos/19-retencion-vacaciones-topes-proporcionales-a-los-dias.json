@@ -1,0 +1,47 @@
+{
+  "casos": [
+    {
+      "nombre": "Retención de un disfrute de 15 días comerciales: los topes mensuales en UVT van a la mitad (D-28)",
+      "descripcion": "Research R5, modo Mensualizado: la liquidación de vacaciones depura como pago laboral ordinario y sus topes mensuales (vivienda 100 UVT, renta exenta 65,83 UVT, global 111,67 UVT) se proporcionan a los días que cubre el pago (15/30), igual que la nómina ordinaria proporciona los suyos a los días del período. Con proporción 1 la ordinaria del mes y esta liquidación sumaban dos meses de topes para un mes de ingreso.",
+      "derivacion": "Salario 25.000.000 (> 2 SMMLV, sin auxilio). Disfrute del 17/10 al 01/11 (16 días calendario, 15 del calendario comercial que la liquidación paga, D-31): día = 25.000.000 / 30 = 833.333,33; 15 × 833.333,33 = 12.500.000 (VACACIONES_LIQ). No cotiza (el disfrute no entra al IBC de esta liquidación): aportes 0. Proporción = 15 / 30 = 0,5. Intereses de vivienda declarados 6.000.000 → tope 100 UVT × 52.374 × 0,5 = 2.618.700. Renta exenta 25 % de (12.500.000 − 2.618.700) = 2.470.325 → tope 65,83 UVT × 52.374 × 0,5 = 1.723.890,21. Total 4.342.590,21 → tope global = mín(40 % × 12.500.000 = 5.000.000; 111,67 UVT × 52.374 × 0,5 = 2.924.302,29) = 2.924.302,29. Base = 12.500.000 − 2.924.302,29 = 9.575.697,71 = 182,8330 UVT → tramo 150–360: (182,8330 − 150) × 28 % + 10 = 19,1932 UVT × 52.374 = 1.005.227 → aproximado a 1.000: 1.005.000. (Con proporción 1 habría dado 480.000: vivienda 5.237.400, exenta 1.815.650, total limitado a 5.000.000, base 7.500.000 = 143,20 UVT → 9,158 UVT = 479.644.)",
+      "tipo": "Vacation",
+      "corte": "2026-10-16",
+      "empleado": {
+        "nombre": "Disfrute de quince días con vivienda declarada",
+        "ingreso": "2020-01-01",
+        "salarios": [ { "desde": "2020-01-01", "mensual": 25000000 } ],
+        "conAuxilio": false,
+        "deduccionesTributarias": [ { "tipo": "HousingInterest", "mensual": 6000000 } ]
+      },
+      "movimientoALiquidar": { "tipo": "Enjoyment", "desde": "2026-10-17", "hasta": "2026-11-01", "diasHabiles": 13, "diasCalendario": 16 },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { "VACACIONES_LIQ": 12500000, "RETEFTE": 1005000 },
+        "explicaciones": [
+          "RETEFTE: Días que cubre este pago (15) / 30",
+          "RETEFTE: Intereses de vivienda: $6.000.000 limitado al tope"
+        ]
+      }
+    },
+    {
+      "nombre": "Retención de un disfrute de 40 días comerciales: la proporción de los topes no pasa de un mes",
+      "descripcion": "Un pago que cubre más de 30 días recibe los topes de UN mes (proporción 1): la depuración no crece con los días.",
+      "derivacion": "Salario 25.000.000. Disfrute del 17/10 al 26/11 (41 días calendario, 40 del calendario comercial, D-31): 40 × 833.333,33 = 33.333.333,33 (VACACIONES_LIQ). Proporción = mín(1; 40/30) = 1. Vivienda 6.000.000 → tope 100 UVT = 5.237.400. Renta exenta 25 % de (33.333.333,33 − 5.237.400) = 7.023.983,33 → tope 65,83 UVT = 3.447.780,42. Total 8.685.180,42 → tope global = mín(40 % × 33.333.333,33 = 13.333.333,33; 111,67 UVT = 5.848.604,58) = 5.848.604,58. Base = 33.333.333,33 − 5.848.604,58 = 27.484.728,75 = 524,7781 UVT → tramo 360–640: (524,7781 − 360) × 33 % + 69 = 123,3768 UVT × 52.374 = 6.461.736 → aproximado a 1.000: 6.462.000.",
+      "tipo": "Vacation",
+      "corte": "2026-10-16",
+      "empleado": {
+        "nombre": "Disfrute de cuarenta días",
+        "ingreso": "2020-01-01",
+        "salarios": [ { "desde": "2020-01-01", "mensual": 25000000 } ],
+        "conAuxilio": false,
+        "deduccionesTributarias": [ { "tipo": "HousingInterest", "mensual": 6000000 } ]
+      },
+      "movimientoALiquidar": { "tipo": "Enjoyment", "desde": "2026-10-17", "hasta": "2026-11-26", "diasHabiles": 35, "diasCalendario": 41 },
+      "esperado": {
+        "soloLineasListadas": true,
+        "lineas": { "VACACIONES_LIQ": 33333333.33, "RETEFTE": 6462000 },
+        "explicaciones": [ "RETEFTE: Días que cubre este pago (40) / 30" ]
+      }
+    }
+  ]
+}

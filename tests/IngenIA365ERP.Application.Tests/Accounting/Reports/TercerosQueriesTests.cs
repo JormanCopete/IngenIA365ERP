@@ -44,7 +44,7 @@ public class TercerosQueriesTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Audit, D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Audit, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             Cartera = D.Cuenta("130505", tercero: true, cruce: true);
             Caja = D.Cuenta("110505");
             Ingreso = D.Cuenta("413505", AccountNature.Credit);

@@ -14,20 +14,22 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// tumba la operación, pero lo deja en el log con la acción y el motivo (Principio IX).
 ///
 /// <para>
-/// La cooperativa del evento sale de <see cref="ICurrentTenantService"/> —el PublicId en formato N,
-/// el mismo con el que <c>MongoAuditService</c> escribe los comandos y con el que la consola lee—
-/// y <b>no</b> de <see cref="ICurrentUserService.TenantId"/>, que es el Id interno («3»). Hasta el
-/// 2026-09-20 se usaba éste: el rastro se escribía en <c>…_Audit_3</c>, una base que nadie consulta,
-/// y <c>GET /api/audit/logs</c> nunca mostró una exportación de informes. Lo fija la e2e de
-/// informes (<c>Accounting.Report.Exported</c> visible en la consola tras exportar).
+/// La base de auditoría de cada cooperativa se nombra por el <c>PublicId</c> del tenant
+/// (<see cref="ICurrentTenantService.TenantId"/>), que es lo que la consola consulta. Hasta el
+/// 2026-09-21 este emisor escribía con <see cref="ICurrentUserService.TenantId"/> —el Id interno— y
+/// los eventos contables explícitos (cuentas, períodos, tipos de comprobante, catálogos, inicio de la
+/// contabilidad) caían en una base que nadie leía: el mismo defecto que <c>PayrollAuditEmitter</c>
+/// corrigió ese día y que la revisión de la feature 010 encontró aquí. El servicio de tenant es
+/// opcional para que las pruebas que construyen el emisor a mano sigan compilando; sin cooperativa
+/// activa el evento va vacío —la base global—, nunca al Id interno, que sería una base fantasma.
 /// </para>
 /// </summary>
 public sealed class AccountingAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
-    ICurrentTenantService tenant,
     IDateTimeService clock,
-    ILogger<AccountingAuditEmitter> logger)
+    ILogger<AccountingAuditEmitter> logger,
+    ICurrentTenantService? tenant = null)
 {
     public const string Modulo = "Accounting";
 
@@ -38,7 +40,7 @@ public sealed class AccountingAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: tenant.TenantId ?? string.Empty,
+                TenantId: tenant?.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

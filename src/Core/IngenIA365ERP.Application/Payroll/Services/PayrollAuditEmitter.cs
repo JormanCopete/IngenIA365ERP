@@ -11,17 +11,23 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// <c>AuditBehavior</c> genérico guarda el comando tal cual; esto guarda además la
 /// entidad, y los valores antes y después. Si la escritura falla no tumba el comando,
 /// pero lo deja en el log con la acción y el motivo (nunca en silencio, Principio IX).
-/// La cooperativa del evento es la de <see cref="ICurrentTenantService"/> (PublicId en formato N,
-/// la base que la consola lee), no el Id interno de <see cref="ICurrentUserService.TenantId"/>:
-/// con éste, hasta el 2026-09-20, los eventos explícitos de nómina iban a una base que nadie
-/// consultaba (ver <c>AccountingAuditEmitter</c>).
+///
+/// <para>
+/// La base de auditoría de cada cooperativa se nombra por el <c>PublicId</c> del tenant
+/// (<see cref="ICurrentTenantService.TenantId"/>), que es lo que la consola consulta. Hasta el
+/// 2026-09-21 este emisor escribía con <see cref="ICurrentUserService.TenantId"/> —el Id interno— y
+/// todos los eventos explícitos de nómina caían en una base que nadie leía; la e2e de la definitiva
+/// (feature 010, US3) lo destapó al buscar <c>Payroll.Settlement.DeductionAdjusted</c>. El servicio
+/// de tenant es opcional para que las pruebas que construyen el emisor a mano sigan compilando; sin
+/// cooperativa activa el evento va vacío —la base global—, nunca al Id interno, que sería una base fantasma.
+/// </para>
 /// </summary>
 public sealed class PayrollAuditEmitter(
     IAuditAppendOnlyWriter writer,
     ICurrentUserService currentUser,
-    ICurrentTenantService tenant,
     IDateTimeService clock,
-    ILogger<PayrollAuditEmitter> logger)
+    ILogger<PayrollAuditEmitter> logger,
+    ICurrentTenantService? tenant = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -30,7 +36,7 @@ public sealed class PayrollAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: tenant.TenantId ?? string.Empty,
+                TenantId: tenant?.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

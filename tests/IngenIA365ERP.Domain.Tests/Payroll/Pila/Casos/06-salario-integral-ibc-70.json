@@ -1,0 +1,86 @@
+{
+  // Caso dorado 06 (feature 010, US5): integral al 70 % (SALARIO_INTEGRAL_BASE_PCT), tope del IBC (IBC_TOPE_SMMLV) y fondo de solidaridad al 2 %.
+  "nombre": "Salario integral: IBC al 70 % y tope de 25 SMMLV",
+  "derivacion": "Escobar (integral 20.000.000): IBC 14.000.000, devenga ≥ 10 SMMLV → no exonerada: 2.240.000 + 1.750.000 + 73.100 + 560.000 + 280.000 + 420.000 + FSP 1 % 140.000 = 5.463.100. Estrada (integral 70.000.000): 70 % = 49.000.000 supera el tope 25 × 1.750.905 = 43.772.625 → IBC 43.772.625; pensión 7.003.620→7.003.700; salud 5.471.578,125→5.471.600; ARL 228.493,10→228.500; CCF 1.750.905→1.751.000; SENA 875.452,5→875.500; ICBF 1.313.178,75→1.313.200; FSP 25 SMMLV → 2 %: 875.452,5→875.500 (solidaridad 218.863,125→218.900, subsistencia 656.600) = 17.519.000. Total 22.982.100; Σ IBC 57.772.625.",
+  "year": 2026,
+  "month": 12,
+  "empresa": {
+    "nombre": "Cooperativa de Prueba",
+    "nit": "900123456",
+    "dv": "7",
+    "clase": "B",
+    "arlPilaCode": "14-23",
+    "codigoOperador": "24",
+    "dane": "76001",
+    "actividadEconomica": "1649501"
+  },
+  "politicas": {
+    "exonerada114_1": true,
+    "cotizaArlEnVacaciones": false
+  },
+  "parametros": {},
+  "cotizantes": [
+    {
+      "documento": "6001",
+      "primerApellido": "Escobar",
+      "segundoApellido": "Echeverri",
+      "primerNombre": "Elena",
+      "clase": "IntegralSalary",
+      "ingreso": "2018-02-01",
+      "salario": 20000000
+    },
+    {
+      "documento": "6002",
+      "primerApellido": "Estrada",
+      "segundoApellido": "Escallón",
+      "primerNombre": "Emilio",
+      "clase": "IntegralSalary",
+      "ingreso": "2012-09-01",
+      "salario": 70000000
+    }
+  ],
+  "esperado": {
+    "cotizantes": 2,
+    "lineas": 2,
+    "totalIbcCcf": 57772625,
+    "totalAportes": 22982100,
+    "bloqueantes": [],
+    "alertas": [
+      "Pila.LayoutSinCotejar"
+    ],
+    "lineasEsperadas": [
+      {
+        "n": 1,
+        "documento": "6001",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 14000000,
+        "pension": 2240000,
+        "fsp": 140000,
+        "salud": 1750000,
+        "arl": 73100,
+        "ccf": 560000,
+        "sena": 280000,
+        "icbf": 420000,
+        "exonerado": false
+      },
+      {
+        "n": 2,
+        "documento": "6002",
+        "novedades": "",
+        "tipo": "01/00",
+        "dias": 30,
+        "ibc": 43772625,
+        "pension": 7003700,
+        "fsp": 875500,
+        "salud": 5471600,
+        "arl": 228500,
+        "ccf": 1751000,
+        "sena": 875500,
+        "icbf": 1313200,
+        "exonerado": false
+      }
+    ]
+  }
+}

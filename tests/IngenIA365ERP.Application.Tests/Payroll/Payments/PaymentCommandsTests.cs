@@ -29,18 +29,18 @@ public class PaymentCommandsTests
         var r = await calc.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var poster = d.Contabilizador(Contadora);
-        var audit = new PayrollAuditEmitter(d.Audit, Contadora, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var apr = new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit);
+        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+        var apr = new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker);
         var a = await apr.Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
         a.IsSuccess.Should().BeTrue(a.Error.Message);
         return r.Value.RunPublicId;
     }
 
     private static MarkPaymentsCommandHandler Marcador(NominaTestData d) =>
-        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual));
 
     private static RevertPaymentMarkCommandHandler Retirador(NominaTestData d) =>
-        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance));
+        new(d.Db, d.Clock, Tesorera, new PayrollAuditEmitter(d.Audit, Tesorera, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual));
 
     [Fact]
     public async Task La_relacion_de_pago_trae_neto_banco_cuenta_y_estado()

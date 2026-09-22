@@ -33,8 +33,8 @@ public class ApprovePayrollRunCommandHandlerTests
     {
         var usuario = quien ?? Contadora;
         var poster = d.Contabilizador(usuario);
-        var audit = new PayrollAuditEmitter(d.Audit, usuario, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        return new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, usuario, audit);
+        var audit = new PayrollAuditEmitter(d.Audit, usuario, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+        return new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, usuario, audit, d.StaleMarker);
     }
 
     private static async Task RegistrarHoras(NominaTestData d)

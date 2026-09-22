@@ -47,8 +47,8 @@ public class SendPayslipsCommandHandlerTests
         if (aprobar)
         {
             var poster = d.Contabilizador(Contadora);
-            var audit = new PayrollAuditEmitter(d.Audit, Contadora, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit)
+            var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
                 .Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
             a.IsSuccess.Should().BeTrue(a.Error.Message);
         }
@@ -79,7 +79,7 @@ public class SendPayslipsCommandHandlerTests
         estado.Description.Returns(correoConfigurado ? "smtp.demo:587" : "sin host");
 
         var dispatcher = new PayslipEmailDispatcher(d.Db, builder, renderer, templates, sender, d.Clock, Contadora, NullLogger<PayslipEmailDispatcher>.Instance);
-        var auditEmitter = new PayrollAuditEmitter(d.Audit, Contadora, CooperativaDePrueba.Actual, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
+        var auditEmitter = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
         return new Armado
         {
             D = d, RunId = r.Value.RunPublicId, Builder = builder, Sender = sender, Enviados = enviados,

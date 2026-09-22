@@ -72,16 +72,15 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
     private static (int Status, string Code, string Message) MapFailure(Error error)
     {
         var code = string.IsNullOrEmpty(error.Code) ? "Generic.Failure" : error.Code;
-        return (EstadoHttpDe(code), code, error.Message);
+        return (EstadoDe(code), code, error.Message);
     }
 
     /// <summary>
-    /// El status HTTP que le toca a un código de error, en un solo sitio. Lo usa también
-    /// <c>EntregaDeInformes</c> (feature 009 E2), que arma su propio cuerpo porque la ruta
-    /// devuelve un archivo en el camino feliz: hasta entonces todo fallo de un informe salía
-    /// 400 plano y un tercero inexistente no se distinguía de un filtro mal escrito.
+    /// El estado HTTP que le toca a un código de error, la misma tabla que usa el filtro. Público para
+    /// quien entrega un <c>IResult</c> propio (la descarga de informes, <c>EntregaDeInformes</c>) y aun
+    /// así tiene que respetar el contrato: <c>*.NotFound</c> 404, negocio 422, <c>Validation.*</c> 400.
     /// </summary>
-    public static int EstadoHttpDe(string code)
+    public static int EstadoDe(string code)
     {
         return code switch
         {

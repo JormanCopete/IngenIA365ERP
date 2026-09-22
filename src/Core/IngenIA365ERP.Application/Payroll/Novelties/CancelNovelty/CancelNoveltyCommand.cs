@@ -40,6 +40,11 @@ public sealed class CancelNoveltyCommandHandler(
         if (novelty.Origin == NoveltyOrigin.LoanDeduction)
             return Result.Failure(new Error("Payroll.NoveltyNotActive",
                 "El descuento lo generó Cartera: se anula desde ese módulo, no desde la nómina."));
+        // Feature 010 (D-01): la ausencia por vacaciones la dejó una liquidación aprobada; la deshace la
+        // reversión de esa liquidación (o la cancelación del movimiento), no una persona desde aquí.
+        if (novelty.Origin == NoveltyOrigin.VacationLeave)
+            return Result.Failure(new Error("Payroll.NoveltyNotActive",
+                "Esta novedad la generó la liquidación de vacaciones: reverse la liquidación en Nómina › Vacaciones para deshacerla."));
 
         var editable = await NoveltyRules.EnsureEditableAsync(db, novelty.PayPeriod!, ct);
         if (editable.IsFailure) return editable;

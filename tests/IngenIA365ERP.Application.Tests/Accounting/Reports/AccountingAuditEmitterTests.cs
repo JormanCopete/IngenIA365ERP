@@ -38,7 +38,7 @@ public class AccountingAuditEmitterTests
         var (escritor, usuario, cooperativa, reloj) = Escenario();
         AuditEventDocument? escrito = null;
         escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        var emisor = new AccountingAuditEmitter(escritor, usuario, cooperativa, reloj, NullLogger<AccountingAuditEmitter>.Instance);
+        var emisor = new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa);
 
         await emisor.EmitirExportacionAsync("trial-balance", new { from = "2026-01-01" }, "xlsx", 42, CancellationToken.None);
 
@@ -57,7 +57,7 @@ public class AccountingAuditEmitterTests
         var (escritor, usuario, cooperativa, reloj) = Escenario();
         AuditEventDocument? escrito = null;
         escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        var emisor = new PayrollAuditEmitter(escritor, usuario, cooperativa, reloj, NullLogger<PayrollAuditEmitter>.Instance);
+        var emisor = new PayrollAuditEmitter(escritor, usuario, reloj, NullLogger<PayrollAuditEmitter>.Instance, cooperativa);
 
         await emisor.EmitAsync("Payroll.Run.Approved", "PayrollRun", Guid.NewGuid(), null, new { neto = 1 }, CancellationToken.None);
 
@@ -74,10 +74,25 @@ public class AccountingAuditEmitterTests
         AuditEventDocument? escrito = null;
         escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await new AccountingAuditEmitter(escritor, usuario, cooperativa, reloj, NullLogger<AccountingAuditEmitter>.Instance)
+        await new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa)
             .EmitAsync("Accounting.Setup.Initialized", "AccountingSetup", null, null, null, CancellationToken.None);
 
         escrito!.TenantId.Should().BeEmpty("vacío es lo que el escritor traduce a la base global; «3» sería una base fantasma");
+    }
+
+    [Fact]
+    public async Task Sin_servicio_de_tenant_el_evento_tampoco_va_al_id_interno()
+    {
+        // La revisión de la feature 010 (2026-09-21) dejó el servicio opcional para las pruebas que arman el
+        // emisor a mano, y de paso caía al Id interno del usuario: el mismo defecto por la otra puerta.
+        var (escritor, usuario, _, reloj) = Escenario();
+        AuditEventDocument? escrito = null;
+        escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        await new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance)
+            .EmitAsync("Accounting.Period.Changed", "AccountingPeriod", null, null, null, CancellationToken.None);
+
+        escrito!.TenantId.Should().BeEmpty();
     }
 
     [Fact]
@@ -86,7 +101,7 @@ public class AccountingAuditEmitterTests
         var (escritor, usuario, cooperativa, reloj) = Escenario();
         escritor.AppendAsync(Arg.Any<AuditEventDocument>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("Mongo caído")));
 
-        var acto = () => new AccountingAuditEmitter(escritor, usuario, cooperativa, reloj, NullLogger<AccountingAuditEmitter>.Instance)
+        var acto = () => new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa)
             .EmitirExportacionAsync("journal", new { }, "pdf", 1, CancellationToken.None);
 
         await acto.Should().NotThrowAsync();

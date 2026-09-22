@@ -48,6 +48,19 @@ public class PrincipioVIII_DualValidation
 
         // Feature 009 - contabilidad reescrita: nace con validador en cada request.
         "IngenIA365ERP.Application.Accounting",
+
+        // Feature 010 - nomina completa (R12): los namespaces entran aqui en el primer commit,
+        // antes de que exista el primer comando, para que ninguno nazca sin validador.
+        "IngenIA365ERP.Application.Payroll.Settlements",
+        "IngenIA365ERP.Application.Payroll.Vacations",
+        "IngenIA365ERP.Application.Payroll.Terminations",
+        "IngenIA365ERP.Application.Payroll.WithholdingRates",
+        "IngenIA365ERP.Application.Payroll.Pila",
+        "IngenIA365ERP.Application.Payroll.ElectronicPayroll",
+        "IngenIA365ERP.Application.Payroll.Dispersion",
+        "IngenIA365ERP.Application.Payroll.Policies",
+        "IngenIA365ERP.Application.Payroll.Holidays",
+        "IngenIA365ERP.Application.Payroll.OpeningBalances",
     ];
 
     private static readonly HashSet<string> AllowedWithoutValidator =

@@ -1,0 +1,37 @@
+{
+  "nombre": "Definitiva por despido sin justa causa, contrato indefinido, 2.400.000 y 810 días: 55 días = 4.400.000",
+  "descripcion": "Research R1: indefinido < 10 SMMLV: 30 días el primer año + 20 por año adicional proporcional → 810 días → 55 días → 4.400.000 (CST art. 64). Con el resto de la definitiva derivado.",
+  "derivacion": "Antigüedad 01-10-2024 a 31-12-2026 = 90 + 360 + 360 = 810 días. Salario 2.400.000 = 1,37 SMMLV → tramo < 10 de INDEMNIZACION_TABLA: 30 días el primer año (FixedValue) y 20 por año adicional (Rate). Días = 30 + (810 − 360) × 20 / 360 = 30 + 25 = 55. Indemnización = 55 × 2.400.000 / 30 = 55 × 80.000 = 4.400.000. Retención 401-3: ingreso mensual 2.649.095 = 50,58 UVT ≤ 204 → 0. Prima 2026-II: 2.649.095 × 180/360 = 1.324.547,50. Cesantías 2026: 2.649.095. Intereses: 317.891,40. Vacaciones: 810 × 15/360 = 33,75 causados − 30 disfrutados = 3,75 × 80.000 = 300.000. IBC = 300.000 → salud 12.000, pensión 12.000, FSP 0. Retención ordinaria: 300.000 − 24.000 = 276.000 × 75 % = 207.000 = 3,95 UVT → 0. Retención prima 0 (18,97 UVT). Retención cesantías 0 (50,58 UVT ≤ 350). Devengos = 1.324.547,50 + 2.649.095 + 317.891,40 + 300.000 + 4.400.000 = 8.991.533,90; deducciones 24.000; neto 8.967.533,90.",
+  "tipo": "Settlement",
+  "corte": "2026-12-31",
+  "empleado": {
+    "nombre": "Despido sin justa causa, indefinido",
+    "ingreso": "2024-10-01",
+    "salarios": [ { "desde": "2024-10-01", "mensual": 2400000 } ],
+    "tipoContrato": "Indefinite"
+  },
+  "movimientosVacaciones": [
+    { "tipo": "Enjoyment", "desde": "2025-10-06", "hasta": "2025-10-22", "diasHabiles": 15, "diasCalendario": 17 },
+    { "tipo": "Enjoyment", "desde": "2026-08-03", "hasta": "2026-08-19", "diasHabiles": 15, "diasCalendario": 17 }
+  ],
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "esperado": {
+    "lineas": {
+      "PRIMA": 1324547.50,
+      "CESANTIAS": 2649095,
+      "INT_CESANTIAS": 317891.40,
+      "VACACIONES_COMP": 300000,
+      "INDEMNIZACION": 4400000,
+      "SALUD_EMP": 12000,
+      "PENSION_EMP": 12000,
+      "FSP": 0,
+      "RETEFTE": 0,
+      "RETEFTE_PRIMA": 0,
+      "RETEFTE_CESANTIAS": 0,
+      "RETEFTE_INDEMNIZACION": 0
+    },
+    "totales": { "devengos": 8991533.90, "deducciones": 24000, "provisiones": 0, "neto": 8967533.90 },
+    "vacaciones": { "causados": 33.75, "pendientes": 3.75 },
+    "explicaciones": [ "INDEMNIZACION: 55 días" ]
+  }
+}

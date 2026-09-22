@@ -36,6 +36,12 @@ public static class CorePermissionCatalogSeeder
         ("Core.Associates", "View",   "Ver asociados y su afiliación"),
         ("Core.Associates", "Create", "Registrar asociados (con persona existente o nueva)"),
         ("Core.Associates", "Update", "Editar la afiliación de un asociado"),
+
+        // Feature 010 (N4, D-42): los formatos de archivo bancario son de Core, ligados al banco, y los
+        // comparten nómina, tesorería y contabilidad; verlos lo tiene todo rol (*.View), administrarlos
+        // el administrador de la cooperativa.
+        ("Core.BankFileFormats", "View",   "Ver los formatos de archivo plano de cada banco"),
+        ("Core.BankFileFormats", "Manage", "Crear, versionar y desactivar formatos de archivo plano de los bancos"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

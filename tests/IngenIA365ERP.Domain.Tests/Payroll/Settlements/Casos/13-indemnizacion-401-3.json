@@ -1,0 +1,19 @@
+{
+  "nombre": "Indemnización de 52.000.000 con ingreso de 12.000.000: retención del art. 401-3 = 7.800.000",
+  "descripcion": "Research R5: si el ingreso mensual supera 204 UVT, retención = (indemnización − 25 % exento dentro del cupo anual) × 20 %, sin restar aportes. El caso deriva la indemnización y su retención.",
+  "derivacion": "Antigüedad 01-01-2021 a 31-12-2026 = 6 × 360 = 2.160 días. Salario 12.000.000 = 6,85 SMMLV → tramo < 10: 30 + (2.160 − 360) × 20 / 360 = 30 + 100 = 130 días. Día = 12.000.000 / 30 = 400.000. Indemnización = 130 × 400.000 = 52.000.000. Retención: ingreso mensual 12.000.000 (sin auxilio) = 229,12 UVT > 204 → renta exenta 25 % = 13.000.000 ≤ cupo anual 790 UVT (41.375.460) → base gravada 39.000.000 × 20 % = 7.800.000.",
+  "tipo": "Settlement",
+  "corte": "2026-12-31",
+  "empleado": {
+    "nombre": "Seis años, doce millones",
+    "ingreso": "2021-01-01",
+    "salarios": [ { "desde": "2021-01-01", "mensual": 12000000 } ],
+    "tipoContrato": "Indefinite"
+  },
+  "terminacion": { "motivo": "DESP_SINJC", "nombreMotivo": "Despido sin justa causa", "generaIndemnizacion": true },
+  "esperado": {
+    "soloLineasListadas": true,
+    "lineas": { "INDEMNIZACION": 52000000, "RETEFTE_INDEMNIZACION": 7800000 },
+    "explicaciones": [ "INDEMNIZACION: 130 días", "RETEFTE_INDEMNIZACION: 20 %" ]
+  }
+}

@@ -37,6 +37,12 @@ public class PayrollRunLine : AuditableEntity
 
     public int? NoveltyId { get; set; }
 
+    /// <summary>
+    /// Feature 010 (FR-018a): la línea <c>DESC_CARTERA</c> / <c>LIBRANZA</c> de una definitiva
+    /// apunta al descuento (propuesto, aplicado, motivo) del que salió.
+    /// </summary>
+    public int? SettlementDeductionId { get; set; }
+
     /// <summary>Explicación estructurada (forma, base, factor, parámetro, tramo, novedad, pasos).</summary>
     public string ExplanationJson { get; set; } = "{}";
 

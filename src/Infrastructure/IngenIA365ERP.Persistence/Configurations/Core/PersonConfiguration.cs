@@ -19,6 +19,9 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.LegacyCode).HasMaxLength(20);
         builder.Property(e => e.LastName).HasMaxLength(150).IsRequired();
         builder.Property(e => e.FirstName).HasMaxLength(150).IsRequired();
+        // Feature 010 (D-06): segundo apellido y otros nombres para PILA y DIAN; nullable, sin migración de datos.
+        builder.Property(e => e.SecondLastName).HasMaxLength(150);
+        builder.Property(e => e.OtherNames).HasMaxLength(150);
         builder.Property(e => e.TaxId).HasMaxLength(20).IsRequired();
         builder.Property(e => e.TaxIdCheckDigit).HasMaxLength(2);
         builder.Property(e => e.IdIssuedAt).HasMaxLength(40);

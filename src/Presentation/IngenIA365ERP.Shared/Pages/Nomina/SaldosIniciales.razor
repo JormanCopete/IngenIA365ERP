@@ -1,0 +1,270 @@
+@page "/nomina/saldos-iniciales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Models.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+@*
+    Feature 010 (R3, FR-007; contracts/api.md §4): lo que cada empleado traía causado antes de
+    que la nómina corriera aquí —días de vacaciones pendientes, cesantías, intereses y prima del
+    período en curso—. Digitación auditada: se reemplaza mientras ninguna liquidación aprobada lo
+    consumió; después, un ajuste con motivo. Sin esto, la prima de diciembre y las cesantías del
+    primer año salen cortas para quien ingresó antes del arranque.
+*@
+
+<PageTitle>Saldos iniciales de prestaciones - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.BenefitBalances.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Saldos iniciales de prestaciones</h3>
+    <div>
+        <SfTextBox @bind-Value="_buscar" Placeholder="Buscar por nombre o documento" ShowClearButton="true" Width="240px"
+                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs _) => CargarAsync())" />
+        <label class="campo-check"><input type="checkbox" @bind="_soloFaltantes" @bind:after="CargarAsync" /> Sólo faltantes</label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+    </div>
+</div>
+
+<div class="info-card @(_faltantes > 0 ? "alerta" : "")">
+    <span class="label">@(_faltantes > 0 ? $"{_faltantes} empleado(s) sin saldo inicial" : "Todos los que lo necesitan tienen saldo")</span>
+    <p>Quien ingresó antes de la fecha de arranque de la nómina en esta plataforma necesita su saldo a esa fecha: días hábiles de vacaciones pendientes, cesantías e intereses causados del año y prima causada del semestre. El motor lo toma como primer tramo y lo explica en la liquidación («Saldo inicial al … digitado por … el …»). Un saldo que ya consumió una liquidación aprobada no se reemplaza: se ajusta con motivo o se reversa la liquidación.</p>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="SaldoInicialResumenDto" DataSource="@_saldos" AllowSorting="true" AllowPaging="true">
+    <GridPageSettings PageSize="25" />
+    <GridColumns>
+        <GridColumn Field="Name" HeaderText="Empleado" Width="220" />
+        <GridColumn Field="Document" HeaderText="Documento" Width="120" />
+        <GridColumn Field="HireDate" HeaderText="Ingreso" Width="110" Format="dd/MM/yyyy" Type="ColumnType.Date" />
+        <GridColumn HeaderText="Estado" Width="110" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var s = (SaldoInicialResumenDto)context;
+                    var css = s.Falta ? "e-badge e-badge-danger" : !s.TieneSaldo ? "e-badge" : s.IsEditable ? "e-badge e-badge-success" : "e-badge e-badge-info";
+                    <span class="@css">@s.EstadoTexto</span>
+                }
+            </Template>
+        </GridColumn>
+        <GridColumn HeaderText="Corte" Width="110">
+            <Template>@(((SaldoInicialResumenDto)context).AsOfDate?.ToString("dd/MM/yyyy") ?? "—")</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Vacaciones (días)" Width="130" TextAlign="TextAlign.Right">
+            <Template>@(((SaldoInicialResumenDto)context).PendingVacationDays?.ToString("N2") ?? "—")</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Cesantías" Width="130" TextAlign="TextAlign.Right">
+            <Template>@(((SaldoInicialResumenDto)context).AccruedSeverance?.ToString("N2") ?? "—")</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Intereses" Width="120" TextAlign="TextAlign.Right">
+            <Template>@(((SaldoInicialResumenDto)context).AccruedSeveranceInterest?.ToString("N2") ?? "—")</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Prima" Width="130" TextAlign="TextAlign.Right">
+            <Template>@(((SaldoInicialResumenDto)context).AccruedServiceBonus?.ToString("N2") ?? "—")</Template>
+        </GridColumn>
+        <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var s = (SaldoInicialResumenDto)context;
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-history" Title="Historial" OnClick="@(() => AbrirHistorialAsync(s))" />
+                    <PermissionGate Required="Payroll.BenefitBalances.Manage">
+                        @if (s.IsEditable)
+                        {
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="@(s.TieneSaldo ? "Editar saldo" : "Digitar saldo")" OnClick="@(() => AbrirEdicionAsync(s, ajuste: false))" />
+                        }
+                        else
+                        {
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" Title="Ajustar con motivo" OnClick="@(() => AbrirEdicionAsync(s, ajuste: true))" />
+                        }
+                    </PermissionGate>
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-user" Title="Abrir la ficha" OnClick="@(() => Nav.NavigateTo($"/nomina/empleados/{s.EmployeePublicId}"))" />
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+</IndicadorDeCarga>
+
+@* ------------------------------------------------------------- edición/ajuste --- *@
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarEdicion" Header="@_tituloEdicion" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaEdicion.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+            <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    @if (_editando is not null)
+                    {
+                        <div class="info-card">
+                            <span class="label">@_editando.Name · @_editando.Document</span>
+                            <p>Ingreso: @_editando.HireDate.ToString("dd/MM/yyyy")@(_editando.HiredBeforeStart ? " — anterior al arranque de la nómina: necesita saldo inicial." : "")</p>
+                            @if (_esAjuste)
+                            {
+                                <p>El saldo ya lo consumió: @string.Join(", ", _editando.ConsumedBy.Select(c => c.TipoTexto)). Un ajuste es una fila nueva con el saldo <strong>completo</strong> corregido y su motivo; la liquidación siguiente lo toma.</p>
+                            }
+                        </div>
+                    }
+                    <SfDatePicker TValue="DateTime" @bind-Value="_form.AsOfDate" Placeholder="Saldo a la fecha de corte" FloatLabelType="FloatLabelType.Always" />
+                    <div class="rejilla-campos">
+                        <div>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_form.PendingVacationDays" Placeholder="Vacaciones pendientes (días hábiles)" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" Format="N2" />
+                        </div>
+                        <div>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_form.AccruedServiceBonus" Placeholder="Prima causada del semestre" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" Format="N2" />
+                        </div>
+                        <div>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_form.AccruedSeverance" Placeholder="Cesantías causadas del año" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" Format="N2" />
+                        </div>
+                        <div>
+                            <SfNumericTextBox TValue="decimal" @bind-Value="_form.AccruedSeveranceInterest" Placeholder="Intereses a las cesantías" FloatLabelType="FloatLabelType.Always" Decimals="2" Min="0" Format="N2" />
+                        </div>
+                        <div>
+                            <SfNumericTextBox TValue="int?" @bind-Value="_form.ServiceBonusDaysAccrued" Placeholder="Días ya contados en la prima (opcional)" FloatLabelType="FloatLabelType.Always" Decimals="0" Min="0" Max="360" Format="0" />
+                        </div>
+                        <div>
+                            <SfNumericTextBox TValue="int?" @bind-Value="_form.SeveranceDaysAccrued" Placeholder="Días ya contados en las cesantías (opcional)" FloatLabelType="FloatLabelType.Always" Decimals="0" Min="0" Max="360" Format="0" />
+                        </div>
+                    </div>
+                    <p class="hint">Los días ya contados evitan que la proporción los duplique: si la prima digitada ya cubre 150 días del semestre, el motor sólo cuenta los que faltan.</p>
+                    @if (_esAjuste)
+                    {
+                        <SfTextBox @bind-Value="_form.Reason" MaxLength="300" Multiline="true" Placeholder="Motivo del ajuste *" FloatLabelType="FloatLabelType.Always" />
+                        <ValidationMessage For="() => _form.Reason" />
+                    }
+                    <SfTextBox @bind-Value="_form.Notes" MaxLength="500" Multiline="true" Placeholder="Notas (de dónde salió el dato)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarEdicion = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardado.Activa">@(_esAjuste ? "Registrar ajuste" : "Guardar saldo")</SfButton>
+                </div>
+            </EditForm>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------ historial --- *@
+<SfDialog @bind-Visible="_mostrarHistorial" Header="@($"Saldo inicial de {_detalle?.Name}")" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaHistorial.Activa">
+            <div class="pagina">
+                @if (_detalle is not null)
+                {
+                    <p class="texto-tenue">Ingreso @_detalle.HireDate.ToString("dd/MM/yyyy") · arranque de la nómina: @(_detalle.PayrollStartDate?.ToString("dd/MM/yyyy") ?? "sin registrar")</p>
+                    @if (_detalle.History.Count == 0)
+                    {
+                        <div class="sin-datos">Sin saldo inicial digitado.</div>
+                    }
+                    @foreach (var f in _detalle.History)
+                    {
+                        <div class="info-card">
+                            <span class="label">@f.TipoTexto al @f.AsOfDate.ToString("dd/MM/yyyy") @(f == _detalle.Current ? "· vigente" : "")</span>
+                            <p>Vacaciones <strong>@f.PendingVacationDays.ToString("N2")</strong> días · Cesantías <strong>@f.AccruedSeverance.ToString("N2")</strong> · Intereses <strong>@f.AccruedSeveranceInterest.ToString("N2")</strong> · Prima <strong>@f.AccruedServiceBonus.ToString("N2")</strong></p>
+                            @if (f.ServiceBonusDaysAccrued is not null || f.SeveranceDaysAccrued is not null)
+                            {
+                                <p class="texto-tenue">Días ya contados: prima @(f.ServiceBonusDaysAccrued?.ToString() ?? "—"), cesantías @(f.SeveranceDaysAccrued?.ToString() ?? "—")</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(f.AdjustmentReason))
+                            {
+                                <p>Motivo: @f.AdjustmentReason</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(f.Notes))
+                            {
+                                <p class="texto-tenue">@f.Notes</p>
+                            }
+                            <p class="texto-tenue">
+                                Digitado por @f.CreatedBy el @f.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                @if (f.UpdatedAt is { } u) { <span> · corregido por @f.UpdatedBy el @u.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
+                                @if (f.ConsumedBy is { } c) { <span> · consumido por @c.TipoTexto</span> }
+                            </p>
+                        </div>
+                    }
+                }
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _cargaHistorial = new(), _cargaEdicion = new(), _guardado = new();
+    private List<SaldoInicialResumenDto> _saldos = [];
+    private int _faltantes;
+    private string? _buscar;
+    private bool _soloFaltantes, _mostrarEdicion, _mostrarHistorial, _esAjuste;
+    private SaldoInicialResumenDto? _editando;
+    private SaldoInicialDetalleDto? _detalle;
+    private SaldoInicialFormulario _form = new();
+    private string _tituloEdicion = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarSaldosInicialesAsync(null, _soloFaltantes, _buscar);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los saldos iniciales.");
+            return;
+        }
+        _saldos = (res.Value ?? []).ToList();
+        _faltantes = _saldos.Count(s => s.Falta);
+    }
+
+    private async Task AbrirEdicionAsync(SaldoInicialResumenDto s, bool ajuste)
+    {
+        _editando = s;
+        _esAjuste = ajuste;
+        _form = SaldoInicialFormulario.Desde(s, vigente: null);
+        _tituloEdicion = ajuste ? "Ajustar saldo inicial" : s.TieneSaldo ? "Editar saldo inicial" : "Digitar saldo inicial";
+        _mostrarEdicion = true;
+        if (!s.TieneSaldo) return;
+
+        // El resumen de la grilla no trae los «días ya contados» ni las notas, y el PUT reemplaza la
+        // fila entera (contracts/api.md §4): el formulario arranca desde la fila vigente del detalle
+        // o no se abre, porque guardar sin ella los borraría sin que nadie lo viera.
+        using var carga = _cargaEdicion.Iniciar();
+        var res = await Nomina.SaldoInicialDeAsync(s.EmployeePublicId);
+        if (!res.IsSuccess || res.Value?.Current is not { } vigente)
+        {
+            _mostrarEdicion = false;
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo leer el saldo vigente para editarlo.");
+            return;
+        }
+        _form = SaldoInicialFormulario.Desde(s, vigente);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editando is null || _guardado.Activa) return;
+        if (_esAjuste && string.IsNullOrWhiteSpace(_form.Reason)) { await Notification.WarningAsync("El ajuste exige un motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var res = _esAjuste
+            ? await Nomina.AjustarSaldoInicialAsync(_editando.EmployeePublicId, _form.AAjustar())
+            : await Nomina.GuardarSaldoInicialAsync(_editando.EmployeePublicId, _form.AGuardar());
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo guardar el saldo.");
+            return;
+        }
+        await Notification.SuccessAsync(_esAjuste ? "Ajuste registrado." : "Saldo inicial guardado.");
+        _mostrarEdicion = false;
+        await CargarAsync();
+    }
+
+    private async Task AbrirHistorialAsync(SaldoInicialResumenDto s)
+    {
+        _detalle = null;
+        _mostrarHistorial = true;
+        using var carga = _cargaHistorial.Iniciar();
+        var res = await Nomina.SaldoInicialDeAsync(s.EmployeePublicId);
+        if (res.IsSuccess) _detalle = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo cargar el historial.");
+    }
+}

@@ -22,6 +22,7 @@
         <GridColumn Field="ShortName" HeaderText="Nombre Corto" Width="150" />
         <GridColumn Field="AccountCode" HeaderText="Cuenta Contable" Width="150" />
         <GridColumn Field="VoucherTypeCode" HeaderText="Tipo Comprobante" Width="150" />
+        <GridColumn Field="TransferCode" HeaderText="Código ACH" Width="110" />
         <GridColumn Field="CheckDigitRequired" HeaderText="Digito Chequeo" Width="130" DisplayAsCheckBox="true" />
         <GridColumn Field="FinancialTaxRate" HeaderText="% GMF" Width="100" Format="N4" TextAlign="TextAlign.Right" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
@@ -61,6 +62,11 @@
                 <div>
                     <label>Tipo Comprobante</label>
                     <SfTextBox @bind-Value="_model.VoucherTypeCode" MaxLength="10" Placeholder="Codigo tipo comprobante" />
+                </div>
+                <div>
+                    <label>Código de transferencia (ACH)</label>
+                    <SfTextBox @bind-Value="_model.TransferCode" MaxLength="20" Placeholder="p. ej. 1052 (AV Villas), 1007 (Bancolombia)" />
+                    <span class="hint">El código con que los demás bancos identifican a éste en los archivos de dispersión (feature 010). Sin él, los empleados de este banco quedan en pendientes.</span>
                 </div>
                 <div>
                     <SfCheckBox @bind-Checked="_model.CheckDigitRequired" Label="Requiere Digito de Chequeo" />
@@ -132,6 +138,7 @@
             ShortName = item.ShortName,
             AccountCode = item.AccountCode,
             VoucherTypeCode = item.VoucherTypeCode,
+            TransferCode = item.TransferCode,
             CheckDigitRequired = item.CheckDigitRequired,
             FinancialTaxRate = item.FinancialTaxRate,
             PersonPublicId = item.PersonPublicId
@@ -191,6 +198,7 @@
         public string? ShortName { get; set; }
         public string? AccountCode { get; set; }
         public string? VoucherTypeCode { get; set; }
+        public string? TransferCode { get; set; }
         public bool CheckDigitRequired { get; set; }
         public decimal? FinancialTaxRate { get; set; }
     }
@@ -203,6 +211,8 @@
         public string? ShortName { get; set; }
         public string? AccountCode { get; set; }
         public string? VoucherTypeCode { get; set; }
+        // Feature 010 (D-10): el código ACH del banco; hasta el 2026-09-21 la pantalla no lo mostraba y cada edición lo borraba.
+        public string? TransferCode { get; set; }
         public bool CheckDigitRequired { get; set; }
         public decimal? FinancialTaxRate { get; set; }
     }

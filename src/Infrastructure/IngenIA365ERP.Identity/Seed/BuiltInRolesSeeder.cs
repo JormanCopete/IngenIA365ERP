@@ -90,12 +90,21 @@ public static class BuiltInRolesSeeder
         // baja (Core.People.Delete, Payroll.Employees.Terminate) — eso queda en CompanyAdmin.
         // Feature 009: registra borradores de comprobantes y exporta informes, pero NO
         // contabiliza, anula, cierra ni parametriza (segregación; cuatro ojos opcional).
+        // Feature 010 (contracts/api.md §1): ve, registra, calcula y genera —prima, cesantías,
+        // vacaciones, definitiva, porcentaje P2, PILA, nómina electrónica, dispersión— y digita
+        // saldos iniciales; NO aprueba, reversa, transmite, marca enviado/cargado/consignado,
+        // ajusta descuentos ni administra políticas, festivos, formatos ni habilitación (FR-006).
         ["Operator"]     = ["*.View", "Attachments.*", "Notifications.ManageOwn",
                             "Payroll.Novelties.*", "Payroll.Runs.Calculate",
                             "Core.People.Create", "Core.People.Update",
                             "Core.Associates.Create", "Core.Associates.Update",
                             "Payroll.Employees.Create", "Payroll.Employees.Update",
-                            "Accounting.Vouchers.Create", "Accounting.Reports.Export"],
+                            "Accounting.Vouchers.Create", "Accounting.Reports.Export",
+                            "Payroll.ServiceBonus.Calculate", "Payroll.Severance.Calculate",
+                            "Payroll.Vacations.Register", "Payroll.Vacations.Calculate",
+                            "Payroll.Settlements.Calculate", "Payroll.BenefitBalances.Manage",
+                            "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
+                            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate"],
         ["ReadOnly"]     = ["*.View"],
     };
 

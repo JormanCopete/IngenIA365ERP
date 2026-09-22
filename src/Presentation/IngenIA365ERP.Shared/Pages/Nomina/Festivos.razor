@@ -1,0 +1,171 @@
+@page "/nomina/festivos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+
+@*
+    Feature 010 (R6, contracts/api.md §10.2): el calendario de festivos que lee el contador de
+    días hábiles de las vacaciones. Los de la Ley 51 de 1983 vienen sembrados y no se retiran;
+    un puente decretado o un festivo propio se agrega aquí y queda quién lo hizo.
+*@
+
+<PageTitle>Festivos - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.Holidays.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Calendario de festivos</h3>
+    <div>
+        <SfNumericTextBox TValue="int" @bind-Value="_anio" Min="2000" Max="2100" Format="0" ShowSpinButton="true" Placeholder="Año" FloatLabelType="FloatLabelType.Always" Width="120px" />
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+        <PermissionGate Required="Payroll.Holidays.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo festivo</SfButton>
+        </PermissionGate>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">@_festivos.Count festivo(s) en @_anio</span>
+    <p>Los de la Ley 51 de 1983 (fijos, trasladados al lunes y los que dependen de Pascua) los pone el programa y no se retiran desde aquí. Un puente decretado por el Gobierno o un día que la cooperativa no trabaja se agrega como «Decretado» o «Manual» y cuenta en los días hábiles de las vacaciones desde ese momento.</p>
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="FestivoDto" DataSource="@_festivos" AllowSorting="true">
+    <GridColumns>
+        <GridColumn Field="Date" HeaderText="Fecha" Width="130">
+            <Template>@(((FestivoDto)context).Date.ToString("dd/MM/yyyy"))</Template>
+        </GridColumn>
+        <GridColumn Field="DiaTexto" HeaderText="Día" Width="120" />
+        <GridColumn Field="Name" HeaderText="Festivo" Width="280" />
+        <GridColumn Field="OrigenTexto" HeaderText="Origen" Width="220" />
+        <GridColumn HeaderText="Acciones" Width="100" TextAlign="TextAlign.Center">
+            <Template>
+                @{
+                    var f = (FestivoDto)context;
+                    if (f.SePuedeRetirar)
+                    {
+                        <PermissionGate Required="Payroll.Holidays.Manage">
+                            <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash" Title="Retirar" OnClick="@(() => PedirRetiro(f))" />
+                        </PermissionGate>
+                    }
+                    else
+                    {
+                        <span class="texto-tenue" title="Sembrado por la Ley 51: no se retira">Ley 51</span>
+                    }
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+@if (!_carga.Activa && _festivos.Count == 0)
+{
+    <div class="sin-datos">Sin festivos registrados para @_anio. La semilla cubre 2026–2028 y cada año suma uno más; para otro año, registralos aquí.</div>
+}
+</IndicadorDeCarga>
+
+@* ------------------------------------------------------------- nuevo festivo --- *@
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarNuevo" Header="Nuevo festivo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <EditForm Model="_nuevo" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="pagina">
+                    <SfDatePicker TValue="DateTime" @bind-Value="_nuevo.Date" Placeholder="Fecha" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_nuevo.Name" MaxLength="80" Placeholder="Nombre del festivo *" FloatLabelType="FloatLabelType.Always" />
+                    <ValidationMessage For="() => _nuevo.Name" />
+                    <label class="campo">
+                        Origen
+                        <select class="e-input" @bind="_nuevo.Origin">
+                            <option value="Decreed">Decretado por el Gobierno (puente, día cívico)</option>
+                            <option value="Manual">Manual (decisión de la cooperativa)</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarNuevo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="submit" Disabled="@_guardado.Activa">Guardar</SfButton>
+                </div>
+            </EditForm>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarRetiro" Title="Retirar festivo" ConfirmText="Retirar"
+               Message="@($"¿Retirar el festivo «{_aRetirar?.Name}» del {_aRetirar?.Date:dd/MM/yyyy}? Dejará de contar en los días hábiles de las vacaciones.")"
+               OnConfirm="RetirarAsync" />
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<FestivoDto> _festivos = [];
+    private int _anio = DateTime.Today.Year;
+    private bool _mostrarNuevo, _confirmarRetiro;
+    private FormFestivo _nuevo = new();
+    private FestivoDto? _aRetirar;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarFestivosAsync(_anio);
+        if (res.IsSuccess) _festivos = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los festivos.");
+    }
+
+    private void AbrirNuevo()
+    {
+        _nuevo = new FormFestivo { Date = new DateTime(_anio, Math.Min(DateTime.Today.Month, 12), 1) };
+        _mostrarNuevo = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var res = await Nomina.CrearFestivoAsync(new NuevoFestivoRequest(DateOnly.FromDateTime(_nuevo.Date), _nuevo.Name.Trim(), _nuevo.Origin));
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo registrar el festivo.");
+            return;
+        }
+        await Notification.SuccessAsync("Festivo registrado.");
+        _mostrarNuevo = false;
+        if (_nuevo.Date.Year != _anio) _anio = _nuevo.Date.Year;
+        await CargarAsync();
+    }
+
+    private void PedirRetiro(FestivoDto f)
+    {
+        _aRetirar = f;
+        _confirmarRetiro = true;
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_aRetirar is null) return;
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.EliminarFestivoAsync(_aRetirar.HolidayPublicId);
+        if (!res.IsSuccess)
+        {
+            await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo retirar el festivo.");
+            return;
+        }
+        await Notification.SuccessAsync("Festivo retirado.");
+        _aRetirar = null;
+        await CargarAsync();
+    }
+
+    private sealed class FormFestivo
+    {
+        public DateTime Date { get; set; } = DateTime.Today;
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        [StringLength(80)]
+        public string Name { get; set; } = string.Empty;
+        public string Origin { get; set; } = "Decreed";
+    }
+}

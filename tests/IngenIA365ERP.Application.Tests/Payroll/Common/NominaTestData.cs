@@ -13,6 +13,7 @@ using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using Microsoft.EntityFrameworkCore;
 using IngenIA365ERP.Persistence.Seeding.Parametric;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -43,6 +44,10 @@ public sealed class NominaTestData
     public PayrollAccountingPoster Poster { get; }
     public RecurringNoveltiesMaterializer Recurrentes { get; }
 
+    // Feature 010: lo que las liquidaciones especiales comparten.
+    public ProvisionBalanceReader SaldosDeProvision { get; }
+    public SettlementInputLoader SettlementLoader { get; }
+
     public PayrollPlan Plan { get; }
     public PayPeriod Marzo { get; }
     public Employee Ana { get; }
@@ -65,9 +70,11 @@ public sealed class NominaTestData
 
         StaleMarker = new PayrollRunStaleMarker(Db, NullLogger<PayrollRunStaleMarker>.Instance);
         CarryOver = new CarryOverNoveltiesService(Db, Clock, User);
-        AuditEmitter = new PayrollAuditEmitter(Audit, User, CooperativaDePrueba.Actual, Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        Policies = new PayrollPolicyReader(Db);
+        AuditEmitter = new PayrollAuditEmitter(Audit, User, Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+        Policies = new PayrollPolicyReader(Db, Clock);
         Loader = new CalculationInputLoader(Db, Policies);
+        SaldosDeProvision = new ProvisionBalanceReader(Db);
+        SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, NullLogger<SettlementInputLoader>.Instance);
         Alcance = Substitute.For<IUserBranchScope>();
         Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));
         Poster = Contabilizador(User);
@@ -269,4 +276,152 @@ public sealed class NominaTestData
         });
         Db.SaveChanges();
     }
+
+    // ============================================================ feature 010 ==
+
+    /// <summary>Mueve «hoy» del reloj de prueba: las liquidaciones fechan el comprobante al corte y el corte no puede ser posterior a hoy.</summary>
+    public void HoyEs(DateTime fecha)
+    {
+        var utc = DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
+        Clock.UtcNow.Returns(utc);
+        Clock.TodayUtc.Returns(DateOnly.FromDateTime(utc));
+    }
+
+    /// <summary>Una política por empresa con vigencia (<c>PAY_CompanyPolicies</c>).</summary>
+    public CompanyPolicy Politica(string clave, string valor, DateOnly desde, DateOnly? hasta = null)
+    {
+        var p = new CompanyPolicy { Key = clave, Value = valor, ValidFrom = desde, ValidTo = hasta, CreatedBy = "test" };
+        Db.CompanyPolicies.Add(p);
+        Db.SaveChanges();
+        return p;
+    }
+
+    /// <summary>Un cambio de salario con fecha de efecto; como <c>RegisterSalaryChange</c>, siembra la línea base del ingreso si no había historial.</summary>
+    public SalaryChange CambioDeSalario(Employee e, DateTime desde, decimal nuevoSalario)
+    {
+        if (!Db.SalaryChanges.Any(s => s.EmployeeId == e.Id) && desde > e.JoinDate.Date)
+            Db.SalaryChanges.Add(new SalaryChange { PayrollCompanyId = 1, EmployeeId = e.Id, EffectiveDate = e.JoinDate.Date, NewSalary = e.Salary, CreatedBy = "system:baseline" });
+        var c = new SalaryChange { PayrollCompanyId = 1, EmployeeId = e.Id, EffectiveDate = desde, NewSalary = nuevoSalario, CreatedBy = "test" };
+        Db.SalaryChanges.Add(c);
+        e.Salary = nuevoSalario;
+        Db.SaveChanges();
+        return c;
+    }
+
+    /// <summary>El saldo inicial de prestaciones de un empleado a una fecha (R3, FR-007).</summary>
+    public EmployeeBenefitOpeningBalance SaldoInicial(Employee e, DateOnly asOf, decimal prima = 0m, decimal cesantias = 0m, decimal intereses = 0m,
+        decimal diasVacaciones = 0m, int? diasPrima = null, int? diasCesantias = null)
+    {
+        var b = new EmployeeBenefitOpeningBalance
+        {
+            EmployeeId = e.Id, AsOfDate = asOf, Kind = OpeningBalanceKind.Opening,
+            AccruedServiceBonus = prima, AccruedSeverance = cesantias, AccruedSeveranceInterest = intereses, PendingVacationDays = diasVacaciones,
+            ServiceBonusDaysAccrued = diasPrima, SeveranceDaysAccrued = diasCesantias, CreatedBy = "contadora@demo", CreatedAt = Ahora,
+        };
+        Db.EmployeeBenefitOpeningBalances.Add(b);
+        Db.SaveChanges();
+        return b;
+    }
+
+    /// <summary>Una línea de una corrida aprobada: código, naturaleza y valor; la definición se busca en la semilla por código.</summary>
+    public sealed record Linea(string Code, ConceptNature Nature, decimal Amount, decimal? Quantity = null, bool AffectsAccounting = true);
+
+    /// <summary>
+    /// Una corrida ordinaria APROBADA de un mes anterior con las líneas que se indiquen (salario,
+    /// variables, provisiones), para que el cargador de liquidaciones tenga bases prestacionales
+    /// y provisión acumulada de dónde leer. Crea el período del mes en <c>Approved</c>.
+    /// </summary>
+    public PayrollRun CorridaAprobada(int año, int mes, Employee e, params Linea[] lineas)
+    {
+        var desde = new DateTime(año, mes, 1);
+        var hasta = desde.AddMonths(1).AddDays(-1);
+        var periodo = Db.PayPeriods.FirstOrDefault(p => p.PayrollPlanId == Plan.Id && p.StartDate == desde && p.EndDate == hasta)
+                      ?? Periodo(desde, hasta, PayPeriodStatus.Approved);
+        periodo.Status = PayPeriodStatus.Approved;
+
+        var run = Db.PayrollRuns.Include(r => r.Employees).FirstOrDefault(r => r.PayPeriodId == periodo.Id && r.Status == PayrollRunStatus.Approved);
+        if (run is null)
+        {
+            run = new PayrollRun
+            {
+                Kind = PayrollRunKind.Ordinary, PayPeriodId = periodo.Id, Version = 1, Status = PayrollRunStatus.Approved,
+                CalculatedAt = hasta, CalculatedBy = "ana@demo", ApprovedAt = hasta, ApprovedBy = "contadora@demo",
+                InputsHash = new string('b', 64), CreatedBy = "test",
+            };
+            Db.PayrollRuns.Add(run);
+            periodo.RunPublicId = run.PublicId;
+        }
+
+        var definiciones = Db.PayrollConceptDefinitions.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
+        var fila = new PayrollRunEmployee { EmployeeId = e.Id, PayrollPlanId = Plan.Id, DaysWorked = 30, EmployeeClass = e.EmployeeClass, CreatedBy = "test" };
+        var orden = 0;
+        foreach (var l in lineas)
+        {
+            var def = definiciones.GetValueOrDefault(l.Code) ?? throw new InvalidOperationException($"La semilla no trae el concepto {l.Code}.");
+            fila.Lines.Add(new PayrollRunLine
+            {
+                ConceptDefinitionId = def.Id, ConceptCode = def.Code, ConceptName = def.Name, Nature = l.Nature, Amount = l.Amount, Quantity = l.Quantity,
+                AffectsAccounting = l.AffectsAccounting, Order = ++orden, ExplanationJson = "{}", CreatedBy = "test",
+            });
+        }
+        fila.TotalEarnings = lineas.Where(l => l.Nature == ConceptNature.Earning).Sum(l => l.Amount);
+        fila.TotalDeductions = lineas.Where(l => l.Nature == ConceptNature.Deduction).Sum(l => l.Amount);
+        fila.TotalEmployerContributions = lineas.Where(l => l.Nature == ConceptNature.EmployerContribution).Sum(l => l.Amount);
+        fila.TotalProvisions = lineas.Where(l => l.Nature == ConceptNature.Provision).Sum(l => l.Amount);
+        fila.NetPay = fila.TotalEarnings - fila.TotalDeductions;
+        run.Employees.Add(fila);
+        run.EmployeeCount = run.Employees.Count;
+        run.TotalEarnings += fila.TotalEarnings;
+        run.TotalDeductions += fila.TotalDeductions;
+        run.TotalProvisions += fila.TotalProvisions;
+        run.TotalEmployerContributions += fila.TotalEmployerContributions;
+        run.TotalNet += fila.NetPay;
+        Db.SaveChanges();
+        return run;
+    }
+
+    /// <summary>
+    /// Un mes «típico» aprobado para el empleado: salario y auxilio como devengos y las cuatro
+    /// provisiones (prima, cesantías, intereses, vacaciones) con los valores que se indiquen.
+    /// </summary>
+    public PayrollRun MesAprobado(int año, int mes, Employee e, decimal salario, decimal auxilio, decimal provPrima, decimal provCesantias, decimal provIntereses, decimal provVacaciones, decimal variables = 0m)
+    {
+        var lineas = new List<Linea>
+        {
+            new("SALARIO", ConceptNature.Earning, salario, 30m),
+            new("PROV_PRIMA", ConceptNature.Provision, provPrima),
+            new("PROV_CESANTIAS", ConceptNature.Provision, provCesantias),
+            new("PROV_INT_CESANTIAS", ConceptNature.Provision, provIntereses),
+            new("PROV_VACACIONES", ConceptNature.Provision, provVacaciones),
+        };
+        if (auxilio > 0m) lineas.Add(new("AUX_TRANSPORTE", ConceptNature.Earning, auxilio));
+        if (variables > 0m) lineas.Add(new("HEX_DIURNA", ConceptNature.Earning, variables, 4m));
+        return CorridaAprobada(año, mes, e, lineas.ToArray());
+    }
+
+    /// <summary>Un fondo de cesantías con persona vinculada (FR-088), asignado a la ficha; devuelve la persona del fondo.</summary>
+    public Person FondoDeCesantiasConPersona(Employee e, string nombre = "Porvenir")
+    {
+        var persona = new Person { FirstName = nombre, LastName = "S.A.", TaxId = $"8{Db.People.Count():000000000}", CreatedBy = "test" };
+        Db.People.Add(persona);
+        Db.SaveChanges();
+        var fondo = new SeveranceProvider { Code = nombre.ToUpperInvariant()[..Math.Min(10, nombre.Length)], Name = nombre, PersonId = persona.Id, CreatedBy = "test" };
+        Db.SeveranceProviders.Add(fondo);
+        Db.SaveChanges();
+        e.SeveranceFundId = fondo.Id;
+        Db.SaveChanges();
+        return persona;
+    }
+
+    /// <summary>El contabilizador de liquidaciones especiales sobre el de nómina, con el usuario indicado.</summary>
+    public SettlementAccountingPoster ContabilizadorDeLiquidaciones(ICurrentUserService quien) =>
+        new(Db, Contabilizador(quien), Clock);
+
+    /// <summary>La persistencia y el ciclo de vida comunes de las liquidaciones, con el usuario indicado.</summary>
+    public IngenIA365ERP.Application.Payroll.Settlements.Common.SettlementRunPersister Persistidor(ICurrentUserService? quien = null) =>
+        new(Db, Clock, quien ?? User);
+
+    public IngenIA365ERP.Application.Payroll.Settlements.Common.SettlementRunWorkflow Flujo(ICurrentUserService quien) =>
+        new(Db, ContabilizadorDeLiquidaciones(quien), Policies, Clock, quien,
+            new PayrollAuditEmitter(Audit, quien, Clock, NullLogger<PayrollAuditEmitter>.Instance));
 }

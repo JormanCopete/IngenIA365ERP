@@ -109,6 +109,37 @@ public static class AuditEventTypes
     public const string PayrollEmployeeWithholdingChanged = "Payroll.EmployeeWithholding.Changed";
     public const string PayrollRunExported = "Payroll.Run.Exported";
 
+    // -------------------- Nómina completa (feature 010, R12) --------------------
+    // Las liquidaciones especiales son corridas y comparten Approved/Reversed/Discarded de arriba
+    // sólo en la forma; aquí llevan nombre propio para que la consulta distinga una prima de una
+    // nómina. La exportación reutiliza PayrollRunExported (el contrato lo llama
+    // «Payroll.Report.Exported»; el código que existe es «Payroll.Run.Exported» y no se duplica)
+    // y el porcentaje P2 aprobado emite además PayrollEmployeeWithholdingChanged, como hoy.
+    public const string PayrollSettlementCalculated = "Payroll.Settlement.Calculated";
+    public const string PayrollSettlementApproved = "Payroll.Settlement.Approved";
+    public const string PayrollSettlementReversed = "Payroll.Settlement.Reversed";
+    public const string PayrollSettlementDiscarded = "Payroll.Settlement.Discarded";
+    public const string PayrollSettlementDeductionAdjusted = "Payroll.Settlement.DeductionAdjusted";
+    public const string PayrollEmployeeTerminated = "Payroll.Employee.Terminated";
+    public const string PayrollEmployeeReinstated = "Payroll.Employee.Reinstated";
+    public const string PayrollOpeningBalanceChanged = "Payroll.OpeningBalance.Changed";
+    public const string PayrollVacationRegistered = "Payroll.Vacation.Registered";
+    public const string PayrollVacationCancelled = "Payroll.Vacation.Cancelled";
+    public const string PayrollWithholdingRateCalculated = "Payroll.WithholdingRate.Calculated";
+    public const string PayrollWithholdingRateApproved = "Payroll.WithholdingRate.Approved";
+    public const string PayrollPilaGenerated = "Payroll.Pila.Generated";
+    public const string PayrollPilaUploaded = "Payroll.Pila.Uploaded";
+    public const string PayrollElectronicPayrollGenerated = "Payroll.ElectronicPayroll.Generated";
+    public const string PayrollElectronicPayrollTransmitted = "Payroll.ElectronicPayroll.Transmitted";
+    public const string PayrollElectronicPayrollStatusChanged = "Payroll.ElectronicPayroll.StatusChanged";
+    public const string PayrollElectronicPayrollEnablementChanged = "Payroll.ElectronicPayroll.EnablementChanged";
+    public const string PayrollDispersionGenerated = "Payroll.Dispersion.Generated";
+    public const string PayrollDispersionSent = "Payroll.Dispersion.Sent";
+    public const string PayrollDispersionCancelled = "Payroll.Dispersion.Cancelled";
+    public const string PayrollSeveranceDeposited = "Payroll.Severance.Deposited";
+    public const string PayrollCompanyPolicyChanged = "Payroll.CompanyPolicy.Changed";
+    public const string PayrollHolidayChanged = "Payroll.Holiday.Changed";
+
     // -------------------- Contabilidad (feature 009) --------------------
     // Eventos explicitos ademas del AuditBehavior generico: exportaciones (FR-050), envios de
     // certificados, inicializacion y validacion de catalogos. Modulo "Accounting".

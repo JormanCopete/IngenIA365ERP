@@ -28,6 +28,9 @@ public class PayrollPaymentConfiguration : IEntityTypeConfiguration<PayrollPayme
             .HasDatabaseName("UX_PAY_PayrollPayments_RunEmployee_Vigente");
 
         builder.HasOne(e => e.RunEmployee).WithMany().HasForeignKey(e => e.PayrollRunEmployeeId).OnDelete(DeleteBehavior.Restrict);
+        // Feature 010 (US8): la marca que dejó «marcar enviado» sabe de qué archivo vino.
+        builder.HasOne<Domain.Entities.Payroll.Transactions.BankDisbursementFile>().WithMany().HasForeignKey(e => e.BankDisbursementFileId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.BankDisbursementFileId).HasDatabaseName("IX_PAY_PayrollPayments_BankDisbursementFileId");
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

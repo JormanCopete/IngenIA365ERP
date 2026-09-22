@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,8 @@ namespace IngenIA365ERP.Application.Attachments.DownloadAttachment;
 /// </list>
 ///
 /// El query scoped al tenant del usuario actual — un adjunto de otro tenant
-/// devuelve <c>Generic.NotFound</c> (404 indistinguible).
+/// devuelve <c>Generic.NotFound</c> (404 indistinguible). Lo mismo un adjunto que generó un
+/// módulo (<see cref="AdjuntosDeModulo"/>) cuando quien pide no tiene el permiso de ese módulo.
 /// </summary>
 public sealed record DownloadAttachmentQuery(Guid AttachmentPublicId)
     : IRequest<Result<AttachmentDownload>>;
@@ -41,17 +43,20 @@ public sealed class DownloadAttachmentQueryHandler
     private readonly IBlobStore _store;
     private readonly IAttachmentCipher _cipher;
     private readonly ICurrentUserService _currentUser;
+    private readonly IPermissionChecker _permissions;
 
     public DownloadAttachmentQueryHandler(
         IApplicationDbContext db,
         IBlobStore store,
         IAttachmentCipher cipher,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IPermissionChecker permissions)
     {
         _db = db;
         _store = store;
         _cipher = cipher;
         _currentUser = currentUser;
+        _permissions = permissions;
     }
 
     public async Task<Result<AttachmentDownload>> Handle(
@@ -68,7 +73,7 @@ public sealed class DownloadAttachmentQueryHandler
             .Where(a => a.TenantId == tenantInternalId && a.PublicId == request.AttachmentPublicId)
             .FirstOrDefaultAsync(ct);
 
-        if (attachment is null)
+        if (attachment is null || !await AdjuntosDeModulo.PuedeLeerAsync(_permissions, attachment.OwnerEntityType, ct))
         {
             return Result.Failure<AttachmentDownload>(
                 "Generic.NotFound", "Adjunto no encontrado.");

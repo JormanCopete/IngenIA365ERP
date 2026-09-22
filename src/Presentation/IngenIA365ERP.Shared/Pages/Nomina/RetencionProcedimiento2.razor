@@ -1,0 +1,259 @@
+@page "/nomina/retencion-procedimiento-2"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+@*
+    Feature 010 (US7, contracts/api.md §6): el porcentaje fijo de retención del procedimiento 2
+    (ET art. 386). Se calcula en junio (rige julio–diciembre) y en diciembre (rige enero–junio
+    del año siguiente) para los empleados en procedimiento 2, con la explicación mes a mes;
+    aprobar cierra la vigencia anterior de la ficha y abre la nueva, y la nómina siguiente la aplica.
+*@
+
+<PageTitle>Retención procedimiento 2 - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Payroll.WithholdingRate.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Retención en la fuente · procedimiento 2</h3>
+    <div class="toolbar">
+        <SfNumericTextBox TValue="int" @bind-Value="_anio" Min="2000" Max="2100" Format="0" ShowSpinButton="true" Placeholder="Año" FloatLabelType="FloatLabelType.Always" Width="110px" />
+        <select class="e-input" @bind="_semestre">
+            <option value="1">Semestre 1 (se calcula en junio; rige julio–diciembre)</option>
+            <option value="2">Semestre 2 (se calcula en diciembre; rige enero–junio siguiente)</option>
+        </select>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Ver</SfButton>
+        <PermissionGate Required="Payroll.WithholdingRate.Calculate">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-calculator" Disabled="@_accion.Activa" OnClick="@CalcularAsync" Title="Calcula el porcentaje de todos los empleados en procedimiento 2">Calcular</SfButton>
+        </PermissionGate>
+        <PermissionGate Required="Payroll.WithholdingRate.Approve">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@(_accion.Activa || !_calculos.Any(c => c.Calculado))" OnClick="@AprobarTodosAsync">Aprobar todos los calculados</SfButton>
+        </PermissionGate>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("xlsx", null))">Excel</SfButton>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Cómo funciona</span>
+    <p>Para cada empleado en <strong>procedimiento 2</strong> se suman los pagos gravables de los <strong>doce meses anteriores</strong> al mes del cálculo (la prima entra; las cesantías y sus intereses no), se restan los aportes obligatorios, se depura con las mismas deducciones y rentas exentas de la nómina ordinaria en la secuencia que diga la política <code>P2SecuenciaDepuracion</code>, se divide por el parámetro <code>RETEFTE_P2_DIVISOR</code> (o por los meses de vinculación si son menos de doce) y se lleva a la tabla vigente (o a la del plan). <strong>Aprobar</strong> cierra la vigencia anterior de la ficha y abre la nueva; la quincena siguiente la aplica.</p>
+    @if (_avisos.Count > 0) { <p class="texto-alerta">@string.Join(" ", _avisos)</p> }
+</div>
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+<SfGrid TValue="CalculoP2Dto" DataSource="@_calculos" AllowPaging="true" AllowSorting="true">
+    <GridEvents TValue="CalculoP2Dto" RowSelected="@(async c => await AbrirAsync(c.Data.CalculationPublicId))" />
+    <GridPageSettings PageSize="20" />
+    <GridColumns>
+        <GridColumn Field="EmployeeName" HeaderText="Empleado" Width="220" />
+        <GridColumn Field="Document" HeaderText="Documento" Width="110" />
+        <GridColumn Field="Version" HeaderText="V." Width="60" TextAlign="TextAlign.Right" />
+        <GridColumn Field="EstadoTexto" HeaderText="Estado" Width="110" />
+        <GridColumn Field="MonthsUsed" HeaderText="Meses" Width="70" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Divisor" HeaderText="÷" Width="60" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AverageBase" HeaderText="Base promedio" Width="130" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="AverageBaseUvt" HeaderText="UVT" Width="90" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="TheoreticalWithholding" HeaderText="Retención teórica" Width="130" Format="N0" TextAlign="TextAlign.Right" />
+        <GridColumn Field="Percentage" HeaderText="%" Width="80" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="CurrentRatePercent" HeaderText="% vigente hoy" Width="110" Format="N2" TextAlign="TextAlign.Right" />
+        <GridColumn Field="CalculatedAt" HeaderText="Calculado" Width="130" Format="dd/MM/yyyy" Type="ColumnType.DateTime" />
+        <GridColumn HeaderText="" Width="120">
+            <Template>
+                @{ var c = (CalculoP2Dto)context; }
+                @if (c.Calculado)
+                {
+                    <PermissionGate Required="Payroll.WithholdingRate.Approve">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-check" Title="Aprobar y abrir la vigencia" Disabled="@_accion.Activa" OnClick="@(() => AprobarAsync(c.CalculationPublicId))" />
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" Title="Rechazar con motivo" Disabled="@_accion.Activa" OnClick="@(() => { _rechazar = c.CalculationPublicId; _motivo = string.Empty; _mostrarRechazo = true; })" />
+                    </PermissionGate>
+                }
+            </Template>
+        </GridColumn>
+    </GridColumns>
+</SfGrid>
+@if (!_carga.Activa && _calculos.Count == 0)
+{
+    <div class="sin-datos">Sin cálculos para @_anio-@_semestre. «Calcular» los crea para todos los empleados en procedimiento 2.</div>
+}
+@if (_omitidos.Count > 0)
+{
+    <div class="info-card">
+        <span class="label">Sin cálculo (@_omitidos.Count)</span>
+        <ul>@foreach (var o in _omitidos) { <li>@o.EmployeeName: @o.Message</li> }</ul>
+    </div>
+}
+</IndicadorDeCarga>
+
+@if (_detalle is not null)
+{
+    var s = _detalle.Summary;
+    <IndicadorDeCarga Cargando="@_detalleCarga.Activa">
+    <div class="info-card">
+        <span class="label">@s.EmployeeName · @s.SemestreTexto · versión @s.Version · @s.EstadoTexto</span>
+        <p>
+            Sumatoria @_detalle.TotalGrossIncome.ToString("N0") − aportes obligatorios @_detalle.TotalMandatoryContributions.ToString("N0") · deducciones declaradas @_detalle.TotalDeclaredDeductions.ToString("N0") · renta exenta @_detalle.TotalExemptIncome.ToString("N0") ·
+            base depurada @_detalle.DepuratedBase.ToString("N0") · <strong>÷ @_detalle.Divisor.ToString("0.##")</strong> (@(_detalle.DivisorSource == "MesesDeVinculacion" ? "meses de vinculación" : _detalle.DivisorSource)) · @s.SecuenciaTexto ·
+            base promedio <strong>@_detalle.AverageBase.ToString("N0")</strong> = @_detalle.AverageBaseUvt.ToString("N2") UVT (UVT @_detalle.Uvt.ToString("N0")) ·
+            tabla @_detalle.Table.Code@(s.PlanTableUsed ? " (del plan)" : "") vigente desde @_detalle.Table.ValidFrom.ToString("dd/MM/yyyy"): @_detalle.RangeText ·
+            retención teórica <strong>@_detalle.TheoreticalWithholding.ToString("N0")</strong> → <strong>@_detalle.Percentage.ToString("N2") %</strong> (@_detalle.Rounding).
+        </p>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("xlsx", s.CalculationPublicId))">Excel</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export-pdf" Disabled="@_accion.Activa" OnClick="@(() => ReporteAsync("pdf", s.CalculationPublicId))">PDF</SfButton>
+        </div>
+    </div>
+    <SfTab>
+        <TabItems>
+            <TabItem>
+                <ChildContent><TabHeader Text="Mes a mes" /></ChildContent>
+                <ContentTemplate>
+                    <SfGrid TValue="MesP2Dto" DataSource="@_detalle.Months">
+                        <GridColumns>
+                            <GridColumn Field="Year" HeaderText="Año" Width="80" />
+                            <GridColumn Field="Month" HeaderText="Mes" Width="70" />
+                            <GridColumn Field="GrossTaxable" HeaderText="Ingreso gravable" Width="150" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="MandatoryContributions" HeaderText="Aportes obligatorios" Width="160" Format="N0" TextAlign="TextAlign.Right" />
+                            <GridColumn HeaderText="Corridas" Width="420"><Template>@string.Join("; ", ((MesP2Dto)context).SourceRuns.Select(r => $"{r.Kind} v{r.Version}: {r.Amount:N0}"))</Template></GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Depuración y pasos" /></ChildContent>
+                <ContentTemplate>
+                    <table class="campos-formato">
+                        <thead><tr><th>Paso</th><th>Valor</th><th>Nota</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _detalle.Steps) { <tr><td>@p.Label</td><td class="derecha">@(p.Value?.ToString("N2"))</td><td>@p.Text</td></tr> }
+                            <tr><td colspan="3"><strong>Depuración (ET arts. 206, 387, 388)</strong></td></tr>
+                            @foreach (var p in _detalle.DepurationSteps) { <tr><td>@p.Label</td><td class="derecha">@(p.Value?.ToString("N2"))</td><td>@p.Text</td></tr> }
+                        </tbody>
+                    </table>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Tabla" /></ChildContent>
+                <ContentTemplate>
+                    <p class="texto-tenue">@_detalle.Table.Source</p>
+                    <SfGrid TValue="TramoP2Dto" DataSource="@_detalle.Table.Ranges">
+                        <GridColumns>
+                            <GridColumn Field="From" HeaderText="Desde (UVT)" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="To" HeaderText="Hasta (UVT)" Width="120" Format="N2" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Rate" HeaderText="Tarifa %" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                            <GridColumn Field="Fixed" HeaderText="UVT fijas" Width="100" Format="N2" TextAlign="TextAlign.Right" />
+                        </GridColumns>
+                    </SfGrid>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
+    </IndicadorDeCarga>
+}
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarRechazo" Header="Rechazar el cálculo" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Rechazando…">
+            <div class="pagina">
+                <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarRechazo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-danger" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@RechazarAsync">Rechazar</SfButton>
+                </div>
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
+    private List<CalculoP2Dto> _calculos = [];
+    private List<CalculoP2OmitidoDto> _omitidos = [];
+    private List<string> _avisos = [];
+    private DetalleP2Dto? _detalle;
+    private int _anio = DateTime.Today.Year;
+    private int _semestre = DateTime.Today.Month <= 6 ? 1 : 2;
+    private bool _mostrarRechazo;
+    private Guid _rechazar;
+    private string _motivo = string.Empty;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var res = await Nomina.ListarCalculosP2Async(_anio, _semestre);
+        if (res.IsSuccess) _calculos = (res.Value ?? []).ToList();
+        else await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudieron cargar los cálculos.");
+    }
+
+    private async Task CalcularAsync()
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        _omitidos = []; _avisos = [];
+        var res = await Nomina.CalcularP2Async(_anio, _semestre);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo calcular."); return; }
+        var l = res.Value!;
+        _omitidos = l.Skipped.ToList();
+        _avisos = l.Warnings.Select(w => w.Message).ToList();
+        await Notification.SuccessAsync($"Calculados {l.Items.Count} porcentaje(s); {l.Skipped.Count} sin historia.");
+        await CargarAsync();
+    }
+
+    private async Task AbrirAsync(Guid id)
+    {
+        using var carga = _detalleCarga.Iniciar();
+        var res = await Nomina.CalculoP2Async(id);
+        if (res.IsSuccess) _detalle = res.Value;
+        else await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo abrir el cálculo.");
+    }
+
+    private async Task AprobarAsync(Guid id)
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.AprobarP2Async(id);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo aprobar."); return; }
+        var a = res.Value!;
+        await Notification.SuccessAsync($"Porcentaje {a.Percentage:N2} % vigente del {a.ValidFrom:dd/MM/yyyy} al {a.ValidTo:dd/MM/yyyy}" + (a.PreviousClosedAt is { } c ? $"; la vigencia anterior se cerró el {c:dd/MM/yyyy}." : "."));
+        await CargarAsync();
+        if (_detalle?.Summary.CalculationPublicId == id) await AbrirAsync(id);
+    }
+
+    private async Task AprobarTodosAsync()
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var ids = _calculos.Where(c => c.Calculado).Select(c => c.CalculationPublicId).ToList();
+        var res = await Nomina.AprobarP2LoteAsync(ids);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo aprobar el lote."); return; }
+        var ok = res.Value!.Count(x => x.Approved);
+        var fallos = res.Value.Where(x => !x.Approved).Select(x => x.Message).ToList();
+        await Notification.SuccessAsync($"Aprobados {ok} de {res.Value.Count}." + (fallos.Count > 0 ? " " + string.Join(" ", fallos) : string.Empty));
+        await CargarAsync();
+    }
+
+    private async Task RechazarAsync()
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.RechazarP2Async(_rechazar, _motivo.Trim());
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo rechazar."); return; }
+        _mostrarRechazo = false;
+        await Notification.SuccessAsync("Cálculo rechazado.");
+        await CargarAsync();
+    }
+
+    private async Task ReporteAsync(string formato, Guid? calculo)
+    {
+        if (_accion.Activa) return;
+        using var accion = _accion.Iniciar();
+        var res = await Nomina.DescargarReporteP2Async(formato, calculo, _anio, _semestre);
+        if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo exportar el reporte."); return; }
+        await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);
+    }
+}

@@ -1,0 +1,38 @@
+{
+  "casos": [
+    {
+      "nombre": "Retención independiente de la prima en procedimiento 1: prima 7.000.000 → 52.000",
+      "descripcion": "Research R5 (ET art. 385): la prima se retiene sola, sin restar aportes, menos el 25 % exento, tabla 383 y aproximación al múltiplo de RETEFTE_REDONDEO.",
+      "derivacion": "Salario 14.000.000 sin auxilio (> 2 SMMLV), semestre completo: prima = 14.000.000 × 180/360 = 7.000.000. Depuración: 7.000.000 − 0 aportes − renta exenta 25 % 1.750.000 (≤ tope mensual 65,83 UVT = 3.447.780,42) = 5.250.000; tope global 40 % = 2.800.000 no limita. En UVT: 5.250.000 / 52.374 = 100,2406 → tramo 95–150 al 19 %: (100,2406 − 95) × 0,19 = 0,9957 UVT × 52.374 = 52.149 → aproximado a 1.000: 52.000.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Prima de siete millones",
+        "ingreso": "2020-01-01",
+        "salarios": [ { "desde": "2020-01-01", "mensual": 14000000 } ]
+      },
+      "esperado": {
+        "lineas": { "PRIMA": 7000000, "RETEFTE_PRIMA": 52000 },
+        "totales": { "devengos": 7000000, "deducciones": 52000, "provisiones": 0, "neto": 6948000 }
+      }
+    },
+    {
+      "nombre": "Retención independiente de la prima en procedimiento 1: prima 6.000.000 → 0",
+      "descripcion": "Research R5: una prima hasta 6.634.040 no alcanza las 95 UVT tras el 25 % exento.",
+      "derivacion": "Salario 12.000.000 sin auxilio, semestre completo: prima = 6.000.000. 6.000.000 − 25 % (1.500.000) = 4.500.000 = 85,92 UVT → tramo 0–95 → 0.",
+      "tipo": "ServiceBonus",
+      "corte": "2026-12-31",
+      "inicioPeriodo": "2026-07-01",
+      "empleado": {
+        "nombre": "Prima de seis millones",
+        "ingreso": "2020-01-01",
+        "salarios": [ { "desde": "2020-01-01", "mensual": 12000000 } ]
+      },
+      "esperado": {
+        "lineas": { "PRIMA": 6000000, "RETEFTE_PRIMA": 0 },
+        "totales": { "devengos": 6000000, "deducciones": 0, "provisiones": 0, "neto": 6000000 }
+      }
+    }
+  ]
+}

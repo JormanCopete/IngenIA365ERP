@@ -259,7 +259,9 @@ public sealed class PayrollCalculationEngine
                 }
             }
 
-            var line = Evaluate(def, null, ctx);
+            var line = def.Code.Equals(WellKnownConceptCodes.WorkRisk, StringComparison.OrdinalIgnoreCase)
+                ? WorkRiskLine(def, ctx, input.Policies.CotizaArlEnVacaciones)
+                : Evaluate(def, null, ctx);
             if (line is null)
             {
                 if (def.Code.Equals(WellKnownConceptCodes.WorkRisk, StringComparison.OrdinalIgnoreCase))
@@ -314,12 +316,40 @@ public sealed class PayrollCalculationEngine
         return rule.Evaluate(def, novelty, ctx);
     }
 
+    /// <summary>
+    /// Feature 010 (R6): la ARL sobre el IBC sin los días de vacaciones cuando la cooperativa no
+    /// cotiza riesgos durante el descanso (<c>CotizaArlEnVacaciones</c> = no): el trabajador de
+    /// vacaciones no está expuesto al riesgo. Con la política en «sí», o sin días de vacaciones,
+    /// es la ARL de siempre.
+    /// </summary>
+    private CalculationLine? WorkRiskLine(PayrollConceptDefinition def, RuleContext ctx, bool cotizaEnVacaciones)
+    {
+        var vacaciones = ctx.Bases.VacationLeaveContribution;
+        if (cotizaEnVacaciones || vacaciones <= 0m || ctx.Bases.ContributionBase is not { } ibc)
+            return Evaluate(def, null, ctx);
+
+        ctx.Bases.ContributionBase = Math.Max(0m, ibc - vacaciones);
+        try
+        {
+            var line = Evaluate(def, null, ctx);
+            line?.Explanation.Note("Vacaciones",
+                $"La base excluye {Fmt.Money(vacaciones)} de días de vacaciones ya pagados en la liquidación: la cooperativa no cotiza ARL durante el descanso (política CotizaArlEnVacaciones = no).");
+            return line;
+        }
+        finally
+        {
+            ctx.Bases.ContributionBase = ibc;
+        }
+    }
+
     private static IEnumerable<PayrollConceptDefinition> Automatic(ConceptSet concepts, EmployeeClass clase, ConceptNature nature, string[] excluir) =>
         concepts.All
             .Where(c => c.IsAutomatic && c.Nature == nature && c.AppliesTo(clase)
                         && c.CalculationKind != CalculationKind.CompositeOfConcepts
                         && !excluir.Contains(c.Code, StringComparer.OrdinalIgnoreCase)
-                        && !c.Code.Equals(WellKnownConceptCodes.RoundingAdjustment, StringComparison.OrdinalIgnoreCase))
+                        && !c.Code.Equals(WellKnownConceptCodes.RoundingAdjustment, StringComparison.OrdinalIgnoreCase)
+                        // Feature 010: los de las liquidaciones especiales son del otro motor.
+                        && !WellKnownConceptCodes.SettlementOnly.Contains(c.Code, StringComparer.OrdinalIgnoreCase))
             .OrderBy(c => c.Code, StringComparer.Ordinal);
 
     private static int Posicion(string[] orden, string code)
@@ -372,7 +402,7 @@ public sealed class PayrollCalculationEngine
     }
 
     private static CalculationLine WithholdingProcedure2(PayrollConceptDefinition def, RuleContext ctx,
-        WithholdingBaseBuilder.Depuration depuracion, decimal tasaPct)
+        Depuration depuracion, decimal tasaPct)
     {
         var fraccion = tasaPct / 100m;
         var exp = new Explanation

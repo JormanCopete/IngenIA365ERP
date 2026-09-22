@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Application.Payroll.Runs.Queries;
 /// <summary>Arma <see cref="RunSummaryDto"/> a partir de la corrida (compartido por las consultas).</summary>
 public sealed class RunSummaryBuilder(IApplicationDbContext db)
 {
-    public async Task<RunSummaryDto> BuildAsync(PayrollRun run, Guid periodPublicId, bool detailed, CancellationToken ct)
+    public async Task<RunSummaryDto> BuildAsync(PayrollRun run, Guid? periodPublicId, bool detailed, CancellationToken ct)
     {
         var porConcepto = new List<RunConceptTotalDto>();
         var bloqueos = new List<RunBlockerDto>();
@@ -38,10 +38,11 @@ public sealed class RunSummaryBuilder(IApplicationDbContext db)
                 .ToListAsync(ct);
             porConcepto = porConcepto.OrderBy(c => c.Nature).ThenBy(c => c.Code, StringComparer.Ordinal).ToList();
 
-            foreach (var e in empleados.Where(e => e.Flags != RunEmployeeFlag.None))
+            // En una liquidación especial el saldo inicial ausente es aviso, no bloqueo (contracts/api.md §3.5).
+            foreach (var e in empleados.Where(e => Bloqueantes(run, e.Flags) != RunEmployeeFlag.None))
             {
                 var notas = Notas(e.NotesJson);
-                foreach (var flag in RunJson.FlagNames(e.Flags))
+                foreach (var flag in RunJson.FlagNames(Bloqueantes(run, e.Flags)))
                     bloqueos.Add(new RunBlockerDto(e.PublicId, e.Nombre.Trim(), flag,
                         notas.Refusals.FirstOrDefault() ?? RunJson.FlagLabel(Enum.Parse<RunEmployeeFlag>(flag))));
             }
@@ -58,14 +59,35 @@ public sealed class RunSummaryBuilder(IApplicationDbContext db)
             ? []
             : JsonSerializer.Deserialize<List<ApprovalExceptionDto>>(run.ExceptionsJson, RunJson.Options) ?? [];
 
+        // Feature 010: las liquidaciones especiales traen su tipo, su corte y sus avisos con código.
+        var avisos = new List<RunWarningDto>();
+        Guid? empleadoPublicId = null;
+        if (run.EsEspecial)
+        {
+            var sinSaldo = empleados.Where(e => e.Flags.HasFlag(RunEmployeeFlag.OpeningBalanceMissing)).ToList();
+            if (sinSaldo.Count > 0)
+                avisos.Add(new RunWarningDto(Settlements.Common.SettlementErrors.OpeningBalanceMissingCode,
+                    $"Ingreso anterior al arranque de la nómina sin saldo inicial de prestaciones: {string.Join(", ", sinSaldo.Select(e => e.Nombre.Trim()))}.",
+                    new { employeePublicIds = sinSaldo.Select(e => e.PublicId).ToList() }));
+            foreach (var e in empleados)
+                foreach (var w in Notas(e.NotesJson).Warnings ?? [])
+                    avisos.Add(new RunWarningDto("Payroll.Settlement.Warning", $"{e.Nombre.Trim()}: {w}", new { employeePublicId = e.PublicId }));
+            if (run.EmployeeId is { } empId)
+                empleadoPublicId = await db.Employees.AsNoTracking().Where(e => e.Id == empId).Select(e => (Guid?)e.PublicId).FirstOrDefaultAsync(ct);
+        }
+
         return new RunSummaryDto(run.PublicId, periodPublicId, run.Version, run.Status.ToString(),
             run.CalculatedAt, run.CalculatedBy, run.ApprovedAt, run.ApprovedBy, run.ReversedAt, run.ReversedBy, run.ReversalReason,
             run.EmployeeCount,
             new RunTotalsDto(run.TotalEarnings, run.TotalDeductions, run.TotalEmployerContributions, run.TotalProvisions, run.TotalNet, run.RoundingAdjustment),
             porConcepto, bloqueos, cambiados, run.InputsHash,
             documento?.PublicId, documento is null ? null : $"{documento.VoucherTypeCode}-{documento.DocumentNumber}",
-            reverso, run.ApprovedWithoutSegregation, excepciones, run.DiscardedAt, run.DiscardedBy, run.DiscardReason);
+            reverso, run.ApprovedWithoutSegregation, excepciones, run.DiscardedAt, run.DiscardedBy, run.DiscardReason,
+            run.Kind.ToString(), run.CutoffDate, run.PayDate, run.Year, run.Semester, empleadoPublicId, avisos);
     }
+
+    private static RunEmployeeFlag Bloqueantes(PayrollRun run, RunEmployeeFlag flags) =>
+        run.EsEspecial ? Settlements.Common.SettlementRunPersister.SinAvisos(flags) : flags;
 
     public static RunEmployeeNotes Notas(string? json)
     {
@@ -87,7 +109,7 @@ public sealed class GetCurrentRunQueryHandler(IApplicationDbContext db, RunSumma
     {
         var period = await db.PayPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.PublicId == request.PeriodPublicId, ct);
         if (period is null) return Result.Failure<RunSummaryDto>(new Error("Payroll.PeriodNotFound", "No existe el período de pago indicado."));
-        var run = await db.PayrollRuns.AsNoTracking().Where(r => r.PayPeriodId == period.Id).OrderByDescending(r => r.Version).FirstOrDefaultAsync(ct);
+        var run = await db.PayrollRuns.AsNoTracking().Where(r => r.PayPeriodId == period.Id && r.Kind == PayrollRunKind.Ordinary).OrderByDescending(r => r.Version).FirstOrDefaultAsync(ct);
         if (run is null) return Result.Failure<RunSummaryDto>(new Error("Payroll.RunNotFound", "El período todavía no se ha calculado."));
         return Result.Success(await builder.BuildAsync(run, period.PublicId, detailed: true, ct));
     }
@@ -102,7 +124,7 @@ public sealed class ListRunsQueryHandler(IApplicationDbContext db, RunSummaryBui
     {
         var period = await db.PayPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.PublicId == request.PeriodPublicId, ct);
         if (period is null) return Result.Failure<IReadOnlyList<RunSummaryDto>>(new Error("Payroll.PeriodNotFound", "No existe el período de pago indicado."));
-        var runs = await db.PayrollRuns.AsNoTracking().Where(r => r.PayPeriodId == period.Id).OrderByDescending(r => r.Version).ToListAsync(ct);
+        var runs = await db.PayrollRuns.AsNoTracking().Where(r => r.PayPeriodId == period.Id && r.Kind == PayrollRunKind.Ordinary).OrderByDescending(r => r.Version).ToListAsync(ct);
         var lista = new List<RunSummaryDto>();
         foreach (var r in runs) lista.Add(await builder.BuildAsync(r, period.PublicId, detailed: false, ct));
         return Result.Success<IReadOnlyList<RunSummaryDto>>(lista);
@@ -118,7 +140,8 @@ public sealed class GetRunSummaryQueryHandler(IApplicationDbContext db, RunSumma
     {
         var run = await db.PayrollRuns.AsNoTracking().Include(r => r.PayPeriod).FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Result.Failure<RunSummaryDto>(new Error("Payroll.RunNotFound", "No existe la corrida indicada."));
-        return Result.Success(await builder.BuildAsync(run, run.PayPeriod!.PublicId, detailed: true, ct));
+        // Una liquidación especial no tiene período (R2): PeriodPublicId sale nulo.
+        return Result.Success(await builder.BuildAsync(run, run.PayPeriod?.PublicId, detailed: true, ct));
     }
 }
 

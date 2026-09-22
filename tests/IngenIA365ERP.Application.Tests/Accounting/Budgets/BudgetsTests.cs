@@ -34,7 +34,7 @@ public class BudgetsTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, CooperativaDePrueba.Actual, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             Gasto = D.Cuenta("5105061");
             OtroGasto = D.Cuenta("5105062");
             Ingreso = D.Cuenta("4135051", AccountNature.Credit);

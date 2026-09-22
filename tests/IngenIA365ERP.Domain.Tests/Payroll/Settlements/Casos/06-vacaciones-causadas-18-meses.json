@@ -1,0 +1,33 @@
+{
+  "nombre": "Definitiva por renuncia a los 18 meses: 22,5 días causados, 11 disfrutados, 11,5 × 80.000 = 920.000",
+  "descripcion": "Research R1 (vacaciones): 540 días → 22,5 hábiles; 11,5 pendientes × 80.000 = 920.000. La definitiva paga además la prima del semestre, las cesantías e intereses del año y los aportes de ley sobre lo que cotiza. El último período ya lo pagó la nómina (sin salario pendiente).",
+  "derivacion": "Vacaciones: días 01-07-2025 a 31-12-2026 = 540; causados = 540 × 15 / 360 = 22,5; disfrutados 11 → pendientes 11,5; día = 2.400.000 / 30 = 80.000 (sin auxilio, CST art. 192); 11,5 × 80.000 = 920.000. Prima 2026-II: base 2.400.000 + 249.095 = 2.649.095 × 180 / 360 = 1.324.547,50. Cesantías 2026: 2.649.095 × 360 / 360 = 2.649.095. Intereses: 2.649.095 × 12 % = 317.891,40. Indemnización: renuncia no genera → omitida. IBC = sólo las vacaciones compensadas 920.000 → salud 4 % = 36.800, pensión 4 % = 36.800, FSP: 0,53 SMMLV → no aplica (0). Retención ordinaria: 920.000 − 73.600 = 846.400 − 25 % (211.600) = 634.800 = 12,12 UVT → 0. Retención prima: 1.324.547,50 × 75 % = 993.410,63 = 18,97 UVT → 0. Retención cesantías: ingreso 2.649.095 = 50,58 UVT ≤ 350 → 0. Devengos = 1.324.547,50 + 2.649.095 + 317.891,40 + 920.000 = 5.211.533,90; deducciones 73.600; neto 5.137.933,90.",
+  "tipo": "Settlement",
+  "corte": "2026-12-31",
+  "empleado": {
+    "nombre": "Renuncia a los 18 meses",
+    "ingreso": "2025-07-01",
+    "salarios": [ { "desde": "2025-07-01", "mensual": 2400000 } ]
+  },
+  "movimientosVacaciones": [
+    { "tipo": "Enjoyment", "desde": "2026-03-02", "hasta": "2026-03-14", "diasHabiles": 11, "diasCalendario": 13 }
+  ],
+  "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
+  "esperado": {
+    "lineas": {
+      "PRIMA": 1324547.50,
+      "CESANTIAS": 2649095,
+      "INT_CESANTIAS": 317891.40,
+      "VACACIONES_COMP": 920000,
+      "SALUD_EMP": 36800,
+      "PENSION_EMP": 36800,
+      "FSP": 0,
+      "RETEFTE": 0,
+      "RETEFTE_PRIMA": 0,
+      "RETEFTE_CESANTIAS": 0
+    },
+    "totales": { "devengos": 5211533.90, "deducciones": 73600, "provisiones": 0, "neto": 5137933.90 },
+    "omitidos": [ "INDEMNIZACION:MotivoNoGeneraIndemnizacion", "SALARIO_PENDIENTE:SinDiasPendientes" ],
+    "vacaciones": { "causados": 22.5, "pendientes": 11.5 }
+  }
+}
