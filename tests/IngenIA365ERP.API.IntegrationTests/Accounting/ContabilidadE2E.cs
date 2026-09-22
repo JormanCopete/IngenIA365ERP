@@ -165,19 +165,89 @@ public static class ContabilidadE2E
         return acceso!;
     }
 
+    // ------------------------------------------------------ cooperativa aislada --
+
+    /// <summary>Una cooperativa propia dentro del mismo host: para lo que cambia el estado de todo el libro (cerrar el ejercicio, cargar la apertura) sin pisar a las demás pruebas.</summary>
+    public sealed class CooperativaAislada
+    {
+        public required string TokenAdmin { get; init; }
+        public required Guid TenantPublicId { get; init; }
+        public required Guid SucursalPrincipal { get; init; }
+        public required int PrimerEjercicio { get; init; }
+    }
+
+    private static readonly Dictionary<(CentralIdentityApiFixture, string), Task<CooperativaAislada>> Aisladas = [];
+
+    /// <summary>
+    /// Alta de una cooperativa con su administrador y la contabilidad iniciada (PUC solidario, nivel 5,
+    /// sucursal «Principal», ejercicio <paramref name="primerEjercicio"/> abierto) —el mismo camino HTTP
+    /// que <see cref="NominaE2E.PrepararAsync"/>, sin nómina—. Una por sufijo y fixture.
+    /// </summary>
+    public static Task<CooperativaAislada> CooperativaAisladaAsync(CentralIdentityApiFixture fx, string sufijo, int primerEjercicio)
+    {
+        lock (Cerrojo)
+        {
+            if (!Aisladas.TryGetValue((fx, sufijo), out var tarea))
+            {
+                tarea = CooperativaAisladaDeVerdadAsync(fx, sufijo, primerEjercicio);
+                Aisladas[(fx, sufijo)] = tarea;
+            }
+            return tarea;
+        }
+    }
+
+    private static async Task<CooperativaAislada> CooperativaAisladaDeVerdadAsync(CentralIdentityApiFixture fx, string sufijo, int primerEjercicio)
+    {
+        using var http = fx.CreateClient();
+        var tokenMaestro = await fx.IniciarSesionMaestroAsync(http);
+        var correoAdmin = $"admin.{sufijo}@coop.contabilidad.test";
+        var alta = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, "/api/saas/tenants/with-admin", new
+        {
+            name = $"Coop. Contabilidad {sufijo}",
+            schemaName = $"tenant_conta_{sufijo}",
+            subdomain = $"tenant_conta_{sufijo}",
+            nit = (900_800_000 + Math.Abs(sufijo.Sum(c => c) % 100_000)).ToString(),
+            legalName = $"Cooperativa Contabilidad {sufijo} E2E",
+            contactEmail = $"contacto.{sufijo}@coop.contabilidad.test",
+            planType = "Basic",
+            maxUsers = 20,
+            storageLimitMb = 1024,
+            firstAdminEmail = correoAdmin,
+        });
+        alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa {sufijo}: «{await alta.Content.ReadAsStringAsync()}»");
+        var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();
+        var admin = await AceptarInvitacionAsync(fx, http, correoAdmin, $"Conta-{sufijo}-2026!");
+
+        var sucursal = await EnviarAsync(http, admin, HttpMethod.Post, "/api/core/branches", new { name = "Principal", shortName = "PPAL" });
+        sucursal.IsSuccessStatusCode.Should().BeTrue($"sucursal: «{await sucursal.Content.ReadAsStringAsync()}»");
+        var sucursales = await GetAsync(http, admin, "/api/core/branches?PageNumber=1&PageSize=10");
+        var principal = sucursales.GetProperty("items").EnumerateArray().First().GetProperty("publicId").GetGuid();
+        var inicio = await EnviarAsync(http, admin, HttpMethod.Post, "/api/accounting/setup/initialize", new
+        {
+            catalogCode = "PUC-SOLIDARIO", movementLevel = 5, niifGroup = 2, firstFiscalYear = primerEjercicio, mainBranchPublicId = principal, fourEyes = false,
+        });
+        inicio.IsSuccessStatusCode.Should().BeTrue($"iniciar la contabilidad: «{await inicio.Content.ReadAsStringAsync()}»");
+        return new CooperativaAislada { TokenAdmin = admin, TenantPublicId = tenantPublicId, SucursalPrincipal = principal, PrimerEjercicio = primerEjercicio };
+    }
+
     // ------------------------------------------------------------------ plan --
 
     /// <summary>Una auxiliar de movimiento bajo la subcuenta del catálogo (los seis primeros dígitos), habilitada para Contabilidad. Idempotente.</summary>
-    public static async Task CrearAuxiliarAsync(HttpClient http, string token, string codigo, string nombre)
+    public static Task CrearAuxiliarAsync(HttpClient http, string token, string codigo, string nombre) =>
+        CrearCuentaAsync(http, token, codigo, nombre, codigo[..6], ["CNT"]);
+
+    /// <summary>Una cuenta propia bajo el padre indicado (donde el CUIF no trae hijos —3505 EXCEDENTES— la empresa crea la de 6 dígitos y debajo la auxiliar). Idempotente.</summary>
+    public static async Task CrearCuentaAsync(HttpClient http, string token, string codigo, string nombre, string codigoPadre, string[] modulos,
+        bool tercero = false, bool cruce = false, bool centro = false, bool sucursal = false)
     {
-        var padre = await CuentaAsync(http, token, codigo[..6]);
+        var padre = await CuentaAsync(http, token, codigoPadre);
         var resp = await EnviarAsync(http, token, HttpMethod.Post, "/api/accounting/accounts", new
         {
             code = codigo, name = nombre, parentPublicId = padre,
-            enabledModules = new[] { "CNT" }, requiresThirdParty = false, requiresCrossDocument = false, requiresCostCenter = false, requiresBranch = false,
+            enabledModules = modulos, requiresThirdParty = tercero, requiresCrossDocument = cruce, requiresCostCenter = centro, requiresBranch = sucursal,
         });
         if (resp.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity) return;
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"auxiliar {codigo}: «{await resp.Content.ReadAsStringAsync()}»");
+        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"cuenta {codigo}: «{await resp.Content.ReadAsStringAsync()}»");
     }
 
     /// <summary>El PublicId de una cuenta del plan por su código exacto.</summary>
@@ -208,14 +278,14 @@ public static class ContabilidadE2E
 
     public static string SiguienteCruce() => Interlocked.Increment(ref _numeroDeCruce).ToString();
 
-    public static object Linea(string cuenta, Guid sucursal, decimal debito, decimal credito, Guid? persona = null, string? tipoCruce = null, string? numeroCruce = null, string? detalle = null) => new
+    public static object Linea(string cuenta, Guid? sucursal, decimal debito, decimal credito, Guid? persona = null, string? tipoCruce = null, string? numeroCruce = null, string? detalle = null) => new
     {
         accountCode = cuenta, branchPublicId = sucursal, costCenterPublicId = (Guid?)null, personPublicId = persona,
         crossDocumentType = tipoCruce, crossDocumentNumber = numeroCruce, debit = debito, credit = credito, detail = detalle, taxBase = (decimal?)null,
     };
 
-    /// <summary>Guarda un borrador CG con esas líneas: 201 con <c>publicId</c> y sin errores bloqueantes.</summary>
-    public static async Task<Guid> BorradorAsync(HttpClient http, string token, DateOnly fecha, string descripcion, object[] lineas)
+    /// <summary>Guarda un borrador CG con esas líneas: 201 con <c>publicId</c> y sin errores bloqueantes (salvo que se admitan a propósito).</summary>
+    public static async Task<Guid> BorradorAsync(HttpClient http, string token, DateOnly fecha, string descripcion, object[] lineas, bool admiteErrores = false)
     {
         var resp = await EnviarAsync(http, token, HttpMethod.Post, "/api/accounting/documents/drafts", new
         {
@@ -223,9 +293,45 @@ public static class ContabilidadE2E
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"borrador: «{await resp.Content.ReadAsStringAsync()}»");
         var cuerpo = await LeerAsync(resp);
-        cuerpo.GetProperty("errors").EnumerateArray().Where(e => e.GetProperty("severity").GetString() == "Error")
-            .Should().BeEmpty("el borrador de prueba no debe tener errores bloqueantes");
+        if (!admiteErrores)
+            cuerpo.GetProperty("errors").EnumerateArray().Where(e => e.GetProperty("severity").GetString() == "Error")
+                .Should().BeEmpty("el borrador de prueba no debe tener errores bloqueantes");
         return cuerpo.GetProperty("publicId").GetGuid();
+    }
+
+    public static async Task CerrarMesAsync(HttpClient http, string token, int year, int month)
+    {
+        var resp = await EnviarAsync(http, token, HttpMethod.Post, $"/api/accounting/periods/{year}/{month}/close", null);
+        resp.StatusCode.Should().Be(HttpStatusCode.NoContent, $"cerrar {year}-{month}: «{await resp.Content.ReadAsStringAsync()}»");
+    }
+
+    public static async Task ReabrirMesAsync(HttpClient http, string token, int year, int month, string motivo)
+    {
+        var resp = await EnviarAsync(http, token, HttpMethod.Post, $"/api/accounting/periods/{year}/{month}/reopen", new { reason = motivo });
+        resp.StatusCode.Should().Be(HttpStatusCode.NoContent, $"reabrir {year}-{month}: «{await resp.Content.ReadAsStringAsync()}»");
+    }
+
+    /// <summary>Abre el ejercicio si no existe (422 <c>AlreadyExists</c> no es un fallo: otra prueba pudo abrirlo).</summary>
+    public static async Task AbrirEjercicioAsync(HttpClient http, string token, int year)
+    {
+        var resp = await EnviarAsync(http, token, HttpMethod.Post, "/api/accounting/periods/years", new { year });
+        if (resp.StatusCode == HttpStatusCode.UnprocessableEntity) { (await CodigoDeErrorAsync(resp)).Should().Be("Accounting.FiscalYear.AlreadyExists"); return; }
+        resp.IsSuccessStatusCode.Should().BeTrue($"abrir {year}: «{await resp.Content.ReadAsStringAsync()}»");
+    }
+
+    /// <summary>Los eventos de la auditoría de la cooperativa con esa acción, reintentando hasta 30 s (la escritura es asíncrona).</summary>
+    public static async Task<List<JsonElement>> EventosDeAuditoriaAsync(HttpClient http, string token, string modulo, string accion, Func<JsonElement, bool>? filtro = null, int minimo = 1)
+    {
+        var limite = DateTime.UtcNow.AddSeconds(30);
+        List<JsonElement> eventos = [];
+        while (DateTime.UtcNow < limite)
+        {
+            var pagina = await GetAsync(http, token, $"/api/audit/logs?module={modulo}&action={Uri.EscapeDataString(accion)}&pageSize=100");
+            eventos = pagina.GetProperty("items").EnumerateArray().Where(e => filtro is null || filtro(e)).ToList();
+            if (eventos.Count >= minimo) break;
+            await Task.Delay(500);
+        }
+        return eventos;
     }
 
     public static async Task<long> ContabilizarBorradorAsync(HttpClient http, string token, Guid borrador)
