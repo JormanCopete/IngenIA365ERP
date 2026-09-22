@@ -40,6 +40,22 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release 0a309f3`** (2026-09-22 09:35–09:45 UTC, GitOps `8c9d2e7`, autorizado por el dueño con
+«realiza merge a develop y también despliega en producción»): **contabilidad 009 E2** —consultas e
+informes (13 vistas), libro auxiliar, estados financieros, presupuesto, cierre y reapertura del
+ejercicio (`CI`), saldos de apertura (`AP`) y las e2e pendientes de E1— sobre `develop` `857d0e5`.
+**Sin migraciones** (26 en `ingenia365erp` y `cooflopal` antes y después). Respaldos previos
+`pg_dump -Fc` en `/root/respaldos/`: `ingenia365erp_admin-`, `ingenia365erp-` y
+`cooflopal-20260922-pre-f009e2.dump` (72 KB / 1,4 MB / 1,5 MB, cabecera `PGDMP`; el nodo no tiene
+`pg_restore` y el contenedor no acepta el archivo por `stdin`, así que esta vez no se contaron las
+tablas). Diagnóstico antes: 0 documentos y 0 movimientos contables en las dos bases (la contabilidad
+no está iniciada en `cooflopal`; 15 corridas de nómina intactas). CI de `develop` y `release`
+verdes; sync manual de Argo `Succeeded` → `Healthy`; pods API `e676b852…` y Web `bc0927c4…`;
+30 permisos `Accounting.*` en cada base; `/health/ready` 200; `app.ingenia365.com` 200; 0 `[ERR]`.
+**Lo que sigue en producción**: T096 (el contador valida el CUIF y recorre E2 por rol), iniciar la
+contabilidad en `cooflopal` y definir la cuenta de resultado antes del primer cierre anual
+([contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §3, §7a).
+
 **`release c388a17`** (2026-09-22 01:05–01:15 UTC, GitOps `8f8449b`, autorizado por el dueño con
 «realiza commit, merge a develop e integrar produccion»; segundo revisor Jorman Copete): la feature 010
 completa salvo N3 — **N1** (prima, cesantías anuales, vacaciones, liquidación definitiva, políticas,
@@ -422,7 +438,7 @@ sin migraciones pendientes», «Cooperativas con base propia: 0 de 0 activa(s)»
 Como `HookSucceeded` borra el Job al terminar, para leer sus pasos se lanzó una
 copia del mismo manifiesto sin anotaciones de Argo y se borró después.
 
-#### P15 — Feature 009 (contabilidad NIIF): E1 en **producción** (`release ff25948`, 2026-09-19); E2 completa en la rama `009-e2-consultas-presupuesto` (2026-09-21), pendiente merge, QA y validación del contador
+#### P15 — Feature 009 (contabilidad NIIF): E1 y E2 en `develop` y en **producción** (`release ff25948` 2026-09-19 y `release 0a309f3` 2026-09-22); pendientes QA por rol y validación del contador (T096); E3/E4 en ramas posteriores
 
 La **entrega E1 está en `develop`** (merge `6d0c89d`, 2026-09-15) y desplegada en **DEV y QA**
 por el pipeline (`gitops` `9c614c8`, imágenes `api@8f36b0b7…`, `web@0c2fc64c…`). En los dos
@@ -507,8 +523,8 @@ sobre la 010) y 211 de integración con Docker (210 pasan, 1 omitida). Receta:
 cinco e2e marcadas en `specs/009-contabilidad-niif/tasks.md`; de E1 y E2 sólo queda **T096**, que
 es del dueño.
 
-**Lo que sigue pendiente (del dueño o de otra rama)**: merge de `009-e2-consultas-presupuesto` a
-`develop` y despliegue a DEV/QA; QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
+**Lo que sigue pendiente (del dueño o de otra rama)**: ~~merge a `develop` y despliegue~~ hecho el
+2026-09-22 (`develop` `857d0e5`, `release 0a309f3`, arriba); QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
 dos PUC por el contador** (T096, bloqueante para usar la contabilidad en producción) y de que en el
 CUIF las contras de activo (1408, 1499…) y los gastos por deterioro/depreciación (5115, 5120, 5415,
 5420) estén alineados para que la «Diferencia» del EFE sea cero; definir en cada cooperativa la
