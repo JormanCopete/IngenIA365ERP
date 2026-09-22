@@ -40,6 +40,17 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release 8d3f9a1`** (2026-09-22 13:05–13:20 UTC, GitOps `11976be`, autorizado por el dueño con
+«promueve a release»): las dos **mejoras de implantación** que pidió al arrancar COOFLOPAL —carga
+masiva de auxiliares desde plantilla xlsx y saldos de apertura con fecha elegible y editables hasta
+contabilizar—. **Sin migraciones** (26 en las dos bases, antes y después). Respaldos previos
+`pg_dump -Fc`: `/root/respaldos/{ingenia365erp_admin,ingenia365erp,cooflopal}-20260922b-pre-implantacion.dump`
+(72 KB / 1,4 MB / 1,7 MB). Diagnóstico antes: libros en cero en las dos bases; **`cooflopal` ya tiene
+la contabilidad iniciada** (2.110 cuentas del CUIF copiadas ese día por el dueño) con sus 11 empleados
+y 15 corridas intactos. CI de `develop` (`59f0606`) y `release` verdes; sync manual de Argo
+`Succeeded` → `Healthy`; pods API `aaa4f7e6…` y Web `444f76e6…`; `/health/ready` 200;
+`app.ingenia365.com` 200; 0 `[ERR]`; datos intactos después del relevo.
+
 **`release 0a309f3`** (2026-09-22 09:35–09:45 UTC, GitOps `8c9d2e7`, autorizado por el dueño con
 «realiza merge a develop y también despliega en producción»): **contabilidad 009 E2** —consultas e
 informes (13 vistas), libro auxiliar, estados financieros, presupuesto, cierre y reapertura del
@@ -533,7 +544,8 @@ la propuesta; se mueve hasta el fin del primer ejercicio y nunca a un mes cerrad
 entera mientras sea borrador**: agregar, cambiar y quitar cuentas desde el comprobante, cambiar la
 fecha, descartarlo, y volver a importar reemplaza sus líneas conservando el mismo comprobante. Con
 esto una cooperativa que llega de SOLIDO carga cuentas y saldos al corte real sin digitar de a una.
-Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a.
+Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a. **En producción
+desde el `release 8d3f9a1`** (2026-09-22).
 
 **Lo que sigue pendiente (del dueño o de otra rama)**: ~~merge a `develop` y despliegue~~ hecho el
 2026-09-22 (`develop` `857d0e5`, `release 0a309f3`, arriba); QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los
