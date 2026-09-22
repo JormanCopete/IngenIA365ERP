@@ -1,0 +1,2 @@
+# Feature 010 (N2): los archivos esperados de la PILA son ancho fijo con CRLF; git no debe normalizarlos.
+*.esperado.txt -text
