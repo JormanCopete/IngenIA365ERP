@@ -118,6 +118,12 @@ puede mover sin invalidar lo ya escrito.
    se descubriría al subir el primer soporte—. Con S3 responde `S3: s3://ingenia365-erp-attachments/pdn`;
    con disco, la ruta. Después, subir un adjunto de prueba a un comprobante, descargarlo y borrarlo.
 
+   Esa escritura se hace **como mucho una vez cada cinco minutos**, no en cada sonda: la
+   `readinessProbe` pega cada 5 s por pod, y el 2026-09-22, el día que esto salió a DEV y QA, el
+   bucket juntó 18 versiones en dos minutos. Entre medio se repite el último veredicto. El primer
+   arranque **siempre** prueba, que es cuando importa: un despliegue con la credencial mal puesta
+   tiene que quedarse sin pasar a Ready. Lo fija `BlobStoreHealthCheckTests`.
+
 4. **Retirar el volumen** (opcional, cuando lleve días andando): quitar de `base/api.yaml` el
    `volumeMount`, el `volume` y el PVC `erp-attachments`. Hasta entonces el volumen queda montado sin
    usarse, que no molesta. **No borrarlo antes de verificar** el punto 3.
