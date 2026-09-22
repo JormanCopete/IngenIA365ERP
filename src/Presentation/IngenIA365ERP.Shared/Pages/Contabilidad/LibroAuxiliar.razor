@@ -1,0 +1,208 @@
+@page "/contabilidad/libro-auxiliar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Libro auxiliar - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US5 (FR-042, FR-043): la consulta dinámica del libro. Se navega con migas de pan
+   —clase › grupo › cuenta › subcuenta › auxiliar › tercero › documento cruce › comprobante › línea—
+   y cada nivel es UNA consulta a `ledger?node=` con los mismos filtros: no hay árbol en memoria
+   porque un ejercicio puede tener un millón de líneas (SC-008). La grilla del nivel actual se
+   exporta tal cual (Excel, PDF, Word) y una fila con comprobante se abre en su pantalla. *@
+<PermissionGate Required="Accounting.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Libro auxiliar</h3>
+        <div class="toolbar">
+            @if (_comprobanteActual is { } comprobante)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-open-link" OnClick="@(() => AbrirComprobante(comprobante))">Abrir comprobante</SfButton>
+            }
+            @if (_tabla is not null)
+            {
+                <PermissionGate Required="Accounting.Reports.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa" MostrarNivel="false" MostrarConTerceros="false" />
+
+    <nav class="migas" aria-label="Camino en el libro">
+        @for (var i = 0; i < _camino.Count; i++)
+        {
+            var indice = i;
+            var miga = _camino[i];
+            var ultima = i == _camino.Count - 1;
+            @if (i > 0) { <span class="miga-separador" aria-hidden="true">›</span> }
+            @if (ultima)
+            {
+                <span class="miga-actual" aria-current="page">@miga.Texto</span>
+            }
+            else
+            {
+                <button type="button" class="enlace" @onclick="@(() => IrAMigaAsync(indice))">@miga.Texto</button>
+            }
+        }
+    </nav>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <TablaDeReporte Tabla="@_tabla" FilasClicables="true" EsClicable="@(f => Destino(f) is not null)" FilaElegida="@ProfundizarAsync"
+                        TextoSinTabla="Elija el rango y pulse «Consultar»: se muestran las clases del plan con movimiento."
+                        TextoSinFilas="Nada que mostrar en este nivel con estos filtros." />
+        @if (_tabla is not null && _tabla.Filas.Count > 0)
+        {
+            <p class="hint">Un clic en una fila baja un nivel (cuenta › tercero › documento cruce › comprobante › líneas). Excel, PDF y Word exportan el nivel que se está viendo.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>Un nivel del camino: cómo se llama y qué nodo pide a la API (nulo = la raíz, las clases).</summary>
+    internal sealed record Miga(string Texto, string? Nodo);
+
+    private readonly EstadoDeCarga _carga = new();
+    private FiltrosDeInformeModelo _filtros = new();
+    private FiltrosDeInformeModelo _aplicados = new();
+    private TablaReporteDto? _tabla;
+    private readonly List<Miga> _camino = [new("Clases", null)];
+    private bool _iniciado;
+
+    /// <summary>Nodo inicial (<c>account:1105</c>, <c>person:1105|{id}</c>…) para llegar desde otra pantalla.</summary>
+    [SupplyParameterFromQuery(Name = "node")] public string? Node { get; set; }
+
+    private string? _nodoActual => _camino[^1].Nodo;
+    private Guid? _comprobanteActual => _nodoActual is { } n && n.StartsWith("voucher:", StringComparison.Ordinal) && Guid.TryParse(n["voucher:".Length..], out var id) ? id : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        var uri = new Uri(Navigation.Uri);
+        _filtros = FiltrosDeInformeModelo.DesdeQuery(uri.Query);
+        _filtros.To ??= DateOnly.FromDateTime(DateTime.Today);
+        _filtros.From ??= new DateOnly(_filtros.To.Value.Year, 1, 1);
+        _aplicados = _filtros.Copia();
+        if (!string.IsNullOrWhiteSpace(Node))
+        {
+            _camino.Clear();
+            _camino.AddRange(MigasDesdeNodo(Node));
+        }
+        await CargarAsync();
+    }
+
+    private async Task AplicarAsync(FiltrosDeInformeModelo f)
+    {
+        _aplicados = f;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var query = _aplicados.ToQuery();
+        if (_nodoActual is { } nodo) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
+        var r = await Contabilidad.InformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, query);
+        if (!r.IsSuccess)
+        {
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el libro.");
+            return;
+        }
+        _tabla = r.Value;
+    }
+
+    /// <summary>A dónde lleva la fila: un nodo para profundizar, o un comprobante para abrir.</summary>
+    private (string? Nodo, Guid? Comprobante)? Destino(FilaReporteDto fila)
+    {
+        if (_tabla is null) return null;
+        var nodo = TablaDeReporte.Oculto(_tabla, fila, "_nodo");
+        if (nodo is not null) return (nodo, null);
+        var comprobante = TablaDeReporte.Oculto(_tabla, fila, "_comprobante");
+        if (comprobante is not null && Guid.TryParse(comprobante, out var id)) return (null, id);
+        return null;
+    }
+
+    private async Task ProfundizarAsync(FilaReporteDto fila)
+    {
+        if (_tabla is null || Destino(fila) is not { } destino) return;
+        if (destino.Nodo is { } nodo)
+        {
+            _camino.Add(new Miga(TextoDeFila(_tabla, fila, nodo), nodo));
+            await CargarAsync();
+            return;
+        }
+        if (destino.Comprobante is { } id) AbrirComprobante(id);
+    }
+
+    private async Task IrAMigaAsync(int indice)
+    {
+        if (indice >= _camino.Count - 1) return;
+        _camino.RemoveRange(indice + 1, _camino.Count - indice - 1);
+        await CargarAsync();
+    }
+
+    private void AbrirComprobante(Guid id) => Navigation.NavigateTo($"/contabilidad/comprobantes/{id}");
+
+    private async Task DescargarAsync(string formato)
+    {
+        using var carga = _carga.Iniciar();
+        var query = _aplicados.ToQuery();
+        if (_nodoActual is { } nodo) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
+        var r = await Contabilidad.DescargarInformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, query, formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>El rótulo de la miga: código y nombre de la fila si los hay; si no, la clave del nodo.</summary>
+    private static string TextoDeFila(TablaReporteDto tabla, FilaReporteDto fila, string nodo)
+    {
+        var visibles = tabla.Columnas.Select((c, i) => (c, i)).Where(x => !x.c.EsOculta).Take(2).ToList();
+        var partes = visibles.Select(x => x.i < fila.Valores.Count ? TablaReporteDto.Texto(fila.Valores[x.i], x.c.Tipo) : string.Empty)
+            .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        var texto = string.Join(" ", partes);
+        if (texto.Length > 48) texto = texto[..47] + "…";
+        return string.IsNullOrWhiteSpace(texto) ? nodo : texto;
+    }
+
+    /// <summary>
+    /// Migas para un nodo que llegó por la URL. Para <c>account:110505</c> se reconstruyen los
+    /// ancestros por la regla fija de longitud del código (1, 2, 4, 6 dígitos; luego 7–9 y 10–12,
+    /// ver <c>LongitudDeAuxiliar</c>) porque no hay nombres a mano; los nodos de tercero, documento
+    /// o comprobante se muestran con su clave tal cual, y el camino se completa al ir bajando.
+    /// </summary>
+    internal static List<Miga> MigasDesdeNodo(string nodo)
+    {
+        var migas = new List<Miga> { new("Clases", null) };
+        var separador = nodo.IndexOf(':');
+        var tipo = separador < 0 ? nodo : nodo[..separador];
+        var clave = separador < 0 ? string.Empty : nodo[(separador + 1)..];
+        if (tipo is not ("account" or "person" or "document"))
+        {
+            // voucher:<publicId> (o algo que no se reconoce): no hay cuenta de la que colgar el camino.
+            migas.Add(new Miga(nodo, nodo));
+            return migas;
+        }
+        var codigo = clave.Split('|')[0];
+        foreach (var largo in new[] { 1, 2, 4, 6 })
+        {
+            if (codigo.Length <= largo) break;
+            migas.Add(new Miga(codigo[..largo], $"account:{codigo[..largo]}"));
+        }
+        if (tipo != "account" && codigo.Length > 0)
+            migas.Add(new Miga(codigo, $"account:{codigo}"));
+        migas.Add(new Miga(tipo == "account" ? codigo : nodo, nodo));
+        return migas;
+    }
+}

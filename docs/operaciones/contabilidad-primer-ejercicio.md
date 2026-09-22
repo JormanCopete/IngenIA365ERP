@@ -106,8 +106,113 @@ WHERE v."Code" = 'NM' GROUP BY d."Id", d."Number", d."Date", d."Status", d."Orig
 
 `Contabilidad › Períodos`: cerrar exige que no queden borradores fechados en el mes (la
 respuesta los lista); reabrir pide motivo, queda en la auditoría y deja «desactualizadas»
-las conciliaciones cerradas del mes. El cierre del ejercicio (`CI`) y la apertura (`AP`)
-llegan en E2.
+las conciliaciones cerradas del mes.
+
+## 7a. Saldos de apertura y cierre del ejercicio (E2, 2026-09-21)
+
+**Apertura** (`Contabilidad › Saldos de apertura`, `/contabilidad/apertura`, permiso
+`Accounting.Opening.Manage`; API `/api/accounting/opening`). Es lo primero que hace una
+cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear las auxiliares:
+
+1. Descargar la plantilla (`GET /template.xlsx`): la hoja «Datos» trae sólo los encabezados en la
+   fila 1 —`cuenta, tercero, tipoDocumento, numeroDocumento, centroCosto, sucursal, debito,
+   credito, detalle`— y la hoja «Instrucciones» explica cada columna. El contador la llena desde
+   SOLIDO: una fila por auxiliar de movimiento, y por tercero y documento cruce donde la cuenta lo
+   exige (cartera, proveedores). `tercero` es el documento de identidad de la persona (tiene que
+   existir en Personas), `sucursal` su código, sigla o nombre (vacía = la principal), importes sin
+   separador de miles y con hasta dos decimales.
+2. Importar (`POST /import`, multipart `archivo`; también admite CSV). Cada fila se valida con las
+   reglas de su cuenta (FR-014): agrupación, tercero inexistente, documento cruce faltante, más de
+   dos decimales, cuenta que no existe. **Con un solo error responde 422 `Accounting.Opening.Invalid`
+   con `data.errors[] { row, column, code, message }` y no guarda nada.** Sin errores, 201 con el
+   borrador `AP` (`Kind = Opening`) **fechado la víspera del primer período** (el 31 de diciembre
+   anterior al primer ejercicio): es la única fecha que el contrato admite fuera de un período abierto.
+   El archivo no tiene que cuadrar para importarse; cuadrar es requisito para contabilizar.
+3. Revisar el borrador en Comprobantes y contabilizarlo (`Accounting.Vouchers.Post`, cuatro ojos si
+   la empresa lo exige). Queda referenciado en la configuración (`openingDocumentPublicId`) y
+   **es la única apertura vigente**: otra importación o un borrador `AP` digitado responden 422
+   `Accounting.Opening.AlreadyExists` con `data.openingDocumentPublicId` hasta reversarla; la
+   reversión también es de clase Apertura y de la misma fecha, y libera el cupo. Las dos quedan
+   referenciadas y auditadas (`Accounting.Opening.Imported`).
+4. Comprobar: el balance de prueba del primer mes muestra la apertura como **saldo inicial**, no
+   como movimiento; el estado de cuenta del tercero muestra sus documentos pendientes.
+
+**Cierre del ejercicio** (`Contabilidad › Períodos`, botón «Cerrar el ejercicio», permiso
+`Accounting.Periods.CloseYear`; API `POST /api/accounting/periods/years/{year}/close`):
+
+- Exige los **doce meses cerrados** (422 `Accounting.FiscalYear.PeriodsOpen` con `data.openMonths`),
+  el **ejercicio anterior cerrado** (`.PreviousOpen`) y la **cuenta de resultado del ejercicio** en
+  Configuración inicial (`.ResultAccountMissing`; una auxiliar de movimiento activa, por ejemplo
+  bajo 3505 EXCEDENTES, donde el CUIF no trae hijos y la empresa crea la de 6 dígitos y debajo la
+  auxiliar).
+- Genera el comprobante **`CI` del 31 de diciembre** —el mes está cerrado y el contrato lo admite
+  sólo por ser de clase Cierre— que cancela lo acumulado en las clases 4 a 7 **por sucursal y centro
+  de costo** y lleva el excedente o la pérdida a la cuenta de resultado, sucursal por sucursal. Las
+  exigencias de quien digita (cuenta habilitada para el módulo, tercero, documento cruce) no aplican
+  al cierre: cancela lo que ya pasó por la cuenta. Sin resultados que cancelar, el ejercicio cierra
+  sin comprobante. Auditado (`Accounting.FiscalYear.Closed`).
+- En las consultas, el cierre del ejercicio consultado queda **fuera salvo `includeClosing=true`**
+  (el estado de resultados del año lo sigue mostrando) y los de ejercicios anteriores cuentan
+  siempre (el balance del 1 de enero siguiente ya no trae resultados). El `CI` **no se reversa
+  desde Comprobantes** (`Accounting.Document.IsClosing`): se **reabre el ejercicio**
+  (`POST /years/{year}/reopen` con `{ reason }`), que lo reversa en su misma fecha y de su misma
+  clase, deja el año abierto **con los meses todavía cerrados** (cada mes se reabre aparte) y queda
+  auditado (`Accounting.FiscalYear.Reopened`). Sólo se reabre el último cerrado
+  (`Accounting.FiscalYear.NotLast`).
+- Abrir el ejercicio siguiente (`POST /years` con `{ year }`) no exige cerrar el actual: enero
+  arranca antes de que diciembre esté cerrado. Los saldos no se «trasladan»: no hay saldos
+  guardados, todo es la suma de lo contabilizado.
+
+## 7b. Consultas e informes (E2, 2026-09-20)
+
+Todo saldo es una suma sobre `ACC_JournalEntries` con `IsPosted` (FR-046): no hay tabla de
+saldos. Reglas que aplican a todas las vistas y a sus archivos:
+
+- **Signo por naturaleza**: un saldo positivo va con la naturaleza de la cuenta (débito en
+  activos, costos y gastos; crédito en pasivos, patrimonio e ingresos). El encabezado de cada
+  informe lo repite.
+- **Reversas**: el original y su espejo se muestran los dos (el espejo con la fecha de la
+  reversa) y se netean; a una fecha intermedia el saldo muestra el original.
+- **Cierre**: el comprobante `CI` del ejercicio consultado queda fuera salvo «incluir cierre»; los
+  cierres de ejercicios anteriores siempre cuentan (si no, el balance del segundo año no cuadra).
+- **Apertura**: las líneas del `AP` son siempre saldo inicial, caiga o no su fecha en el rango.
+- **Alcance de sucursal**: quien tenga sucursales asignadas ve sólo esas, en todas las vistas.
+- **Permisos**: `Accounting.Reports.View` para ver; `Accounting.Reports.Export` para Excel, PDF y
+  Word (Operador y Auditor lo tienen; Sólo lectura no). Cada exportación queda en la auditoría
+  como `Accounting.Report.Exported` con la vista, los filtros y el formato.
+- **Encabezado** (FR-045): empresa, NIT, filtros aplicados, período, quién y cuándo; el archivo
+  trae los mismos totales que la pantalla.
+
+| Pantalla | Ruta | Qué trae |
+|---|---|---|
+| Libro auxiliar | `/contabilidad/libro-auxiliar` | Profundización por migas de pan: clases → grupos → cuentas → subcuentas → auxiliares → terceros → documentos cruce → comprobantes → líneas, con saldo inicial, débitos, créditos y saldo final en cada nivel; cada nivel se exporta; «Abrir comprobante» desde el último nivel. Acepta `?node=` y los filtros por query string. |
+| Informes | `/contabilidad/informes?vista=` | Balance de prueba (`trial-balance`: nivel, con terceros, con cierre), libro diario (`journal`), libro mayor y balances (`general-ledger`), relación de comprobantes (`voucher-list`), documentos cruce pendientes (`pending-documents`), saldo diario promedio (`daily-average`). Un clic en una cuenta abre el libro auxiliar con los mismos filtros. |
+| Estados financieros | `/contabilidad/estados-financieros?estado=` (esf, eri, ecp, efe) | Situación financiera a una fecha con comparativo al mismo día del año anterior (resultado del ejercicio inyectado en el patrimonio; cuentas de orden como memorando), resultado integral del rango con subtotales y comparativo, cambios en el patrimonio, flujo de efectivo indirecto (fila «Diferencia» que debe ser 0). Los rubros salen de `ACC_FinancialStatementItems` por el `NiifItemCode` de cada cuenta de movimiento, medida por el lado que el rubro espera (una pérdida en 3510 resta al patrimonio; un deterioro en 1408 resta al activo); un clic en un rubro del ESF o del ERI abre el libro auxiliar filtrado por ese rubro (`niifItem=`). ECP y EFE también traen comparativo. |
+| Estado de cuenta del tercero | `/contabilidad/terceros?person=` | Vista consolidada de una persona: tarjetas (débitos, créditos, saldo, pendientes), saldos por cuenta (clic → libro auxiliar filtrado por el tercero), documentos cruce con saldo pendiente y movimientos con saldo corrido y enlace al comprobante. |
+
+API: `GET /api/reports/accounting/{vista}?format=json|xlsx|pdf|docx&from=&to=&accountFrom=&accountTo=&accountPublicId=&niifItem=&person=&crossDocument=TIPO|NÚMERO&costCenter=&branch=&voucherType=&origin=&user=&level=&withThirdParties=&includeClosing=` (rango de hasta 5 años, 1 en `daily-average`)
+(`ledger` además `node=`; `budget-execution` además `year=&month=`). Sin permiso responde 404.
+
+El Centro de Reportes (`/reportes`) enlaza a estas pantallas con la vista preseleccionada; las
+cinco tarjetas contables que hasta el 2026-09-20 llevaban a «Página no encontrada» ya no existen.
+
+## 7c. Presupuesto y ejecución (E2, 2026-09-20)
+
+`Contabilidad › Presupuesto` (`/contabilidad/presupuesto`). El ejercicio debe existir en
+Períodos (`Accounting.Budget.FiscalYearNotFound` si no). Se presupuestan **cuentas de
+movimiento** (una de agrupación responde `Accounting.Budget.AccountNotMovement`), opcionalmente
+por sucursal y centro de costo (dentro del alcance de quien digita), doce meses por línea **en pesos** (sin decimales; tope 9.999.999.999.999). Acciones: copiar del año anterior con un
+porcentaje (redondeo a pesos), distribuir un total por cuenta (igual: la diferencia de redondeo
+cae en diciembre; porcentual: los porcentajes suman 100; manual: los doce valores suman el
+total), guardar, aprobar. **Después de aprobado**, cada guardado exige motivo y crea otra
+versión (`ACC_Budgets.Version`, la anterior queda `Superseded`); la pestaña Ejecución compara
+contra la versión vigente y muestra también el presupuesto inicial acumulado. Ejecución:
+presupuestado, ejecutado (movimiento neto por naturaleza), variación y % del mes y acumulado,
+por cuenta y agregado hacia arriba por niveles; un clic abre el libro auxiliar del mes. Permisos
+`Accounting.Budget.View` / `Accounting.Budget.Manage`. API en `/api/accounting/budgets`
+(`GET ?year=&version=`, `POST /`, `PUT /{year}`, `POST /{year}/approve`,
+`POST /{year}/copy-from/{previousYear}?adjustPercent=`, `POST /{year}/distribute`,
+`GET /execution?year=&month=` —la ejecución bajo el permiso del presupuesto—).
 
 ## 8. Qué mirar si algo falla
 
@@ -119,4 +224,9 @@ llegan en E2.
 | `Accounting.Line.AccountNotEnabledForModule` | Auxiliar sin «aplica a Nómina» | Paso 4 |
 | `Accounting.Period.Closed` | Mes cerrado; la nómina fecha al último día del período | Paso 7 |
 | `Accounting.Document.FourEyes` | Quien registró el borrador intenta contabilizarlo | Configuración: cuatro ojos |
+| `Accounting.Opening.Invalid` con `data.errors` | Filas del archivo de apertura con problemas; no se guardó nada | Paso 7a.2 |
+| `Accounting.Opening.AlreadyExists` | Ya hay una apertura contabilizada y no reversada | Paso 7a.3 |
+| `Accounting.Opening.DateInvalid` | Un borrador AP con otra fecha: la apertura va la víspera del primer período | Paso 7a.2 |
+| `Accounting.FiscalYear.PeriodsOpen` / `.PreviousOpen` / `.ResultAccountMissing` | Falta cerrar meses, el año anterior o definir la cuenta de resultado | Paso 7a (cierre) |
+| `Accounting.Document.IsClosing` | Se intentó reversar el CI desde Comprobantes | Reabrir el ejercicio en Períodos |
 | Buscador de cuentas vacío en otro módulo | Rol sin `Accounting.Accounts.View` | `LecturaDeMaestros` en `BuiltInRolesSeeder` |

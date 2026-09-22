@@ -163,7 +163,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         AccountingDocument original, DateOnly date, string reason, AccountingOrigin origin, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(reason)) return Fallo(AccountingErrors.ReasonRequired);
-        if (original.Kind == DocumentKind.Reversal) return Fallo(AccountingErrors.DocumentIsReversal);
+        if (original.Kind == DocumentKind.Reversal || original.ReversesDocumentId is not null) return Fallo(AccountingErrors.DocumentIsReversal);
         if (original.Status == DocumentStatus.Reversed || original.ReversedByDocumentId is not null) return Fallo(AccountingErrors.DocumentAlreadyReversed);
         if (original.Status != DocumentStatus.Posted) return Fallo(AccountingErrors.DocumentNotPosted);
         if (!string.Equals(original.OriginModule, origin.Module, StringComparison.Ordinal)) return Fallo(AccountingErrors.DocumentModuleOwned(original.OriginModule));
@@ -178,12 +178,31 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         original.VoucherType ??= voucher;
 
         var hoy = clock.TodayUtc;
-        if (origin.EsContabilidad && date > hoy) return Fallo(AccountingErrors.DateInFuture(date));
+        if (origin.EsContabilidad && date > hoy && original.Kind is not (DocumentKind.Closing or DocumentKind.Opening)) return Fallo(AccountingErrors.DateInFuture(date));
 
         var fecha = date;
         var nota = string.Empty;
         var periodo = await PeriodoDeAsync(date, ct);
-        if (periodo is null || periodo.Status != PeriodStatus.Open)
+        if (original.Kind == DocumentKind.Closing)
+        {
+            // Reabrir el ejercicio (US6) deshace el cierre en su misma fecha y su mismo período, aunque
+            // esté cerrado: una reversión fechada en el ejercicio siguiente dejaría el 31/12 con los
+            // resultados cancelados y el 1/1 con ellos de vuelta, y los dos años mentirían. El reverso
+            // es también de clase «Cierre»: las consultas lo tratan igual que al cierre que deshace
+            // (fuera salvo IncludeClosing), así apertura y cierre siguen neteando a cero.
+            fecha = original.Date;
+            periodo = await PeriodoDeAsync(original.Date, ct);
+            if (periodo is null) return Fallo(AccountingErrors.PeriodNotFound(original.Date));
+        }
+        else if (original.Kind == DocumentKind.Opening)
+        {
+            // La apertura (US13) se deshace donde está: la víspera del primer período, sin período y de
+            // clase «Apertura», para que siga siendo saldo inicial (en cero) y no un movimiento del mes
+            // en que alguien la reversó; la que se cargue después vuelve a ser la única vigente (FR-087).
+            fecha = original.Date;
+            periodo = null;
+        }
+        else if (periodo is null || periodo.Status != PeriodStatus.Open)
         {
             var abierto = await db.AccountingPeriods.AsNoTracking()
                 .Where(p => !p.IsDeleted && p.Status == PeriodStatus.Open && p.EndDate >= date && (!origin.EsContabilidad || p.StartDate <= hoy))
@@ -213,11 +232,11 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             Date = fecha,
             Description = Recortar($"Reversión del comprobante {referencia}: {motivo}{nota}"),
             Status = DocumentStatus.Posted,
-            Kind = DocumentKind.Reversal,
+            Kind = original.Kind is DocumentKind.Closing or DocumentKind.Opening ? original.Kind : DocumentKind.Reversal,
             OriginModule = original.OriginModule,
             SourceType = original.SourceType,
             SourcePublicId = original.SourcePublicId,
-            PeriodId = periodo.Id,
+            PeriodId = periodo?.Id,
             TotalDebit = original.TotalCredit,
             TotalCredit = original.TotalDebit,
             RegisteredByUserId = user.UserId ?? 0,
@@ -308,6 +327,15 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             var esperada = primero.StartDate.AddDays(-1);
             if (request.Date != esperada) return Result.Failure<Analisis>(AccountingErrors.OpeningDateInvalid(esperada));
         }
+        else if (request.Kind == DocumentKind.Closing)
+        {
+            // El cierre se fecha el último día del ejercicio, que a esa altura está cerrado —cerrar los
+            // doce meses es requisito, no impedimento (FR-023)— y puede estar en el futuro del reloj si
+            // el año se cierra por anticipado en pruebas; la fecha no la elige nadie, la fija el ejercicio.
+            periodo = await PeriodoDeAsync(request.Date, ct);
+            if (periodo is null) return Result.Failure<Analisis>(AccountingErrors.PeriodNotFound(request.Date));
+            if (request.Date.Month != 12 || request.Date != periodo.EndDate) return Result.Failure<Analisis>(AccountingErrors.ClosingDateInvalid(new DateOnly(request.Date.Year, 12, 31)));
+        }
         else
         {
             // «Posterior a hoy» sólo se rechaza al digitar: un módulo fecha según su operación (la
@@ -332,7 +360,8 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         var porCodigo = cuentas.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
 
         // sucursal propuesta: la del usuario al digitar, si no la principal (R7); alcance sólo en CNT (FR-035)
-        var alcance = request.Origin.EsContabilidad ? await scope.ObtenerAsync(ct) : AlcanceDeSucursales.SinRestriccion;
+        // El cierre cancela las cuentas de resultado de todas las sucursales, las vea o no quien lo corre.
+        var alcance = request.Origin.EsContabilidad && request.Kind != DocumentKind.Closing ? await scope.ObtenerAsync(ct) : AlcanceDeSucursales.SinRestriccion;
         var propuesta = alcance.SucursalPorDefecto ?? setup.MainBranchId;
 
         // referencias vigentes, consultadas una vez para todo el comprobante
@@ -356,7 +385,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
                 .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct);
 
         var contexto = new ContextoDeReglas(request.Origin.Module, setup.TaxTolerance, alcance,
-            sucursalesVigentes, tercerosVigentes, centrosVigentes, new HashSet<string>(tiposDeCruce.Keys, StringComparer.OrdinalIgnoreCase));
+            sucursalesVigentes, tercerosVigentes, centrosVigentes, new HashSet<string>(tiposDeCruce.Keys, StringComparer.OrdinalIgnoreCase), request.Kind);
 
         // 5 a 10. reglas de cada línea
         var errores = new List<ErrorDeLinea>();

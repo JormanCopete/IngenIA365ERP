@@ -1065,6 +1065,26 @@ input[type="checkbox"], input[type="radio"] {
 .periodo-tarjeta.periodo-cerrado { background: var(--superficie-2); color: var(--texto-secundario); }
 .periodo-tarjeta .periodo-mes { font-weight: var(--peso-fuerte); }
 
+/* --- Consultas e informes contables (feature 009 E2) ----------------------- */
+/* Migas de pan del libro auxiliar: el camino clase › grupo › cuenta › … › comprobante. Cada
+   miga anterior es un botón (vuelve a ese nivel); la actual es texto. */
+.migas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-xs); font-size: var(--texto-sm); }
+.migas .enlace { padding: 0; }
+.migas .miga-separador { color: var(--texto-tenue); }
+.migas .miga-actual { font-weight: var(--peso-medio); }
+/* Filas que llevan a otro nivel o a un comprobante: se ven como enlace al pasar el mouse. */
+.data-grid.filas-clicables tr.clicable { cursor: pointer; }
+.data-grid.filas-clicables tr.clicable:hover td { background: var(--acento-suave); }
+.data-grid.filas-clicables tr.clicable:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+/* Panel plegable de filtros: los que no son fecha, bajo «Filtros (n)». Un campo largo es el
+   buscador de cuenta o de tercero, que necesita más ancho que un select. */
+.filtros-de-informe { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.toolbar label.campo-largo { min-width: 280px; }
+/* Grilla del presupuesto: doce cuotas editables por fila, alineadas a la derecha. */
+.grilla-presupuesto input.importe { width: 6.5rem; text-align: right; }
+.grilla-presupuesto .codigo { font-family: var(--fuente-mono); font-weight: var(--peso-medio); margin-right: var(--gap-xs); }
+.grilla-presupuesto td.linea-acciones { white-space: nowrap; }
+.grilla-presupuesto td.linea-acciones .enlace { padding: 0 var(--pad-xs); }
 /* Feature 010 (N4): archivos planos bancarios — la vista previa se lee en monoespaciada, sin cortar líneas. */
 .archivo-plano { font-family: var(--fuente-mono); font-size: var(--texto-sm); white-space: pre; overflow-x: auto; margin: var(--pad-sm) 0 0; padding: var(--pad-sm) var(--pad-md); background: var(--superficie-2); border: 1px solid var(--borde); border-radius: var(--radio-sm); }
 .fila-campos { display: flex; flex-wrap: wrap; gap: var(--gap-md); align-items: flex-end; }

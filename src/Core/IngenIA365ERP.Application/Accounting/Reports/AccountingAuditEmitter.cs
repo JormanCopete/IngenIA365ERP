@@ -20,7 +20,8 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// los eventos contables explícitos (cuentas, períodos, tipos de comprobante, catálogos, inicio de la
 /// contabilidad) caían en una base que nadie leía: el mismo defecto que <c>PayrollAuditEmitter</c>
 /// corrigió ese día y que la revisión de la feature 010 encontró aquí. El servicio de tenant es
-/// opcional para que las pruebas que construyen el emisor a mano sigan compilando.
+/// opcional para que las pruebas que construyen el emisor a mano sigan compilando; sin cooperativa
+/// activa el evento va vacío —la base global—, nunca al Id interno, que sería una base fantasma.
 /// </para>
 /// </summary>
 public sealed class AccountingAuditEmitter(
@@ -39,7 +40,7 @@ public sealed class AccountingAuditEmitter(
         try
         {
             await writer.AppendAsync(new AuditEventDocument(
-                TenantId: tenant?.TenantId ?? currentUser.TenantId ?? string.Empty,
+                TenantId: tenant?.TenantId ?? string.Empty,
                 UserId: currentUser.UserId?.ToString() ?? string.Empty,
                 UserName: currentUser.UserName,
                 Action: action,

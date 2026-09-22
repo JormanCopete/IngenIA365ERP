@@ -12,6 +12,9 @@ public record UpdateBranchCommand : IRequest<Result>
     public string? Code { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? ShortName { get; init; }
+
+    /// <summary>Oficina administrativa vinculada (ver <c>CreateBranchCommand.TenantBranchPublicId</c>); nulo quita el vínculo.</summary>
+    public Guid? TenantBranchPublicId { get; init; }
 }
 
 public class UpdateBranchCommandHandler(
@@ -40,8 +43,12 @@ public class UpdateBranchCommandHandler(
         }
         entity.LegacyCode = codigo;
 
+        var vinculo = await CreateBranch.VinculoConOficina.ValidarAsync(context, request.TenantBranchPublicId, excluirId: entity.Id, cancellationToken);
+        if (vinculo.IsFailure) return Result.Failure(vinculo.Error);
+
         entity.Name = request.Name;
         entity.ShortName = request.ShortName;
+        entity.TenantBranchPublicId = request.TenantBranchPublicId == Guid.Empty ? null : request.TenantBranchPublicId;
         entity.UpdatedAt = dateTime.UtcNow;
         entity.UpdatedBy = currentUser.UserName;
 

@@ -1,0 +1,155 @@
+@page "/contabilidad/estados-financieros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Estados financieros - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E2, US5 (FR-047): los cuatro estados por rubro NIIF —situación financiera a una
+   fecha con comparativo al mismo día del año anterior, resultados del rango con el mismo rango
+   un año antes, cambios en el patrimonio y flujo de efectivo (indirecto)—. Se calculan siempre
+   desde los movimientos contabilizados (FR-046, no hay saldos guardados); el cierre entra sólo
+   si se pide. El Centro de Reportes llega con `?estado=esf|eri|ecp|efe`. *@
+<PermissionGate Required="Accounting.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Estados financieros</h3>
+        <div class="toolbar">
+            @if (_tabla is not null)
+            {
+                <PermissionGate Required="Accounting.Reports.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <div class="toolbar" role="tablist" aria-label="Estado financiero">
+        @foreach (var (clave, nombre, _, _) in Estados)
+        {
+            var estado = clave;
+            <SfButton CssClass="@(estado == _estado ? "e-primary" : "e-outline")" role="tab" aria-selected="@(estado == _estado ? "true" : "false")" OnClick="@(() => CambiarEstadoAsync(estado))">@nombre</SfButton>
+        }
+    </div>
+
+    <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa"
+                      SoloFechaDeCorte="@(_estado == "esf")" MostrarCuenta="false" MostrarTercero="false" MostrarDocumentoCruce="false"
+                      MostrarComprobante="false" MostrarNivel="false" MostrarIncluirCierre="true" />
+
+    <p class="texto-tenue">@Descripcion(_estado)</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <TablaDeReporte Tabla="@_tabla" FilasClicables="true" EsClicable="@(f => Destino(f) is not null)" FilaElegida="@AbrirAuxiliarAsync"
+                        TextoSinTabla="Elija la fecha y pulse «Consultar»." TextoSinFilas="Sin movimientos contabilizados para estos filtros." />
+        @if (_tabla is not null && _tabla.Filas.Count > 0)
+        {
+            <p class="hint">Los subtotales van resaltados. Las cifras salen de los movimientos contabilizados: un borrador no cuenta y una reversa neta su original.@(_estado is "esf" or "eri" ? " Un clic en un rubro abre el libro auxiliar con sus cuentas." : "")</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>Clave en la URL, nombre, vista de la API y descripción.</summary>
+    private static readonly (string Clave, string Nombre, string Vista, string Descripcion)[] Estados =
+    [
+        ("esf", "Situación financiera", ContabilidadClient.Vistas.SituacionFinanciera, "Activo, pasivo y patrimonio por rubro NIIF a la fecha de corte, con el resultado del ejercicio en el patrimonio y el comparativo al mismo día del año anterior. Las cuentas de orden van aparte, al final."),
+        ("eri", "Resultados", ContabilidadClient.Vistas.Resultados, "Ingresos, costos y gastos del rango por rubro NIIF con los subtotales (utilidad bruta, resultado operacional, antes de impuestos, del ejercicio) y el comparativo del mismo rango un año antes."),
+        ("ecp", "Cambios en el patrimonio", ContabilidadClient.Vistas.CambiosEnElPatrimonio, "Por cada rubro del patrimonio: saldo al inicio del rango, aumentos, disminuciones y saldo final."),
+        ("efe", "Flujo de efectivo", ContabilidadClient.Vistas.FlujoDeEfectivo, "Método indirecto: resultado del rango más ajustes no monetarios y variaciones por actividad (operación, inversión, financiación); la suma cuadra con la variación del efectivo."),
+    ];
+
+    private readonly EstadoDeCarga _carga = new();
+    private FiltrosDeInformeModelo _filtros = new();
+    private FiltrosDeInformeModelo _aplicados = new();
+    private TablaReporteDto? _tabla;
+    private string _estado = "esf";
+    private bool _iniciado;
+
+    [SupplyParameterFromQuery(Name = "estado")] public string? Estado { get; set; }
+
+    private string VistaActual => Estados.First(e => e.Clave == _estado).Vista;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        if (!string.IsNullOrWhiteSpace(Estado) && Estados.Any(e => e.Clave == Estado.ToLowerInvariant())) _estado = Estado.ToLowerInvariant();
+        _filtros = FiltrosDeInformeModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
+        _filtros.To ??= DateOnly.FromDateTime(DateTime.Today);
+        _filtros.From ??= new DateOnly(_filtros.To.Value.Year, 1, 1);
+        _aplicados = _filtros.Copia();
+        await CargarAsync();
+    }
+
+    private async Task CambiarEstadoAsync(string estado)
+    {
+        if (estado == _estado) return;
+        _estado = estado;
+        _tabla = null;
+        await CargarAsync();
+    }
+
+    private async Task AplicarAsync(FiltrosDeInformeModelo f)
+    {
+        _aplicados = f;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.InformeAsync(VistaActual, _aplicados.ToQuery());
+        if (!r.IsSuccess)
+        {
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el estado financiero.");
+            return;
+        }
+        _tabla = r.Value;
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.DescargarInformeAsync(VistaActual, _aplicados.ToQuery(), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>
+    /// Un rubro es una suma de cuentas y el libro auxiliar se recorre por cuenta: la fila abre el
+    /// auxiliar con el filtro <c>niifItem</c> (el rubro y sus descendientes), que resuelve la API.
+    /// Sólo en el ESF y el ERI: las cuentas del plan apuntan a rubros de esos dos estados; los del
+    /// ECP y el EFE se derivan de los del ESF y ninguna cuenta los lleva, así que un libro filtrado
+    /// por «ECP-CAP» saldría vacío. Las filas sin rubro («Sin rubro NIIF», totales) sólo se leen.
+    /// </summary>
+    private string? Destino(FilaReporteDto fila)
+    {
+        if (_tabla is null || _estado is not ("esf" or "eri")) return null;
+        var rubro = TablaDeReporte.Oculto(_tabla, fila, "_rubro");
+        return string.IsNullOrWhiteSpace(rubro) ? null : rubro;
+    }
+
+    private Task AbrirAuxiliarAsync(FilaReporteDto fila)
+    {
+        if (Destino(fila) is not { } rubro) return Task.CompletedTask;
+        var f = _aplicados.Copia();
+        f.NiifItem = rubro;
+        // El ESF es acumulado desde el inicio: el auxiliar arranca en enero del año de corte. El ERI
+        // es del rango, y el rango se conserva.
+        if (_estado == "esf") f.From = new DateOnly((f.To ?? DateOnly.FromDateTime(DateTime.Today)).Year, 1, 1);
+        Navigation.NavigateTo($"/contabilidad/libro-auxiliar?{f.ToQuery()}");
+        return Task.CompletedTask;
+    }
+
+    private static string Descripcion(string estado) => Estados.First(e => e.Clave == estado).Descripcion;
+}

@@ -8,7 +8,9 @@
 
 @* Feature 009, US3 (FR-020..FR-023): el ejercicio con sus doce meses; cerrar exige que no queden
    borradores fechados en el mes; reabrir pide motivo, queda auditado y desactualiza las
-   conciliaciones cerradas. El cierre del ejercicio (comprobante CI) llega en la etapa 2. *@
+   conciliaciones cerradas. E2 (US6): con los doce cerrados y el anterior cerrado, «Cerrar el
+   ejercicio» genera el comprobante CI contra la cuenta de resultado; reabrirlo lo reversa en su
+   misma fecha y deja los meses como estaban (cada uno se reabre aparte). *@
 <PermissionGate Required="Accounting.Periods.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Períodos contables</h3>
@@ -33,6 +35,33 @@
     else
     {
         <p class="texto-apoyo">Ejercicio @_ejercicio.Year · @(_ejercicio.Status == "Closed" ? "cerrado" : "abierto"). Un mes cerrado no recibe comprobantes; para corregir algo se reabre con motivo y queda registrado quién y cuándo.</p>
+        <div class="info-card">
+            <span class="label">Cierre del ejercicio</span>
+            @if (_ejercicio.Status == "Closed")
+            {
+                <p>Cerrado por @_ejercicio.ClosedBy el @(_ejercicio.ClosedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "").
+                   @if (_ejercicio.ClosingDocumentPublicId is { } ci) { <span>Comprobante de cierre: <a class="enlace" href="/contabilidad/comprobantes/@ci">ver CI</a>.</span> }
+                   else { <span>No había ingresos ni gastos que cancelar: cerró sin comprobante.</span> }
+                </p>
+                <PermissionGate Required="Accounting.Periods.CloseYear">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@_ocupado" OnClick="@(() => { _motivoEjercicio = ""; _mostrarReabrirEjercicio = true; })">Reabrir el ejercicio</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+            else
+            {
+                <p>Con los doce meses cerrados y el ejercicio anterior cerrado, el cierre cancela ingresos, costos y gastos contra la cuenta de resultado del ejercicio (Configuración inicial) con un comprobante CI fechado el 31 de diciembre. El estado de resultados del año lo sigue mostrando; el balance del 1 de enero siguiente ya no.
+                   @if (_ejercicio.ReopenedAt is { } r) { <span class="texto-tenue">Reabierto por @_ejercicio.ReopenedBy el @r.ToLocalTime().ToString("yyyy-MM-dd"): @_ejercicio.ReopenReason.</span> }
+                </p>
+                <PermissionGate Required="Accounting.Periods.CloseYear">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_ocupado || _ejercicio.Periods.Any(p => p.Status != "Closed"))" OnClick="@(() => _mostrarCerrarEjercicio = true)"
+                                  title="@(_ejercicio.Periods.Any(p => p.Status != "Closed") ? "Cierre primero los doce meses" : "")">Cerrar el ejercicio @_ejercicio.Year</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+        </div>
         <div class="periodos-grilla">
             @foreach (var p in _ejercicio.Periods)
             {
@@ -73,6 +102,31 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCerrarEjercicio" Header="@($"Cerrar el ejercicio {_ejercicio?.Year}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p>Se genera el comprobante CI del 31 de diciembre que deja en cero las cuentas de resultado y lleva el excedente o la pérdida a la cuenta de resultado del ejercicio. Queda auditado. Si algo falta, se reabre el ejercicio y el CI se reversa en su misma fecha.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_ocupado" OnClick="@CerrarEjercicioAsync">Cerrar el ejercicio</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCerrarEjercicio = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarReabrirEjercicio" Header="@($"Reabrir el ejercicio {_ejercicio?.Year}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p>El comprobante de cierre se reversa en su misma fecha y el ejercicio vuelve a estar abierto; los meses siguen cerrados hasta que reabra el que necesite corregir. Queda en la auditoría con el motivo.</p>
+            <label class="campo">Motivo <input class="e-input" @bind="_motivoEjercicio" maxlength="200" placeholder="Por qué se reabre el ejercicio" /></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivoEjercicio))" OnClick="@ReabrirEjercicioAsync">Reabrir</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReabrirEjercicio = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -80,9 +134,9 @@
     private List<int> _anios = [];
     private int _anio;
     private EjercicioDto? _ejercicio;
-    private bool _ocupado, _mostrarMotivo;
+    private bool _ocupado, _mostrarMotivo, _mostrarCerrarEjercicio, _mostrarReabrirEjercicio;
     private PeriodoContableDto? _aReabrir;
-    private string _motivo = "";
+    private string _motivo = "", _motivoEjercicio = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -126,6 +180,41 @@
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reabrir el período."); return; }
             _mostrarMotivo = false;
             await Notification.SuccessAsync($"{Mes(_aReabrir.Month)} {_aReabrir.Year} reabierto.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task CerrarEjercicioAsync()
+    {
+        if (_ejercicio is null) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.CerrarEjercicioAsync(_ejercicio.Year);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el ejercicio."); return; }
+            _mostrarCerrarEjercicio = false;
+            var v = r.Value!;
+            await Notification.SuccessAsync(v.ClosingDocumentPublicId is null
+                ? $"Ejercicio {v.Year} cerrado; no había resultados que cancelar."
+                : $"Ejercicio {v.Year} cerrado con el comprobante CI-{v.Number} ({v.Lines} líneas, {(v.Result >= 0 ? "excedente" : "pérdida")} de {Math.Abs(v.Result):N0}).");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ReabrirEjercicioAsync()
+    {
+        if (_ejercicio is null) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.ReabrirEjercicioAsync(_ejercicio.Year, _motivoEjercicio.Trim());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reabrir el ejercicio."); return; }
+            _mostrarReabrirEjercicio = false;
+            await Notification.SuccessAsync(r.Value?.ClosingDocumentPublicId is null
+                ? $"Ejercicio {_ejercicio.Year} reabierto."
+                : $"Ejercicio {_ejercicio.Year} reabierto: el cierre quedó reversado con el CI-{r.Value.Number}.");
             await CargarAsync();
         }
         finally { _ocupado = false; }

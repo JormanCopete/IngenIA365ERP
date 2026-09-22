@@ -36,14 +36,20 @@
             <NavLink href="/contabilidad/plan-de-cuentas" class="nav-subitem">Plan de cuentas</NavLink>
             <NavLink href="/contabilidad/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
             <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos</NavLink>
+            <NavLink href="/contabilidad/apertura" class="nav-subitem">Saldos de apertura</NavLink>
             <NavLink href="/contabilidad/comprobantes" class="nav-subitem">Comprobantes</NavLink>
             <NavLink href="/contabilidad/borradores" class="nav-subitem">Borradores</NavLink>
             <NavLink href="/contabilidad/parametrizaciones-invalidas" class="nav-subitem">Parametrizaciones invalidas</NavLink>
+            <NavLink href="/contabilidad/presupuesto" class="nav-subitem">Presupuesto</NavLink>
             @* Los reportes de cada modulo viven en su modulo (no en un grupo "Reportes"
-               aparte). Los informes contables y los estados financieros son de la entrega E2
-               (T107: /contabilidad/informes y /contabilidad/estados-financieros); el enlace
-               se agrega cuando exista la pagina: hasta el 2026-09-19 apuntaba a una ruta sin
-               pagina y mostraba "Pagina no encontrada". *@
+               aparte); el Centro de Reportes solo enlaza aqui. Son de la entrega E2 (US5):
+               hasta el 2026-09-19 el enlace apuntaba a una ruta sin pagina y mostraba
+               "Pagina no encontrada", por eso se quito hasta tener las pantallas. *@
+            <span class="nav-subgroup-title">Consultas e informes</span>
+            <NavLink href="/contabilidad/libro-auxiliar" class="nav-subitem">Libro auxiliar</NavLink>
+            <NavLink href="/contabilidad/informes" class="nav-subitem">Informes</NavLink>
+            <NavLink href="/contabilidad/estados-financieros" class="nav-subitem">Estados financieros</NavLink>
+            <NavLink href="/contabilidad/terceros" class="nav-subitem">Estado de cuenta del tercero</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">

@@ -62,8 +62,19 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
         var codigoTipo = request.VoucherTypeCode.Trim().ToUpperInvariant();
         var tipo = await db.VoucherTypes.AsNoTracking().FirstOrDefaultAsync(v => v.Code == codigoTipo && !v.IsDeleted, ct);
         if (tipo is null) return Result.Failure<BorradorGuardadoDto>(AccountingErrors.VoucherTypeNotFound(codigoTipo));
-        if (tipo.Usage != VoucherUsage.Manual) return Result.Failure<BorradorGuardadoDto>(AccountingErrors.DocumentManualOnly);
+        // La apertura (US13, FR-085) también se digita: es un borrador del tipo reservado AP, de clase
+        // Opening y con la fecha que le toca (la víspera del primer período), no la que se digite.
+        var esApertura = tipo.Usage == VoucherUsage.Opening;
+        if (tipo.Usage != VoucherUsage.Manual && !esApertura) return Result.Failure<BorradorGuardadoDto>(AccountingErrors.DocumentManualOnly);
         if (!tipo.IsActive) return Result.Failure<BorradorGuardadoDto>(AccountingErrors.VoucherTypeInactive(codigoTipo));
+        var fecha = request.Date;
+        if (esApertura)
+        {
+            if (await Opening.Aperturas.VigenteAsync(db, ct) is { } vigente) return Result.Failure<BorradorGuardadoDto>(Opening.Aperturas.YaExiste(vigente));
+            var esperada = await Opening.Aperturas.FechaEsperadaAsync(db, ct);
+            if (esperada.IsFailure) return Result.Failure<BorradorGuardadoDto>(esperada.Error);
+            fecha = esperada.Value;
+        }
 
         AccountingDocument? documento = null;
         if (request.PublicId is { } id)
@@ -79,14 +90,14 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
             return Result.Failure<BorradorGuardadoDto>(irrecuperables.Count == 1 ? irrecuperables[0].ComoError() : AccountingErrors.DocumentInvalid(irrecuperables));
 
         // Las infracciones se informan, no bloquean (FR-026): el borrador existe para corregirlas.
-        var validacion = await poster.ValidarAsync(new PostingRequest(codigoTipo, request.Date, request.Description, AccountingOrigin.Manual(request.PublicId ?? Guid.Empty),
-            LineasDeBorrador.AlContrato(request.Lines, refs)), ct);
+        var validacion = await poster.ValidarAsync(new PostingRequest(codigoTipo, fecha, request.Description, AccountingOrigin.Manual(request.PublicId ?? Guid.Empty),
+            LineasDeBorrador.AlContrato(request.Lines, refs), esApertura ? DocumentKind.Opening : DocumentKind.Regular), ct);
 
         var ahora = clock.UtcNow;
         var quien = string.IsNullOrWhiteSpace(user.UserName) ? "system" : user.UserName;
         var alcance = await scope.ObtenerAsync(ct);
         var sucursalPropuesta = alcance.SucursalPorDefecto ?? setup.MainBranchId;
-        var periodo = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted && p.StartDate <= request.Date && p.EndDate >= request.Date).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        var periodo = esApertura ? null : await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted && p.StartDate <= fecha && p.EndDate >= fecha).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
 
         if (documento is null)
         {
@@ -99,7 +110,8 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
         }
 
         documento.VoucherTypeId = tipo.Id;
-        documento.Date = request.Date;
+        documento.Kind = esApertura ? DocumentKind.Opening : DocumentKind.Regular;
+        documento.Date = fecha;
         documento.Description = request.Description.Trim();
         documento.PeriodId = periodo;
         documento.TotalDebit = request.Lines.Sum(l => l.Debit);
@@ -138,7 +150,7 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
             linea.Credit = entrada.Credit;
             linea.Description = string.IsNullOrWhiteSpace(entrada.Detail) ? null : entrada.Detail.Trim();
             linea.TaxBase = entrada.TaxBase;
-            linea.Date = request.Date;
+            linea.Date = fecha;
             linea.IsPosted = false;
         }
         for (var i = request.Lines.Count; i < vivas.Count; i++)
@@ -228,12 +240,16 @@ public sealed class PostDocumentCommandHandler(IApplicationDbContext db, ICurren
         if (!documento.EsDeModulo && documento.VoucherType?.Usage is not (VoucherUsage.Manual or VoucherUsage.Opening))
             return Result.Failure<ContabilizadoDto>(AccountingErrors.DocumentManualOnly);
 
-        var setup = await db.AccountingSetups.AsNoTracking().FirstOrDefaultAsync(s => !s.IsDeleted, ct);
+        // Con seguimiento: la apertura contabilizada se referencia desde la configuración (FR-087).
+        var setup = await db.AccountingSetups.FirstOrDefaultAsync(s => !s.IsDeleted, ct);
         if (setup is null) return Result.Failure<ContabilizadoDto>(AccountingErrors.NotInitialized);
         if (setup.FourEyes && documento.RegisteredByUserId == (user.UserId ?? 0)) return Result.Failure<ContabilizadoDto>(AccountingErrors.DocumentFourEyes);
+        if (documento.Kind == DocumentKind.Opening && await Opening.Aperturas.VigenteAsync(db, ct) is { } vigente)
+            return Result.Failure<ContabilizadoDto>(Opening.Aperturas.YaExiste(vigente));
 
         var contabilizado = await poster.ContabilizarBorradorAsync(documento, LineasDeBorrador.DesdeDocumento(documento), ct);
         if (contabilizado.IsFailure) return Result.Failure<ContabilizadoDto>(contabilizado.Error);
+        if (documento.Kind == DocumentKind.Opening) setup.OpeningDocument = documento;
 
         await db.SaveChangesAsync(ct);
         return Result.Success(new ContabilizadoDto(documento.Number!.Value));
@@ -268,8 +284,17 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
                 new { origin = new { module = original.OriginModule, moduleName = ModuloContable.Nombre(original.OriginModule), sourceType = original.SourceType, sourcePublicId = original.SourcePublicId } }));
         }
 
+        if (original.Kind == DocumentKind.Closing) return Result.Failure<ReversadoDto>(AccountingErrors.DocumentIsClosing);
+
         var reverso = await poster.PrepareReversalAsync(original, request.Date ?? clock.TodayUtc, request.Reason, AccountingOrigin.Manual(original.PublicId), ct);
         if (reverso.IsFailure) return Result.Failure<ReversadoDto>(reverso.Error);
+
+        // Reversada la apertura, la empresa vuelve a poder cargar otra (FR-087); las dos quedan referenciadas entre sí.
+        if (original.Kind == DocumentKind.Opening)
+        {
+            var setup = await db.AccountingSetups.FirstOrDefaultAsync(s => !s.IsDeleted && s.OpeningDocumentId == original.Id, ct);
+            if (setup is not null) setup.OpeningDocumentId = null;
+        }
 
         await db.SaveChangesAsync(ct);
         return Result.Success(new ReversadoDto(reverso.Value.PublicId, reverso.Value.Number!.Value));

@@ -69,6 +69,10 @@ public static class AccountingErrors
     public static readonly Error FiscalYearAlreadyExists = new("Accounting.FiscalYear.AlreadyExists", "Ese ejercicio ya existe.");
     public static readonly Error FiscalYearNotClosed = new("Accounting.FiscalYear.NotClosed", "El ejercicio no está cerrado.");
     public static readonly Error FiscalYearAlreadyClosed = new("Accounting.FiscalYear.AlreadyClosed", "El ejercicio ya está cerrado.");
+    public static readonly Error FiscalYearNotLast = new("Accounting.FiscalYear.NotLast",
+        "Sólo se reabre el último ejercicio cerrado: el siguiente ya está cerrado y su cierre se apoya en éste.");
+    public static Error ClosingDateInvalid(DateOnly esperada) =>
+        new("Accounting.Closing.DateInvalid", $"El cierre se fecha el último día del ejercicio: {esperada:yyyy-MM-dd}.");
 
     // ---- documento ----
     public static Error DocumentUnbalanced(decimal difference) =>
@@ -79,6 +83,8 @@ public static class AccountingErrors
     public static readonly Error DocumentNotPosted = new("Accounting.Document.NotPosted", "Sólo se reversa un comprobante contabilizado.");
     public static readonly Error DocumentAlreadyReversed = new("Accounting.Document.AlreadyReversed", "El comprobante ya fue reversado.");
     public static readonly Error DocumentIsReversal = new("Accounting.Document.IsReversal", "Una reversión no se reversa: reverse el original.");
+    public static readonly Error DocumentIsClosing = new("Accounting.Document.IsClosing",
+        "El comprobante de cierre no se reversa desde Comprobantes: reabra el ejercicio en Contabilidad › Períodos.");
     public static Error DocumentModuleOwned(string module) =>
         new("Accounting.Document.ModuleOwned", $"Este comprobante lo generó {NombreDeModulo(module)}: sólo desde ahí se anula.");
     public static readonly Error DocumentFourEyes = new("Accounting.Document.FourEyes",

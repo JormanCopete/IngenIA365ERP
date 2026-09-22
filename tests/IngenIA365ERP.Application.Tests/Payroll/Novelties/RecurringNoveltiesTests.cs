@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
 using IngenIA365ERP.Application.Payroll.Runs.ApprovePayrollRun;
@@ -23,7 +24,7 @@ public class RecurringNoveltiesTests
     private static async Task Aprobar(NominaTestData d, Guid runId)
     {
         var poster = d.Contabilizador(Contadora);
-        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance);
+        var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
         var r = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);

@@ -7,8 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace IngenIA365ERP.API.Endpoints.Accounting;
 
 /// <summary>
-/// Ejercicios y períodos (feature 009, contracts/api.md §5). El cierre y la reapertura del
-/// ejercicio (<c>/years/{year}/close|reopen</c>) llegan con US5 en E2.
+/// Ejercicios y períodos (feature 009, contracts/api.md §5): abrir el ejercicio, cerrar y reabrir
+/// cada mes, y desde E2 (US6) cerrar y reabrir el ejercicio entero: el cierre genera el comprobante
+/// <c>CI</c> contra la cuenta de resultado y reabrir lo reversa en su misma fecha.
 /// </summary>
 public class PeriodsEndpoints : ICarterModule
 {
@@ -33,6 +34,17 @@ public class PeriodsEndpoints : ICarterModule
 
         group.MapPost("/years", async (AbrirEjercicioRequest body, ISender sender, CancellationToken ct) => await sender.Send(new OpenFiscalYearCommand(body.Year), ct))
             .WithName("Accounting_Periods_OpenYear")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Periods.CloseYear");
+
+        group.MapPost("/years/{year:int}/close", async (int year, ISender sender, CancellationToken ct) => await sender.Send(new CloseFiscalYearCommand(year), ct))
+            .WithName("Accounting_Periods_CloseYear")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Periods.CloseYear");
+
+        group.MapPost("/years/{year:int}/reopen", async (int year, MotivoRequest body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ReopenFiscalYearCommand(year, body.Reason), ct))
+            .WithName("Accounting_Periods_ReopenYear")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.CloseYear");
 

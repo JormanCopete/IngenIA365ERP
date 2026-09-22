@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Accounting.Accounts;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -29,7 +30,7 @@ public class AccountCommandsTests
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance);
+            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
             Referencias.BuscarAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<ReferenciaDeCuenta>>([]));
             // Un tramo del catálogo: 1 › 11 › 1105 › 110505, ninguna de movimiento (Setup: movimiento en 5; una auxiliar lleva de 7 a 9 dígitos).
             var clase = Catalogo("1", 1, null); var grupo = Catalogo("11", 2, clase); var cuenta = Catalogo("1105", 3, grupo);

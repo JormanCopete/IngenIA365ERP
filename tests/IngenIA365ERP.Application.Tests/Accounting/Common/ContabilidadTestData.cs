@@ -14,8 +14,9 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Common;
 /// Escenario mínimo de contabilidad (feature 009) sobre InMemory: configuración iniciada, dos
 /// sucursales (la principal), un centro de costo, un tercero vigente, los tipos CG (manual), NM
 /// (Nómina), AP (apertura) y CI (cierre), el tipo de cruce FV y el ejercicio 2026 con enero y
-/// febrero cerrados, marzo y abril abiertos. El reloj marca el 20 de marzo de 2026. Las cuentas se
-/// piden con <see cref="Cuenta"/> y sus reglas por parámetro.
+/// febrero cerrados, marzo y abril abiertos, y diciembre cerrado (el cierre del ejercicio se fecha
+/// el 31/12 y el contrato exige que el período exista, E2). El reloj marca el 20 de marzo de 2026.
+/// Las cuentas se piden con <see cref="Cuenta"/> y sus reglas por parámetro.
 /// </summary>
 public sealed class ContabilidadTestData
 {
@@ -67,7 +68,7 @@ public sealed class ContabilidadTestData
         Db.SaveChanges();
         Db.AccountingPeriods.AddRange(
             Periodo(ejercicio.Id, 1, PeriodStatus.Closed), Periodo(ejercicio.Id, 2, PeriodStatus.Closed),
-            Periodo(ejercicio.Id, 3, PeriodStatus.Open), Periodo(ejercicio.Id, 4, PeriodStatus.Open));
+            Periodo(ejercicio.Id, 3, PeriodStatus.Open), Periodo(ejercicio.Id, 4, PeriodStatus.Open), Periodo(ejercicio.Id, 12, PeriodStatus.Closed));
 
         Setup = new AccountingSetup
         {
@@ -76,6 +77,32 @@ public sealed class ContabilidadTestData
         };
         if (iniciada) Db.AccountingSetups.Add(Setup);
         Db.SaveChanges();
+    }
+
+    /// <summary>Feature 009 E2 (US6): el ejercicio 2026 completo, con los doce meses en el estado que se pida (por defecto todos cerrados, listo para el cierre del año).</summary>
+    public FiscalYear EjercicioCompleto(PeriodStatus estado = PeriodStatus.Closed)
+    {
+        var ejercicio = Db.FiscalYears.Single(f => f.Year == 2026);
+        var existentes = Db.AccountingPeriods.Where(p => p.FiscalYearId == ejercicio.Id).ToList();
+        foreach (var p in existentes) p.Status = estado;
+        for (var mes = 5; mes <= 11; mes++) Db.AccountingPeriods.Add(Periodo(ejercicio.Id, mes, estado));
+        Db.SaveChanges();
+        return ejercicio;
+    }
+
+    /// <summary>Un ejercicio más (abierto o cerrado) con sus doce períodos, para probar «el anterior tiene que estar cerrado» y «sólo se reabre el último».</summary>
+    public FiscalYear OtroEjercicio(int year, PeriodStatus estado)
+    {
+        var ejercicio = new FiscalYear { Year = year, Status = estado, CreatedBy = "test" };
+        Db.FiscalYears.Add(ejercicio);
+        Db.SaveChanges();
+        for (var mes = 1; mes <= 12; mes++)
+        {
+            var inicio = new DateOnly(year, mes, 1);
+            Db.AccountingPeriods.Add(new AccountingPeriod { FiscalYearId = ejercicio.Id, Month = (byte)mes, StartDate = inicio, EndDate = inicio.AddMonths(1).AddDays(-1), Status = estado, CreatedBy = "test" });
+        }
+        Db.SaveChanges();
+        return ejercicio;
     }
 
     private static AccountingPeriod Periodo(int ejercicioId, int mes, PeriodStatus estado)
