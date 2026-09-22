@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # crear-bucket-adjuntos.ps1 - Crea en AWS el bucket donde el ERP guarda los
 # adjuntos (soportes de comprobantes, planillas, archivos de dispersion) y, si
 # hay permisos, el usuario IAM con su llave instalada en los tres clusteres.
@@ -20,10 +20,13 @@
 # SEGURIDAD: la llave secreta nunca se imprime ni se escribe en un archivo. Se
 # genera, viaja por STDIN sobre SSH a los clusteres y se borra de memoria.
 #
+# Corre igual en Windows PowerShell 5.1 y en PowerShell 7 (pwsh).
+#
 # Uso:
 #   .\tools\scripts\crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloVerificar
 #   .\tools\scripts\crear-bucket-adjuntos.ps1 -Perfil ingenia365
 #   .\tools\scripts\crear-bucket-adjuntos.ps1 -Perfil ingenia365 -OmitirIam
+#   .\tools\scripts\crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloSecreto
 # =============================================================================
 param(
     [string]$Bucket     = 'ingenia365-erp-attachments',
@@ -36,21 +39,128 @@ param(
     # Salta la parte de IAM: util cuando quien ejecuta no puede crear usuarios y
     # la credencial se genera a mano desde la consola.
     [switch]$OmitirIam,
+    # Instala en los tres clusteres una llave creada A MANO en la consola de AWS. Es
+    # el complemento de -OmitirIam: quien ejecuta no puede crear usuarios IAM, la
+    # credencial la crea otro, y aqui solo se pide y se instala.
+    [switch]$SoloSecreto,
     [switch]$SoloVerificar
 )
 
 $ErrorActionPreference = 'Stop'
 
-$aws = @('aws')
-if ($Perfil) { $aws += @('--profile', $Perfil) }
+$awsExtras = @()
+if ($Perfil) { $awsExtras = @('--profile', $Perfil) }
+
+# Windows PowerShell 5.1 convierte en error TERMINANTE cualquier linea que un
+# ejecutable nativo escriba en stderr cuando se la redirige y ErrorActionPreference
+# vale 'Stop', aunque el comando haya terminado en 0. aws escribe avisos por ahi, y
+# head-bucket sobre un bucket que todavia no existe escribe el 404 que este guion
+# necesita tolerar. Por eso la preferencia se baja alrededor de la llamada y se
+# decide por $LASTEXITCODE, que es lo unico que dice de verdad si el comando fallo.
+function Invoke-Nativo {
+    param([string]$Programa, [string[]]$Argumentos, [string]$Entrada)
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($PSBoundParameters.ContainsKey('Entrada')) { $salida = $Entrada | & $Programa $Argumentos 2>&1 }
+        else { $salida = & $Programa $Argumentos 2>&1 }
+    } finally {
+        $ErrorActionPreference = $previo
+    }
+    return ,@($salida | ForEach-Object { "$_" })
+}
 
 function Invoke-Aws {
     param([string[]]$Argumentos, [switch]$TolerarError)
-    $salida = & $aws[0] ($aws[1..($aws.Length - 1)] + $Argumentos) 2>&1
+    $salida = Invoke-Nativo -Programa 'aws' -Argumentos ($awsExtras + $Argumentos)
     if ($LASTEXITCODE -ne 0 -and -not $TolerarError) {
         throw ("aws {0} fallo: {1}" -f ($Argumentos -join ' '), ($salida -join "`n"))
     }
     return $salida
+}
+
+# Windows PowerShell 5.1 se come las comillas dobles al pasar un argumento a un
+# ejecutable nativo, asi que un JSON en linea le llega a aws como {Rules:[...]} y lo
+# rechaza por invalido. Se escribe a un archivo temporal -en %TEMP%, que no tiene
+# espacios en la ruta- y se pasa por file://, que es ademas como aws espera recibir
+# los documentos largos.
+function Invoke-AwsConJson {
+    param([string[]]$Argumentos, [string]$Json)
+    $archivo = Join-Path ([IO.Path]::GetTempPath()) ("ingenia-" + [Guid]::NewGuid().ToString('N') + ".json")
+    [IO.File]::WriteAllText($archivo, $Json, (New-Object Text.UTF8Encoding($false)))
+    try { Invoke-Aws ($Argumentos + @("file://$archivo")) | Out-Null }
+    finally { Remove-Item $archivo -Force -ErrorAction SilentlyContinue }
+}
+
+function ConvertFrom-Segura {
+    param([Security.SecureString]$Segura)
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Segura)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+}
+
+# Escribe y borra un objeto con LA llave que se va a instalar, no con la del operador:
+# que el bucket exista no dice nada sobre si esa credencial puede escribir en el, y es
+# exactamente lo que el health check de la API intenta al arrancar. Vale la pena
+# descubrirlo aqui y no en /health/ready.
+function Test-Llave {
+    param([string]$IdLlave, [string]$Secreta)
+    Write-Host "  Probando la llave contra el bucket (escribe y borra) ... " -NoNewline
+    $previos = @{
+        Id = $env:AWS_ACCESS_KEY_ID; Secreta = $env:AWS_SECRET_ACCESS_KEY
+        Token = $env:AWS_SESSION_TOKEN; Perfil = $env:AWS_PROFILE
+    }
+    $archivo = Join-Path ([IO.Path]::GetTempPath()) ("ingenia-prueba-" + [Guid]::NewGuid().ToString('N') + ".bin")
+    $clave = ".healthcheck/credencial-" + [Guid]::NewGuid().ToString('N') + ".bin"
+    $env:AWS_ACCESS_KEY_ID = $IdLlave
+    $env:AWS_SECRET_ACCESS_KEY = $Secreta
+    $env:AWS_SESSION_TOKEN = $null
+    $env:AWS_PROFILE = $null
+    try {
+        [IO.File]::WriteAllText($archivo, 'ok')
+        $salida = Invoke-Nativo -Programa 'aws' -Argumentos @(
+            's3api', 'put-object', '--bucket', $Bucket, '--key', $clave, '--body', $archivo, '--region', $Region)
+        if ($LASTEXITCODE -ne 0) { throw ("la llave no puede escribir en el bucket: {0}" -f ($salida -join "`n")) }
+        $salida = Invoke-Nativo -Programa 'aws' -Argumentos @(
+            's3api', 'delete-object', '--bucket', $Bucket, '--key', $clave, '--region', $Region)
+        if ($LASTEXITCODE -ne 0) { throw ("la llave escribe pero no borra: {0}" -f ($salida -join "`n")) }
+    } finally {
+        Remove-Item $archivo -Force -ErrorAction SilentlyContinue
+        $env:AWS_ACCESS_KEY_ID     = $previos.Id
+        $env:AWS_SECRET_ACCESS_KEY = $previos.Secreta
+        $env:AWS_SESSION_TOKEN     = $previos.Token
+        $env:AWS_PROFILE           = $previos.Perfil
+    }
+    Write-Host "OK" -ForegroundColor Green
+}
+
+function Install-Secret {
+    param([string]$IdLlave, [string]$Secreta)
+    $destinos = @(
+        @{ Maquina = '100.94.218.42';  Namespace = 'erp-dev'; Nombre = 'DEV' },
+        @{ Maquina = '100.94.218.42';  Namespace = 'erp-qa';  Nombre = 'QA' },
+        @{ Maquina = '100.104.190.76'; Namespace = 'erp-pdn'; Nombre = 'PRODUCCION' }
+    )
+    $b64Id      = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($IdLlave))
+    $b64Secreta = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Secreta))
+    foreach ($d in $destinos) {
+        $yaml = @"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: erp-adjuntos-s3
+  namespace: $($d.Namespace)
+type: Opaque
+data:
+  accessKeyId: $b64Id
+  secretAccessKey: $b64Secreta
+"@
+        Write-Host ("  Instalando el Secret en {0} ... " -f $d.Nombre) -NoNewline
+        $salida = Invoke-Nativo -Programa 'ssh' -Entrada $yaml -Argumentos @(
+            '-i', $KeyPath, '-o', 'BatchMode=yes', "root@$($d.Maquina)", 'k3s kubectl apply -f -')
+        if ($LASTEXITCODE -eq 0) { Write-Host "OK" -ForegroundColor Green }
+        else { Write-Host "FALLO" -ForegroundColor Red; Write-Host ("    {0}" -f ($salida -join "`n")) -ForegroundColor Red }
+    }
 }
 
 Write-Host ""
@@ -72,6 +182,31 @@ if ($SoloVerificar) {
         Write-Host ("  Cifrado:    {0}" -f (Invoke-Aws @('s3api', 'get-bucket-encryption', '--bucket', $Bucket, '--output', 'text') -TolerarError))
         Write-Host ("  Objetos:    {0}" -f (Invoke-Aws @('s3api', 'list-objects-v2', '--bucket', $Bucket, '--max-items', '1', '--output', 'text') -TolerarError))
     }
+    return
+}
+
+if ($SoloSecreto) {
+    if (-not $existe) { throw "El bucket $Bucket no existe todavia: corra el guion sin -SoloSecreto (o con -OmitirIam) primero." }
+    Write-Host ""
+    Write-Host ("  Llave del usuario {0}, creada a mano en la consola de AWS." -f $UsuarioIam) -ForegroundColor Cyan
+    Write-Host "  No se imprime, no se guarda en ningun archivo y no queda en el historial." -ForegroundColor DarkGray
+    Write-Host ""
+    $idLlave = (Read-Host "  AccessKeyId").Trim()
+    $secretaSegura = Read-Host "  SecretAccessKey" -AsSecureString
+    if (-not $idLlave -or -not $secretaSegura -or $secretaSegura.Length -eq 0) { throw "Falta la llave." }
+    $secreta = ConvertFrom-Segura $secretaSegura
+    try {
+        Write-Host ""
+        Test-Llave -IdLlave $idLlave -Secreta $secreta
+        Install-Secret -IdLlave $idLlave -Secreta $secreta
+    } finally {
+        $secreta = $null
+        $secretaSegura.Dispose()
+        [GC]::Collect()
+    }
+    Write-Host ""
+    Write-Host "  Listo. Falta el overlay de GitOps y relevar los pods de la API." -ForegroundColor Cyan
+    Write-Host ""
     return
 }
 
@@ -101,16 +236,16 @@ Write-Host "OK" -ForegroundColor Green
 
 Write-Host "  Cifrado del lado del servidor (AES256) ... " -NoNewline
 $cifrado = '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
-Invoke-Aws @('s3api', 'put-bucket-encryption', '--bucket', $Bucket,
-             '--server-side-encryption-configuration', $cifrado) | Out-Null
+Invoke-AwsConJson @('s3api', 'put-bucket-encryption', '--bucket', $Bucket,
+                    '--server-side-encryption-configuration') -Json $cifrado
 Write-Host "OK" -ForegroundColor Green
 
 Write-Host "  Ciclo de vida (versiones viejas 90 d, multipart a medias 7 d) ... " -NoNewline
 $ciclo = '{"Rules":[{"ID":"limpieza","Status":"Enabled","Filter":{},' +
          '"NoncurrentVersionExpiration":{"NoncurrentDays":90},' +
          '"AbortIncompleteMultipartUpload":{"DaysAfterInitiation":7}}]}'
-Invoke-Aws @('s3api', 'put-bucket-lifecycle-configuration', '--bucket', $Bucket,
-             '--lifecycle-configuration', $ciclo) | Out-Null
+Invoke-AwsConJson @('s3api', 'put-bucket-lifecycle-configuration', '--bucket', $Bucket,
+                    '--lifecycle-configuration') -Json $ciclo
 Write-Host "OK" -ForegroundColor Green
 
 if ($OmitirIam) {
@@ -134,9 +269,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "  Politica minima ... " -NoNewline
-Invoke-Aws @('iam', 'put-user-policy', '--user-name', $UsuarioIam,
-             '--policy-name', 'AdjuntosDelErp',
-             '--policy-document', "file://$((Resolve-Path $politica).Path)") | Out-Null
+Invoke-AwsConJson @('iam', 'put-user-policy', '--user-name', $UsuarioIam,
+                    '--policy-name', 'AdjuntosDelErp',
+                    '--policy-document') -Json ([IO.File]::ReadAllText((Resolve-Path $politica).Path))
 Write-Host "OK" -ForegroundColor Green
 
 Write-Host ""
@@ -148,35 +283,14 @@ $secreta = $llave.AccessKey.SecretAccessKey
 Write-Host "OK" -ForegroundColor Green
 Write-Host ("  AccessKeyId: {0}" -f $idLlave) -ForegroundColor DarkGray
 
-$destinos = @(
-    @{ Host = '100.94.218.42';  Namespace = 'erp-dev'; Nombre = 'DEV' },
-    @{ Host = '100.94.218.42';  Namespace = 'erp-qa';  Nombre = 'QA' },
-    @{ Host = '100.104.190.76'; Namespace = 'erp-pdn'; Nombre = 'PRODUCCION' }
-)
-
-$b64Id      = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($idLlave))
-$b64Secreta = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secreta))
-
-foreach ($d in $destinos) {
-    $yaml = @"
-apiVersion: v1
-kind: Secret
-metadata:
-  name: erp-adjuntos-s3
-  namespace: $($d.Namespace)
-type: Opaque
-data:
-  accessKeyId: $b64Id
-  secretAccessKey: $b64Secreta
-"@
-    Write-Host ("  Instalando el Secret en {0} ... " -f $d.Nombre) -NoNewline
-    $salida = $yaml | ssh -i $KeyPath -o BatchMode=yes "root@$($d.Host)" "k3s kubectl apply -f -" 2>&1
-    if ($LASTEXITCODE -eq 0) { Write-Host "OK" -ForegroundColor Green }
-    else { Write-Host "FALLO" -ForegroundColor Red; Write-Host ("    {0}" -f ($salida -join "`n")) -ForegroundColor Red }
+Write-Host ""
+try {
+    Test-Llave -IdLlave $idLlave -Secreta $secreta
+    Install-Secret -IdLlave $idLlave -Secreta $secreta
+} finally {
+    $secreta = $null
+    [GC]::Collect()
 }
-
-$secreta = $null
-[GC]::Collect()
 
 Write-Host ""
 Write-Host "  Listo. Falta:" -ForegroundColor Cyan

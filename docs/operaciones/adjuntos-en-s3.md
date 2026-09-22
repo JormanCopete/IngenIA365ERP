@@ -1,4 +1,4 @@
-# Adjuntos del ERP en S3
+﻿# Adjuntos del ERP en S3
 
 Los adjuntos (soportes de comprobantes contables, planillas PILA, archivos de dispersión,
 documentos de liquidación) se suben cifrados y se guardan por `IBlobStore`. Hay dos
@@ -45,19 +45,46 @@ puede mover sin invalidar lo ya escrito.
 1. **Crear el bucket y la credencial** (una vez, desde una máquina con AWS CLI y el perfil correcto):
 
    ```bash
-   pwsh ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloVerificar
+   powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloVerificar
    ```
 
    ```bash
-   pwsh ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365
+   powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365
    ```
+
+   (`powershell` es el de Windows, 5.1, que es el que hay en la maquina del dueno; con
+   PowerShell 7 instalado sirve igual `pwsh`.)
 
    Es re-ejecutable. Crea el bucket con todo lo de arriba, el usuario IAM
    `ingenia365-erp-adjuntos` con la política mínima de
    [politica-iam-adjuntos.json](politica-iam-adjuntos.json) —que además **niega explícitamente**
    tocar el bucket de respaldos— y deja el Secret `erp-adjuntos-s3` en los tres namespaces. La llave
-   secreta no se imprime ni se escribe en ningún archivo. Con `-OmitirIam` sólo hace el bucket, para
-   cuando el usuario de AWS no puede crear usuarios IAM.
+   secreta no se imprime ni se escribe en ningún archivo: se genera, viaja por STDIN sobre SSH y se
+   descarta. Antes de instalarla **escribe y borra un objeto con esa misma llave**, que es lo que el
+   health check intentará al arrancar: que el bucket exista no dice nada sobre si la credencial puede
+   escribir en él.
+
+   **Si quien ejecuta no tiene permisos de IAM** (el 2026-09-22, `copesan@hotmail.com` en la cuenta
+   `058264424927` —la de los dos buckets— no tiene ni `iam:ListUsers`), el bucket se crea igual con
+   `-OmitirIam` y la credencial la hace otro desde la consola de AWS de esa cuenta:
+
+   1. IAM › Usuarios › Crear usuario `ingenia365-erp-adjuntos`, **sin acceso a la consola**.
+   2. Permisos › Agregar permisos › Incorporar directamente una política › JSON: pegar
+      [politica-iam-adjuntos.json](politica-iam-adjuntos.json) tal cual, con el nombre `AdjuntosDelErp`.
+   3. Credenciales de seguridad › Crear clave de acceso › «Aplicación que se ejecuta fuera de AWS».
+   4. Volver acá con la llave a la vista y correr:
+
+      ```bash
+      powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloSecreto
+      ```
+
+      Pide el `AccessKeyId` y el `SecretAccessKey` —éste con `Read-Host -AsSecureString`, así que no se
+      ve al teclearlo ni queda en el historial—, prueba la llave contra el bucket y la instala en los
+      tres namespaces. **Nunca se pasa la llave por la línea de comandos**: quedaría en el historial de
+      la consola.
+
+   Reusar la credencial de los respaldos **no** es una opción: la separación entre las dos es
+   justamente lo que impide que una aplicación comprometida borre los respaldos.
 
 2. **Configurar el overlay de cada ambiente** (repo GitOps). En `base/api.yaml`, junto a las demás
    variables:

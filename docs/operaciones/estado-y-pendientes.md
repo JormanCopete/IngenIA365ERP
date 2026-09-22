@@ -328,16 +328,34 @@ Consola AWS → IAM → usuario dueño → *Credenciales de seguridad* → **Des
 Confirmar antes que `polly-carteravirtual` tenga su reemplazo: esa aplicación sí
 la estaba usando.
 
-#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22 (falta desplegar)
+#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22 (bucket y overlay hechos; falta la imagen)
 
 Los adjuntos (soportes de comprobantes, planillas, dispersión) escribían en un PVC `local-path` de
 10 Gi: sin redundancia, **fuera de los respaldos diarios** y `ReadWriteOnce`, o sea que con un
 segundo nodo una de las dos réplicas de la API no podría montarlo. Ya existe `S3BlobStore` detrás
 del mismo `IBlobStore` y se elige con `AttachmentStorage:Provider`; el cifrado sigue siendo nuestro
 (AES-256-GCM antes de subir) y S3 pone el suyo encima. **Se hizo con el volumen vacío en producción**,
-así que no hay nada que migrar. Falta: crear el bucket con
-[`crear-bucket-adjuntos.ps1`](../../tools/scripts/crear-bucket-adjuntos.ps1), poner las variables en
-el overlay y verificar `/health/ready`. Receta: [adjuntos-en-s3.md](adjuntos-en-s3.md).
+así que no hay nada que migrar.
+
+Estado del 2026-09-22: el bucket `ingenia365-erp-attachments` ya existe en la cuenta `058264424927`
+(la misma de los respaldos) con versionado, cifrado AES256, acceso público bloqueado y ciclo de vida;
+el Secret `erp-adjuntos-s3` está en los tres namespaces; y el overlay de GitOps ya lleva
+`AttachmentStorage__Provider=S3` con el prefijo de cada ambiente (`9d9ae02`). **Falta que el código
+llegue**: la imagen desplegada es anterior a `S3BlobStore`, así que la configuración está viva pero
+inerte y el health check todavía dice `writable: /app/storage/attachments`. Con la imagen nueva tiene
+que decir `S3: s3://ingenia365-erp-attachments/{ambiente}`; después, subir, bajar y borrar un adjunto
+de verdad, y más adelante retirar el PVC `erp-attachments`, que queda montado sin usarse.
+
+El usuario IAM se creó **a mano desde la consola**: el usuario del perfil `ingenia365` no tiene
+ningún permiso de IAM (ni `iam:ListUsers`), y el guión cubre ese caso con `-OmitirIam` para el bucket
+y `-SoloSecreto` para instalar la llave. Receta: [adjuntos-en-s3.md](adjuntos-en-s3.md).
+
+**Pendiente del dueño**: rotar la llave instalada ese día. Quedó expuesta el 2026-09-22 al
+verificar el Secret con un `jsonpath` que imprimió los valores además de los nombres. Sólo puede leer,
+escribir y borrar objetos del bucket de adjuntos —que está vacío—, no borrar versiones ni tocar el de
+respaldos, pero se rota igual: desactivar y eliminar en la consola, crear otra y reinstalarla con
+`-SoloSecreto`. El Secret se referencia **por nombre, sin hash**, así que reinstalarlo no rota los
+pods: hay que relevarlos (mientras el código S3 no esté desplegado, no hace falta ni eso).
 
 #### P2 — MongoDB sin redundancia de almacenamiento
 
