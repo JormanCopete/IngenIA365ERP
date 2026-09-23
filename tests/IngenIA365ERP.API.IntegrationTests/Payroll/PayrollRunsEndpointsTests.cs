@@ -72,7 +72,7 @@ public class PayrollRunsEndpointsTests(CentralIdentityApiFixture fx)
             exceptions = await NominaE2E.ExcepcionesParaAsync(http, admin, run2),
         });
         sinSegunda.IsSuccessStatusCode.Should().BeFalse();
-        (await NominaE2E.CodigoDeErrorAsync(sinSegunda)).Should().Be("Payroll.ConfirmationRequired");
+        (await NominaE2E.CodigoDeErrorAsync(sinSegunda)).Should().Be("Payroll.SegregationConfirmationRequired");
 
         var aprobacion = await NominaE2E.AprobarAsync(http, admin, run2);
         aprobacion.GetProperty("accountingDocumentNumber").GetString().Should().StartWith("NM-");

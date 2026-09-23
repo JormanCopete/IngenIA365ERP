@@ -664,7 +664,7 @@
         var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarLiquidacionRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null, ConfirmWithoutSegregation: _confirmarSinSegregacion));
         if (!res.IsSuccess)
         {
-            if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && !_pideSegundaConfirmacion)
+            if (res.ErrorCode == "Payroll.Settlement.SegregationConfirmationRequired" && !_pideSegundaConfirmacion)
             {
                 _pideSegundaConfirmacion = true;
                 await Notification.WarningAsync(res.ErrorMessage ?? "Hace falta la segunda confirmación.");

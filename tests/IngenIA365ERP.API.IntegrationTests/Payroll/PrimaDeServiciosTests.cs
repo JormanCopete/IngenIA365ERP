@@ -141,7 +141,7 @@ public class PrimaDeServiciosTests(CentralIdentityApiFixture fx)
         // ------------------------------------------------------------------- aprobar --
         var sinSegunda = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"{Ruta}/{runId}/approve", new { confirm = true });
         sinSegunda.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, "quien calculó aprueba sólo con la segunda confirmación");
-        (await NominaE2E.CodigoDeErrorAsync(sinSegunda)).Should().Be("Payroll.Settlement.ConfirmationRequired");
+        (await NominaE2E.CodigoDeErrorAsync(sinSegunda)).Should().Be("Payroll.Settlement.SegregationConfirmationRequired");
 
         var fueraDeRango = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"{Ruta}/{runId}/approve", new { confirm = true, confirmWithoutSegregation = true, postingDate = "2026-06-15" });
         (await NominaE2E.CodigoDeErrorAsync(fueraDeRango)).Should().Be("Payroll.Settlement.PostingDateInvalid");

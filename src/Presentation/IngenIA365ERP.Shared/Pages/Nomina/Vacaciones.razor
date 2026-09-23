@@ -821,7 +821,7 @@
             ConfirmWithoutSegregation: _confirmarSinSegregacion, AcceptRetroactive: _aceptaRetroactivoAprobar));
         if (!res.IsSuccess)
         {
-            if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && !_confirmarSinSegregacion) _pideSegundaConfirmacion = true;
+            if (res.ErrorCode == "Payroll.Settlement.SegregationConfirmationRequired") _pideSegundaConfirmacion = true;
             if (res.ErrorCode == "Payroll.Vacation.PeriodApproved") _pideRetroactivoAprobar = true;
             await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo aprobar.");
             return;

@@ -1,4 +1,4 @@
-@*
+﻿@*
     PanelDeAprobacion — diálogo de aprobación (contracts/ui.md §2): resumen de totales,
     lista de bloqueos con casilla «Autorizar excepción» + motivo (visible sólo con el
     permiso), texto de confirmación explícito, y segunda confirmación cuando la
@@ -95,7 +95,7 @@
     private readonly Dictionary<string, string> _motivos = [];
     private bool _confirmar, _confirmarVacio, _confirmarSinSegregacion, _pideSegundaConfirmacion;
 
-    /// <summary>La pantalla la llama cuando el servidor pidió la segunda confirmación (Payroll.ConfirmationRequired por segregación).</summary>
+    /// <summary>La pantalla la llama cuando el servidor pidió la segunda confirmación (Payroll.SegregationConfirmationRequired).</summary>
     public void PedirSegundaConfirmacion() { _pideSegundaConfirmacion = true; StateHasChanged(); }
 
     public void Reiniciar()

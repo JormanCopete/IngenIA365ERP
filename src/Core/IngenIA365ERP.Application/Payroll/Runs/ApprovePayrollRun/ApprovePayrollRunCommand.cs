@@ -136,8 +136,13 @@ public sealed class ApprovePayrollRunCommandHandler(
                 return Fallo("Payroll.SegregationOfDuties",
                     "Quien registra novedades o calcula no puede aprobar la misma nómina. Otra persona con el permiso Payroll.Runs.Approve (Seguridad › Roles) debe hacerlo, o la cooperativa habilita la política AllowSameUserApproval en Nómina › Políticas de la empresa, con vigencia que cubra el fin del período; quien apruebe así deberá confirmarlo expresamente y quedará registrado.");
             if (!request.ConfirmWithoutSegregation)
-                return Fallo("Payroll.ConfirmationRequired",
-                    "Usted participó en las novedades o el cálculo de este período. La cooperativa permite aprobarlo igual, pero exige una segunda confirmación (confirmWithoutSegregation = true); quedará registrado.");
+                // Código propio, no el genérico de confirmación: la pantalla tiene que distinguir
+                // ESTE caso para revelar la casilla de la segunda confirmación, y hasta el 2026-09-22
+                // lo hacía buscando «segregaci» en el texto —que no aparece en ninguna parte de este
+                // mensaje—, así que la casilla no salía nunca y aprobar la propia nómina era
+                // imposible desde la aplicación. Un mensaje es para quien lee, no para ramificar.
+                return Fallo("Payroll.SegregationConfirmationRequired",
+                    "Usted participó en las novedades o el cálculo de este período. La cooperativa permite aprobarlo igual, pero exige confirmarlo expresamente: marque «Confirmo aprobar sin segregación de funciones». Quedará registrado en la corrida.");
             sinSegregacion = true;
         }
 

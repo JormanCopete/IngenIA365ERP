@@ -114,7 +114,7 @@ public class SettlementRunWorkflowTests
         vigente.ValidFrom = new DateOnly(2026, 1, 1);
         await d.Db.SaveChangesAsync();
         (await d.Flujo(d.User).ApproveAsync(Aprobar(run.PublicId), null, CancellationToken.None)).Error.Code
-            .Should().Be("Payroll.Settlement.ConfirmationRequired", "con la política sí, pero exige la segunda confirmación");
+            .Should().Be("Payroll.Settlement.SegregationConfirmationRequired", "con la política sí, pero exige la segunda confirmación");
 
         var ok = await d.Flujo(d.User).ApproveAsync(Aprobar(run.PublicId, sinSegregacion: true), null, CancellationToken.None);
         ok.IsSuccess.Should().BeTrue(ok.Error.Message);

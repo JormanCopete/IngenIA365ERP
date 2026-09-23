@@ -1,4 +1,4 @@
-@page "/nomina/liquidacion"
+﻿@page "/nomina/liquidacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Components.Nomina
@@ -827,7 +827,7 @@
             var res = await Nomina.AprobarAsync(_corrida.PublicId, request);
             if (!res.IsSuccess)
             {
-                if (res.ErrorCode == "Payroll.ConfirmationRequired" && (res.ErrorMessage ?? string.Empty).Contains("segregaci", StringComparison.OrdinalIgnoreCase))
+                if (res.ErrorCode == "Payroll.SegregationConfirmationRequired")
                 {
                     _panel?.PedirSegundaConfirmacion();
                     await Notification.WarningAsync(res.ErrorMessage ?? "Se requiere una segunda confirmación.");
