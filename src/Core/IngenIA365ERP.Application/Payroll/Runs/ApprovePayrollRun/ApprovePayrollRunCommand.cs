@@ -134,7 +134,7 @@ public sealed class ApprovePayrollRunCommandHandler(
         {
             if (!politica.AllowSameUserApproval)
                 return Fallo("Payroll.SegregationOfDuties",
-                    "Quien registra novedades o calcula no puede aprobar la misma nómina. Otra persona con el permiso Payroll.Runs.Approve (Seguridad › Roles) debe hacerlo, o la cooperativa habilita el parámetro Payroll.AllowSameUserApproval en Administración › Parámetros del sistema › Nómina.");
+                    "Quien registra novedades o calcula no puede aprobar la misma nómina. Otra persona con el permiso Payroll.Runs.Approve (Seguridad › Roles) debe hacerlo, o la cooperativa habilita la política AllowSameUserApproval en Nómina › Políticas de la empresa, con vigencia que cubra el fin del período; quien apruebe así deberá confirmarlo expresamente y quedará registrado.");
             if (!request.ConfirmWithoutSegregation)
                 return Fallo("Payroll.ConfirmationRequired",
                     "Usted participó en las novedades o el cálculo de este período. La cooperativa permite aprobarlo igual, pero exige una segunda confirmación (confirmWithoutSegregation = true); quedará registrado.");

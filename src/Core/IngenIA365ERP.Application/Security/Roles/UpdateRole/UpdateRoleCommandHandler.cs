@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Security.Roles.Common;
@@ -176,8 +176,14 @@ public sealed class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand
             .Select(x => (x.RoleId, x.PermissionId))
             .ToList();
 
+        // SEC_UserRoles es una tabla de union y NO maneja borrado logico: UserConfiguration ignora
+        // IsDeleted y las demas columnas de auditoria de UserRole, asi que filtrar por ellas no
+        // compila a SQL -«Translation of member 'IsDeleted' on entity type 'UserRole' failed»- y
+        // tumbaba con 500 toda edicion de rol en un ambiente con el catalogo completo. El borrado
+        // del usuario tampoco hay que pedirlo: User lleva filtro global !IsDeleted y EF lo aplica
+        // al join, de modo que un usuario eliminado deja ur.User en null.
         var asignaciones = (await _db.UserRoles
-            .Where(ur => !ur.IsDeleted && ur.User != null && ur.User.IsActive && !ur.User.IsDeleted)
+            .Where(ur => ur.User != null && ur.User.IsActive)
             .Select(ur => new { ur.UserId, ur.RoleId })
             .ToListAsync(ct))
             .Select(x => (x.UserId, x.RoleId))
