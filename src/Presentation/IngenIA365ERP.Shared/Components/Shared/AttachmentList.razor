@@ -10,9 +10,13 @@
 @* Soportes de una entidad (feature 009, T045): vivía en Web.Client y Shared no lo veía. Lista,
    descarga y elimina adjuntos por (OwnerEntityType, OwnerEntityPublicId); el token va en cada
    petición como en los clientes tipados, porque en el prerenderizado el HttpClient plano sale sin
-   autorización. La descarga pasa por window.descargas (Shared/wwwroot/js/descargas.js). *@
+   autorización. La descarga pasa por window.descargas (Shared/wwwroot/js/descargas.js).
+   Feature 011 (FR-004): el botón Borrar sale según el `canDelete` que calcula el servidor —permiso y
+   regla del dueño—, no según lo que crea la pantalla; hasta el 2026-09-23 lo decidía un parámetro y la
+   API borraba igual el soporte de un comprobante contabilizado. Borrar pide confirmación y avisa que el
+   archivo queda 90 días en la papelera. *@
 <div class="attachment-list">
-    <IndicadorDeCarga Cargando="@_carga.Activa">
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _borrando.Activa)" Texto="@(_borrando.Activa ? "Borrando…" : "Cargando…")">
         @if (!string.IsNullOrEmpty(_error))
         {
             <p class="aviso aviso-error">@_error</p>
@@ -37,9 +41,9 @@
                             <td>@a.CreatedAt.ToString("yyyy-MM-dd HH:mm") @a.CreatedBy</td>
                             <td class="acciones">
                                 <button type="button" class="boton boton-secundario" @onclick="() => DownloadAsync(a)">Descargar</button>
-                                @if (PermitirEliminar)
+                                @if (a.CanDelete)
                                 {
-                                    <button type="button" class="boton boton-peligro" @onclick="() => DeleteAsync(a)">Eliminar</button>
+                                    <button type="button" class="boton boton-peligro" @onclick="() => PedirConfirmacion(a)">Borrar</button>
                                 }
                             </td>
                         </tr>
@@ -50,14 +54,17 @@
     </IndicadorDeCarga>
 </div>
 
+<ConfirmDialog @bind-Visible="_confirmarBorrado" Title="Borrar soporte" ConfirmText="Borrar" OnConfirm="@BorrarAsync"
+               Message="@($"¿Borrar «{_aBorrar?.FileName}»? Queda 90 días en la papelera; para recuperarlo hay que pedirlo a soporte.")" />
+
 @code {
     [Parameter, EditorRequired] public string OwnerEntityType { get; set; } = string.Empty;
     [Parameter, EditorRequired] public Guid OwnerEntityPublicId { get; set; }
 
-    /// <summary>Un comprobante contabilizado conserva sus soportes: quien lo muestra decide si se pueden retirar.</summary>
-    [Parameter] public bool PermitirEliminar { get; set; } = true;
-
     private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _borrando = new();
+    private bool _confirmarBorrado;
+    private AttachmentDto? _aBorrar;
     private string _error = string.Empty;
     private List<AttachmentDto> _items = [];
 
@@ -113,17 +120,48 @@
         }
     }
 
-    private async Task DeleteAsync(AttachmentDto a)
+    private void PedirConfirmacion(AttachmentDto a)
     {
-        using var req = Peticion(HttpMethod.Delete, $"/api/attachments/{a.PublicId}");
-        if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
-        using var resp = await Http.SendAsync(req);
-        if (!resp.IsSuccessStatusCode)
+        _aBorrar = a;
+        _confirmarBorrado = true;
+    }
+
+    private async Task BorrarAsync()
+    {
+        if (_aBorrar is not { } a) return;
+        using var carga = _borrando.Iniciar();
+        _error = string.Empty;
+        try
         {
-            _error = $"No se pudo eliminar (error {(int)resp.StatusCode}).";
+            using var req = Peticion(HttpMethod.Delete, $"/api/attachments/{a.PublicId}");
+            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
+            using var resp = await Http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                // El sobre de la API trae el motivo (por ejemplo, que el comprobante ya se contabilizó).
+                var sobre = await LeerSobreAsync(resp);
+                _error = sobre?.Message ?? $"No se pudo borrar (error {(int)resp.StatusCode}).";
+                await RefreshAsync();
+                return;
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Error de red: {ex.Message}";
             return;
         }
+        finally
+        {
+            _aBorrar = null;
+        }
         await RefreshAsync();
+    }
+
+    private static async Task<SobreDeError?> LeerSobreAsync(HttpResponseMessage resp)
+    {
+        try { return await resp.Content.ReadFromJsonAsync<SobreDeError>(); }
+        catch (System.Text.Json.JsonException) { return null; }
+        catch (NotSupportedException) { return null; }
     }
 
     private HttpRequestMessage? Peticion(HttpMethod metodo, string url)
@@ -146,5 +184,7 @@
     public sealed record AttachmentDto(
         Guid PublicId, string OwnerEntityType, Guid OwnerEntityPublicId,
         string FileName, string ContentType, long SizeBytes, string Sha256Hex,
-        DateTime CreatedAt, string? CreatedBy);
+        DateTime CreatedAt, string? CreatedBy, bool CanDelete);
+
+    private sealed record SobreDeError(string? Code, string? Message);
 }

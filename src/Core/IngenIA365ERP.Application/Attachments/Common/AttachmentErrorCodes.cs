@@ -27,6 +27,26 @@ public static class AttachmentErrorCodes
     /// borra por la ruta genérica. 422.
     /// </summary>
     public const string OwnedByModule = "Attachments.OwnedByModule";
+
+    // --- Feature 011: subida y descarga directas al almacén (contracts/api.md) ---
+
+    /// <summary>
+    /// El tipo de dueño no admite subidas de personas: lo genera un módulo (PILA, dispersión,
+    /// definitiva) o todavía no está habilitado (FR-019). 422.
+    /// </summary>
+    public const string OwnerNotAllowed = "Attachments.OwnerNotAllowed";
+
+    /// <summary>Es soporte de un comprobante contabilizado: se conserva, no se borra (FR-004). 422.</summary>
+    public const string OwnerLocked = "Attachments.OwnerLocked";
+
+    /// <summary>El estado del adjunto no admite lo pedido (no está disponible, o no se puede renovar). 409.</summary>
+    public const string NotAvailable = "Attachments.NotAvailable";
+
+    /// <summary>Es del formato directo: se baja con un enlace firmado, no a través de la API. 409.</summary>
+    public const string UseDownloadLink = "Attachments.UseDownloadLink";
+
+    /// <summary>Se excedió el límite de concurrencia de las rutas de adjuntos. 429.</summary>
+    public const string Busy = "Attachments.Busy";
 }
 
 /// <summary>

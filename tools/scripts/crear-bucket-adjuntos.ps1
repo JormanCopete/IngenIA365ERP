@@ -4,16 +4,24 @@
 # hay permisos, el usuario IAM con su llave instalada en los tres clusteres.
 #
 # ES OTRO BUCKET que el de respaldos, a proposito: aquel tiene Object Lock a 40
-# dias porque un respaldo no debe poder borrarse; un adjunto SI se borra cuando
-# su dueno lo borra desde la aplicacion. Mezclarlos obligaria a elegir una sola
-# retencion para las dos cosas.
+# dias porque un respaldo no debe poder borrarse; un adjunto se borra cuando una
+# persona con permiso lo borra desde la aplicacion. Mezclarlos obligaria a elegir
+# una sola retencion para las dos cosas.
+#
+# NADA SE BORRA SOLO (feature 011). Borrar desde el ERP deja una marca de borrado
+# y la version queda 90 dias en la papelera, de donde soporte la recupera; pasado
+# ese plazo el ciclo de vida la purga, y es la unica purga automatica que existe:
+# solo alcanza a lo que alguien ya borro. La credencial del ERP no puede borrar
+# versiones. Recetas de recuperacion y de supresion definitiva (Habeas Data) en
+# docs/operaciones/adjuntos-en-s3.md.
 #
 #   ingenia365-erp-attachments/{pdn,qa,dev}/<cooperativa>/<aaaa>/<mm>/<guid>.bin
 #
 # Lo que SI lleva: versionado (un borrado accidental se recupera), cifrado
-# AES256 del lado del servidor -encima del nuestro, que ya cifra cada archivo
-# con AES-256-GCM antes de subirlo-, bloqueo total de acceso publico y ciclo de
-# vida que limpia las versiones viejas a los 90 dias y los multipart a medias.
+# AES256 del lado del servidor, bloqueo total de acceso publico, politica que
+# rechaza toda peticion sin TLS, y ciclo de vida que purga las versiones borradas
+# a los 90 dias, las marcas de borrado que quedan sin version y los multipart a
+# medias.
 #
 # ES RE-EJECUTABLE: si el bucket ya existe, completa lo que falte sin recrearlo.
 #
@@ -181,6 +189,8 @@ if ($SoloVerificar) {
         Write-Host ("  Versionado: {0}" -f (Invoke-Aws @('s3api', 'get-bucket-versioning', '--bucket', $Bucket, '--output', 'text') -TolerarError))
         Write-Host ("  Cifrado:    {0}" -f (Invoke-Aws @('s3api', 'get-bucket-encryption', '--bucket', $Bucket, '--output', 'text') -TolerarError))
         Write-Host ("  Objetos:    {0}" -f (Invoke-Aws @('s3api', 'list-objects-v2', '--bucket', $Bucket, '--max-items', '1', '--output', 'text') -TolerarError))
+        Write-Host ("  Ciclo:      {0}" -f (Invoke-Aws @('s3api', 'get-bucket-lifecycle-configuration', '--bucket', $Bucket, '--query', 'Rules[].ID', '--output', 'text') -TolerarError))
+        Write-Host ("  Politica:   {0}" -f (Invoke-Aws @('s3api', 'get-bucket-policy', '--bucket', $Bucket, '--query', 'Policy', '--output', 'text') -TolerarError))
     }
     return
 }
@@ -240,12 +250,26 @@ Invoke-AwsConJson @('s3api', 'put-bucket-encryption', '--bucket', $Bucket,
                     '--server-side-encryption-configuration') -Json $cifrado
 Write-Host "OK" -ForegroundColor Green
 
-Write-Host "  Ciclo de vida (versiones viejas 90 d, multipart a medias 7 d) ... " -NoNewline
-$ciclo = '{"Rules":[{"ID":"limpieza","Status":"Enabled","Filter":{},' +
+# La papelera (contracts/almacen.md de la feature 011, seccion 1). Reemplaza la
+# configuracion entera: la regla vieja se llamaba "limpieza" y no purgaba las
+# marcas de borrado que quedan solas cuando su version ya se fue.
+Write-Host "  Ciclo de vida (papelera de 90 d, marcas huerfanas, multipart a medias 7 d) ... " -NoNewline
+$ciclo = '{"Rules":[{"ID":"papelera-90-dias","Status":"Enabled","Filter":{},' +
          '"NoncurrentVersionExpiration":{"NoncurrentDays":90},' +
+         '"Expiration":{"ExpiredObjectDeleteMarker":true},' +
          '"AbortIncompleteMultipartUpload":{"DaysAfterInitiation":7}}]}'
 Invoke-AwsConJson @('s3api', 'put-bucket-lifecycle-configuration', '--bucket', $Bucket,
                     '--lifecycle-configuration') -Json $ciclo
+Write-Host "OK" -ForegroundColor Green
+
+# Solo TLS. Es un Deny, asi que no choca con BlockPublicPolicy (que solo mira los
+# Allow). put-bucket-policy REEMPLAZA la politica: este guion es su unica fuente, y
+# si alguien le agrego algo a mano desde la consola, aqui se pierde.
+Write-Host "  Politica del bucket (solo TLS) ... " -NoNewline
+$politicaDelBucket = '{"Version":"2012-10-17","Statement":[{"Sid":"SoloTls","Effect":"Deny","Principal":"*",' +
+                     '"Action":"s3:*","Resource":["arn:aws:s3:::' + $Bucket + '","arn:aws:s3:::' + $Bucket + '/*"],' +
+                     '"Condition":{"Bool":{"aws:SecureTransport":"false"}}}]}'
+Invoke-AwsConJson @('s3api', 'put-bucket-policy', '--bucket', $Bucket, '--policy') -Json $politicaDelBucket
 Write-Host "OK" -ForegroundColor Green
 
 if ($OmitirIam) {

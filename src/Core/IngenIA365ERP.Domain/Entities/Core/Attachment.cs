@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Core;
 
 namespace IngenIA365ERP.Domain.Entities.Core;
 
@@ -60,6 +61,28 @@ public class Attachment : AuditableEntityLong
     /// DEK envuelta por la KEK de DataProtection (Base64). Cada blob tiene
     /// su propia DEK random; la KEK rota sin re-cifrar blobs.
     /// </summary>
+    /// <summary>Sólo en <see cref="FormatoDeAdjunto.AppEncrypted"/>; vacío en <see cref="FormatoDeAdjunto.Direct"/>.</summary>
     [MaxLength(1000)]
     public string EncryptedDek { get; set; } = string.Empty;
+
+    // --- Feature 011: subida y descarga directas al almacén ---
+    // Los valores por defecto reproducen el comportamiento anterior (cifrado por la aplicación y
+    // disponible al guardarse); los flujos nuevos los fijan explícitamente.
+
+    public FormatoDeAdjunto Format { get; set; } = FormatoDeAdjunto.AppEncrypted;
+
+    public EstadoDeAdjunto Status { get; set; } = EstadoDeAdjunto.Available;
+
+    /// <summary>Vencimiento de la autorización de subida; nulo en los generados y en las filas anteriores.</summary>
+    public DateTime? UploadExpiresAt { get; set; }
+
+    /// <summary>Cuándo se confirmó o se rechazó la subida.</summary>
+    public DateTime? ConfirmedAt { get; set; }
+
+    [MaxLength(100)]
+    public string? ConfirmedBy { get; set; }
+
+    /// <summary>Por qué se rechazó, en palabras de quien lo subió («el contenido no corresponde a un PDF»).</summary>
+    [MaxLength(300)]
+    public string? RejectionReason { get; set; }
 }

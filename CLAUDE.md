@@ -295,12 +295,32 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   elige con `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`,
   2026-09-22, los tres ambientes del clúster). El almacén es **transparente**: recibe bytes ya
   cifrados, así que S3 nunca ve el archivo original y su SSE-S3 va encima, no en lugar del nuestro.
-  El bucket de adjuntos (`ingenia365-erp-attachments`) es **otro** que el de respaldos: aquél tiene
-  Object Lock a 40 días y un adjunto se borra cuando su dueño lo borra; la credencial puede borrar
-  objetos pero **no versiones**, de modo que un borrado deja marca y se recupera. La clave es
-  `{prefijo del ambiente}/{cooperativa}/{aaaa}/{mm}/{guid}.bin` y **el prefijo no se guarda en la
-  base** (`BlobUri` lleva la referencia sin él), así se puede mover el prefijo o el bucket sin
-  invalidar lo escrito. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
+  El bucket de adjuntos (`ingenia365-erp-attachments`) es **otro** que el de respaldos (aquél tiene
+  Object Lock a 40 días). La clave es `{prefijo del ambiente}/{cooperativa}/{aaaa}/{mm}/{guid}.bin` y
+  **el prefijo no se guarda en la base** (`StoragePath` lleva la referencia sin él), así se puede mover
+  el prefijo o el bucket sin invalidar lo escrito.
+  **Nada se borra solo (feature 011, rama `011-adjuntos-s3-prefirmadas`, entrega E1, 2026-09-23)**:
+  borrar es el acto de una persona con `Attachments.Delete`, auditado, y `DeleteAttachmentCommand`
+  retira **primero el objeto y después la fila** (si la baja falla, reintentar completa; al revés
+  quedaba un objeto vigente sin nada que lo nombrara). La credencial del ERP no borra **versiones**:
+  el objeto queda en la **papelera de 90 días** (regla de ciclo de vida `papelera-90-dias`, la única
+  purga automática, y sólo alcanza a lo ya borrado); recuperarlo o suprimirlo por Habeas Data son
+  recetas de soporte con la credencial administrativa, no botones. Hasta ese día la documentación
+  prometía un «GC programado» que nunca existió y borrar sólo daba de baja la fila;
+  `NadieBorraAdjuntosPorSuCuenta` fija quién puede llamar a `IBlobStore.DeleteAsync`. Las reglas por
+  dueño viven en **un solo sitio**, `AdjuntosDeModulo`: lo que genera un módulo (definitiva,
+  dispersión, PILA) no se borra ni recibe subidas; el soporte de un comprobante exige
+  `Accounting.Vouchers.View` para leerlo, `Vouchers.Create` y que el comprobante exista para subirlo,
+  y **no se borra si está contabilizado o reversado** (`Attachments.OwnerLocked`; antes sólo la
+  pantalla escondía el botón —ahora lo decide `canDelete` del servidor—); cualquier otro dueño no
+  admite subidas todavía. Descartar un borrador con soportes pide confirmarlo
+  (`Accounting.Document.HasAttachments`, `?deleteAttachments=true`). `POST /api/attachments`
+  (multipart) **se retiró sin alias**: permitía colgar un archivo de cualquier dueño. El grupo lleva
+  el limitador de concurrencia `adjuntos` (32 + 64 en cola por réplica, 429 `Attachments.Busy`).
+  Con `Provider = Local` y fuera de Production el almacén local **imita a S3** con tokens de
+  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. La subida y descarga directas
+  con URLs prefirmadas (US1/US2) y los roles temporales (IAM Roles Anywhere) son las entregas
+  siguientes; `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
   redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
   réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
@@ -478,11 +498,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 765 (2026-09-22; +2 de la carga masiva de auxiliares sobre las 763 de E2) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | 766 (2026-09-23; feature 011 E1: −1 por la subida multipart retirada, +2 del almacén local, que sólo se registran con `Provider = Local` fuera de Production) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.667 el 2026-09-22 (223 Domain, 1.225 Application, 116 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 218 el 2026-09-22 con Docker: 217 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las 18 de adjuntos no levantan contenedor) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.697 el 2026-09-23 (223 Domain, 1.252 Application, 119 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 252 el 2026-09-23 con Docker: 251 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y un host propio) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -527,11 +547,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/010-nomina-prestaciones-pila-dian/plan.md](specs/010-nomina-prestaciones-pila-dian/plan.md)
+[specs/011-adjuntos-s3-prefirmadas/plan.md](specs/011-adjuntos-s3-prefirmadas/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/010-nomina-prestaciones-pila-dian/spec.md)
-- [research.md](specs/010-nomina-prestaciones-pila-dian/research.md)
-- [data-model.md](specs/010-nomina-prestaciones-pila-dian/data-model.md)
-- [quickstart.md](specs/010-nomina-prestaciones-pila-dian/quickstart.md)
-- [contracts/](specs/010-nomina-prestaciones-pila-dian/contracts/)
+- [spec.md](specs/011-adjuntos-s3-prefirmadas/spec.md)
+- [research.md](specs/011-adjuntos-s3-prefirmadas/research.md)
+- [data-model.md](specs/011-adjuntos-s3-prefirmadas/data-model.md)
+- [quickstart.md](specs/011-adjuntos-s3-prefirmadas/quickstart.md)
+- [contracts/](specs/011-adjuntos-s3-prefirmadas/contracts/)
 <!-- SPECKIT END -->

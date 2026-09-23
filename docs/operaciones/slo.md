@@ -43,5 +43,7 @@
   `PasswordHashIntegrityTests` T141a).
 - **Notificaciones**: in-app entregado < 5 s; correo con 4 reintentos antes
   de marcar `Failed` y persistir `NotificationDeliveryFailure` (T119).
-- **Adjuntos**: cifrados AES-256-GCM en reposo (FR-031, T106); GC de blobs
-  huérfanos < 24 h tras soft-delete de la metadata.
+- **Adjuntos**: cifrados AES-256-GCM en reposo (FR-031, T106). **No hay purga
+  automática** (feature 011, FR-001): borrar retira el objeto a la papelera de 90
+  días del bucket y da de baja la fila; el «GC de blobs huérfanos < 24 h» que
+  prometía esta línea nunca existió. Ver `adjuntos-en-s3.md`.

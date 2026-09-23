@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Application.Attachments.UploadAttachment;
 
@@ -24,8 +25,9 @@ namespace IngenIA365ERP.Application.Attachments.UploadAttachment;
 ///
 /// <para>
 /// Devuelve el <c>PublicId</c> del adjunto creado. Si falla la persistencia
-/// SQL después de subir el blob, queda un blob huérfano — un GC futuro lo
-/// detectará (queries que comparen rutas en disco vs rutas en BD).
+/// SQL después de subir el blob, el handler lo retira; si eso también falla,
+/// queda huérfano. Ningún proceso lo limpia solo (feature 011, FR-001): lo
+/// encuentra un inventario manual del bucket contra las bases.
 /// </para>
 /// </summary>
 public sealed record UploadAttachmentCommand(
@@ -37,8 +39,9 @@ public sealed record UploadAttachmentCommand(
 
 public sealed class UploadAttachmentCommandValidator : AbstractValidator<UploadAttachmentCommand>
 {
-    public UploadAttachmentCommandValidator()
+    public UploadAttachmentCommandValidator(IOptions<LimitesDeAdjuntos> limites)
     {
+        var maximo = limites.Value;
         RuleFor(x => x.OwnerEntityType).NotEmpty().MaximumLength(100);
         RuleFor(x => x.OwnerEntityPublicId).NotEmpty();
         RuleFor(x => x.FileName).NotEmpty().MaximumLength(500);
@@ -48,8 +51,8 @@ public sealed class UploadAttachmentCommandValidator : AbstractValidator<UploadA
             .Must(c => c is { Length: > 0 })
                 .WithMessage("El archivo está vacío.")
                 .WithErrorCode(AttachmentErrorCodes.Validation_FileEmpty)
-            .Must(c => c is null || c.Length <= AttachmentPolicy.MaxBytes)
-                .WithMessage($"El archivo excede el tamaño máximo de {AttachmentPolicy.MaxBytes / (1024 * 1024)} MB.")
+            .Must(c => c is null || c.Length <= maximo.MaxBytes)
+                .WithMessage($"El archivo excede el tamaño máximo de {maximo.MaxBytesLegible}.")
                 .WithErrorCode(AttachmentErrorCodes.Validation_FileTooLarge);
         RuleFor(x => x.ContentType)
             .Must(ct => AttachmentPolicy.AllowedMimeTypes.Contains(ct))
@@ -144,9 +147,11 @@ public sealed class UploadAttachmentCommandHandler
             }
             catch (Exception cleanupEx)
             {
+                // No hay ningún proceso que lo limpie después (feature 011, FR-001: nada se borra
+                // solo): queda huérfano hasta que alguien haga el inventario del bucket.
                 _logger.LogError(cleanupEx,
                     "Rollback de blob huérfano {Uri} también falló. " +
-                    "El blob seguirá en el store hasta que el GC programado lo purgue.",
+                    "El objeto queda en el almacén sin fila que lo nombre; nada lo limpia solo.",
                     reference.Uri);
             }
             throw;

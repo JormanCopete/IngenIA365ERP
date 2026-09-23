@@ -59,6 +59,10 @@ public sealed class ListAttachmentsByOwnerQueryHandler
         if (!await AdjuntosDeModulo.PuedeLeerAsync(_permissions, request.OwnerEntityType, ct))
             return Result.Success<IReadOnlyList<AttachmentDto>>([]);
 
+        // Todos los de la lista son del mismo dueño: la regla se evalúa una vez.
+        var puedeBorrar = await _permissions.HasPermissionAsync(AdjuntosDeModulo.PermisoDeBorrar, ct)
+            && await AdjuntosDeModulo.PuedeBorrarAsync(_db, request.OwnerEntityType, request.OwnerEntityPublicId, ct) is null;
+
         var items = await _db.Attachments
             .Where(a => a.TenantId == tenantInternalId
                      && a.OwnerEntityType == request.OwnerEntityType
@@ -73,7 +77,8 @@ public sealed class ListAttachmentsByOwnerQueryHandler
                 a.SizeBytes,
                 a.Sha256Hex,
                 a.CreatedAt,
-                a.CreatedBy))
+                a.CreatedBy,
+                puedeBorrar))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<AttachmentDto>>(items);

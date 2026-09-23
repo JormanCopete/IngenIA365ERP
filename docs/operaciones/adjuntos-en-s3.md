@@ -27,18 +27,105 @@ llavero de DataProtection sigue significando perder los adjuntos, con S3 o sin �
 ## El bucket
 
 `ingenia365-erp-attachments`, **distinto del de respaldos**: aquel tiene Object Lock GOVERNANCE a 40
-días porque un respaldo no debe poder borrarse, y un adjunto sí se borra cuando su dueño lo borra
-desde la aplicación. Mezclarlos obligaría a elegir una sola retención para las dos cosas.
+días porque un respaldo no debe poder borrarse, y un adjunto sí se puede borrar cuando una persona con
+permiso lo borra desde la aplicación. Mezclarlos obligaría a elegir una sola retención para las dos
+cosas.
 
-Lleva: acceso público bloqueado, **versionado** (un borrado accidental se recupera: la credencial
-puede borrar objetos pero **no versiones**, así que un `DeleteObject` deja marca y la versión
-anterior sobrevive), cifrado AES256 por defecto y ciclo de vida que limpia versiones no vigentes a
-los 90 días y multipart a medias a los 7.
+Lleva: acceso público bloqueado, una política que **rechaza toda petición sin TLS**, **versionado**,
+cifrado AES256 por defecto y el ciclo de vida de la **papelera** (abajo). La credencial del ERP puede
+borrar objetos pero **no versiones**, así que un `DeleteObject` deja una marca y la versión anterior
+sobrevive.
 
 Clave de cada objeto: `{prefijo}/{cooperativa}/{aaaa}/{mm}/{guid}.bin`. El **prefijo es del ambiente**
-(`pdn`, `qa`, `dev`) y **no** se guarda en la base: `COR_Attachments.BlobUri` guarda la referencia sin
-él, igual que el store local guardaba la ruta relativa al root. Así el prefijo —o el bucket— se
+(`pdn`, `qa`, `dev`) y **no** se guarda en la base: `COR_Attachments.StoragePath` guarda la referencia
+sin él, igual que el store local guardaba la ruta relativa al root. Así el prefijo —o el bucket— se
 puede mover sin invalidar lo ya escrito.
+
+## Borrar, recuperar y suprimir
+
+**Nada se borra solo** (feature 011, FR-001). Ningún proceso del ERP retira archivos por su cuenta —lo
+vigila la prueba `NadieBorraAdjuntosPorSuCuenta`— y cada cooperativa conserva sus archivos el tiempo que
+necesite. Hasta el 2026-09-23 esta página y el código prometían una purga automática de los adjuntos
+borrados que nunca existió, y decían que borrar un adjunto lo eliminaba del almacén: sólo se daba de baja
+la fila.
+
+**Qué pasa al borrar.** Borrar es siempre el acto de una persona con `Attachments.Delete`, y queda en la
+auditoría. `DeleteAttachmentCommand` hace, en este orden:
+
+1. aplica las reglas de conservación: lo que genera un módulo —PILA, dispersión, documento de la
+   definitiva— no se borra (`Attachments.OwnedByModule`), y el soporte de un comprobante contabilizado o
+   reversado tampoco (`Attachments.OwnerLocked`); ninguna de las dos se salta por la API;
+2. retira el objeto: S3 deja una **marca de borrado** y la versión pasa a la **papelera**;
+3. da de baja la fila.
+
+Si el paso 3 falla, el objeto ya está en la papelera y la fila sigue viva: reintentar el borrado lo
+completa. Descartar un borrador de comprobante con soportes exige confirmarlo
+(`Accounting.Document.HasAttachments`), y con la confirmación sus soportes siguen el mismo camino.
+
+**La papelera** es el ciclo de vida del bucket (regla `papelera-90-dias`):
+
+| Qué | Cuándo se purga |
+|---|---|
+| Una versión que alguien borró | a los **90 días** de borrada (`NoncurrentVersionExpiration`) |
+| La marca de borrado, cuando ya no le queda versión | sola (`ExpiredObjectDeleteMarker`) |
+| Una subida multipart a medias | a los 7 días |
+
+Es la **única** purga automática, y sólo alcanza a lo que una persona ya borró.
+
+### Recuperar un adjunto borrado (dentro de los 90 días)
+
+Lo hace soporte con la credencial administrativa (el perfil `ingenia365`, que tiene permisos de S3
+aunque no de IAM). El ERP no puede: su credencial no borra versiones, y quitar la marca es borrar una.
+
+1. En la base de la cooperativa, la clave del objeto (`StoragePath`) de la fila dada de baja:
+
+   ```sql
+   SELECT "PublicId", "FileName", "StoragePath", "DeletedAt", "DeletedBy"
+   FROM "COR_Attachments" WHERE "PublicId" = '<publicId del adjunto>';
+   ```
+
+2. Las versiones de esa clave, con el prefijo del ambiente delante:
+
+   ```bash
+   aws s3api list-object-versions --profile ingenia365 --bucket ingenia365-erp-attachments --prefix "pdn/<StoragePath>"
+   ```
+
+   La marca es la entrada de `DeleteMarkers` con `IsLatest: true`.
+
+3. Quitar la marca. La versión anterior vuelve a ser la vigente:
+
+   ```bash
+   aws s3api delete-object --profile ingenia365 --bucket ingenia365-erp-attachments --key "pdn/<StoragePath>" --version-id "<VersionId de la marca>"
+   ```
+
+4. Reactivar la fila:
+
+   ```sql
+   UPDATE "COR_Attachments" SET "IsDeleted" = false, "DeletedAt" = NULL, "DeletedBy" = NULL
+   WHERE "PublicId" = '<publicId del adjunto>';
+   ```
+
+   Si el adjunto era soporte de un borrador **descartado**, el borrador sigue descartado: sin él, el
+   soporte no se ve en ninguna pantalla.
+
+### Supresión definitiva (Habeas Data)
+
+Para cuando la ley obliga a que el archivo desaparezca de verdad, antes de los 90 días. **No es un botón
+de la aplicación**: es este procedimiento, con la misma credencial administrativa.
+
+1. Borrar el adjunto desde el ERP si todavía está vivo (así queda en la auditoría). Si el ERP no lo
+   deja —soporte de un comprobante contabilizado, archivo que generó un módulo—, la decisión es de la
+   cooperativa con su asesor: un soporte contable tiene su propia obligación de conservarse.
+2. Listar las versiones como en la recuperación y borrar **cada** `VersionId`, versiones y marcas:
+
+   ```bash
+   aws s3api delete-object --profile ingenia365 --bucket ingenia365-erp-attachments --key "pdn/<StoragePath>" --version-id "<VersionId>"
+   ```
+
+3. Comprobar que `list-object-versions` ya no devuelve nada para esa clave.
+4. Dejar constancia en el caso de Habeas Data: quién pidió, quién ejecutó, cuándo, qué adjunto
+   (`PublicId`) y qué versiones se borraron. La fila queda dada de baja como rastro; si el propio nombre
+   del archivo es un dato personal, se reemplaza por `suprimido-<fecha>`.
 
 ## Puesta en marcha
 
@@ -131,9 +218,12 @@ puede mover sin invalidar lo ya escrito.
 ## Qué pasa si S3 no responde
 
 Subir un adjunto falla y la pantalla lo dice; **lo que se estaba guardando no queda a medias**,
-porque el handler escribe la fila de `COR_Attachments` después de que el almacén confirma. El caso
-inverso —blob escrito y fila no guardada— deja un objeto huérfano, que no rompe nada y se limpia con
-un inventario contra la base (sigue pendiente, como con el disco).
+porque el handler escribe la fila de `COR_Attachments` después de que el almacén confirma. En el caso
+inverso —objeto escrito y fila no guardada— el handler retira el objeto; si eso también falla, el objeto
+queda **huérfano** y vigente. No rompe nada y **nada lo limpia solo** (FR-001): lo encuentra un
+inventario manual del bucket contra las bases, que hoy no existe.
+
+Borrar con S3 caído falla antes de tocar la fila: el adjunto sigue vivo y se puede reintentar.
 
 El resto del ERP no depende de los adjuntos: una nómina se aprueba y un comprobante se contabiliza
 aunque el bucket esté caído.
@@ -142,5 +232,9 @@ aunque el bucket esté caído.
 
 Nada cambia: `appsettings.json` trae `Provider: Local` y los archivos van a `storage/attachments`.
 Para probar S3 en local se puede apuntar a MinIO con `AttachmentStorage:S3:ServiceUrl` y
-`ForcePathStyle: true`. Las pruebas (`S3BlobStoreTests`) usan un `IAmazonS3` falso: **el CI no tiene
-credenciales de AWS ni las necesita**.
+`ForcePathStyle: true`. Las pruebas (`S3BlobStoreTests`) usan un `IAmazonS3` falso y, para la forma de
+las autorizaciones firmadas, un cliente real con credenciales ficticias (firmar no toca la red): **el CI
+no tiene credenciales de AWS ni las necesita**. `AlmacenPrefirmadoTests` levanta MinIO con Docker
+(`quay.io/minio/minio`: MinIO ya no publica en Docker Hub) para lo que sólo un almacén de verdad puede
+decir: que la firma ata tamaño, tipo y clave, que el enlace vence y que borrar deja la versión en la
+papelera.

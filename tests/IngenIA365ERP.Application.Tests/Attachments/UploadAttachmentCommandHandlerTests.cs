@@ -116,7 +116,7 @@ public class UploadAttachmentCommandHandlerTests
     [Fact]
     public void Validator_rejects_oversized_file()
     {
-        var validator = new UploadAttachmentCommandValidator();
+        var validator = new UploadAttachmentCommandValidator(Microsoft.Extensions.Options.Options.Create(new LimitesDeAdjuntos()));
         var big = new byte[AttachmentPolicy.MaxBytes + 1];
 
         var result = validator.Validate(new UploadAttachmentCommand(
@@ -130,7 +130,7 @@ public class UploadAttachmentCommandHandlerTests
     [Fact]
     public void Validator_rejects_disallowed_mime_type()
     {
-        var validator = new UploadAttachmentCommandValidator();
+        var validator = new UploadAttachmentCommandValidator(Microsoft.Extensions.Options.Options.Create(new LimitesDeAdjuntos()));
 
         var result = validator.Validate(new UploadAttachmentCommand(
             "User", Guid.NewGuid(), "evil.exe",
@@ -144,7 +144,7 @@ public class UploadAttachmentCommandHandlerTests
     [Fact]
     public void Validator_rejects_empty_file()
     {
-        var validator = new UploadAttachmentCommandValidator();
+        var validator = new UploadAttachmentCommandValidator(Microsoft.Extensions.Options.Options.Create(new LimitesDeAdjuntos()));
 
         var result = validator.Validate(new UploadAttachmentCommand(
             "User", Guid.NewGuid(), "vacio.pdf", "application/pdf", []));

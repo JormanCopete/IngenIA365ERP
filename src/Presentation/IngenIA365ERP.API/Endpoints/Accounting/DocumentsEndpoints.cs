@@ -67,7 +67,8 @@ public class DocumentsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Vouchers.Create");
 
-        group.MapDelete("/drafts/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new DiscardDraftCommand(id), ct))
+        group.MapDelete("/drafts/{id:guid}", async (Guid id, bool? deleteAttachments, ISender sender, CancellationToken ct) =>
+                await sender.Send(new DiscardDraftCommand(id, deleteAttachments ?? false), ct))
             .WithName("Accounting_Documents_DiscardDraft")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Vouchers.Create");
