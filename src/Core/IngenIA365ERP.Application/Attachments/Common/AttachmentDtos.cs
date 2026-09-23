@@ -1,6 +1,12 @@
 namespace IngenIA365ERP.Application.Attachments.Common;
 
 /// <summary>Metadata pública de un adjunto (US5).</summary>
+/// <param name="CanDelete">
+/// Feature 011 (FR-004): si quien consulta puede borrarlo —tiene <c>Attachments.Delete</c> y la regla del
+/// dueño lo admite; el soporte de un comprobante contabilizado, por ejemplo, no—. La pantalla muestra el
+/// botón según esto, no según lo que ella crea: hasta el 2026-09-23 sólo la pantalla lo decidía y la API
+/// lo borraba igual.
+/// </param>
 public sealed record AttachmentDto(
     Guid PublicId,
     string OwnerEntityType,
@@ -10,7 +16,8 @@ public sealed record AttachmentDto(
     long SizeBytes,
     string Sha256Hex,
     DateTime CreatedAt,
-    string? CreatedBy);
+    string? CreatedBy,
+    bool CanDelete);
 
 /// <summary>
 /// Resultado de la descarga: payload descifrado + metadata para el HTTP

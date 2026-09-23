@@ -135,6 +135,15 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Saas.MasterOnly" => StatusCodes.Status403Forbidden,
             "Saas.PlatformMfaPolicy.TeDejariaFuera" => StatusCodes.Status409Conflict,
 
+            // Feature 011 (contracts/api.md §2, §5, §6): el adjunto existe pero su estado no admite lo
+            // pedido —no está disponible, o es del formato directo y se baja por enlace—. Es un
+            // conflicto con el estado, no una regla de negocio incumplida: 409, no el 422 por defecto.
+            "Attachments.NotAvailable" => StatusCodes.Status409Conflict,
+            "Attachments.UseDownloadLink" => StatusCodes.Status409Conflict,
+            // Lo responde el limitador de concurrencia (LimiteDeAdjuntos); aquí para que un Result con
+            // ese código diga lo mismo.
+            "Attachments.Busy" => StatusCodes.Status429TooManyRequests,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

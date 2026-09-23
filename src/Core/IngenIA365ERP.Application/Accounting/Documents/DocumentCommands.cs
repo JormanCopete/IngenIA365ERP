@@ -1,8 +1,10 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -187,20 +189,39 @@ public sealed class SaveDraftDocumentCommandHandler(IApplicationDbContext db, ID
 
 // --------------------------------------------------------------------------- descartar borrador --
 
-public sealed record DiscardDraftCommand(Guid PublicId) : IRequest<Result>;
+/// <summary>
+/// Descarta un borrador, también los de apertura (<c>AP</c>). Feature 011 (research R10): si tiene
+/// soportes, sin <paramref name="DeleteAttachments"/> responde <c>Accounting.Document.HasAttachments</c>
+/// y no toca nada; con la marca, retira cada soporte del almacén —a la papelera de 90 días— y después, en
+/// una sola unidad de trabajo, da de baja las filas y el borrador. El mismo orden que
+/// <c>DeleteAttachmentCommand</c>: si el guardado falla, los objetos ya están en la papelera y reintentar
+/// completa. Hasta el 2026-09-23 el borrador se descartaba y sus soportes quedaban vivos, colgando de un
+/// comprobante que ya no existía.
+/// </summary>
+public sealed record DiscardDraftCommand(Guid PublicId, bool DeleteAttachments = false) : IRequest<Result>;
 
 public sealed class DiscardDraftCommandValidator : AbstractValidator<DiscardDraftCommand>
 {
     public DiscardDraftCommandValidator() => RuleFor(x => x.PublicId).NotEmpty();
 }
 
-public sealed class DiscardDraftCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user) : IRequestHandler<DiscardDraftCommand, Result>
+public sealed class DiscardDraftCommandHandler(IApplicationDbContext db, IBlobStore store, IDateTimeService clock, ICurrentUserService user) : IRequestHandler<DiscardDraftCommand, Result>
 {
     public async Task<Result> Handle(DiscardDraftCommand request, CancellationToken ct)
     {
         var documento = await db.AccountingDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.PublicId == request.PublicId && !d.IsDeleted, ct);
         if (documento is null) return Result.Failure(AccountingErrors.DocumentNotFound);
         if (documento.Status != DocumentStatus.Draft) return Result.Failure(AccountingErrors.DocumentNotDraft);
+
+        var soportes = await db.Attachments
+            .Where(a => a.OwnerEntityType == AdjuntosDeModulo.Comprobante && a.OwnerEntityPublicId == documento.PublicId && !a.IsDeleted)
+            .ToListAsync(ct);
+        if (soportes.Count > 0 && !request.DeleteAttachments)
+            return Result.Failure(AccountingErrors.DocumentHasAttachments(soportes.Count));
+
+        // Primero los objetos, a la papelera; la base, después y de una vez.
+        foreach (var soporte in soportes.Where(s => !string.IsNullOrWhiteSpace(s.StoragePath)))
+            await store.DeleteAsync(new BlobReference(soporte.StoragePath), ct);
 
         var ahora = clock.UtcNow;
         var quien = user.UserName ?? "system";
@@ -214,6 +235,14 @@ public sealed class DiscardDraftCommandHandler(IApplicationDbContext db, IDateTi
             l.DeletedAt = ahora;
             l.UpdatedAt = ahora;
             l.UpdatedBy = quien;
+        }
+        foreach (var soporte in soportes)
+        {
+            soporte.IsDeleted = true;
+            soporte.DeletedAt = ahora;
+            soporte.DeletedBy = quien;
+            soporte.UpdatedAt = ahora;
+            soporte.UpdatedBy = quien;
         }
         await db.SaveChangesAsync(ct);
         return Result.Success();

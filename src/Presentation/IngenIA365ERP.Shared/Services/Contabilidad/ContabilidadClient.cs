@@ -167,8 +167,15 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<BorradorGuardadoDto>> ActualizarBorradorAsync(Guid id, BorradorRequest request, CancellationToken ct = default) =>
         EnviarAsync<BorradorGuardadoDto>(HttpMethod.Put, $"{Base}/documents/drafts/{id}", request, ct);
 
-    public Task<InvitationApiResult<EmptyResponse>> DescartarBorradorAsync(Guid id, CancellationToken ct = default) =>
-        EnviarAsync<EmptyResponse>(HttpMethod.Delete, $"{Base}/documents/drafts/{id}", null, ct);
+    /// <summary>
+    /// Feature 011 (R10): con soportes y sin <paramref name="borrarSoportes"/> responde
+    /// <see cref="CodigoTieneSoportes"/> con <c>data.count</c>; la pantalla confirma y reintenta con la marca.
+    /// </summary>
+    public Task<ResultadoContable<EmptyResponse>> DescartarBorradorAsync(Guid id, bool borrarSoportes = false, CancellationToken ct = default) =>
+        EnviarConDatosAsync<EmptyResponse>(HttpMethod.Delete,
+            $"{Base}/documents/drafts/{id}{(borrarSoportes ? "?deleteAttachments=true" : string.Empty)}", null, ct);
+
+    public const string CodigoTieneSoportes = "Accounting.Document.HasAttachments";
 
     public Task<InvitationApiResult<ValidacionDto>> ValidarAsync(BorradorRequest request, CancellationToken ct = default) =>
         EnviarAsync<ValidacionDto>(HttpMethod.Post, $"{Base}/documents/validate", request, ct);

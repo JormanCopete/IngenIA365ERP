@@ -30,7 +30,11 @@ public sealed class AttachmentStorageSettings
     public bool EsS3 => string.Equals(Provider, ProveedorS3, StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>El bucket de adjuntos. Es <b>otro</b> que el de respaldos: aquel tiene Object Lock a 40 días y un adjunto se borra cuando su dueño lo borra.</summary>
+/// <summary>
+/// El bucket de adjuntos. Es <b>otro</b> que el de respaldos: aquel tiene Object Lock a 40 días, y un
+/// adjunto sólo se retira cuando una persona con permiso lo borra —y aun así queda 90 días en la papelera
+/// del bucket versionado (docs/operaciones/adjuntos-en-s3.md)—.
+/// </summary>
 public sealed class S3StorageSettings
 {
     public string BucketName { get; set; } = string.Empty;

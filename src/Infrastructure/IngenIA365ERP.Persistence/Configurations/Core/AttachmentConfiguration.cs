@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,6 +26,15 @@ public class AttachmentConfiguration : IEntityTypeConfiguration<Attachment>
         builder.Property(e => e.StoragePath).HasMaxLength(2000).IsRequired();
         builder.Property(e => e.StorageProvider).HasMaxLength(50).IsRequired().HasDefaultValue("Local");
         builder.Property(e => e.EncryptedDek).HasMaxLength(1000).IsRequired();
+
+        // Feature 011. Los valores por defecto dejan las filas anteriores como se comportan hoy:
+        // cifradas por la aplicación y disponibles (data-model.md). Los flujos nuevos los fijan.
+        builder.Property(e => e.Format).IsRequired().HasDefaultValue(FormatoDeAdjunto.AppEncrypted);
+        builder.Property(e => e.Status).IsRequired().HasDefaultValue(EstadoDeAdjunto.Available);
+        builder.Property(e => e.UploadExpiresAt);
+        builder.Property(e => e.ConfirmedAt);
+        builder.Property(e => e.ConfirmedBy).HasMaxLength(100);
+        builder.Property(e => e.RejectionReason).HasMaxLength(300);
 
         // Índice combinado por owner — el patrón de consulta es "lista los
         // adjuntos del User X" → (TenantId, OwnerEntityType, OwnerEntityPublicId).

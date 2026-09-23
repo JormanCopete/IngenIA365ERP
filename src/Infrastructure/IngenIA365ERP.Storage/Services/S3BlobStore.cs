@@ -57,8 +57,7 @@ public sealed class S3BlobStore : IBlobStore, IDisposable
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(metadata);
 
-        var ahora = DateTime.UtcNow;
-        var referencia = $"{Sanear(metadata.TenantId)}/{ahora:yyyy}/{ahora:MM}/{Guid.NewGuid():N}{Extension}";
+        var referencia = NuevaReferencia(metadata.TenantId);
         var peticion = new PutObjectRequest
         {
             BucketName = _opciones.BucketName,
@@ -101,7 +100,7 @@ public sealed class S3BlobStore : IBlobStore, IDisposable
             memoria.Position = 0;
             return memoria;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (NoEsta(ex, reference.Uri))
         {
             throw new FileNotFoundException("Blob no encontrado.", reference.Uri, ex);
         }
@@ -138,6 +137,154 @@ public sealed class S3BlobStore : IBlobStore, IDisposable
         await _s3.PutObjectAsync(peticion, ct);
         await _s3.DeleteObjectAsync(_opciones.BucketName, clave, ct);
         return $"s3://{_opciones.BucketName}/{_opciones.Prefix}".TrimEnd('/');
+    }
+
+    /// <summary>
+    /// POST prefirmado (feature 011, research R1). La espiga S1 del 2026-09-23 contra el bucket real
+    /// confirmó que así queda <b>inmutable desde que se autoriza</b>: un byte de más da
+    /// <c>EntityTooLarge</c>, otro tipo u otra clave dan 403, el contenido alterado da <c>BadDigest</c>, y
+    /// cambiar la huella por la del contenido alterado da 403, porque el SDK convierte cada campo de
+    /// <see cref="CreatePresignedPostRequest.Fields"/> en una condición exacta de la política.
+    /// </summary>
+    public async Task<AutorizacionDeSubida> FirmarSubidaAsync(SolicitudDeSubida solicitud, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(solicitud);
+        var m = solicitud.Metadata;
+        var referencia = NuevaReferencia(m.TenantId);
+        var campos = new Dictionary<string, string>
+        {
+            ["Content-Type"] = m.ContentType,
+            // Sin estos dos, S3 acepta un contenido distinto del mismo tamaño (espiga S1, caso e).
+            ["x-amz-checksum-algorithm"] = "SHA256",
+            ["x-amz-checksum-sha256"] = solicitud.Sha256Base64,
+            // Los mismos metadatos que PutAsync, para poder auditar o reconstruir sin la base.
+            ["x-amz-meta-tenant"] = Sanear(m.TenantId),
+            ["x-amz-meta-owner-type"] = Sanear(m.OwnerEntityType),
+            ["x-amz-meta-owner-id"] = m.OwnerEntityPublicId.ToString(),
+            ["x-amz-meta-sha256"] = m.Sha256Hex,
+            ["x-amz-meta-nombre"] = Uri.EscapeDataString(m.OriginalFileName),
+        };
+        if (!string.IsNullOrWhiteSpace(_opciones.ServerSideEncryption))
+            campos["x-amz-server-side-encryption"] = _opciones.ServerSideEncryption;
+
+        var firma = await _s3.CreatePresignedPostAsync(new CreatePresignedPostRequest
+        {
+            BucketName = _opciones.BucketName,
+            Key = ClaveDe(referencia, _opciones.Prefix),
+            Expires = solicitud.VenceEn.UtcDateTime,
+            Conditions = [new ContentLengthRangeCondition(m.SizeBytes, m.SizeBytes), new ExactMatchCondition("Content-Type", m.ContentType)],
+            Fields = campos,
+        });
+        return new AutorizacionDeSubida(
+            new BlobReference(referencia),
+            firma.Url.ToString(),
+            firma.Fields.ToList(),
+            CampoDelArchivo: "file",
+            solicitud.VenceEn);
+    }
+
+    /// <summary>
+    /// GET prefirmado (research R2). Las cabeceras de la respuesta van firmadas: el navegador guarda el
+    /// archivo con su nombre —nunca lo abre dentro de la página— y la PILA conserva su <c>charset</c>.
+    /// </summary>
+    public async Task<EnlaceDeDescarga> FirmarDescargaAsync(BlobReference reference, DescargaFirmada descarga, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        ArgumentNullException.ThrowIfNull(descarga);
+        var pedido = new GetPreSignedUrlRequest
+        {
+            BucketName = _opciones.BucketName,
+            Key = ClaveDe(reference.Uri, _opciones.Prefix),
+            Verb = HttpVerb.GET,
+            Expires = descarga.VenceEn.UtcDateTime,
+            // El SDK firma con https salvo que se le diga otra cosa, aunque el cliente apunte a un
+            // almacén compatible por http (AttachmentStorage:S3:ServiceUrl): el enlace no abría.
+            Protocol = EsHttpPlano() ? Protocol.HTTP : Protocol.HTTPS,
+        };
+        pedido.ResponseHeaderOverrides.ContentDisposition = ComoAdjunto(descarga.NombreDeArchivo);
+        pedido.ResponseHeaderOverrides.ContentType = descarga.ContentType;
+        pedido.ResponseHeaderOverrides.CacheControl = "no-store";
+        return new EnlaceDeDescarga(await _s3.GetPreSignedURLAsync(pedido), descarga.VenceEn);
+    }
+
+    public async Task<EstadoDelObjeto?> ConsultarAsync(BlobReference reference, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        try
+        {
+            var cabecera = await _s3.GetObjectMetadataAsync(new GetObjectMetadataRequest
+            {
+                BucketName = _opciones.BucketName,
+                Key = ClaveDe(reference.Uri, _opciones.Prefix),
+                ChecksumMode = ChecksumMode.ENABLED,
+            }, ct);
+            return new EstadoDelObjeto(cabecera.ContentLength, string.IsNullOrEmpty(cabecera.ChecksumSHA256) ? null : cabecera.ChecksumSHA256);
+        }
+        catch (AmazonS3Exception ex) when (NoEsta(ex, reference.Uri))
+        {
+            return null;
+        }
+    }
+
+    public async Task<byte[]> LeerInicioAsync(BlobReference reference, int bytes, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        ArgumentOutOfRangeException.ThrowIfLessThan(bytes, 1);
+        try
+        {
+            using var respuesta = await _s3.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = _opciones.BucketName,
+                Key = ClaveDe(reference.Uri, _opciones.Prefix),
+                ByteRange = new ByteRange(0, bytes - 1),
+            }, ct);
+            var inicio = new byte[bytes];
+            var leidos = 0;
+            int n;
+            while (leidos < bytes && (n = await respuesta.ResponseStream.ReadAsync(inicio.AsMemory(leidos, bytes - leidos), ct)) > 0)
+                leidos += n;
+            return leidos == bytes ? inicio : inicio[..leidos];
+        }
+        catch (AmazonS3Exception ex) when (NoEsta(ex, reference.Uri))
+        {
+            throw new FileNotFoundException("Blob no encontrado.", reference.Uri, ex);
+        }
+    }
+
+    /// <summary>
+    /// «No está» es 404, y también 403: sin permiso de listar el bucket —a propósito, research R4— S3
+    /// responde 403 ante una clave que no existe, para no revelar qué hay. Eso mismo podría esconder un
+    /// permiso mal configurado, así que cada conversión queda en el log en vez de pasar en silencio.
+    /// </summary>
+    private bool NoEsta(AmazonS3Exception ex, string referencia)
+    {
+        if (ex.StatusCode == System.Net.HttpStatusCode.NotFound) return true;
+        if (ex.StatusCode != System.Net.HttpStatusCode.Forbidden) return false;
+        _log.LogInformation(
+            "El almacén respondió 403 para {Referencia}; sin permiso de listar es lo que responde ante un objeto que no está. " +
+            "Si se repite con objetos que sí existen, revisar la política del rol.", referencia);
+        return true;
+    }
+
+    /// <summary>Verdadero sólo si el cliente apunta a un almacén compatible servido por http (MinIO en local).</summary>
+    private bool EsHttpPlano() =>
+        _s3.Config?.ServiceURL?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>La referencia de un objeto nuevo: la misma partición que el almacén local.</summary>
+    private static string NuevaReferencia(string tenantId)
+    {
+        var ahora = DateTime.UtcNow;
+        return $"{Sanear(tenantId)}/{ahora:yyyy}/{ahora:MM}/{Guid.NewGuid():N}{Extension}";
+    }
+
+    /// <summary>
+    /// <c>Content-Disposition</c> según RFC 6266, con el nombre en UTF-8 (RFC 5987) y una versión ASCII
+    /// para clientes viejos: «Factura – Núñez.pdf» llega con sus tildes a cualquier navegador actual.
+    /// </summary>
+    internal static string ComoAdjunto(string nombre)
+    {
+        var ascii = new string(nombre.Select(c => c is >= ' ' and <= '~' and not '"' and not '\\' ? c : '_').ToArray());
+        return $"attachment; filename=\"{ascii}\"; filename*=UTF-8''{Uri.EscapeDataString(nombre)}";
     }
 
     /// <summary>La clave dentro del bucket: el prefijo del ambiente más la referencia guardada en la base.</summary>

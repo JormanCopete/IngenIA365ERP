@@ -139,7 +139,7 @@
     @if (Id is { } idAdjuntos)
     {
         <h4>Soportes</h4>
-        <AttachmentList OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" PermitirEliminar="@_esBorrador" />
+        <AttachmentList OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" />
     }
 </div>
 
@@ -162,7 +162,9 @@
 </div>
 </IndicadorDeCarga>
 
-<ConfirmDialog @bind-Visible="_confirmarDescarte" Title="Descartar borrador" Message="El borrador se descarta y no aparece más en la lista. ¿Continuar?" ConfirmText="Descartar" OnConfirm="@DescartarAsync" />
+<ConfirmDialog @bind-Visible="_confirmarDescarte" Title="Descartar borrador" Message="El borrador se descarta y no aparece más en la lista. ¿Continuar?" ConfirmText="Descartar" OnConfirm="@(() => DescartarAsync(borrarSoportes: false))" />
+<ConfirmDialog @bind-Visible="_confirmarDescarteConSoportes" Title="El borrador tiene soportes" ConfirmText="Descartar y borrar soportes" OnConfirm="@(() => DescartarAsync(borrarSoportes: true))"
+               Message="@($"Tiene {_soportesPorBorrar} {(_soportesPorBorrar == 1 ? "soporte" : "soportes")}; se borrarán y quedarán 90 días en la papelera. ¿Continuar?")" />
 
 <SfDialog @bind-Visible="_mostrarReversion" Header="Anular comprobante" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -197,7 +199,8 @@
     private List<LineasDeComprobante.ItemDeCatalogo> _sucursales = [], _centros = [];
     private List<TipoCruceDto> _tiposDeCruce = [];
     private LineasDeComprobante? _lineas;
-    private bool _saving, _confirmarDescarte, _mostrarReversion, _mostrarAyuda;
+    private bool _saving, _confirmarDescarte, _confirmarDescarteConSoportes, _mostrarReversion, _mostrarAyuda;
+    private int _soportesPorBorrar;
     private string _motivo = "", _campo = "VoucherType";
     private CancellationTokenSource? _debounce;
     private Guid? _cargado;
@@ -327,10 +330,17 @@
         finally { _saving = false; }
     }
 
-    private async Task DescartarAsync()
+    private async Task DescartarAsync(bool borrarSoportes)
     {
         if (Id is null) return;
-        var r = await Contabilidad.DescartarBorradorAsync(Id.Value);
+        var r = await Contabilidad.DescartarBorradorAsync(Id.Value, borrarSoportes);
+        if (!r.IsSuccess && r.ErrorCode == ContabilidadClient.CodigoTieneSoportes)
+        {
+            // Feature 011 (FR-005): los soportes no se borran sin que la persona lo confirme en el mismo acto.
+            _soportesPorBorrar = r.Entero("count") ?? 0;
+            _confirmarDescarteConSoportes = true;
+            return;
+        }
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
         await Notification.SuccessAsync("Borrador descartado.");
         Navigation.NavigateTo("/contabilidad/borradores");

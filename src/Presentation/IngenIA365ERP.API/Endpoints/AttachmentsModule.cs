@@ -1,10 +1,10 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Attachments.DeleteAttachment;
 using IngenIA365ERP.Application.Attachments.DownloadAttachment;
 using IngenIA365ERP.Application.Attachments.ListAttachments;
-using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +15,17 @@ namespace IngenIA365ERP.API.Endpoints;
 /// T109 — Endpoints REST de adjuntos cifrados (US5).
 ///
 /// <para>
-/// El upload va por <c>multipart/form-data</c> con dos partes: el archivo
-/// y los metadatos de owner como form-fields. El download devuelve el
-/// payload descifrado con <c>Results.File</c> + filename original. El
+/// El download devuelve el payload descifrado con <c>Results.File</c> + filename original. El
 /// listado por owner es JSON paginado pequeño (≤ 50 items en práctica).
+/// </para>
+///
+/// <para>
+/// Feature 011: la subida multipart a través de la API (<c>POST /api/attachments</c>) se retiró sin
+/// alias el 2026-09-23. Ninguna pantalla la usaba —su único cliente era el componente huérfano
+/// <c>AttachmentUploader</c>— y dejaba colgar un archivo de cualquier dueño, incluida la PILA de otro.
+/// Las personas suben directo al almacén con una autorización firmada (contracts/api.md §1–§3); los
+/// módulos siguen guardando sus archivos por <c>UploadAttachmentCommand</c>, que no tiene ruta. Todo
+/// el grupo lleva el limitador de concurrencia <see cref="LimiteDeAdjuntos"/>.
 /// </para>
 /// </summary>
 public sealed class AttachmentsModule : ICarterModule
@@ -27,12 +34,8 @@ public sealed class AttachmentsModule : ICarterModule
     {
         var group = app.MapGroup("/api/attachments")
             .WithTags("Attachments")
-            .RequireAuthorization();
-
-        group.MapPost("/", UploadAsync)
-            .WithName("Attachments_Upload")
-            .DisableAntiforgery()
-            .RequirePermission("Attachments.Upload");
+            .RequireAuthorization()
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
 
         group.MapGet("/{publicId:guid}", DownloadAsync)
             .WithName("Attachments_Download")
@@ -47,37 +50,6 @@ public sealed class AttachmentsModule : ICarterModule
             .WithName("Attachments_ListByOwner")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Attachments.Download");
-    }
-
-    private static async Task<IResult> UploadAsync(
-        [FromForm] IFormFile file,
-        [FromForm] string ownerEntityType,
-        [FromForm] Guid ownerEntityPublicId,
-        ISender sender,
-        HttpContext http,
-        CancellationToken ct)
-    {
-        if (file is null || file.Length == 0)
-        {
-            return Results.Json(
-                new { code = AttachmentErrorCodes.Validation_FileEmpty,
-                      message = "No se recibió un archivo.",
-                      traceId = http.TraceIdentifier },
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var bytes = ms.ToArray();
-
-        var result = await sender.Send(new UploadAttachmentCommand(
-            OwnerEntityType: ownerEntityType,
-            OwnerEntityPublicId: ownerEntityPublicId,
-            FileName: file.FileName,
-            ContentType: file.ContentType,
-            Content: bytes), ct);
-
-        return (IResult)ErrorEnvelopeFilter.Translate(http, result)!;
     }
 
     private static async Task<IResult> DownloadAsync(
