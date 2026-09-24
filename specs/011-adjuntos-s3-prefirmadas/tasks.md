@@ -315,13 +315,16 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - *Hecho (2026-09-23)*: validada localmente (el usuario del perfil `ingenia365` no tiene `cloudformation:ValidateTemplate`). Al crear la pila hay que reconocer `CAPABILITY_NAMED_IAM`.
 - [X] T070 [P] [US5] Crear tools/credential-helper/Dockerfile y un job en .github/workflows/ci.yml que descarga `aws_signing_helper` en la versión fijada, verifica la SHA-256 que publica AWS y publica la imagen en ghcr
   - *Hecho (2026-09-23)*: `aws_signing_helper` 1.8.5 (2026-08-24) sobre `distroless/base-debian12:nonroot`; el Dockerfile verifica la SHA-256 y ejecuta el binario antes de empaquetarlo (probado con Docker local). Job `credential-helper` propio —la matriz `docker` descarga artefactos de publicación que el sidecar no tiene— y el job `gitops` fija su digest en los overlays que declaran la imagen.
-- [ ] T071 [US5] En tools/scripts/crear-bucket-adjuntos.ps1, quitar la creación del usuario IAM y `-SoloSecreto` (después de T001, que todavía los usa), y agregar el CORS con los orígenes que confirmó T003 (contracts/almacen.md §1). Retirar docs/operaciones/politica-iam-adjuntos.json, que reemplaza la plantilla
+- [X] T071 [US5] En tools/scripts/crear-bucket-adjuntos.ps1, quitar la creación del usuario IAM y `-SoloSecreto` (después de T001, que todavía los usa), y agregar el CORS con los orígenes que confirmó T003 (contracts/almacen.md §1). Retirar docs/operaciones/politica-iam-adjuntos.json, que reemplaza la plantilla
+  - *Hecho (2026-09-24)*: el guion del bucket ya no crea el usuario IAM ni tiene `-OmitirIam`/`-SoloSecreto`; CORS con los orígenes web y de la app; `politica-iam-adjuntos.json` retirado.
   - *Avance (2026-09-23, después)*: los dos orígenes de la app ya están en el CORS del guion (T003).
   - *Adelantado en E3 (2026-09-23)*: el CORS con los tres orígenes **web** ya está en el guion, porque sin él la subida directa no funciona en DEV ni QA. Faltan los orígenes de la app (T003) y lo demás de esta tarea.
   - *Avance (2026-09-23)*: la política transitoria (`politica-iam-adjuntos.json`) ya no permite listar ni leer versiones; hay que pegarla en la consola. Quitar el usuario IAM, `-SoloSecreto` y ese JSON espera a T075, y los orígenes de la app a T003.
-- [ ] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
+- [X] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
+  - *Hecho (2026-09-24)*: certificados de los tres ambientes (el de producción reemitido con la CA original), pila creada, CA en custodia del dueño.
   - *Avance (2026-09-23)*: el dueño creó la CA y los certificados de DEV y QA (hasta 2027-09-24), el guion instaló el Secret `erp-adjuntos-certificado` en `erp-dev` y `erp-qa`, y la pila `ingenia365-erp-adjuntos-roles-anywhere` quedó creada desde CloudShell con sus cinco salidas. Falta confirmar que la política transitoria sin listar se pegó en la consola.
-- [ ] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
+- [X] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
+  - *Hecho (2026-09-24)*: producción activa (GitOps `f1ba464`, `01d5bb6`); `base/api.yaml` sin `AWS_*` y el Secret `erp-adjuntos-s3` borrado de los tres namespaces (GitOps `1fdc852`).
   - el sidecar `aws_signing_helper serve` con el Secret del ambiente;
   - los ARN en cada overlay;
   - `AWS_EC2_METADATA_SERVICE_ENDPOINT`;
@@ -331,7 +334,8 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - *DEV y QA activos (2026-09-23)*: GitOps `2e3f5cb` activa el componente con los ARN y el digest del sidecar, y `aa718f6` le quita la `startupProbe`, que no podía pasar (research R3). Los dos ambientes están Ready con la credencial temporal. Faltan: producción (autorización expresa), quitar de base/api.yaml las `AWS_*` y el Secret `erp-adjuntos-s3` (después de T075), y anotar en el componente que el sidecar depende del `fsGroup` del pod.
 
   Primero DEV y QA; producción **con autorización expresa** del dueño.
-- [ ] T074 [US5] Espiga S2 en DEV:
+- [X] T074 [US5] Espiga S2 en DEV:
+  - *Hecho (2026-09-24)*: renovación vista en DEV y QA: pods de las 03:41, a las 04:48 el sidecar entregaba una sesión nueva (vence 05:32), sin reinicios ni errores de S3.
   - confirmar que el SDK toma la credencial del sidecar y la renueva;
   - medir cuánto vive de verdad una URL firmada cerca del vencimiento de la sesión. Si hace falta, que src/Infrastructure/IngenIA365ERP.Storage/Services/S3BlobStore.cs pida una credencial fresca cuando le queden menos de 10 min;
   - comprobar que `/health/ready` sigue sano con esa credencial y sin permiso de listar: la sonda escribe y borra bajo `{ambiente}/.healthcheck/`, que queda dentro del prefijo del rol (FR-051).
@@ -339,6 +343,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   Anotarlo en specs/011-adjuntos-s3-prefirmadas/research.md (R3)
   - *Avance (2026-09-23)*: el SDK toma la credencial y `/health/ready` sigue sano. Los márgenes de renovación salen del código del sidecar y del SDK: en el peor caso firma con 8 minutos por delante, así que `S3BlobStore` no cambia (research R3). Falta ver con los propios ojos la primera renovación, pasada la hora (03:28 UTC).
 - [ ] T075 [US5] Verificar la quickstart §6 —sin listar, sin ver otro prefijo, vencimiento a la hora, revocación por CRL en QA— y que los nombres de los objetos no revelan el archivo (FR-043) ni se agregó ningún servicio con costo fijo (FR-047). **Recién entonces**, borrar en la consola el usuario IAM `ingenia365-erp-adjuntos` con su clave transitoria, y comprobar que ninguna llave permanente accede al bucket de adjuntos (FR-048). Registrarlo en docs/operaciones/estado-y-pendientes.md
+  - *Avance (2026-09-24)*: 14/14 permisos también en producción; el Secret de la llave borrado y la llave desactivada por el dueño. Faltan: el ensayo de revocación en QA y que el dueño elimine el usuario IAM.
   - *Herramientas (2026-09-23)*: `probar-credencial-adjuntos.ps1` (permisos, `ObtieneCredencial`, `SinCredencial`), `crear-certificados-adjuntos.ps1 -Prueba` (certificado desechable de 7 dias) y `revocar-certificado-adjuntos.ps1` (CRL acumulada); receta del ensayo en adjuntos-en-s3.md. En QA pasaron las 14 comprobaciones de permisos. El ensayo de revocacion necesita la frase de la CA y un administrador de AWS.
   - *Avance (2026-09-23)*: en DEV, desde un pod de prueba con el mismo sidecar y el mismo Secret, pasaron las 13 comprobaciones de permisos: sin listar, sin versiones, sin otro prefijo, sin respaldos y sin el rol de otro ambiente (research R3). Faltan: el vencimiento a la hora, la CRL en QA, FR-043, FR-047 y borrar el usuario IAM.
 
@@ -361,7 +366,8 @@ producción.
   - *Hecho (2026-09-23)*: entra a la API por un tunel SSH al Service (DEV y QA estan detras de Cloudflare Access), inicia sesion con el usuario de quien lo corre (correo, contrasena y codigo TOTP pedidos en el momento), mide la lista de comprobantes y `kubectl top` antes y durante, sube en paralelo directo al bucket, confirma y borra lo subido salvo `-Conservar`. Probado hasta el ingreso (tunel y API); la parte con sesion la corre el dueño en T082.
 - [ ] T081 Verificar en MAUI, en Windows y en Android, la subida y la descarga de la quickstart §4b (FR-018). Si T003 dejó la subida deshabilitada, habilitarla quitando el aviso de src/Presentation/IngenIA365ERP.Shared/Components/Shared/SubirSoporte.razor, una vez que los orígenes estén en el CORS (T071)
 - [ ] T082 Recorrer specs/011-adjuntos-s3-prefirmadas/quickstart.md completa en DEV y en QA, incluida la §4b, y anotar los resultados en ese mismo archivo
-- [ ] T083 Promover a producción (E4) con autorización del dueño, `pg_dump` y diagnóstico: aplicar la migración `AdjuntosDirectos` con el DbMigrator y verificar `/health/ready` y la quickstart §1–§5 en producción, según docs/operaciones/adjuntos-en-s3.md
+- [X] T083 Promover a producción (E4) con autorización del dueño, `pg_dump` y diagnóstico: aplicar la migración `AdjuntosDirectos` con el DbMigrator y verificar `/health/ready` y la quickstart §1–§5 en producción, según docs/operaciones/adjuntos-en-s3.md
+  - *Hecho (2026-09-24)*: `release e0c97b9` en producción con respaldos `*-20260924-pre-f011.dump`, migración `AdjuntosDirectos` por el PreSync, credenciales temporales desde el primer día, verificación en pantalla del dueño y 14/14 permisos.
   - *Receta (2026-09-23)*: docs/operaciones/despliegue-adjuntos-directos.md. Producción entra directo con Roles Anywhere (certificado `-Ambientes pdn` y componente en `overlays/pdn` antes de sincronizar). El 2026-09-23 el disco de adjuntos de producción tenía 0 archivos: nada que trasladar, pero hay que volver a mirarlo ese día.
 
 ---
