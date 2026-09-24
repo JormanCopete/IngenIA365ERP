@@ -247,12 +247,29 @@ que hoy está instalada en los tres ambientes y ya se filtró. Con esto:
 **Costo: cero.** El *trust anchor* es de tipo «certificate bundle» con una CA propia; no usa AWS Private
 CA (~USD 400 al mes).
 
+**Estado:** activo en **DEV y QA** desde el 2026-09-23 (GitOps `2e3f5cb` y `aa718f6`, pila
+`ingenia365-erp-adjuntos-roles-anywhere`); producción pendiente, con autorización expresa del dueño.
+
 **Cómo funciona.** En el pod de la API corre un segundo contenedor, el **sidecar** con el binario oficial
 de AWS (`aws_signing_helper serve`, imagen `ghcr.io/jormancopete/ingenia365erp/credential-helper` que
 construye el CI verificando la SHA-256 que publica AWS). El sidecar presenta el certificado del ambiente y
 expone la credencial en `127.0.0.1:9911`, imitando al IMDSv2 de EC2; la API la toma por la cadena
 estándar del SDK con `AWS_EC2_METADATA_SERVICE_ENDPOINT`, **sin cambiar su código**. El certificado y
 su llave se montan **sólo en el sidecar**.
+
+Tres cosas del sidecar que no se ven en el manifiesto:
+- **No tiene sondas.** `serve` escucha sólo en 127.0.0.1 (está fijo en su código) y el kubelet sondea la
+  IP del pod, así que una `startupProbe` TCP no pasa nunca y mata al sidecar en bucle; le pasó al primer
+  despliegue. Lo que prueba la credencial es `/health/ready` de la API, que escribe y borra en el bucket
+  cada 5 minutos.
+- **Lee el certificado una sola vez, al arrancar.** Después de instalar un certificado nuevo hay que
+  reiniciar la API; `crear-certificados-adjuntos.ps1` lo hace solo.
+- **Lo puede leer gracias al `fsGroup` del pod.** El Secret se monta 0400 y la imagen corre sin
+  privilegios; sin el `fsGroup: 10001` de `base/api.yaml`, falla con «could not parse PEM data».
+
+**Márgenes.** El sidecar pide sesión nueva cuando a la suya le quedan menos de 10 minutos, y el SDK se la
+vuelve a pedir cada 2. Lo que firma la API tiene siempre al menos 8 minutos por delante, más que los 5 de
+una autorización de subida (research R3).
 
 ### Puesta en marcha, en este orden
 
@@ -291,11 +308,68 @@ su llave se montan **sólo en el sidecar**.
    verdad una autorización firmada cerca del vencimiento de la sesión, y que `/health/ready` siga sano
    sin permiso de listar (la sonda escribe y borra bajo `dev/.healthcheck/`, dentro del prefijo).
 
-6. **Verificar** (T075, quickstart §6 de la feature 011): desde el pod, listar el bucket o leer `qa/` o
-   `pdn/` da AccessDenied; la credencial vence a la hora sin cortar la API; en QA, importar la CRL corta
-   la credencial. **Recién entonces**: borrar el Secret `erp-adjuntos-s3` de cada namespace, borrar en la
-   consola el usuario IAM `ingenia365-erp-adjuntos` con su llave, y retirar
+6. **Verificar** (T075, quickstart §6 de la feature 011):
+   - los permisos, con un pod de prueba que usa el mismo sidecar y el mismo certificado de la API y se
+     borra solo (14 comprobaciones; en DEV y QA pasaron el 2026-09-23):
+
+     ```bash
+     powershell -ExecutionPolicy Bypass -File ./tools/scripts/probar-credencial-adjuntos.ps1 -Ambiente qa
+     ```
+
+   - la credencial vence a la hora sin cortar la API;
+   - en QA, el ensayo de revocación de abajo.
+
+   **Recién entonces**: borrar el Secret `erp-adjuntos-s3` de cada namespace, borrar en la consola el
+   usuario IAM `ingenia365-erp-adjuntos` con su llave, y retirar
    [politica-iam-adjuntos.json](politica-iam-adjuntos.json).
+
+### Renovar los certificados (cada año)
+
+Los certificados de los ambientes duran un año; los de DEV y QA vencen el **2027-09-24**. En el último mes
+de vigencia se vuelve a correr el mismo guion con la carpeta de custodia: reutiliza la CA (pide su frase),
+emite los certificados que vencen en menos de 30 días, los instala y **reinicia la API** del ambiente para
+que el sidecar tome el nuevo. El reinicio no corta el servicio (`maxUnavailable: 0`).
+
+```bash
+powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-certificados-adjuntos.ps1 -Carpeta D:/Custodia/erp-adjuntos
+```
+
+Si no se renueva, el día del vencimiento el sidecar ya no obtiene sesión: los adjuntos fallan y la API sale
+de Ready.
+
+### Si se filtra un certificado: revocarlo
+
+Roles Anywhere no consulta ningún servidor de revocación: sólo conoce la **CRL** (lista de revocados) que se
+le importa. En este orden, para no dejar a la API sin credencial:
+
+1. Emitir el reemplazo, que se instala y reinicia la API:
+   `crear-certificados-adjuntos.ps1 -Carpeta … -Ambientes <amb> -Renovar`. El certificado viejo queda
+   en `anteriores/erp-api-<amb>-<serie>.crt` de la carpeta de custodia, y el guion dice cuál es.
+2. Revocar el viejo. El guion lleva la base de la CA en `revocacion/` de la carpeta de custodia, suma la
+   revocación a las anteriores, firma `revocados.crl.pem` y muestra los comandos para importarla:
+
+   ```bash
+   powershell -ExecutionPolicy Bypass -File ./tools/scripts/revocar-certificado-adjuntos.ps1 -Carpeta D:/Custodia/erp-adjuntos -Certificado anteriores/erp-api-qa-<serie>.crt
+   ```
+
+3. Un administrador la importa en CloudShell: `aws rolesanywhere import-crl … --enabled` la primera vez,
+   y `update-crl` las siguientes, con la lista completa.
+
+Desde ese momento el certificado no obtiene sesiones nuevas; las ya emitidas vencen en una hora como
+mucho.
+
+### Ensayo de revocación (T075, en QA)
+
+Se ensaya con un certificado **desechable** del mismo CN, así que la API de QA no se entera:
+
+1. `crear-certificados-adjuntos.ps1 -Carpeta … -Ambientes qa -Prueba`: emite `erp-api-qa-prueba.crt`
+   (7 días) y lo instala como Secret `erp-adjuntos-certificado-prueba`.
+2. `probar-credencial-adjuntos.ps1 -Ambiente qa -Secret erp-adjuntos-certificado-prueba -Prueba ObtieneCredencial`.
+3. `revocar-certificado-adjuntos.ps1 -Carpeta … -Certificado erp-api-qa-prueba.crt`, e importar la CRL.
+4. `probar-credencial-adjuntos.ps1 -Ambiente qa -Secret erp-adjuntos-certificado-prueba -Prueba SinCredencial`:
+   el sidecar informa el rechazo.
+5. `probar-credencial-adjuntos.ps1 -Ambiente qa`: la API sigue con los mismos permisos.
+6. Borrar el Secret de prueba: `k3s kubectl delete secret erp-adjuntos-certificado-prueba -n erp-qa`.
 
 **Mientras tanto**, la llave transitoria sigue en uso. Su política
 ([politica-iam-adjuntos.json](politica-iam-adjuntos.json)) ya **no permite listar** el bucket (desde el
