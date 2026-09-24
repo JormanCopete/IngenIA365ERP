@@ -345,8 +345,11 @@ Anywhere, un rol por ambiente acotado a su prefijo, sin costo:
   - el ensayo de revocación en QA (recetas en [adjuntos-en-s3.md](adjuntos-en-s3.md));
   - producción, con autorización expresa;
   - borrar el Secret `erp-adjuntos-s3` y el usuario IAM con su llave.
-- **Mientras tanto la llave sigue viva en producción**: rotarla (T001 de la feature 011) sigue pendiente
-  del dueño.
+- **La llave ya no la usa ningún ambiente**: DEV y QA van con el sidecar, y el código de producción
+  (`release 8d3f9a1`) es anterior a `S3BlobStore`, así que no toca S3. En vez de rotarla (T001), se
+  **desactiva ya** en la consola, después de comprobar su «Último uso» (anterior al 2026-09-24 02:28 UTC).
+  Producción entra directo con credenciales temporales: receta en
+  [despliegue-adjuntos-directos.md](despliegue-adjuntos-directos.md).
 
 #### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22; desde el 2026-09-23 el archivo tampoco pasa por la API
 

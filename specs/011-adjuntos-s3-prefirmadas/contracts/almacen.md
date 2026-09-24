@@ -60,7 +60,15 @@ Key.
 }]
 ```
 
-Los dos últimos orígenes son los de BlazorWebView (MAUI, .NET 8+) y se confirman en la espiga S3.
+Los dos últimos orígenes son los de BlazorWebView (MAUI, .NET 8+). **Confirmados en el código**
+(2026-09-23, `dotnet/maui` rama `net10.0`, la versión del proyecto):
+- `HostAddressHelper.GetAppHostAddress()` devuelve `0.0.0.1`, salvo con el interruptor
+  `BlazorWebView.AppHostAddressAlways0000`, que la app no usa;
+- `WebView2WebViewManager` (Windows) y `AndroidWebKitWebViewManager` sirven la página desde
+  `https://0.0.0.1/`;
+- `BlazorWebViewHandler.iOS` (iOS y Mac Catalyst) la sirve desde `app://0.0.0.1/`.
+
+Falta verlo en un dispositivo (T081). El guion del bucket ya los incluye.
 
 ## 2. Credenciales temporales (IAM Roles Anywhere)
 
