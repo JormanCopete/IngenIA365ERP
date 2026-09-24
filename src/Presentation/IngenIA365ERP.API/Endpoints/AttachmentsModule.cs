@@ -2,6 +2,10 @@ using Carter;
 using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Attachments.ConfirmarSubida;
+using IngenIA365ERP.Application.Attachments.EmitirEnlaceDeDescarga;
+using IngenIA365ERP.Application.Attachments.RenovarSubida;
+using IngenIA365ERP.Application.Attachments.SolicitarSubida;
 using IngenIA365ERP.Application.Attachments.DeleteAttachment;
 using IngenIA365ERP.Application.Attachments.DownloadAttachment;
 using IngenIA365ERP.Application.Attachments.ListAttachments;
@@ -27,6 +31,13 @@ namespace IngenIA365ERP.API.Endpoints;
 /// módulos siguen guardando sus archivos por <c>UploadAttachmentCommand</c>, que no tiene ruta. Todo
 /// el grupo lleva el limitador de concurrencia <see cref="LimiteDeAdjuntos"/>.
 /// </para>
+///
+/// <para>
+/// Ninguna ruta de este módulo recibe el archivo: pedir, renovar y confirmar una subida, y pedir un
+/// enlace de descarga, sólo firman y revisan. El archivo va del navegador al almacén y del almacén al
+/// navegador. <c>GET /{id}</c> sigue sirviendo bytes, pero sólo del formato anterior, que hay que
+/// descifrar. Lo fija <c>LosAdjuntosNoPasanPorElServidor</c>.
+/// </para>
 /// </summary>
 public sealed class AttachmentsModule : ICarterModule
 {
@@ -36,6 +47,28 @@ public sealed class AttachmentsModule : ICarterModule
             .WithTags("Attachments")
             .RequireAuthorization()
             .RequireRateLimiting(LimiteDeAdjuntos.Politica);
+
+        group.MapPost("/uploads", SolicitarSubidaAsync)
+            .WithName("Attachments_RequestUpload")
+            .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/upload-url", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new RenovarSubidaDeAdjuntoCommand(publicId), ct))
+            .WithName("Attachments_RenewUpload")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/confirm", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ConfirmarSubidaDeAdjuntoCommand(publicId), ct))
+            .WithName("Attachments_ConfirmUpload")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/download-link", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new EmitirEnlaceDeDescargaCommand(publicId), ct))
+            .WithName("Attachments_DownloadLink")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Download");
 
         group.MapGet("/{publicId:guid}", DownloadAsync)
             .WithName("Attachments_Download")
@@ -50,6 +83,16 @@ public sealed class AttachmentsModule : ICarterModule
             .WithName("Attachments_ListByOwner")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Attachments.Download");
+    }
+
+    /// <summary>201 con la autorización (contracts/api.md §1); los errores, con el sobre de siempre.</summary>
+    private static async Task<IResult> SolicitarSubidaAsync(
+        SolicitarSubidaDeAdjuntoCommand solicitud, ISender sender, HttpContext http, CancellationToken ct)
+    {
+        var result = await sender.Send(solicitud, ct);
+        return result.IsSuccess
+            ? Results.Created($"/api/attachments/{result.Value.AttachmentPublicId}", result.Value)
+            : (IResult)ErrorEnvelopeFilter.Translate(http, result)!;
     }
 
     private static async Task<IResult> DownloadAsync(

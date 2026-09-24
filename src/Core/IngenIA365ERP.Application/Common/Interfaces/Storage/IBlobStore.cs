@@ -73,9 +73,12 @@ public sealed record BlobReference(string Uri);
 
 /// <summary>
 /// Lo que el ERP autoriza a subir. La huella va en base64, que es como la exige el almacén; en la
-/// base se guarda en hexadecimal (<c>Sha256Hex</c>).
+/// base se guarda en hexadecimal (<c>Sha256Hex</c>). Con <paramref name="Referencia"/> se vuelve a
+/// firmar la <b>misma</b> clave —renovar una subida incompleta—; sin ella, el almacén elige una nueva.
+/// Re-firmar la misma clave es seguro porque ambas autorizaciones fijan la misma huella: llegue la que
+/// llegue, el contenido es el mismo.
 /// </summary>
-public sealed record SolicitudDeSubida(BlobMetadata Metadata, string Sha256Base64, DateTimeOffset VenceEn);
+public sealed record SolicitudDeSubida(BlobMetadata Metadata, string Sha256Base64, DateTimeOffset VenceEn, BlobReference? Referencia = null);
 
 /// <summary>
 /// Una autorización de subida: el cliente arma un formulario con <see cref="Campos"/> —todos, en ese

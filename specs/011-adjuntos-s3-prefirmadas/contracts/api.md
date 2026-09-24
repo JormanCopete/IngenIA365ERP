@@ -52,7 +52,7 @@ El cliente arma un `multipart/form-data` con **todos** los `fields`, en el orden
 | `Attachments.OwnerNotAllowed` | 422 | el tipo de dueño no admite subidas de personas: lo genera un módulo o no está habilitado |
 | `Generic.NotFound` | 404 | el documento no existe en la cooperativa, **o** falta el permiso de escritura de su módulo (misma respuesta) |
 
-Los `Validation.*` responden **400**: así los mapea `ErrorEnvelopeFilter` en toda la API. Esta tabla decía 422 hasta que la implementación lo contrastó con el filtro.
+Los `Validation.*` responden **400**: así los mapea `ErrorEnvelopeFilter` en toda la API. Esta tabla decía 422 hasta que la implementación lo contrastó con el filtro. Los tres los responde el **handler**, no el validador: un fallo del validador sale siempre como `Validation.Invalid`, y el código de la tabla no llegaría nunca al cliente (la misma convención que nómina). El validador sólo mira la forma: tipo de dueño e id presentes, nombre de hasta 500 caracteres y la huella como SHA-256 en base64 (44 caracteres).
 
 ## 2. Renovar la autorización de una subida incompleta
 
@@ -92,16 +92,19 @@ más el permiso de lectura del módulo · consulta: **no escribe**
 [
   {
     "publicId": "c2d4…",
+    "ownerEntityType": "AccountingDocument",
+    "ownerEntityPublicId": "8f1c…",
     "fileName": "Factura 1234 – Ferretería Núñez.pdf",
     "contentType": "application/pdf",
     "sizeBytes": 20481234,
+    "sha256Hex": "9f86d081…",
+    "createdAt": "2026-09-23T15:00:01Z",
+    "createdBy": "auxiliar@coop",
+    "canDelete": true,
     "status": 2,
     "format": 2,
-    "uploadedAt": "2026-09-23T15:00:01Z",
-    "uploadedBy": "auxiliar@coop",
     "rejectionReason": null,
-    "needsConfirmation": false,
-    "canDelete": true
+    "needsConfirmation": false
   }
 ]
 ```
@@ -110,6 +113,8 @@ más el permiso de lectura del módulo · consulta: **no escribe**
   §3 para esos adjuntos (R5).
 - **`canDelete`** aplica las reglas de conservación: por ejemplo, es falso si el comprobante ya está
   contabilizado. Sin permiso de lectura del módulo, la lista viene **vacía**, sin error.
+- Los campos de siempre (`ownerEntityType`, `ownerEntityPublicId`, `sha256Hex`, `createdAt`, `createdBy`)
+  se conservan con sus nombres; hasta la implementación este ejemplo los llamaba `uploadedAt/By`.
 
 ## 5. Pedir un enlace de descarga
 

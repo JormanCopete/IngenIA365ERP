@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Core;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,16 +13,17 @@ using Microsoft.Extensions.Options;
 namespace IngenIA365ERP.Application.Attachments.UploadAttachment;
 
 /// <summary>
-/// T108 — Sube un adjunto cifrado (FR-030/FR-031).
+/// T108 — Guarda un archivo que <b>genera un módulo</b>: la planilla PILA, el archivo de dispersión, el
+/// documento de la liquidación definitiva. Es un camino interno, sin ruta HTTP: las personas suben
+/// directo al almacén con una autorización firmada (<c>SolicitarSubidaDeAdjuntoCommand</c>).
 ///
-/// <para>Pipeline:</para>
-/// <list type="number">
-///   <item>Valida tamaño + MIME contra <see cref="AttachmentPolicy"/>.</item>
-///   <item>Calcula SHA-256 del payload original.</item>
-///   <item>Cifra con <see cref="IAttachmentCipher"/> (AES-256-GCM + DEK random).</item>
-///   <item>Persiste el blob via <see cref="IBlobStore"/>.</item>
-///   <item>Guarda metadata en <c>COR_Attachments</c> (incluye DEK envuelta).</item>
-/// </list>
+/// <para>
+/// Feature 011 (research R11): guarda el contenido <b>tal como se generó</b>, en formato
+/// <c>Direct</c> y ya <c>Available</c> —lo produjo el programa, no hay nada que validar (FR-030)—, y lo
+/// cifra el bucket. Hasta el 2026-09-23 lo cifraba antes la aplicación y la descarga tenía que pasar por
+/// la API para descifrarlo, con el archivo entero en memoria; ahora se baja con un enlace firmado. La
+/// huella es la del contenido, y el almacén la verifica al recibirlo.
+/// </para>
 ///
 /// <para>
 /// Devuelve el <c>PublicId</c> del adjunto creado. Si falla la persistencia
@@ -66,20 +68,17 @@ public sealed class UploadAttachmentCommandHandler
 {
     private readonly IApplicationDbContext _db;
     private readonly IBlobStore _store;
-    private readonly IAttachmentCipher _cipher;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<UploadAttachmentCommandHandler> _logger;
 
     public UploadAttachmentCommandHandler(
         IApplicationDbContext db,
         IBlobStore store,
-        IAttachmentCipher cipher,
         ICurrentUserService currentUser,
         ILogger<UploadAttachmentCommandHandler> logger)
     {
         _db = db;
         _store = store;
-        _cipher = cipher;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -95,8 +94,6 @@ public sealed class UploadAttachmentCommandHandler
 
         var sha256Hex = Convert.ToHexString(SHA256.HashData(request.Content)).ToLowerInvariant();
 
-        var cipherPayload = _cipher.Encrypt(request.Content);
-
         var metadata = new BlobMetadata(
             TenantId: tenantIdStr,
             OwnerEntityType: request.OwnerEntityType,
@@ -107,7 +104,7 @@ public sealed class UploadAttachmentCommandHandler
             Sha256Hex: sha256Hex);
 
         BlobReference reference;
-        await using (var ms = new MemoryStream(cipherPayload.EncryptedBlob, writable: false))
+        await using (var ms = new MemoryStream(request.Content, writable: false))
         {
             reference = await _store.PutAsync(ms, metadata, ct);
         }
@@ -123,8 +120,9 @@ public sealed class UploadAttachmentCommandHandler
             SizeBytes = request.Content.LongLength,
             Sha256Hex = sha256Hex,
             StoragePath = reference.Uri,
-            StorageProvider = "Local",
-            EncryptedDek = cipherPayload.WrappedDekBase64,
+            EncryptedDek = string.Empty,
+            Format = FormatoDeAdjunto.Direct,
+            Status = EstadoDeAdjunto.Available,
             CreatedBy = actor,
             UpdatedBy = actor
         };
@@ -136,8 +134,8 @@ public sealed class UploadAttachmentCommandHandler
         }
         catch (Exception saveEx)
         {
-            // El blob ya está en disk pero la metadata falló. Mejor liberarlo
-            // que dejar un huérfano que tiene secretos cifrados.
+            // El objeto ya está en el almacén pero la fila no: se retira para no dejar un archivo
+            // que ninguna fila nombra.
             _logger.LogError(saveEx,
                 "SaveChanges falló tras subir blob {Uri}; intentando rollback.",
                 reference.Uri);

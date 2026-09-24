@@ -117,10 +117,14 @@ public class PilaTests(CentralIdentityApiFixture fx)
         explicacion.GetProperty("fields").GetArrayLength().Should().Be(98);
 
         // ------------------------------------------------------------ descargar --
-        var sinReconocerDiferencia = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"{Ruta}/{gen1}/file", null);
+        // Feature 011 (§9): la planilla se baja con un enlace firmado, con las mismas reglas de antes.
+        var sinReconocerDiferencia = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"{Ruta}/{gen1}/download-link", null);
         sinReconocerDiferencia.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         (await NominaE2E.CodigoDeErrorAsync(sinReconocerDiferencia)).Should().Be("Payroll.Pila.Unreconciled");
-        using var descarga = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"{Ruta}/{gen1}/file?acknowledgeDifference=true", null);
+        var porLaApi = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"{Ruta}/{gen1}/file?acknowledgeDifference=true", null);
+        porLaApi.StatusCode.Should().Be(HttpStatusCode.Conflict, "GET /file queda para las planillas del formato anterior");
+        (await NominaE2E.CodigoDeErrorAsync(porLaApi)).Should().Be("Attachments.UseDownloadLink");
+        using var descarga = await NominaE2E.BajarPorEnlaceAsync(http, admin, $"{Ruta}/{gen1}/download-link?acknowledgeDifference=true");
         descarga.StatusCode.Should().Be(HttpStatusCode.OK, await descarga.Content.ReadAsStringAsync());
         descarga.Content.Headers.ContentType!.CharSet.Should().Be("us-ascii");
         var bytes = await descarga.Content.ReadAsByteArrayAsync();
@@ -140,7 +144,7 @@ public class PilaTests(CentralIdentityApiFixture fx)
         var gen2 = g2.GetProperty("generationPublicId").GetGuid();
         var versiones = (await NominaE2E.GetAsync(http, admin, $"{Ruta}?year=2027&month=3")).EnumerateArray().ToList();
         versiones.Single(v => v.GetProperty("generationPublicId").GetGuid() == gen1).GetProperty("status").GetInt32().Should().Be(3, "Superseded");
-        (await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"{Ruta}/{gen1}/file?acknowledgeDifference=true", null)).StatusCode.Should().Be(HttpStatusCode.OK, "la versión reemplazada conserva su archivo");
+        (await NominaE2E.BajarPorEnlaceAsync(http, admin, $"{Ruta}/{gen1}/download-link?acknowledgeDifference=true")).StatusCode.Should().Be(HttpStatusCode.OK, "la versión reemplazada conserva su archivo");
 
         // ------------------------------------------------- sin permiso: 404 --
         var prohibido = await NominaE2E.EnviarAsync(http, ctx.TokenSoloLectura, HttpMethod.Post, $"{Ruta}/{gen2}/mark-uploaded", new { uploadedAt = new DateTime(2027, 4, 5), operatorReference = "X" });

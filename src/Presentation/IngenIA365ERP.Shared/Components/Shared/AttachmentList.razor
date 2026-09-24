@@ -1,27 +1,24 @@
-@using System.Net.Http.Headers
-@using System.Net.Http.Json
 @using IngenIA365ERP.Shared.Services
-@using IngenIA365ERP.Shared.Services.Security
+@using IngenIA365ERP.Shared.Services.Adjuntos
 @using Microsoft.JSInterop
-@inject HttpClient Http
-@inject CentralAuthClient Auth
+@inject AdjuntosClient Adjuntos
 @inject IJSRuntime JS
 
-@* Soportes de una entidad (feature 009, T045): vivía en Web.Client y Shared no lo veía. Lista,
-   descarga y elimina adjuntos por (OwnerEntityType, OwnerEntityPublicId); el token va en cada
-   petición como en los clientes tipados, porque en el prerenderizado el HttpClient plano sale sin
-   autorización. La descarga pasa por window.descargas (Shared/wwwroot/js/descargas.js).
-   Feature 011 (FR-004): el botón Borrar sale según el `canDelete` que calcula el servidor —permiso y
-   regla del dueño—, no según lo que crea la pantalla; hasta el 2026-09-23 lo decidía un parámetro y la
-   API borraba igual el soporte de un comprobante contabilizado. Borrar pide confirmación y avisa que el
-   archivo queda 90 días en la papelera. *@
+@* Soportes de una entidad (feature 009, T045): lista, descarga y borra adjuntos por
+   (OwnerEntityType, OwnerEntityPublicId).
+   Feature 011: todo pasa por AdjuntosClient y el archivo no pasa por .NET. Descargar pide un enlace
+   firmado y navega a él; sólo lo guardado con el formato anterior se baja por la API (descargas.js),
+   porque hay que descifrarlo. La lista muestra el estado de cada soporte —subiendo, rechazado con su
+   motivo, subida incompleta— y confirma las subidas cuya autorización venció (la consulta no escribe:
+   confirmar es un comando). Borrar sale según el `canDelete` que calcula el servidor —permiso y regla
+   del dueño— y avisa que el archivo queda 90 días en la papelera. *@
 <div class="attachment-list">
-    <IndicadorDeCarga Cargando="@(_carga.Activa || _borrando.Activa)" Texto="@(_borrando.Activa ? "Borrando…" : "Cargando…")">
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _accion.Activa)" Texto="@(_textoDeLaAccion ?? "Cargando…")">
         @if (!string.IsNullOrEmpty(_error))
         {
             <p class="aviso aviso-error">@_error</p>
         }
-        else if (_items.Count == 0)
+        @if (_items.Count == 0)
         {
             <p class="muted">Sin soportes.</p>
         }
@@ -29,7 +26,7 @@
         {
             <table class="data-grid">
                 <thead>
-                    <tr><th>Archivo</th><th>Tipo</th><th class="numero">Tamaño</th><th>Subido</th><th></th></tr>
+                    <tr><th>Archivo</th><th>Tipo</th><th class="numero">Tamaño</th><th>Subido</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach (var a in _items)
@@ -38,9 +35,24 @@
                             <td>@a.FileName</td>
                             <td>@a.ContentType</td>
                             <td class="numero">@FormatBytes(a.SizeBytes)</td>
-                            <td>@a.CreatedAt.ToString("yyyy-MM-dd HH:mm") @a.CreatedBy</td>
+                            <td>@a.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") @a.CreatedBy</td>
+                            <td>
+                                @Estado(a)
+                                @if (a.RejectionReason is { } motivo)
+                                {
+                                    <div class="muted">@motivo</div>
+                                }
+                            </td>
                             <td class="acciones">
-                                <button type="button" class="boton boton-secundario" @onclick="() => DownloadAsync(a)">Descargar</button>
+                                @if (a.Disponible)
+                                {
+                                    <button type="button" class="boton boton-secundario" @onclick="() => DescargarAsync(a)">Descargar</button>
+                                }
+                                @if (a.Incompleto)
+                                {
+                                    <label class="boton boton-secundario" for="@IdDeReintento(a)" title="Vuelva a elegir el mismo archivo">Reintentar</label>
+                                    <input type="file" id="@IdDeReintento(a)" hidden accept="@TiposDeSoporte.Extensiones" @onchange="() => ReintentarAsync(a)" />
+                                }
                                 @if (a.CanDelete)
                                 {
                                     <button type="button" class="boton boton-peligro" @onclick="() => PedirConfirmacion(a)">Borrar</button>
@@ -62,45 +74,73 @@
     [Parameter, EditorRequired] public Guid OwnerEntityPublicId { get; set; }
 
     private readonly EstadoDeCarga _carga = new();
-    private readonly EstadoDeCarga _borrando = new();
-    private bool _confirmarBorrado;
-    private AttachmentDto? _aBorrar;
+    private readonly EstadoDeCarga _accion = new();
+    private string? _textoDeLaAccion;
     private string _error = string.Empty;
-    private List<AttachmentDto> _items = [];
+    private List<AdjuntoDto> _items = [];
+    private bool _confirmarBorrado;
+    private AdjuntoDto? _aBorrar;
 
     protected override Task OnInitializedAsync() => RefreshAsync();
 
-    /// <summary>Recarga la lista — llamable desde el padre tras subir un archivo.</summary>
+    /// <summary>Recarga la lista —llamable desde el padre tras subir un archivo— y confirma las subidas vencidas.</summary>
     public async Task RefreshAsync()
     {
         using var carga = _carga.Iniciar();
         _error = string.Empty;
+        if (!await CargarAsync()) return;
+
+        // R5: una subida con la autorización vencida pasa a disponible, rechazada o incompleta al confirmarla.
+        var pendientes = _items.Where(a => a.NeedsConfirmation).ToList();
+        if (pendientes.Count == 0) return;
+        foreach (var a in pendientes)
+            await Adjuntos.ConfirmarAsync(a.PublicId);
+        await CargarAsync();
+    }
+
+    private async Task<bool> CargarAsync()
+    {
+        var r = await Adjuntos.ListarAsync(OwnerEntityType, OwnerEntityPublicId);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudieron cargar los soportes.";
+            return false;
+        }
+        _items = r.Value ?? [];
+        return true;
+    }
+
+    private async Task DescargarAsync(AdjuntoDto a)
+    {
+        using var accion = Iniciar("Preparando la descarga…");
+        _error = string.Empty;
+        var enlace = await Adjuntos.EnlaceDeDescargaAsync(a.PublicId);
+        if (!enlace.IsSuccess || enlace.Value is null)
+        {
+            _error = enlace.ErrorMessage ?? "No se pudo preparar la descarga.";
+            return;
+        }
         try
         {
-            using var req = Peticion(HttpMethod.Get,
-                $"/api/attachments/by-owner?ownerEntityType={Uri.EscapeDataString(OwnerEntityType)}&ownerEntityPublicId={OwnerEntityPublicId}");
-            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
-            using var resp = await Http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode)
+            if (enlace.Value is { Direct: true, Url: { } url })
             {
-                _error = $"No se pudieron cargar los soportes (error {(int)resp.StatusCode}).";
+                await Adjuntos.DescargarAsync(url, a.FileName);
                 return;
             }
-            _items = await resp.Content.ReadFromJsonAsync<List<AttachmentDto>>() ?? [];
+            await DescargarPorLaApiAsync(a);
         }
-        catch (HttpRequestException ex)
+        catch (JSException ex)
         {
-            _error = $"Error de red: {ex.Message}";
+            _error = $"El navegador no pudo guardar el archivo: {ex.Message}";
         }
     }
 
-    private async Task DownloadAsync(AttachmentDto a)
+    /// <summary>El formato anterior: la API lo descifra y el navegador lo guarda con descargas.js.</summary>
+    private async Task DescargarPorLaApiAsync(AdjuntoDto a)
     {
         try
         {
-            using var req = Peticion(HttpMethod.Get, $"/api/attachments/{a.PublicId}");
-            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
-            using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+            using var resp = await Adjuntos.AbrirPorLaApiAsync(a.PublicId);
             if (!resp.IsSuccessStatusCode)
             {
                 _error = $"No se pudo descargar (error {(int)resp.StatusCode}).";
@@ -114,13 +154,29 @@
         {
             _error = $"Error de red: {ex.Message}";
         }
-        catch (JSException ex)
-        {
-            _error = $"El navegador no pudo guardar el archivo: {ex.Message}";
-        }
     }
 
-    private void PedirConfirmacion(AttachmentDto a)
+    private async Task ReintentarAsync(AdjuntoDto a)
+    {
+        using var accion = Iniciar("Subiendo…");
+        _error = string.Empty;
+        ArchivoElegido? archivo;
+        try
+        {
+            archivo = await Adjuntos.PrepararAsync(IdDeReintento(a));
+        }
+        catch (JSException ex)
+        {
+            _error = $"El navegador no pudo leer el archivo: {ex.Message}";
+            return;
+        }
+        if (archivo is null) return;
+        var resultado = await Adjuntos.ReintentarAsync(a, archivo);
+        if (!resultado.Ok) _error = resultado.Mensaje;
+        await CargarAsync();
+    }
+
+    private void PedirConfirmacion(AdjuntoDto a)
     {
         _aBorrar = a;
         _confirmarBorrado = true;
@@ -129,48 +185,45 @@
     private async Task BorrarAsync()
     {
         if (_aBorrar is not { } a) return;
-        using var carga = _borrando.Iniciar();
+        using var accion = Iniciar("Borrando…");
         _error = string.Empty;
         try
         {
-            using var req = Peticion(HttpMethod.Delete, $"/api/attachments/{a.PublicId}");
-            if (req is null) { _error = "Falta el token. Vuelve a iniciar sesión."; return; }
-            using var resp = await Http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode)
-            {
-                // El sobre de la API trae el motivo (por ejemplo, que el comprobante ya se contabilizó).
-                var sobre = await LeerSobreAsync(resp);
-                _error = sobre?.Message ?? $"No se pudo borrar (error {(int)resp.StatusCode}).";
-                await RefreshAsync();
-                return;
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            _error = $"Error de red: {ex.Message}";
-            return;
+            var r = await Adjuntos.BorrarAsync(a.PublicId);
+            // El sobre de la API trae el motivo (por ejemplo, que el comprobante ya se contabilizó).
+            if (!r.IsSuccess) _error = r.ErrorMessage ?? "No se pudo borrar.";
         }
         finally
         {
             _aBorrar = null;
         }
-        await RefreshAsync();
+        await CargarAsync();
     }
 
-    private static async Task<SobreDeError?> LeerSobreAsync(HttpResponseMessage resp)
+    private IDisposable Iniciar(string texto)
     {
-        try { return await resp.Content.ReadFromJsonAsync<SobreDeError>(); }
-        catch (System.Text.Json.JsonException) { return null; }
-        catch (NotSupportedException) { return null; }
+        _textoDeLaAccion = texto;
+        return new Terminar(_accion.Iniciar(), () => _textoDeLaAccion = null);
     }
 
-    private HttpRequestMessage? Peticion(HttpMethod metodo, string url)
+    private sealed class Terminar(IDisposable interno, System.Action alTerminar) : IDisposable
     {
-        var token = Auth.CurrentAccessToken;
-        if (token is null) return null;
-        var req = new HttpRequestMessage(metodo, url);
-        return req;
+        public void Dispose()
+        {
+            interno.Dispose();
+            alTerminar();
+        }
     }
+
+    private static string IdDeReintento(AdjuntoDto a) => $"reintento-{a.PublicId:N}";
+
+    private static string Estado(AdjuntoDto a) => a.Status switch
+    {
+        EstadosDeAdjunto.Subiendo => "Subiendo…",
+        EstadosDeAdjunto.Rechazado => "Rechazado",
+        EstadosDeAdjunto.Incompleto => "Subida incompleta",
+        _ => "Disponible",
+    };
 
     private static string FormatBytes(long bytes)
     {
@@ -180,11 +233,4 @@
         while (value >= 1024 && i < suffixes.Length - 1) { value /= 1024; i++; }
         return $"{value:N1} {suffixes[i]}";
     }
-
-    public sealed record AttachmentDto(
-        Guid PublicId, string OwnerEntityType, Guid OwnerEntityPublicId,
-        string FileName, string ContentType, long SizeBytes, string Sha256Hex,
-        DateTime CreatedAt, string? CreatedBy, bool CanDelete);
-
-    private sealed record SobreDeError(string? Code, string? Message);
 }

@@ -154,7 +154,7 @@ public class S3BlobStoreTests
     }
 
     [Fact]
-    public async Task El_objeto_va_como_octet_stream_cifrado_por_el_servidor_y_con_el_nombre_original_codificado()
+    public async Task El_objeto_va_con_su_tipo_cifrado_por_el_bucket_con_huella_y_con_el_nombre_original_codificado()
     {
         var (store, s3) = Crear();
         PutObjectRequest? enviado = null;
@@ -164,7 +164,8 @@ public class S3BlobStoreTests
 
         enviado.Should().NotBeNull();
         enviado!.BucketName.Should().Be(Bucket);
-        enviado.ContentType.Should().Be("application/octet-stream", "lo que se sube son bytes cifrados, no un PDF");
+        enviado.ContentType.Should().Be("application/pdf", "feature 011 (R11): lo que genera un módulo va tal como se generó");
+        enviado.ChecksumAlgorithm.Should().Be(ChecksumAlgorithm.SHA256, "el HEAD devuelve la huella que S3 verificó");
         enviado.ServerSideEncryptionMethod.Should().Be(ServerSideEncryptionMethod.AES256);
         enviado.Metadata["x-amz-meta-nombre"].Should().Be(Uri.EscapeDataString("soporte de la factura.pdf"));
         enviado.Metadata["x-amz-meta-sha256"].Should().Be("abc123");
@@ -305,6 +306,20 @@ public class S3BlobStoreTests
         Exige(condiciones, "x-amz-checksum-sha256", "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=");
         Exige(condiciones, "x-amz-checksum-algorithm", "SHA256");
         Exige(condiciones, "x-amz-server-side-encryption", "AES256");
+    }
+
+    [Fact]
+    public async Task Renovar_vuelve_a_firmar_la_misma_clave()
+    {
+        using var store = ConFirmaReal();
+        var metadatos = new BlobMetadata("3", "AccountingDocument", Guid.NewGuid(), "a.pdf", "application/pdf", 10, "9f86d081");
+        var referencia = new BlobReference("3/2026/09/0123456789abcdef0123456789abcdef.bin");
+
+        var autorizacion = await store.FirmarSubidaAsync(
+            new SolicitudDeSubida(metadatos, "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=", DateTimeOffset.UtcNow.AddMinutes(5), referencia), CancellationToken.None);
+
+        autorizacion.Referencia.Should().Be(referencia);
+        autorizacion.Campos.Single(c => c.Key.Equals("key", StringComparison.OrdinalIgnoreCase)).Value.Should().Be($"pdn/{referencia.Uri}");
     }
 
     [Fact]

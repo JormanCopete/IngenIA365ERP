@@ -7,6 +7,10 @@ using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using IngenIA365ERP.Domain.Payroll.Pila;
+using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
+using IngenIA365ERP.Domain.Enums.Core;
+using Microsoft.Extensions.Options;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -221,6 +225,45 @@ public sealed class DownloadPilaFileQueryHandler(IApplicationDbContext db, ISend
             return Result.Failure<PilaDownloadDto>(new Error("Payroll.Pila.FileTampered", "El archivo guardado no coincide con la huella registrada al generarlo."));
         var layout = PilaLayoutCatalog.ByCode(g.LayoutVersion);
         return Result.Success(new PilaDownloadDto(g.FileName, "text/plain", descarga.Value.Content, layout?.Encoding ?? "us-ascii"));
+    }
+}
+
+/// <summary>
+/// Feature 011 (US4, contracts/api.md §9): la planilla se baja con un enlace firmado, sin pasar por la
+/// memoria del servidor. Aplica las mismas reglas que la descarga de siempre —la generación tiene
+/// archivo, y con descuadre hay que reconocerlo (FR-027)— y firma con el <c>charset</c> del layout, que
+/// el operador exige. Una planilla guardada con el formato anterior responde <c>direct: false</c> y se
+/// baja por <c>GET /{id}/file</c>. Es un comando porque cada enlace queda en la auditoría.
+/// </summary>
+public sealed record EmitirEnlaceDePilaCommand(Guid GenerationPublicId, bool AcknowledgeDifference = false) : IRequest<Result<EnlaceDeDescargaDto>>;
+
+public sealed class EmitirEnlaceDePilaCommandValidator : AbstractValidator<EmitirEnlaceDePilaCommand>
+{
+    public EmitirEnlaceDePilaCommandValidator() => RuleFor(x => x.GenerationPublicId).NotEmpty();
+}
+
+public sealed class EmitirEnlaceDePilaCommandHandler(IApplicationDbContext db, IBlobStore store, IDateTimeService reloj, IOptions<LimitesDeAdjuntos> limites)
+    : IRequestHandler<EmitirEnlaceDePilaCommand, Result<EnlaceDeDescargaDto>>
+{
+    public async Task<Result<EnlaceDeDescargaDto>> Handle(EmitirEnlaceDePilaCommand request, CancellationToken ct)
+    {
+        var g = await db.PilaGenerations.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == request.GenerationPublicId, ct);
+        if (g is null) return Result.Failure<EnlaceDeDescargaDto>(PilaErrors.GenerationNotFound);
+        if (g.FileAttachmentPublicId is not { } adjuntoId || g.FileName is null) return Result.Failure<EnlaceDeDescargaDto>(PilaErrors.NotGenerated(g.Status.ToString()));
+        if (!g.Balanced && !request.AcknowledgeDifference)
+        {
+            var cuadre = JsonSerializer.Deserialize<PilaReconciliationDto>(g.ReconciliationJson, GeneratePilaCommandHandler.JsonWeb);
+            return Result.Failure<EnlaceDeDescargaDto>(PilaErrors.Unreconciled(cuadre ?? new PilaReconciliationDto([], false, null)));
+        }
+        var adjunto = await db.Attachments.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == adjuntoId, ct);
+        if (adjunto is null) return Result.Failure<EnlaceDeDescargaDto>("Generic.NotFound", "El archivo de la planilla no está guardado.");
+        if (!string.Equals(adjunto.Sha256Hex, g.FileSha256, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<EnlaceDeDescargaDto>(new Error("Payroll.Pila.FileTampered", "El archivo guardado no coincide con la huella registrada al generarlo."));
+        if (adjunto.Format == FormatoDeAdjunto.AppEncrypted) return Result.Success(EnlaceDeDescargaDto.PorLaApi);
+
+        var codificacion = PilaLayoutCatalog.ByCode(g.LayoutVersion)?.Encoding ?? "us-ascii";
+        return Result.Success(await AdjuntosDirectos.FirmarDescargaAsync(store, adjunto, reloj, limites.Value, ct,
+            contentType: $"text/plain; charset={codificacion}", nombre: g.FileName));
     }
 }
 

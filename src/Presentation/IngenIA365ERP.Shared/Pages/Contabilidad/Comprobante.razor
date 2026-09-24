@@ -139,7 +139,14 @@
     @if (Id is { } idAdjuntos)
     {
         <h4>Soportes</h4>
-        <AttachmentList OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" />
+        @* Feature 011 (FR-017): se agregan soportes al borrador y también al contabilizado —el soporte
+           suele llegar después—; borrarlos, sólo mientras sea borrador (lo decide el servidor). *@
+        <PermissionGate Required="Attachments.Upload">
+            <PermissionGate Required="Accounting.Vouchers.Create">
+                <SubirSoporte OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" OnSubido="@RefrescarSoportesAsync" />
+            </PermissionGate>
+        </PermissionGate>
+        <AttachmentList @ref="_soportes" OwnerEntityType="AccountingDocument" OwnerEntityPublicId="@idAdjuntos" />
     }
 </div>
 
@@ -200,6 +207,9 @@
     private List<TipoCruceDto> _tiposDeCruce = [];
     private LineasDeComprobante? _lineas;
     private bool _saving, _confirmarDescarte, _confirmarDescarteConSoportes, _mostrarReversion, _mostrarAyuda;
+    private AttachmentList? _soportes;
+
+    private Task RefrescarSoportesAsync() => _soportes?.RefreshAsync() ?? Task.CompletedTask;
     private int _soportesPorBorrar;
     private string _motivo = "", _campo = "VoucherType";
     private CancellationTokenSource? _debounce;

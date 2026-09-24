@@ -93,15 +93,22 @@ public class AdjuntosDeModuloTests
     public async Task Sin_el_permiso_del_modulo_el_listado_por_dueño_sale_vacio_y_con_el_permiso_lo_trae()
     {
         var sin = new Escenario(conPermisoDeLiquidaciones: false);
-        var vacio = await new ListAttachmentsByOwnerQueryHandler(sin.Db, sin.Usuario, sin.Permisos)
+        var vacio = await new ListAttachmentsByOwnerQueryHandler(sin.Db, sin.Usuario, sin.Permisos, Reloj())
             .Handle(new ListAttachmentsByOwnerQuery("EmploymentTermination", sin.Definitiva.OwnerEntityPublicId), CancellationToken.None);
         vacio.IsSuccess.Should().BeTrue();
         vacio.Value.Should().BeEmpty();
 
         var con = new Escenario(conPermisoDeLiquidaciones: true);
-        var lista = await new ListAttachmentsByOwnerQueryHandler(con.Db, con.Usuario, con.Permisos)
+        var lista = await new ListAttachmentsByOwnerQueryHandler(con.Db, con.Usuario, con.Permisos, Reloj())
             .Handle(new ListAttachmentsByOwnerQuery("EmploymentTermination", con.Definitiva.OwnerEntityPublicId), CancellationToken.None);
         lista.Value.Should().ContainSingle().Which.FileName.Should().StartWith("liquidacion-definitiva-");
+    }
+
+    private static IDateTimeService Reloj()
+    {
+        var reloj = Substitute.For<IDateTimeService>();
+        reloj.UtcNow.Returns(DateTime.UtcNow);
+        return reloj;
     }
 
     [Fact]
@@ -165,7 +172,7 @@ public class AdjuntosDeModuloTests
         var soporte = e.Soporte(e.Comprobante(DocumentStatus.Draft));
         var store = Substitute.For<IBlobStore>();
 
-        var lista = await new ListAttachmentsByOwnerQueryHandler(e.Db, e.Usuario, e.Permisos)
+        var lista = await new ListAttachmentsByOwnerQueryHandler(e.Db, e.Usuario, e.Permisos, Reloj())
             .Handle(new ListAttachmentsByOwnerQuery(AdjuntosDeModulo.Comprobante, soporte.OwnerEntityPublicId), CancellationToken.None);
         var descarga = await new DownloadAttachmentQueryHandler(e.Db, store, Substitute.For<IAttachmentCipher>(), e.Usuario, e.Permisos)
             .Handle(new DownloadAttachmentQuery(soporte.PublicId), CancellationToken.None);
@@ -266,7 +273,7 @@ public class AdjuntosDeModuloTests
         var doc = e.Comprobante(estado);
         e.Soporte(doc);
 
-        var lista = await new ListAttachmentsByOwnerQueryHandler(e.Db, e.Usuario, e.Permisos)
+        var lista = await new ListAttachmentsByOwnerQueryHandler(e.Db, e.Usuario, e.Permisos, Reloj())
             .Handle(new ListAttachmentsByOwnerQuery(AdjuntosDeModulo.Comprobante, doc.PublicId), CancellationToken.None);
 
         lista.Value.Should().ContainSingle().Which.CanDelete.Should().Be(esperado,

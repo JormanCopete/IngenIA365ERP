@@ -4,6 +4,7 @@
 @inject NominaClient Nomina
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 @inject NavigationManager Nav
 
 @*
@@ -362,6 +363,15 @@
             // FR-027: la diferencia se ve arriba; descargar con diferencia es una decisión explícita.
             await Notification.WarningAsync("El archivo no cuadra con la nómina: se descarga reconociendo la diferencia mostrada en el cuadre.");
             reconocer = true;
+        }
+        // Feature 011 (§9): con un enlace firmado el archivo va del almacén al navegador sin pasar por el
+        // servidor; sólo una planilla guardada con el formato anterior se baja por la API.
+        var enlace = await Nomina.EnlaceDePilaAsync(_detalle.Summary.GenerationPublicId, reconocer);
+        if (!enlace.IsSuccess) { await Notification.ErrorAsync(enlace.ErrorMessage ?? "No se pudo descargar la planilla."); return; }
+        if (enlace.Value is { Direct: true, Url: { } url })
+        {
+            await Adjuntos.DescargarAsync(url, _detalle.Summary.FileName ?? "planilla.txt");
+            return;
         }
         var res = await Nomina.DescargarPilaAsync(_detalle.Summary.GenerationPublicId, reconocer);
         if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar la planilla."); return; }

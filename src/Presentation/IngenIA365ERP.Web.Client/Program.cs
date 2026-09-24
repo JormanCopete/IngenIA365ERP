@@ -101,6 +101,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchiv
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
+// Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario>();
 // Feature 009 (FR-051): el ingreso a cada opción queda en la auditoría (cola con reintentos; nunca frena la pantalla).

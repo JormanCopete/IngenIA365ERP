@@ -23,8 +23,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity;
 /// propio <c>DatabaseInitializerHostedService</c> de la aplicación con las
 /// migraciones EF del proveedor (la fuente única de verdad) + seed paramétrico
 /// — con lo cual cada corrida de la suite valida también el arranque real.
+///
+/// <para>
+/// Feature 011: una subclase puede levantar algo más antes del host (<see cref="AntesDeArrancarAsync"/>)
+/// y ajustar el host (<see cref="ConfigurarHost"/>). Así existe <c>ApiConAlmacenS3Fixture</c>, el mismo
+/// host con los adjuntos en MinIO en vez del disco.
+/// </para>
 /// </summary>
-public sealed class CentralIdentityApiFixture : IAsyncLifetime
+public class CentralIdentityApiFixture : IAsyncLifetime
 {
     public const string MasterEmail = "master@integration.test";
     public const string MasterPassword = "Master-Integration-2026!";
@@ -58,12 +64,22 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public CapturingEmailSender Emails { get; } = new();
 
+    /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
+    protected virtual Task AntesDeArrancarAsync() => Task.CompletedTask;
+
+    /// <summary>El último ajuste del host, después de los de esta fixture.</summary>
+    protected virtual void ConfigurarHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder) { }
+
+    /// <summary>Lo que una subclase tiene que cerrar después del host.</summary>
+    protected virtual Task DespuesDeCerrarAsync() => Task.CompletedTask;
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).StartAsync(),
             _mongo.StartAsync(),
-            _redis.StartAsync());
+            _redis.StartAsync(),
+            AntesDeArrancarAsync());
 
         var operationalConnection = _db.GetConnectionString();
         var adminConnection = WithDatabaseName(operationalConnection,
@@ -116,6 +132,8 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
             });
+
+            ConfigurarHost(builder);
         });
 
         // Forzar arranque del host (dispara el DatabaseInitializerHostedService:
@@ -287,7 +305,8 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),
             _mongo.DisposeAsync().AsTask(),
-            _redis.DisposeAsync().AsTask());
+            _redis.DisposeAsync().AsTask(),
+            DespuesDeCerrarAsync());
     }
 }
 

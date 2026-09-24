@@ -162,55 +162,59 @@ cerrados. Se puede promover sin tocar nada de AWS.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T034 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/FirmaDeContenidoTests.cs con los casos de R6: cada tipo, un ejecutable renombrado, una imagen declarada como documento, un binario declarado como texto y un archivo vacío
-- [ ] T035 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/SolicitarSubidaDeAdjuntoCommandHandlerTests.cs:
+- [X] T034 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/FirmaDeContenidoTests.cs con los casos de R6: cada tipo, un ejecutable renombrado, una imagen declarada como documento, un binario declarado como texto y un archivo vacío
+- [X] T035 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/SolicitarSubidaDeAdjuntoCommandHandlerTests.cs:
   - tamaño, tipo y archivo vacío;
   - `OwnerNotAllowed`;
   - 404 sin permiso o con un documento inexistente;
   - la fila queda `Uploading`, con `UploadExpiresAt`;
   - la firma lleva tamaño, tipo y huella exactos.
-- [ ] T036 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/ConfirmarSubidaDeAdjuntoCommandHandlerTests.cs:
+- [X] T036 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/ConfirmarSubidaDeAdjuntoCommandHandlerTests.cs:
   - `Available`;
   - `Rejected` por firma y por tamaño, con el objeto retirado a la papelera (FR-001, opción A);
   - `Incomplete`;
   - `Uploading` con la autorización vigente;
   - confirmar dos veces da el mismo resultado.
-- [ ] T037 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/RenovarSubidaDeAdjuntoCommandHandlerTests.cs: sólo con `Incomplete` o `Uploading` vencido, sobre la misma fila; `NotAvailable` en cualquier otro estado
-- [ ] T038 [P] [US1] Crear tests/IngenIA365ERP.API.IntegrationTests/Attachments/SubidaDirectaTests.cs, por HTTP y sobre MinIO:
+- [X] T037 [P] [US1] Crear tests/IngenIA365ERP.Application.Tests/Attachments/RenovarSubidaDeAdjuntoCommandHandlerTests.cs: sólo con `Incomplete` o `Uploading` vencido, sobre la misma fila; `NotAvailable` en cualquier otro estado
+- [X] T038 [P] [US1] Crear tests/IngenIA365ERP.API.IntegrationTests/Attachments/SubidaDirectaTests.cs, por HTTP y sobre MinIO:
   - solicitar → POST al almacén → confirmar → `Available`;
   - un ejecutable renombrado → `Rejected`;
   - un tipo de módulo → 422;
   - otra cooperativa → 404.
-- [ ] T039 [P] [US1] Crear tests/IngenIA365ERP.Architecture.Tests/Principles/LosAdjuntosNoPasanPorElServidor.cs: ninguna ruta de AttachmentsModule recibe `IFormFile` ni `Stream`, salvo LocalBlobEndpoints
+  - *Hecho (2026-09-23)*: sobre `ApiConAlmacenS3Fixture`, el host de siempre con `Provider = S3` apuntando a MinIO (la fixture central ganó dos ganchos para eso). Suma además el 400 con `data.maxBytes`.
+- [X] T039 [P] [US1] Crear tests/IngenIA365ERP.Architecture.Tests/Principles/LosAdjuntosNoPasanPorElServidor.cs: ninguna ruta de AttachmentsModule recibe `IFormFile` ni `Stream`, salvo LocalBlobEndpoints
 
 ### Implementation for User Story 1
 
-- [ ] T040 [US1] Crear el detector puro src/Core/IngenIA365ERP.Application/Attachments/Common/FirmaDeContenido.cs, con la tabla de firmas de R6
-- [ ] T041 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/SolicitarSubida/SolicitarSubidaDeAdjuntoCommand.cs, con su validador: `PuedeSubirAsync`, la fila `Uploading` y `FirmarSubidaAsync` (contracts/api.md §1)
-- [ ] T042 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/RenovarSubida/RenovarSubidaDeAdjuntoCommand.cs, con su validador (§2)
-- [ ] T043 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/ConfirmarSubida/ConfirmarSubidaDeAdjuntoCommand.cs, con su validador (§3): `ConsultarAsync`, `LeerInicioAsync` de 8 KiB y `FirmaDeContenido`. Un rechazo retira el objeto a la papelera (R7, FR-001 opción A)
-- [ ] T044 [US1] Agregar `status`, `format`, `rejectionReason` y `needsConfirmation` (`Uploading` con la autorización vencida) a src/Core/IngenIA365ERP.Application/Attachments/ListAttachments/ListAttachmentsByOwnerQuery.cs (§4)
-- [ ] T045 [US1] Agregar las rutas §1–§3 (`uploads`, `{id}/upload-url` y `{id}/confirm`) a src/Presentation/IngenIA365ERP.API/Endpoints/AttachmentsModule.cs. Sólo reenvían al `ISender`
-- [ ] T046 [US1] Crear src/Presentation/IngenIA365ERP.Shared/wwwroot/js/adjuntos.js:
+- [X] T040 [US1] Crear el detector puro src/Core/IngenIA365ERP.Application/Attachments/Common/FirmaDeContenido.cs, con la tabla de firmas de R6
+- [X] T041 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/SolicitarSubida/SolicitarSubidaDeAdjuntoCommand.cs, con su validador: `PuedeSubirAsync`, la fila `Uploading` y `FirmarSubidaAsync` (contracts/api.md §1)
+  - *Hecho (2026-09-23)*: tamaño, tipo y vacío los responde el handler con los códigos del contrato; el validador sólo mira la forma (un fallo del validador sale siempre como `Validation.Invalid`).
+- [X] T042 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/RenovarSubida/RenovarSubidaDeAdjuntoCommand.cs, con su validador (§2)
+  - *Hecho (2026-09-23)*: re-firma la **misma clave** (`SolicitudDeSubida.Referencia`), y si el objeto ya llegó responde `NotAvailable` pidiendo confirmar en vez de volver a subir.
+- [X] T043 [US1] Crear src/Core/IngenIA365ERP.Application/Attachments/ConfirmarSubida/ConfirmarSubidaDeAdjuntoCommand.cs, con su validador (§3): `ConsultarAsync`, `LeerInicioAsync` de 8 KiB y `FirmaDeContenido`. Un rechazo retira el objeto a la papelera (R7, FR-001 opción A)
+- [X] T044 [US1] Agregar `status`, `format`, `rejectionReason` y `needsConfirmation` (`Uploading` con la autorización vencida) a src/Core/IngenIA365ERP.Application/Attachments/ListAttachments/ListAttachmentsByOwnerQuery.cs (§4)
+- [X] T045 [US1] Agregar las rutas §1–§3 (`uploads`, `{id}/upload-url` y `{id}/confirm`) a src/Presentation/IngenIA365ERP.API/Endpoints/AttachmentsModule.cs. Sólo reenvían al `ISender`
+- [X] T046 [US1] Crear src/Presentation/IngenIA365ERP.Shared/wwwroot/js/adjuntos.js:
   - lee el `File` del input;
   - calcula el SHA-256 en base64 con WebCrypto;
   - arma el POST `FormData` con los `fields` en orden y el archivo al final;
   - le devuelve a .NET sólo el resultado: **los bytes nunca cruzan a .NET**.
-- [ ] T047 [US1] Registrar adjuntos.js con `@Assets[...]` en src/Presentation/IngenIA365ERP.Web/Components/App.razor y en src/Presentation/IngenIA365ERP.App/wwwroot/index.html
-- [ ] T048 [US1] Crear src/Presentation/IngenIA365ERP.Shared/Services/Adjuntos/AdjuntosClient.cs, con los DTOs de solicitar, renovar, confirmar y listar, sin poner la cabecera `Authorization` a mano (`ElTokenDeSesionLoPoneElHandler`), y registrarlo donde se registran los demás clientes tipados
-- [ ] T049 [US1] Crear src/Presentation/IngenIA365ERP.Shared/Components/Shared/SubirSoporte.razor:
+- [X] T047 [US1] Registrar adjuntos.js con `@Assets[...]` en src/Presentation/IngenIA365ERP.Web/Components/App.razor y en src/Presentation/IngenIA365ERP.App/wwwroot/index.html
+- [X] T048 [US1] Crear src/Presentation/IngenIA365ERP.Shared/Services/Adjuntos/AdjuntosClient.cs, con los DTOs de solicitar, renovar, confirmar y listar, sin poner la cabecera `Authorization` a mano (`ElTokenDeSesionLoPoneElHandler`), y registrarlo donde se registran los demás clientes tipados
+- [X] T049 [US1] Crear src/Presentation/IngenIA365ERP.Shared/Components/Shared/SubirSoporte.razor:
   - input de archivo con validación previa de tipo y tamaño (Principio VIII);
   - interop con adjuntos.js y confirmación;
   - indicador «Subiendo…» (`IndicadorDeCarga`);
   - en MAUI, mientras T003 no confirme los orígenes, el aviso «súbalo desde la web». Ese aviso es **transitorio** y se quita en T081.
+  - *Hecho (2026-09-23)*: la app se reconoce por `IFormFactor` (en MAUI no es «Web» ni «WebAssembly»). El tipo se deduce de la extensión en `adjuntos.js`: Windows informa un .csv como `application/vnd.ms-excel` y el servidor lo rechazaría.
 - [X] T050 [US1] Borrar el componente huérfano src/Presentation/IngenIA365ERP.Web.Client/Components/AttachmentUploader.razor
   - *Adelantada a E1 (2026-09-23)*: con T018 llamaba a una ruta que ya no existe; nadie la usaba.
-- [ ] T051 [US1] En src/Presentation/IngenIA365ERP.Shared/Components/Shared/AttachmentList.razor:
+- [X] T051 [US1] En src/Presentation/IngenIA365ERP.Shared/Components/Shared/AttachmentList.razor:
   - mostrar el estado: subiendo, disponible, rechazado con su motivo, subida incompleta;
   - confirmar solo los `needsConfirmation`;
   - ofrecer Reintentar;
   - pasar a `AdjuntosClient`, retirando `Peticion` y el comentario desfasado sobre el token.
-- [ ] T052 [US1] Poner `SubirSoporte` junto a la lista de soportes, en borradores y en contabilizados (FR-017), en src/Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Comprobante.razor
+- [X] T052 [US1] Poner `SubirSoporte` junto a la lista de soportes, en borradores y en contabilizados (FR-017), en src/Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Comprobante.razor
 
 **Checkpoint**: se suben soportes a comprobantes directo al almacén, con validación de contenido.
 
@@ -230,25 +234,26 @@ API.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T053 [P] [US2] Crear tests/IngenIA365ERP.Application.Tests/Attachments/EmitirEnlaceDeDescargaCommandHandlerTests.cs:
+- [X] T053 [P] [US2] Crear tests/IngenIA365ERP.Application.Tests/Attachments/EmitirEnlaceDeDescargaCommandHandlerTests.cs:
   - enlace directo con `Available`;
   - `direct: false` con `AppEncrypted`;
   - 409 `NotAvailable`;
   - 404 sin lectura contable;
   - el comando queda auditado.
-- [ ] T054 [P] [US2] Crear tests/IngenIA365ERP.API.IntegrationTests/Attachments/DescargaDirectaTests.cs, sobre MinIO:
+- [X] T054 [P] [US2] Crear tests/IngenIA365ERP.API.IntegrationTests/Attachments/DescargaDirectaTests.cs, sobre MinIO:
   - el enlace baja el archivo idéntico, con el nombre con tildes;
   - con `DescargaSegundos = 2`, falla a los 3 s;
   - un `AppEncrypted`, sembrado con `SembradorDeAdjuntosAnteriores`, baja por `GET /api/attachments/{id}`;
   - un `Direct` por esa misma ruta da 409.
+  - *Hecho (2026-09-23), con un cambio*: el vencimiento no se prueba por HTTP con 2 s porque `DescargaSegundos` admite de 10 a 300 (FR-021) y el host no arrancaría; lo prueban `AlmacenPrefirmadoTests` contra MinIO con 1 s y `EmitirEnlaceDeDescargaCommandHandlerTests` (el comando firma a los segundos de la configuración).
 
 ### Implementation for User Story 2
 
-- [ ] T055 [US2] Crear src/Core/IngenIA365ERP.Application/Attachments/EmitirEnlaceDeDescarga/EmitirEnlaceDeDescargaCommand.cs, con su validador (§5)
-- [ ] T056 [US2] Limitar src/Core/IngenIA365ERP.Application/Attachments/DownloadAttachment/DownloadAttachmentQuery.cs a `AppEncrypted`: con `Direct` responde `Attachments.UseDownloadLink` (§6)
-- [ ] T057 [US2] Agregar las rutas §5 (`{id}/download-link`) y §6 a src/Presentation/IngenIA365ERP.API/Endpoints/AttachmentsModule.cs
-- [ ] T058 [US2] Agregar a src/Presentation/IngenIA365ERP.Shared/wwwroot/js/adjuntos.js la descarga por navegación a la URL, con un ancla y `download`, sin `fetch`
-- [ ] T059 [US2] En src/Presentation/IngenIA365ERP.Shared/Services/Adjuntos/AdjuntosClient.cs y src/Presentation/IngenIA365ERP.Shared/Components/Shared/AttachmentList.razor, Descargar pide el enlace: si es directo, navega; si es del formato anterior, baja por la API como hoy (flujo a descargas.js)
+- [X] T055 [US2] Crear src/Core/IngenIA365ERP.Application/Attachments/EmitirEnlaceDeDescarga/EmitirEnlaceDeDescargaCommand.cs, con su validador (§5)
+- [X] T056 [US2] Limitar src/Core/IngenIA365ERP.Application/Attachments/DownloadAttachment/DownloadAttachmentQuery.cs a `AppEncrypted`: con `Direct` responde `Attachments.UseDownloadLink` (§6)
+- [X] T057 [US2] Agregar las rutas §5 (`{id}/download-link`) y §6 a src/Presentation/IngenIA365ERP.API/Endpoints/AttachmentsModule.cs
+- [X] T058 [US2] Agregar a src/Presentation/IngenIA365ERP.Shared/wwwroot/js/adjuntos.js la descarga por navegación a la URL, con un ancla y `download`, sin `fetch`
+- [X] T059 [US2] En src/Presentation/IngenIA365ERP.Shared/Services/Adjuntos/AdjuntosClient.cs y src/Presentation/IngenIA365ERP.Shared/Components/Shared/AttachmentList.razor, Descargar pide el enlace: si es directo, navega; si es del formato anterior, baja por la API como hoy (flujo a descargas.js)
 
 **Checkpoint**: subir y bajar soportes no pasa por el servidor.
 
@@ -267,20 +272,21 @@ idénticas. La PILA sigue pidiendo reconocer el descuadre (quickstart §4.5).
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T060 [P] [US4] Actualizar tests/IngenIA365ERP.Application.Tests/Attachments/UploadAttachmentCommandHandlerTests.cs: `Direct`, `Available`, sin cifrar, SHA-256 del contenido, y si falla el guardado la reversión retira el objeto
-- [ ] T061 [P] [US4] Crear tests/IngenIA365ERP.Application.Tests/Payroll/Pila/EnlaceDePilaTests.cs y tests/IngenIA365ERP.Application.Tests/Payroll/Dispersion/EnlaceDeDispersionTests.cs: la PILA exige el reconocimiento y lleva `charset`; la dispersión sale igual
+- [X] T060 [P] [US4] Actualizar tests/IngenIA365ERP.Application.Tests/Attachments/UploadAttachmentCommandHandlerTests.cs: `Direct`, `Available`, sin cifrar, SHA-256 del contenido, y si falla el guardado la reversión retira el objeto
+- [X] T061 [P] [US4] Crear tests/IngenIA365ERP.Application.Tests/Payroll/Pila/EnlaceDePilaTests.cs y tests/IngenIA365ERP.Application.Tests/Payroll/Dispersion/EnlaceDeDispersionTests.cs: la PILA exige el reconocimiento y lleva `charset`; la dispersión sale igual
 
 ### Implementation for User Story 4
 
-- [ ] T062 [US4] Reescribir src/Core/IngenIA365ERP.Application/Attachments/UploadAttachment/UploadAttachmentCommand.cs según R11: `PutObject` del contenido ya generado, sin `IAttachmentCipher`, con `Status = Available` y `Format = Direct`
-- [ ] T063 [US4] Agregar el comando de enlace, auditado, en src/Core/IngenIA365ERP.Application/Payroll/Pila/PilaQueries.cs y en src/Core/IngenIA365ERP.Application/Payroll/Dispersion/DisbursementQueries.cs: aplica la regla del módulo y firma con el `Content-Type` y el `charset` de hoy
-- [ ] T064 [US4] Agregar `POST /{id}/download-link` (§9, con el limitador `adjuntos`) a src/Presentation/IngenIA365ERP.API/Endpoints/Payroll/PilaEndpoints.cs y src/Presentation/IngenIA365ERP.API/Endpoints/Payroll/DisbursementsEndpoints.cs, y dejar `GET /{id}/file` sólo para `AppEncrypted`
-- [ ] T065 [US4] Reescribir las descargas de tests/IngenIA365ERP.API.IntegrationTests/Payroll/PilaTests.cs (líneas 120–143) y tests/IngenIA365ERP.API.IntegrationTests/Payroll/DispersionTests.cs (línea 104) sobre `POST …/download-link`:
+- [X] T062 [US4] Reescribir src/Core/IngenIA365ERP.Application/Attachments/UploadAttachment/UploadAttachmentCommand.cs según R11: `PutObject` del contenido ya generado, sin `IAttachmentCipher`, con `Status = Available` y `Format = Direct`
+- [X] T063 [US4] Agregar el comando de enlace, auditado, en src/Core/IngenIA365ERP.Application/Payroll/Pila/PilaQueries.cs y en src/Core/IngenIA365ERP.Application/Payroll/Dispersion/DisbursementQueries.cs: aplica la regla del módulo y firma con el `Content-Type` y el `charset` de hoy
+- [X] T064 [US4] Agregar `POST /{id}/download-link` (§9, con el limitador `adjuntos`) a src/Presentation/IngenIA365ERP.API/Endpoints/Payroll/PilaEndpoints.cs y src/Presentation/IngenIA365ERP.API/Endpoints/Payroll/DisbursementsEndpoints.cs, y dejar `GET /{id}/file` sólo para `AppEncrypted`
+- [X] T065 [US4] Reescribir las descargas de tests/IngenIA365ERP.API.IntegrationTests/Payroll/PilaTests.cs (líneas 120–143) y tests/IngenIA365ERP.API.IntegrationTests/Payroll/DispersionTests.cs (línea 104) sobre `POST …/download-link`:
   - sin reconocer el descuadre, se mantiene el error de hoy;
   - con el reconocimiento, se sigue la URL devuelta (en la fixture, la ruta `local-blob`) y se compara el contenido;
   - la versión reemplazada conserva su archivo.
-- [ ] T066 [US4] En src/Presentation/IngenIA365ERP.Shared/Services/Nomina/NominaClient.Pila.cs y NominaClient.Dispersion.cs, pedir el enlace y navegar a él; en src/Presentation/IngenIA365ERP.Shared/Pages/Nomina/Pila.razor y Dispersion.razor, el indicador de carga
-- [ ] T067 [US4] Registrar las rutas y los códigos de §9 en specs/010-nomina-prestaciones-pila-dian/contracts/api.md (lo exige `LosCodigosDeNominaEstanEnElContrato`)
+- [X] T066 [US4] En src/Presentation/IngenIA365ERP.Shared/Services/Nomina/NominaClient.Pila.cs y NominaClient.Dispersion.cs, pedir el enlace y navegar a él; en src/Presentation/IngenIA365ERP.Shared/Pages/Nomina/Pila.razor y Dispersion.razor, el indicador de carga
+  - *Hecho (2026-09-23)*: las pantallas ya tenían su indicador (`_accion`); con `direct: false` siguen bajando por `/file`.
+- [X] T067 [US4] Registrar las rutas y los códigos de §9 en specs/010-nomina-prestaciones-pila-dian/contracts/api.md (lo exige `LosCodigosDeNominaEstanEnElContrato`)
 
 **Checkpoint**: todo adjunto nuevo es `Direct`; PILA y dispersión se bajan por enlace.
 
@@ -305,6 +311,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
 - [ ] T069 [US5] Crear la plantilla CloudFormation docs/operaciones/plantillas/adjuntos-roles-anywhere.yaml (contracts/almacen.md §2): *trust anchor* con el bundle de la CA, perfil de 3600 s, y tres roles con confianza por CN y política acotada a su prefijo
 - [ ] T070 [P] [US5] Crear tools/credential-helper/Dockerfile y un job en .github/workflows/ci.yml que descarga `aws_signing_helper` en la versión fijada, verifica la SHA-256 que publica AWS y publica la imagen en ghcr
 - [ ] T071 [US5] En tools/scripts/crear-bucket-adjuntos.ps1, quitar la creación del usuario IAM y `-SoloSecreto` (después de T001, que todavía los usa), y agregar el CORS con los orígenes que confirmó T003 (contracts/almacen.md §1). Retirar docs/operaciones/politica-iam-adjuntos.json, que reemplaza la plantilla
+  - *Adelantado en E3 (2026-09-23)*: el CORS con los tres orígenes **web** ya está en el guion, porque sin él la subida directa no funciona en DEV ni QA. Faltan los orígenes de la app (T003) y lo demás de esta tarea.
 - [ ] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
 - [ ] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
   - el sidecar `aws_signing_helper serve` con el Secret del ambiente;
