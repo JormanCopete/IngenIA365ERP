@@ -120,6 +120,35 @@ operador.
 Si el margen de renovación del SDK es menor que la vida de la URL más larga, el firmador pide
 credenciales frescas antes de firmar cuando a la sesión le quedan menos de 10 minutos.
 
+**Resultado de la espiga (2026-09-23, DEV y QA).**
+- **El SDK toma la credencial del sidecar.** La API quedó sin ninguna variable `AWS_ACCESS_KEY_ID` o
+  `AWS_SECRET_ACCESS_KEY`, sólo con `AWS_EC2_METADATA_SERVICE_ENDPOINT`, y pasó `/health/ready`, cuya
+  sonda escribe y borra un objeto en el bucket cada 5 minutos. Cada sidecar entrega la sesión de **su**
+  rol (`ingenia365-erp-adjuntos-dev`, `…-qa`), de una hora.
+- **No hace falta tocar el firmador.** Los márgenes salen del código de las dos piezas:
+  - el sidecar (`aws_signing_helper/serve.go`, `RefreshTime` de 5 minutos) pide sesión nueva cuando a la
+    que tiene le quedan **menos de 10 minutos**, así que nunca entrega una con menos;
+  - el SDK de .NET (`DefaultInstanceProfileAWSCredentials`) vuelve a pedirla **cada 2 minutos**.
+
+  En el peor caso, la credencial con la que firma la API vive **8 minutos más**, y lo más largo que
+  firma son los 5 minutos de una autorización de subida. Un enlace de descarga (60 s) o una
+  autorización de subida nunca vencen antes de tiempo.
+- **El sidecar no admite sondas.** `serve` escucha sólo en 127.0.0.1 (fijo en su código) y el kubelet
+  sondea la IP del pod: la `startupProbe` TCP del primer despliegue nunca pasó y mataba al sidecar en
+  bucle. Como la imagen es distroless, tampoco hay con qué hacer un exec. La prueba de que la credencial
+  sirve es `/health/ready`. El despliegue con `maxUnavailable: 0` dejó a los pods viejos atendiendo
+  todo el tiempo.
+- **El sidecar lee el certificado gracias al `fsGroup: 10001` del pod.** El Secret se monta 0400 y la
+  imagen corre sin privilegios; sin ese `fsGroup` el binario falla con «could not parse PEM data».
+- **Permisos comprobados desde un pod de prueba en DEV**, con el mismo sidecar y el mismo Secret:
+  - con el rol de DEV, escribe, lee y borra lo suyo bajo `dev/`;
+  - no lista el bucket, ni siquiera `dev/`, ni sus versiones;
+  - no vacía la papelera (`DeleteObjectVersion`);
+  - no escribe ni lee en `qa/` ni en `pdn/`;
+  - no lista ni lee el bucket de respaldos;
+  - el certificado de DEV pidiendo el rol de QA recibe `AccessDeniedException` de Roles Anywhere, así que
+    el aislamiento entre ambientes lo impone AWS y no el ERP.
+
 ## R4 — Política de acceso por ambiente y del bucket
 
 **Decisión.** El rol de cada ambiente tiene una política en línea que:

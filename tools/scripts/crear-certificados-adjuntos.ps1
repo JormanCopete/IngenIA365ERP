@@ -24,8 +24,9 @@
 # PRODUCCION solo si se pide con -Ambientes pdn (o dev,qa,pdn), y el guion pide
 # escribir PRODUCCION antes de instalar alli.
 #
-# Corre igual en Windows PowerShell 5.1 y en PowerShell 7. Necesita openssl en el
-# PATH (viene con Git para Windows) y la llave SSH de despliegue.
+# Corre igual en Windows PowerShell 5.1 y en PowerShell 7. Necesita openssl (lo
+# busca en el PATH y, si no, en la instalacion de Git para Windows) y la llave SSH
+# de despliegue.
 #
 # Uso:
 #   .\tools\scripts\crear-certificados-adjuntos.ps1 -Carpeta D:\Custodia\erp-adjuntos
@@ -73,7 +74,7 @@ function Invoke-Nativo {
 
 function Invoke-OpenSsl {
     param([string[]]$Argumentos, [string]$Que)
-    $salida = Invoke-Nativo -Programa 'openssl' -Argumentos $Argumentos
+    $salida = Invoke-Nativo -Programa $script:OpenSsl -Argumentos $Argumentos
     if ($LASTEXITCODE -ne 0) { throw ("openssl fallo al {0}:`n{1}" -f $Que, ($salida -join "`n")) }
     return $salida
 }
@@ -87,8 +88,26 @@ function ConvertFrom-Segura {
 
 # ------------------------------------------------------------------ verificaciones --
 
-if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
-    throw "No se encontro openssl en el PATH. Viene con Git para Windows (C:\Program Files\Git\mingw64\bin)."
+# openssl: el del PATH o, si no esta (lo normal en Windows: Git no lo agrega), el
+# que trae Git para Windows en mingw64\bin. El de usr\bin es de MSYS y traduce las
+# rutas a su manera; no se usa.
+$script:OpenSsl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
+if (-not $script:OpenSsl) {
+    $raices = @()
+    $git = (Get-Command git -ErrorAction SilentlyContinue).Source
+    if ($git) {
+        # ...\Git\cmd\git.exe o ...\Git\mingw64\bin\git.exe
+        $raices += Split-Path (Split-Path $git -Parent) -Parent
+        $raices += Split-Path (Split-Path (Split-Path $git -Parent) -Parent) -Parent
+    }
+    $raices += Join-Path $env:ProgramFiles 'Git'
+    $script:OpenSsl = $raices |
+        ForEach-Object { Join-Path $_ 'mingw64\bin\openssl.exe' } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+}
+if (-not $script:OpenSsl) {
+    throw "No se encontro openssl. Viene con Git para Windows (C:\Program Files\Git\mingw64\bin\openssl.exe)."
 }
 
 $Carpeta = [IO.Path]::GetFullPath($Carpeta)
@@ -156,7 +175,7 @@ try {
 
         $vigente = $false
         if ((Test-Path $crt) -and (Test-Path $key) -and -not $Renovar) {
-            Invoke-Nativo -Programa 'openssl' -Argumentos @('x509', '-in', $crt, '-noout', '-checkend', '2592000') | Out-Null
+            Invoke-Nativo -Programa $script:OpenSsl -Argumentos @('x509', '-in', $crt, '-noout', '-checkend', '2592000') | Out-Null
             $vigente = ($LASTEXITCODE -eq 0)
         }
         if ($vigente) {

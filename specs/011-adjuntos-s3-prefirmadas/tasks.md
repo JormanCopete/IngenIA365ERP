@@ -317,6 +317,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - *Adelantado en E3 (2026-09-23)*: el CORS con los tres orígenes **web** ya está en el guion, porque sin él la subida directa no funciona en DEV ni QA. Faltan los orígenes de la app (T003) y lo demás de esta tarea.
   - *Avance (2026-09-23)*: la política transitoria (`politica-iam-adjuntos.json`) ya no permite listar ni leer versiones; hay que pegarla en la consola. Quitar el usuario IAM, `-SoloSecreto` y ese JSON espera a T075, y los orígenes de la app a T003.
 - [ ] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
+  - *Avance (2026-09-23)*: el dueño creó la CA y los certificados de DEV y QA (hasta 2027-09-24), el guion instaló el Secret `erp-adjuntos-certificado` en `erp-dev` y `erp-qa`, y la pila `ingenia365-erp-adjuntos-roles-anywhere` quedó creada desde CloudShell con sus cinco salidas. Falta confirmar que la política transitoria sin listar se pegó en la consola.
 - [ ] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
   - el sidecar `aws_signing_helper serve` con el Secret del ambiente;
   - los ARN en cada overlay;
@@ -324,6 +325,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - quitar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y el Secret `erp-adjuntos-s3`;
   - corregir el comentario de workloads/erp/base/kustomization.yaml que dice que un adjunto se borra cuando su dueño lo borra.
   - *Preparado (2026-09-23), sin commit ni push*: en el clon de GitOps, rama `roles-anywhere-adjuntos`, el componente `workloads/erp/components/adjuntos-roles-anywhere` (sidecar nativo, ARN desde el ConfigMap `erp-roles-anywhere`, borra las `AWS_*` de la API, certificado montado sólo en el sidecar) y el comentario de `base/kustomization.yaml` corregido. Renderiza con un overlay de prueba. Activarlo en los overlays espera los ARN de T072.
+  - *DEV y QA activos (2026-09-23)*: GitOps `2e3f5cb` activa el componente con los ARN y el digest del sidecar, y `aa718f6` le quita la `startupProbe`, que no podía pasar (research R3). Los dos ambientes están Ready con la credencial temporal. Faltan: producción (autorización expresa), quitar de base/api.yaml las `AWS_*` y el Secret `erp-adjuntos-s3` (después de T075), y anotar en el componente que el sidecar depende del `fsGroup` del pod.
 
   Primero DEV y QA; producción **con autorización expresa** del dueño.
 - [ ] T074 [US5] Espiga S2 en DEV:
@@ -332,7 +334,9 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - comprobar que `/health/ready` sigue sano con esa credencial y sin permiso de listar: la sonda escribe y borra bajo `{ambiente}/.healthcheck/`, que queda dentro del prefijo del rol (FR-051).
 
   Anotarlo en specs/011-adjuntos-s3-prefirmadas/research.md (R3)
+  - *Avance (2026-09-23)*: el SDK toma la credencial y `/health/ready` sigue sano. Los márgenes de renovación salen del código del sidecar y del SDK: en el peor caso firma con 8 minutos por delante, así que `S3BlobStore` no cambia (research R3). Falta ver con los propios ojos la primera renovación, pasada la hora (03:28 UTC).
 - [ ] T075 [US5] Verificar la quickstart §6 —sin listar, sin ver otro prefijo, vencimiento a la hora, revocación por CRL en QA— y que los nombres de los objetos no revelan el archivo (FR-043) ni se agregó ningún servicio con costo fijo (FR-047). **Recién entonces**, borrar en la consola el usuario IAM `ingenia365-erp-adjuntos` con su clave transitoria, y comprobar que ninguna llave permanente accede al bucket de adjuntos (FR-048). Registrarlo en docs/operaciones/estado-y-pendientes.md
+  - *Avance (2026-09-23)*: en DEV, desde un pod de prueba con el mismo sidecar y el mismo Secret, pasaron las 13 comprobaciones de permisos: sin listar, sin versiones, sin otro prefijo, sin respaldos y sin el rol de otro ambiente (research R3). Faltan: el vencimiento a la hora, la CRL en QA, FR-043, FR-047 y borrar el usuario IAM.
 
 **Checkpoint**: ninguna llave permanente accede al almacén de adjuntos. Es condición para ir a
 producción.
