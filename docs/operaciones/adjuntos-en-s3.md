@@ -234,6 +234,75 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
    `volumeMount`, el `volume` y el PVC `erp-attachments`. Hasta entonces el volumen queda montado sin
    usarse, que no molesta. **No borrarlo antes de verificar** el punto 3.
 
+## Credenciales temporales (IAM Roles Anywhere)
+
+Feature 011, entrega E2. **Reemplaza la llave permanente** del usuario IAM `ingenia365-erp-adjuntos`,
+que hoy está instalada en los tres ambientes y ya se filtró. Con esto:
+
+- cada pod de la API recibe una credencial que **vence en una hora** y se renueva sola;
+- **cada ambiente sólo ve su prefijo**: la credencial de DEV no puede leer `pdn/`;
+- nadie puede **listar** el bucket ni **borrar versiones** (la papelera es de soporte);
+- si se filtra un certificado, se **revoca** con una CRL y a más tardar en una hora deja de servir.
+
+**Costo: cero.** El *trust anchor* es de tipo «certificate bundle» con una CA propia; no usa AWS Private
+CA (~USD 400 al mes).
+
+**Cómo funciona.** En el pod de la API corre un segundo contenedor, el **sidecar** con el binario oficial
+de AWS (`aws_signing_helper serve`, imagen `ghcr.io/jormancopete/ingenia365erp/credential-helper` que
+construye el CI verificando la SHA-256 que publica AWS). El sidecar presenta el certificado del ambiente y
+expone la credencial en `127.0.0.1:9911`, imitando al IMDSv2 de EC2; la API la toma por la cadena
+estándar del SDK con `AWS_EC2_METADATA_SERVICE_ENDPOINT`, **sin cambiar su código**. El certificado y
+su llave se montan **sólo en el sidecar**.
+
+### Puesta en marcha, en este orden
+
+1. **La imagen del sidecar** la publica el CI solo (job `credential-helper`) en cada push a develop o
+   release. No hay nada que hacer.
+
+2. **Certificados** (el dueño, una vez; se renuevan cada año). Crea una CA propia y un certificado por
+   ambiente en una carpeta **fuera del repositorio**, y los instala como Secret
+   `erp-adjuntos-certificado` en cada namespace. La llave de la CA queda cifrada con una frase que el
+   guion pide y no guarda; nunca entra al clúster.
+
+   ```bash
+   powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-certificados-adjuntos.ps1 -Carpeta D:/Custodia/erp-adjuntos
+   ```
+
+   Sin `-Ambientes` emite DEV y QA. Producción, cuando toque, con `-Ambientes pdn` (pide escribir
+   PRODUCCION). **Guarde la carpeta fuera de la máquina**: sin la llave de la CA y su frase no se emite ni
+   se renueva ningún certificado.
+
+3. **La pila de AWS** (un administrador de la cuenta 058264424927; el usuario del perfil `ingenia365` no
+   tiene permisos de IAM ni de CloudFormation). Consola › CloudFormation › Crear pila › Cargar
+   [plantillas/adjuntos-roles-anywhere.yaml](plantillas/adjuntos-roles-anywhere.yaml):
+   - parámetro `CertificadoDeLaCa`: el contenido de `ca.crt` de la carpeta del paso 2 (es público);
+   - marcar **«Reconozco que CloudFormation puede crear recursos de IAM con nombres personalizados»**
+     (`CAPABILITY_NAMED_IAM`): los roles llevan nombre;
+   - al terminar, la pestaña **Salidas** trae `TrustAnchorArn`, `ProfileArn` y un ARN de rol por
+     ambiente. Son los que necesita el paso 4.
+
+4. **GitOps, primero DEV y QA** (con los ARN del paso 3). En el overlay de cada ambiente se activa el
+   componente `workloads/erp/components/adjuntos-roles-anywhere` —su cabecera dice exactamente qué
+   agregar— con los tres ARN en el ConfigMap `erp-roles-anywhere` y la imagen del sidecar. El componente
+   quita de la API `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY`: el SDK las preferiría al sidecar.
+   **Producción, sólo con autorización expresa del dueño** y después del paso 6 en QA.
+
+5. **Espiga en DEV** (T074): que el SDK tome la credencial del sidecar y la renueve, cuánto vive de
+   verdad una autorización firmada cerca del vencimiento de la sesión, y que `/health/ready` siga sano
+   sin permiso de listar (la sonda escribe y borra bajo `dev/.healthcheck/`, dentro del prefijo).
+
+6. **Verificar** (T075, quickstart §6 de la feature 011): desde el pod, listar el bucket o leer `qa/` o
+   `pdn/` da AccessDenied; la credencial vence a la hora sin cortar la API; en QA, importar la CRL corta
+   la credencial. **Recién entonces**: borrar el Secret `erp-adjuntos-s3` de cada namespace, borrar en la
+   consola el usuario IAM `ingenia365-erp-adjuntos` con su llave, y retirar
+   [politica-iam-adjuntos.json](politica-iam-adjuntos.json).
+
+**Mientras tanto**, la llave transitoria sigue en uso. Su política
+([politica-iam-adjuntos.json](politica-iam-adjuntos.json)) ya **no permite listar** el bucket (desde el
+2026-09-23): el ERP no lo necesita y trata el 403 de una clave inexistente como «no está». Hay que
+pegarla de nuevo en la consola (IAM › Usuarios › `ingenia365-erp-adjuntos` › Permisos › `AdjuntosDelErp`
+› Editar › JSON).
+
 ## Qué pasa si S3 no responde
 
 **Una persona que sube un soporte**: el envío al bucket falla y la pantalla lo dice. La fila quedó

@@ -331,8 +331,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   (multipart) **se retiró sin alias**: permitía colgar un archivo de cualquier dueño. El grupo lleva
   el limitador de concurrencia `adjuntos` (32 + 64 en cola por réplica, 429 `Attachments.Busy`).
   Con `Provider = Local` y fuera de Production el almacén local **imita a S3** con tokens de
-  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. Siguen los roles temporales
-  (IAM Roles Anywhere, E2) y la verificación en MAUI (E4); `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
+  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. **E2, credenciales temporales**
+  (IAM Roles Anywhere, sin costo): preparado el 2026-09-23 y pendiente de que el dueño lo aplique —
+  `tools/scripts/crear-certificados-adjuntos.ps1` (CA propia fuera del repo y del clúster, un
+  certificado por ambiente), la pila `docs/operaciones/plantillas/adjuntos-roles-anywhere.yaml` (un rol por
+  ambiente acotado a su prefijo, sin listar ni versiones), la imagen del sidecar `aws_signing_helper`
+  (job `credential-helper` del CI, SHA-256 verificada) y el componente de GitOps
+  `components/adjuntos-roles-anywhere`. Hasta completarlo sigue la llave transitoria, ya **sin permiso de
+  listar** (`politica-iam-adjuntos.json`). Falta la verificación en MAUI (E4);
+  `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
   redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
   réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
@@ -513,12 +520,16 @@ dudás, medí en vez de creerles; el comando está al lado.
 | Rutas REST | 772 (2026-09-23; feature 011: E1 −1 por la subida multipart retirada y +2 del almacén local —sólo con `Provider = Local` fuera de Production—; E3 +6: pedir, renovar y confirmar una subida, y los enlaces de adjuntos, PILA y dispersión) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.763 el 2026-09-23 (223 Domain, 1.316 Application, 121 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas sin contenedores | 1.771 el 2026-09-23 (223 Domain, 1.316 Application, 129 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 261 el 2026-09-23 con Docker: 260 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y el host «Adjuntos sobre S3», `ApiConAlmacenS3Fixture`, con `Provider = S3` contra MinIO) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
-corriendo. Las 13 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
+corriendo, y **nada más**: desde el 2026-09-23 la fixture pone su propio WebAuthn, su maestro
+(`MasterAdmin:*` con sus constantes de prueba) y un par de llaves JWT generado por corrida. Hasta esa
+fecha dependía de tres cosas que git ignora —`appsettings.Development.json`,
+`appsettings.Development.local.json` y `Keys/`— y en un clon limpio o un worktree todas caían en
+`ObjectDisposedException`. Las 13 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
 `PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,

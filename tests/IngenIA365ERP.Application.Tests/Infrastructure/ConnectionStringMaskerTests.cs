@@ -20,10 +20,10 @@ public class ConnectionStringMaskerTests
     public void Mask_PostgreSql_OcultaUsernameYPassword()
     {
         var masked = ConnectionStringMasker.Mask(
-            "Host=localhost;Port=5432;Database=ingenia365erp;Username=ingenia;Password=IngenIA365_Dev2026!");
+            "Host=localhost;Port=5432;Database=ingenia365erp;Username=ingenia;Password=secreto-de-prueba");
 
         masked.Should().Contain("localhost").And.Contain("ingenia365erp");
-        masked.Should().NotContain("IngenIA365_Dev2026!");
+        masked.Should().NotContain("secreto-de-prueba");
         masked.Should().Contain("***");
     }
 

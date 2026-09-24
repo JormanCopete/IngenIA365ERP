@@ -283,6 +283,76 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+  # Feature 011 (US5, T070): el sidecar de credenciales temporales (IAM Roles
+  # Anywhere). No sale del publish de .NET: su Dockerfile descarga el binario
+  # oficial de AWS en la version fijada y verifica la SHA-256 que AWS publica; si
+  # no coincide, el build falla. Mismas reglas que las demas imagenes: se construye
+  # siempre y se publica solo en push. El job gitops fija su digest en los overlays
+  # que declaran la imagen (T073).
+  credential-helper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calcular etiquetas
+        id: meta
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BRANCH="pr-${GITHUB_REF_NAME%%/*}"
+          else
+            BRANCH="${GITHUB_REF_NAME//\//-}"
+          fi
+          REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          IMAGE="${REGISTRY}/${REPO_LC}/credential-helper"
+          VERSION=$(sed -n 's/^ARG VERSION=//p' tools/credential-helper/Dockerfile)
+          echo "tags=${IMAGE}:${BRANCH},${IMAGE}:${VERSION}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to GHCR
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push credential-helper
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: tools/credential-helper
+          file: tools/credential-helper/Dockerfile
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+
+      - name: Guardar digest
+        run: |
+          mkdir -p digests
+          case "${{ steps.build.outputs.digest }}" in
+            sha256:*) echo "${{ steps.build.outputs.digest }}" > "digests/credential-helper" ;;
+            *) echo "::error::el sidecar no devolvio un digest valido: '${{ steps.build.outputs.digest }}'"; exit 1 ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-credential-helper
+          path: digests
+          retention-days: 3
+          if-no-files-found: error
+
   # Escribe el DIGEST de las imagenes recien publicadas en el overlay del ambiente
   # que alimenta esta rama, en el repositorio GitOps (P3, cerrado el 2026-09-10).
   #
@@ -300,7 +370,7 @@ jobs:
   # escritura) sobre JormanCopete/ingenia365-gitops. Sin el, este job FALLA a
   # proposito: un despliegue que no llego y nadie noto es peor que un CI rojo.
   gitops:
-    needs: docker
+    needs: [docker, credential-helper]
     if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'release')
     runs-on: ubuntu-latest
     permissions:
@@ -331,6 +401,8 @@ jobs:
             d=$(cat "digests/$i" 2>/dev/null || true)
             case "$d" in sha256:*) echo "${i^^}_DIGEST=$d" >> "$GITHUB_ENV" ;; *) echo "::error::$i no trae un digest valido: '$d'"; exit 1;; esac
           done
+          d=$(cat "digests/credential-helper" 2>/dev/null || true)
+          case "$d" in sha256:*) echo "SIDECAR_DIGEST=$d" >> "$GITHUB_ENV" ;; *) echo "::error::credential-helper no trae un digest valido: '$d'"; exit 1;; esac
 
       - name: Checkout GitOps
         uses: actions/checkout@v4
@@ -355,7 +427,8 @@ jobs:
             f="gitops/workloads/erp/overlays/$o/kustomization.yaml"
             # Solo las imagenes que el overlay ya declara (dev y qa no llevan migrator).
             # Se escribe digest y se retira newTag: kustomize no admite los dos.
-            for par in "api=$API_DIGEST" "web=$WEB_DIGEST" "migrator=$MIGRATOR_DIGEST"; do
+            # El sidecar de credenciales (feature 011) solo en los overlays que ya lo declaran.
+            for par in "api=$API_DIGEST" "web=$WEB_DIGEST" "migrator=$MIGRATOR_DIGEST" "credential-helper=$SIDECAR_DIGEST"; do
               nombre="$REG/${par%%=*}"; digest="${par#*=}"
               N="$nombre" D="$digest" yq -i '(.images[] | select(.name == strenv(N))) |= (.digest = strenv(D) | del(.newTag))' "$f"
             done

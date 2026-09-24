@@ -304,14 +304,18 @@ idénticas. La PILA sigue pidiendo reconocer el descuadre (quickstart §4.5).
 AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el certificado la corta
 (quickstart §6).
 
-- [ ] T068 [US5] Crear tools/scripts/crear-certificados-adjuntos.ps1:
+- [X] T068 [US5] Crear tools/scripts/crear-certificados-adjuntos.ps1:
   - con openssl crea la CA y los tres certificados en una carpeta **fuera del repositorio** que elige el dueño;
   - instala cada certificado como Secret `erp-adjuntos-certificado` en su namespace, por STDIN sobre SSH;
   - nunca imprime una llave ni la escribe en el repo.
-- [ ] T069 [US5] Crear la plantilla CloudFormation docs/operaciones/plantillas/adjuntos-roles-anywhere.yaml (contracts/almacen.md §2): *trust anchor* con el bundle de la CA, perfil de 3600 s, y tres roles con confianza por CN y política acotada a su prefijo
-- [ ] T070 [P] [US5] Crear tools/credential-helper/Dockerfile y un job en .github/workflows/ci.yml que descarga `aws_signing_helper` en la versión fijada, verifica la SHA-256 que publica AWS y publica la imagen en ghcr
+  - *Hecho (2026-09-23)*: CA RSA 3072 de diez años con la llave cifrada por una frase que se pide y no se guarda; certificados EC P-256 de un año (`clientAuth`, sólo firma); se niega a escribir dentro del repositorio; producción sólo con `-Ambientes pdn` y escribiendo PRODUCCION. La secuencia de openssl se probó en una carpeta temporal: la cadena verifica. **Lo corre el dueño.**
+- [X] T069 [US5] Crear la plantilla CloudFormation docs/operaciones/plantillas/adjuntos-roles-anywhere.yaml (contracts/almacen.md §2): *trust anchor* con el bundle de la CA, perfil de 3600 s, y tres roles con confianza por CN y política acotada a su prefijo
+  - *Hecho (2026-09-23)*: validada localmente (el usuario del perfil `ingenia365` no tiene `cloudformation:ValidateTemplate`). Al crear la pila hay que reconocer `CAPABILITY_NAMED_IAM`.
+- [X] T070 [P] [US5] Crear tools/credential-helper/Dockerfile y un job en .github/workflows/ci.yml que descarga `aws_signing_helper` en la versión fijada, verifica la SHA-256 que publica AWS y publica la imagen en ghcr
+  - *Hecho (2026-09-23)*: `aws_signing_helper` 1.8.5 (2026-08-24) sobre `distroless/base-debian12:nonroot`; el Dockerfile verifica la SHA-256 y ejecuta el binario antes de empaquetarlo (probado con Docker local). Job `credential-helper` propio —la matriz `docker` descarga artefactos de publicación que el sidecar no tiene— y el job `gitops` fija su digest en los overlays que declaran la imagen.
 - [ ] T071 [US5] En tools/scripts/crear-bucket-adjuntos.ps1, quitar la creación del usuario IAM y `-SoloSecreto` (después de T001, que todavía los usa), y agregar el CORS con los orígenes que confirmó T003 (contracts/almacen.md §1). Retirar docs/operaciones/politica-iam-adjuntos.json, que reemplaza la plantilla
   - *Adelantado en E3 (2026-09-23)*: el CORS con los tres orígenes **web** ya está en el guion, porque sin él la subida directa no funciona en DEV ni QA. Faltan los orígenes de la app (T003) y lo demás de esta tarea.
+  - *Avance (2026-09-23)*: la política transitoria (`politica-iam-adjuntos.json`) ya no permite listar ni leer versiones; hay que pegarla en la consola. Quitar el usuario IAM, `-SoloSecreto` y ese JSON espera a T075, y los orígenes de la app a T003.
 - [ ] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
 - [ ] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
   - el sidecar `aws_signing_helper serve` con el Secret del ambiente;
@@ -319,6 +323,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - `AWS_EC2_METADATA_SERVICE_ENDPOINT`;
   - quitar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y el Secret `erp-adjuntos-s3`;
   - corregir el comentario de workloads/erp/base/kustomization.yaml que dice que un adjunto se borra cuando su dueño lo borra.
+  - *Preparado (2026-09-23), sin commit ni push*: en el clon de GitOps, rama `roles-anywhere-adjuntos`, el componente `workloads/erp/components/adjuntos-roles-anywhere` (sidecar nativo, ARN desde el ConfigMap `erp-roles-anywhere`, borra las `AWS_*` de la API, certificado montado sólo en el sidecar) y el comentario de `base/kustomization.yaml` corregido. Renderiza con un overlay de prueba. Activarlo en los overlays espera los ARN de T072.
 
   Primero DEV y QA; producción **con autorización expresa** del dueño.
 - [ ] T074 [US5] Espiga S2 en DEV:
