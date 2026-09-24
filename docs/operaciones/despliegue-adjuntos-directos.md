@@ -1,5 +1,11 @@
 # Desplegar los adjuntos directos a producción (feature 011)
 
+> **Hecho el 2026-09-24** (`release e0c97b9`, GitOps `f1ba464` + `01d5bb6`, respaldos
+> `/root/respaldos/*-20260924-pre-f011.dump`). Tropiezo que conviene no repetir: el primer certificado
+> de producción se emitió con la carpeta de custodia **sin** la CA original, el guion creó una CA nueva y
+> AWS respondió «Untrusted signing certificate»; el despliegue quedó detenido **sin corte** (los pods viejos
+> siguieron atendiendo) hasta reemitirlo con la CA original. La limpieza de abajo se hizo el mismo día.
+
 **El documento a tener delante el día que develop pase a release.** Producción (`release 8d3f9a1`)
 todavía no tiene ni `S3BlobStore`: guarda los adjuntos en el disco del nodo aunque su overlay ya diga
 `Provider=S3`. Esta promoción le lleva de una vez el almacén S3, el flujo directo (el archivo no pasa por
@@ -104,11 +110,13 @@ flujo nuevo queda en el bucket y vuelve a verse al avanzar otra vez. Al revés n
 anterior guarde mientras dure el rollback va al disco del nodo, y antes de volver a avanzar hay que
 copiarlo al bucket (el punto 4 de «Antes»). El sidecar puede quedarse: el código anterior no usa S3.
 
-## Después (cierra T075 y T071)
+## Después (cierra T075 y T071) — hecho el 2026-09-24 salvo lo marcado
 
-1. Borrar el Secret `erp-adjuntos-s3` de `erp-dev`, `erp-qa` y `erp-pdn`.
-2. En GitOps, quitar de `base/api.yaml` las variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y el
-   volumen `erp-attachments` (el PVC queda sin usarse).
-3. En la consola, **borrar** el usuario IAM `ingenia365-erp-adjuntos` con su llave.
-4. En el repositorio: retirar `docs/operaciones/politica-iam-adjuntos.json` y, del guion del bucket, la
-   creación del usuario y `-SoloSecreto`.
+1. ✅ Borrado el Secret `erp-adjuntos-s3` de `erp-dev`, `erp-qa` y `erp-pdn` (ningún pod lo referenciaba).
+2. ✅ GitOps `1fdc852`: `base/api.yaml` sin `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` (el manifiesto
+   renderizado no cambió: el componente ya las quitaba). **Pendiente a propósito**: el volumen
+   `erp-attachments`. Producción lo tiene vacío, pero DEV y QA pueden guardar archivos de antes del
+   bucket; retirarlo borra el volumen, así que va aparte y con una mirada a su contenido.
+3. ⏳ El dueño **elimina** en la consola el usuario IAM `ingenia365-erp-adjuntos` (su llave ya está desactivada).
+4. ✅ Retirado `docs/operaciones/politica-iam-adjuntos.json`; el guion del bucket ya no crea el usuario ni
+   tiene `-OmitirIam`/`-SoloSecreto`.

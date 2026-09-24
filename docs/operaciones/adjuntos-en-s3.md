@@ -148,7 +148,7 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
 
 ## Puesta en marcha
 
-1. **Crear el bucket y la credencial** (una vez, desde una máquina con AWS CLI y el perfil correcto):
+1. **Crear el bucket** (una vez, desde una máquina con AWS CLI y el perfil correcto):
 
    ```bash
    powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloVerificar
@@ -158,36 +158,11 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
    powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365
    ```
 
-   (`powershell` es el de Windows, 5.1, que es el que hay en la maquina del dueno; con
-   PowerShell 7 instalado sirve igual `pwsh`.)
-
-   Es re-ejecutable. Crea el bucket con todo lo de arriba, el usuario IAM
-   `ingenia365-erp-adjuntos` con la política mínima de
-   [politica-iam-adjuntos.json](politica-iam-adjuntos.json) —que además **niega explícitamente**
-   tocar el bucket de respaldos— y deja el Secret `erp-adjuntos-s3` en los tres namespaces. La llave
-   secreta no se imprime ni se escribe en ningún archivo: se genera, viaja por STDIN sobre SSH y se
-   descarta. Antes de instalarla **escribe y borra un objeto con esa misma llave**, que es lo que el
-   health check intentará al arrancar: que el bucket exista no dice nada sobre si la credencial puede
-   escribir en él.
-
-   **Si quien ejecuta no tiene permisos de IAM** (el 2026-09-22, `copesan@hotmail.com` en la cuenta
-   `058264424927` —la de los dos buckets— no tiene ni `iam:ListUsers`), el bucket se crea igual con
-   `-OmitirIam` y la credencial la hace otro desde la consola de AWS de esa cuenta:
-
-   1. IAM › Usuarios › Crear usuario `ingenia365-erp-adjuntos`, **sin acceso a la consola**.
-   2. Permisos › Agregar permisos › Incorporar directamente una política › JSON: pegar
-      [politica-iam-adjuntos.json](politica-iam-adjuntos.json) tal cual, con el nombre `AdjuntosDelErp`.
-   3. Credenciales de seguridad › Crear clave de acceso › «Aplicación que se ejecuta fuera de AWS».
-   4. Volver acá con la llave a la vista y correr:
-
-      ```bash
-      powershell -ExecutionPolicy Bypass -File ./tools/scripts/crear-bucket-adjuntos.ps1 -Perfil ingenia365 -SoloSecreto
-      ```
-
-      Pide el `AccessKeyId` y el `SecretAccessKey` —éste con `Read-Host -AsSecureString`, así que no se
-      ve al teclearlo ni queda en el historial—, prueba la llave contra el bucket y la instala en los
-      tres namespaces. **Nunca se pasa la llave por la línea de comandos**: quedaría en el historial de
-      la consola.
+   Es re-ejecutable: crea o completa el bucket con todo lo de arriba (versionado, papelera, sólo TLS,
+   CORS). **La credencial del ERP no sale de aquí**: es temporal (sección «Credenciales temporales»).
+   Hasta el 2026-09-24 el guion creaba el usuario IAM `ingenia365-erp-adjuntos` con una llave
+   permanente y la instalaba como Secret `erp-adjuntos-s3`; ese usuario, la llave y el Secret se
+   retiraron ese día.
 
    Reusar la credencial de los respaldos **no** es una opción: la separación entre las dos es
    justamente lo que impide que una aplicación comprometida borre los respaldos.
@@ -202,10 +177,6 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
      value: "ingenia365-erp-attachments"
    - name: AttachmentStorage__S3__Region
      value: "us-east-1"
-   - name: AWS_ACCESS_KEY_ID
-     valueFrom: { secretKeyRef: { name: erp-adjuntos-s3, key: accessKeyId, optional: true } }
-   - name: AWS_SECRET_ACCESS_KEY
-     valueFrom: { secretKeyRef: { name: erp-adjuntos-s3, key: secretAccessKey, optional: true } }
    ```
 
    y en el overlay de cada ambiente el prefijo que le toca:
@@ -214,10 +185,6 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
    - name: AttachmentStorage__S3__Prefix
      value: "pdn"    # qa / dev en los otros
    ```
-
-   **`optional: true` es a propósito**: un ambiente sin el Secret arranca igual y el fallo aparece en
-   `/health/ready`, en vez de dejar el pod en `CrashLoopBackOff` sin explicación. El Secret se lee
-   **al arrancar**: creado después, hay que relevar los pods.
 
 3. **Verificar**. `/health/ready` trae un check `blobstore` que **escribe y borra** un objeto bajo
    `.healthcheck/` —listar el bucket no alcanza: una credencial puede leer y no poder escribir, y eso
@@ -319,9 +286,10 @@ una autorización de subida (research R3).
    - la credencial vence a la hora sin cortar la API;
    - en QA, el ensayo de revocación de abajo.
 
-   **Recién entonces**: borrar el Secret `erp-adjuntos-s3` de cada namespace, borrar en la consola el
-   usuario IAM `ingenia365-erp-adjuntos` con su llave, y retirar
-   [politica-iam-adjuntos.json](politica-iam-adjuntos.json).
+   **Hecho el 2026-09-24**, con producción ya en Roles Anywhere: se borró el Secret `erp-adjuntos-s3`
+   de los tres namespaces, se quitaron de `base/api.yaml` las variables que lo leían (GitOps `1fdc852`)
+   y se retiró `politica-iam-adjuntos.json`. El usuario IAM `ingenia365-erp-adjuntos` lo elimina el dueño
+   en la consola.
 
 ### Renovar los certificados (cada año)
 
@@ -370,12 +338,6 @@ Se ensaya con un certificado **desechable** del mismo CN, así que la API de QA 
    el sidecar informa el rechazo.
 5. `probar-credencial-adjuntos.ps1 -Ambiente qa`: la API sigue con los mismos permisos.
 6. Borrar el Secret de prueba: `k3s kubectl delete secret erp-adjuntos-certificado-prueba -n erp-qa`.
-
-**Mientras tanto**, la llave transitoria sigue en uso. Su política
-([politica-iam-adjuntos.json](politica-iam-adjuntos.json)) ya **no permite listar** el bucket (desde el
-2026-09-23): el ERP no lo necesita y trata el 403 de una clave inexistente como «no está». Hay que
-pegarla de nuevo en la consola (IAM › Usuarios › `ingenia365-erp-adjuntos` › Permisos › `AdjuntosDelErp`
-› Editar › JSON).
 
 ## Qué pasa si S3 no responde
 
