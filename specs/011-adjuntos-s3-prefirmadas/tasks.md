@@ -35,6 +35,7 @@ el resto se renumeró.
 preparar las herramientas de prueba.
 
 - [ ] T001 Rotar **ya** la llave filtrada de adjuntos, sin esperar a US5, en este orden:
+  - *Replanteo (2026-09-23)*: la llave ya no la usa ningún ambiente (DEV y QA con el sidecar; el código de producción es anterior a `S3BlobStore`). En vez de rotarla, **desactivarla ya** tras mirar su «Último uso», y borrar el usuario después de T075; producción entra directo con credenciales temporales (docs/operaciones/despliegue-adjuntos-directos.md). La llave de P1 sigue aparte.
   - crear una clave nueva para `ingenia365-erp-adjuntos` en la consola;
   - instalarla con `tools/scripts/crear-bucket-adjuntos.ps1 -SoloSecreto`;
   - relevar los pods de la API en los tres ambientes;
@@ -43,6 +44,7 @@ preparar las herramientas de prueba.
   Desactivar también la llave de P1, verificando antes que no la use `s3-backup-creds`. Registrarlo en docs/operaciones/estado-y-pendientes.md. Desactivar la vieja antes de instalar la nueva dejaría sin adjuntos a DEV y QA (research R19)
 - [X] T002 [P] Espiga S1 (research R1): con AWSSDK.S3 4.0.103, armar un POST prefirmado con `ContentLengthRangeCondition` [n, n], `ExactMatchCondition` sobre `Content-Type` y el campo `x-amz-checksum-sha256`, y subir contra MinIO y contra `ingenia365-erp-attachments/dev/`, probando otro tamaño, otro tipo y otra huella. Comprobar además qué pasa con una subida que empezó antes de vencer la autorización y termina después. Anotar el resultado y la decisión final en specs/011-adjuntos-s3-prefirmadas/research.md
 - [ ] T003 [P] Espiga S3 (research R15): leer `window.location.origin` dentro de BlazorWebView en Windows y Android desde src/Presentation/IngenIA365ERP.App, y anotar los orígenes reales en specs/011-adjuntos-s3-prefirmadas/contracts/almacen.md (CORS)
+  - *Avance (2026-09-23)*: confirmado en el código de `dotnet/maui` (rama `net10.0`): `https://0.0.0.1` en Windows y Android, `app://0.0.0.1` en iOS y Mac (contracts/almacen.md). El guion del bucket ya los pone en el CORS; hay que volver a correrlo. Verlo en un dispositivo queda para T081.
 - [X] T004 Agregar `Testcontainers.Minio` (misma versión mayor que los otros Testcontainers) a tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj y crear el fixture tests/IngenIA365ERP.API.IntegrationTests/Attachments/MinioFixture.cs, con el bucket versionado y la colección «Almacén MinIO»
 - [X] T005 Crear los límites configurables `MaxBytes` (25 MB), `SubidaMinutos` (5, tope 5) y `DescargaSegundos` (60, tope 300) en src/Core/IngenIA365ERP.Application/Attachments/Common/LimitesDeAdjuntos.cs —en Application y no en `AttachmentStorageSettings`, porque los aplican validadores y comandos de Application (Principio II)—, enlazados a la sección `AttachmentStorage` y validados al arrancar desde src/Infrastructure/IngenIA365ERP.Storage/DependencyInjection.cs; reflejarlo en src/Presentation/IngenIA365ERP.API/appsettings.json. El validador de `UploadAttachmentCommand` pasa a leer el máximo configurado; `AttachmentPolicy.MaxBytes` queda como valor por defecto
 
@@ -314,6 +316,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
 - [X] T070 [P] [US5] Crear tools/credential-helper/Dockerfile y un job en .github/workflows/ci.yml que descarga `aws_signing_helper` en la versión fijada, verifica la SHA-256 que publica AWS y publica la imagen en ghcr
   - *Hecho (2026-09-23)*: `aws_signing_helper` 1.8.5 (2026-08-24) sobre `distroless/base-debian12:nonroot`; el Dockerfile verifica la SHA-256 y ejecuta el binario antes de empaquetarlo (probado con Docker local). Job `credential-helper` propio —la matriz `docker` descarga artefactos de publicación que el sidecar no tiene— y el job `gitops` fija su digest en los overlays que declaran la imagen.
 - [ ] T071 [US5] En tools/scripts/crear-bucket-adjuntos.ps1, quitar la creación del usuario IAM y `-SoloSecreto` (después de T001, que todavía los usa), y agregar el CORS con los orígenes que confirmó T003 (contracts/almacen.md §1). Retirar docs/operaciones/politica-iam-adjuntos.json, que reemplaza la plantilla
+  - *Avance (2026-09-23, después)*: los dos orígenes de la app ya están en el CORS del guion (T003).
   - *Adelantado en E3 (2026-09-23)*: el CORS con los tres orígenes **web** ya está en el guion, porque sin él la subida directa no funciona en DEV ni QA. Faltan los orígenes de la app (T003) y lo demás de esta tarea.
   - *Avance (2026-09-23)*: la política transitoria (`politica-iam-adjuntos.json`) ya no permite listar ni leer versiones; hay que pegarla en la consola. Quitar el usuario IAM, `-SoloSecreto` y ese JSON espera a T075, y los orígenes de la app a T003.
 - [ ] T072 [US5] Tarea del dueño o de un administrador de AWS, guiada por la sección «Puesta en marcha» de docs/operaciones/adjuntos-en-s3.md: aplicar T069 y T071 en la cuenta 058264424927 y guardar la llave de la CA fuera del clúster. **No** desactiva llaves: eso ya lo hizo T001 con la filtrada, y la transitoria se retira en T075
@@ -359,6 +362,7 @@ producción.
 - [ ] T081 Verificar en MAUI, en Windows y en Android, la subida y la descarga de la quickstart §4b (FR-018). Si T003 dejó la subida deshabilitada, habilitarla quitando el aviso de src/Presentation/IngenIA365ERP.Shared/Components/Shared/SubirSoporte.razor, una vez que los orígenes estén en el CORS (T071)
 - [ ] T082 Recorrer specs/011-adjuntos-s3-prefirmadas/quickstart.md completa en DEV y en QA, incluida la §4b, y anotar los resultados en ese mismo archivo
 - [ ] T083 Promover a producción (E4) con autorización del dueño, `pg_dump` y diagnóstico: aplicar la migración `AdjuntosDirectos` con el DbMigrator y verificar `/health/ready` y la quickstart §1–§5 en producción, según docs/operaciones/adjuntos-en-s3.md
+  - *Receta (2026-09-23)*: docs/operaciones/despliegue-adjuntos-directos.md. Producción entra directo con Roles Anywhere (certificado `-Ambientes pdn` y componente en `overlays/pdn` antes de sincronizar). El 2026-09-23 el disco de adjuntos de producción tenía 0 archivos: nada que trasladar, pero hay que volver a mirarlo ese día.
 
 ---
 

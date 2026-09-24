@@ -275,11 +275,13 @@ Write-Host "OK" -ForegroundColor Green
 
 # CORS (feature 011, research R14): el navegador sube directo al bucket con una autorizacion firmada, asi
 # que el bucket tiene que aceptar el POST desde los origenes del ERP. Bajar no lo necesita: es navegacion.
-# Los origenes de la app (BlazorWebView, https://0.0.0.1 y app://0.0.0.1) se agregan cuando la espiga T003
-# los confirme en cada plataforma; hasta entonces la app pide subir los soportes desde la web.
-Write-Host "  CORS (subidas directas desde la web del ERP) ... " -NoNewline
+# Los dos ultimos son los de la app (MAUI): BlazorWebView sirve la pagina desde https://0.0.0.1 en Windows
+# y Android y desde app://0.0.0.1 en iOS y Mac (codigo de dotnet/maui, rama net10.0: HostAddressHelper;
+# seria 0.0.0.0 solo con el interruptor BlazorWebView.AppHostAddressAlways0000, que la app no usa). El CORS
+# no da acceso: sin una autorizacion firmada por el ERP, ningun origen sube nada.
+Write-Host "  CORS (subidas directas desde la web y la app del ERP) ... " -NoNewline
 $cors = '{"CORSRules":[{"AllowedMethods":["POST"],' +
-        '"AllowedOrigins":["https://app-dev.ingenia365.com","https://app-qa.ingenia365.com","https://app.ingenia365.com"],' +
+        '"AllowedOrigins":["https://app-dev.ingenia365.com","https://app-qa.ingenia365.com","https://app.ingenia365.com","https://0.0.0.1","app://0.0.0.1"],' +
         '"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3000}]}'
 Invoke-AwsConJson @('s3api', 'put-bucket-cors', '--bucket', $Bucket, '--cors-configuration') -Json $cors
 Write-Host "OK" -ForegroundColor Green
