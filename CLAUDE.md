@@ -332,7 +332,8 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   el limitador de concurrencia `adjuntos` (32 + 64 en cola por réplica, 429 `Attachments.Busy`).
   Con `Provider = Local` y fuera de Production el almacén local **imita a S3** con tokens de
   DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. **E2, credenciales temporales**
-  (IAM Roles Anywhere, sin costo): **activo en DEV y QA desde el 2026-09-23**. La API toma una sesión
+  (IAM Roles Anywhere, sin costo): **activo en los tres ambientes** (DEV y QA desde el 2026-09-23,
+  producción desde el 2026-09-24 con `release e0c97b9`; no queda ninguna llave permanente). La API toma una sesión
   de una hora del sidecar `aws_signing_helper serve` (en `127.0.0.1:9911`, imitando al IMDSv2), con
   un rol por ambiente acotado a su prefijo, sin listar ni versiones. Piezas:
   - `tools/scripts/crear-certificados-adjuntos.ps1`: CA propia fuera del repo y del clúster, un certificado
@@ -344,8 +345,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   - `probar-credencial-adjuntos.ps1`: 14 comprobaciones de permisos desde un pod de prueba;
   - `revocar-certificado-adjuntos.ps1`: la CRL.
 
-  Producción sigue con la llave transitoria, ya **sin permiso de listar**
-  (`politica-iam-adjuntos.json`), hasta su autorización. Falta la verificación en MAUI (E4);
+  La receta del paso a producción, con su tropiezo, en `docs/operaciones/despliegue-adjuntos-directos.md`. Falta la verificación en MAUI (E4);
   `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
   redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
   réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
