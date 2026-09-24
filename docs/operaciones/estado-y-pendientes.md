@@ -331,8 +331,9 @@ la estaba usando.
 #### P1b — Llave permanente de adjuntos → credenciales temporales (feature 011) — ✅ cerrado el 2026-09-24
 
 Los tres ambientes usan credenciales temporales (producción desde `release e0c97b9`). El Secret
-`erp-adjuntos-s3`, las variables que lo leían y `politica-iam-adjuntos.json` se retiraron; queda que el
-dueño elimine en la consola el usuario IAM `ingenia365-erp-adjuntos` (su llave ya está desactivada).
+`erp-adjuntos-s3`, las variables que lo leían y `politica-iam-adjuntos.json` se retiraron; el usuario IAM
+`ingenia365-erp-adjuntos` se eliminó el mismo día y el ensayo de revocación en QA se hizo. La app MAUI
+(CORS de sus orígenes y el aviso de SubirSoporte) queda para cuando se implemente.
 Historia:
 
 La llave del usuario IAM `ingenia365-erp-adjuntos` (la de P2b) es la misma en los tres ambientes y
