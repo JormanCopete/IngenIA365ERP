@@ -328,7 +328,34 @@ Consola AWS → IAM → usuario dueño → *Credenciales de seguridad* → **Des
 Confirmar antes que `polly-carteravirtual` tenga su reemplazo: esa aplicación sí
 la estaba usando.
 
-#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22 (bucket y overlay hechos; falta la imagen)
+#### P1b — Llave permanente de adjuntos → credenciales temporales (feature 011) — en curso
+
+La llave del usuario IAM `ingenia365-erp-adjuntos` (la de P2b) es la misma en los tres ambientes y
+quedó expuesta. La feature 011 la reemplaza por **credenciales temporales de una hora** con IAM Roles
+Anywhere, un rol por ambiente acotado a su prefijo, sin costo:
+
+- **Hecho (2026-09-23):**
+  - la CA propia y los certificados de DEV y QA, que vencen el 2027-09-24;
+  - la pila `ingenia365-erp-adjuntos-roles-anywhere`;
+  - el sidecar activo en **DEV y QA** (GitOps `2e3f5cb`, `aa718f6`);
+  - la política transitoria sin permiso de listar;
+  - las 14 comprobaciones de permisos en los dos ambientes (`probar-credencial-adjuntos.ps1`).
+- **Falta:**
+  - ver la primera renovación a la hora;
+  - el ensayo de revocación en QA (recetas en [adjuntos-en-s3.md](adjuntos-en-s3.md));
+  - producción, con autorización expresa;
+  - borrar el Secret `erp-adjuntos-s3` y el usuario IAM con su llave.
+- **Mientras tanto la llave sigue viva en producción**: rotarla (T001 de la feature 011) sigue pendiente
+  del dueño.
+
+#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22; desde el 2026-09-23 el archivo tampoco pasa por la API
+
+Feature 011 (en DEV y QA, falta producción): el navegador sube y baja **directo al bucket** con
+autorizaciones firmadas de 5 minutos y 60 segundos. La API sólo autoriza, firma y revisa los primeros
+8 KiB, así que su memoria ya no depende del tamaño de los archivos. Lo nuevo lo cifra el bucket
+(SSE-S3). Lo escrito antes en DEV y QA sigue cifrado por la aplicación y se baja por la API. Nada se
+borra solo: lo borrado queda 90 días en la papelera del bucket. La historia del traslado al bucket
+sigue abajo.
 
 Los adjuntos (soportes de comprobantes, planillas, dispersión) escribían en un PVC `local-path` de
 10 Gi: sin redundancia, **fuera de los respaldos diarios** y `ReadWriteOnce`, o sea que con un
