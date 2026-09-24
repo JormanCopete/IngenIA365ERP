@@ -197,9 +197,10 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
    arranque **siempre** prueba, que es cuando importa: un despliegue con la credencial mal puesta
    tiene que quedarse sin pasar a Ready. Lo fija `BlobStoreHealthCheckTests`.
 
-4. **Retirar el volumen** (opcional, cuando lleve días andando): quitar de `base/api.yaml` el
-   `volumeMount`, el `volume` y el PVC `erp-attachments`. Hasta entonces el volumen queda montado sin
-   usarse, que no molesta. **No borrarlo antes de verificar** el punto 3.
+4. **El volumen ya no existe.** El PVC `erp-attachments`, su montaje y su volumen se retiraron de
+   `base/api.yaml` el 2026-09-24, en los tres ambientes, con los tres vacíos (0 archivos): GitOps
+   `ee8c324` en DEV y QA y `431092b` en `base`, con producción sincronizada y respaldo previo
+   `*-20260924c-pre-volumen.dump`. La API no monta ningún disco para adjuntos.
 
 ## Credenciales temporales (IAM Roles Anywhere)
 

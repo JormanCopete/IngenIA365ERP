@@ -348,7 +348,8 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   La receta del paso a producción, con su tropiezo, en `docs/operaciones/despliegue-adjuntos-directos.md`. Falta la verificación en MAUI (E4);
   `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
   redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
-  réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
+  réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción, y el PVC `erp-attachments` se retiró de los tres
+  ambientes el 2026-09-24 (vacíos; GitOps `431092b`). El
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
   se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
   `docs/operaciones/adjuntos-en-s3.md`.
