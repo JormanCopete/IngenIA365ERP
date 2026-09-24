@@ -839,7 +839,7 @@ else if (_lista.Count > 0)
                 ConfirmWithoutSegregation: _aprobacion.ConfirmarSinSegregacion));
             if (!res.IsSuccess)
             {
-                if (res.ErrorCode == "Payroll.Settlement.ConfirmationRequired" && (res.ErrorMessage ?? string.Empty).Contains("segregaci", StringComparison.OrdinalIgnoreCase))
+                if (res.ErrorCode == "Payroll.Settlement.SegregationConfirmationRequired")
                 {
                     _aprobacion.PideSegundaConfirmacion = true;
                     await Notification.WarningAsync(res.ErrorMessage ?? "Se requiere una segunda confirmación.");

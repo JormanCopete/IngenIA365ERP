@@ -268,6 +268,19 @@ public static class NominaE2E
         return await http.SendAsync(req);
     }
 
+    /// <summary>
+    /// Feature 011 (§9): pide el enlace firmado de un archivo de módulo y lo sigue, como el navegador. En
+    /// este host el almacén es el local, así que el enlace es la ruta anónima <c>local-blob</c> de la API.
+    /// </summary>
+    public static async Task<HttpResponseMessage> BajarPorEnlaceAsync(HttpClient http, string token, string rutaDelEnlace)
+    {
+        using var pedido = await EnviarAsync(http, token, HttpMethod.Post, rutaDelEnlace, null);
+        pedido.StatusCode.Should().Be(HttpStatusCode.OK, $"POST {rutaDelEnlace}: «{await pedido.Content.ReadAsStringAsync()}»");
+        var enlace = await LeerAsync(pedido);
+        enlace.GetProperty("direct").GetBoolean().Should().BeTrue("lo que genera un módulo se guarda en el formato directo desde la feature 011");
+        return await http.GetAsync(enlace.GetProperty("url").GetString());
+    }
+
     public static async Task<JsonElement> LeerAsync(HttpResponseMessage resp)
     {
         var raw = await resp.Content.ReadAsStringAsync();

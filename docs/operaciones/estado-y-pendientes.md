@@ -40,6 +40,17 @@ que separa a producción de su primera cooperativa es P14.
 Desde entonces producción se promueve commit a commit con un merge `Promover develop
 a release: …` y sincronización manual de Argo.
 
+**`release 8d3f9a1`** (2026-09-22 13:05–13:20 UTC, GitOps `11976be`, autorizado por el dueño con
+«promueve a release»): las dos **mejoras de implantación** que pidió al arrancar COOFLOPAL —carga
+masiva de auxiliares desde plantilla xlsx y saldos de apertura con fecha elegible y editables hasta
+contabilizar—. **Sin migraciones** (26 en las dos bases, antes y después). Respaldos previos
+`pg_dump -Fc`: `/root/respaldos/{ingenia365erp_admin,ingenia365erp,cooflopal}-20260922b-pre-implantacion.dump`
+(72 KB / 1,4 MB / 1,7 MB). Diagnóstico antes: libros en cero en las dos bases; **`cooflopal` ya tiene
+la contabilidad iniciada** (2.110 cuentas del CUIF copiadas ese día por el dueño) con sus 11 empleados
+y 15 corridas intactos. CI de `develop` (`59f0606`) y `release` verdes; sync manual de Argo
+`Succeeded` → `Healthy`; pods API `aaa4f7e6…` y Web `444f76e6…`; `/health/ready` 200;
+`app.ingenia365.com` 200; 0 `[ERR]`; datos intactos después del relevo.
+
 **`release 0a309f3`** (2026-09-22 09:35–09:45 UTC, GitOps `8c9d2e7`, autorizado por el dueño con
 «realiza merge a develop y también despliega en producción»): **contabilidad 009 E2** —consultas e
 informes (13 vistas), libro auxiliar, estados financieros, presupuesto, cierre y reapertura del
@@ -317,6 +328,65 @@ Consola AWS → IAM → usuario dueño → *Credenciales de seguridad* → **Des
 Confirmar antes que `polly-carteravirtual` tenga su reemplazo: esa aplicación sí
 la estaba usando.
 
+#### P1b — Llave permanente de adjuntos → credenciales temporales (feature 011) — en curso
+
+La llave del usuario IAM `ingenia365-erp-adjuntos` (la de P2b) es la misma en los tres ambientes y
+quedó expuesta. La feature 011 la reemplaza por **credenciales temporales de una hora** con IAM Roles
+Anywhere, un rol por ambiente acotado a su prefijo, sin costo:
+
+- **Hecho (2026-09-23):**
+  - la CA propia y los certificados de DEV y QA, que vencen el 2027-09-24;
+  - la pila `ingenia365-erp-adjuntos-roles-anywhere`;
+  - el sidecar activo en **DEV y QA** (GitOps `2e3f5cb`, `aa718f6`);
+  - la política transitoria sin permiso de listar;
+  - las 14 comprobaciones de permisos en los dos ambientes (`probar-credencial-adjuntos.ps1`).
+- **Falta:**
+  - ver la primera renovación a la hora;
+  - el ensayo de revocación en QA (recetas en [adjuntos-en-s3.md](adjuntos-en-s3.md));
+  - producción, con autorización expresa;
+  - borrar el Secret `erp-adjuntos-s3` y el usuario IAM con su llave.
+- **La llave ya no la usa ningún ambiente**: DEV y QA van con el sidecar, y el código de producción
+  (`release 8d3f9a1`) es anterior a `S3BlobStore`, así que no toca S3. En vez de rotarla (T001), se
+  **desactiva ya** en la consola, después de comprobar su «Último uso» (anterior al 2026-09-24 02:28 UTC).
+  Producción entra directo con credenciales temporales: receta en
+  [despliegue-adjuntos-directos.md](despliegue-adjuntos-directos.md).
+
+#### P2b — Adjuntos en disco del nodo — ✅ cerrado el 2026-09-22; desde el 2026-09-23 el archivo tampoco pasa por la API
+
+Feature 011 (en DEV y QA, falta producción): el navegador sube y baja **directo al bucket** con
+autorizaciones firmadas de 5 minutos y 60 segundos. La API sólo autoriza, firma y revisa los primeros
+8 KiB, así que su memoria ya no depende del tamaño de los archivos. Lo nuevo lo cifra el bucket
+(SSE-S3). Lo escrito antes en DEV y QA sigue cifrado por la aplicación y se baja por la API. Nada se
+borra solo: lo borrado queda 90 días en la papelera del bucket. La historia del traslado al bucket
+sigue abajo.
+
+Los adjuntos (soportes de comprobantes, planillas, dispersión) escribían en un PVC `local-path` de
+10 Gi: sin redundancia, **fuera de los respaldos diarios** y `ReadWriteOnce`, o sea que con un
+segundo nodo una de las dos réplicas de la API no podría montarlo. Ya existe `S3BlobStore` detrás
+del mismo `IBlobStore` y se elige con `AttachmentStorage:Provider`; el cifrado sigue siendo nuestro
+(AES-256-GCM antes de subir) y S3 pone el suyo encima. **Se hizo con el volumen vacío en producción**,
+así que no hay nada que migrar.
+
+Estado del 2026-09-22: el bucket `ingenia365-erp-attachments` ya existe en la cuenta `058264424927`
+(la misma de los respaldos) con versionado, cifrado AES256, acceso público bloqueado y ciclo de vida;
+el Secret `erp-adjuntos-s3` está en los tres namespaces; y el overlay de GitOps ya lleva
+`AttachmentStorage__Provider=S3` con el prefijo de cada ambiente (`9d9ae02`). **Falta que el código
+llegue**: la imagen desplegada es anterior a `S3BlobStore`, así que la configuración está viva pero
+inerte y el health check todavía dice `writable: /app/storage/attachments`. Con la imagen nueva tiene
+que decir `S3: s3://ingenia365-erp-attachments/{ambiente}`; después, subir, bajar y borrar un adjunto
+de verdad, y más adelante retirar el PVC `erp-attachments`, que queda montado sin usarse.
+
+El usuario IAM se creó **a mano desde la consola**: el usuario del perfil `ingenia365` no tiene
+ningún permiso de IAM (ni `iam:ListUsers`), y el guión cubre ese caso con `-OmitirIam` para el bucket
+y `-SoloSecreto` para instalar la llave. Receta: [adjuntos-en-s3.md](adjuntos-en-s3.md).
+
+**Pendiente del dueño**: rotar la llave instalada ese día. Quedó expuesta el 2026-09-22 al
+verificar el Secret con un `jsonpath` que imprimió los valores además de los nombres. Sólo puede leer,
+escribir y borrar objetos del bucket de adjuntos —que está vacío—, no borrar versiones ni tocar el de
+respaldos, pero se rota igual: desactivar y eliminar en la consola, crear otra y reinstalarla con
+`-SoloSecreto`. El Secret se referencia **por nombre, sin hash**, así que reinstalarlo no rota los
+pods: hay que relevarlos (mientras el código S3 no esté desplegado, no hace falta ni eso).
+
 #### P2 — MongoDB sin redundancia de almacenamiento
 
 La auditoría SARLAFT (retención obligatoria de 5 años) vive en `local-path`, es
@@ -533,7 +603,8 @@ la propuesta; se mueve hasta el fin del primer ejercicio y nunca a un mes cerrad
 entera mientras sea borrador**: agregar, cambiar y quitar cuentas desde el comprobante, cambiar la
 fecha, descartarlo, y volver a importar reemplaza sus líneas conservando el mismo comprobante. Con
 esto una cooperativa que llega de SOLIDO carga cuentas y saldos al corte real sin digitar de a una.
-Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a.
+Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a. **En producción
+desde el `release 8d3f9a1`** (2026-09-22).
 
 **Lo que sigue pendiente (del dueño o de otra rama)**: ~~merge a `develop` y despliegue~~ hecho el
 2026-09-22 (`develop` `857d0e5`, `release 0a309f3`, arriba); QA manual `quickstart.md` §4 y §5 E2 por rol; **validación de los

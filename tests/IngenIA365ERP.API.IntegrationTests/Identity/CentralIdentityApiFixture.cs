@@ -23,8 +23,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity;
 /// propio <c>DatabaseInitializerHostedService</c> de la aplicación con las
 /// migraciones EF del proveedor (la fuente única de verdad) + seed paramétrico
 /// — con lo cual cada corrida de la suite valida también el arranque real.
+///
+/// <para>
+/// Feature 011: una subclase puede levantar algo más antes del host (<see cref="AntesDeArrancarAsync"/>)
+/// y ajustar el host (<see cref="ConfigurarHost"/>). Así existe <c>ApiConAlmacenS3Fixture</c>, el mismo
+/// host con los adjuntos en MinIO en vez del disco.
+/// </para>
 /// </summary>
-public sealed class CentralIdentityApiFixture : IAsyncLifetime
+public class CentralIdentityApiFixture : IAsyncLifetime
 {
     public const string MasterEmail = "master@integration.test";
     public const string MasterPassword = "Master-Integration-2026!";
@@ -58,12 +64,22 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public CapturingEmailSender Emails { get; } = new();
 
+    /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
+    protected virtual Task AntesDeArrancarAsync() => Task.CompletedTask;
+
+    /// <summary>El último ajuste del host, después de los de esta fixture.</summary>
+    protected virtual void ConfigurarHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder) { }
+
+    /// <summary>Lo que una subclase tiene que cerrar después del host.</summary>
+    protected virtual Task DespuesDeCerrarAsync() => Task.CompletedTask;
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).StartAsync(),
             _mongo.StartAsync(),
-            _redis.StartAsync());
+            _redis.StartAsync(),
+            AntesDeArrancarAsync());
 
         var operationalConnection = _db.GetConnectionString();
         var adminConnection = WithDatabaseName(operationalConnection,
@@ -102,20 +118,36 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("Smtp:Port", "25");
             builder.UseSetting("Smtp:FromAddress", "noresponder@integration.test");
 
-            // Las claves RS256 se cargan con File.Exists sobre un path RELATIVO
-            // ("Keys/dev_private.pem"). Bajo el test host el cwd es el bin de
-            // tests → path absoluto a las claves reales del API.
-            var apiKeys = Path.Combine(FindRepoRoot(),
-                "src", "Presentation", "IngenIA365ERP.API", "Keys");
-            builder.UseSetting("JwtSettings:PrivateKeyPath",
-                Path.Combine(apiKeys, "dev_private.pem"));
-            builder.UseSetting("JwtSettings:PublicKeyPath",
-                Path.Combine(apiKeys, "dev_public.pem"));
+            // La suite no depende de nada que git ignore (2026-09-23): hasta esa fecha
+            // el host sólo arrancaba con appsettings.Development.json (WebAuthn), las
+            // credenciales del maestro de appsettings.Development.local.json y las
+            // llaves de Keys/, los tres locales de cada máquina. En un clon limpio o en
+            // un worktree todas las pruebas caían en ObjectDisposedException.
+            //
+            // Llaves RS256 propias de esta corrida, en una carpeta temporal: la API las
+            // carga por ruta y, si no existen, sólo genera una efímera fuera de
+            // Production según ASPNETCORE_ENVIRONMENT del PROCESO, que aquí no está.
+            var (privada, publica) = CrearLlavesJwt();
+            builder.UseSetting("JwtSettings:PrivateKeyPath", privada);
+            builder.UseSetting("JwtSettings:PublicKeyPath", publica);
+
+            // WebAuthn no tiene valor por defecto a propósito (cambiarlo invalida las
+            // llaves inscritas): el host no arranca sin él.
+            builder.UseSetting("WebAuthn:RelyingPartyId", "localhost");
+            builder.UseSetting("WebAuthn:RelyingPartyName", "IngenIA365ERP (pruebas)");
+            builder.UseSetting("WebAuthn:OrigenesPermitidos:0", "https://localhost:7200");
+
+            // El maestro que siembra el host es el mismo que usa la fixture: sin
+            // credenciales, el sembrador se niega a arrancar una instalación sin gobierno.
+            builder.UseSetting("MasterAdmin:Email", MasterEmail);
+            builder.UseSetting("MasterAdmin:Password", MasterPassword);
 
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
             });
+
+            ConfigurarHost(builder);
         });
 
         // Forzar arranque del host (dispara el DatabaseInitializerHostedService:
@@ -245,17 +277,6 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
         return builder.ConnectionString;
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "IngenIA365ERP.slnx")))
-        {
-            dir = dir.Parent;
-        }
-        return dir?.FullName
-            ?? throw new InvalidOperationException("No se encontró la raíz del repo (IngenIA365ERP.slnx).");
-    }
-
     private async Task SeedMasterAdminAsync()
     {
         using var scope = Factory.Services.CreateScope();
@@ -281,13 +302,31 @@ public sealed class CentralIdentityApiFixture : IAsyncLifetime
         }
     }
 
+    private string? _carpetaDeLlaves;
+
+    /// <summary>Un par RS256 nuevo para esta corrida; se borra al cerrar la fixture.</summary>
+    private (string Privada, string Publica) CrearLlavesJwt()
+    {
+        _carpetaDeLlaves = Path.Combine(Path.GetTempPath(), "ingenia-jwt-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_carpetaDeLlaves);
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var privada = Path.Combine(_carpetaDeLlaves, "privada.pem");
+        var publica = Path.Combine(_carpetaDeLlaves, "publica.pem");
+        File.WriteAllText(privada, rsa.ExportPkcs8PrivateKeyPem());
+        File.WriteAllText(publica, rsa.ExportSubjectPublicKeyInfoPem());
+        return (privada, publica);
+    }
+
     public async Task DisposeAsync()
     {
         Factory?.Dispose();
+        try { if (_carpetaDeLlaves is not null && Directory.Exists(_carpetaDeLlaves)) Directory.Delete(_carpetaDeLlaves, recursive: true); }
+        catch (IOException) { /* el SO puede tener el archivo abierto un instante más: queda en la carpeta temporal */ }
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),
             _mongo.DisposeAsync().AsTask(),
-            _redis.DisposeAsync().AsTask());
+            _redis.DisposeAsync().AsTask(),
+            DespuesDeCerrarAsync());
     }
 }
 

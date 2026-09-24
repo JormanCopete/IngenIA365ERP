@@ -62,8 +62,16 @@ public static class SettlementErrors
     public static readonly Error ConfirmationRequired = new("Payroll.Settlement.ConfirmationRequired",
         "La aprobación exige confirmación explícita (confirm = true).");
 
-    public static readonly Error ConfirmWithoutSegregationRequired = new("Payroll.Settlement.ConfirmationRequired",
-        "Usted calculó esta liquidación. La cooperativa permite aprobarla igual, pero exige una segunda confirmación (confirmWithoutSegregation = true); quedará registrado.");
+    /// <summary>
+    /// Código propio, no el genérico de confirmación: la pantalla revela la casilla de la segunda
+    /// confirmación sólo ante este caso, y las tres razones que compartían
+    /// <c>Payroll.Settlement.ConfirmationRequired</c> la obligaban a adivinar por el texto del
+    /// mensaje. Prima y Cesantías buscaban «segregaci», que no aparece en él; Vacaciones y la
+    /// definitiva se guiaban por el código y acertaban de casualidad, porque los otros dos casos no
+    /// se dan con los cuerpos que envían.
+    /// </summary>
+    public static readonly Error ConfirmWithoutSegregationRequired = new("Payroll.Settlement.SegregationConfirmationRequired",
+        "Usted calculó esta liquidación. La cooperativa permite aprobarla igual, pero exige confirmarlo expresamente: marque «Confirmo aprobar sin segregación de funciones». Quedará registrado en la corrida.");
 
     public static readonly Error EmptyRunRequiresConfirmation = new("Payroll.Settlement.ConfirmationRequired",
         "La liquidación no tiene empleados con derecho. Aprobarla vacía exige confirmEmpty = true.");

@@ -40,7 +40,7 @@ public class AttachmentEncryptionAtRestTests : IDisposable
         var sp = services.BuildServiceProvider();
         _cipher = new AttachmentEncryptionService(sp.GetRequiredService<IDataProtectionProvider>());
         _store = new LocalEncryptedFileStore(Options.Create(
-            new AttachmentStorageSettings { LocalRootPath = _tempRoot }));
+            new AttachmentStorageSettings { LocalRootPath = _tempRoot }), sp.GetRequiredService<IDataProtectionProvider>());
     }
 
     [Fact]

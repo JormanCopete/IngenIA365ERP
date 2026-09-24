@@ -16,6 +16,10 @@ public sealed record ResultadoContable<T>(bool IsSuccess, T? Value, string? Erro
 
     public List<ErrorDeFilaDto> ErroresDeFila() => Lista<ErrorDeFilaDto>("errors");
 
+    /// <summary>Un número de <c>data</c> (por ejemplo, <c>count</c> en <c>Accounting.Document.HasAttachments</c>), o nulo si no viene.</summary>
+    public int? Entero(string propiedad) =>
+        Data is { ValueKind: JsonValueKind.Object } data && data.TryGetProperty(propiedad, out var v) && v.TryGetInt32(out var n) ? n : null;
+
     public List<ErrorDeLineaDto> ErroresDeLinea() => Lista<ErrorDeLineaDto>("errors");
 
     private List<TItem> Lista<TItem>(string propiedad)

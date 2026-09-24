@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Enums.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,13 +37,15 @@ public sealed class ListAttachmentsByOwnerQueryHandler
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IPermissionChecker _permissions;
+    private readonly IDateTimeService _reloj;
 
     public ListAttachmentsByOwnerQueryHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IPermissionChecker permissions)
+        IApplicationDbContext db, ICurrentUserService currentUser, IPermissionChecker permissions, IDateTimeService reloj)
     {
         _db = db;
         _currentUser = currentUser;
         _permissions = permissions;
+        _reloj = reloj;
     }
 
     public async Task<Result<IReadOnlyList<AttachmentDto>>> Handle(
@@ -59,6 +62,11 @@ public sealed class ListAttachmentsByOwnerQueryHandler
         if (!await AdjuntosDeModulo.PuedeLeerAsync(_permissions, request.OwnerEntityType, ct))
             return Result.Success<IReadOnlyList<AttachmentDto>>([]);
 
+        var ahora = _reloj.UtcNow;
+        // Todos los de la lista son del mismo dueño: la regla se evalúa una vez.
+        var puedeBorrar = await _permissions.HasPermissionAsync(AdjuntosDeModulo.PermisoDeBorrar, ct)
+            && await AdjuntosDeModulo.PuedeBorrarAsync(_db, request.OwnerEntityType, request.OwnerEntityPublicId, ct) is null;
+
         var items = await _db.Attachments
             .Where(a => a.TenantId == tenantInternalId
                      && a.OwnerEntityType == request.OwnerEntityType
@@ -73,7 +81,12 @@ public sealed class ListAttachmentsByOwnerQueryHandler
                 a.SizeBytes,
                 a.Sha256Hex,
                 a.CreatedAt,
-                a.CreatedBy))
+                a.CreatedBy,
+                puedeBorrar,
+                a.Status,
+                a.Format,
+                a.RejectionReason,
+                a.Status == EstadoDeAdjunto.Uploading && a.UploadExpiresAt != null && a.UploadExpiresAt <= ahora))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<AttachmentDto>>(items);

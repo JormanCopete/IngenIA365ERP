@@ -92,6 +92,17 @@ public static class AccountingErrors
     public static readonly Error DocumentManualOnly = new("Accounting.Document.ManualOnly",
         "Los borradores sólo usan tipos de comprobante manuales.");
 
+    /// <summary>
+    /// Feature 011 (research R10): descartar un borrador con soportes no los borra sin preguntar. La
+    /// pantalla confirma y reintenta con <c>deleteAttachments=true</c>; <c>data.count</c> dice cuántos son.
+    /// </summary>
+    public static Error DocumentHasAttachments(int count) =>
+        new ErrorConDatos("Accounting.Document.HasAttachments",
+            count == 1
+                ? "El borrador tiene 1 soporte: al descartarlo se borra y queda 90 días en la papelera."
+                : $"El borrador tiene {count} soportes: al descartarlo se borran y quedan 90 días en la papelera.",
+            new { count });
+
     /// <summary>Todas las infracciones bloqueantes juntas (FR-041): el mensaje resume las primeras y <c>data.errors</c> las trae completas.</summary>
     public static Error DocumentInvalid(IReadOnlyList<ErrorDeLinea> errores)
     {

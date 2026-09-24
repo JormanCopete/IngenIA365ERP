@@ -6,6 +6,7 @@
     <RootNamespace>IngenIA365ERP.Storage</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.*" />
     <PackageReference Include="CsvHelper" Version="33.*" />
     <PackageReference Include="MailKit" Version="4.*" />
     <PackageReference Include="MimeKit" Version="4.*" />
@@ -29,6 +30,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />
+    <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />
   </ItemGroup>
 
 </Project>

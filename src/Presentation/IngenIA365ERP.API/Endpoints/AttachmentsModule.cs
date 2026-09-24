@@ -1,10 +1,14 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Attachments.ConfirmarSubida;
+using IngenIA365ERP.Application.Attachments.EmitirEnlaceDeDescarga;
+using IngenIA365ERP.Application.Attachments.RenovarSubida;
+using IngenIA365ERP.Application.Attachments.SolicitarSubida;
 using IngenIA365ERP.Application.Attachments.DeleteAttachment;
 using IngenIA365ERP.Application.Attachments.DownloadAttachment;
 using IngenIA365ERP.Application.Attachments.ListAttachments;
-using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +19,24 @@ namespace IngenIA365ERP.API.Endpoints;
 /// T109 — Endpoints REST de adjuntos cifrados (US5).
 ///
 /// <para>
-/// El upload va por <c>multipart/form-data</c> con dos partes: el archivo
-/// y los metadatos de owner como form-fields. El download devuelve el
-/// payload descifrado con <c>Results.File</c> + filename original. El
+/// El download devuelve el payload descifrado con <c>Results.File</c> + filename original. El
 /// listado por owner es JSON paginado pequeño (≤ 50 items en práctica).
+/// </para>
+///
+/// <para>
+/// Feature 011: la subida multipart a través de la API (<c>POST /api/attachments</c>) se retiró sin
+/// alias el 2026-09-23. Ninguna pantalla la usaba —su único cliente era el componente huérfano
+/// <c>AttachmentUploader</c>— y dejaba colgar un archivo de cualquier dueño, incluida la PILA de otro.
+/// Las personas suben directo al almacén con una autorización firmada (contracts/api.md §1–§3); los
+/// módulos siguen guardando sus archivos por <c>UploadAttachmentCommand</c>, que no tiene ruta. Todo
+/// el grupo lleva el limitador de concurrencia <see cref="LimiteDeAdjuntos"/>.
+/// </para>
+///
+/// <para>
+/// Ninguna ruta de este módulo recibe el archivo: pedir, renovar y confirmar una subida, y pedir un
+/// enlace de descarga, sólo firman y revisan. El archivo va del navegador al almacén y del almacén al
+/// navegador. <c>GET /{id}</c> sigue sirviendo bytes, pero sólo del formato anterior, que hay que
+/// descifrar. Lo fija <c>LosAdjuntosNoPasanPorElServidor</c>.
 /// </para>
 /// </summary>
 public sealed class AttachmentsModule : ICarterModule
@@ -27,12 +45,30 @@ public sealed class AttachmentsModule : ICarterModule
     {
         var group = app.MapGroup("/api/attachments")
             .WithTags("Attachments")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
 
-        group.MapPost("/", UploadAsync)
-            .WithName("Attachments_Upload")
-            .DisableAntiforgery()
+        group.MapPost("/uploads", SolicitarSubidaAsync)
+            .WithName("Attachments_RequestUpload")
             .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/upload-url", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new RenovarSubidaDeAdjuntoCommand(publicId), ct))
+            .WithName("Attachments_RenewUpload")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/confirm", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ConfirmarSubidaDeAdjuntoCommand(publicId), ct))
+            .WithName("Attachments_ConfirmUpload")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Upload");
+
+        group.MapPost("/{publicId:guid}/download-link", async (Guid publicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new EmitirEnlaceDeDescargaCommand(publicId), ct))
+            .WithName("Attachments_DownloadLink")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Attachments.Download");
 
         group.MapGet("/{publicId:guid}", DownloadAsync)
             .WithName("Attachments_Download")
@@ -49,35 +85,14 @@ public sealed class AttachmentsModule : ICarterModule
             .RequirePermission("Attachments.Download");
     }
 
-    private static async Task<IResult> UploadAsync(
-        [FromForm] IFormFile file,
-        [FromForm] string ownerEntityType,
-        [FromForm] Guid ownerEntityPublicId,
-        ISender sender,
-        HttpContext http,
-        CancellationToken ct)
+    /// <summary>201 con la autorización (contracts/api.md §1); los errores, con el sobre de siempre.</summary>
+    private static async Task<IResult> SolicitarSubidaAsync(
+        SolicitarSubidaDeAdjuntoCommand solicitud, ISender sender, HttpContext http, CancellationToken ct)
     {
-        if (file is null || file.Length == 0)
-        {
-            return Results.Json(
-                new { code = AttachmentErrorCodes.Validation_FileEmpty,
-                      message = "No se recibió un archivo.",
-                      traceId = http.TraceIdentifier },
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        using var ms = new MemoryStream();
-        await file.CopyToAsync(ms, ct);
-        var bytes = ms.ToArray();
-
-        var result = await sender.Send(new UploadAttachmentCommand(
-            OwnerEntityType: ownerEntityType,
-            OwnerEntityPublicId: ownerEntityPublicId,
-            FileName: file.FileName,
-            ContentType: file.ContentType,
-            Content: bytes), ct);
-
-        return (IResult)ErrorEnvelopeFilter.Translate(http, result)!;
+        var result = await sender.Send(solicitud, ct);
+        return result.IsSuccess
+            ? Results.Created($"/api/attachments/{result.Value.AttachmentPublicId}", result.Value)
+            : (IResult)ErrorEnvelopeFilter.Translate(http, result)!;
     }
 
     private static async Task<IResult> DownloadAsync(

@@ -82,6 +82,11 @@ public class TenantResolutionMiddleware
         // middleware corta con Session.TenantNotSelected antes de llegar al
         // endpoint, aunque el endpoint esté marcado AllowAnonymous.
         "/api/publico/",
+        // Las rutas que imitan a S3 en desarrollo (feature 011, LocalBlobEndpoints). Son anónimas como
+        // una URL prefirmada —la autorización es el token, que sólo acuña el servidor— y no tocan datos
+        // de ninguna cooperativa: escriben y leen el disco local. Sólo se registran con el proveedor
+        // Local y fuera de Production; en producción esta exención no alcanza ninguna ruta.
+        "/api/attachments/local-blob/",
         "/health",     // /health/live y /health/ready (T031 — sin tenant)
         "/swagger",
         "/_framework",

@@ -183,7 +183,7 @@ public class ApproveServiceBonusCommandHandlerTests
 
         d.Politica(Domain.Payroll.Policies.CompanyPolicyKeys.AllowSameUserApproval, Domain.Payroll.Policies.CompanyPolicyKeys.Verdadero, new DateOnly(2026, 1, 1));
         (await PrimaDePrueba.Aprobar(d, d.User).Handle(new ApproveServiceBonusCommand(runId, Confirm: true), CancellationToken.None)).Error.Code
-            .Should().Be("Payroll.Settlement.ConfirmationRequired");
+            .Should().Be("Payroll.Settlement.SegregationConfirmationRequired");
         var ok = await PrimaDePrueba.Aprobar(d, d.User).Handle(new ApproveServiceBonusCommand(runId, Confirm: true, ConfirmWithoutSegregation: true), CancellationToken.None);
         ok.IsSuccess.Should().BeTrue(ok.Error.Message);
         ok.Value.ApprovedWithoutSegregation.Should().BeTrue();

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
+using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Middleware;
 using IngenIA365ERP.API.Middleware.CentralIdentity;
 using IngenIA365ERP.API.Services;
@@ -252,6 +253,8 @@ try
     builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
     builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
     builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+    // Feature 011 (R13): operaciones de adjuntos simultaneas por replica; ver LimiteDeAdjuntos.
+    builder.Services.AddLimiteDeAdjuntos(builder.Configuration);
 
     // === Audit (MongoDB) ===
     builder.Services.AddAuditServices(builder.Configuration);
@@ -448,6 +451,8 @@ try
     app.UseCentralIdentityChallenge();
     app.UseTenantResolution();
     app.UseAuthorization();
+    // Despues de autorizar: una peticion sin sesion no ocupa un cupo de adjuntos.
+    app.UseRateLimiter();
     // T074 — convierte cualquier 404 bajo /api/* en el envelope canónico,
     // haciendo indistinguible "endpoint no existe" vs "no tienes permiso".
     app.UseNotFoundEnvelope();

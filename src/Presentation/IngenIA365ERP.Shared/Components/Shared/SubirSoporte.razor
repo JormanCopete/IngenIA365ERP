@@ -1,0 +1,99 @@
+@using IngenIA365ERP.Shared.Services
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@inject AdjuntosClient Adjuntos
+@inject IServiceProvider Servicios
+
+@* Feature 011 (US1, T049): agrega un soporte a un documento. El archivo va del navegador al almacén con
+   una autorización firmada; el servidor sólo autoriza y, al final, revisa lo que llegó. Es un <input>
+   plano y no InputFile a propósito: InputFile copiaría el archivo a la memoria de .NET (research R14).
+   El tipo y el tamaño se revisan antes de pedir la autorización para avisar enseguida (Principio VIII);
+   quien decide es el servidor. *@
+<div class="subir-soporte">
+    <IndicadorDeCarga Cargando="@_subiendo.Activa" Texto="Subiendo…">
+        @if (_soloDesdeLaWeb)
+        {
+            @* Transitorio (T081): hasta confirmar los orígenes de la app en el CORS del almacén (T003, T071). *@
+            <p class="aviso aviso-info">Por ahora los soportes se agregan desde la versión web del ERP.</p>
+        }
+        else
+        {
+            <div class="toolbar">
+                <label class="boton boton-secundario" for="@_idDelInput">Agregar soporte</label>
+                <input type="file" id="@_idDelInput" hidden accept="@TiposDeSoporte.Extensiones"
+                       disabled="@_subiendo.Activa" @onchange="ElegidoAsync" />
+                <span class="muted">PDF, imagen, Word, Excel o texto; hasta @Legible(MaxBytes).</span>
+            </div>
+        }
+        @if (_mensaje is not null)
+        {
+            <p class="aviso @(_ok ? "aviso-ok" : "aviso-error")">@_mensaje</p>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string OwnerEntityType { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public Guid OwnerEntityPublicId { get; set; }
+
+    /// <summary>Para avisar antes de subir; el tope real lo aplica el servidor.</summary>
+    [Parameter] public long MaxBytes { get; set; } = TiposDeSoporte.MaxBytesPorDefecto;
+
+    /// <summary>Se dispara al terminar una subida, bien o mal: la lista de soportes se recarga.</summary>
+    [Parameter] public EventCallback OnSubido { get; set; }
+
+    private readonly string _idDelInput = $"soporte-{Guid.NewGuid():N}";
+    private readonly EstadoDeCarga _subiendo = new();
+    private bool _soloDesdeLaWeb;
+    private string? _mensaje;
+    private bool _ok;
+
+    protected override void OnInitialized()
+    {
+        // En la app (MAUI) el origen de la página no está todavía en el CORS del almacén.
+        var formato = Servicios.GetService<IFormFactor>()?.GetFormFactor();
+        _soloDesdeLaWeb = formato is not null && formato is not ("Web" or "WebAssembly");
+    }
+
+    private async Task ElegidoAsync()
+    {
+        _mensaje = null;
+        using var carga = _subiendo.Iniciar();
+        ArchivoElegido? archivo;
+        try
+        {
+            archivo = await Adjuntos.PrepararAsync(_idDelInput);
+        }
+        catch (JSException ex)
+        {
+            Avisar(false, $"El navegador no pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        if (archivo is null) return;
+
+        var problema = archivo.Size == 0 ? "El archivo está vacío."
+            : archivo.Size > MaxBytes ? $"«{archivo.Name}» pesa {Legible(archivo.Size)}; el máximo es {Legible(MaxBytes)}."
+            : !TiposDeSoporte.Admitidos.Contains(archivo.Type) ? $"«{archivo.Name}» no es de un tipo admitido como soporte."
+            : null;
+        if (problema is not null)
+        {
+            await Adjuntos.OlvidarAsync(archivo);
+            Avisar(false, problema);
+            return;
+        }
+
+        var resultado = await Adjuntos.SubirAsync(OwnerEntityType, OwnerEntityPublicId, archivo);
+        Avisar(resultado.Ok, resultado.Mensaje);
+        await OnSubido.InvokeAsync();
+    }
+
+    private void Avisar(bool ok, string mensaje)
+    {
+        _ok = ok;
+        _mensaje = mensaje;
+    }
+
+    private static string Legible(long bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / (1024d * 1024):0.#} MB" : bytes >= 1024 ? $"{bytes / 1024d:0.#} KB" : $"{bytes} bytes";
+}

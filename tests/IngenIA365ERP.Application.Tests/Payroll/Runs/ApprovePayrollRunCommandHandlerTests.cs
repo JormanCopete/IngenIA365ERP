@@ -195,7 +195,7 @@ public class ApprovePayrollRunCommandHandlerTests
 
         d.PermitirAprobarMismoUsuario();
         var sinSegundaConfirmacion = await Aprobador(d, d.User).Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
-        sinSegundaConfirmacion.Error.Code.Should().Be("Payroll.ConfirmationRequired");
+        sinSegundaConfirmacion.Error.Code.Should().Be("Payroll.SegregationConfirmationRequired");
 
         var conDoble = await Aprobador(d, d.User).Handle(new ApprovePayrollRunCommand(runId, Confirm: true, ConfirmWithoutSegregation: true), CancellationToken.None);
         conDoble.IsSuccess.Should().BeTrue(conDoble.Error.Message);

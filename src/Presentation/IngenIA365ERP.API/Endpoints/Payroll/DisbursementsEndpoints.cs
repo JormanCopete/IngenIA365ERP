@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.BankFiles;
 using IngenIA365ERP.Application.Payroll.Dispersion;
@@ -47,7 +48,16 @@ public sealed class DisbursementsEndpoints : ICarterModule
             })
             .WithName("Payroll_Disbursements_Download")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
-            .RequirePermission("Payroll.Disbursement.View");
+            .RequirePermission("Payroll.Disbursement.View")
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
+
+        // Feature 011 (§9): el archivo se baja con un enlace firmado; GET /file queda para los del formato anterior.
+        group.MapPost("/{id:guid}/download-link", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new EmitirEnlaceDeDispersionCommand(id), ct))
+            .WithName("Payroll_Disbursements_DownloadLink")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Disbursement.View")
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
 
         group.MapPost("/preview", async (PreviewBody body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new PreviewDisbursementFileCommand(body.RunPublicId, body.FormatPublicId, body.PaymentDate, body.SourceAccountPublicId, body.Reference, body.Definition), ct))

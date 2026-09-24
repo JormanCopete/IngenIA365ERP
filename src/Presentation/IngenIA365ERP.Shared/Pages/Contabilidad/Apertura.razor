@@ -157,13 +157,24 @@
     </DialogTemplates>
 </SfDialog>
 
-<SfDialog Visible="@(_aDescartar is not null)" Header="Descartar el borrador de apertura" Width="460px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) _aDescartar = null; })">
+<SfDialog Visible="@(_aDescartar is not null)" Header="Descartar el borrador de apertura" Width="460px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) CerrarDescarte(); })">
     <DialogTemplates>
         <Content>
             <p>Se descarta el borrador con sus @(_aDescartar?.Lines) línea(s). No afecta a ningún saldo: todavía no está contabilizado. Puede volver a importar el archivo cuando quiera.</p>
+            @if (_confirmarDescarteConSoportes)
+            {
+                <p class="aviso aviso-alerta">Tiene @_soportesPorBorrar @(_soportesPorBorrar == 1 ? "soporte" : "soportes"); se borrarán y quedarán 90 días en la papelera.</p>
+            }
             <div class="toolbar">
-                <SfButton CssClass="e-danger" Disabled="@_ocupado" OnClick="@DescartarAsync">Descartar</SfButton>
-                <SfButton CssClass="e-outline" OnClick="@(() => _aDescartar = null)">Cancelar</SfButton>
+                @if (_confirmarDescarteConSoportes)
+                {
+                    <SfButton CssClass="e-danger" Disabled="@_ocupado" OnClick="@(() => DescartarAsync(borrarSoportes: true))">Descartar y borrar soportes</SfButton>
+                }
+                else
+                {
+                    <SfButton CssClass="e-danger" Disabled="@_ocupado" OnClick="@(() => DescartarAsync(borrarSoportes: false))">Descartar</SfButton>
+                }
+                <SfButton CssClass="e-outline" OnClick="@CerrarDescarte">Cancelar</SfButton>
             </div>
         </Content>
     </DialogTemplates>
@@ -180,6 +191,14 @@
     private DateTime _fecha = DateTime.Today, _nuevaFecha = DateTime.Today;
     private DateTime _minimo = DateTime.Today, _maximo = DateTime.Today;
     private AperturaResumenDto? _aFechar, _aDescartar;
+    private bool _confirmarDescarteConSoportes;
+    private int _soportesPorBorrar;
+
+    private void CerrarDescarte()
+    {
+        _aDescartar = null;
+        _confirmarDescarteConSoportes = false;
+    }
 
     protected override Task OnInitializedAsync() => CargarAsync();
 
@@ -224,15 +243,22 @@
         finally { _ocupado = false; }
     }
 
-    private async Task DescartarAsync()
+    private async Task DescartarAsync(bool borrarSoportes)
     {
         if (_aDescartar is null) return;
         _ocupado = true;
         try
         {
-            var r = await Contabilidad.DescartarBorradorAsync(_aDescartar.PublicId);
+            var r = await Contabilidad.DescartarBorradorAsync(_aDescartar.PublicId, borrarSoportes);
+            if (!r.IsSuccess && r.ErrorCode == ContabilidadClient.CodigoTieneSoportes)
+            {
+                // Feature 011 (FR-005): los soportes de la apertura tampoco se borran sin confirmarlo.
+                _soportesPorBorrar = r.Entero("count") ?? 0;
+                _confirmarDescarteConSoportes = true;
+                return;
+            }
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar el borrador."); return; }
-            _aDescartar = null;
+            CerrarDescarte();
             await Notification.SuccessAsync("Borrador descartado.");
             await CargarAsync();
         }

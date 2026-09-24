@@ -39,7 +39,7 @@ public class DocumentCommandsTests
 
         public ValidateDraftQueryHandler Validador() => new(D.Db, D.Poster);
 
-        public DiscardDraftCommandHandler Descartador() => new(D.Db, D.Clock, D.User);
+        public DiscardDraftCommandHandler Descartador() => new(D.Db, NSubstitute.Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Storage.IBlobStore>(), D.Clock, D.User);
 
         private AccountingPoster Poster(ICurrentUserService? usuario) => usuario is null ? D.Poster : new AccountingPoster(D.Db, D.Clock, usuario, D.Alcance);
 

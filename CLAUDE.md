@@ -290,6 +290,68 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   como saldo inicial y fuera del cierre mensual. El borrador se edita entero hasta contabilizarlo
   (líneas por `PUT /documents/drafts/{id}` con tipo `AP`, fecha, descartar) y **volver a importar
   reemplaza sus líneas** conservando el mismo comprobante (las viejas quedan de baja, Principio XI).
+- **Adjuntos**: se guardan por `IBlobStore`, que tiene dos implementaciones y se elige con
+  `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`, 2026-09-22, los
+  tres ambientes del clúster). **El archivo no pasa por el servidor** (feature 011, entrega E3,
+  2026-09-23): una persona pide una autorización firmada (`POST /api/attachments/uploads`: clave, tipo,
+  tamaño exacto y huella, 5 minutos), el navegador sube directo al bucket con
+  `Shared/wwwroot/js/adjuntos.js` —los bytes nunca cruzan a .NET; nada de `InputFile`— y `/confirm` revisa
+  lo que llegó con `FirmaDeContenido` sobre los primeros 8 KiB: `Available`, `Rejected` (motivo; el objeto
+  va a la papelera) o, vencida la autorización sin objeto, `Incomplete` (se reintenta sobre la misma
+  fila y clave con `/upload-url`). Bajar es un enlace firmado de 60 s (`/download-link`, auditado) que
+  obliga a guardar con nombre y tipo; PILA y dispersión tienen el suyo con su `charset`. Lo que generan
+  los módulos se guarda tal cual, `Direct` y ya `Available`. Hay **dos formatos**: `Direct` (todo lo
+  nuevo, cifrado por el bucket, SSE-S3) y `AppEncrypted` (lo escrito antes en DEV y QA, cifrado por
+  `AttachmentEncryptionService` y DataProtection), que **no se migra** y se sigue bajando por la API
+  (`GET /api/attachments/{id}`, `…/file`); a un `Direct` esas rutas le responden 409
+  `Attachments.UseDownloadLink`. Tamaño, tipo y vacío los responde el **handler** (`Validation.Attachments.*`,
+  400, `data.maxBytes`), no el validador. Ninguna ruta de adjuntos recibe el archivo salvo `local-blob`
+  (`LosAdjuntosNoPasanPorElServidor`). **El bucket necesita CORS** para los orígenes web (lo pone
+  `crear-bucket-adjuntos.ps1`); sin él la subida falla en el navegador aunque la API autorice.
+  El bucket de adjuntos (`ingenia365-erp-attachments`) es **otro** que el de respaldos (aquél tiene
+  Object Lock a 40 días). La clave es `{prefijo del ambiente}/{cooperativa}/{aaaa}/{mm}/{guid}.bin` y
+  **el prefijo no se guarda en la base** (`StoragePath` lleva la referencia sin él), así se puede mover
+  el prefijo o el bucket sin invalidar lo escrito.
+  **Nada se borra solo (feature 011, rama `011-adjuntos-s3-prefirmadas`, entrega E1, 2026-09-23)**:
+  borrar es el acto de una persona con `Attachments.Delete`, auditado, y `DeleteAttachmentCommand`
+  retira **primero el objeto y después la fila** (si la baja falla, reintentar completa; al revés
+  quedaba un objeto vigente sin nada que lo nombrara). La credencial del ERP no borra **versiones**:
+  el objeto queda en la **papelera de 90 días** (regla de ciclo de vida `papelera-90-dias`, la única
+  purga automática, y sólo alcanza a lo ya borrado); recuperarlo o suprimirlo por Habeas Data son
+  recetas de soporte con la credencial administrativa, no botones. Hasta ese día la documentación
+  prometía un «GC programado» que nunca existió y borrar sólo daba de baja la fila;
+  `NadieBorraAdjuntosPorSuCuenta` fija quién puede llamar a `IBlobStore.DeleteAsync`. Las reglas por
+  dueño viven en **un solo sitio**, `AdjuntosDeModulo`: lo que genera un módulo (definitiva,
+  dispersión, PILA) no se borra ni recibe subidas; el soporte de un comprobante exige
+  `Accounting.Vouchers.View` para leerlo, `Vouchers.Create` y que el comprobante exista para subirlo,
+  y **no se borra si está contabilizado o reversado** (`Attachments.OwnerLocked`; antes sólo la
+  pantalla escondía el botón —ahora lo decide `canDelete` del servidor—); cualquier otro dueño no
+  admite subidas todavía. Descartar un borrador con soportes pide confirmarlo
+  (`Accounting.Document.HasAttachments`, `?deleteAttachments=true`). `POST /api/attachments`
+  (multipart) **se retiró sin alias**: permitía colgar un archivo de cualquier dueño. El grupo lleva
+  el limitador de concurrencia `adjuntos` (32 + 64 en cola por réplica, 429 `Attachments.Busy`).
+  Con `Provider = Local` y fuera de Production el almacén local **imita a S3** con tokens de
+  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. **E2, credenciales temporales**
+  (IAM Roles Anywhere, sin costo): **activo en DEV y QA desde el 2026-09-23**. La API toma una sesión
+  de una hora del sidecar `aws_signing_helper serve` (en `127.0.0.1:9911`, imitando al IMDSv2), con
+  un rol por ambiente acotado a su prefijo, sin listar ni versiones. Piezas:
+  - `tools/scripts/crear-certificados-adjuntos.ps1`: CA propia fuera del repo y del clúster, un certificado
+    por ambiente que vence en un año; al instalar reinicia la API porque el sidecar lee el certificado sólo
+    al arrancar;
+  - la pila `docs/operaciones/plantillas/adjuntos-roles-anywhere.yaml`;
+  - el componente de GitOps `components/adjuntos-roles-anywhere`, **sin sondas**, porque `serve` sólo
+    escucha en 127.0.0.1;
+  - `probar-credencial-adjuntos.ps1`: 14 comprobaciones de permisos desde un pod de prueba;
+  - `revocar-certificado-adjuntos.ps1`: la CRL.
+
+  Producción sigue con la llave transitoria, ya **sin permiso de listar**
+  (`politica-iam-adjuntos.json`), hasta su autorización. Falta la verificación en MAUI (E4);
+  `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
+  redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
+  réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
+  health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
+  se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
+  `docs/operaciones/adjuntos-en-s3.md`.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -462,15 +524,19 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 765 (2026-09-22; +2 de la carga masiva de auxiliares sobre las 763 de E2) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | 772 (2026-09-23; feature 011: E1 −1 por la subida multipart retirada y +2 del almacén local —sólo con `Provider = Local` fuera de Production—; E3 +6: pedir, renovar y confirmar una subida, y los enlaces de adjuntos, PILA y dispersión) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.664 el 2026-09-22 (223 Domain, 1.225 Application, 113 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 213 el 2026-09-22 con Docker: 212 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.778 el 2026-09-23, cierre de la feature 011 en DEV y QA (223 Domain, 1.318 Application, 134 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 261 el 2026-09-23 con Docker: 260 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y el host «Adjuntos sobre S3», `ApiConAlmacenS3Fixture`, con `Provider = S3` contra MinIO) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
-corriendo. Las 13 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
+corriendo, y **nada más**: desde el 2026-09-23 la fixture pone su propio WebAuthn, su maestro
+(`MasterAdmin:*` con sus constantes de prueba) y un par de llaves JWT generado por corrida. Hasta esa
+fecha dependía de tres cosas que git ignora —`appsettings.Development.json`,
+`appsettings.Development.local.json` y `Keys/`— y en un clon limpio o un worktree todas caían en
+`ObjectDisposedException`. Las 13 de nómina (`Payroll/`, colección «Nomina e2e», una cooperativa
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
 `PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,
@@ -511,11 +577,11 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/010-nomina-prestaciones-pila-dian/plan.md](specs/010-nomina-prestaciones-pila-dian/plan.md)
+[specs/011-adjuntos-s3-prefirmadas/plan.md](specs/011-adjuntos-s3-prefirmadas/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/010-nomina-prestaciones-pila-dian/spec.md)
-- [research.md](specs/010-nomina-prestaciones-pila-dian/research.md)
-- [data-model.md](specs/010-nomina-prestaciones-pila-dian/data-model.md)
-- [quickstart.md](specs/010-nomina-prestaciones-pila-dian/quickstart.md)
-- [contracts/](specs/010-nomina-prestaciones-pila-dian/contracts/)
+- [spec.md](specs/011-adjuntos-s3-prefirmadas/spec.md)
+- [research.md](specs/011-adjuntos-s3-prefirmadas/research.md)
+- [data-model.md](specs/011-adjuntos-s3-prefirmadas/data-model.md)
+- [quickstart.md](specs/011-adjuntos-s3-prefirmadas/quickstart.md)
+- [contracts/](specs/011-adjuntos-s3-prefirmadas/contracts/)
 <!-- SPECKIT END -->
