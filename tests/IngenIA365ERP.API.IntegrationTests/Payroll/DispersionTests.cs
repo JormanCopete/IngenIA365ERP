@@ -101,7 +101,8 @@ public class DispersionTests(CentralIdentityApiFixture fx)
         total.Should().Be(netoAna + netoCarlos, "el total del archivo es la suma de los netos incluidos");
 
         // --------------------------------------------------------------- descargar --
-        using var descarga = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Get, $"{Ruta}/{archivoId}/file", null);
+        // Feature 011 (§9): el archivo se baja con un enlace firmado, con el tipo y la codificación del formato.
+        using var descarga = await NominaE2E.BajarPorEnlaceAsync(http, admin, $"{Ruta}/{archivoId}/download-link");
         descarga.StatusCode.Should().Be(HttpStatusCode.OK, await descarga.Content.ReadAsStringAsync());
         descarga.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
         descarga.Content.Headers.ContentType.CharSet.Should().Be("us-ascii");

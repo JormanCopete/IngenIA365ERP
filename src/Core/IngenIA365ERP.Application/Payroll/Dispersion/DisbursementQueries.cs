@@ -5,6 +5,10 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
+using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
+using IngenIA365ERP.Domain.Enums.Core;
+using Microsoft.Extensions.Options;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -115,4 +119,42 @@ public sealed class DownloadDisbursementFileQueryHandler(IApplicationDbContext d
             return Result.Failure<DisbursementDownloadDto>(new Error("Payroll.Disbursement.FileTampered", "El archivo guardado no coincide con la huella registrada al generarlo."));
         return Result.Success(new DisbursementDownloadDto(a.FileName, a.Format?.ContentType ?? descarga.Value.ContentType, descarga.Value.Content, a.Format?.Encoding ?? "us-ascii"));
     }
+}
+
+/// <summary>
+/// Feature 011 (US4, contracts/api.md §9): el archivo de dispersión se baja con un enlace firmado, con el
+/// nombre, el tipo y la codificación del formato del banco. Uno guardado con el formato anterior
+/// responde <c>direct: false</c> y se baja por <c>GET /{id}/file</c>. Es un comando porque cada enlace
+/// queda en la auditoría.
+/// </summary>
+public sealed record EmitirEnlaceDeDispersionCommand(Guid FilePublicId) : IRequest<Result<EnlaceDeDescargaDto>>;
+
+public sealed class EmitirEnlaceDeDispersionCommandValidator : AbstractValidator<EmitirEnlaceDeDispersionCommand>
+{
+    public EmitirEnlaceDeDispersionCommandValidator() => RuleFor(x => x.FilePublicId).NotEmpty();
+}
+
+public sealed class EmitirEnlaceDeDispersionCommandHandler(IApplicationDbContext db, IBlobStore store, IDateTimeService reloj, IOptions<LimitesDeAdjuntos> limites)
+    : IRequestHandler<EmitirEnlaceDeDispersionCommand, Result<EnlaceDeDescargaDto>>
+{
+    public async Task<Result<EnlaceDeDescargaDto>> Handle(EmitirEnlaceDeDispersionCommand request, CancellationToken ct)
+    {
+        var a = await db.BankDisbursementFiles.AsNoTracking().Include(x => x.Format).FirstOrDefaultAsync(x => x.PublicId == request.FilePublicId, ct);
+        if (a is null) return Result.Failure<EnlaceDeDescargaDto>(DisbursementErrors.FileNotFound);
+        var adjunto = a.FileAttachmentPublicId is { } adjuntoId
+            ? await db.Attachments.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == adjuntoId, ct)
+            : null;
+        if (adjunto is null)
+            return Result.Failure<EnlaceDeDescargaDto>(new Error("Payroll.Disbursement.FileMissing", "El archivo no quedó guardado; genere uno nuevo."));
+        if (!string.Equals(adjunto.Sha256Hex, a.FileSha256, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<EnlaceDeDescargaDto>(new Error("Payroll.Disbursement.FileTampered", "El archivo guardado no coincide con la huella registrada al generarlo."));
+        if (adjunto.Format == FormatoDeAdjunto.AppEncrypted) return Result.Success(EnlaceDeDescargaDto.PorLaApi);
+
+        return Result.Success(await AdjuntosDirectos.FirmarDescargaAsync(store, adjunto, reloj, limites.Value, ct,
+            contentType: TipoConCodificacion(a.Format?.ContentType ?? adjunto.ContentType, a.Format?.Encoding ?? "us-ascii"), nombre: a.FileName));
+    }
+
+    /// <summary>El mismo tipo que servía <c>GET /{id}/file</c>: el del formato, con su codificación si no la trae.</summary>
+    public static string TipoConCodificacion(string tipo, string codificacion) =>
+        tipo.Contains("charset", StringComparison.OrdinalIgnoreCase) ? tipo : $"{tipo}; charset={codificacion}";
 }

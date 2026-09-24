@@ -4,6 +4,7 @@
 @inject NominaClient Nomina
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 
 @*
     Feature 010 (US8, contracts/api.md §9.2): los archivos de dispersión bancaria generados desde
@@ -222,6 +223,15 @@
     {
         if (_detalle is null || _accion.Activa) return;
         using var accion = _accion.Iniciar();
+        // Feature 011 (§9): el archivo va del almacén al navegador con un enlace firmado; sólo uno guardado
+        // con el formato anterior se baja por la API.
+        var enlace = await Nomina.EnlaceDeDispersionAsync(_detalle.Summary.FilePublicId);
+        if (!enlace.IsSuccess) { await Notification.ErrorAsync(enlace.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        if (enlace.Value is { Direct: true, Url: { } url })
+        {
+            await Adjuntos.DescargarAsync(url, _detalle.Summary.FileName);
+            return;
+        }
         var res = await Nomina.DescargarDispersionAsync(_detalle.Summary.FilePublicId);
         if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
         await Descargas.GuardarAsync(res.Value!.Nombre, res.Value.TipoContenido, res.Value.Contenido);

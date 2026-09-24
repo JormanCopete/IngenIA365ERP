@@ -191,6 +191,7 @@ if ($SoloVerificar) {
         Write-Host ("  Objetos:    {0}" -f (Invoke-Aws @('s3api', 'list-objects-v2', '--bucket', $Bucket, '--max-items', '1', '--output', 'text') -TolerarError))
         Write-Host ("  Ciclo:      {0}" -f (Invoke-Aws @('s3api', 'get-bucket-lifecycle-configuration', '--bucket', $Bucket, '--query', 'Rules[].ID', '--output', 'text') -TolerarError))
         Write-Host ("  Politica:   {0}" -f (Invoke-Aws @('s3api', 'get-bucket-policy', '--bucket', $Bucket, '--query', 'Policy', '--output', 'text') -TolerarError))
+        Write-Host ("  CORS:       {0}" -f (Invoke-Aws @('s3api', 'get-bucket-cors', '--bucket', $Bucket, '--query', 'CORSRules[].AllowedOrigins[]', '--output', 'text') -TolerarError))
     }
     return
 }
@@ -270,6 +271,17 @@ $politicaDelBucket = '{"Version":"2012-10-17","Statement":[{"Sid":"SoloTls","Eff
                      '"Action":"s3:*","Resource":["arn:aws:s3:::' + $Bucket + '","arn:aws:s3:::' + $Bucket + '/*"],' +
                      '"Condition":{"Bool":{"aws:SecureTransport":"false"}}}]}'
 Invoke-AwsConJson @('s3api', 'put-bucket-policy', '--bucket', $Bucket, '--policy') -Json $politicaDelBucket
+Write-Host "OK" -ForegroundColor Green
+
+# CORS (feature 011, research R14): el navegador sube directo al bucket con una autorizacion firmada, asi
+# que el bucket tiene que aceptar el POST desde los origenes del ERP. Bajar no lo necesita: es navegacion.
+# Los origenes de la app (BlazorWebView, https://0.0.0.1 y app://0.0.0.1) se agregan cuando la espiga T003
+# los confirme en cada plataforma; hasta entonces la app pide subir los soportes desde la web.
+Write-Host "  CORS (subidas directas desde la web del ERP) ... " -NoNewline
+$cors = '{"CORSRules":[{"AllowedMethods":["POST"],' +
+        '"AllowedOrigins":["https://app-dev.ingenia365.com","https://app-qa.ingenia365.com","https://app.ingenia365.com"],' +
+        '"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3000}]}'
+Invoke-AwsConJson @('s3api', 'put-bucket-cors', '--bucket', $Bucket, '--cors-configuration') -Json $cors
 Write-Host "OK" -ForegroundColor Green
 
 if ($OmitirIam) {

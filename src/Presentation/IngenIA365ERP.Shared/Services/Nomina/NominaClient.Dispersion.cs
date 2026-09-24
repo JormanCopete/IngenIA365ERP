@@ -51,6 +51,18 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<ArchivoDescargado>> DescargarDispersionAsync(Guid archivoId, CancellationToken ct = default) =>
         DescargarAsync($"{RutaDispersion}/{archivoId}/file", ct);
 
+    /// <summary>
+    /// Feature 011 (§9): el enlace firmado del archivo. Con <c>direct: false</c> (guardado con el formato
+    /// anterior) hay que bajarlo por <see cref="DescargarDispersionAsync"/>.
+    /// </summary>
+    public async Task<InvitationApiResult<Adjuntos.EnlaceDeDescargaDto>> EnlaceDeDispersionAsync(Guid archivoId, CancellationToken ct = default)
+    {
+        var r = await EnviarAsync<Adjuntos.EnlaceDeDescargaDto>(HttpMethod.Post, $"{RutaDispersion}/{archivoId}/download-link", null, ct);
+        return r.IsSuccess && r.Value is { Url: { } url } enlace
+            ? InvitationApiResult<Adjuntos.EnlaceDeDescargaDto>.Success(enlace with { Url = Adjuntos.EnlacesFirmados.Absoluta(http, url) })
+            : r;
+    }
+
     public Task<InvitationApiResult<VistaPreviaDeDispersionDto>> VistaPreviaDeDispersionAsync(VistaPreviaDeDispersionRequest request, CancellationToken ct = default) =>
         EnviarAsync<VistaPreviaDeDispersionDto>(HttpMethod.Post, $"{RutaDispersion}/preview", request, ct);
 

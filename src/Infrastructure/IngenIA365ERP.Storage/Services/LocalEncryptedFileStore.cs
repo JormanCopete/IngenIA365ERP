@@ -98,7 +98,7 @@ public sealed class LocalEncryptedFileStore : IBlobStore, IAlmacenLocal
     {
         ArgumentNullException.ThrowIfNull(solicitud);
         var m = solicitud.Metadata;
-        var referencia = NuevaReferencia(m.TenantId);
+        var referencia = solicitud.Referencia?.Uri ?? NuevaReferencia(m.TenantId);
         var token = Proteger(new Pase("subir", referencia, m.ContentType, m.SizeBytes, solicitud.Sha256Base64, null, solicitud.VenceEn));
         // Los mismos campos que pide la política de S3, para que el cliente no distinga los almacenes.
         IReadOnlyList<KeyValuePair<string, string>> campos =

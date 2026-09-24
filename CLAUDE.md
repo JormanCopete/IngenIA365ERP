@@ -290,11 +290,24 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   como saldo inicial y fuera del cierre mensual. El borrador se edita entero hasta contabilizarlo
   (líneas por `PUT /documents/drafts/{id}` con tipo `AP`, fecha, descartar) y **volver a importar
   reemplaza sus líneas** conservando el mismo comprobante (las viejas quedan de baja, Principio XI).
-- **Adjuntos**: se suben cifrados (`AttachmentEncryptionService`, AES-256-GCM con clave por archivo
-  envuelta con DataProtection) y se guardan por `IBlobStore`, que tiene dos implementaciones y se
-  elige con `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`,
-  2026-09-22, los tres ambientes del clúster). El almacén es **transparente**: recibe bytes ya
-  cifrados, así que S3 nunca ve el archivo original y su SSE-S3 va encima, no en lugar del nuestro.
+- **Adjuntos**: se guardan por `IBlobStore`, que tiene dos implementaciones y se elige con
+  `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`, 2026-09-22, los
+  tres ambientes del clúster). **El archivo no pasa por el servidor** (feature 011, entrega E3,
+  2026-09-23): una persona pide una autorización firmada (`POST /api/attachments/uploads`: clave, tipo,
+  tamaño exacto y huella, 5 minutos), el navegador sube directo al bucket con
+  `Shared/wwwroot/js/adjuntos.js` —los bytes nunca cruzan a .NET; nada de `InputFile`— y `/confirm` revisa
+  lo que llegó con `FirmaDeContenido` sobre los primeros 8 KiB: `Available`, `Rejected` (motivo; el objeto
+  va a la papelera) o, vencida la autorización sin objeto, `Incomplete` (se reintenta sobre la misma
+  fila y clave con `/upload-url`). Bajar es un enlace firmado de 60 s (`/download-link`, auditado) que
+  obliga a guardar con nombre y tipo; PILA y dispersión tienen el suyo con su `charset`. Lo que generan
+  los módulos se guarda tal cual, `Direct` y ya `Available`. Hay **dos formatos**: `Direct` (todo lo
+  nuevo, cifrado por el bucket, SSE-S3) y `AppEncrypted` (lo escrito antes en DEV y QA, cifrado por
+  `AttachmentEncryptionService` y DataProtection), que **no se migra** y se sigue bajando por la API
+  (`GET /api/attachments/{id}`, `…/file`); a un `Direct` esas rutas le responden 409
+  `Attachments.UseDownloadLink`. Tamaño, tipo y vacío los responde el **handler** (`Validation.Attachments.*`,
+  400, `data.maxBytes`), no el validador. Ninguna ruta de adjuntos recibe el archivo salvo `local-blob`
+  (`LosAdjuntosNoPasanPorElServidor`). **El bucket necesita CORS** para los orígenes web (lo pone
+  `crear-bucket-adjuntos.ps1`); sin él la subida falla en el navegador aunque la API autorice.
   El bucket de adjuntos (`ingenia365-erp-attachments`) es **otro** que el de respaldos (aquél tiene
   Object Lock a 40 días). La clave es `{prefijo del ambiente}/{cooperativa}/{aaaa}/{mm}/{guid}.bin` y
   **el prefijo no se guarda en la base** (`StoragePath` lleva la referencia sin él), así se puede mover
@@ -318,9 +331,8 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   (multipart) **se retiró sin alias**: permitía colgar un archivo de cualquier dueño. El grupo lleva
   el limitador de concurrencia `adjuntos` (32 + 64 en cola por réplica, 429 `Attachments.Busy`).
   Con `Provider = Local` y fuera de Production el almacén local **imita a S3** con tokens de
-  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. La subida y descarga directas
-  con URLs prefirmadas (US1/US2) y los roles temporales (IAM Roles Anywhere) son las entregas
-  siguientes; `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
+  DataProtection y rutas anónimas `/api/attachments/local-blob/{token}`. Siguen los roles temporales
+  (IAM Roles Anywhere, E2) y la verificación en MAUI (E4); `specs/011-adjuntos-s3-prefirmadas/`. Hasta ese día los tres ambientes escribían en un PVC `local-path` sin
   redundancia, fuera de los respaldos y `ReadWriteOnce` —con un segundo nodo, una de las dos
   réplicas de la API no habría podido montarlo—; se migró con el volumen vacío en producción. El
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
@@ -498,11 +510,11 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 766 (2026-09-23; feature 011 E1: −1 por la subida multipart retirada, +2 del almacén local, que sólo se registran con `Provider = Local` fuera de Production) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Rutas REST | 772 (2026-09-23; feature 011: E1 −1 por la subida multipart retirada y +2 del almacén local —sólo con `Provider = Local` fuera de Production—; E3 +6: pedir, renovar y confirmar una subida, y los enlaces de adjuntos, PILA y dispersión) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
 | Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
 | Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.697 el 2026-09-23 (223 Domain, 1.252 Application, 119 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 252 el 2026-09-23 con Docker: 251 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y un host propio) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Pruebas sin contenedores | 1.763 el 2026-09-23 (223 Domain, 1.316 Application, 121 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 261 el 2026-09-23 con Docker: 260 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y el host «Adjuntos sobre S3», `ApiConAlmacenS3Fixture`, con `Provider = S3` contra MinIO) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop

@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Enums.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,12 @@ namespace IngenIA365ERP.Application.Attachments.DownloadAttachment;
 /// El query scoped al tenant del usuario actual — un adjunto de otro tenant
 /// devuelve <c>Generic.NotFound</c> (404 indistinguible). Lo mismo un adjunto que generó un
 /// módulo (<see cref="AdjuntosDeModulo"/>) cuando quien pide no tiene el permiso de ese módulo.
+///
+/// <para>
+/// Feature 011 (contracts/api.md §6): sirve <b>sólo el formato anterior</b> (<c>AppEncrypted</c>), el
+/// que hay que descifrar. Un adjunto <c>Direct</c> responde 409 <c>Attachments.UseDownloadLink</c>: se
+/// baja con un enlace firmado, sin pasar por la memoria del servidor.
+/// </para>
 /// </summary>
 public sealed record DownloadAttachmentQuery(Guid AttachmentPublicId)
     : IRequest<Result<AttachmentDownload>>;
@@ -77,6 +84,12 @@ public sealed class DownloadAttachmentQueryHandler
         {
             return Result.Failure<AttachmentDownload>(
                 "Generic.NotFound", "Adjunto no encontrado.");
+        }
+
+        if (attachment.Format == FormatoDeAdjunto.Direct)
+        {
+            return Result.Failure<AttachmentDownload>(AttachmentErrorCodes.UseDownloadLink,
+                "Este archivo se baja con un enlace de descarga (POST /api/attachments/{id}/download-link), no a través de la API.");
         }
 
         byte[] encryptedBlob;

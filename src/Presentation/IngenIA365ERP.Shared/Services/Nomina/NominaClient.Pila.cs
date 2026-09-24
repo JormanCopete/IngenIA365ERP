@@ -43,6 +43,19 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<ArchivoDescargado>> DescargarPilaAsync(Guid generacionId, bool reconocerDiferencia = false, CancellationToken ct = default) =>
         DescargarAsync($"{RutaPila}/{generacionId}/file" + (reconocerDiferencia ? "?acknowledgeDifference=true" : string.Empty), ct);
 
+    /// <summary>
+    /// Feature 011 (§9): el enlace firmado de la planilla, con las mismas reglas que <see cref="DescargarPilaAsync"/>.
+    /// Con <c>direct: false</c> (guardada con el formato anterior) hay que bajarla por aquella.
+    /// </summary>
+    public async Task<InvitationApiResult<Adjuntos.EnlaceDeDescargaDto>> EnlaceDePilaAsync(Guid generacionId, bool reconocerDiferencia = false, CancellationToken ct = default)
+    {
+        var r = await EnviarAsync<Adjuntos.EnlaceDeDescargaDto>(HttpMethod.Post,
+            $"{RutaPila}/{generacionId}/download-link" + (reconocerDiferencia ? "?acknowledgeDifference=true" : string.Empty), null, ct);
+        return r.IsSuccess && r.Value is { Url: { } url } enlace
+            ? InvitationApiResult<Adjuntos.EnlaceDeDescargaDto>.Success(enlace with { Url = Adjuntos.EnlacesFirmados.Absoluta(http, url) })
+            : r;
+    }
+
     public Task<InvitationApiResult<PilaCargadaDto>> MarcarPilaCargadaAsync(Guid generacionId, MarcarCargadaRequest request, CancellationToken ct = default) =>
         EnviarAsync<PilaCargadaDto>(HttpMethod.Post, $"{RutaPila}/{generacionId}/mark-uploaded", request, ct);
 

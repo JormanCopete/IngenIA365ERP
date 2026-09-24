@@ -21,10 +21,10 @@ namespace IngenIA365ERP.Storage.Services;
 /// </para>
 ///
 /// <para>
-/// El contenido llega <b>ya cifrado</b> por <see cref="AttachmentEncryptionService"/> (AES-256-GCM
-/// con clave por archivo): S3 sólo ve bytes opacos, y el cifrado del lado del servidor (SSE-S3) va
-/// encima, no en lugar del nuestro. Las credenciales las resuelve el SDK por la cadena estándar; el
-/// proceso no las lee ni las registra.
+/// Desde la feature 011 el contenido llega como se generó o como lo subió el navegador, y lo cifra el
+/// bucket (SSE-S3). Los objetos del formato anterior siguen cifrados por
+/// <see cref="AttachmentEncryptionService"/> y se leen por la API. Las credenciales las resuelve el SDK
+/// por la cadena estándar; el proceso no las lee ni las registra.
 /// </para>
 /// </summary>
 public sealed class S3BlobStore : IBlobStore, IDisposable
@@ -63,9 +63,12 @@ public sealed class S3BlobStore : IBlobStore, IDisposable
             BucketName = _opciones.BucketName,
             Key = ClaveDe(referencia, _opciones.Prefix),
             InputStream = content,
-            // Lo que se guarda son bytes cifrados; declararlos como el tipo original sería mentir y
-            // además revelaría en los metadatos de S3 qué clase de archivo es.
-            ContentType = "application/octet-stream",
+            // Feature 011 (R11): lo que suben los módulos (PILA, dispersión, definitiva) va tal como se
+            // generó, con su tipo; el cifrado en reposo es el del bucket. Hasta el 2026-09-23 llegaban
+            // cifrados por la aplicación y se declaraban application/octet-stream.
+            ContentType = metadata.ContentType,
+            // Que S3 calcule y guarde la huella, como en la subida firmada: el HEAD la devuelve.
+            ChecksumAlgorithm = ChecksumAlgorithm.SHA256,
             AutoCloseStream = false,
         };
         // Metadatos para poder auditar o reconstruir sin la base; el nombre original va codificado
@@ -150,7 +153,7 @@ public sealed class S3BlobStore : IBlobStore, IDisposable
     {
         ArgumentNullException.ThrowIfNull(solicitud);
         var m = solicitud.Metadata;
-        var referencia = NuevaReferencia(m.TenantId);
+        var referencia = solicitud.Referencia?.Uri ?? NuevaReferencia(m.TenantId);
         var campos = new Dictionary<string, string>
         {
             ["Content-Type"] = m.ContentType,

@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.Pila;
 using MediatR;
@@ -63,7 +64,15 @@ public sealed class PilaEndpoints : ICarterModule
                 if (result.IsFailure) return (object)result;
                 return Results.File(result.Value.Content, $"{result.Value.ContentType}; charset={result.Value.Encoding}", result.Value.FileName);
             })
-            .WithName("Payroll_Pila_Download").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Pila.View");
+            .WithName("Payroll_Pila_Download").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Pila.View")
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
+
+        // Feature 011 (§9): la planilla se baja con un enlace firmado, con las mismas reglas —reconocer el
+        // descuadre— y su charset. GET /file queda para las guardadas con el formato anterior.
+        group.MapPost("/{id:guid}/download-link", async (Guid id, bool? acknowledgeDifference, ISender sender, CancellationToken ct) =>
+                await sender.Send(new EmitirEnlaceDePilaCommand(id, acknowledgeDifference ?? false), ct))
+            .WithName("Payroll_Pila_DownloadLink").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Payroll.Pila.View")
+            .RequireRateLimiting(LimiteDeAdjuntos.Politica);
 
         group.MapPost("/{id:guid}/mark-uploaded", async (Guid id, MarkUploadedBody body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new MarkPilaUploadedCommand(id, body.UploadedAt, body.OperatorReference, body.OperatorFilingDate, body.PaidAt), ct))

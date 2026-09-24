@@ -1,12 +1,12 @@
 ﻿# Adjuntos del ERP en S3
 
 Los adjuntos (soportes de comprobantes contables, planillas PILA, archivos de dispersión,
-documentos de liquidación) se suben cifrados y se guardan por `IBlobStore`. Hay dos
-implementaciones y se elige por configuración:
+documentos de liquidación) se guardan por `IBlobStore`. Hay dos implementaciones y se elige por
+configuración:
 
 | `AttachmentStorage:Provider` | Implementación | Dónde se usa |
 |---|---|---|
-| `Local` | `LocalEncryptedFileStore` | desarrollo (`storage/attachments`) |
+| `Local` | `LocalEncryptedFileStore` | desarrollo (`storage/attachments`); imita a S3 con rutas `local-blob` firmadas, sólo fuera de Production |
 | `S3` | `S3BlobStore` | DEV, QA y producción |
 
 **Por qué no el disco del nodo.** Hasta el 2026-09-22 los tres ambientes escribían en un PVC
@@ -15,14 +15,33 @@ cubren PostgreSQL y MongoDB) y, siendo `ReadWriteOnce`, no se puede montar desde
 funciona sólo porque las dos réplicas de la API caen en el mismo. Se migró estando el volumen
 **vacío en producción**, así que no hubo nada que mover.
 
-## Lo que el cambio no toca
+## Dos formatos: el anterior y el directo
 
-El **cifrado sigue siendo nuestro**: `AttachmentEncryptionService` cifra con AES-256-GCM y una clave
-por archivo (envuelta con DataProtection, que vive en `ADM_DataProtectionKeys`) **antes** de llamar
-al almacén. S3 recibe bytes opacos y los guarda con `Content-Type: application/octet-stream`; el
-cifrado del lado del servidor (SSE-S3, AES256) va **encima**, no en lugar del nuestro. Perder el
-llavero de DataProtection sigue significando perder los adjuntos, con S3 o sin él
-([llavero-dataprotection.md](llavero-dataprotection.md)).
+Desde la feature 011 (entrega E3, 2026-09-23) los archivos **no pasan por el servidor**:
+
+- **Subir** (soportes de comprobantes): la pantalla pide una autorización firmada
+  (`POST /api/attachments/uploads`), el navegador sube el archivo **directo al bucket** y la API sólo
+  confirma lo que llegó (`/confirm`): tamaño, huella y la firma del contenido sobre los primeros 8 KiB.
+  Un ejecutable con nombre de PDF queda **rechazado**, con el motivo, y su objeto va a la papelera.
+- **Bajar**: la API verifica cooperativa y permiso y devuelve un **enlace firmado de 60 s**
+  (`POST /api/attachments/{id}/download-link`) que obliga a guardar el archivo con su nombre y su tipo.
+  PILA y dispersión tienen el suyo (`POST …/{id}/download-link`), con su `charset`.
+- **Lo que generan los módulos** (PILA, dispersión, definitiva) se guarda tal como se generó.
+
+| Formato | Cifrado en reposo | Cómo se baja |
+|---|---|---|
+| `Direct` (todo lo nuevo) | el del bucket (SSE-S3, AES256) | enlace firmado, directo del bucket |
+| `AppEncrypted` (lo escrito antes del 2026-09-23 en DEV y QA) | el nuestro, AES-256-GCM con clave por archivo envuelta con DataProtection, **y** el del bucket encima | por la API (`GET /api/attachments/{id}`, `GET …/file`), que lo descifra |
+
+Lo del formato anterior **no se migra**: se sigue leyendo por la API. Para él vale lo de siempre: perder
+el llavero de DataProtection es perder esos archivos ([llavero-dataprotection.md](llavero-dataprotection.md)).
+Lo directo ya no depende del llavero.
+
+**El bucket necesita CORS** para que el navegador pueda subir (bajar no lo necesita: es navegación). Lo
+pone `tools/scripts/crear-bucket-adjuntos.ps1` con los orígenes web del ERP (`app-dev`, `app-qa`, `app`);
+**sin él, la subida falla en el navegador** con «No se pudo contactar el almacén de archivos», aunque la
+API autorice. Los orígenes de la app (MAUI) se agregan cuando se confirmen en cada plataforma (T003);
+mientras tanto la app muestra «Por ahora los soportes se agregan desde la versión web del ERP».
 
 ## El bucket
 
@@ -217,11 +236,18 @@ de la aplicación**: es este procedimiento, con la misma credencial administrati
 
 ## Qué pasa si S3 no responde
 
-Subir un adjunto falla y la pantalla lo dice; **lo que se estaba guardando no queda a medias**,
-porque el handler escribe la fila de `COR_Attachments` después de que el almacén confirma. En el caso
-inverso —objeto escrito y fila no guardada— el handler retira el objeto; si eso también falla, el objeto
-queda **huérfano** y vigente. No rompe nada y **nada lo limpia solo** (FR-001): lo encuentra un
-inventario manual del bucket contra las bases, que hoy no existe.
+**Una persona que sube un soporte**: el envío al bucket falla y la pantalla lo dice. La fila quedó
+`Uploading`; cuando vence la autorización (5 minutos), la próxima vez que alguien mire la lista pasa a
+**«Subida incompleta»** y se puede reintentar con el mismo archivo o borrar. Nada se borra solo.
+
+**Un módulo que guarda lo que generó** (PILA, dispersión, definitiva): falla la generación y la pantalla
+lo dice; la fila de `COR_Attachments` se escribe después de que el almacén confirma, así que **no queda a
+medias**. En el caso inverso —objeto escrito y fila no guardada— el handler retira el objeto; si eso
+también falla, el objeto queda **huérfano** y vigente. No rompe nada y **nada lo limpia solo** (FR-001):
+lo encuentra un inventario manual del bucket contra las bases, que hoy no existe.
+
+**Bajar**: el enlace se firma sin tocar el bucket, así que se entrega igual; es el navegador el que no
+podrá bajar el archivo mientras S3 no responda.
 
 Borrar con S3 caído falla antes de tocar la fila: el adjunto sigue vivo y se puede reintentar.
 
@@ -230,7 +256,10 @@ aunque el bucket esté caído.
 
 ## Desarrollo
 
-Nada cambia: `appsettings.json` trae `Provider: Local` y los archivos van a `storage/attachments`.
+`appsettings.json` trae `Provider: Local` y los archivos van a `storage/attachments`. El almacén local
+**imita a S3**: firma tokens de DataProtection hacia rutas anónimas de la propia API
+(`/api/attachments/local-blob/{token}`) que rechazan lo mismo que la política de S3, así que la pantalla
+usa exactamente el mismo flujo, sin Docker. Esas rutas no existen con `Provider = S3` ni en Production.
 Para probar S3 en local se puede apuntar a MinIO con `AttachmentStorage:S3:ServiceUrl` y
 `ForcePathStyle: true`. Las pruebas (`S3BlobStoreTests`) usan un `IAmazonS3` falso y, para la forma de
 las autorizaciones firmadas, un cliente real con credenciales ficticias (firmar no toca la red): **el CI
