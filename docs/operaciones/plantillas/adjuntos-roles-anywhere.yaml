@@ -1,0 +1,231 @@
+# =============================================================================
+# adjuntos-roles-anywhere.yaml - Credenciales TEMPORALES para el bucket de
+# adjuntos del ERP (feature 011, US5; research R3 y R4; contracts/almacen.md §2).
+#
+# Reemplaza a la llave permanente del usuario IAM ingenia365-erp-adjuntos. Cada
+# pod de la API presenta el certificado de su ambiente (CN erp-api-<ambiente>,
+# emitido por tools/scripts/crear-certificados-adjuntos.ps1) y recibe una
+# credencial que vence en UNA hora, acotada a su prefijo del bucket.
+#
+# COSTO: cero. El trust anchor es de tipo CERTIFICATE_BUNDLE (CA propia); no usa
+# AWS Private CA (~USD 400/mes).
+#
+# QUIEN LA APLICA: un administrador de la cuenta 058264424927 (el usuario del
+# perfil ingenia365 no tiene permisos de IAM). Consola > CloudFormation > Crear
+# pila > Cargar esta plantilla. Parametro CertificadoDeLaCa: el contenido de
+# ca.crt (publico; la llave de la CA NUNCA va aqui).
+#
+# QUE NO PUEDE HACER NINGUN ROL, a proposito (R4): listar el bucket, leer o
+# borrar versiones (la papelera es de soporte), cambiar su configuracion, ver el
+# prefijo de otro ambiente, ni tocar el bucket de respaldos.
+#
+# REVOCAR un certificado: importar la CRL de la CA en el trust anchor
+# (Roles Anywhere > Revocacion). A mas tardar en una hora deja de haber
+# credenciales para ese certificado.
+# =============================================================================
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  IngenIA365 ERP - adjuntos: IAM Roles Anywhere (trust anchor con CA propia, perfil de 1 hora y un rol
+  por ambiente limitado a su prefijo del bucket). Feature 011, US5.
+
+Parameters:
+  CertificadoDeLaCa:
+    Type: String
+    Description: >-
+      Contenido PEM de ca.crt (-----BEGIN CERTIFICATE----- ... -----END CERTIFICATE-----). Es publico.
+    MinLength: 100
+  BucketDeAdjuntos:
+    Type: String
+    Default: ingenia365-erp-attachments
+  BucketDeRespaldos:
+    Type: String
+    Default: ingenia365-erp-backups
+  DuracionDeLaSesion:
+    Type: Number
+    Default: 3600
+    MinValue: 900
+    MaxValue: 3600
+    Description: Segundos que vive cada credencial (research R3; una hora).
+
+Resources:
+  AnclaDeConfianza:
+    Type: AWS::RolesAnywhere::TrustAnchor
+    Properties:
+      Name: ingenia365-erp
+      Enabled: true
+      Source:
+        SourceType: CERTIFICATE_BUNDLE
+        SourceData:
+          X509CertificateData: !Ref CertificadoDeLaCa
+
+  RolDev:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ingenia365-erp-adjuntos-dev
+      Description: API del ERP en DEV; solo su prefijo del bucket de adjuntos (feature 011).
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: rolesanywhere.amazonaws.com }
+            Action: [sts:AssumeRole, sts:TagSession, sts:SetSourceIdentity]
+            Condition:
+              StringEquals: { "aws:PrincipalTag/x509Subject/CN": erp-api-dev }
+              ArnEquals: { "aws:SourceArn": !GetAtt AnclaDeConfianza.TrustAnchorArn }
+      Policies:
+        - PolicyName: AdjuntosDelAmbiente
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ObjetosDelAmbiente
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource: !Sub "arn:aws:s3:::${BucketDeAdjuntos}/dev/*"
+              - Sid: NiListarNiVersionesNiConfiguracion
+                Effect: Deny
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:ListBucketMultipartUploads
+                  - s3:DeleteObjectVersion
+                  - s3:GetObjectVersion
+                  - s3:PutBucketVersioning
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutBucketCORS
+                  - s3:DeleteBucket
+                Resource: "*"
+              - Sid: NoTocarElBucketDeRespaldos
+                Effect: Deny
+                Action: s3:*
+                Resource:
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}"
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}/*"
+
+  RolQa:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ingenia365-erp-adjuntos-qa
+      Description: API del ERP en QA; solo su prefijo del bucket de adjuntos (feature 011).
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: rolesanywhere.amazonaws.com }
+            Action: [sts:AssumeRole, sts:TagSession, sts:SetSourceIdentity]
+            Condition:
+              StringEquals: { "aws:PrincipalTag/x509Subject/CN": erp-api-qa }
+              ArnEquals: { "aws:SourceArn": !GetAtt AnclaDeConfianza.TrustAnchorArn }
+      Policies:
+        - PolicyName: AdjuntosDelAmbiente
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ObjetosDelAmbiente
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource: !Sub "arn:aws:s3:::${BucketDeAdjuntos}/qa/*"
+              - Sid: NiListarNiVersionesNiConfiguracion
+                Effect: Deny
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:ListBucketMultipartUploads
+                  - s3:DeleteObjectVersion
+                  - s3:GetObjectVersion
+                  - s3:PutBucketVersioning
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutBucketCORS
+                  - s3:DeleteBucket
+                Resource: "*"
+              - Sid: NoTocarElBucketDeRespaldos
+                Effect: Deny
+                Action: s3:*
+                Resource:
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}"
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}/*"
+
+  RolPdn:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ingenia365-erp-adjuntos-pdn
+      Description: API del ERP en produccion; solo su prefijo del bucket de adjuntos (feature 011).
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: rolesanywhere.amazonaws.com }
+            Action: [sts:AssumeRole, sts:TagSession, sts:SetSourceIdentity]
+            Condition:
+              StringEquals: { "aws:PrincipalTag/x509Subject/CN": erp-api-pdn }
+              ArnEquals: { "aws:SourceArn": !GetAtt AnclaDeConfianza.TrustAnchorArn }
+      Policies:
+        - PolicyName: AdjuntosDelAmbiente
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ObjetosDelAmbiente
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource: !Sub "arn:aws:s3:::${BucketDeAdjuntos}/pdn/*"
+              - Sid: NiListarNiVersionesNiConfiguracion
+                Effect: Deny
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:ListBucketMultipartUploads
+                  - s3:DeleteObjectVersion
+                  - s3:GetObjectVersion
+                  - s3:PutBucketVersioning
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutBucketCORS
+                  - s3:DeleteBucket
+                Resource: "*"
+              - Sid: NoTocarElBucketDeRespaldos
+                Effect: Deny
+                Action: s3:*
+                Resource:
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}"
+                  - !Sub "arn:aws:s3:::${BucketDeRespaldos}/*"
+
+  Perfil:
+    Type: AWS::RolesAnywhere::Profile
+    Properties:
+      Name: ingenia365-erp-adjuntos
+      Enabled: true
+      DurationSeconds: !Ref DuracionDeLaSesion
+      RoleArns:
+        - !GetAtt RolDev.Arn
+        - !GetAtt RolQa.Arn
+        - !GetAtt RolPdn.Arn
+
+Outputs:
+  TrustAnchorArn:
+    Description: Va en el sidecar de los tres ambientes (--trust-anchor-arn).
+    Value: !GetAtt AnclaDeConfianza.TrustAnchorArn
+  ProfileArn:
+    Description: Va en el sidecar de los tres ambientes (--profile-arn).
+    Value: !GetAtt Perfil.ProfileArn
+  RolDevArn:
+    Description: Overlay de DEV (--role-arn).
+    Value: !GetAtt RolDev.Arn
+  RolQaArn:
+    Description: Overlay de QA (--role-arn).
+    Value: !GetAtt RolQa.Arn
+  RolPdnArn:
+    Description: Overlay de produccion (--role-arn).
+    Value: !GetAtt RolPdn.Arn
