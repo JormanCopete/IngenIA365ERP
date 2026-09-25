@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,7 +54,9 @@ public class ListAssociatesQueryHandler(IApplicationDbContext context)
             query = query.Where(x =>
                 x.p.TaxId.Contains(term) ||
                 x.p.FirstName.Contains(term) ||
+                (x.p.OtherNames != null && x.p.OtherNames.Contains(term)) ||
                 x.p.LastName.Contains(term) ||
+                (x.p.SecondLastName != null && x.p.SecondLastName.Contains(term)) ||
                 (x.p.BusinessName != null && x.p.BusinessName.Contains(term)));
         }
 
@@ -67,9 +70,7 @@ public class ListAssociatesQueryHandler(IApplicationDbContext context)
                 x.a.PublicId,
                 x.p.PublicId,
                 x.p.TaxId,
-                x.p.BusinessName != null && x.p.BusinessName.Length > 0
-                    ? x.p.BusinessName
-                    : x.p.FirstName + " " + x.p.LastName,
+                PersonFactory.NombreVisible(x.p.FirstName, x.p.OtherNames, x.p.LastName, x.p.SecondLastName, x.p.BusinessName),
                 x.p.Email,
                 x.p.Phone1,
                 x.p.Mobile,
@@ -177,7 +178,7 @@ public class GetAssociateByPersonIdQueryHandler(IApplicationDbContext context)
         var p = entity.Person;
         return Result.Success(new AssociateEditDto(
             entity.PublicId, p.PublicId,
-            p.BusinessName != null && p.BusinessName.Length > 0 ? p.BusinessName : $"{p.FirstName} {p.LastName}",
+            PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
             p.TaxId,
             entity.JoinDate, entity.ContributionRate,
             entity.EmployerCompany?.PublicId, entity.Branch?.PublicId, entity.CostCenter?.PublicId,
@@ -230,7 +231,7 @@ public class GetAssociateByIdQueryHandler(IApplicationDbContext context)
         return Result.Success(new AssociateEditDto(
             entity.PublicId,
             p.PublicId,
-            p.BusinessName != null && p.BusinessName.Length > 0 ? p.BusinessName : $"{p.FirstName} {p.LastName}",
+            PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
             p.TaxId,
             entity.JoinDate,
             entity.ContributionRate,

@@ -110,7 +110,7 @@
                 return;
             }
 
-            _personName = $"{person.FirstName} {person.LastName}";
+            _personName = NombreDePersona.Completo(person.FirstName, person.OtherNames, person.LastName, person.SecondLastName);
             _personPublicId = person.PublicId;
 
             // Load accounts
@@ -165,7 +165,7 @@
     }
 
     // --- Local types ---
-    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record PersonLookup(Guid PublicId, string FirstName, string LastName, string? OtherNames = null, string? SecondLastName = null);
     record AccountItem(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
         string SavingsLineName, DateOnly CreationDate, decimal Balance, string Status)
     {

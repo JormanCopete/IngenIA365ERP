@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -79,7 +80,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                   && e.JoinDate <= end
                   && e.TerminationDate >= start
             orderby p.LastName, p.FirstName
-            select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email }
+            select new { Employee = e, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, p.Email }
         ).ToListAsync(ct);
 
         // Feature 010 (FR-005, FR-020, D-29): la verdad del retiro es PAY_EmploymentTerminations. Una
@@ -180,7 +181,7 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
         foreach (var x in empleados)
         {
             var e = x.Employee;
-            var nombre = $"{x.FirstName} {x.LastName}".Trim();
+            var nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName);
 
             var historial = cambiosPorEmpleado[e.Id]
                 .Select(s => new SalaryChangeInput(s.EffectiveDate.Date, s.NewSalary))

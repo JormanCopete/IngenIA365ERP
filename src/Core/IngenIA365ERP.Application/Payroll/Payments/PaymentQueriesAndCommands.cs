@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -59,7 +60,7 @@ public sealed class GetPaymentRegisterQueryHandler(IApplicationDbContext db)
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
             orderby p.LastName, p.FirstName
-            select new { re.Id, e.PublicId, Nombre = p.FirstName + " " + p.LastName, p.TaxId, p.Email, re.NetPay, e.PayrollBankId, e.PayrollBankAccountType, e.PayrollBankAccountNumber })
+            select new { re.Id, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, p.Email, re.NetPay, e.PayrollBankId, e.PayrollBankAccountType, e.PayrollBankAccountNumber })
             .ToListAsync(ct);
 
         var ids = filas.Select(f => f.Id).ToList();
@@ -76,7 +77,7 @@ public sealed class GetPaymentRegisterQueryHandler(IApplicationDbContext db)
         var rows = filas.Select(f =>
         {
             pagos.TryGetValue(f.Id, out var pago);
-            return new PaymentRegisterRowDto(f.PublicId, f.Nombre.Trim(), f.TaxId, f.Email, f.NetPay,
+            return new PaymentRegisterRowDto(f.PublicId, NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName), f.TaxId, f.Email, f.NetPay,
                 f.PayrollBankId is { } bk && bancos.TryGetValue(bk, out var nombreBanco) ? nombreBanco : f.PayrollBankId,
                 TipoCuenta(f.PayrollBankAccountType), f.PayrollBankAccountNumber,
                 pago is not null, pago?.PublicId, pago?.PaidAt, pago?.PaymentMethod.ToString(), pago?.Reference, pago?.PaidBy);

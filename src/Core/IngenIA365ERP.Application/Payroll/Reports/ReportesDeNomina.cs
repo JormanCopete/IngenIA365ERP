@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Payroll.Novelties.Queries;
 using IngenIA365ERP.Application.Payroll.Runs.Queries;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -124,7 +125,7 @@ public sealed class DetalleEmpleadoConceptoReportQueryHandler(IApplicationDbCont
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
             orderby p.LastName, p.FirstName
-            select new { re.Id, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId, re.DaysWorked, re.TotalEarnings, re.TotalDeductions, re.TotalEmployerContributions, re.TotalProvisions, re.NetPay }
+            select new { re.Id, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, re.DaysWorked, re.TotalEarnings, re.TotalDeductions, re.TotalEmployerContributions, re.TotalProvisions, re.NetPay }
         ).ToListAsync(ct);
         var ids = filasEmpleado.Select(f => f.Id).ToList();
         var lineas = await db.PayrollRunLines.AsNoTracking()
@@ -144,7 +145,7 @@ public sealed class DetalleEmpleadoConceptoReportQueryHandler(IApplicationDbCont
             .ToDictionary(g => g.Key, g => g.GroupBy(l => l.ConceptCode).ToDictionary(x => x.Key, x => x.Sum(l => l.Amount)));
         var filas = filasEmpleado.Select(f =>
         {
-            var valores = new List<object?> { f.Nombre, f.TaxId, f.DaysWorked };
+            var valores = new List<object?> { NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName), f.TaxId, f.DaysWorked };
             porEmpleado.TryGetValue(f.Id, out var montos);
             valores.AddRange(conceptos.Select(c => montos is not null && montos.TryGetValue(c, out var m) ? m : (object?)null));
             valores.AddRange([f.TotalEarnings, f.TotalDeductions, f.NetPay]);
@@ -205,7 +206,7 @@ public sealed class HistoricoEmpleadoReportQueryHandler(IApplicationDbContext db
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where e.PublicId == request.EmployeePublicId
-            select new { e.Id, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }).FirstOrDefaultAsync(ct);
+            select new { e.Id, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).FirstOrDefaultAsync(ct);
         if (empleado is null) return Result.Failure<TablaExportable>(new Error("Employee.NotFound", "Empleado no encontrado."));
 
         var desde = request.Desde.Date;
@@ -228,7 +229,7 @@ public sealed class HistoricoEmpleadoReportQueryHandler(IApplicationDbContext db
             [f.Description ?? $"{f.StartDate:MMM yyyy}", f.StartDate, f.EndDate, f.Version, f.ApprovedAt, f.DaysWorked, f.TotalEarnings, f.TotalDeductions, f.TotalEmployerContributions, f.TotalProvisions, f.NetPay])).ToList();
         var totales = new FilaExportable(["Total", null, null, null, null, filas.Sum(f => f.DaysWorked), filas.Sum(f => f.TotalEarnings), filas.Sum(f => f.TotalDeductions),
             filas.Sum(f => f.TotalEmployerContributions), filas.Sum(f => f.TotalProvisions), filas.Sum(f => f.NetPay)], Resaltada: true);
-        return Result.Success(new TablaExportable($"Histórico de nómina · {empleado.Nombre} ({empleado.TaxId})",
+        return Result.Success(new TablaExportable($"Histórico de nómina · {NombreDePersona.Completo(empleado.FirstName, empleado.OtherNames, empleado.LastName, empleado.SecondLastName)} ({empleado.TaxId})",
             $"Liquidaciones aprobadas entre {desde:dd/MM/yyyy} y {hasta:dd/MM/yyyy}", columnas, tabla, totales,
             [$"{filas.Count} período(s) aprobado(s). Sólo se listan corridas aprobadas; los borradores y las reversadas no."]));
     }

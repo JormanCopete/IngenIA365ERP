@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Holidays;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Settlements.Calendar;
@@ -21,7 +22,7 @@ public static class VacationQueriesSupport
         var persona = e.Person;
         return new VacationBalanceSummaryDto(
             e.PublicId,
-            persona is null ? string.Empty : $"{persona.FirstName} {persona.LastName}".Trim(),
+            persona is null ? string.Empty : NombreDePersona.Completo(persona),
             persona?.TaxId ?? string.Empty,
             e.JoinDate,
             b.AsOf,
@@ -88,7 +89,9 @@ public sealed class GetVacationBalancesQueryHandler(IApplicationDbContext db, Va
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var s = request.Search.Trim();
-            empleados = empleados.Where(e => e.Person.TaxId.Contains(s) || e.Person.FirstName.Contains(s) || e.Person.LastName.Contains(s));
+            empleados = empleados.Where(e => e.Person.TaxId.Contains(s) || e.Person.FirstName.Contains(s) || e.Person.LastName.Contains(s)
+                || (e.Person.OtherNames != null && e.Person.OtherNames.Contains(s))
+                || (e.Person.SecondLastName != null && e.Person.SecondLastName.Contains(s)));
         }
         var fichas = await empleados.OrderBy(e => e.Person.LastName).ThenBy(e => e.Person.FirstName).ToListAsync(ct);
         if (fichas.Count == 0) return Result.Success<IReadOnlyList<VacationBalanceSummaryDto>>([]);

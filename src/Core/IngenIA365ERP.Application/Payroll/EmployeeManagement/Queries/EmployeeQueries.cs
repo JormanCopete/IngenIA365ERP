@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -135,7 +136,12 @@ public record EmployeeDetailDto(
     EmployeeVacationBalanceDto? VacationBalance = null,
     EmployeeOpeningBalanceDto? OpeningBalance = null,
     EmployeeWithholdingRateDto? CurrentWithholdingRate = null,
-    EmployeeTerminationDto? Termination = null);
+    EmployeeTerminationDto? Termination = null,
+    // Las otras dos partes del nombre (feature 010, D-06) y el nombre ya compuesto por
+    // NombreDePersona: la pantalla lo mostraba como «FirstName LastName».
+    string? OtherNames = null,
+    string? SecondLastName = null,
+    string FullName = "");
 
 // --- List Employees ---
 
@@ -169,7 +175,9 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
             query = query.Where(x =>
                 x.p.TaxId.Contains(search)
                 || x.p.FirstName.Contains(search)
-                || x.p.LastName.Contains(search));
+                || (x.p.OtherNames != null && x.p.OtherNames.Contains(search))
+                || x.p.LastName.Contains(search)
+                || (x.p.SecondLastName != null && x.p.SecondLastName.Contains(search)));
         }
 
         var totalCount = await query.CountAsync(ct);
@@ -181,7 +189,7 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
             .Take(request.PageSize)
             .Select(x => new EmployeeDto(
                 x.e.PublicId,
-                x.p.FirstName + " " + x.p.LastName,
+                NombreDePersona.Completo(x.p.FirstName, x.p.OtherNames, x.p.LastName, x.p.SecondLastName),
                 x.p.TaxId,
                 "",
                 x.e.Salary,
@@ -412,6 +420,9 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTim
             vacationBalance,
             openingBalance,
             currentRate,
-            termination));
+            termination,
+            person.OtherNames,
+            person.SecondLastName,
+            NombreDePersona.Completo(person)));
     }
 }

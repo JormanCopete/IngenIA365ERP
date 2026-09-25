@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -193,7 +194,7 @@ public sealed class ListRecurringNoveltiesQueryHandler(IApplicationDbContext db)
             where (request.EmployeePublicId == null || e.PublicId == request.EmployeePublicId)
                   && (request.Active == null || r.IsActive == request.Active)
             orderby r.IsActive descending, p.LastName, p.FirstName, r.StartDate
-            select new { r, e.PublicId, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }).ToListAsync(ct);
+            select new { r, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).ToListAsync(ct);
 
         var codigos = filas.Select(f => f.r.ConceptCode).Distinct().ToList();
         var conceptos = (await db.PayrollConceptDefinitions.AsNoTracking().Where(c => codigos.Contains(c.Code)).OrderByDescending(c => c.ValidFrom).ToListAsync(ct))
@@ -202,7 +203,7 @@ public sealed class ListRecurringNoveltiesQueryHandler(IApplicationDbContext db)
         return Result.Success<IReadOnlyList<RecurringNoveltyDto>>(filas.Select(f =>
         {
             conceptos.TryGetValue(f.r.ConceptCode, out var c);
-            return new RecurringNoveltyDto(f.r.PublicId, f.PublicId, f.Nombre, f.TaxId, f.r.ConceptCode, c?.Name ?? f.r.ConceptCode, (c?.Nature ?? ConceptNature.Earning).ToString(),
+            return new RecurringNoveltyDto(f.r.PublicId, f.PublicId, NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName), f.TaxId, f.r.ConceptCode, c?.Name ?? f.r.ConceptCode, (c?.Nature ?? ConceptNature.Earning).ToString(),
                 f.r.Quantity, f.r.Amount, f.r.StartDate, f.r.EndDate, f.r.TotalInstallments, f.r.InstallmentsIssued, f.r.IsActive, f.r.Notes, f.r.DeactivationReason, f.r.CreatedAt, f.r.CreatedBy,
                 f.r.ApplyOn.ToString());
         }).ToList());
@@ -239,7 +240,7 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
 
     public async Task<MaterializationResult> MaterializeAsync(PayPeriod period, CancellationToken ct)
     {
-        var candidatas = await (
+        var candidatas = (await (
             from r in db.PayrollRecurringNovelties.AsNoTracking()
             join e in db.Employees.AsNoTracking() on r.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
@@ -247,7 +248,9 @@ public sealed class RecurringNoveltiesMaterializer(IApplicationDbContext db, IDa
                   && (r.TotalInstallments == null || r.InstallmentsIssued < r.TotalInstallments)
                   && e.PayrollPlanId == period.PayrollPlanId
             orderby r.Id
-            select new { r, e, nombre = (p.FirstName + " " + p.LastName).Trim() }).ToListAsync(ct);
+            select new { r, e, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }).ToListAsync(ct))
+            .Select(x => new { x.r, x.e, nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName) })
+            .ToList();
         if (candidatas.Count == 0) return new MaterializationResult(0, []);
 
         var delPeriodo = await db.PayrollNovelties.AsNoTracking()

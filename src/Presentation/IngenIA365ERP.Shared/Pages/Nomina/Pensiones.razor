@@ -182,6 +182,6 @@
         _mostrarPersona = false;
         var r = await Personas.ObtenerAsync(publicId);
         if (r.IsSuccess && r.Value is { } p)
-            _persona = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = string.IsNullOrWhiteSpace(p.BusinessName) ? $"{p.FirstName} {p.LastName}".Trim() : p.BusinessName };
+            _persona = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible };
     }
 }

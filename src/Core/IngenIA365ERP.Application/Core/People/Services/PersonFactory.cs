@@ -100,12 +100,12 @@ public sealed class PersonFactory(
             .AsNoTracking()
             .Where(p => p.TaxId == taxId && (excluirId == null || p.Id != excluirId))
             .OrderBy(p => p.IsDeleted) // si hubiera una viva y una eliminada, manda la viva
-            .Select(p => new { p.PublicId, p.FirstName, p.LastName, p.BusinessName, p.IsDeleted, p.DeletedAt })
+            .Select(p => new { p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.IsDeleted, p.DeletedAt })
             .FirstOrDefaultAsync(ct);
 
         if (existente is null) return null;
 
-        var nombre = NombreVisible(existente.FirstName, existente.LastName, existente.BusinessName);
+        var nombre = NombreVisible(existente.FirstName, existente.OtherNames, existente.LastName, existente.SecondLastName, existente.BusinessName);
         return existente.IsDeleted
             ? DocumentoEliminado(nombre, existente.DeletedAt)
             : DocumentoDuplicado(nombre);
@@ -146,6 +146,18 @@ public sealed class PersonFactory(
 
     private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
+    /// <summary>
+    /// La razón social si la hay; si no, el nombre completo de la persona natural con sus cuatro
+    /// partes (<see cref="NombreDePersona.Completo(string?, string?, string?, string?)"/>).
+    /// En una consulta EF, sólo en la proyección final.
+    /// </summary>
+    public static string NombreVisible(string? firstName, string? otherNames, string? lastName, string? secondLastName, string? businessName) =>
+        !string.IsNullOrWhiteSpace(businessName) ? businessName : NombreDePersona.Completo(firstName, otherNames, lastName, secondLastName);
+
+    /// <summary>
+    /// Sólo primer nombre y primer apellido. Se conserva para los llamadores que todavía no
+    /// traen <c>OtherNames</c>/<c>SecondLastName</c>; lo nuevo usa la sobrecarga de cuatro partes.
+    /// </summary>
     public static string NombreVisible(string firstName, string lastName, string? businessName) =>
-        !string.IsNullOrWhiteSpace(businessName) ? businessName : $"{firstName} {lastName}".Trim();
+        NombreVisible(firstName, null, lastName, null, businessName);
 }

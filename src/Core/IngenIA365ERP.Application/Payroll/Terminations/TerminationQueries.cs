@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
@@ -34,7 +35,7 @@ public sealed class ListTerminationsQueryHandler(IApplicationDbContext db)
             join r in db.TerminationReasons.AsNoTracking() on t.TerminationReasonId equals r.Id
             join e in db.Employees.AsNoTracking() on t.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
-            select new { t, r, e.PublicId, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId };
+            select new { t, r, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId };
         if (request.Year is { } anio)
         {
             var desde = new DateOnly(anio, 1, 1);
@@ -59,7 +60,7 @@ public sealed class ListTerminationsQueryHandler(IApplicationDbContext db)
         {
             corridaPor.TryGetValue(x.t.Id, out var run);
             return new TerminationListItemDto(
-                x.t.PublicId, run?.PublicId, run?.Version, run?.Status.ToString(), x.PublicId, x.Nombre, x.TaxId,
+                x.t.PublicId, run?.PublicId, run?.Version, run?.Status.ToString(), x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId,
                 x.t.TerminationDate, x.r.Code, x.r.Name, x.r.GeneratesSeverancePay, x.t.ContractTypeAtTermination, x.t.ContractEndDate,
                 x.t.Status, run?.TotalNet ?? 0m, run?.ApprovedAt, x.t.Notes, x.t.SettlementDocumentAttachmentPublicId);
         }).ToList();

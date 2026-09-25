@@ -66,5 +66,21 @@ public class SegundoApellidoYOtrosNombresHttpTests(CentralIdentityApiFixture fx)
         var persona = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people/{personaId}");
         persona.GetProperty("secondLastName").GetString().Should().Be("PÉREZ");
         persona.GetProperty("otherNames").GetString().Should().Be("ANDRÉS");
+
+        // Listados y buscador muestran el nombre completo y también encuentran por las partes nuevas.
+        const string completo = "WILLIAN ANDRÉS LAGOS PÉREZ";
+        var listado = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people?SearchTerm={documento}");
+        listado.GetProperty("items")[0].GetProperty("fullName").GetString().Should().Be(completo);
+
+        var porOtroNombre = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people?SearchTerm=ANDRÉS");
+        porOtroNombre.GetProperty("items").EnumerateArray()
+            .Should().Contain(i => i.GetProperty("taxId").GetString() == documento);
+
+        var busqueda = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people/search?q={documento}");
+        busqueda[0].GetProperty("fullName").GetString().Should().Be(completo);
+
+        var empleados = await GetAsync(http, ctx.TokenAdmin, $"/api/payroll/employees?PageNumber=1&PageSize=20&Search={documento}");
+        var items = empleados.ValueKind == System.Text.Json.JsonValueKind.Array ? empleados : empleados.GetProperty("items");
+        items[0].GetProperty("fullName").GetString().Should().Be(completo);
     }
 }

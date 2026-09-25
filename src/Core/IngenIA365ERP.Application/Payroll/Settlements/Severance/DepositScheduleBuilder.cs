@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -32,7 +33,7 @@ public sealed class DepositScheduleBuilder(IApplicationDbContext db)
             select new
             {
                 RunEmployeeId = re.Id, e.PublicId, e.SeveranceFundId, e.JoinDate, p.IdType, p.TaxId,
-                Nombre = (p.FirstName + " " + p.LastName).Trim(), p.LastName, p.FirstName,
+                p.FirstName, p.OtherNames, p.LastName, p.SecondLastName,
             }).ToListAsync(ct);
         var idsFilas = filas.Select(f => f.RunEmployeeId).ToList();
 
@@ -65,7 +66,7 @@ public sealed class DepositScheduleBuilder(IApplicationDbContext db)
                 {
                     var cesantias = lineasPorFila[f.RunEmployeeId].FirstOrDefault(l => l.ConceptCode == WellKnownConceptCodes.Severance);
                     var intereses = lineasPorFila[f.RunEmployeeId].Where(l => l.ConceptCode == WellKnownConceptCodes.SeveranceInterest).Sum(l => l.Amount);
-                    return new DepositScheduleLineDto(f.PublicId, f.IdType, f.TaxId, f.Nombre, DateOnly.FromDateTime(f.JoinDate),
+                    return new DepositScheduleLineDto(f.PublicId, f.IdType, f.TaxId, NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName), DateOnly.FromDateTime(f.JoinDate),
                         cesantias?.BaseAmount ?? 0m, cesantias?.Quantity ?? 0m, cesantias?.Amount ?? 0m, intereses);
                 })
                 .OrderBy(l => l.Name, StringComparer.CurrentCultureIgnoreCase)

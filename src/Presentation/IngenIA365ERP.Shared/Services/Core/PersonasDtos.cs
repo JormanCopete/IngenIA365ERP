@@ -1,3 +1,5 @@
+using IngenIA365ERP.Shared.Models.Personas;
+
 namespace IngenIA365ERP.Shared.Services.Core;
 
 // DTOs del maestro de personas tal como los sirve la API (feature 008). `Shared` no referencia
@@ -41,7 +43,7 @@ public sealed record PersonaDto
     public bool IsSupplier { get; init; }
     public bool ReceivesInvoice { get; init; }
 
-    public string NombreVisible => !string.IsNullOrWhiteSpace(BusinessName) ? BusinessName : $"{FirstName} {LastName}".Trim();
+    public string NombreVisible => NombreDePersona.Visible(BusinessName, FirstName, OtherNames, LastName, SecondLastName);
 }
 
 /// <summary>
