@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,7 +42,7 @@ public class GetContributionBalanceQueryHandler(IApplicationDbContext context)
                 "Persona no encontrada."));
 
         var personCode = person.LegacyCode ?? person.TaxId;
-        var personName = $"{person.FirstName} {person.LastName}";
+        var personName = NombreDePersona.Completo(person);
 
         var entries = await context.ContributionReductions.AsNoTracking()
             .Where(cr => cr.PersonCode == personCode && !cr.IsDeleted)

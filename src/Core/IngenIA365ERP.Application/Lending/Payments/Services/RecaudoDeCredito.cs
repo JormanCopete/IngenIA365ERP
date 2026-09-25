@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Accounting.Accounts;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment;
 using IngenIA365ERP.Domain.Entities.Lending;
 using Microsoft.EntityFrameworkCore;
@@ -179,7 +180,7 @@ public sealed class RecaudoDeCredito(
         if (linea is null)
             return Result.Failure<PaymentResultDto>(AccountingErrors.ParameterizationMissing(ModuloContable.Cartera, "la línea de crédito del crédito"));
 
-        var personName = portfolio.Person is not null ? $"{portfolio.Person.FirstName} {portfolio.Person.LastName}" : portfolio.IdentificationNumber;
+        var personName = portfolio.Person is not null ? NombreDePersona.Completo(portfolio.Person) : portfolio.IdentificationNumber;
         var detalle = $"Recaudo crédito #{portfolio.PortfolioNumber} - {personName}";
         var pagare = portfolio.PortfolioNumber.ToString();
         var lineas = new List<PostingLine>

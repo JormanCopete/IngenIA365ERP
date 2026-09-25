@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -136,7 +137,7 @@ public class ListCertificatesQueryHandler(IApplicationDbContext context)
         var personIds = items.Select(i => i.PersonId).Distinct().ToList();
         var personNames = await context.People.AsNoTracking()
             .Where(p => personIds.Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id, p => p.FirstName + " " + p.LastName, ct);
+            .ToDictionaryAsync(p => p.Id, p => PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName), ct);
 
         var dtos = items.Select(c => new CertificateDto(
             c.PublicId,
@@ -175,7 +176,7 @@ public class GetCertificateByIdQueryHandler(IApplicationDbContext context)
 
         var person = await context.People.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == cert.PersonId, ct);
-        var personName = person is not null ? $"{person.FirstName} {person.LastName}" : $"ID:{cert.PersonId}";
+        var personName = person is not null ? PersonFactory.NombreVisible(person.FirstName, person.OtherNames, person.LastName, person.SecondLastName, person.BusinessName) : $"ID:{cert.PersonId}";
         var personCode = person?.LegacyCode ?? person?.TaxId ?? "";
 
         // Entries
@@ -257,7 +258,7 @@ public class GetCertificatesNearExpiryQueryHandler(IApplicationDbContext context
         var personIds = items.Select(i => i.PersonId).Distinct().ToList();
         var personNames = await context.People.AsNoTracking()
             .Where(p => personIds.Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id, p => p.FirstName + " " + p.LastName, ct);
+            .ToDictionaryAsync(p => p.Id, p => PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName), ct);
 
         var dtos = items.Select(c => new CertificateDto(
             c.PublicId,

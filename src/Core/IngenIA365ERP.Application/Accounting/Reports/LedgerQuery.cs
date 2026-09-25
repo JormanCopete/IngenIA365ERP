@@ -193,7 +193,7 @@ public sealed class LedgerQueryHandler(
         var personas = ids.Count == 0
             ? []
             : await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => ids.Contains(p.Id))
-                .Select(p => new MovimientosContables.TerceroResuelto(p.Id, p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.LastName, p.BusinessName), p.TaxId))
+                .Select(p => new MovimientosContables.TerceroResuelto(p.Id, p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName), p.TaxId))
                 .ToListAsync(ct);
         var porId = personas.ToDictionary(p => p.Id);
 
@@ -337,7 +337,7 @@ public sealed class LedgerQueryHandler(
             .Select(e => new
             {
                 Codigo = e.Account!.Code, Nombre = e.Account!.Name, Cuenta = e.Account!.PublicId,
-                Tercero = e.Person == null ? null : PersonFactory.NombreVisible(e.Person.FirstName, e.Person.LastName, e.Person.BusinessName),
+                Tercero = e.Person == null ? null : PersonFactory.NombreVisible(e.Person.FirstName, e.Person.OtherNames, e.Person.LastName, e.Person.SecondLastName, e.Person.BusinessName),
                 Tipo = e.CrossDocumentType == null ? null : e.CrossDocumentType.Code, e.CrossDocumentNumber,
                 e.Description, e.Debit, e.Credit,
             })
@@ -389,7 +389,7 @@ public sealed class LedgerQueryHandler(
     {
         if (nodo.Tercero is not { } publicId) return Result.Success<MovimientosContables.TerceroResuelto?>(null);
         var t = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.PublicId == publicId)
-            .Select(p => new MovimientosContables.TerceroResuelto(p.Id, p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.LastName, p.BusinessName), p.TaxId))
+            .Select(p => new MovimientosContables.TerceroResuelto(p.Id, p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName), p.TaxId))
             .FirstOrDefaultAsync(ct);
         return t is null ? Result.Failure<MovimientosContables.TerceroResuelto?>(MovimientosContables.TerceroNoEncontrado) : Result.Success<MovimientosContables.TerceroResuelto?>(t);
     }

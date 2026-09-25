@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Domain.Entities.CDT;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -134,7 +135,7 @@ public class GetCDTLiquidationPreviewQueryHandler(IApplicationDbContext context)
             var interest = cdt.Amount * cdt.InterestRate / 100m / 360m * days;
 
             var personName = people.TryGetValue(cdt.PersonId, out var person)
-                ? $"{person.FirstName} {person.LastName}"
+                ? PersonFactory.NombreVisible(person.FirstName, person.OtherNames, person.LastName, person.SecondLastName, person.BusinessName)
                 : cdt.PersonId.ToString();
 
             return new CDTLiquidationPreviewLineDto

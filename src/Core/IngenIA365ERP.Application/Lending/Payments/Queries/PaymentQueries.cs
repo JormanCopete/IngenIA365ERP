@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,7 +53,7 @@ public class GetPaymentReceiptQueryHandler(IApplicationDbContext context)
                                     && !lp.IsDeleted, ct);
 
         var personName = portfolio?.Person is not null
-            ? $"{portfolio.Person.FirstName} {portfolio.Person.LastName}"
+            ? NombreDePersona.Completo(portfolio.Person)
             : transaction.PersonCode;
 
         // Parse description for capital/interest/default breakdown

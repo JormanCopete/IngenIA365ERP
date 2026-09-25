@@ -221,7 +221,7 @@ public sealed class PendingDocumentsQueryHandler(
         var idsDeTercero = grupos.Where(g => g.PersonId != null).Select(g => g.PersonId!.Value).Distinct().ToList();
         // Un tercero dado de baja sigue debiendo o acreedor: se nombra igual.
         var terceros = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => idsDeTercero.Contains(p.Id))
-            .Select(p => new { p.Id, p.PublicId, Nombre = PersonFactory.NombreVisible(p.FirstName, p.LastName, p.BusinessName) })
+            .Select(p => new { p.Id, p.PublicId, Nombre = PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName) })
             .ToDictionaryAsync(p => p.Id, ct);
         var idsDeTipo = grupos.Select(g => g.TipoId).Distinct().ToList();
         var tipos = await db.CrossDocumentTypes.AsNoTracking().Where(t => idsDeTipo.Contains(t.Id)).Select(t => new { t.Id, t.Code }).ToDictionaryAsync(t => t.Id, t => t.Code, ct);
