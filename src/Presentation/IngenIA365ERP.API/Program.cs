@@ -174,6 +174,12 @@ try
     // Feature 012 (T13, T055, T056): estado por peticion de la idempotencia; ClaveDeOperacionFilter pone la
     // clave y lee si IdempotencyBehavior respondio con lo guardado (Idempotent-Replayed). Adelanto de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Behaviors.EstadoDeLaOperacion>();
+    // Feature 012 (T10, T078): la senal en proceso que despierta al despachador de mensajes (I2) cuando un guardado
+    // incluyo mensajes; la avisa ApplicationDbContext desde SavedChanges. Singleton: la comparten todas las peticiones.
+    // Adelanto de T096.
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.SenalDeMensajes>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Integration.ISenalDeMensajes>(
+        sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.SenalDeMensajes>());
 
     // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
     // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando

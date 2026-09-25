@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -6,6 +7,8 @@ using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Debit;
@@ -32,10 +35,37 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
         ErpTenantInfo? tenantInfo = null,
-        ICurrentUserService? currentUserService = null) : base(options)
+        ICurrentUserService? currentUserService = null,
+        ISenalDeMensajes? senalDeMensajes = null) : base(options)
     {
         _tenantInfo = tenantInfo;
         _currentUserService = currentUserService;
+        if (senalDeMensajes is not null) AvisarMensajesGuardados(senalDeMensajes);
+    }
+
+    /// <summary>
+    /// Feature 012 (T10, T078): cuando un guardado incluyó mensajes de integración nuevos, avisa a
+    /// <see cref="ISenalDeMensajes"/> para despertar al despachador (I2). Los <c>PublicId</c> se toman en
+    /// <c>SavingChanges</c> —después del guardado ya no están <c>Added</c>— y se avisan sólo en
+    /// <c>SavedChanges</c>: un guardado que falla no despierta a nadie. El aviso es del <c>SaveChanges</c>, no del
+    /// commit de una transacción explícita; el sondeo del despachador cubre ese hueco.
+    /// </summary>
+    private void AvisarMensajesGuardados(ISenalDeMensajes senal)
+    {
+        List<Guid>? porAvisar = null;
+        SavingChanges += (_, _) =>
+        {
+            porAvisar = ChangeTracker.Entries<IntegrationMessage>()
+                .Where(e => e.State == EntityState.Added)
+                .Select(e => e.Entity.PublicId)
+                .ToList();
+        };
+        SavedChanges += (_, _) =>
+        {
+            if (porAvisar is { Count: > 0 }) senal.Avisar(porAvisar);
+            porAvisar = null;
+        };
+        SaveChangesFailed += (_, _) => porAvisar = null;
     }
 
     /// <summary>
@@ -327,6 +357,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
     // Feature 012 (T21, T069): parametros con vigencia (adelanto de T096).
     public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
+    // Feature 012 (T7, T9; T073-T078): bandeja de salida de mensajes de integracion (adelanto de T096).
+    public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
+    public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
+    public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();

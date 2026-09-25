@@ -21,7 +21,12 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LosHechosInmutablesNoSeModifican
 {
     /// <summary>Nombres de tipo de las entidades que son hechos inmutables. Los agrega el bloque que las crea.</summary>
-    private static readonly string[] Hechos = [];
+    private static readonly string[] Hechos =
+    [
+        // Plataforma, bandeja de salida (T073): el mensaje y su arista sólo tienen init.
+        "IntegrationMessage",
+        "IntegrationMessageDependency",
+    ];
 
     private static readonly Regex SetPublico = new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);
 

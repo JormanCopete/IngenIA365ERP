@@ -911,6 +911,27 @@ JSON embebidos versionados (T40), no semillas.
     ParameterCurrentValueDto, ParameterOverrideDto, ParameterScheduledDto}`; `GetParameterHistory/{GetParameterHistoryQuery,
     ParameterHistoryItemDto}`; en la API `ParametersEndpoints.AgregarVigenciaRequest`. `ParameterDto` agrega
     `requiresLegalSource` al contrato de api.md §7. `Parameters.KeyNotFound` responde 404 (mapeado en `ErrorEnvelopeFilter`).
+  - **(nuevo, T073–T078)** bandeja de salida y catálogo de mensajes: en `Application/Common/Integration` la solicitud
+    `SolicitudDeEmision(Origen, OriginEventKey, Contenidos, Modo, CadenasDeLasQueDepende?, Relacionado?, ValidacionPrevia?,
+    KindDelOriginal?)` con `OrigenDeEmision` (clase del documento como texto), `DocumentoRelacionado` y `ModoDeEntrega`
+    { `Sellado(Modo, ScheduleKey?, BatchScopeKey?)`, `Heredado(OriginalPublicId, BatchScopeKey?)` };
+    `EmisorDeMensajes.EmitirAsync(solicitud, ct) → IReadOnlyList<IntegrationMessage>` (Scoped, recuerda lo emitido en su
+    ámbito; constantes `ModuloDeOrigen = "INV"`, `Moneda = "COP"`); `ClavesDeEvento` (`Confirmacion`, `Reclasificacion`,
+    `ConfirmacionPor(Guid)`, `Cierre(v)`, `Reapertura(v)`, `EsValida(forma, clave)`); `ClavesDeLote` (`Horario(tipoRaiz,
+    disparador, hora?, granularidad)`, `SesionDeCaja(Guid)`, `Periodo(año, mes)`); `ISenalDeMensajes { Avisar(mensajes);
+    ChannelReader<Guid> Avisos }` y en la API `SenalDeMensajes` (`Capacidad` = 1024, descarta el aviso más viejo). En
+    `Contracts/Inventory`: `OpcionesDeMensajes` (`Opciones`, `Serializar(contenido) → byte[]`), `CatalogoDeMensajesV1`
+    (`Todos`, `Buscar(Type)`) con el record `TipoDeMensaje(Record, Type, Version, Destination, Kind?, FormaDeClave)` y el
+    enum `FormaDeClaveDeEvento` { Confirmacion=1, ConfirmacionPorPublicId, Cierre, Reapertura, Reclasificacion } (no se
+    guarda); `MessageOriginV1` (el `origin` del sobre) y los objetos anidados de §5–§8 de contracts/mensajes.md:
+    `SalesTotalsV1`, `ApprovalRefV1`, `CreditTermsV1`, `SupplierDocumentV1`, `SupplierInvoiceLineV1`,
+    `SupplierInvoiceTotalsV1`, `TaxableWithdrawalV1`, `VoidedContentV1`, `ReclassificationLineV1`, `CashierV1`,
+    `CashCountDifferenceLineV1`, `PeriodValuationLineV1`, `UnbilledShipmentV1`, `AcknowledgedPendingV1`,
+    `PartySnapshotV1`, `CreditPaymentV1`. `IntegrationEnvelopeV1.Payload` (`object`, al leer `JsonElement`) lleva el
+    contenido, como en los ejemplos de §14. Índices `UK_COR_IntegrationMessages_Origin_Type_EventKey`,
+    `IX_COR_IntegrationMessageDeliveries_Eligible` (`[Status] = 0`) e `…_InBatch` (`[Status] = 1`). Precisión de T9: el
+    mensaje apunta al último de cada cadena **y** al último de esa cadena con entrega a su mismo destino (sin esa arista un
+    `AjusteDeVentaACredito` no esperaría a su `VentaACreditoRegistrada` si el último del original fuera contable).
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

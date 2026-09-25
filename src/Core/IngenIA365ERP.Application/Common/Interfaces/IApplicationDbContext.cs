@@ -6,6 +6,8 @@ using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
@@ -240,6 +242,13 @@ public interface IApplicationDbContext
     // Feature 012 (T21, T069-T071): parametros con vigencia. Los leen solo LectorDeParametros y los escribe solo
     // AddParameterVersionCommandHandler (LosParametrosSeLeenEnUnSoloSitio). (Adelanto de T096.)
     DbSet<ParameterVersion> ParameterVersions { get; }
+
+    // Feature 012 (T7, T9; T073-T078): bandeja de salida de mensajes de integracion. Escribe mensajes, entregas y
+    // dependencias solo EmisorDeMensajes (dentro del SaveChanges del documento); las entregas las actualizan
+    // despues los comandos de I2. (Adelanto de T096.)
+    DbSet<IntegrationMessage> IntegrationMessages { get; }
+    DbSet<IntegrationMessageDependency> IntegrationMessageDependencies { get; }
+    DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

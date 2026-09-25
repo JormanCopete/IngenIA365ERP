@@ -7,6 +7,8 @@ using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
@@ -59,6 +61,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
     // Feature 012 (T21): parametros con vigencia de LectorDeParametros y AddParameterVersionCommand.
     public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
+    // Feature 012 (T7, T9): bandeja de salida de EmisorDeMensajes.
+    public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
+    public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
+    public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -291,6 +297,18 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<OperationKey>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<ParameterVersion>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IntegrationMessage>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IntegrationMessageDelivery>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.Message).WithMany().HasForeignKey(d => d.MessageId);
+        });
+        modelBuilder.Entity<IntegrationMessageDependency>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.Message).WithMany().HasForeignKey(d => d.MessageId);
+            b.HasOne(d => d.DependsOnMessage).WithMany().HasForeignKey(d => d.DependsOnMessageId);
+        });
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));
