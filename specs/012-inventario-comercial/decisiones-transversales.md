@@ -891,6 +891,26 @@ JSON embebidos versionados (T40), no semillas.
     en la API `VerifyAuditIntegrityRequest`; en la fixture `CentralIdentityApiFixture.ReenviarAuditoriaAsync(tenantPublicId)`.
     Índices: `UK_COR_AuditOutbox_EventId`, `UK_COR_AuditOutbox_Stream_Seq`, `IX_COR_AuditOutbox_Pending`,
     `UK_COR_AuditChainHeads_Stream`, `UK_COR_AuditAnchors_Stream_Kind_Seq`, `UK_COR_AuditAnchors_Stream_AnchorDate`.
+  - **(nuevo, T067–T072)** parámetros con vigencia: en `Domain/Common/Parametros` los enums `TipoDeParametro`
+    { Bool=1, Int, Decimal, Text, Date, Time, Choice } y `EntregaDelComercio` { I1=1, I2, I3, IC, I4, I5, I6 } (no se
+    guardan), el record struct `ValorInterpretado(Admitido, Texto, Valor)`, `DefinicionDeParametro` (`Modulo`, `Clave`,
+    `Descripcion`, `Tipo`, `ValoresAdmitidos`, `ValoresDesde`, `DefectoSeguro`, `AmbitosAdmitidos`, `PermisoAdicional`,
+    `SelladoAlConfirmar`, `ExigeFuenteLegal`, `DisponibleDesde`, `AdmiteVacio`, `Minimo`, `Maximo`, `Patron`;
+    `Interpretar(texto, entrega)`, `Admitidos(entrega)`, `AdmiteAmbito`) y `CatalogoDeParametros` (`EntregaVigente` = I1,
+    `Modulos`, `Todas`, `Buscar(modulo, clave)`); constantes de clave y de permiso en los tres catálogos
+    (`ParametrosDeInventario.PermisoDeCosteo`, `ParametrosTributarios.Permiso`, `ParametrosDeFacturacionElectronica.Permiso`);
+    `ParameterVersion.VigenteEn(fecha)`; índice `UK_COR_ParameterVersions_Module_Key_Scope_ValidFrom`. En
+    `Application/Common/Parameters`: `ErroresDeParametros`, `ILectorDeParametros` (`LeerAsync(modulo, clave, fecha,
+    ambito, ambitoId, ct)`, `VigenciasAsync(modulo?, clave?, ct)`; extensión `LeerComoAsync<T>`) con los records
+    `ValorDeParametro` (`EsDefecto`, `Como<T>()`) y `VigenciaDeParametro`; `LectorDeParametros.VigenteA`;
+    `IResolutorDeAmbitoDeParametro` (`ResolverAsync`, `DescribirAsync`) con `AmbitoDeParametro` y la implementación vacía
+    `ResolutorDeAmbitoVacio`; `IReglasDeParametros` (`EvaluarAsync(AltaDeParametro, ct)`) con `AltaDeParametro`,
+    `DecisionDeReglasDeParametro` (`Ambitos`, `AfectadosPorTipoDeDocumento`, `Adelante`) y `ReglasDeParametrosVacias`;
+    `AddParameterVersion/{AddParameterVersionCommand, AddParameterVersionCommandValidator, AddParameterVersionCommandHandler,
+    AddParameterVersionResponse, ReferenciaDeAmbitoDto}`; `ListParameters/{ListParametersQuery, ParameterDto,
+    ParameterCurrentValueDto, ParameterOverrideDto, ParameterScheduledDto}`; `GetParameterHistory/{GetParameterHistoryQuery,
+    ParameterHistoryItemDto}`; en la API `ParametersEndpoints.AgregarVigenciaRequest`. `ParameterDto` agrega
+    `requiresLegalSource` al contrato de api.md §7. `Parameters.KeyNotFound` responde 404 (mapeado en `ErrorEnvelopeFilter`).
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

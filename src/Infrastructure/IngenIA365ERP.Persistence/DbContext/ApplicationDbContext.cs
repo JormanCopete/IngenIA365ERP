@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.CDT;
@@ -324,6 +325,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
     public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
     public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
+    // Feature 012 (T21, T069): parametros con vigencia (adelanto de T096).
+    public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();

@@ -105,6 +105,11 @@ public static class DependencyInjection
         // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad
         // de cuentas que parametrizan los demas modulos (FR-016).
         services.AddScoped<Accounting.Posting.AccountingPoster>();
+        // Feature 012 (T21, T070-T071): el unico lector de parametros con vigencia (memoriza por peticion) y los
+        // dos ganchos del alta, vacios hasta que Inventario los implemente (US1 T226, US3 T286).
+        services.AddScoped<Common.Parameters.ILectorDeParametros, Common.Parameters.LectorDeParametros>();
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoVacio>();
+        services.AddScoped<Common.Parameters.IReglasDeParametros, Common.Parameters.ReglasDeParametrosVacias>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.

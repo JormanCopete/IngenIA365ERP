@@ -8,6 +8,7 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -235,6 +236,10 @@ public interface IApplicationDbContext
     DbSet<AuditOutboxEntry> AuditOutbox { get; }
     DbSet<AuditChainHead> AuditChainHeads { get; }
     DbSet<AuditAnchor> AuditAnchors { get; }
+
+    // Feature 012 (T21, T069-T071): parametros con vigencia. Los leen solo LectorDeParametros y los escribe solo
+    // AddParameterVersionCommandHandler (LosParametrosSeLeenEnUnSoloSitio). (Adelanto de T096.)
+    DbSet<ParameterVersion> ParameterVersions { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

@@ -148,6 +148,10 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // una peticion mal formada, no una regla de negocio. Sin esta linea caia al 422 por defecto.
             "Operation.KeyRequired" => StatusCodes.Status400BadRequest,
 
+            // Feature 012 (T21, contracts/api.md §7): una clave fuera del catalogo de parametros es un recurso que no
+            // existe. No termina en ".NotFound" y sin esta linea caia al 422 por defecto.
+            "Parameters.KeyNotFound" => StatusCodes.Status404NotFound,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

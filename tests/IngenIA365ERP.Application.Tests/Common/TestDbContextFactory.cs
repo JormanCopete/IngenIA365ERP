@@ -9,6 +9,7 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -56,6 +57,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
     public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
     public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
+    // Feature 012 (T21): parametros con vigencia de LectorDeParametros y AddParameterVersionCommand.
+    public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -287,6 +290,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<OperationKey>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ParameterVersion>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));

@@ -31,7 +31,15 @@ public class ElComercioNoTieneValoresLegalesFijos
     ];
 
     /// <summary>Archivos (relativos a la raíz, con '/') exceptuados, cada uno con su motivo. Empieza vacía.</summary>
-    private static readonly string[] ArchivosExceptuados = [];
+    private static readonly string[] ArchivosExceptuados =
+    [
+        // T068: los tres catálogos cerrados de claves de parámetro. Sus valores son DEFECTOS CONFIGURABLES con
+        // vigencia (COR_ParameterVersions, LectorDeParametros), no valores legales fijos: la cooperativa los
+        // cambia sin tocar el programa, y los que dependen de una norma exigen su fuente legal.
+        "src/Core/IngenIA365ERP.Domain/Inventory/Parameters/ParametrosDeInventario.cs",
+        "src/Core/IngenIA365ERP.Domain/Taxes/ParametrosTributarios.cs",
+        "src/Core/IngenIA365ERP.Domain/ElectronicInvoicing/ParametrosDeFacturacionElectronica.cs",
+    ];
 
     private static readonly Regex LiteralDecimal = new(@"(?<![\w.])\d+(?:\.\d+)?[mM]\b", RegexOptions.Compiled);
 
