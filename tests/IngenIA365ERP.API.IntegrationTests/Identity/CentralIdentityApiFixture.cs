@@ -142,6 +142,17 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("MasterAdmin:Email", MasterEmail);
             builder.UseSetting("MasterAdmin:Password", MasterPassword);
 
+            // Feature 012 (T008; decisiones-transversales T10, T47): los trabajos de fondo nuevos
+            // de la plataforma arrancan APAGADOS en las pruebas. Un despachador, un reenviador o un
+            // programador corriendo por su cuenta harían que una e2e viera efectos a destiempo; las
+            // pruebas conducen cada pasada a mano. Hoy nadie lee estas claves todavía: las enlaza
+            // IntegrationOptions (T049) y las consultan el despachador (I2), AuditOutboxForwarder
+            // (T065), ProgramadorDeTareas (T050) y el despachador de correo (T47).
+            builder.UseSetting("Integration:Dispatcher:Enabled", "false");
+            builder.UseSetting("Integration:AuditForwarder:Enabled", "false");
+            builder.UseSetting("Integration:ScheduledTasks:Enabled", "false");
+            builder.UseSetting("Integration:EmailDispatcher:Enabled", "false");
+
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
@@ -162,6 +173,17 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
+
+    // TODO(feature 012, T008 parcial): con los trabajos de fondo apagados, las e2e conducen el
+    // ciclo a mano con dos métodos que resuelven el servicio del contenedor y corren UNA pasada
+    // para la cooperativa indicada:
+    //   · ReenviarAuditoriaAsync(Guid tenantPublicId) → AuditOutboxForwarder, que crea T065
+    //     (specs/012-inventario-comercial/tasks.md, fase 2: «expone una pasada manual para la fixture»);
+    //     lo usa IntegridadDeAuditoriaTests (T023).
+    //   · CorrerTareasProgramadasAsync(Guid tenantPublicId) → ProgramadorDeTareas e ITareaProgramada,
+    //     que crea T050 (fase 2), sobre IntegrationOptions (T049) e IEjecutorEnCooperativa.
+    // No se escriben todavía porque esos servicios no existen: se agregan aquí en cuanto T050 y
+    // T065 los creen, y con eso T008 queda completa.
 
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
     private string? _secretoMaestro;
