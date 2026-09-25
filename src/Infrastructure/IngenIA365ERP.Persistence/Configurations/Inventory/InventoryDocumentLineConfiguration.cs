@@ -36,7 +36,10 @@ public class InventoryDocumentLineConfiguration : IEntityTypeConfiguration<Inven
         builder.Property(e => e.TotalCost).Monto();
         builder.Property(e => e.Description).HasMaxLength(200);
 
-        builder.HasIndex(e => new { e.DocumentId, e.LineNumber }).IsUnique().HasDatabaseName("UK_INV_DocumentLines_Document_LineNumber");
+        // Filtrado a las vivas (fase 3, ciclo común): reemplazar las líneas de un borrador da de baja las que faltan y
+        // renumera las demás desde 1, así el número de una línea de baja se reusa.
+        builder.HasIndex(e => new { e.DocumentId, e.LineNumber }).IsUnique().HasDatabaseName("UK_INV_DocumentLines_Document_LineNumber")
+            .HasFilter("[IsDeleted] = 0");
         builder.HasIndex(e => e.ProductId).HasDatabaseName("IX_INV_DocumentLines_ProductId");
 
         builder.Property(e => e.RowVersion).IsRowVersion();

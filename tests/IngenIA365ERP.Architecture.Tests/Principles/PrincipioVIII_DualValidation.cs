@@ -61,12 +61,24 @@ public class PrincipioVIII_DualValidation
         "IngenIA365ERP.Application.Payroll.Policies",
         "IngenIA365ERP.Application.Payroll.Holidays",
         "IngenIA365ERP.Application.Payroll.OpeningBalances",
+
+        // Feature 012 (fase 3): el ciclo común del documento de inventario y los tipos de documento nacen con validador.
+        "IngenIA365ERP.Application.Inventory.Documents",
+        "IngenIA365ERP.Application.Inventory.DocumentTypes",
     ];
 
     private static readonly HashSet<string> AllowedWithoutValidator =
     [
         "IngenIA365ERP.Application.Notifications.Contracts.SendNotificationCommand"
     ];
+
+    private static Type? ValidadoDe(Type tipo)
+    {
+        for (var b = tipo.BaseType; b is not null; b = b.BaseType)
+            if (b.IsGenericType && b.GetGenericTypeDefinition() == typeof(AbstractValidator<>))
+                return b.GetGenericArguments()[0];
+        return null;
+    }
 
     [Fact]
     public void Every_request_in_phase0_scope_has_a_FluentValidation_validator()
@@ -83,11 +95,12 @@ public class PrincipioVIII_DualValidation
             .Where(t => !AllowedWithoutValidator.Contains(t.FullName ?? string.Empty))
             .ToList();
 
+        // Feature 012: los validadores de comandos con motivo heredan de ValidadorConMotivo<T>, que a su vez es un
+        // AbstractValidator<T>; se recorre la cadena de bases hasta encontrarlo.
         var validatorTargets = asm.GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract)
-            .Where(t => t.BaseType is { IsGenericType: true }
-                     && t.BaseType.GetGenericTypeDefinition() == typeof(AbstractValidator<>))
-            .Select(t => t.BaseType!.GetGenericArguments()[0])
+            .Select(ValidadoDe)
+            .OfType<Type>()
             .ToHashSet();
 
         var missing = requests

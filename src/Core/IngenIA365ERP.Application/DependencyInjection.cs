@@ -130,6 +130,15 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
         // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
+        // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
+        // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
+        // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).
+        services.AddScoped<Inventory.Documents.Efectos.EfectosDeClase>();
+        services.TryAddScoped<Inventory.Documents.IMaestrosDelDocumento, Inventory.Documents.MaestrosDelDocumentoSinCatalogo>();
+        services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
+        services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
+        services.AddScoped<Inventory.DocumentTypes.VistaDeTiposDeDocumento>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.

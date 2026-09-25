@@ -26,6 +26,9 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "GetUserCommercialScopeQueryHandler",
         "ListAlertsQueryHandler",
         "GetAlertQueryHandler",
+        // Fase 3, ciclo común (T148): la lista y el detalle genéricos de documentos.
+        "ListInventoryDocumentsQueryHandler",
+        "GetInventoryDocumentQueryHandler",
     ];
 
     [Fact]

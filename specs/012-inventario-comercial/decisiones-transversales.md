@@ -1043,6 +1043,33 @@ JSON embebidos versionados (T40), no semillas.
   (catálogo de códigos de §8 y §9.6 de api.md); `FiltroDeAlcance.{DocumentosVisibles, BodegasDeSusOrigenesAsync,
   DocumentoVisible}`. Persistence `Inventory/SqlDelCerrojo` (+ `SentenciaDelCerrojo`, el SQL puro de cada motor que
   ejecuta `CerrojoDeInventario`) y `DbContext/GuardaDeInmutabilidad` (la guarda de T137 que llama `SaveChangesAsync`).
+- Ciclo común y tipos de documento (fase 3, T142–T152; todos **(nuevo)**): en `Application/Inventory/Documents`,
+  `Efectos/IEfectoDeClase` (`Clase`, `AvisosDelBorradorAsync`, `ValidarAsync`, `MontoParaAprobar`, `Cerrojo`,
+  `AplicarAsync`, `MensajesAsync`, `RevertirAsync`, `MensajesDeAnulacionAsync`) con el record `ContextoDeEfecto(Documento,
+  Tipo, Clase, Original?)`, la base `EfectoDeClaseBase` y el registro `Efectos/EfectosDeClase` (`Para(clase)`, `Opera`;
+  la anulación no tiene estrategia propia: la revierte la de la clase del original); el puerto `IMaestrosDelDocumento`
+  (bodegas, productos, unidades, ubicaciones, causas, canales y `CorteAsync`) con los records `BodegaDelDocumento`,
+  `ProductoDelDocumento`, `UnidadDelDocumento`, `UbicacionDelDocumento`, `ReferenciaDelCatalogo`, `CorteDeInventario` y
+  la implementación `MaestrosDelDocumentoSinCatalogo` (TryAdd; la reemplazan US1/US3); los pasos opcionales
+  `IPasoFiscalDeConfirmacion` e `IPasoDeValidacionPrevia` (+ `ResultadoDeValidacionPrevia`); `ReglasDelDocumento` (reglas
+  comunes de §9.4, avisos al guardar y error al confirmar); `PermisosDeGrupo` (ver, crear, confirmar, anular y
+  `PermisoLimitado` por `DocumentClassGroup`); `ErroresDelDocumento` (404 de lo referenciado:
+  `Inventory.Product.NotFound`, `Inventory.Location.NotFound`, `Inventory.AdjustmentCause.NotFound`,
+  `Inventory.SalesChannel.NotFound`, `Core.CostCenter.NotFound`, `Core.Person.NotFound`, y
+  `Inventory.Document.Unauthorized` sin persona resuelta); `VistaDeDocumentos` (buscar con alcance y grupo,
+  `allowedActions` —`Edit`, `Discard`, `Confirm`, `Void`—, resúmenes y detalle); `ConfirmacionDeDocumento` (el flujo
+  canónico como servicio, con `PedidoDeConfirmacion(DocumentPublicId, GrupoEsperado?, RowVersion?, PorAprobacion)`),
+  `FotoDeLaContraparte`, `FuenteDeAprobacionDeDocumento` (`IFuenteDeAprobacion` de `InventoryDocument`); `Queries/`
+  con `FiltrosDeDocumentos`, `ListInventoryDocumentsQuery`, `GetInventoryDocumentQuery`; los DTO de
+  `InventoryDocumentDtos.cs` (T143). `Numerador.AjustarSiguiente` (el único otro escritor de `NextValue`, desde
+  `AddDocumentSequenceCommand`). En `Application/Inventory/DocumentTypes`: `DocumentClassDto`, `DocumentTypeDto`,
+  `CamposObligatoriosDto`, `DocumentSequenceDto`, `PoliticaDelTipoDto`, `NivelDePoliticaDelTipoDto`,
+  `ModoDePasoDelTipoDto`, `MarcasDelTipo`, `ReglasDeTipoDeDocumento`, `VistaDeTiposDeDocumento`. En la API
+  `Endpoints/Inventory/CicloDeDocumentoRutas.MapCicloDeDocumento(grupo, DocumentClassGroup, prefijoDePermiso, nombre)`
+  (con `MotivoRequest`, `ConfirmarRequest`, `AnularRequest`), `DocumentsEndpoints`, `DocumentTypesEndpoints`
+  (`CrearTipoRequest`, `EditarTipoRequest`, `SecuenciaRequest`, `MotivoRequest`). Slug de catálogo
+  `tipos-de-documento`. Semilla `InventoryDocumentTypesSeeder` (Order 80) con los códigos REC, FCP, NTP, DVP, AJP, AJN,
+  CIN, BAJ, SIN, TRD, TRR, MUB, CON, AJC, ANU; no siembra hasta que la base tenga `InventarioComercialNucleo`.
 - Comandos: `SaveInventoryDraftCommand`, `ConfirmInventoryDocumentCommand(DocumentPublicId,
   ExpectedGroup)`, `VoidInventoryDocumentCommand`, `DiscardInventoryDraftCommand`,
   `DispatchTransferCommand`, `ReceiveTransferCommand`, `ResolveTransferDiscrepancyCommand`,

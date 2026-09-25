@@ -48,4 +48,17 @@ public sealed class Numerador(IApplicationDbContext db, ICerrojoDeInventario cer
         secuencia.NextValue = secuencia.NextValue + 1;
         return Result.Success();
     }
+
+    /// <summary>
+    /// Mueve el siguiente número de una secuencia al cambiar de número o reabrir un prefijo desde
+    /// <c>AddDocumentSequenceCommand</c> (T150). Vive aquí para que el consecutivo tenga un solo escritor
+    /// (<c>SoloElNumeradorNumera</c>); quien lo llama ya comprobó que <paramref name="siguiente"/> queda por encima de lo
+    /// emitido con ese prefijo (<c>Inventory.Sequence.NumberAlreadyIssued</c>).
+    /// </summary>
+    public static void AjustarSiguiente(DocumentSequence secuencia, long siguiente)
+    {
+        ArgumentNullException.ThrowIfNull(secuencia);
+        if (siguiente < 1) throw new ArgumentOutOfRangeException(nameof(siguiente), siguiente, "El siguiente número es 1 o mayor.");
+        secuencia.NextValue = siguiente;
+    }
 }
