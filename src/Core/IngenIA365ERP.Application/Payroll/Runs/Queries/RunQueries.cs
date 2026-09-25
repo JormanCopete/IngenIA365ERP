@@ -2,6 +2,7 @@ using FluentValidation;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -19,12 +20,15 @@ public sealed class RunSummaryBuilder(IApplicationDbContext db)
         var bloqueos = new List<RunBlockerDto>();
         var cambiados = 0;
 
-        var empleados = await (
+        var empleados = (await (
             from re in db.PayrollRunEmployees.AsNoTracking()
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
-            select new { re.Id, re.Flags, re.ChangedFromPreviousRun, re.NotesJson, e.PublicId, Nombre = p.FirstName + " " + p.LastName }).ToListAsync(ct);
+            select new { re.Id, re.Flags, re.ChangedFromPreviousRun, re.NotesJson, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }).ToListAsync(ct))
+            .Select(x => new { x.Id, x.Flags, x.ChangedFromPreviousRun, x.NotesJson, x.PublicId,
+                Nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName) })
+            .ToList();
         cambiados = empleados.Count(e => e.ChangedFromPreviousRun);
 
         if (detailed)
@@ -163,13 +167,14 @@ public sealed class ListRunEmployeesQueryHandler(IApplicationDbContext db)
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
-            select new { re, e.PublicId, p.FirstName, p.LastName, p.TaxId };
+            select new { re, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId };
 
         if (request.Changed is { } cambiado) query = query.Where(x => x.re.ChangedFromPreviousRun == cambiado);
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var s = request.Search.Trim();
-            query = query.Where(x => x.FirstName.Contains(s) || x.LastName.Contains(s) || x.TaxId.Contains(s));
+            query = query.Where(x => x.FirstName.Contains(s) || (x.OtherNames != null && x.OtherNames.Contains(s))
+                || x.LastName.Contains(s) || (x.SecondLastName != null && x.SecondLastName.Contains(s)) || x.TaxId.Contains(s));
         }
 
         var filas = await query.OrderBy(x => x.LastName).ThenBy(x => x.FirstName).ToListAsync(ct);
@@ -177,7 +182,7 @@ public sealed class ListRunEmployeesQueryHandler(IApplicationDbContext db)
             filas = filas.Where(x => flag == RunEmployeeFlag.None ? x.re.Flags == RunEmployeeFlag.None : x.re.Flags.HasFlag(flag)).ToList();
 
         var dtos = filas.Select(x => new RunEmployeeRowDto(
-            x.PublicId, $"{x.FirstName} {x.LastName}".Trim(), x.TaxId, x.re.EmployeeClass.ToString(), x.re.DaysWorked,
+            x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId, x.re.EmployeeClass.ToString(), x.re.DaysWorked,
             x.re.TotalEarnings, x.re.TotalDeductions, x.re.TotalEmployerContributions, x.re.TotalProvisions, x.re.NetPay,
             RunJson.FlagNames(x.re.Flags), x.re.ChangedFromPreviousRun,
             RunSummaryBuilder.Notas(x.re.NotesJson) is { } n && (n.Refusals.Count > 0 || n.Skips.Count > 0))).ToList();
@@ -201,7 +206,7 @@ public sealed class GetRunEmployeeDetailQueryHandler(IApplicationDbContext db)
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id && e.PublicId == request.EmployeePublicId
-            select new { re, p.FirstName, p.LastName, p.TaxId }).FirstOrDefaultAsync(ct);
+            select new { re, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).FirstOrDefaultAsync(ct);
         if (fila is null) return Result.Failure<RunEmployeeDetailDto>(new Error("Payroll.RunEmployeeNotFound", "El empleado no está en esta corrida."));
 
         var lineas = await db.PayrollRunLines.AsNoTracking()
@@ -217,7 +222,7 @@ public sealed class GetRunEmployeeDetailQueryHandler(IApplicationDbContext db)
         var bases = JsonSerializer.Deserialize<List<ExplanationStep>>(fila.re.BasesJson, RunJson.Options) ?? [];
         var notas = RunSummaryBuilder.Notas(fila.re.NotesJson);
 
-        var dto = new RunEmployeeDetailDto(run.PublicId, request.EmployeePublicId, $"{fila.FirstName} {fila.LastName}".Trim(), fila.TaxId,
+        var dto = new RunEmployeeDetailDto(run.PublicId, request.EmployeePublicId, NombreDePersona.Completo(fila.FirstName, fila.OtherNames, fila.LastName, fila.SecondLastName), fila.TaxId,
             fila.re.EmployeeClass.ToString(), fila.re.DaysWorked, tramos,
             lineas.Select(l => new RunLineDto(l.PublicId, l.ConceptCode, l.ConceptName, l.Nature.ToString(), l.Quantity, l.BaseAmount, l.Factor,
                 l.RangeFrom, l.RangeTo, l.Amount, l.AffectsAccounting,

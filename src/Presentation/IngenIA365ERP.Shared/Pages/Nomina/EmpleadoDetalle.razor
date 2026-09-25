@@ -11,7 +11,7 @@
 <PageTitle>Detalle Empleado - IngenIA365ERP</PageTitle>
 
 <div class="page-header">
-    <h3>@(_employee is not null ? $"Empleado: {_employee.FirstName} {_employee.LastName}" : "Detalle Empleado")</h3>
+    <h3>@(_employee is not null ? $"Empleado: {_employee.NombreCompleto}" : "Detalle Empleado")</h3>
     <div>
         <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
                   OnClick='@(() => Nav.NavigateTo("/nomina/empleados"))'>Volver a Lista</SfButton>
@@ -86,11 +86,11 @@ else
                     <div class="rejilla-campos panel-pestana">
                         <div>
                             <label>Nombres</label>
-                            <SfTextBox Value="@_employee.FirstName" Readonly="true" CssClass="e-disabled" />
+                            <SfTextBox Value="@_employee.Nombres" Readonly="true" CssClass="e-disabled" />
                         </div>
                         <div>
                             <label>Apellidos</label>
-                            <SfTextBox Value="@_employee.LastName" Readonly="true" CssClass="e-disabled" />
+                            <SfTextBox Value="@_employee.Apellidos" Readonly="true" CssClass="e-disabled" />
                         </div>
                         <div>
                             <label>Numero Documento</label>
@@ -481,7 +481,7 @@ else
 
 @* ===== Terminar contrato (feature 010, US3): registra la terminación y abre la definitiva ===== *@
 <DialogoDeTerminacion @ref="_registroDeTerminacion" @bind-Visible="_mostrarTerminacion"
-                      EmpleadoPublicId="@EmployeeId" EmpleadoNombre="@($"{_employee?.FirstName} {_employee?.LastName}".Trim())"
+                      EmpleadoPublicId="@EmployeeId" EmpleadoNombre="@(_employee?.NombreCompleto ?? "")"
                       ContratoDeLaFicha="@_employee?.Dian?.ContractTypeDian"
                       OnRegistrada="@(t => Nav.NavigateTo($"/nomina/liquidacion-definitiva/{t.RunPublicId}"))" />
 

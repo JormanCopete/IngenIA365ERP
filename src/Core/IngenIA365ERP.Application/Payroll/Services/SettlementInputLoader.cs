@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Application.Payroll.OpeningBalances;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
@@ -159,7 +160,7 @@ public sealed class SettlementInputLoader(
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where e.JoinDate <= corteDt
-            select new { Employee = e, p.FirstName, p.LastName, p.TaxId, p.Email };
+            select new { Employee = e, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, p.Email };
         if (request.EmployeeIds is { Count: > 0 } ids)
             empleadosQuery = empleadosQuery.Where(x => ids.Contains(x.Employee.Id));
         else
@@ -183,7 +184,7 @@ public sealed class SettlementInputLoader(
             {
                 if (!liquidadaPorEmpleado.TryGetValue(x.Employee.Id, out var terminacionViva)) continue;
                 var fecha = terminacionViva.TerminationDate;
-                var nombre = $"{x.FirstName} {x.LastName}".Trim();
+                var nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName);
                 if (fecha < inicioPeriodo)
                 {
                     empleados.Remove(x);
@@ -386,7 +387,7 @@ public sealed class SettlementInputLoader(
         foreach (var x in empleados)
         {
             var e = x.Employee;
-            var nombre = $"{x.FirstName} {x.LastName}".Trim();
+            var nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName);
 
             // Sin historial, el salario de la ficha rige desde el ingreso (RegisterSalaryChange siembra la
             // línea base al registrar el primer cambio, así que esto sólo aplica a fichas sin cambios).

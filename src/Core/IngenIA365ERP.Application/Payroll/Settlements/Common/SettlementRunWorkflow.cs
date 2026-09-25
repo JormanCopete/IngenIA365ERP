@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
@@ -245,11 +246,14 @@ public sealed class SettlementRunWorkflow(
         return Result.Success(new SettlementDiscardedDto(run.PublicId, motivo));
     }
 
-    private async Task<string?> NombreAsync(int employeeId, CancellationToken ct) =>
-        await (from e in db.Employees.AsNoTracking()
-               join p in db.People.AsNoTracking() on e.PersonId equals p.Id
-               where e.Id == employeeId
-               select (p.FirstName + " " + p.LastName).Trim()).FirstOrDefaultAsync(ct);
+    private async Task<string?> NombreAsync(int employeeId, CancellationToken ct)
+    {
+        var x = await (from e in db.Employees.AsNoTracking()
+                       join p in db.People.AsNoTracking() on e.PersonId equals p.Id
+                       where e.Id == employeeId
+                       select new { p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }).FirstOrDefaultAsync(ct);
+        return x is null ? null : NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName);
+    }
 }
 
 /// <summary>Cómo se llama cada liquidación en comprobantes, asientos y pantallas («Prima de servicios 2026-II», «Liquidación definitiva · Ana Prueba»).</summary>

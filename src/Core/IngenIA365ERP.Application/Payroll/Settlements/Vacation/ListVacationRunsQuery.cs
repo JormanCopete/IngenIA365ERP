@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +52,7 @@ public sealed class ListVacationRunsQueryHandler(IApplicationDbContext db) : IRe
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where idsEmpleado.Contains(e.Id)
-            select new { e.Id, e.PublicId, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }
+            select new { e.Id, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }
         ).ToDictionaryAsync(x => x.Id, ct);
 
         var lista = new List<VacationRunRowDto>(filas.Count);
@@ -63,7 +64,7 @@ public sealed class ListVacationRunsQueryHandler(IApplicationDbContext db) : IRe
             if (m is { Status: VacationMovementStatus.Cancelled })
                 avisos.Add(new RunWarningDto("Payroll.Vacation.MovementCancelled", "El movimiento de esta liquidación está anulado.", new { movementPublicId = m.PublicId }));
             lista.Add(new VacationRunRowDto(
-                r.PublicId, m?.PublicId, e?.PublicId ?? Guid.Empty, e?.Nombre ?? string.Empty, e?.TaxId ?? string.Empty,
+                r.PublicId, m?.PublicId, e?.PublicId ?? Guid.Empty, e is null ? string.Empty : NombreDePersona.Completo(e.FirstName, e.OtherNames, e.LastName, e.SecondLastName), e?.TaxId ?? string.Empty,
                 m?.Kind, m?.StartDate, m is { Kind: VacationMovementKind.Enjoyment } ? m.EndDate : null,
                 m?.BusinessDays ?? 0m, m?.CalendarDays ?? 0,
                 m is { Kind: VacationMovementKind.Compensation } ? m.BusinessDays : null,

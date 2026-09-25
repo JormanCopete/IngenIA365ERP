@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -126,8 +127,9 @@ public sealed class GetRunComparisonQueryHandler(IApplicationDbContext db, Payro
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == runId
-            select new { re.EmployeeId, e.PublicId, Nombre = p.FirstName + " " + p.LastName, re.NetPay })
-        .ToDictionaryAsync(x => x.EmployeeId, x => (x.PublicId, x.Nombre.Trim(), x.NetPay), ct);
+            select new { re.EmployeeId, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, re.NetPay })
+        .ToDictionaryAsync(x => x.EmployeeId,
+            x => (x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.NetPay), ct);
 }
 
 // --------------------------------------------------------------------- cuadre --

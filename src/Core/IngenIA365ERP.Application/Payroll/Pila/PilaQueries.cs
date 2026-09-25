@@ -3,6 +3,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Attachments.DownloadAttachment;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -135,14 +136,14 @@ public sealed class GetPilaGenerationQueryHandler(IApplicationDbContext db) : IR
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where l.GenerationId == g.Id
             orderby l.LineNumber
-            select new { Line = l, e.PublicId, p.FirstName, p.LastName, p.SecondLastName, p.TaxId }).ToListAsync(ct);
+            select new { Line = l, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).ToListAsync(ct);
         var empleados = await (
             from e in db.Employees.AsNoTracking() join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where g.Issues.Select(i => i.EmployeeId).Contains(e.Id)
-            select new { e.Id, e.PublicId, Nombre = p.FirstName + " " + p.LastName }).ToDictionaryAsync(x => x.Id, ct);
+            select new { e.Id, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }).ToDictionaryAsync(x => x.Id, ct);
 
         var dtoLineas = lineas.Select(x => new PilaLineDto(
-            x.Line.LineNumber, x.PublicId, $"{x.FirstName} {x.LastName} {x.SecondLastName}".Trim(), x.TaxId, x.Line.ContributorType, x.Line.ContributorSubType,
+            x.Line.LineNumber, x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId, x.Line.ContributorType, x.Line.ContributorSubType,
             x.Line.NoveltyFlags.Split(',', StringSplitOptions.RemoveEmptyEntries),
             x.Line.DaysPension, x.Line.DaysHealth, x.Line.DaysWorkRisk, x.Line.DaysFamilyCompensation, x.Line.Salary,
             x.Line.IbcPension, x.Line.IbcHealth, x.Line.IbcWorkRisk, x.Line.IbcFamilyCompensation,
@@ -151,7 +152,7 @@ public sealed class GetPilaGenerationQueryHandler(IApplicationDbContext db) : IR
             x.Line.Exempt, JsonSerializer.Deserialize<Dictionary<string, string>>(x.Line.FieldsJson) ?? [])).ToList();
         var issues = g.Issues.OrderBy(i => i.Severity).Select(i => new PilaIssueDto(i.Severity, i.Code, i.FieldNumber, i.Message,
             i.EmployeeId is { } eid && empleados.TryGetValue(eid, out var emp) ? emp.PublicId : null,
-            i.EmployeeId is { } eid2 && empleados.TryGetValue(eid2, out var emp2) ? emp2.Nombre : null, i.LinkRoute)).ToList();
+            i.EmployeeId is { } eid2 && empleados.TryGetValue(eid2, out var emp2) ? NombreDePersona.Completo(emp2.FirstName, emp2.OtherNames, emp2.LastName, emp2.SecondLastName) : null, i.LinkRoute)).ToList();
         var cuadre = JsonSerializer.Deserialize<PilaReconciliationDto>(g.ReconciliationJson, GeneratePilaCommandHandler.JsonWeb) ?? new PilaReconciliationDto([], g.Balanced, null);
         var fuentes = JsonSerializer.Deserialize<List<PilaSourceRunDto>>(g.SourceRunsJson, GeneratePilaCommandHandler.JsonWeb) ?? [];
         return Result.Success(new PilaGenerationDetailDto(PilaMappers.Resumen(g), dtoLineas, issues, cuadre, fuentes, g.ExemptionApplied));
@@ -180,7 +181,7 @@ public sealed class GetPilaLineExplanationQueryHandler(IApplicationDbContext db)
             join e in db.Employees.AsNoTracking() on l.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where l.GenerationId == g.Id && l.LineNumber == request.LineNumber
-            select new { Line = l, e.PublicId, p.FirstName, p.LastName }).FirstOrDefaultAsync(ct);
+            select new { Line = l, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }).FirstOrDefaultAsync(ct);
         if (x is null) return Result.Failure<PilaLineExplanationDto>(PilaErrors.LineNotFound);
 
         var layout = PilaLayoutCatalog.ByCode(g.LayoutVersion) ?? PilaLayoutCatalog.ForPeriod(new DateOnly(g.Year, g.Month, 1));
@@ -195,7 +196,7 @@ public sealed class GetPilaLineExplanationQueryHandler(IApplicationDbContext db)
             var detalle = ex.Count == 0 ? (f.Rules.Count > 0 ? string.Join("; ", f.Rules) : null) : string.Join(" → ", ex.Select(e => e.Detail));
             lista.Add(new PilaFieldExplanationDto(f.Number, f.Name, valor, ex.Count > 0 ? ex[^1].Source : f.Source, detalle, ex.Count > 0 ? ex[^1].Value : null));
         }
-        return Result.Success(new PilaLineExplanationDto(x.Line.LineNumber, x.PublicId, $"{x.FirstName} {x.LastName}", x.Line.RecordText, lista));
+        return Result.Success(new PilaLineExplanationDto(x.Line.LineNumber, x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.Line.RecordText, lista));
     }
 }
 

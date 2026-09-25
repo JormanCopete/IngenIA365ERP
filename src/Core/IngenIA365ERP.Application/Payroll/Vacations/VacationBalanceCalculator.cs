@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -95,7 +96,7 @@ public sealed class VacationBalanceCalculator(IApplicationDbContext db)
                 Employee = new SettlementEmployeeInput
                 {
                     PublicId = e.PublicId,
-                    DisplayName = e.Person is null ? string.Empty : $"{e.Person.FirstName} {e.Person.LastName}".Trim(),
+                    DisplayName = e.Person is null ? string.Empty : NombreDePersona.Completo(e.Person),
                     Class = e.EmployeeClass,
                     JoinDate = e.JoinDate.Date,
                     TerminationDate = e.Status < 0 && e.TerminationDate < DateTime.MaxValue.Date ? e.TerminationDate.Date : null,

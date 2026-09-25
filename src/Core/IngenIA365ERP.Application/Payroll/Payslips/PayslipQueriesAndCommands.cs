@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Notifications;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -89,7 +90,7 @@ public sealed class ListPayslipDeliveriesQueryHandler(IApplicationDbContext db)
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
             orderby d.RequestedAt descending
-            select new PayslipDeliveryDto(d.PublicId, e.PublicId, (p.FirstName + " " + p.LastName).Trim(), d.RecipientEmail, d.RequestedAt, d.RequestedBy, d.SentAt, d.Status.ToString(), d.ErrorMessage, d.AttemptNumber))
+            select new PayslipDeliveryDto(d.PublicId, e.PublicId, NombreDePersona.Completo(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName), d.RecipientEmail, d.RequestedAt, d.RequestedBy, d.SentAt, d.Status.ToString(), d.ErrorMessage, d.AttemptNumber))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<PayslipDeliveryDto>>(filas);
     }

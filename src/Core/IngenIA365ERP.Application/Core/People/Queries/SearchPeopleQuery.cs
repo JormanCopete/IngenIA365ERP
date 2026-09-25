@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -50,7 +51,9 @@ public class SearchPeopleQueryHandler(IApplicationDbContext context)
             .Where(p => !p.IsDeleted &&
                 (p.TaxId.Contains(term) ||
                  p.FirstName.Contains(term) ||
+                 (p.OtherNames != null && p.OtherNames.Contains(term)) ||
                  p.LastName.Contains(term) ||
+                 (p.SecondLastName != null && p.SecondLastName.Contains(term)) ||
                  (p.BusinessName != null && p.BusinessName.Contains(term)) ||
                  (p.LegacyCode != null && p.LegacyCode.Contains(term))));
 
@@ -63,9 +66,7 @@ public class SearchPeopleQueryHandler(IApplicationDbContext context)
             .Select(p => new PersonSearchDto(
                 p.PublicId,
                 p.TaxId,
-                p.BusinessName != null && p.BusinessName.Length > 0
-                    ? p.BusinessName
-                    : p.FirstName + " " + p.LastName,
+                PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
                 p.IsAssociate,
                 p.IsEmployee,
                 p.IsSalesperson,

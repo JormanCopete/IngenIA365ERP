@@ -96,7 +96,7 @@ public sealed class PersonaFormularioModelo
 
     public string? Status { get; set; } = "A";
 
-    public string NombreVisible => !string.IsNullOrWhiteSpace(BusinessName) ? BusinessName : $"{FirstName} {LastName}".Trim();
+    public string NombreVisible => NombreDePersona.Visible(BusinessName, FirstName, OtherNames, LastName, SecondLastName);
 
     /// <summary>Un modelo nuevo, con los valores por defecto del alta y, si se sabe, el documento ya escrito.</summary>
     public static PersonaFormularioModelo Nuevo(string? documento = null) => new()

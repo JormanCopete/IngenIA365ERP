@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Withholding;
@@ -43,7 +44,7 @@ public sealed class CalculateWithholdingRatesCommandHandler(
     {
         var q = from e in db.Employees join p in db.People.AsNoTracking() on e.PersonId equals p.Id
                 where e.WithholdingProcedure == 2 && e.Status == 1
-                select new { Employee = e, p.FirstName, p.LastName, p.TaxId };
+                select new { Employee = e, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId };
         if (request.EmployeePublicIds is { Count: > 0 } ids) q = q.Where(x => ids.Contains(x.Employee.PublicId));
         var empleados = await q.OrderBy(x => x.LastName).ThenBy(x => x.FirstName).ToListAsync(ct);
         if (empleados.Count == 0) return Result.Failure<WithholdingRateBatchDto>(WithholdingRateErrors.NoProcedure2Employees);
@@ -58,7 +59,7 @@ public sealed class CalculateWithholdingRatesCommandHandler(
         foreach (var x in empleados)
         {
             var e = x.Employee;
-            var nombre = $"{x.FirstName} {x.LastName}";
+            var nombre = NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName);
             var carga = await loader.LoadAsync(e, request.Year, request.Semester, ct);
             if (carga.IsFailure)
             {

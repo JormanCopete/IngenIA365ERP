@@ -547,7 +547,7 @@
     {
         _employeePublicId = ficha.PublicId;
         _isNewEmployee = false;
-        _dialogTitle = $"Editar empleado: {ficha.FirstName} {ficha.LastName}";
+        _dialogTitle = $"Editar empleado: {NombreDePersona.PreferirCompuesto(ficha.FullName, ficha.FirstName, ficha.OtherNames, ficha.LastName, ficha.SecondLastName)}";
         _employeeModel = MapEmployeeDto(ficha);
         _planOriginal = ficha.PayrollPlanPublicId; _planDesde = DateTime.Today;
         _showEditDialog = true;
@@ -839,6 +839,9 @@
         public Guid PersonPublicId { get; set; }
         public string FirstName { get; set; } = "";
         public string LastName { get; set; } = "";
+        public string? OtherNames { get; set; }
+        public string? SecondLastName { get; set; }
+        public string FullName { get; set; } = "";
         public string IdentificationNumber { get; set; } = "";
         public decimal Salary { get; set; }
         public int ContractType { get; set; }

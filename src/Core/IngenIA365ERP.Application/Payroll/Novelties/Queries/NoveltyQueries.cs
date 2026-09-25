@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
@@ -77,7 +78,8 @@ public sealed class ListNoveltiesQueryHandler(
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var s = request.Search.Trim();
-            query = query.Where(x => x.p.FirstName.Contains(s) || x.p.LastName.Contains(s) || x.p.TaxId.Contains(s)
+            query = query.Where(x => x.p.FirstName.Contains(s) || (x.p.OtherNames != null && x.p.OtherNames.Contains(s))
+                                     || x.p.LastName.Contains(s) || (x.p.SecondLastName != null && x.p.SecondLastName.Contains(s)) || x.p.TaxId.Contains(s)
                                      || x.c.Name.Contains(s) || x.n.ConceptCode.Contains(s));
         }
 
@@ -93,7 +95,7 @@ public sealed class ListNoveltiesQueryHandler(
         var estimados = await EstimarAsync(period, ct);
 
         var dtos = filas.Select(x => new NoveltyDto(
-            x.n.PublicId, period.PublicId, x.e.PublicId, $"{x.p.FirstName} {x.p.LastName}".Trim(), x.p.TaxId,
+            x.n.PublicId, period.PublicId, x.e.PublicId, NombreDePersona.Completo(x.p), x.p.TaxId,
             x.n.ConceptCode, x.c.Name, x.c.Nature.ToString(),
             x.n.Quantity, x.n.Amount, x.n.StartDate, x.n.EndDate, x.n.DaysInPeriod, x.n.CarryOverDays,
             x.n.Status == NoveltyStatus.Active ? estimados.GetValueOrDefault(x.n.PublicId) : null,
@@ -191,7 +193,7 @@ public sealed class GetNoveltyHistoryQueryHandler(IApplicationDbContext db)
         var publicIds = filas.ToDictionary(x => x.n.Id, x => x.n.PublicId);
 
         var dtos = filas.Select(x => new NoveltyDto(
-            x.n.PublicId, x.pp.PublicId, x.e.PublicId, $"{x.p.FirstName} {x.p.LastName}".Trim(), x.p.TaxId,
+            x.n.PublicId, x.pp.PublicId, x.e.PublicId, NombreDePersona.Completo(x.p), x.p.TaxId,
             x.n.ConceptCode, x.c.Name, x.c.Nature.ToString(),
             x.n.Quantity, x.n.Amount, x.n.StartDate, x.n.EndDate, x.n.DaysInPeriod, x.n.CarryOverDays, null,
             x.n.Status.ToString(), x.n.StatusReason, x.n.Origin.ToString(), x.n.InstallmentNumber, x.n.InstallmentTotal,
