@@ -1,0 +1,17 @@
+{
+  "descripcion": "Todo instante sale en UTC, ISO, a milisegundos y con Z, venga con la zona que venga (Bogotá es -05:00).",
+  "eventos": [
+    {
+      "campos": {
+        "local": {
+          "$fecha": "2026-09-25T08:30:15.1234567-05:00"
+        },
+        "utc": {
+          "$fecha": "2026-09-25T13:30:15.123Z"
+        }
+      },
+      "canonico": "{\"local\":\"2026-09-25T13:30:15.123Z\",\"utc\":\"2026-09-25T13:30:15.123Z\",\"v\":1}",
+      "hash": "1f24d26bb8b51ae9909ca4123aa5b81e45589238716dbdccf0e98833fcdda108"
+    }
+  ]
+}

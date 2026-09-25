@@ -864,6 +864,33 @@ JSON embebidos versionados (T40), no semillas.
     `CabeceraDeRepeticion`) con `ClaveDeOperacionExtensions.ConClaveDeOperacion()` y `HttpContext.ClaveDeOperacion()`
     (la ruta la copia al comando); en Shared `Services/Http/ClaveDeOperacion` (`Valor`, `Para(contenido)`,
     `Exito()`, `Aplicar(peticion, contenido)`, `FueRepeticion(respuesta)`).
+  - **(nuevo, T058–T066)** auditoría con origen, entrega garantizada y sello:
+    `Domain/Common/NoAuditarAttribute` (`Mascara = "***"`) y `Domain/Common/IHechoInmutable` (adelanto mínimo de
+    T130, lo necesita `AuditAnchor`); `Application/Common/Audit/ModuloDeAuditoria` (`Inferir(ns, sinModulo = "General")`,
+    constantes de módulo; el interceptor pasa `"Unknown"`; coincide por segmento entero, así `.Web` ya no atrapa
+    `Identity.Auth.WebAuthn`); `AuditoriaEncadenada` (`Modulos`, `SufijoDelFlujo = ":10y"`, `Retencion` = 10 años,
+    `EsEncadenado`, `Flujo(Guid|string)`, `AMilisegundos`, `Canal(ExecutionChannel)` → `web`/`app`/`pos`/`proceso`,
+    `Entrada`, `LeerCarga`, `ComoJson`, `ContextoAsync`, `Evento`, `ParaMongo`, `RegistrarAsync(servicios, AuditLogCommand, ct)`
+    —el método común de ingresar, exportar e imprimir—) y el record `ContextoDeAuditoria`; claves de metadata del
+    evento `Channel`, `Origin`, `ActorKind`, `Actor`, `ActorUserPublicId`, `OperationKey`, `Reason`, `ErrorCode`,
+    `ErrorMessage`; `AuditEventTypes.CommandRejected` (`"Rejected"`), `.CommandFailed` (`"Failed"`),
+    `.AuditLogIntegrityVerified`; `AuditEventDocument.Metadata` (init, opcional); `AuditBehavior` recibe un cuarto
+    parámetro opcional `IServiceProvider`; `ITenantDbContextFactory.AbrirLaDelAmbito()` (otra conexión a la base del
+    ámbito, para el rechazo que sobrevive al rollback); `IAuditSignatureService.AnchorKeyVersion` y
+    `.ComputeHmacBase64(payload, keyVersion)`; `AuditSignatureSettings.AnchorKeyVersion` (por defecto `dev-anclas-v1`,
+    con su clave de desarrollo; nula si es `dev-v1` o no está en `Keys`: entonces no se ancla y el log dice
+    `[Auditoria.AnclaSinClave]`); `Audit/Integrity/SelloDeIntegridad` (`Version = 1`, `Algoritmo`, `HashInicial` = 64
+    ceros, `Cadena.{Campo, Stream, Seq, PrevHash, Hash, Alg, V}`, `Canonico(campos|BsonDocument)`, `Campos`, `Hash`,
+    `CargaDeAncla`, `FirmarAncla`, `AnclaValida`); `Audit/Services/SelladoDeAuditoria` (el trabajo por cooperativa del
+    reenviador: `Tanda` = 200, `TandasPorPasada` = 20, `AnclaCadaEventos` = 1.000, `Documento(entrada, seq, prevHash)`;
+    separado del `BackgroundService` para que éste sólo recorra cooperativas); `AuditOutboxForwarder.ReenviarUnaPasadaAsync(ct)`
+    / `(tenantPublicId, ct)`; `Audit/VerifyIntegrity/ILectorDeCadenaDeAuditoria` (`LeerAsync(tenantId, stream, desdeSeq,
+    hastaSeq, ct)`, `AnclaValida`) con el record `EventoDeCadena`, implementado por `Audit/Integrity/LectorDeCadenaDeAuditoria`;
+    `VerifyAuditIntegrityQuery(From, To, Stream?)`, `VerifyAuditIntegrityResult`, `AuditIntegrityIncident(Kind, Seq,
+    EventId?, OccurredAt?)`, `AuditIntegrityIncidentKinds` (el `kind` viaja como texto) y `VerifyAuditIntegrityQueryValidator`;
+    en la API `VerifyAuditIntegrityRequest`; en la fixture `CentralIdentityApiFixture.ReenviarAuditoriaAsync(tenantPublicId)`.
+    Índices: `UK_COR_AuditOutbox_EventId`, `UK_COR_AuditOutbox_Stream_Seq`, `IX_COR_AuditOutbox_Pending`,
+    `UK_COR_AuditChainHeads_Stream`, `UK_COR_AuditAnchors_Stream_Kind_Seq`, `UK_COR_AuditAnchors_Stream_AnchorDate`.
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

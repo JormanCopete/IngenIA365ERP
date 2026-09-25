@@ -229,6 +229,13 @@ public interface IApplicationDbContext
     // solo IdempotencyBehavior. (Adelanto de T096, que registra el resto de DbSet de la plataforma.)
     DbSet<OperationKey> OperationKeys { get; }
 
+    // Feature 012 (T37, T38; T061–T066): auditoria garantizada de los modulos encadenados. Escriben
+    // AuditableEntityInterceptor, AuditBehavior y AuditoriaEncadenada; sella y reenvia solo el
+    // AuditOutboxForwarder. (Adelanto de T096.)
+    DbSet<AuditOutboxEntry> AuditOutbox { get; }
+    DbSet<AuditChainHead> AuditChainHeads { get; }
+    DbSet<AuditAnchor> AuditAnchors { get; }
+
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir

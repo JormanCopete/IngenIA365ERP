@@ -201,6 +201,17 @@ try
     if (integracion.EmailDispatcher.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.Storage.Services.NotificationEmailDispatcher>());
 
+    // Feature 012 (T37, T38; T065): sella la auditoria de los modulos encadenados y la lleva de
+    // COR_AuditOutbox a Mongo, por cooperativa y con el arrendamiento audit.forward.
+    builder.Services.AddSingleton(sp => new IngenIA365ERP.Audit.Services.AuditOutboxForwarder(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>(),
+        sp.GetRequiredService<IngenIA365ERP.Audit.Services.SelladoDeAuditoria>(),
+        sp.GetRequiredService<ILogger<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>>(),
+        () => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady));
+    if (integracion.AuditForwarder.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>());
+
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);

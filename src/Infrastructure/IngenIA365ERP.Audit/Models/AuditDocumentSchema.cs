@@ -88,7 +88,18 @@ public static class AuditDocumentSchema
 
     // --------------------------------------------------------- escritura --
 
-    public static BsonDocument ToDocument(AuditEventDocument e) => new()
+    public static BsonDocument ToDocument(AuditEventDocument e)
+    {
+        var doc = SinMetadata(e);
+        // Feature 012 (T36): canal, origen, actor, clave, motivo y código de error. Los eventos de identidad
+        // no la llevan y su documento queda como antes.
+        if (e.Metadata is { Count: > 0 } metadata)
+            doc.Add(Metadata, new BsonDocument(metadata.OrderBy(p => p.Key, StringComparer.Ordinal)
+                .Select(p => new BsonElement(p.Key, p.Value))));
+        return doc;
+    }
+
+    private static BsonDocument SinMetadata(AuditEventDocument e) => new()
     {
         { TenantId, e.TenantId },
         { UserId, e.UserId },

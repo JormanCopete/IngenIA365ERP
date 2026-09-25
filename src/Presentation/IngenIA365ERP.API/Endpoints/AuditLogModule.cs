@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Audit.ExportAuditLogCsv;
 using IngenIA365ERP.Application.Audit.ExportAuditLogPdf;
 using IngenIA365ERP.Application.Audit.QueryAuditLog;
 using IngenIA365ERP.Application.Audit.RegisterOptionAccess;
+using IngenIA365ERP.Application.Audit.VerifyIntegrity;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using MediatR;
@@ -46,8 +47,19 @@ public sealed class AuditLogModule : ICarterModule
         group.MapGet("/export.pdf", ExportPdfAsync).WithName("AuditLog_ExportPdf")
             .RequirePermission("AuditLog.Export");
 
+        // Feature 012 (T38, FR-008; T066): verificación de la cadena de sellos de la auditoría. Es una
+        // consulta (sin Idempotency-Key, contracts/api.md §2.3, §29).
+        app.MapPost("/api/audit/integrity/verify", async (VerifyAuditIntegrityRequest body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new VerifyAuditIntegrityQuery(body.From, body.To, body.Stream), ct))
+            .WithTags("Audit")
+            .WithName("AuditLog_VerifyIntegrity")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("AuditLog.VerifyIntegrity");
+
         // Feature 009 (FR-051): ingreso a una opción del ERP. Sesión y cooperativa activa bastan: es el
-        // propio usuario contando dónde estuvo; el evento lo escribe AuditBehavior con Module=Navigation.
+        // propio usuario contando dónde estuvo; el evento lo escribe el handler con Module=Navigation
+        // (feature 012: en COR_AuditOutbox, encadenado).
         app.MapPost("/api/audit/access", async (RegisterOptionAccessCommand body, ISender sender, CancellationToken ct) =>
             {
                 var result = await sender.Send(body, ct);
@@ -137,3 +149,6 @@ public sealed record AuditExportParams(
     string? Action,
     DateTime? From,
     DateTime? To);
+
+/// <summary>Cuerpo de <c>POST /api/audit/integrity/verify</c> (contracts/api.md §29).</summary>
+public sealed record VerifyAuditIntegrityRequest(DateTime From, DateTime To, string? Stream);

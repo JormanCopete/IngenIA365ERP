@@ -174,13 +174,16 @@ public class CentralIdentityApiFixture : IAsyncLifetime
 
     public HttpClient CreateClient() => Factory.CreateClient();
 
-    // TODO(feature 012, T008 parcial): con los trabajos de fondo apagados, las e2e conducen el
-    // ciclo a mano con métodos que resuelven el servicio del contenedor y corren UNA pasada para la
-    // cooperativa indicada. Falta:
-    //   · ReenviarAuditoriaAsync(Guid tenantPublicId) → AuditOutboxForwarder, que crea T065
-    //     (specs/012-inventario-comercial/tasks.md, fase 2: «expone una pasada manual para la fixture»);
-    //     lo usa IntegridadDeAuditoriaTests (T023). Se agrega aquí en cuanto T065 lo cree, y con eso
-    //     T008 queda completa.
+    /// <summary>
+    /// Una pasada del <see cref="IngenIA365ERP.Audit.Services.AuditOutboxForwarder"/> sobre la cooperativa
+    /// indicada (feature 012, T008, T065): toma su arrendamiento <c>audit.forward</c>, sella lo pendiente de
+    /// <c>COR_AuditOutbox</c> en la cadena, lo lleva a Mongo y ancla. El reenviador está apagado en las
+    /// pruebas (<c>Integration:AuditForwarder:Enabled = false</c>), así que la auditoría de los módulos
+    /// encadenados sólo llega a Mongo cuando una prueba lo pide. Devuelve cuántos eventos llevó.
+    /// </summary>
+    public Task<int> ReenviarAuditoriaAsync(Guid tenantPublicId, CancellationToken ct = default) =>
+        Factory.Services.GetRequiredService<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>()
+            .ReenviarUnaPasadaAsync(tenantPublicId, ct);
 
     /// <summary>
     /// Una pasada del <see cref="IngenIA365ERP.API.Integration.ProgramadorDeTareas"/> sobre la cooperativa

@@ -45,6 +45,14 @@ public static class DependencyInjection
         services.AddSingleton<IAuditSignatureService, AuditSignatureService>();
         services.AddScoped<IAuditPdfExporter, AuditPdfExporter>();
 
+        // Feature 012 (T38; T064–T066): el sello de integridad de la cadena de auditoría, el sellado y
+        // reenvío por cooperativa, y el lector de la verificación. El servicio de fondo que los conduce
+        // (AuditOutboxForwarder) lo registra SOLO la API, condicionado a Integration:AuditForwarder:Enabled.
+        services.AddSingleton<IngenIA365ERP.Audit.Integrity.SelloDeIntegridad>();
+        services.AddSingleton<SelladoDeAuditoria>();
+        services.AddSingleton<IngenIA365ERP.Application.Audit.VerifyIntegrity.ILectorDeCadenaDeAuditoria,
+            IngenIA365ERP.Audit.Integrity.LectorDeCadenaDeAuditoria>();
+
         // T026 — Bootstrap idempotente de índices y TTL al arranque.
         services.AddHostedService<AuditIndexBootstrap>();
 

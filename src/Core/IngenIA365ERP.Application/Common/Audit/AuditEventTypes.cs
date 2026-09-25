@@ -158,6 +158,16 @@ public static class AuditEventTypes
     // otra vez; lo emite IdempotencyBehavior con la clave y el primer uso en la metadata.
     public const string OperationReplayed = "Operation.Replayed";
 
+    // -------------------- Auditoria de comandos (feature 012, T36) --------------------
+    // Un comando que termino en Result.IsFailure: queda con este Action y el Error.Code en la metadata
+    // (clave ErrorCode). Una excepcion sigue siendo «Failed».
+    public const string CommandRejected = "Rejected";
+    public const string CommandFailed = "Failed";
+
+    // -------------------- Integridad de la auditoria (feature 012, T38) --------------------
+    // POST /api/audit/integrity/verify: la verificacion misma, con su resultado en la metadata.
+    public const string AuditLogIntegrityVerified = "AuditLog.IntegrityVerified";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

@@ -127,7 +127,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse>(
             {
                 Action = AuditEventTypes.OperationReplayed,
                 EntityType = previa.Operation,
-                Module = AuditBehavior<TRequest, TResponse>.InferModuleFromNamespace(typeof(TRequest).Namespace),
+                Module = ModuloDeAuditoria.Inferir(typeof(TRequest).Namespace),
                 Metadata = new Dictionary<string, string>
                 {
                     ["OperationKey"] = previa.Key.ToString(),
