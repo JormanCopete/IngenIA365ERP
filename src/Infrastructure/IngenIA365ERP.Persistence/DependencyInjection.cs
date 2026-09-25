@@ -129,45 +129,10 @@ public static class DependencyInjection
         // Se registra el TIPO CONCRETO porque la anotacion de nulabilidad no la honra.
         services.AddScoped<TenantConnectionResolver>();
 
-        services.AddScoped(sp =>
-        {
-            var resolutor = sp.GetRequiredService<TenantConnectionResolver>();
-            var peticion = sp.GetService<IHttpContextAccessor>()?.HttpContext;
-
-            // Sin peticion HTTP —arranque, trabajos de fondo, la CLI de migraciones—
-            // no hay cooperativa de la que tirar. Va contra la instancia por defecto,
-            // donde viven el arbol de migraciones y la plantilla. Se comprueba el
-            // HttpContext y no la cooperativa porque por esa via son indistinguibles.
-            if (peticion is null)
-            {
-                return new ErpTenantInfo { SchemaName = "dbo", ConnectionString = resolutor.Plantilla };
-            }
-
-            var baseDeDatos = peticion.Items.TryGetValue("TenantDatabase", out var b) ? b as string : null;
-            var propia = peticion.Items.TryGetValue("TenantConnectionOverride", out var c) ? c as string : null;
-
-            // Dentro de una peticion, una cooperativa sin resolver NO puede caer a la
-            // base de plantilla. No hay segunda barrera que lo recoja: ninguna entidad
-            // implementa ITenantEntity y los filtros globales son todos de borrado
-            // logico. Si esto sale mal, nada lo detiene y los datos se mezclan.
-            if (string.IsNullOrWhiteSpace(baseDeDatos) && string.IsNullOrWhiteSpace(propia))
-            {
-                throw new InvalidOperationException(
-                    "Se pidio la base operativa dentro de una peticion sin cooperativa resuelta " +
-                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a la base de " +
-                    "plantilla mezclaria los datos de todas las cooperativas. Si esta ruta debe " +
-                    "funcionar sin cooperativa, no tiene que usar IApplicationDbContext.");
-            }
-
-            var actual = sp.GetRequiredService<ICurrentTenantService>();
-            return new ErpTenantInfo
-            {
-                SchemaName = "dbo",
-                ConnectionString = resolutor.Resolver(baseDeDatos, propia, actual.TenantName),
-                Name = actual.TenantName,
-                Id = actual.TenantId,
-            };
-        });
+        // La fabrica decide contra que base habla la operativa: la de la peticion, la del
+        // trabajo de fondo (ContextoAmbiental, feature 012) o, sin ninguna de las dos, la
+        // plantilla. Vive en MultiTenancy/CooperativaDelAmbito para poder probarla.
+        services.AddScoped(CooperativaDelAmbito.Crear);
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.

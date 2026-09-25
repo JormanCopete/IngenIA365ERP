@@ -48,12 +48,15 @@ namespace IngenIA365ERP.App
             // Renovación silenciosa: ver la nota en Web.Client/Program.cs.
             builder.Services.AddSingleton<Shared.Services.Security.RenovadorDeSesion>();
             builder.Services.AddTransient<RenovacionDeSesionHandler>();
+            // Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
+            builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.App));
             builder.Services.AddTransient<AuthBearerHandler>();
             builder.Services.AddTransient<TenantDelegatingHandler>();
 
             // Named HttpClient used by all pages/services.
             builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
                 .AddHttpMessageHandler<RenovacionDeSesionHandler>()
+                .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
                 .AddHttpMessageHandler<AuthBearerHandler>()
                 .AddHttpMessageHandler<TenantDelegatingHandler>();
             builder.Services.AddSingleton(sp =>

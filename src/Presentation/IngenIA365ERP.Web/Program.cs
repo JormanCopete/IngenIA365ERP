@@ -40,12 +40,15 @@ builder.Services.AddSingleton<ITenantService, TenantService>();
 // cabecera ya puesta con un token que no está por vencer.
 builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Security.RenovadorDeSesion>();
 builder.Services.AddTransient<RenovacionDeSesionHandler>();
+// Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
+builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.Web));
 builder.Services.AddTransient<AuthBearerHandler>();
 builder.Services.AddTransient<TenantDelegatingHandler>();
 
 // Named HttpClient used by all pages/services.
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
     .AddHttpMessageHandler<RenovacionDeSesionHandler>()
+    .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
     .AddHttpMessageHandler<AuthBearerHandler>()
     .AddHttpMessageHandler<TenantDelegatingHandler>();
 builder.Services.AddScoped(sp =>

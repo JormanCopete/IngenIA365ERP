@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Audit.Configuration;
@@ -45,6 +46,37 @@ public class MongoAuditService : IAuditService, IDisposable
             TimeSpan.FromSeconds(_settings.FlushIntervalSeconds));
     }
 
+    /// <summary>
+    /// La base de auditoría a la que va (o de la que se lee) este evento: la de la cooperativa, o la
+    /// global cuando la operación no tiene cooperativa (identidad, plataforma).
+    ///
+    /// <para>
+    /// <b>Guarda de segundo plano</b> (feature 012, T5, FR-083, T045): un trabajo de fondo corre por
+    /// <c>IEjecutorEnCooperativa</c>, que fija la cooperativa en <see cref="ContextoAmbiental"/>. Si
+    /// hay contexto y aun así no se resolvió cooperativa, algo está mal cableado, y caer a la global
+    /// escondería el evento donde nadie de esa cooperativa lo ve. Se niega: <c>Critical</c> y
+    /// excepción, nunca <see cref="AuditDatabaseNames.SufijoGlobal"/> desde un trabajo de fondo.
+    /// </para>
+    /// </summary>
+    private string CooperativaOGlobal()
+    {
+        var cooperativa = _tenantService.TenantId;
+        if (cooperativa is not null) return cooperativa;
+
+        if (ContextoAmbiental.Activo)
+        {
+            _logger.LogCritical(
+                "[Auditoria.SegundoPlanSinCooperativa] Un trabajo de fondo ({Origen}, actor {Actor}) intentó " +
+                "auditar sin cooperativa resuelta. No se escribe en la base global.",
+                ContextoAmbiental.Origen, ContextoAmbiental.Actor?.Name);
+            throw new InvalidOperationException(
+                $"Auditoría en segundo plano sin cooperativa resuelta ({ContextoAmbiental.Origen}). " +
+                "Nunca se cae a la base Global desde un trabajo de fondo: revisá que corra por IEjecutorEnCooperativa.");
+        }
+
+        return AuditDatabaseNames.SufijoGlobal;
+    }
+
     // === WRITE: Legacy overload ===
 
     public Task LogAsync(string action, string entityType, string entityId,
@@ -74,7 +106,7 @@ public class MongoAuditService : IAuditService, IDisposable
         // IngenIA365ERP_Audit_default y CERO en IngenIA365ERP_Audit_Global, que
         // es la que lee la consola. Los eventos de identidad —inicios de sesion,
         // segundo factor, invitaciones— se escribian y quedaban invisibles.
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
 
         var entry = new AuditLog
         {
@@ -111,7 +143,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAccessAsync(AccessLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
 
         var entry = new AccessLog
         {
@@ -228,7 +260,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<PagedList<AuditLogEntry>> QueryAsync(AuditQueryParameters query, CancellationToken cancellationToken = default)
     {
-        var tenantId = query.TenantId ?? _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = query.TenantId ?? CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         // Filtro, orden y mapeo entienden las dos formas del documento; ver
@@ -250,7 +282,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByEntityAsync(string entityType, string entityId, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         var filter = AuditDocumentSchema.FiltroPorEntidad(entityType, entityId);
@@ -266,7 +298,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         var filter = AuditDocumentSchema.FiltroPorUsuario(userId, from, to);
@@ -282,7 +314,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAccessCollection(tenantId);
 
         var filterBuilder = Builders<AccessLog>.Filter;

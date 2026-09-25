@@ -161,9 +161,16 @@ try
     builder.Services.AddSingleton<
         IngenIA365ERP.Application.Common.Interfaces.Identity.ICurrentCentralUserContext,
         CurrentCentralUserContextAccessor>();
+    // Feature 012 (T20): AhoraLocal/HoyLocal con la zona de Plataforma:ZonaHoraria.
+    builder.Services.Configure<PlataformaOptions>(builder.Configuration.GetSection(PlataformaOptions.SectionName));
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
+    // Feature 012 (T5, T6, T36): origen (IP, User-Agent, canal X-Canal, endpoint) y actor de la
+    // operacion; en segundo plano, los del ContextoAmbiental que fija IEjecutorEnCooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IOrigenDeLaPeticion, IngenIA365ERP.API.Services.OrigenDeLaPeticion>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IActorActual, IngenIA365ERP.API.Services.ActorDeLaPeticion>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa, IngenIA365ERP.API.Integration.EjecutorEnCooperativa>();
 
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).

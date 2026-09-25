@@ -438,7 +438,10 @@ de `data-model.md`; ninguna columna de enum es `tinyint`). La FK a la unidad de 
 - `PromotionKind` { Percent=1, Amount=2, BuyNPayM=3, QuantityPrice=4, BundlePrice=5 }
 - `SupplierInvoiceEventCode` { Receipt030=30, GoodsReceived032=32 } · `SupplierInvoiceEventStatus`
   { Pending=0, RegisteredExternally=1, Emitted=2, Rejected=3, NotApplicable=4 }
-- `PurchaseMatchStatus` { Held=1, Approved=2, Rejected=3 } (I5, nuevo; data-model §9.6)
+- `PurchaseMatchStatus` { Held=1, Approved=2, Rejected=3 } (I5, nuevo; data-model §9.6; lo agrega US13, T776)
+- `CreditOrigin` { ProvisionalCredit=1, LendingNoResponse=2, Validated=3 } · `PromotionScopeKind` { Product=1,
+  Category=2, Segment=3, Channel=4 } · `DayCloseStatus` { Closed=1, Reopened=2 } **(nuevos en §2.5; data-model §26;
+  creados en T025)**
 
 `Domain/Enums/Core/TaxEnums.cs` y `PaymentEnums.cs`
 - `TaxKind` { Iva=1, Inc=2, ReteFuente=3, ReteIva=4, ReteIca=5, Ica=6, Other=99 }
@@ -462,6 +465,8 @@ de `data-model.md`; ninguna columna de enum es `tinyint`). La FK a la unidad de 
 - `BatchStatus` { Requested=0, Running=1, Completed=2, CompletedWithRejections=3, Empty=4 }
 - `ActorKind` { Person=1, Process=2 } · `ExecutionChannel` { Web=1, App=2, Pos=3, Process=4 }
 - `PrevalidationOutcome` { Postable=1, NoResponse=2, NotApplicable=3 }
+- `MessageOriginKind` { Document=1, Operation=2 } · `DeliveryAttemptOutcome` { Processed=1, AlreadyProcessed=2,
+  Rejected=3, Retry=4 } **(nuevos en §2.5; data-model §26; creados en T039)**
 - Destinos (constantes, no enum): `IntegrationDestinations.Accounting = "Accounting"`,
   `IntegrationDestinations.Lending = "Lending"`.
 
@@ -826,6 +831,17 @@ JSON embebidos versionados (T40), no semillas.
   `Kind`, `UserId?` (SEC_Users.Id, interno), `UserPublicId?`, `CentralUserId?`, `Name`, `Email?`,
   `Channel`, `Origin`, `Ip?`, `Reason?`), `IArrendamientos` (arrendar, renovar, soltar
   `COR_BackgroundLeases`).
+  - **(nuevo, T040)** firmas: `ContextoAmbiental.Fijar(TenantDirectoryEntry, Actor, origen) → IDisposable` y
+    `Activo`, `Cooperativa`, `Actor`, `Origen`; `Actor.ProcesoDeIntegracion(origen)` valida el prefijo
+    (`Mensaje:`, `Lote:`, `Tarea:`), `Actor.NombreDelProceso`, `Actor.OrigenDeMensaje/OrigenDeLote/OrigenDeTarea`,
+    `Actor.EsProceso`; `IEjecutorEnCooperativa.EjecutarAsync(…, ct) → Task<ResultadoEnCooperativa>` con
+    `ResultadoEnCooperativa { Ejecutada=1, Omitida=2 }`; `IArrendamientos.ArrendarAsync(nombre, duracion?)`,
+    `RenovarAsync(nombre, duracion?)` (bool) y `SoltarAsync(nombre)`; `IActorActual.ObtenerAsync(ct) → Task<Actor>`;
+    `IOrigenDeLaPeticion { Ip, UserAgent, Endpoint, Canal (ExecutionChannel), Origen }`.
+  - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
+    `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
+    `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,
+    `App = "app"`; propiedad de log `execution_origin` en `CentralIdentityLogEnricher`.
 - `Interfaces/Security/IActorActual`, `Interfaces/IOrigenDeLaPeticion`, `Interfaces/Security/IAlcanceDeInventario`
   (record `AlcanceDeInventario`), `Interfaces/Security/ILimitesPorPermiso`.
 - `Behaviors/IdempotencyBehavior` + marcador `IOperacionIdempotente { Guid OperationKey }`;
