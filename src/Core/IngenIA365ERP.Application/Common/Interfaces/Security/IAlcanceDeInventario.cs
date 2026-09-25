@@ -6,10 +6,9 @@ namespace IngenIA365ERP.Application.Common.Interfaces.Security;
 /// <c>Inventory.Scope.AllWarehouses</c> / <c>Inventory.Scope.AllPointsOfSale</c>. En segundo plano el alcance es total.
 ///
 /// <para>
-/// Adelanto de T087 (sección de alcance) hecho por la de aprobaciones (T083), que necesita el contrato para exigir
-/// alcance al aprobador: aquí van sólo la interfaz y el record; <c>FiltroDeAlcance</c> y la implementación de la
-/// petición (<c>AlcanceDeInventarioDeLaPeticion</c>, T089) son de esa sección. Mientras tanto la API registra
-/// <see cref="AlcanceDeInventarioCerrado"/>.
+/// La implementación de la petición es <c>AlcanceDeInventarioDeLaPeticion</c> (API, T089), que lee sólo por
+/// <see cref="IAsignacionesDeBodega"/> e <see cref="IAsignacionesDePuntoDeVenta"/>; las consultas lo aplican con
+/// <c>FiltroDeAlcance</c> (<c>Application/Inventory/Common</c>, T087) y los comandos con su <c>AsegurarAsync</c>.
 /// </para>
 /// </summary>
 public interface IAlcanceDeInventario
@@ -36,14 +35,26 @@ public sealed record AlcanceDeInventario(
     /// <summary>Todas las bodegas y todos los puntos (segundo plano, o los dos permisos de alcance total).</summary>
     public static AlcanceDeInventario Total { get; } = new(true, new HashSet<int>(), null, true, new HashSet<int>(), null);
 
+    /// <summary>
+    /// El alcance de un usuario a partir de sus dos permisos de alcance total y de sus asignaciones (T089). Con alcance
+    /// total de una clase se ignoran las asignaciones de esa clase. (nuevo)
+    /// </summary>
+    public static AlcanceDeInventario De(bool todasLasBodegas, AsignacionesDeAlcance bodegas, bool todosLosPuntos, AsignacionesDeAlcance puntos) => new(
+        todasLasBodegas,
+        todasLasBodegas ? new HashSet<int>() : bodegas.Ids,
+        bodegas.PorDefecto,
+        todosLosPuntos,
+        todosLosPuntos ? new HashSet<int>() : puntos.Ids,
+        puntos.PorDefecto);
+
     public bool IncluyeBodega(int bodegaId) => TodasLasBodegas || Bodegas.Contains(bodegaId);
 
     public bool IncluyePunto(int puntoId) => TodosLosPuntos || Puntos.Contains(puntoId);
 }
 
 /// <summary>
-/// La implementación que falla cerrado mientras no exista la de la petición (T089): siempre
-/// <see cref="AlcanceDeInventario.Vacio"/>. La registra la API con <c>TryAdd</c>. (nuevo)
+/// La implementación que siempre falla cerrado: <see cref="AlcanceDeInventario.Vacio"/>. La API registra la de la
+/// petición (T089); ésta queda para anfitriones sin petición ni asignaciones y para las pruebas. (nuevo)
 /// </summary>
 public sealed class AlcanceDeInventarioCerrado : IAlcanceDeInventario
 {

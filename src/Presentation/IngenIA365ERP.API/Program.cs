@@ -181,14 +181,22 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Integration.ISenalDeMensajes>(
         sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.SenalDeMensajes>());
     // Feature 012 (T34, T082; T33, T083-T085): montos maximos por permiso del actor, y permiso y alcance del
-    // aprobador presente (el supervisor en la caja). El alcance de la peticion llega con la seccion de alcance (T089):
-    // hasta entonces falla cerrado (AlcanceDeInventarioCerrado), con TryAdd para que su registro lo reemplace.
-    // Adelantos de T096.
+    // aprobador presente (el supervisor en la caja). Adelantos de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.ILimitesPorPermiso, IngenIA365ERP.API.Services.LimitesPorPermiso>();
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Approvals.IAutoridadDeOtroAprobador, IngenIA365ERP.API.Services.AutoridadDeOtroAprobador>();
+    // Feature 012 (T35, T087-T089): el alcance por bodega y punto de la peticion (una lectura por peticion; total en
+    // segundo plano), que lee solo por los puertos de asignacion. Sus implementaciones vacias fallan cerrado hasta que
+    // US1 (AsignacionesDeBodegaEnBase, T224) y US5 (AsignacionesDePuntoDeVentaEnBase, T596) registren las reales: TryAdd
+    // para que su registro, hecho antes, gane. Adelanto de T096.
     Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<
-        IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario,
-        IngenIA365ERP.Application.Common.Interfaces.Security.AlcanceDeInventarioCerrado>(builder.Services);
+        IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDeBodega,
+        IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDeBodega>(builder.Services);
+    Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<
+        IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDePuntoDeVenta,
+        IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDePuntoDeVenta>(builder.Services);
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario, IngenIA365ERP.API.Services.AlcanceDeInventarioDeLaPeticion>();
+    // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
 
     // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
     // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando

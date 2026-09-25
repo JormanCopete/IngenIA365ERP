@@ -19,6 +19,7 @@ using IngenIA365ERP.Domain.Entities.Web;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Exceptions;
 using IngenIA365ERP.Persistence.Configurations.Common;
@@ -369,6 +370,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
     public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
     public DbSet<PermissionAmountLimit> PermissionAmountLimits => Set<PermissionAmountLimit>();
+    // Feature 012 (T39; T091-T094): alertas de plataforma. (Adelanto de T096.)
+    public DbSet<AlertType> AlertTypes => Set<AlertType>();
+    public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();

@@ -180,6 +180,9 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.FinancialStatementItemsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.VoucherTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CrossDocumentTypesSeeder>();
+        // Feature 012 (T39, T094): los tipos de alerta del catalogo cerrado con sus destinatarios por defecto (Order 83).
+        // La tabla COR_AlertTypes llega con PlataformaParaInventario (T186).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AlertTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

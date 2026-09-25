@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
@@ -73,6 +74,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
     public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
     public DbSet<PermissionAmountLimit> PermissionAmountLimits => Set<PermissionAmountLimit>();
+    // Feature 012 (T39): alertas de plataforma.
+    public DbSet<AlertType> AlertTypes => Set<AlertType>();
+    public DbSet<Alert> Alerts => Set<Alert>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -318,6 +322,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
             b.HasMany(r => r.Decisions).WithOne(d => d.Request).HasForeignKey(d => d.RequestId);
         });
         modelBuilder.Entity<ApprovalDecision>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AlertType>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Alert>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(a => a.AlertType).WithMany().HasForeignKey(a => a.AlertTypeId);
+        });
         modelBuilder.Entity<PermissionAmountLimit>(b =>
         {
             b.Ignore("RowVersion");

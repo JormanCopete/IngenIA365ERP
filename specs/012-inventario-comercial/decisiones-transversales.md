@@ -960,6 +960,33 @@ JSON embebidos versionados (T40), no semillas.
     DecidirRequest, DesafioRequest, RetirarRequest, FijarMontoRequest}`. Precisiones: `PermissionAmountLimit.MaxAmount` es
     nulable (api.md §15.3: nulo = sin límite); `Approvals.Policy.Overlaps` y `Approvals.AmountLimit.Overlaps` llevan
     `data.existingValidFrom`.
+  - **(nuevo, T087–T095)** alcance y alertas: en `Interfaces/Security`, los puertos `IAsignacionesDeBodega`
+    { `BodegasDelUsuarioAsync`, `BuscarAsync(publicIds)`, `ReemplazarAsync` } e `IAsignacionesDePuntoDeVenta`
+    { `PuntosDelUsuarioAsync`, `BuscarAsync`, `ReemplazarAsync` } con `SinAsignacionesDeBodega`/`SinAsignacionesDePuntoDeVenta`,
+    los records `ElementoDeAlcance(Id, PublicId, Code, Name)`, `AsignacionDeAlcance(Elemento, IsDefault)`,
+    `AsignacionesDeAlcance(Items)` { `Ninguna`, `Ids`, `PorDefecto` } y `AsignacionPedida(Id, IsDefault)`,
+    `ErroresDeAlcance` (`Inventory.Warehouse.NotFound`, `Inventory.PointOfSale.NotFound`, `Inventory.Scope.DefaultDuplicate`
+    con `data.kind`) y `AlcanceDeInventario.De(...)`; `Application/Inventory/Common/FiltroDeAlcance` { `PorBodega`,
+    `PorPunto`, `DocumentosPorBodega`, `DocumentoSinBodegaVisible`, `DocumentoSinBodegaOperable`, `AsegurarAsync` };
+    `Application/Inventory/Security/Scopes/{VistaDeAlcanceComercial, GetUserCommercialScopeQuery,
+    SetUserCommercialScopeCommand}` con `UserCommercialScopeDto`, `ScopeUserDto`, `WarehouseScopeDto`,
+    `PointOfSaleScopeDto`, `WarehouseScopeInput`, `PointOfSaleScopeInput`; API `Services/AlcanceDeInventarioDeLaPeticion`
+    y `Endpoints/Inventory/ScopesEndpoints.FijarAlcanceRequest`. En `Application/Common/Alerts`: `TiposDeAlerta` (el
+    catálogo cerrado de §2.13 como constantes y `DefinicionDeTipoDeAlerta(TypeCode, Module, Description, Destinatarios,
+    Canales, Severidad, DisponibleDesde, UsaDestinatarios, Umbrales)`), `IAlertas` { `LevantarAsync(AlertaALevantar)`,
+    `AtenderPorProcesoAsync(dedupKey, nota)` } → `Alertas` (con `ClaveDe`), `AlertaALevantar`, `AlertaLevantada`,
+    enum `DesenlaceDeAlerta` { Levantada=1, Repetida=2, TipoInactivo=3 } (no se guarda), `IDestinatariosPorPermiso`
+    { `ResolverAsync`, `ContarActivosAsync`, `TiposSinDestinatarioAsync` } con `DestinatarioDeAlerta` y
+    `DestinatariosDeAlerta(Usuarios, SinDestinatario)` (API: `DestinatariosPorPermiso`), `VisibilidadDeAlertas`,
+    `AvisosDeAprobacionPorAlertas` (el `IAvisosDeAprobacion` real), `ErroresDeAlertas`, DTOs `AlertDto`,
+    `AlertEntityDto`, `AlertTypeDto`; carpetas `RaiseAlert`, `AttendAlert`, `SaveAlertType`, `ListAlerts`, `GetAlert`,
+    `ListAlertTypes`, `GetAlertTypeHistory`; código `Alerts.Type.ViewPermissionNotAllowed` (un permiso `*.View` no puede
+    ser destinatario; §16.2 no le daba código). Índices `UK_COR_AlertTypes_TypeCode_ValidFrom`,
+    `UK_COR_Alerts_DedupKey_Pending`, `IX_COR_Alerts_Status_TypeCode_RaisedAt`. `NotificationPayload.AlertPublicId` y
+    `NotificationItemDto.AlertPublicId` (opcionales). En la API, `AlertsEndpoints.{AtenderRequest, VersionDeTipoRequest}`.
+    Decisiones: `CompanyAdmin` **no** cuenta como destinatario por permiso (lo concede todo); es el respaldo de SC-022.
+    Una alerta alcanza a quien tiene un permiso destinatario de la versión con que se levantó y alcance sobre su bodega y
+    su punto, **o** a quien se le notificó. La severidad y el módulo de un tipo no se configuran.
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

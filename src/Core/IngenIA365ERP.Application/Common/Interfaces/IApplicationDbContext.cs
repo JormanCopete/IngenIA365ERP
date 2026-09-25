@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
@@ -260,6 +261,11 @@ public interface IApplicationDbContext
     DbSet<ApprovalRequest> ApprovalRequests { get; }
     DbSet<ApprovalDecision> ApprovalDecisions { get; }
     DbSet<PermissionAmountLimit> PermissionAmountLimits { get; }
+
+    // Feature 012 (T39; T091-T094): alertas de plataforma. Escriben solo IAlertas (levantar, atender por proceso),
+    // AttendAlertCommand, SaveAlertTypeCommand y AlertTypesSeeder. (Adelanto de T096.)
+    DbSet<AlertType> AlertTypes { get; }
+    DbSet<Alert> Alerts { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

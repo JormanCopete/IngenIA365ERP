@@ -12,7 +12,8 @@ public sealed record NotificationItemDto(
     string EmailStatus,
     DateTime CreatedAt,
     DateTime? ReadAt,
-    DateTime? ArchivedAt);
+    DateTime? ArchivedAt,
+    Guid? AlertPublicId = null);
 
 public sealed record NotificationInboxDto(
     IReadOnlyList<NotificationItemDto> Items,

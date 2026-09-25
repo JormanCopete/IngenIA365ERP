@@ -42,4 +42,10 @@ public class Notification : AuditableEntityLong
 
     /// <summary>Archivada por el destinatario.</summary>
     public DateTime? ArchivedAt { get; set; }
+
+    /// <summary>
+    /// La alerta (<c>COR_Alerts</c>) que entrega esta notificación, para abrirla desde la bandeja (feature 012, T39,
+    /// T091). Nula en las notificaciones que no son alertas. La columna llega con <c>PlataformaParaInventario</c>.
+    /// </summary>
+    public Guid? AlertPublicId { get; set; }
 }

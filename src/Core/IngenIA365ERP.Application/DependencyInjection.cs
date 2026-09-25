@@ -114,14 +114,20 @@ public static class DependencyInjection
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
         services.AddScoped<Common.Integration.EmisorDeMensajes>();
-        // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Los tres
-        // ganchos van vacios hasta que existan sus duenos: el aviso Aprobaciones.Pendiente (alertas, T093) y las reglas
-        // de politica de Inventario (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
+        // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
+        // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
         // historia. TryAdd para que el modulo que los implementa los reemplace sin quitar estas lineas.
         services.AddScoped<Common.Approvals.VistaDeSolicitudes>();
         services.AddScoped<Common.Approvals.IMotorDeAprobaciones, Common.Approvals.MotorDeAprobaciones>();
-        services.TryAddScoped<Common.Approvals.IAvisosDeAprobacion, Common.Approvals.SinAvisosDeAprobacion>();
+        // Feature 012 (T39, T093): el aviso Aprobaciones.Pendiente sale por las alertas (reemplaza a SinAvisosDeAprobacion).
+        services.TryAddScoped<Common.Approvals.IAvisosDeAprobacion, Common.Alerts.AvisosDeAprobacionPorAlertas>();
         services.TryAddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion, Common.Approvals.ReglasDePoliticaDeAprobacionVacias>();
+        // Feature 012 (T39, T093-T094): levantar y atender alertas, y qué alertas alcanzan a quien pregunta. Los
+        // destinatarios por permiso (IDestinatariosPorPermiso) los resuelve la API. Adelanto de T096.
+        services.AddScoped<Common.Alerts.IAlertas, Common.Alerts.Alertas>();
+        services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
+        // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
+        services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.

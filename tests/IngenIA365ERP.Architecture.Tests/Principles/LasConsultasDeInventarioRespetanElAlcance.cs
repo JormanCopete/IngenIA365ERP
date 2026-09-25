@@ -10,16 +10,23 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// muestra existencias y documentos de bodegas ajenas.
 ///
 /// <para>
-/// Esqueleto del Setup: <see cref="ConsultasDeInventario"/> (nombres de tipo de los handlers de
-/// consulta) empieza vacía y la prueba afirma la regla sobre cada elemento; con la lista vacía pasa
-/// porque no hay nada que violar, no por un <c>return</c> temprano. La llena cada historia dueña de
-/// sus consultas (fase 3 en adelante, empezando por US1).
+/// <see cref="ConsultasDeInventario"/> lleva los nombres de tipo de los handlers de consulta que filtran por alcance, y
+/// la prueba exige que el archivo que declara cada uno aplique <c>IAlcanceDeInventario</c> (directo o por
+/// <c>FiltroDeAlcance</c>, cuyo archivo lo nombra en su documentación y firma). La llenó la plataforma (fase 2, T087) con
+/// las consultas que ya existen —el alcance comercial de un usuario y la bandeja y el detalle de alertas— y cada
+/// historia agrega las suyas (fase 3 en adelante; fases 11 y 21, US12 y US17). Las consultas de vendedores
+/// (<c>Application/Inventory/Salespeople</c>) no están: son personas, no tienen bodega ni punto (FR-031).
 /// </para>
 /// </summary>
 public class LasConsultasDeInventarioRespetanElAlcance
 {
     /// <summary>Nombres de tipo de los handlers de consulta de inventario. Los agrega cada historia.</summary>
-    private static readonly string[] ConsultasDeInventario = [];
+    private static readonly string[] ConsultasDeInventario =
+    [
+        "GetUserCommercialScopeQueryHandler",
+        "ListAlertsQueryHandler",
+        "GetAlertQueryHandler",
+    ];
 
     [Fact]
     public void Cada_consulta_de_inventario_aplica_el_alcance()
