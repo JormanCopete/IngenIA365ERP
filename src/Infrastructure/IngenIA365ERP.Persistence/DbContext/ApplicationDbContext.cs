@@ -331,6 +331,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<DocumentPartySnapshot> DocumentPartySnapshots => Set<DocumentPartySnapshot>();
     public DbSet<DocumentTaxLine> DocumentTaxLines => Set<DocumentTaxLine>();
     public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
+    // Feature 012 (T161): catalogo tributario de Core.
+    public DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<Domain.Entities.Core.Taxes.TaxDefinition>();
+    public DbSet<Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<Domain.Entities.Core.Taxes.TaxRate>();
+    public DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts => Set<Domain.Entities.Core.Taxes.WithholdingConcept>();
     public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 

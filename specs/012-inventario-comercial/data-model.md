@@ -2138,23 +2138,23 @@ relación producto → impuesto es `INV_ProductTaxes` (§1).
 | Columna | Tipo | Regla |
 |---|---|---|
 | `Code` | nvarchar(10) | `CodigoDeCatalogo`; único filtrado vivos |
-| `Name` | nvarchar(80) | |
+| `Name` | nvarchar(120) | el largo de la plantilla (contracts/plantillas.md §1; antes decía 80) |
 | `Kind` | int (`TaxKind`: `Iva=1`, `Inc=2`, `ReteFuente=3`, `ReteIva=4`, `ReteIca=5`, `Ica=6`, `Other=99`) | `Ica` es informativo (declaración por municipio) |
 | `CalculationForm` | int (`TaxCalculationForm`: `PercentOfBase=1`, `PercentOfTax=2`, `AmountPerUnit=3`) | |
 | `TaxedOnDefinitionId` | int, nullable, FK self | obligatorio si `PercentOfTax` (ReteIVA sobre el IVA) |
 | `IsWithholding` | bit | verdadero en `ReteFuente`, `ReteIva`, `ReteIca`; en `Other`, lo dice quien lo crea |
 | `DianTaxCode` | nvarchar(4), nullable | tributo DIAN (01 IVA, 04 INC, 22 bolsas, 05 ReteIVA, 06 ReteFuente, 07 ReteICA, ZZ…); obligatorio en lo que va a un documento electrónico |
 | `IsActive` | bit | |
-| `Notes` | nvarchar(300), nullable | |
+| `Notes` | nvarchar(400), nullable | el largo de la plantilla (antes decía 300) |
 
 ### `COR_WithholdingConcepts` — `WithholdingConcept`
 
 | Columna | Tipo | Regla |
 |---|---|---|
 | `Code` | nvarchar(10) | único filtrado vivos |
-| `Name` | nvarchar(80) | compras, servicios, honorarios, arrendamientos, transporte, otros |
+| `Name` | nvarchar(120) | compras, servicios, honorarios, arrendamientos, transporte, otros |
 | `IsActive` | bit | |
-| `Notes` | nvarchar(300), nullable | |
+| `Notes` | nvarchar(400), nullable | |
 
 ### `COR_TaxRates` — `TaxRate`
 
@@ -2165,7 +2165,7 @@ Una tarifa con vigencia, sus condiciones y su norma. Una vigencia nueva es una f
 |---|---|---|
 | `TaxDefinitionId` | int, FK | |
 | `Code` | nvarchar(10) | lo que la matriz contable usa como `TaxRateCode` (T27); **no cambia** |
-| `Name` | nvarchar(80) | «IVA 19 %», «ReteFuente compras declarante» |
+| `Name` | nvarchar(120) | «IVA 19 %», «ReteFuente compras declarante» |
 | `Rate` | 9,6, nullable | **fracción** (0,19; 0,00966 para 9,66 ‰); obligatorio salvo `AmountPerUnit` |
 | `AmountPerUnit` | 18,2, nullable | valor por unidad gravable; la unidad gravable por unidad base del producto la da `INV_ProductTaxes.TaxableUnitsPerBaseUnit` |
 | `WithholdingConceptId` | int, nullable, FK | obligatorio en `ReteFuente` |
@@ -2182,7 +2182,7 @@ Una tarifa con vigencia, sus condiciones y su norma. Una vigencia nueva es una f
 | `ValidTo` | date, nullable | |
 | `LegalSource` | nvarchar(200) | la norma (FR-013) |
 | `ReviewPending` | bit NOT NULL DEFAULT 0 | la semilla la deja en 1: «pendiente de validar por la contadora» (A8); la baja quien tiene `Core.Taxes.Manage`, auditado |
-| `Notes` | nvarchar(300), nullable | |
+| `Notes` | nvarchar(400), nullable | |
 
 Único `(Code, ValidFrom)` filtrado vivos; dos vigencias del mismo `Code` no se cruzan
 (`Core.TaxRate.Overlaps`). **Una tarifa no se edita desde que entra en vigencia**: tarifa, valor por
@@ -2197,7 +2197,9 @@ actividad exactos o, si no hay, la fila `*` del municipio, y cuyas condiciones n
 `PerfilTributario` de las dos partes. Gana la de mayor `Priority`; a igual prioridad, la de más
 condiciones no nulas; si aún empatan, el documento no se confirma (`Core.TaxRate.Ambiguous`, que nombra
 las dos). Guardar una tarifa ya rechaza el empate evidente (misma definición, concepto, municipio,
-actividad, condiciones y prioridad con vigencias cruzadas). Una retención procede con base **≥** el
+actividad, condiciones y prioridad con vigencias cruzadas). El empate evidente sólo se mira en las definiciones de retención (el motor
+elige esas tarifas por condiciones; los impuestos del producto se citan por código en `INV_ProductTaxes`, así que IVA 19 e
+IVA 5 conviven sin empate). Un código de tarifa pertenece a una sola definición. Una retención procede con base **≥** el
 mínimo convertido a pesos con `Tributario.RedondeoUvtAPesos`; las notas usan la foto del original y no
 vuelven a probar el mínimo.
 

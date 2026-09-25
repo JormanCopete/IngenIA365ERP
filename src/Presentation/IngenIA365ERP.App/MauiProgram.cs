@@ -69,6 +69,9 @@ namespace IngenIA365ERP.App
                 builder.Services.AddSingleton<IAuthService, AuthService>();
             System.Diagnostics.Debug.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={AppMode.ApiBaseUrl}");
 
+            // Feature 012 (T170): cliente del catalogo tributario de Core. Como los demas clientes tipados de Shared,
+            // depende de CentralAuthClient, que la app MAUI todavia no registra (verificacion de MAUI pendiente).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 

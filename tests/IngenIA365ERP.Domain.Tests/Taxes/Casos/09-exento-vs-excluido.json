@@ -1,0 +1,35 @@
+{
+  // Feature 012, T097, caso 09 (FR-044): el IVA de la compra de un producto que se vende EXENTO es descontable; el de
+  // uno que se vende EXCLUIDO va al costo. La cooperativa es responsable de IVA y el tipo de compra no está marcado.
+  // Línea 1 (exento): 1.000.000 × 5 % = 50.000 descontable. Línea 2 (excluido): 1.000.000 × 19 % = 190.000 al costo.
+  "nombre": "IVA de compra de un producto exento frente a uno excluido",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 1, "codigo": "IVA", "nombre": "IVA", "clase": "Iva", "forma": "PercentOfBase", "codigoDian": "01" }
+  ],
+  "tarifas": [
+    { "id": 11, "impuesto": 1, "codigo": "IVA19", "tarifa": 0.19, "aplicaA": "Both", "desde": "2017-01-01" },
+    { "id": 12, "impuesto": 1, "codigo": "IVA5", "tarifa": 0.05, "aplicaA": "Both", "desde": "2017-01-01" }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Compra de un exento y de un excluido",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [
+        { "numero": 1, "base": 1000000, "tratamientoIva": "Exempt", "impuestos": [ { "impuesto": 1, "tarifa": "IVA5", "aplicaA": "Purchases" } ] },
+        { "numero": 2, "base": 1000000, "tratamientoIva": "Excluded", "impuestos": [ { "impuesto": 1, "tarifa": "IVA19", "aplicaA": "Purchases" } ] }
+      ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "IVA5", "tratamiento": "Deductible", "base": 1000000, "valor": 50000, "explicacion": [ "IVA descontable" ] },
+          { "linea": 2, "tarifa": "IVA19", "tratamiento": "AddedToCost", "base": 1000000, "valor": 190000, "explicacion": [ "se vende excluido" ] }
+        ]
+      }
+    }
+  ]
+}

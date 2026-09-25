@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Entities.Core.Taxes;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -7,9 +8,8 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory;
 /// <summary>
 /// <c>INV_DocumentTaxLines</c> (feature 012, T22, T136; data-model §5.7). Hecho de sólo inserción; tarifa como fracción
 /// (9,6), base y valor en pesos (18,2), unidades gravables (18,4). Índices por documento y por (impuesto, documento).
-/// FK <c>Restrict</c> al documento y a su línea; las de <c>COR_TaxDefinitions</c>, <c>COR_TaxRates</c> y
-/// <c>COR_WithholdingConcepts</c> las agrega la configuración del catálogo tributario cuando esas entidades existan
-/// (misma migración <c>InventarioComercialNucleo</c> o anterior).
+/// FK <c>Restrict</c> al documento, a su línea y al catálogo tributario (<c>COR_TaxDefinitions</c>, la fila de
+/// <c>COR_TaxRates</c> que aplicó y <c>COR_WithholdingConcepts</c>; éstas desde la sección tributaria de la fase 3, T161).
 /// </summary>
 public class DocumentTaxLineConfiguration : IEntityTypeConfiguration<DocumentTaxLine>
 {
@@ -38,6 +38,9 @@ public class DocumentTaxLineConfiguration : IEntityTypeConfiguration<DocumentTax
 
         builder.HasOne<InventoryDocument>().WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InventoryDocumentLine>().WithMany().HasForeignKey(e => e.DocumentLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TaxDefinition>().WithMany().HasForeignKey(e => e.TaxDefinitionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TaxRate>().WithMany().HasForeignKey(e => e.TaxRateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<WithholdingConcept>().WithMany().HasForeignKey(e => e.WithholdingConceptId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.DocumentId).HasDatabaseName("IX_INV_DocumentTaxLines_DocumentId");
         builder.HasIndex(e => new { e.TaxDefinitionId, e.DocumentId }).HasDatabaseName("IX_INV_DocumentTaxLines_TaxDefinition_Document");

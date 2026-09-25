@@ -1102,6 +1102,26 @@ JSON embebidos versionados (T40), no semillas.
 **Core**: `Domain/Taxes/{MotorTributario, IvaDescontable, ConversionUvt, TaxCatalogSnapshot,
 PerfilTributario}`, `Application/Core/Taxes/{LectorDeCatalogoTributario, ImportTaxCatalogCommand}`,
 `Application/Core/PaymentMeans/*`.
+  Catálogo tributario (fase 3, sección tributaria, T161–T171; todos **(nuevo)**): en `Domain/Taxes`, la entrada y la
+  salida del motor —`EntradaTributaria`, `LineaTributaria`, `ImpuestoDeLinea`, `RenglonTributario`, `ResultadoTributario`
+  (con `Rechazos` y `Omisiones`), `RechazoTributario`, `ExplicacionTributaria` + `PasoTributario`—, lo que lleva la foto
+  —`ImpuestoEnFoto`, `TarifaEnFoto`, `ConceptoEnFoto`, `CondicionesDeTarifa`—, `RedondeoUvt { Peso, Centena, Mil }`,
+  `IvaDescontable.Explicar`, `PerfilTributario.EsAgenteDeRetencion` y las constantes `MotorTributario.{CodigoAmbiguo,
+  CodigoTarifaNoVigente, CodigoImpuestoInexistente, ActividadGeneral}`; en `Domain/Entities/Core/Taxes`, `TaxDefinition`,
+  `TaxRate` (`VigenteEn`, `SeCruzaCon`), `WithholdingConcept`; en `Application/Common/Taxation`, `UvtVigente` y
+  `LectorDeUvt.{CodigoFaltante, Faltante}`; en `Application/Core/Taxes`, `TaxErrors`, `ReglasDelCatalogoTributario`
+  (+ `IDatosDeTarifa`, `CampoDeTarifa`), `PlantillaDeImpuestos` (la definición de la plantilla 1 con sus columnas, que
+  `CatalogoDePlantillas` toma), los comandos `Create/UpdateTaxDefinitionCommand`, `Create/UpdateTaxRateCommand`,
+  `Create/UpdateWithholdingConceptCommand`, `CloseTaxRateCommand`, `ReviewTaxRateCommand`, las consultas
+  `ListTaxDefinitionsQuery`, `GetTaxDefinitionQuery`, `ListTaxRatesQuery`, `GetTaxRateQuery`,
+  `ListWithholdingConceptsQuery`, `GetTaxCatalogTemplateDataQuery`, y los DTO `TaxDefinitionDto` (con `Rates` en el
+  detalle), `TaxRateDto` (con `OtherVersions`), `TaxRateConditionsDto`, `WithholdingConceptDto`; en Persistence,
+  `Configurations/Core/Taxes/*Configuration` y `TaxCatalogSeeder` (Order 81, `Data/impuestos-co.json`); en la API,
+  `Endpoints/Core/TaxesEndpoints` (tres grupos: `taxes`, `tax-rates`, `withholding-concepts`); en Shared,
+  `Services/Core/{ImpuestosClient, ImpuestosDtos}` (`ImpuestoDto`, `TarifaTributariaDto` —ya había un `TarifaDto`
+  contable—, `CondicionesDeTarifaDto`, `ConceptoDeRetencionDto`, `CatalogoTributarioTextos` y los *Request) y
+  `Pages/Maestros/Impuestos.razor`. Slugs de `BuscarCodigoDeCatalogoQuery`: `impuestos`, `tarifas`,
+  `conceptos-de-retencion`.
 
 **Contabilidad** (`Application/Accounting/Inventory`): `Reglas/{OperacionesDeInventario, RolesDeCuenta,
 ResolutorDeReglas}`, `CreateInventoryPostingRuleCommand`, `AddInventoryPostingRuleVersionCommand`,
@@ -1180,7 +1200,8 @@ de otro módulo → `Accounting.VoucherType.NotAllowedForModule`; cierre contabl
 `Concurrency.*`), `.EconomicFootprintChanged` (`data.fields[]`), `.MissingData` (`data.missing[] { field,
 where, permission }`), `ElectronicInvoicing.NotReady` (`data.missing[]`); catálogo tributario →
 `Core.Tax.NotFound`, `Core.TaxRate.{NotFound, Overlaps, InEffect, Ambiguous}`,
-`Core.WithholdingConcept.NotFound`; vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+`Core.WithholdingConcept.{NotFound, InUse}`, `Core.Tax.Immutable` (nuevo: la plantilla no cambia la clase, la forma de
+cálculo ni el impuesto base de un impuesto existente); vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

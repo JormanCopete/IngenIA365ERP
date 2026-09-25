@@ -207,6 +207,12 @@ public interface IApplicationDbContext
     DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses { get; }
     DbSet<DocumentSequence> DocumentSequences { get; }
 
+    // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
+    // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.
+    DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions { get; }
+    DbSet<Domain.Entities.Core.Taxes.TaxRate> TaxRates { get; }
+    DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts { get; }
+
     // CDT
     DbSet<Certificate> Certificates { get; }
     DbSet<CdtParameter> CdtParameters { get; }

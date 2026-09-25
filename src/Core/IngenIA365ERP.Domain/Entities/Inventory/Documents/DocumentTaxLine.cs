@@ -8,8 +8,7 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// 012, T22; FR-013, FR-044; data-model §5.7). Hecho inmutable: el borrador los calcula al vuelo y guarda sólo los
 /// totales; al confirmar se escriben estas filas y ya no cambian. Notas y devoluciones reutilizan la foto del
 /// original. <see cref="DocumentLineId"/> nulo = renglón del documento (retenciones). Las FK al catálogo tributario
-/// (<c>COR_TaxDefinitions</c>, <c>COR_TaxRates</c>, <c>COR_WithholdingConcepts</c>) las declara la configuración de
-/// ese catálogo cuando exista.
+/// (<c>COR_TaxDefinitions</c>, <c>COR_TaxRates</c>, <c>COR_WithholdingConcepts</c>) las declara su configuración.
 /// </summary>
 public class DocumentTaxLine : AuditableEntity, IHechoInmutable
 {

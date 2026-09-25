@@ -252,6 +252,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
     public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
+    // Feature 012 (T161): catalogo tributario de Core.
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept>();
     DbSet<Certificate> IApplicationDbContext.Certificates => throw new NotImplementedException();
     DbSet<CdtParameter> IApplicationDbContext.CdtParameters => throw new NotImplementedException();
     DbSet<CdtRateByTerm> IApplicationDbContext.CdtRatesByTerm => throw new NotImplementedException();
@@ -335,6 +339,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         });
         modelBuilder.Entity<DocumentTypeWarehouse>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<DocumentSequence>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.TaxedOnDefinition).WithMany().HasForeignKey(d => d.TaxedOnDefinitionId);
+            b.HasMany(d => d.Rates).WithOne(r => r.TaxDefinition).HasForeignKey(r => r.TaxDefinitionId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollTransaction>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollConcept>(b => b.Ignore("RowVersion"));
         // City.People choca con las dos navegaciones Person→City (City y MailingCity); aquí no hace falta.

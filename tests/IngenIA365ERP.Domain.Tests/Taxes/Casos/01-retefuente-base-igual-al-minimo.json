@@ -1,0 +1,35 @@
+{
+  // Feature 012, T097, caso 01 (FR-013): la retención procede con base IGUAL o superior al mínimo.
+  // Calculado a mano: 27 UVT × 52.374 = 1.414.098 (redondeo al peso). Base 1.414.098 ≥ 1.414.098 → retiene.
+  // 1.414.098 × 2,5 % = 35.352,45.
+  "nombre": "ReteFuente con la base exactamente en el mínimo",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 21, "impuesto": 2, "codigo": "RF25", "tarifa": 0.025, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false }, "norma": "DUR 1625/2016 (caso)" },
+    { "id": 22, "impuesto": 2, "codigo": "RF35", "tarifa": 0.035, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": false, "sujetoAutorretenedor": false }, "norma": "DUR 1625/2016 (caso)" }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Compra de 1.414.098 a un proveedor declarante",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 1414098, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RF25", "tratamiento": "WithholdingApplied", "base": 1414098, "valor": 35352.45,
+            "explicacion": [ "UVT: 52374", "Base mínima en UVT: 27", "Base mínima en pesos: 1414098", "igual o superior", "sujeto declarante: sí" ] }
+        ]
+      }
+    }
+  ]
+}

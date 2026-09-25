@@ -1,0 +1,45 @@
+{
+  // Feature 012, T097, caso 05: dos tarifas del mismo concepto, una para declarantes y otra para no declarantes.
+  // Base 2.000.000 (≥ 27 UVT = 1.414.098). A) declarante: × 2,5 % = 50.000. B) no declarante: × 3,5 % = 70.000.
+  "nombre": "ReteFuente de compras a declarante y a no declarante",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 21, "impuesto": 2, "codigo": "RF25", "tarifa": 0.025, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false } },
+    { "id": 22, "impuesto": 2, "codigo": "RF35", "tarifa": 0.035, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": false, "sujetoAutorretenedor": false } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Proveedor declarante",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "01", "responsableIva": false, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RF25", "tratamiento": "WithholdingApplied", "base": 2000000, "valor": 50000, "explicacion": [ "sujeto declarante: sí" ] }
+        ]
+      }
+    },
+    {
+      "nombre": "Proveedor no declarante",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "01", "responsableIva": false, "declarante": false },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RF35", "tratamiento": "WithholdingApplied", "base": 2000000, "valor": 70000, "explicacion": [ "sujeto declarante: no" ] }
+        ]
+      }
+    }
+  ]
+}

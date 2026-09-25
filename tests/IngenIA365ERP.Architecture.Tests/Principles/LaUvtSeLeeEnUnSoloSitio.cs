@@ -11,23 +11,42 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// sólo el lector.
 ///
 /// <para>
-/// Esqueleto del Setup: <see cref="SimbolosDeUvt"/> (identificadores cuyo uso está restringido)
-/// empieza vacía y la prueba afirma la regla sobre cada elemento; con la lista vacía pasa porque no
-/// hay nada que violar, no por un <c>return</c> temprano. La llena la tarea que crea
-/// <c>LectorDeUvt</c> (fase 2, plataforma) con el <c>DbSet</c> de parámetros legales;
-/// <see cref="LectoresAutorizados"/> y <see cref="CarpetasAutorizadas"/> dicen quién puede usarlos.
+/// Completada por la sección tributaria de la fase 3 (T117, T163): <see cref="SimbolosDeUvt"/> lleva el
+/// <c>DbSet</c> de parámetros legales y el código de la UVT; <see cref="LectoresAutorizados"/> y
+/// <see cref="CarpetasAutorizadas"/> dicen quién puede usarlos. <see cref="Hay_un_solo_lector_de_la_UVT"/> fija que
+/// el lector existe y es el único que implementa <c>IValorUvt</c>.
 /// </para>
 /// </summary>
 public class LaUvtSeLeeEnUnSoloSitio
 {
-    /// <summary>Identificadores restringidos (p. ej. el DbSet de parámetros legales). Los agrega quien crea el lector.</summary>
-    private static readonly string[] SimbolosDeUvt = [];
+    /// <summary>
+    /// Identificadores restringidos: el <c>DbSet</c> de parámetros legales y el código de la UVT (T117, sección
+    /// tributaria de la fase 3, al crear <c>LectorDeUvt</c>).
+    /// </summary>
+    private static readonly string[] SimbolosDeUvt = ["PayrollLegalParameters", "LegalParameterCodes.Uvt"];
 
-    /// <summary>Nombres de archivo (sin ruta) autorizados.</summary>
-    private static readonly string[] LectoresAutorizados = ["LectorDeUvt.cs"];
+    /// <summary>
+    /// Nombres de archivo (sin ruta) autorizados: el lector, y los que declaran la tabla o la siembran (el contexto de
+    /// datos y la semilla de nómina).
+    /// </summary>
+    private static readonly string[] LectoresAutorizados =
+    [
+        "LectorDeUvt.cs",
+        "IApplicationDbContext.cs",
+        "ApplicationDbContext.cs",
+        "PayrollLegalParametersSeeder.cs",
+    ];
 
-    /// <summary>Carpetas (fragmento de ruta con '/') autorizadas: nómina conserva su lectura propia.</summary>
-    private static readonly string[] CarpetasAutorizadas = ["/IngenIA365ERP.Application/Payroll/"];
+    /// <summary>
+    /// Carpetas (fragmento de ruta con '/') autorizadas: nómina conserva su lectura propia (su motor, sus casos de uso y
+    /// sus rutas de parámetros legales).
+    /// </summary>
+    private static readonly string[] CarpetasAutorizadas =
+    [
+        "/IngenIA365ERP.Application/Payroll/",
+        "/IngenIA365ERP.Domain/Payroll/",
+        "/IngenIA365ERP.API/Endpoints/Payroll/",
+    ];
 
     [Fact]
     public void Solo_el_lector_de_UVT_lee_los_parametros_legales_fuera_de_nomina()
@@ -51,5 +70,14 @@ public class LaUvtSeLeeEnUnSoloSitio
 
         Assert.True(infractores.Count == 0,
             "La UVT se lee en un solo sitio (T23):\n  " + string.Join("\n  ", infractores));
+    }
+
+    [Fact]
+    public void Hay_un_solo_lector_de_la_UVT()
+    {
+        var implementaciones = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IngenIA365ERP.Application.Common.Taxation.IValorUvt).IsAssignableFrom(t))
+            .Select(t => t.Name).ToList();
+        Assert.Equal(["LectorDeUvt"], implementaciones);
     }
 }

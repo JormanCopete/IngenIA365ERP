@@ -109,6 +109,10 @@ public static class DependencyInjection
         // Feature 012 (T21, T070-T071): el unico lector de parametros con vigencia (memoriza por peticion) y los
         // dos ganchos del alta, vacios hasta que Inventario los implemente (US1 T226, US3 T286).
         services.AddScoped<Common.Parameters.ILectorDeParametros, Common.Parameters.LectorDeParametros>();
+        // Feature 012 (T23, T163-T164): el unico lector de la UVT y el unico lector del catalogo tributario (arma la foto
+        // del motor tributario a una fecha). Scoped: memorizan por peticion.
+        services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
+        services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
         services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoVacio>();
         services.AddScoped<Common.Parameters.IReglasDeParametros, Common.Parameters.ReglasDeParametrosVacias>();
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio

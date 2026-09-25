@@ -44,7 +44,7 @@ public sealed record PlantillaDeParametrizacion(
 /// </summary>
 public static class CatalogoDePlantillas
 {
-    public const string ImpuestosClave = "core.taxes";
+    public const string ImpuestosClave = Core.Taxes.PlantillaDeImpuestos.Clave;
     public const string GruposContablesClave = "inventory.accounting-groups";
     public const string UnidadesClave = "inventory.units";
     public const string MarcasClave = "inventory.brands";
@@ -65,7 +65,8 @@ public static class CatalogoDePlantillas
 
     public static IReadOnlyList<PlantillaDeParametrizacion> Todas { get; } =
     [
-        new(1, Def(ImpuestosClave, "Impuestos, retenciones y conceptos", ModuloDeAuditoria.Taxes, "Conceptos", "Impuestos", "Tarifas"),
+        // T166: la plantilla 1 declara sus columnas en Core/Taxes/PlantillaDeImpuestos.
+        new(1, Core.Taxes.PlantillaDeImpuestos.Definicion,
             "/api/core/taxes", "ImportTaxCatalogCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Core.Taxes.View", "Core.Taxes.Manage"),
         new(2, Def(GruposContablesClave, "Grupos contables", ModuloDeAuditoria.Inventory, Datos),

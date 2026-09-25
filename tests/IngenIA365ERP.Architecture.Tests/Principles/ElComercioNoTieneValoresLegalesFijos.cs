@@ -48,6 +48,60 @@ public class ElComercioNoTieneValoresLegalesFijos
         "0m", "1m", "2m", "0.5m", "12m", "15m", "30m", "100m", "360m", "0.0m", "1.0m",
     };
 
+    /// <summary>
+    /// Carpetas del catálogo tributario y de la UVT (T117, sección tributaria de la fase 3), en el molde de
+    /// <see cref="LaNominaNoTieneValoresLegalesFijos"/>: además de los literales decimales, ningún porcentaje, UVT ni base
+    /// mínima escrita de otra forma (como <c>double</c>, entero o texto). Las semillas quedan fuera: son datos.
+    /// </summary>
+    private static readonly string[] CarpetasTributarias =
+    [
+        "IngenIA365ERP.Domain/Taxes",
+        "IngenIA365ERP.Application/Core/Taxes",
+        "IngenIA365ERP.Application/Common/Taxation",
+    ];
+
+    /// <summary>Tarifas, UVT y bases de la norma vigente, por si vuelven sin sufijo decimal.</summary>
+    private static readonly string[] SospechososTributarios =
+    [
+        "0.19", "0.16", "0.05", "0.025", "0.035", "0.04", "0.06", "0.11", "0.15", "0.08",
+        "52374", "52_374", "49799", "49_799", "47065", "47_065", "1414098", "1_414_098",
+    ];
+
+    [Fact]
+    public void El_catalogo_tributario_no_escribe_tarifas_UVT_ni_bases_minimas()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var infractores = new List<string>();
+        var carpetasRevisadas = 0;
+
+        foreach (var carpeta in CarpetasTributarias)
+        {
+            var ruta = Path.Combine(root, "src", "Core", carpeta);
+            if (!Directory.Exists(ruta)) continue;
+            carpetasRevisadas++;
+
+            foreach (var archivo in Directory.EnumerateFiles(ruta, "*.cs", SearchOption.AllDirectories))
+            {
+                var relativo = Path.GetRelativePath(root, archivo).Replace('\\', '/');
+                if (ArchivosExceptuados.Contains(relativo, StringComparer.OrdinalIgnoreCase)) continue;
+
+                var lineas = File.ReadAllLines(archivo);
+                for (var i = 0; i < lineas.Length; i++)
+                {
+                    var linea = lineas[i].Trim();
+                    if (linea.StartsWith("//", StringComparison.Ordinal) || linea.StartsWith("*", StringComparison.Ordinal)) continue;
+                    foreach (var sospechoso in SospechososTributarios)
+                        if (System.Text.RegularExpressions.Regex.IsMatch(linea, $@"(?<![\w.]){System.Text.RegularExpressions.Regex.Escape(sospechoso)}(?![\w])"))
+                            infractores.Add($"{relativo}:{i + 1}: valor legal '{sospechoso}' escrito en el programa");
+                }
+            }
+        }
+
+        Assert.True(carpetasRevisadas == CarpetasTributarias.Length, "Las carpetas del catálogo tributario existen desde la fase 3: si se movieron, actualizá CarpetasTributarias.");
+        Assert.True(infractores.Count == 0,
+            "Tarifas, UVT o bases mínimas escritas en el catálogo tributario (FR-013, T22, T23):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Domain_y_Application_del_comercio_no_llevan_tarifas_ni_topes_fijos()
     {

@@ -1,0 +1,39 @@
+{
+  // Feature 012, T097, caso 06 (PercentOfTax): ReteIVA sobre el IVA de las líneas, no sobre la base.
+  // Línea 1: 1.500.000 × 19 % = 285.000; línea 2: 500.000 × 19 % = 95.000 (ambas descontables).
+  // ReteIVA: (285.000 + 95.000) × 15 % = 57.000. El mínimo (27 UVT = 1.414.098) se compara con la base de la
+  // operación gravada, 2.000.000.
+  "nombre": "ReteIVA sobre el IVA",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 1, "codigo": "IVA", "nombre": "IVA", "clase": "Iva", "forma": "PercentOfBase", "codigoDian": "01" },
+    { "id": 3, "codigo": "RETEIVA", "nombre": "Retención de IVA", "clase": "ReteIva", "forma": "PercentOfTax", "calculadoSobre": 1, "codigoDian": "05" }
+  ],
+  "tarifas": [
+    { "id": 11, "impuesto": 1, "codigo": "IVA19", "tarifa": 0.19, "aplicaA": "Both", "desde": "2017-01-01" },
+    { "id": 31, "impuesto": 3, "codigo": "RIVA15", "tarifa": 0.15, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01" }
+  ],
+  "escenarios": [
+    {
+      "nombre": "La cooperativa es agente de retención de IVA",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteRetenedorIva": true, "agenteDeRetencion": true },
+      "lineas": [
+        { "numero": 1, "base": 1500000, "impuestos": [ { "impuesto": 1, "tarifa": "IVA19" } ] },
+        { "numero": 2, "base": 500000, "impuestos": [ { "impuesto": 1, "tarifa": "IVA19" } ] }
+      ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 1500000, "valor": 285000 },
+          { "linea": 2, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 500000, "valor": 95000 },
+          { "linea": null, "tarifa": "RIVA15", "tratamiento": "WithholdingApplied", "base": 380000, "valor": 57000,
+            "explicacion": [ "Base de la operación: 2000000", "Base: 380000", "Tarifa: 0.15" ] }
+        ]
+      }
+    }
+  ]
+}

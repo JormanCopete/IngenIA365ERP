@@ -22,6 +22,8 @@ public class LasCantidadesYCostosTienenSuPrecision
 {
     private const string Inv = "src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Inventory/";
 
+    private const string Tax = "src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Core/Taxes/";
+
     /// <summary>(configuración EF relativa a la raíz, propiedad, ayudante de precisión). Los agrega cada bloque.</summary>
     private static readonly (string Configuracion, string Propiedad, string Precision)[] Columnas =
     [
@@ -50,6 +52,12 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "DocumentTaxLineConfiguration.cs", "TaxableUnits", "Cantidad"),
         (Inv + "DocumentTaxLineConfiguration.cs", "Base", "Monto"),
         (Inv + "DocumentTaxLineConfiguration.cs", "Amount", "Monto"),
+        // Catálogo tributario de Core, fase 3 (T161; data-model §17): tarifa como fracción (9,6), valor por unidad y base
+        // en pesos (18,2), base en UVT (18,4).
+        (Tax + "TaxRateConfiguration.cs", "Rate", "Tarifa"),
+        (Tax + "TaxRateConfiguration.cs", "AmountPerUnit", "Monto"),
+        (Tax + "TaxRateConfiguration.cs", "MinimumBaseUvt", "Cantidad"),
+        (Tax + "TaxRateConfiguration.cs", "MinimumBasePesos", "Monto"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

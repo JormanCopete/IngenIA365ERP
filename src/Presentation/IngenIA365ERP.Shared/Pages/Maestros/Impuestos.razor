@@ -1,0 +1,763 @@
+@page "/maestros/impuestos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ImpuestosClient Catalogo
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+@*
+    Feature 012, T171 (T22; contracts/api.md §30; contracts/plantillas.md §1): el catálogo tributario de Core —impuestos
+    y retenciones, sus tarifas con vigencia y los conceptos de retención— que usan compras, ventas y la DIAN. Una tarifa
+    no se edita desde que entra en vigencia: se cierra y se crea otra con el mismo código. Lo sembrado queda «pendiente
+    de validar por la contadora» hasta que alguien con Core.Taxes.Manage lo marca revisado, con motivo. La UVT no vive
+    aquí: está en Nómina › Parámetros legales.
+*@
+
+<PageTitle>Impuestos y retenciones - IngenIA365ERP</PageTitle>
+
+<PermissionGate Required="Core.Taxes.View" MostrarAviso="true">
+<div class="page-header">
+    <h3>Impuestos y retenciones</h3>
+    <div class="toolbar">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarAsync(false))">Plantilla vacía</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarAsync(true))">Plantilla con los datos</SfButton>
+    </div>
+</div>
+
+<div class="info-card">
+    <span class="label">Pendiente de validar por la contadora</span>
+    <p>El catálogo inicial (IVA, INC, bolsas, ReteFuente por concepto y ReteIVA) viene de la semilla con su norma y marcado
+       «pendiente de validar». Revíselo con la contadora y márquelo revisado tarifa por tarifa. ReteICA es municipal: se carga
+       por la plantilla. Una tarifa que ya rige no se edita: se cierra su vigencia y se crea otra con el mismo código.
+       Descargue la plantilla (vacía o con lo que hoy tiene la cooperativa) para diligenciarla en Excel.</p>
+</div>
+
+<SfTab>
+    <TabItems>
+        <TabItem>
+            <ChildContent><TabHeader Text="Impuestos" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <PermissionGate Required="Core.Taxes.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevoImpuesto">Nuevo impuesto</SfButton>
+                    </PermissionGate>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaImpuestos.Activa">
+                    <SfGrid TValue="ImpuestoDto" DataSource="@_impuestos" AllowSorting="true">
+                        <GridColumns>
+                            <GridColumn Field="Code" HeaderText="Código" Width="120" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="260" />
+                            <GridColumn HeaderText="Clase" Width="120">
+                                <Template>@CatalogoTributarioTextos.Clase(((ImpuestoDto)context).Kind)</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Forma de cálculo" Width="190">
+                                <Template>@CatalogoTributarioTextos.Forma(((ImpuestoDto)context).CalculationForm)</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Retención" Width="100">
+                                <Template>@(((ImpuestoDto)context).IsWithholding ? "Sí" : "No")</Template>
+                            </GridColumn>
+                            <GridColumn Field="DianTaxCode" HeaderText="Tributo DIAN" Width="110" />
+                            <GridColumn HeaderText="Estado" Width="100">
+                                <Template>@(((ImpuestoDto)context).IsActive ? "Activo" : "Inactivo")</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
+                                <Template>
+                                    @{
+                                        var i = (ImpuestoDto)context;
+                                        <PermissionGate Required="Core.Taxes.Manage">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => AbrirEdicionDeImpuesto(i))" />
+                                        </PermissionGate>
+                                    }
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                    @if (!_cargaImpuestos.Activa && _impuestos.Count == 0)
+                    {
+                        <div class="sin-datos">Sin impuestos. La semilla deja el catálogo inicial al crear la cooperativa.</div>
+                    }
+                </IndicadorDeCarga>
+            </ContentTemplate>
+        </TabItem>
+
+        <TabItem>
+            <ChildContent><TabHeader Text="Tarifas" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <SfDatePicker TValue="DateTime?" Value="@_filtroFecha" ValueChanged="@((DateTime? d) => CambiarFechaAsync(d))" Placeholder="Vigentes al (vacío = todas)" FloatLabelType="FloatLabelType.Always" Width="200px" />
+                    <SfTextBox @bind-Value="_filtroMunicipio" Placeholder="Municipio (DANE)" FloatLabelType="FloatLabelType.Always" MaxLength="5" Width="160px" />
+                    <label class="campo-check"><input type="checkbox" @bind="_soloPendientes" /> Sólo pendientes de validar</label>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarTarifasAsync">Filtrar</SfButton>
+                    <PermissionGate Required="Core.Taxes.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirNuevaTarifa(null))">Nueva tarifa</SfButton>
+                    </PermissionGate>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaTarifas.Activa">
+                    <SfGrid TValue="TarifaTributariaDto" DataSource="@_tarifas" AllowSorting="true" AllowPaging="true">
+                        <GridPageSettings PageSize="25" />
+                        <GridColumns>
+                            <GridColumn Field="Code" HeaderText="Código" Width="110" />
+                            <GridColumn HeaderText="Impuesto" Width="120">
+                                <Template>@NombreDeImpuesto(((TarifaTributariaDto)context).TaxPublicId)</Template>
+                            </GridColumn>
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="230" />
+                            <GridColumn HeaderText="Tarifa" Width="130" TextAlign="TextAlign.Right">
+                                <Template>@CatalogoTributarioTextos.Tarifa((TarifaTributariaDto)context)</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Concepto" Width="120">
+                                <Template>@NombreDeConcepto(((TarifaTributariaDto)context).WithholdingConceptPublicId)</Template>
+                            </GridColumn>
+                            <GridColumn Field="MunicipalityDaneCode" HeaderText="Municipio" Width="100" />
+                            <GridColumn Field="ActivityCode" HeaderText="Actividad" Width="90" />
+                            <GridColumn Field="MinimumBaseUvt" HeaderText="Base UVT" Width="90" TextAlign="TextAlign.Right" />
+                            <GridColumn HeaderText="Aplica a" Width="130">
+                                <Template>@CatalogoTributarioTextos.Aplica(((TarifaTributariaDto)context).AppliesTo)</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Vigencia" Width="190">
+                                <Template>
+                                    @{ var t = (TarifaTributariaDto)context; }
+                                    @($"{t.ValidFrom:yyyy-MM-dd} → {(t.ValidTo is { } h ? h.ToString("yyyy-MM-dd") : "sin fin")}")
+                                </Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Validación" Width="130">
+                                <Template>
+                                    @if (((TarifaTributariaDto)context).ReviewPending)
+                                    {
+                                        <span class="badge aviso-alerta">Pendiente de validar</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge">Revisada</span>
+                                    }
+                                </Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="Acciones" Width="170" TextAlign="TextAlign.Center">
+                                <Template>
+                                    @{
+                                        var t = (TarifaTributariaDto)context;
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye" Title="Norma e historial" OnClick="@(() => VerTarifaAsync(t))" />
+                                        <PermissionGate Required="Core.Taxes.Manage">
+                                            @if (t.ValidFrom > Hoy)
+                                            {
+                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Corregir (aún no rige)" OnClick="@(() => AbrirCorreccion(t))" />
+                                            }
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-copy" Title="Vigencia nueva con el mismo código" OnClick="@(() => AbrirNuevaTarifa(t))" />
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" Title="Cerrar vigencia" OnClick="@(() => AbrirMotivo(t, AccionDeMotivo.Cerrar))" />
+                                            @if (t.ReviewPending)
+                                            {
+                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-check" Title="Marcar revisada" OnClick="@(() => AbrirMotivo(t, AccionDeMotivo.Revisar))" />
+                                            }
+                                        </PermissionGate>
+                                    }
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                    @if (!_cargaTarifas.Activa && _tarifas.Count == 0)
+                    {
+                        <div class="sin-datos">Sin tarifas con esos filtros.</div>
+                    }
+                </IndicadorDeCarga>
+            </ContentTemplate>
+        </TabItem>
+
+        <TabItem>
+            <ChildContent><TabHeader Text="Conceptos de retención" /></ChildContent>
+            <ContentTemplate>
+                <div class="toolbar">
+                    <PermissionGate Required="Core.Taxes.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevoConcepto">Nuevo concepto</SfButton>
+                    </PermissionGate>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaConceptos.Activa">
+                    <SfGrid TValue="ConceptoDeRetencionDto" DataSource="@_conceptos" AllowSorting="true">
+                        <GridColumns>
+                            <GridColumn Field="Code" HeaderText="Código" Width="140" />
+                            <GridColumn Field="Name" HeaderText="Nombre" Width="320" />
+                            <GridColumn HeaderText="Estado" Width="110">
+                                <Template>@(((ConceptoDeRetencionDto)context).IsActive ? "Activo" : "Inactivo")</Template>
+                            </GridColumn>
+                            <GridColumn HeaderText="" Width="80" TextAlign="TextAlign.Center">
+                                <Template>
+                                    @{
+                                        var c = (ConceptoDeRetencionDto)context;
+                                        <PermissionGate Required="Core.Taxes.Manage">
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" Title="Editar" OnClick="@(() => AbrirEdicionDeConcepto(c))" />
+                                        </PermissionGate>
+                                    }
+                                </Template>
+                            </GridColumn>
+                        </GridColumns>
+                    </SfGrid>
+                    @if (!_cargaConceptos.Activa && _conceptos.Count == 0)
+                    {
+                        <div class="sin-datos">Sin conceptos de retención.</div>
+                    }
+                </IndicadorDeCarga>
+            </ContentTemplate>
+        </TabItem>
+    </TabItems>
+</SfTab>
+</PermissionGate>
+
+@* ------------------------------------------------------------------------------------------ impuesto --- *@
+<SfDialog @bind-Visible="_mostrarImpuesto" Header="@(_impuestoEditado is null ? "Nuevo impuesto" : $"Editar {_impuestoEditado.Code}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="impuestos" @bind-Value="_fImpuesto.Codigo" Largo="10" Obligatorio="true" Readonly="@(_impuestoEditado is not null)"
+                                 EditandoPublicId="@_impuestoEditado?.TaxPublicId" />
+                    <SfTextBox @bind-Value="_fImpuesto.Nombre" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
+                    <label class="campo">
+                        Clase
+                        <select class="e-input" @bind="_fImpuesto.Clase" disabled="@(_impuestoEditado is not null)">
+                            @foreach (var (valor, texto) in CatalogoTributarioTextos.Clases) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">
+                        Forma de cálculo
+                        <select class="e-input" @bind="_fImpuesto.Forma" disabled="@(_impuestoEditado is not null)">
+                            @foreach (var (valor, texto) in CatalogoTributarioTextos.Formas) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                    @if (_fImpuesto.Forma == 2)
+                    {
+                        <label class="campo">
+                            Se calcula sobre
+                            <select class="e-input" @bind="_fImpuesto.CalculadoSobre" disabled="@(_impuestoEditado is not null)">
+                                <option value="">— elija —</option>
+                                @foreach (var i in _impuestos.Where(i => !i.IsWithholding)) { <option value="@i.TaxPublicId">@i.Code · @i.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <SfTextBox @bind-Value="_fImpuesto.CodigoDian" MaxLength="4" Placeholder="Tributo DIAN (01, 04, 22, ZZ…)" FloatLabelType="FloatLabelType.Always" />
+                    @if (_fImpuesto.Clase == 99)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_fImpuesto.EsRetencion" disabled="@(_impuestoEditado is not null)" /> Es una retención</label>
+                    }
+                    @if (_impuestoEditado is not null)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_fImpuesto.Activo" /> Activo</label>
+                    }
+                </div>
+                <SfTextBox @bind-Value="_fImpuesto.Notas" MaxLength="400" Multiline="true" Placeholder="Notas" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_fImpuesto.Motivo" MaxLength="500" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarImpuesto = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@_guardado.Activa" OnClick="@GuardarImpuestoAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* -------------------------------------------------------------------------------------------- tarifa --- *@
+<SfDialog @bind-Visible="_mostrarTarifa" Header="@_tituloTarifa" Width="980px" Height="90%" IsModal="true" ShowCloseIcon="true" AllowDragging="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-tenue">Una vigencia nueva de una tarifa existente lleva el mismo código y empieza cuando termina la anterior. La tarifa se escribe en puntos (19 = 19 %; 0,966 = 9,66 por mil).</p>
+                <div class="form-grid">
+                    <label class="campo">
+                        Impuesto *
+                        <select class="e-input" @bind="_fTarifa.Impuesto" disabled="@(_tarifaCorregida is not null)">
+                            <option value="">— elija —</option>
+                            @foreach (var i in _impuestos) { <option value="@i.TaxPublicId">@i.Code · @i.Name</option> }
+                        </select>
+                    </label>
+                    <CampoCodigo Catalogo="tarifas" @bind-Value="_fTarifa.Codigo" Largo="10" Obligatorio="true" Readonly="@(_tarifaCorregida is not null)"
+                                 EditandoPublicId="@_tarifaCorregida?.TaxRatePublicId" />
+                    <SfTextBox @bind-Value="_fTarifa.Nombre" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
+                    @if (FormaDelImpuesto == 3)
+                    {
+                        <label class="campo">Valor por unidad *<input class="e-input" type="number" step="0.01" min="0" @bind="_fTarifa.ValorPorUnidad" /></label>
+                    }
+                    else
+                    {
+                        <label class="campo">Tarifa en puntos *<input class="e-input" type="number" step="0.0001" min="0" max="100" @bind="_fTarifa.Puntos" /></label>
+                    }
+                    @if (EsRetencion)
+                    {
+                        <label class="campo">
+                            Concepto de retención
+                            <select class="e-input" @bind="_fTarifa.Concepto">
+                                <option value="">— ninguno —</option>
+                                @foreach (var c in _conceptos.Where(c => c.IsActive)) { <option value="@c.WithholdingConceptPublicId">@c.Code · @c.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <SfTextBox @bind-Value="_fTarifa.Municipio" MaxLength="5" Placeholder="Municipio DANE (ICA, ReteICA)" FloatLabelType="FloatLabelType.Always" />
+                    <SfTextBox @bind-Value="_fTarifa.Actividad" MaxLength="6" Placeholder="Actividad CIIU o *" FloatLabelType="FloatLabelType.Always" />
+                    <label class="campo">Base mínima en UVT<input class="e-input" type="number" step="0.0001" min="0" @bind="_fTarifa.BaseUvt" /></label>
+                    <label class="campo">Base mínima en pesos<input class="e-input" type="number" step="0.01" min="0" @bind="_fTarifa.BasePesos" /></label>
+                    <label class="campo">
+                        Aplica a
+                        <select class="e-input" @bind="_fTarifa.AplicaA">
+                            @foreach (var (valor, texto) in CatalogoTributarioTextos.AplicaA) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Prioridad<input class="e-input" type="number" min="0" step="1" @bind="_fTarifa.Prioridad" /></label>
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_fTarifa.Desde" Placeholder="Vigente desde *" FloatLabelType="FloatLabelType.Always" />
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_fTarifa.Hasta" Placeholder="Vigente hasta (vacío = sin fin)" FloatLabelType="FloatLabelType.Always" />
+                </div>
+                @if (EsRetencion)
+                {
+                    <h5>Condiciones (vacío = no importa)</h5>
+                    <div class="form-grid">
+                        <label class="campo">
+                            Sujeto: tipo de persona
+                            <select class="e-input" @bind="_fTarifa.TipoPersona">
+                                <option value="">No importa</option>
+                                <option value="01">Natural</option>
+                                <option value="02">Jurídica</option>
+                            </select>
+                        </label>
+                        @foreach (var condicion in _fTarifa.Condiciones)
+                        {
+                            <label class="campo">
+                                @condicion.Etiqueta
+                                <select class="e-input" @bind="condicion.Valor">
+                                    <option value="">No importa</option>
+                                    <option value="si">Sí</option>
+                                    <option value="no">No</option>
+                                </select>
+                            </label>
+                        }
+                    </div>
+                }
+                <SfTextBox @bind-Value="_fTarifa.Norma" MaxLength="200" Placeholder="Norma que la respalda *" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_fTarifa.Notas" MaxLength="400" Multiline="true" Placeholder="Notas" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_fTarifa.Motivo" MaxLength="500" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarTarifa = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@_guardado.Activa" OnClick="@GuardarTarifaAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------------------ detalle de la tarifa --- *@
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@($"Tarifa {_detalle?.Code}")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                @if (_detalle is not null)
+                {
+                    <p><strong>@_detalle.Name</strong> · @CatalogoTributarioTextos.Tarifa(_detalle) · @CatalogoTributarioTextos.Aplica(_detalle.AppliesTo)</p>
+                    <p>Norma: @_detalle.LegalSource</p>
+                    @if (!string.IsNullOrWhiteSpace(_detalle.Notes)) { <p class="texto-tenue">@_detalle.Notes</p> }
+                    <h5>Vigencias del código</h5>
+                    <ul>
+                        @foreach (var v in (_detalle.OtherVersions ?? []).Append(_detalle).OrderBy(v => v.ValidFrom))
+                        {
+                            <li>@v.ValidFrom.ToString("yyyy-MM-dd") → @(v.ValidTo is { } h ? h.ToString("yyyy-MM-dd") : "sin fin"): @CatalogoTributarioTextos.Tarifa(v) (@v.LegalSource)</li>
+                        }
+                    </ul>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------------------- cerrar o marcar revisada --- *@
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accion == AccionDeMotivo.Cerrar ? $"Cerrar la vigencia de {_tarifaDeMotivo?.Code}" : $"Marcar revisada {_tarifaDeMotivo?.Code}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_accion == AccionDeMotivo.Cerrar)
+                {
+                    <SfDatePicker TValue="DateTime?" @bind-Value="_cierre" Placeholder="Vigente hasta *" FloatLabelType="FloatLabelType.Always" />
+                }
+                else
+                {
+                    <p>La tarifa queda validada por la contadora. No cambia su valor.</p>
+                }
+                <SfTextBox @bind-Value="_motivo" MaxLength="500" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@_guardado.Activa" OnClick="@ConfirmarMotivoAsync">Confirmar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------------------------------ concepto --- *@
+<SfDialog @bind-Visible="_mostrarConcepto" Header="@(_conceptoEditado is null ? "Nuevo concepto de retención" : $"Editar {_conceptoEditado.Code}")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="conceptos-de-retencion" @bind-Value="_fConcepto.Codigo" Largo="10" Obligatorio="true" Readonly="@(_conceptoEditado is not null)"
+                                 EditandoPublicId="@_conceptoEditado?.WithholdingConceptPublicId" />
+                    <SfTextBox @bind-Value="_fConcepto.Nombre" MaxLength="120" Placeholder="Nombre *" FloatLabelType="FloatLabelType.Always" />
+                    @if (_conceptoEditado is not null)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_fConcepto.Activo" /> Activo</label>
+                    }
+                </div>
+                <SfTextBox @bind-Value="_fConcepto.Notas" MaxLength="400" Multiline="true" Placeholder="Notas" FloatLabelType="FloatLabelType.Always" />
+                <SfTextBox @bind-Value="_fConcepto.Motivo" MaxLength="500" Placeholder="Motivo *" FloatLabelType="FloatLabelType.Always" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarConcepto = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" type="button" Disabled="@_guardado.Activa" OnClick="@GuardarConceptoAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _cargaImpuestos = new(), _cargaTarifas = new(), _cargaConceptos = new(), _cargaDetalle = new(), _guardado = new(), _descarga = new();
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    private List<ImpuestoDto> _impuestos = [];
+    private List<TarifaTributariaDto> _tarifas = [];
+    private List<ConceptoDeRetencionDto> _conceptos = [];
+
+    private DateTime? _filtroFecha = DateTime.Today;
+    private string? _filtroMunicipio;
+    private bool _soloPendientes;
+
+    private bool _mostrarImpuesto, _mostrarTarifa, _mostrarConcepto, _mostrarMotivo, _mostrarDetalle;
+    private ImpuestoDto? _impuestoEditado;
+    private TarifaTributariaDto? _tarifaCorregida, _tarifaDeMotivo, _detalle;
+    private ConceptoDeRetencionDto? _conceptoEditado;
+    private string _tituloTarifa = string.Empty;
+    private FormularioDeImpuesto _fImpuesto = new();
+    private FormularioDeTarifa _fTarifa = new();
+    private FormularioDeConcepto _fConcepto = new();
+    private AccionDeMotivo _accion;
+    private DateTime? _cierre;
+    private string? _motivo;
+
+    // Una clave de idempotencia por operación de pantalla (se renueva tras cada éxito).
+    private ClaveDeOperacion _clave = new();
+
+    private enum AccionDeMotivo { Cerrar, Revisar }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(CargarImpuestosAsync(), CargarConceptosAsync());
+        await CargarTarifasAsync();
+    }
+
+    private async Task CargarImpuestosAsync()
+    {
+        using var carga = _cargaImpuestos.Iniciar();
+        var r = await Catalogo.ListarImpuestosAsync();
+        if (r.IsSuccess) _impuestos = [.. r.Value!];
+        else await AvisarAsync(r.ErrorCode, r.ErrorMessage, "No se pudieron cargar los impuestos.");
+    }
+
+    private async Task CargarConceptosAsync()
+    {
+        using var carga = _cargaConceptos.Iniciar();
+        var r = await Catalogo.ListarConceptosAsync();
+        if (r.IsSuccess) _conceptos = [.. r.Value!];
+        else await AvisarAsync(r.ErrorCode, r.ErrorMessage, "No se pudieron cargar los conceptos.");
+    }
+
+    private async Task CargarTarifasAsync()
+    {
+        using var carga = _cargaTarifas.Iniciar();
+        var r = await Catalogo.ListarTarifasAsync(
+            aLaFecha: _filtroFecha is { } f ? DateOnly.FromDateTime(f) : null,
+            municipio: _filtroMunicipio,
+            pendientes: _soloPendientes ? true : null);
+        if (r.IsSuccess) _tarifas = [.. r.Value!];
+        else await AvisarAsync(r.ErrorCode, r.ErrorMessage, "No se pudieron cargar las tarifas.");
+    }
+
+    private async Task CambiarFechaAsync(DateTime? fecha)
+    {
+        _filtroFecha = fecha;
+        await CargarTarifasAsync();
+    }
+
+    private string NombreDeImpuesto(Guid id) => _impuestos.FirstOrDefault(i => i.TaxPublicId == id)?.Code ?? "—";
+
+    private string NombreDeConcepto(Guid? id) => id is null ? "" : _conceptos.FirstOrDefault(c => c.WithholdingConceptPublicId == id)?.Code ?? "—";
+
+    private ImpuestoDto? ImpuestoDelFormulario => Guid.TryParse(_fTarifa.Impuesto, out var id) ? _impuestos.FirstOrDefault(i => i.TaxPublicId == id) : null;
+
+    private int FormaDelImpuesto => ImpuestoDelFormulario?.CalculationForm ?? 1;
+
+    private bool EsRetencion => ImpuestoDelFormulario?.IsWithholding ?? false;
+
+    // ------------------------------------------------------------------------------------------ plantilla --
+
+    private async Task DescargarAsync(bool conDatos)
+    {
+        using var carga = _descarga.Iniciar();
+        var r = await Catalogo.PlantillaAsync(conDatos);
+        if (!r.IsSuccess) { await AvisarAsync(r.ErrorCode, r.ErrorMessage, "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    // ------------------------------------------------------------------------------------------- impuestos --
+
+    private void AbrirNuevoImpuesto()
+    {
+        _impuestoEditado = null;
+        _fImpuesto = new FormularioDeImpuesto();
+        _clave = new ClaveDeOperacion();
+        _mostrarImpuesto = true;
+    }
+
+    private void AbrirEdicionDeImpuesto(ImpuestoDto i)
+    {
+        _impuestoEditado = i;
+        _fImpuesto = new FormularioDeImpuesto
+        {
+            Codigo = i.Code, Nombre = i.Name, Clase = i.Kind, Forma = i.CalculationForm, CalculadoSobre = i.TaxedOnTaxPublicId?.ToString() ?? "",
+            EsRetencion = i.IsWithholding, CodigoDian = i.DianTaxCode, Activo = i.IsActive, Notas = i.Notes,
+        };
+        _clave = new ClaveDeOperacion();
+        _mostrarImpuesto = true;
+    }
+
+    private async Task GuardarImpuestoAsync()
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var f = _fImpuesto;
+        var (ok, codigo, mensaje) = _impuestoEditado is { } editado
+            ? Resultado(await Catalogo.EditarImpuestoAsync(editado.TaxPublicId, new EditarImpuestoRequest(f.Nombre ?? "", f.CodigoDian, f.Activo, f.Notas, f.Motivo ?? ""), _clave))
+            : Resultado(await Catalogo.CrearImpuestoAsync(new CrearImpuestoRequest(f.Codigo ?? "", f.Nombre ?? "", f.Clase, f.Forma,
+                Guid.TryParse(f.CalculadoSobre, out var sobre) ? sobre : null, f.EsRetencion, f.CodigoDian, f.Notas, f.Motivo ?? ""), _clave));
+        if (!ok) { await AvisarAsync(codigo, mensaje, "No se pudo guardar el impuesto."); return; }
+        await Notification.SuccessAsync("Impuesto guardado.");
+        _mostrarImpuesto = false;
+        await CargarImpuestosAsync();
+    }
+
+    // --------------------------------------------------------------------------------------------- tarifas --
+
+    private void AbrirNuevaTarifa(TarifaTributariaDto? base_)
+    {
+        _tarifaCorregida = null;
+        _fTarifa = base_ is null ? new FormularioDeTarifa() : FormularioDeTarifa.DeTarifa(base_, nuevaVigencia: true);
+        _tituloTarifa = base_ is null ? "Nueva tarifa" : $"Vigencia nueva de {base_.Code}";
+        _clave = new ClaveDeOperacion();
+        _mostrarTarifa = true;
+    }
+
+    private void AbrirCorreccion(TarifaTributariaDto t)
+    {
+        _tarifaCorregida = t;
+        _fTarifa = FormularioDeTarifa.DeTarifa(t, nuevaVigencia: false);
+        _tituloTarifa = $"Corregir {t.Code} (aún no rige)";
+        _clave = new ClaveDeOperacion();
+        _mostrarTarifa = true;
+    }
+
+    private async Task GuardarTarifaAsync()
+    {
+        if (_guardado.Activa) return;
+        var f = _fTarifa;
+        if (ImpuestoDelFormulario is not { } impuesto) { await Notification.ErrorAsync("Elija el impuesto de la tarifa."); return; }
+        if (f.Desde is not { } desde) { await Notification.ErrorAsync("Indique desde cuándo rige la tarifa."); return; }
+        using var guardado = _guardado.Iniciar();
+
+        var porUnidad = impuesto.CalculationForm == 3;
+        var request = new TarifaRequest(
+            impuesto.TaxPublicId, f.Codigo, f.Nombre ?? "",
+            porUnidad ? null : f.Puntos is { } p ? p / 100m : null,
+            porUnidad ? f.ValorPorUnidad : null,
+            impuesto.IsWithholding && Guid.TryParse(f.Concepto, out var concepto) ? concepto : null,
+            Nulo(f.Municipio), Nulo(f.Actividad), f.BaseUvt, f.BasePesos,
+            impuesto.IsWithholding ? f.CondicionesDto() : null,
+            f.AplicaA, (short)Math.Max(0, f.Prioridad), DateOnly.FromDateTime(desde), f.Hasta is { } h ? DateOnly.FromDateTime(h) : null,
+            f.Norma ?? "", f.Notas, f.Motivo ?? "");
+
+        var (ok, codigo, mensaje) = _tarifaCorregida is { } corregida
+            ? Resultado(await Catalogo.CorregirTarifaAsync(corregida.TaxRatePublicId, request, _clave))
+            : Resultado(await Catalogo.CrearTarifaAsync(request, _clave));
+        if (!ok) { await AvisarAsync(codigo, mensaje, "No se pudo guardar la tarifa."); return; }
+        await Notification.SuccessAsync("Tarifa guardada.");
+        _mostrarTarifa = false;
+        await CargarTarifasAsync();
+    }
+
+    private async Task VerTarifaAsync(TarifaTributariaDto t)
+    {
+        _detalle = t;
+        _mostrarDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Catalogo.ObtenerTarifaAsync(t.TaxRatePublicId);
+        if (r.IsSuccess) _detalle = r.Value;
+        else await AvisarAsync(r.ErrorCode, r.ErrorMessage, "No se pudo leer la tarifa.");
+    }
+
+    private void AbrirMotivo(TarifaTributariaDto t, AccionDeMotivo accion)
+    {
+        _tarifaDeMotivo = t;
+        _accion = accion;
+        _motivo = null;
+        _cierre = accion == AccionDeMotivo.Cerrar ? DateTime.Today : null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (_tarifaDeMotivo is null || _guardado.Activa) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.ErrorAsync("Indique el motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        (bool Ok, string? Codigo, string? Mensaje) r;
+        if (_accion == AccionDeMotivo.Cerrar)
+        {
+            if (_cierre is not { } hasta) { await Notification.ErrorAsync("Indique hasta cuándo rige."); return; }
+            r = Resultado(await Catalogo.CerrarTarifaAsync(_tarifaDeMotivo.TaxRatePublicId, new CerrarTarifaRequest(DateOnly.FromDateTime(hasta), _motivo), _clave));
+        }
+        else
+        {
+            r = Resultado(await Catalogo.MarcarRevisadaAsync(_tarifaDeMotivo.TaxRatePublicId, new MotivoTributarioRequest(_motivo), _clave));
+        }
+        if (!r.Ok) { await AvisarAsync(r.Codigo, r.Mensaje, "No se pudo guardar."); return; }
+        await Notification.SuccessAsync(_accion == AccionDeMotivo.Cerrar ? "Vigencia cerrada." : "Tarifa marcada como revisada.");
+        _mostrarMotivo = false;
+        await CargarTarifasAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------- conceptos --
+
+    private void AbrirNuevoConcepto()
+    {
+        _conceptoEditado = null;
+        _fConcepto = new FormularioDeConcepto();
+        _clave = new ClaveDeOperacion();
+        _mostrarConcepto = true;
+    }
+
+    private void AbrirEdicionDeConcepto(ConceptoDeRetencionDto c)
+    {
+        _conceptoEditado = c;
+        _fConcepto = new FormularioDeConcepto { Codigo = c.Code, Nombre = c.Name, Activo = c.IsActive, Notas = c.Notes };
+        _clave = new ClaveDeOperacion();
+        _mostrarConcepto = true;
+    }
+
+    private async Task GuardarConceptoAsync()
+    {
+        if (_guardado.Activa) return;
+        using var guardado = _guardado.Iniciar();
+        var f = _fConcepto;
+        var (ok, codigo, mensaje) = _conceptoEditado is { } editado
+            ? Resultado(await Catalogo.EditarConceptoAsync(editado.WithholdingConceptPublicId, new EditarConceptoDeRetencionRequest(f.Nombre ?? "", f.Activo, f.Notas, f.Motivo ?? ""), _clave))
+            : Resultado(await Catalogo.CrearConceptoAsync(new CrearConceptoDeRetencionRequest(f.Codigo ?? "", f.Nombre ?? "", f.Notas, f.Motivo ?? ""), _clave));
+        if (!ok) { await AvisarAsync(codigo, mensaje, "No se pudo guardar el concepto."); return; }
+        await Notification.SuccessAsync("Concepto guardado.");
+        _mostrarConcepto = false;
+        await CargarConceptosAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------ ayudantes --
+
+    private static (bool Ok, string? Codigo, string? Mensaje) Resultado<T>(IngenIA365ERP.Shared.Services.Security.InvitationApiResult<T> r) =>
+        (r.IsSuccess, r.ErrorCode, r.ErrorMessage);
+
+    private Task AvisarAsync(string? codigo, string? mensaje, string porDefecto) =>
+        Notification.ErrorAsync(codigo == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : mensaje ?? porDefecto);
+
+    private static string? Nulo(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    private sealed class FormularioDeImpuesto
+    {
+        public string? Codigo { get; set; }
+        public string? Nombre { get; set; }
+        public int Clase { get; set; } = 1;
+        public int Forma { get; set; } = 1;
+        public string CalculadoSobre { get; set; } = "";
+        public bool EsRetencion { get; set; }
+        public string? CodigoDian { get; set; }
+        public bool Activo { get; set; } = true;
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private sealed class CondicionDeFormulario(string etiqueta, string valor)
+    {
+        public string Etiqueta { get; } = etiqueta;
+        public string Valor { get; set; } = valor;
+        public bool? Leer() => Valor switch { "si" => true, "no" => false, _ => null };
+        public static string Escribir(bool? v) => v switch { true => "si", false => "no", _ => "" };
+    }
+
+    private sealed class FormularioDeTarifa
+    {
+        public string Impuesto { get; set; } = "";
+        public string? Codigo { get; set; }
+        public string? Nombre { get; set; }
+        public decimal? Puntos { get; set; }
+        public decimal? ValorPorUnidad { get; set; }
+        public string Concepto { get; set; } = "";
+        public string? Municipio { get; set; }
+        public string? Actividad { get; set; }
+        public decimal? BaseUvt { get; set; }
+        public decimal? BasePesos { get; set; }
+        public int AplicaA { get; set; } = 3;
+        public int Prioridad { get; set; }
+        public DateTime? Desde { get; set; } = DateTime.Today;
+        public DateTime? Hasta { get; set; }
+        public string TipoPersona { get; set; } = "";
+        public string? Norma { get; set; }
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+
+        public List<CondicionDeFormulario> Condiciones { get; } =
+        [
+            new("Sujeto declarante", ""), new("Sujeto responsable de IVA", ""), new("Sujeto gran contribuyente", ""),
+            new("Sujeto autorretenedor", ""), new("Sujeto del régimen simple", ""), new("Agente gran contribuyente", ""),
+            new("Agente retenedor de IVA", ""),
+        ];
+
+        public CondicionesDeTarifaDto CondicionesDto() => new()
+        {
+            SubjectPersonType = string.IsNullOrEmpty(TipoPersona) ? null : TipoPersona,
+            SubjectIsIncomeTaxFiler = Condiciones[0].Leer(),
+            SubjectIsVatResponsible = Condiciones[1].Leer(),
+            SubjectIsLargeContributor = Condiciones[2].Leer(),
+            SubjectIsSelfWithholder = Condiciones[3].Leer(),
+            SubjectIsSimpleTaxRegime = Condiciones[4].Leer(),
+            AgentIsLargeContributor = Condiciones[5].Leer(),
+            AgentIsVatWithholdingAgent = Condiciones[6].Leer(),
+        };
+
+        /// <summary>El formulario con los datos de una tarifa: para corregirla o para abrir su vigencia siguiente.</summary>
+        public static FormularioDeTarifa DeTarifa(TarifaTributariaDto t, bool nuevaVigencia)
+        {
+            var f = new FormularioDeTarifa
+            {
+                Impuesto = t.TaxPublicId.ToString(), Codigo = t.Code, Nombre = t.Name,
+                Puntos = t.Rate is { } r ? r * 100m : null, ValorPorUnidad = t.AmountPerUnit,
+                Concepto = t.WithholdingConceptPublicId?.ToString() ?? "", Municipio = t.MunicipalityDaneCode, Actividad = t.ActivityCode,
+                BaseUvt = t.MinimumBaseUvt, BasePesos = t.MinimumBasePesos, AplicaA = t.AppliesTo, Prioridad = t.Priority,
+                Desde = nuevaVigencia ? (t.ValidTo is { } h ? h.AddDays(1).ToDateTime(TimeOnly.MinValue) : DateTime.Today) : t.ValidFrom.ToDateTime(TimeOnly.MinValue),
+                Hasta = nuevaVigencia ? null : t.ValidTo?.ToDateTime(TimeOnly.MinValue),
+                TipoPersona = t.Conditions.SubjectPersonType ?? "", Norma = t.LegalSource, Notas = t.Notes,
+            };
+            var c = t.Conditions;
+            bool?[] valores = [c.SubjectIsIncomeTaxFiler, c.SubjectIsVatResponsible, c.SubjectIsLargeContributor, c.SubjectIsSelfWithholder,
+                c.SubjectIsSimpleTaxRegime, c.AgentIsLargeContributor, c.AgentIsVatWithholdingAgent];
+            for (var i = 0; i < valores.Length; i++) f.Condiciones[i].Valor = CondicionDeFormulario.Escribir(valores[i]);
+            return f;
+        }
+    }
+
+    private sealed class FormularioDeConcepto
+    {
+        public string? Codigo { get; set; }
+        public string? Nombre { get; set; }
+        public bool Activo { get; set; } = true;
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+    }
+}

@@ -70,6 +70,10 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "convenios" => db.Agreements.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         // Inventario (feature 012, T150): el código del tipo de documento es inmutable y único entre vivos.
         "tipos-de-documento" => db.InventoryDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Catálogo tributario de Core (feature 012, T165): el código de la tarifa es el mismo en todas sus vigencias.
+        "impuestos" => db.TaxDefinitions.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "tarifas" => db.TaxRates.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).OrderByDescending(e => e.ValidFrom).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "conceptos-de-retencion" => db.WithholdingConcepts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "ciudades" => db.Cities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };
