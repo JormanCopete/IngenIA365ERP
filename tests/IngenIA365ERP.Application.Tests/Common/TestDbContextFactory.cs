@@ -2,6 +2,8 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
+using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
@@ -65,6 +67,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
     public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
     public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
+    // Feature 012 (T33, T34): aprobaciones y montos maximos por permiso.
+    public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
+    public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
+    public DbSet<PermissionAmountLimit> PermissionAmountLimits => Set<PermissionAmountLimit>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -297,6 +305,24 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<OperationKey>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<ParameterVersion>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ApprovalPolicy>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasMany(p => p.Levels).WithOne(l => l.Policy).HasForeignKey(l => l.PolicyId);
+        });
+        modelBuilder.Entity<ApprovalPolicyLevel>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ApprovalRequest>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(r => r.Policy).WithMany().HasForeignKey(r => r.PolicyId);
+            b.HasMany(r => r.Decisions).WithOne(d => d.Request).HasForeignKey(d => d.RequestId);
+        });
+        modelBuilder.Entity<ApprovalDecision>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PermissionAmountLimit>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.Role).WithMany().HasForeignKey(l => l.RoleId);
+        });
         modelBuilder.Entity<IntegrationMessage>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IntegrationMessageDelivery>(b =>
         {

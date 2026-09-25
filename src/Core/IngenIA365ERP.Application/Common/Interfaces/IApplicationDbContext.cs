@@ -1,6 +1,8 @@
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
+using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
@@ -249,6 +251,15 @@ public interface IApplicationDbContext
     DbSet<IntegrationMessage> IntegrationMessages { get; }
     DbSet<IntegrationMessageDependency> IntegrationMessageDependencies { get; }
     DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries { get; }
+
+    // Feature 012 (T33, T34; T081-T085): aprobaciones de plataforma y montos maximos por permiso. Escriben solo
+    // MotorDeAprobaciones (solicitudes y decisiones), SaveApprovalPolicyCommand y SetPermissionAmountLimitCommand;
+    // lee los limites ILimitesPorPermiso. (Adelanto de T096.)
+    DbSet<ApprovalPolicy> ApprovalPolicies { get; }
+    DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels { get; }
+    DbSet<ApprovalRequest> ApprovalRequests { get; }
+    DbSet<ApprovalDecision> ApprovalDecisions { get; }
+    DbSet<PermissionAmountLimit> PermissionAmountLimits { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

@@ -180,6 +180,15 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.SenalDeMensajes>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Integration.ISenalDeMensajes>(
         sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.SenalDeMensajes>());
+    // Feature 012 (T34, T082; T33, T083-T085): montos maximos por permiso del actor, y permiso y alcance del
+    // aprobador presente (el supervisor en la caja). El alcance de la peticion llega con la seccion de alcance (T089):
+    // hasta entonces falla cerrado (AlcanceDeInventarioCerrado), con TryAdd para que su registro lo reemplace.
+    // Adelantos de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.ILimitesPorPermiso, IngenIA365ERP.API.Services.LimitesPorPermiso>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Approvals.IAutoridadDeOtroAprobador, IngenIA365ERP.API.Services.AutoridadDeOtroAprobador>();
+    Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<
+        IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario,
+        IngenIA365ERP.Application.Common.Interfaces.Security.AlcanceDeInventarioCerrado>(builder.Services);
 
     // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
     // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando

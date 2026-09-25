@@ -932,6 +932,34 @@ JSON embebidos versionados (T40), no semillas.
     `IX_COR_IntegrationMessageDeliveries_Eligible` (`[Status] = 0`) e `…_InBatch` (`[Status] = 1`). Precisión de T9: el
     mensaje apunta al último de cada cadena **y** al último de esa cadena con entrega a su mismo destino (sin esa arista un
     `AjusteDeVentaACredito` no esperaría a su `VentaACreditoRegistrada` si el último del original fuera contable).
+  - **(nuevo, T079–T086)** aprobaciones y montos máximos: en `Domain/Approvals`, `ApprovalSourceTypes` (constantes de
+    `SourceType`), los records `NivelDeAprobacion(Order, Threshold, PermissionCode)`, `PoliticaDeAprobacion(DocumentTypePublicId?,
+    ValidFrom, ValidTo?, Niveles)`, `ParticipantesDeAprobacion(Creador, Solicitante, Participantes, AprobadoresPrevios)`,
+    `EvaluacionDeAprobacion(Resultado, Niveles, MontoMaximo?, NivelForzado, ReglaFija)`, `NivelSellado(Order, Threshold,
+    Permission)` (la forma de `RequiredLevelsJson`) y los enums `ResultadoDeEvaluacion` { SinAprobacion=0, ConNiveles=1,
+    ExcedeLimite=2 } y `MotivoDeExclusion` { Creator=1, Requester=2, Participant=3, PreviousLevel=4 } (no se guardan);
+    `EvaluadorDePolitica.{ElegirPolitica, ReglaFija, Evaluar, ValidarDecision, ValidarNiveles}`. En
+    `Application/Common/Approvals`: `IMotorDeAprobaciones` suma `InvalidarAsync(sourceType, sourcePublicId, subject)`
+    (la fuente invalida cuando lo aprobado cambia, porque el rechazo `ContentChanged` revierte la transacción del
+    aprobador) y `RetirarAsync(requestPublicId, motivo)`; records `EvaluacionConPolitica`, `SolicitudDeAprobacion`,
+    `AprobadorPresente`, `DecisionDeAprobacion`; ganchos `IFuenteDeAprobacion` { `SourceType`, `AlAprobarAsync`,
+    `AlDevolverAsync`, `EnAlcanceAsync`, `DescribirAsync` }, `IAvisosDeAprobacion` (`SinAvisosDeAprobacion` hasta T093),
+    `IAutoridadDeOtroAprobador` (API: `AutoridadDeOtroAprobador`), `IReglasDePoliticaDeAprobacion`
+    (`ReglasDePoliticaDeAprobacionVacias`, con `AltaDePoliticaDeAprobacion`), `IDesafiosDePresencia` con
+    `DesafioDePresencia` (Caching: `RedisDesafiosDePresencia`); `VistaDeSolicitudes` (lo que comparten motor y
+    consultas); `ErroresDeAprobaciones`, `PermisosLimitables`; DTOs `NivelDto`, `ApprovalPolicyDto`,
+    `TipoDeDocumentoDeAprobacionDto`, `RolDto`, `PermissionAmountLimitDto`, `OrigenDeAprobacionDto`, `TipoDeOrigenDto`,
+    `NivelDeSolicitudDto`, `DecisionDto`, `ApprovalRequestDto`, `EstadoDeFuenteDto`, `DecisionResultDto`,
+    `DesafioDePresenciaDto`, `PresenciaDto`; carpetas `SaveApprovalPolicy`, `SetPermissionAmountLimit`,
+    `ListApprovalPolicies`, `ListPermissionAmountLimits`, `DecideApproval`, `RequestPresenceChallenge`,
+    `WithdrawApprovalRequest`, `ListMyPendingApprovals`, `GetApprovalRequest`. En `Interfaces/Security`,
+    `AlcanceDeInventarioCerrado` (falla cerrado hasta T089). Índices `UK_COR_ApprovalPolicies_PolicyKey_ValidFrom`,
+    `UK_COR_ApprovalPolicyLevels_PolicyId_Order`, `UK_COR_ApprovalRequests_Source_Subject_Pending`,
+    `IX_COR_ApprovalRequests_Status_Module_CurrentLevel`, `UK_COR_ApprovalDecisions_RequestId_Level_Approved`,
+    `UK_SEC_PermissionAmountLimits_Role_Permission_ValidFrom`. En la API, `ApprovalsEndpoints.{GuardarPoliticaRequest,
+    DecidirRequest, DesafioRequest, RetirarRequest, FijarMontoRequest}`. Precisiones: `PermissionAmountLimit.MaxAmount` es
+    nulable (api.md §15.3: nulo = sin límite); `Approvals.Policy.Overlaps` y `Approvals.AmountLimit.Overlaps` llevan
+    `data.existingValidFrom`.
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

@@ -8,6 +8,7 @@ using Mapster;
 using MapsterMapper;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IngenIA365ERP.Application;
 
@@ -113,6 +114,14 @@ public static class DependencyInjection
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
         services.AddScoped<Common.Integration.EmisorDeMensajes>();
+        // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Los tres
+        // ganchos van vacios hasta que existan sus duenos: el aviso Aprobaciones.Pendiente (alertas, T093) y las reglas
+        // de politica de Inventario (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
+        // historia. TryAdd para que el modulo que los implementa los reemplace sin quitar estas lineas.
+        services.AddScoped<Common.Approvals.VistaDeSolicitudes>();
+        services.AddScoped<Common.Approvals.IMotorDeAprobaciones, Common.Approvals.MotorDeAprobaciones>();
+        services.TryAddScoped<Common.Approvals.IAvisosDeAprobacion, Common.Approvals.SinAvisosDeAprobacion>();
+        services.TryAddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion, Common.Approvals.ReglasDePoliticaDeAprobacionVacias>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.

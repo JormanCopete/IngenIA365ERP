@@ -1,0 +1,21 @@
+{
+  "nombre": "Monto sobre el máximo del permiso con política: nivel 1 forzado más los que alcance",
+  "derivacion": "El máximo del permiso es 50.000. 60.000 no alcanza el umbral del nivel 1 (100.000) pero supera el máximo: nivel 1 forzado. 1.200.000 supera el máximo y alcanza los dos: 1 y 2 (el 1 ya lo alcanzaba, no hay nada que forzar). 40.000, bajo el máximo y bajo el umbral: sin aprobación. Un monto igual al máximo no lo supera.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [
+    {
+      "validFrom": "2026-01-01",
+      "niveles": [
+        { "order": 1, "threshold": 100000, "permission": "Inventory.Adjustments.Approve" },
+        { "order": 2, "threshold": 1000000, "permission": "Inventory.Approvals.Supervisor" }
+      ]
+    }
+  ],
+  "evaluaciones": [
+    { "monto": 60000, "montoMaximo": 50000, "esperado": { "resultado": "ConNiveles", "niveles": [1], "nivelForzado": true } },
+    { "monto": 1200000, "montoMaximo": 50000, "esperado": { "resultado": "ConNiveles", "niveles": [1, 2], "nivelForzado": false } },
+    { "monto": 40000, "montoMaximo": 50000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } },
+    { "monto": 50000, "montoMaximo": 50000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } }
+  ]
+}
