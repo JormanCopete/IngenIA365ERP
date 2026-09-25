@@ -171,6 +171,9 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IOrigenDeLaPeticion, IngenIA365ERP.API.Services.OrigenDeLaPeticion>();
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IActorActual, IngenIA365ERP.API.Services.ActorDeLaPeticion>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa, IngenIA365ERP.API.Integration.EjecutorEnCooperativa>();
+    // Feature 012 (T13, T055, T056): estado por peticion de la idempotencia; ClaveDeOperacionFilter pone la
+    // clave y lee si IdempotencyBehavior respondio con lo guardado (Idempotent-Replayed). Adelanto de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Behaviors.EstadoDeLaOperacion>();
 
     // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
     // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando

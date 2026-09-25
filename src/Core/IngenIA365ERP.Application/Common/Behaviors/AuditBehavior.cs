@@ -97,7 +97,9 @@ public class AuditBehavior<TRequest, TResponse>(
         return (action, entityType, module);
     }
 
-    private static string InferModuleFromNamespace(string? ns)
+    // Feature 012 (T055): interno para que IdempotencyBehavior ponga el evento Operation.Replayed en el
+    // modulo del comando. T059 lo reemplaza por ModuloDeAuditoria.Inferir, compartido con el interceptor.
+    internal static string InferModuleFromNamespace(string? ns)
     {
         if (ns is null) return "Unknown";
         // Feature 009 (FR-051): el ingreso a una opción del ERP se audita como navegación, no como escritura de un módulo.

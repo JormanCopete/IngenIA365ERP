@@ -144,6 +144,10 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // ese código diga lo mismo.
             "Attachments.Busy" => StatusCodes.Status429TooManyRequests,
 
+            // Feature 012 (T13, contracts/api.md §2.1): una operacion de pantalla sin Idempotency-Key es
+            // una peticion mal formada, no una regla de negocio. Sin esta linea caia al 422 por defecto.
+            "Operation.KeyRequired" => StatusCodes.Status400BadRequest,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

@@ -850,6 +850,20 @@ JSON embebidos versionados (T40), no semillas.
     por `IntegrationOptions.Problemas()`; pasadas manuales `ProgramadorDeTareas.CorrerUnaPasadaAsync(ct)` /
     `(tenantPublicId, ct)` y `NotificationEmailDispatcher.DespacharUnaPasadaAsync(ct)`; en la fixture
     `CentralIdentityApiFixture.CorrerTareasProgramadasAsync(tenantPublicId)`. Origen del correo: `Tarea:email.dispatch`.
+  - **(nuevo, T052–T057)** `Persistence/TransaccionExplicita.EjecutarAsync<T>(db, trabajo, ct)` (confirma salvo
+    `Result.IsFailure`; se une a `CurrentTransaction`; descarta al repetir) y una sobrecarga `internal` con
+    `descartarAlRepetir` que sólo usa `TransaccionDeLiquidacion` (sus handlers leen antes de abrirla);
+    `Behaviors/{IOperacionIdempotente, IConMotivo, IOperacionDePuntoDeVenta}` (un archivo cada uno),
+    `Behaviors/ValidadorConMotivo<T>` (base abstracta, `LargoMaximo` = 500), `Behaviors/EstadoDeLaOperacion`
+    (Scoped: `Clave`, `EsRepeticion`, `PrimerUso`, `MarcarRepeticion`), `Behaviors/HuellaDeOperacion`
+    (`Calcular(operacion, cuerpo)` = SHA-256 hex minúsculo de `{operación}
+{JSON canónico}`, `Canonico`),
+    `Behaviors/ErroresDeOperacion` (`ClaveRequerida()`, `ClaveReutilizada(operacion, primerUso)`);
+    `Domain/Entities/Core/OperationKey.IndiceUnicoDeLaClave` = `UK_COR_OperationKeys_Key`;
+    `AuditEventTypes.OperationReplayed`; en la API `Filters/ClaveDeOperacionFilter` (`Cabecera`,
+    `CabeceraDeRepeticion`) con `ClaveDeOperacionExtensions.ConClaveDeOperacion()` y `HttpContext.ClaveDeOperacion()`
+    (la ruta la copia al comando); en Shared `Services/Http/ClaveDeOperacion` (`Valor`, `Para(contenido)`,
+    `Exito()`, `Aplicar(peticion, contenido)`, `FueRepeticion(respuesta)`).
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,

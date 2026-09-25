@@ -3,6 +3,8 @@ using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Notifications.Contracts;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Persistence.DbContext;
@@ -23,9 +25,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Integration;
 ///
 /// <para>
 /// Escrita en la fase 2; se ejecuta tras la migración <c>PlataformaParaInventario</c> (T186), que crea la
-/// tabla y siembra sus cinco filas. Los casos de <c>TransaccionExplicita</c> (anidada que se une a la de
-/// afuera; interbloqueo 40P01/1205 repetido entero tras <c>DescartarCambios()</c>) los agrega a este mismo
-/// archivo la tarea que crea esa pieza (T052).
+/// tabla y siembra sus cinco filas. Los dos casos de <c>TransaccionExplicita</c> (T052: la anidada se une a
+/// la de afuera; un interbloqueo 40P01/1205 se repite entero tras <c>DescartarCambios()</c>) usan también
+/// <c>COR_OperationKeys</c>, que llega con la misma migración, y corren en su propia cooperativa aislada.
 /// </para>
 ///
 /// <para>
@@ -190,5 +192,97 @@ public class ArrendamientosYTransaccionTests(CentralIdentityApiFixture fx)
         fx.Emails.Sent.Count(m => m.Subject == asunto).Should().Be(1,
             "el arrendamiento email.dispatch de la cooperativa deja leer el lote pendiente a una sola réplica (pregunta B5)");
         (await FilaAsync(entrada, NombresDeArrendamiento.Correo)).Owner.Should().BeNull("cada pasada suelta el arrendamiento al terminar");
+    }
+
+    // ------------------------------------------------ TransaccionExplicita (T052) --
+
+    private static OperationKey FilaDePrueba(string marca) => new()
+    {
+        Key = Guid.NewGuid(), Operation = marca, RequestSha256 = new string('0', 64), CentralUserId = Guid.Empty, ActorName = "Prueba T052",
+    };
+
+    [Fact]
+    public async Task Una_TransaccionExplicita_anidada_se_une_a_la_de_afuera()
+    {
+        var entrada = await EntradaAsync((await InventarioE2E.CooperativaAisladaAsync(fx, "transaccion")).TenantPublicId);
+        var marca = $"Anidada-{Guid.NewGuid():N}"[..40];
+
+        var resultado = await EnLaCooperativaAsync(entrada, async s =>
+        {
+            var db = s.GetRequiredService<IApplicationDbContext>();
+            var ctx = s.GetRequiredService<ApplicationDbContext>();
+            return await TransaccionExplicita.EjecutarAsync(db, async () =>
+            {
+                var afuera = ctx.Database.CurrentTransaction;
+                afuera.Should().NotBeNull();
+                db.OperationKeys.Add(FilaDePrueba(marca));
+                await db.SaveChangesAsync();
+
+                var adentro = await TransaccionExplicita.EjecutarAsync(db, async () =>
+                {
+                    ctx.Database.CurrentTransaction.Should().BeSameAs(afuera, "la anidada no abre otra transacción");
+                    db.OperationKeys.Add(FilaDePrueba(marca));
+                    await db.SaveChangesAsync();
+                    return Result.Success();
+                }, CancellationToken.None);
+                adentro.IsSuccess.Should().BeTrue();
+
+                // La de afuera decide: un fallo revierte también lo que guardó la anidada.
+                return Result.Failure("Prueba.Revertir", "se revierte a propósito");
+            }, CancellationToken.None);
+        });
+
+        resultado.IsFailure.Should().BeTrue();
+        var quedaron = await EnLaCooperativaAsync(entrada, s => s.GetRequiredService<ApplicationDbContext>().OperationKeys
+            .AsNoTracking().CountAsync(k => k.Operation == marca));
+        quedaron.Should().Be(0, "la anidada se unió a la de afuera y se revirtió con ella");
+    }
+
+    [Fact]
+    public async Task Ante_un_interbloqueo_la_estrategia_repite_el_trabajo_entero_tras_descartar()
+    {
+        var entrada = await EntradaAsync((await InventarioE2E.CooperativaAisladaAsync(fx, "transaccion")).TenantPublicId);
+        var barrera = new Barrier(2);
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+
+        // Dos trabajos toman dos filas de COR_BackgroundLeases en orden cruzado: el motor elige una víctima
+        // (PostgreSQL 40P01, SQL Server 1205), la estrategia de ejecución la repite entera y el segundo
+        // intento ya no espera en la barrera.
+        Task<int> TrabajoAsync(string marca, string primero, string segundo) => EnLaCooperativaAsync(entrada, async s =>
+        {
+            var db = s.GetRequiredService<IApplicationDbContext>();
+            var ctx = s.GetRequiredService<ApplicationDbContext>();
+            var intentos = 0;
+            var r = await TransaccionExplicita.EjecutarAsync(db, async () =>
+            {
+                intentos++;
+                // Una fila pendiente en el ChangeTracker: si el reintento no descartara, quedarían dos.
+                db.OperationKeys.Add(FilaDePrueba(marca));
+                await ctx.Set<BackgroundLease>().Where(l => l.Name == primero)
+                    .ExecuteUpdateAsync(u => u.SetProperty(l => l.LeaseUntil, l => l.LeaseUntil));
+                if (intentos == 1) await Task.Run(() => barrera.SignalAndWait(TimeSpan.FromSeconds(30)));
+                await ctx.Set<BackgroundLease>().Where(l => l.Name == segundo)
+                    .ExecuteUpdateAsync(u => u.SetProperty(l => l.LeaseUntil, l => l.LeaseUntil));
+                await db.SaveChangesAsync();
+                return Result.Success(intentos);
+            }, CancellationToken.None);
+            r.IsSuccess.Should().BeTrue();
+            return r.Value;
+        });
+
+        var uno = $"Interbloqueo-A-{sufijo}";
+        var dos = $"Interbloqueo-B-{sufijo}";
+        var intentos = await Task.WhenAll(
+            TrabajoAsync(uno, NombresDeArrendamiento.Despacho, NombresDeArrendamiento.ReenvioDeAuditoria),
+            TrabajoAsync(dos, NombresDeArrendamiento.ReenvioDeAuditoria, NombresDeArrendamiento.Despacho));
+
+        intentos.Max().Should().BeGreaterThan(1, "la víctima del interbloqueo se repitió");
+        intentos.Min().Should().Be(1, "la otra confirmó al primer intento");
+        foreach (var marca in new[] { uno, dos })
+        {
+            var filas = await EnLaCooperativaAsync(entrada, s => s.GetRequiredService<ApplicationDbContext>().OperationKeys
+                .AsNoTracking().CountAsync(k => k.Operation == marca));
+            filas.Should().Be(1, "cada intento empieza con DescartarCambios(): lo agregado en el intento fallido no se guarda dos veces");
+        }
     }
 }

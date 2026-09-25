@@ -50,6 +50,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    // Feature 012 (T13): claves de idempotencia de IdempotencyBehavior.
+    public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -280,6 +282,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         });
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<OperationKey>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));

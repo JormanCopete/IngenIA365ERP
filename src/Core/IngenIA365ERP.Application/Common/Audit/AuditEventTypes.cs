@@ -153,6 +153,11 @@ public static class AuditEventTypes
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.
     public const string NavigationOpened = "Navigation.Opened";
 
+    // -------------------- Idempotencia (feature 012, T13) --------------------
+    // Una operacion repetida con la misma Idempotency-Key devolvio el resultado guardado sin ejecutar
+    // otra vez; lo emite IdempotencyBehavior con la clave y el primer uso en la metadata.
+    public const string OperationReplayed = "Operation.Replayed";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

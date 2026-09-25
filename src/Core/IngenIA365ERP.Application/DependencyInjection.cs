@@ -18,7 +18,8 @@ public static class DependencyInjection
         var assembly = Assembly.GetExecutingAssembly();
 
         // MediatR + pipeline behaviors.
-        // Orden de envoltura (outermost → innermost): Validation → Logging → Audit → Performance.
+        // Orden de envoltura (outermost → innermost): Validation → Logging → Idempotency → Audit →
+        // ReintentoPorConcurrencia → Performance (feature 012, T14).
         // 1) Validation se ejecuta primero para que las requests inválidas no lleguen al logger ni al audit.
         // 2) Logging abre el scope con tenant/usuario antes de que cualquier otro behavior emita.
         // 3) Audit registra solo lo que pasó validación.
@@ -28,6 +29,12 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+            // 2b) Feature 012 (T13, T14): los comandos IOperacionIdempotente abren aqui su transaccion
+            //     (TransaccionExplicita) y guardan la clave en COR_OperationKeys; va ANTES de Audit para
+            //     que la auditoria del comando quede dentro de la transaccion y una repeticion no la
+            //     dispare otra vez. Orden: Validation -> Logging -> Idempotency -> Audit ->
+            //     ReintentoPorConcurrencia -> Performance.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
             // 3b) Feature 009: reintento ante ConcurrencyConflictException para los requests marcados
             //     IReintentableAnteConcurrencia. Va DESPUES de Audit para que la auditoria vea un solo

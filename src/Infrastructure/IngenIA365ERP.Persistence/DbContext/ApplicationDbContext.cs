@@ -318,6 +318,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    // Feature 012 (T13, T054): claves de idempotencia (adelanto de T096).
+    public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();

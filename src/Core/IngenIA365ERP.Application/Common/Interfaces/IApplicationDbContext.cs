@@ -225,6 +225,10 @@ public interface IApplicationDbContext
     DbSet<RolePermission> RolePermissions { get; }
     DbSet<UserRole> UserRoles { get; }
 
+    // Feature 012 (T13, T054): claves de idempotencia de las operaciones de pantalla. Las lee y escribe
+    // solo IdempotencyBehavior. (Adelanto de T096, que registra el resto de DbSet de la plataforma.)
+    DbSet<OperationKey> OperationKeys { get; }
+
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
