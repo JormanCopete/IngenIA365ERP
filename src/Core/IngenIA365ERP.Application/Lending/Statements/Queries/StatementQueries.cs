@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -111,7 +112,7 @@ public class GetPersonStatementQueryHandler(IApplicationDbContext context)
 
         return Result.Success(new PersonStatementDto
         {
-            PersonName = $"{person.FirstName} {person.LastName}",
+            PersonName = NombreDePersona.Completo(person),
             IdentificationNumber = person.TaxId,
             Year = request.Year,
             Month = request.Month,

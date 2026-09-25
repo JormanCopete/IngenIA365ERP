@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -161,7 +162,7 @@ public class ListLoanPortfoliosQueryHandler(IApplicationDbContext context)
         var personIds = items.Select(i => i.PersonId).Distinct().ToList();
         var personNames = await context.People.AsNoTracking()
             .Where(p => personIds.Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id, p => p.FirstName + " " + p.LastName, ct);
+            .ToDictionaryAsync(p => p.Id, p => NombreDePersona.Completo(p), ct);
 
         var dtos = items.Select(lp => new LoanPortfolioDto(
             lp.PublicId,
@@ -209,7 +210,7 @@ public class GetLoanPortfolioByIdQueryHandler(IApplicationDbContext context)
                 "Credito no encontrado."));
 
         var personName = portfolio.Person is not null
-            ? $"{portfolio.Person.FirstName} {portfolio.Person.LastName}"
+            ? NombreDePersona.Completo(portfolio.Person)
             : portfolio.IdentificationNumber;
 
         // Load installments

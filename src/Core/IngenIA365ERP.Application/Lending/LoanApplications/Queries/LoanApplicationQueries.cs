@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -162,7 +163,7 @@ public class ListLoanApplicationsQueryHandler(IApplicationDbContext context)
             .Where(p => personCodes.Contains(p.LegacyCode!) || personCodes.Contains(p.TaxId))
             .ToDictionaryAsync(
                 p => p.LegacyCode ?? p.TaxId,
-                p => p.FirstName + " " + p.LastName,
+                p => NombreDePersona.Completo(p),
                 ct);
 
         var dtos = items.Select(a => new LoanApplicationDto(
@@ -208,7 +209,7 @@ public class GetLoanApplicationByIdQueryHandler(IApplicationDbContext context)
 
         var person = await context.People.AsNoTracking()
             .FirstOrDefaultAsync(p => p.LegacyCode == app.PersonCode || p.TaxId == app.PersonCode, ct);
-        var personName = person is not null ? $"{person.FirstName} {person.LastName}" : app.PersonCode;
+        var personName = person is not null ? NombreDePersona.Completo(person) : app.PersonCode;
 
         var dto = new LoanApplicationDetailDto(
             app.PublicId,
