@@ -380,7 +380,8 @@ el Secret `erp-adjuntos-s3` está en los tres namespaces; y el overlay de GitOps
 llegue**: la imagen desplegada es anterior a `S3BlobStore`, así que la configuración está viva pero
 inerte y el health check todavía dice `writable: /app/storage/attachments`. Con la imagen nueva tiene
 que decir `S3: s3://ingenia365-erp-attachments/{ambiente}`; después, subir, bajar y borrar un adjunto
-de verdad, y más adelante retirar el PVC `erp-attachments`, que queda montado sin usarse.
+de verdad, y más adelante retirar el PVC `erp-attachments`, que queda montado sin usarse. **Retirado el
+2026-09-24** de los tres ambientes, con los tres vacíos (GitOps `ee8c324` y `431092b`).
 
 El usuario IAM se creó **a mano desde la consola**: el usuario del perfil `ingenia365` no tiene
 ningún permiso de IAM (ni `iam:ListUsers`), y el guión cubre ese caso con `-OmitirIam` para el bucket

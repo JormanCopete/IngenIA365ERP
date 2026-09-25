@@ -114,9 +114,9 @@ copiarlo al bucket (el punto 4 de «Antes»). El sidecar puede quedarse: el cód
 
 1. ✅ Borrado el Secret `erp-adjuntos-s3` de `erp-dev`, `erp-qa` y `erp-pdn` (ningún pod lo referenciaba).
 2. ✅ GitOps `1fdc852`: `base/api.yaml` sin `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` (el manifiesto
-   renderizado no cambió: el componente ya las quitaba). **Pendiente a propósito**: el volumen
-   `erp-attachments`. Producción lo tiene vacío, pero DEV y QA pueden guardar archivos de antes del
-   bucket; retirarlo borra el volumen, así que va aparte y con una mirada a su contenido.
+   renderizado no cambió: el componente ya las quitaba). El volumen `erp-attachments` se retiró
+   después, el mismo día, tras comprobar que estaba vacío en los tres ambientes: GitOps `ee8c324`
+   (DEV y QA) y `431092b` (`base`, producción sincronizada, respaldo `*-20260924c-pre-volumen.dump`).
 3. ⏳ El dueño **elimina** en la consola el usuario IAM `ingenia365-erp-adjuntos` (su llave ya está desactivada).
 4. ✅ Retirado `docs/operaciones/politica-iam-adjuntos.json`; el guion del bucket ya no crea el usuario ni
    tiene `-OmitirIam`/`-SoloSecreto`.

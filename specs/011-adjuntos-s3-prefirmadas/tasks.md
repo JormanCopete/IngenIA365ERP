@@ -326,6 +326,7 @@ AccessDenied. La credencial vence a la hora sin cortar la API, y revocar el cert
   - *Hecho (2026-09-24)*: certificados de los tres ambientes (el de producción reemitido con la CA original), pila creada, CA en custodia del dueño.
   - *Avance (2026-09-23)*: el dueño creó la CA y los certificados de DEV y QA (hasta 2027-09-24), el guion instaló el Secret `erp-adjuntos-certificado` en `erp-dev` y `erp-qa`, y la pila `ingenia365-erp-adjuntos-roles-anywhere` quedó creada desde CloudShell con sus cinco salidas. Falta confirmar que la política transitoria sin listar se pegó en la consola.
 - [X] T073 [US5] En GitOps (`ingenia365-gitops`), en workloads/erp/base/api.yaml y en los overlays:
+  - *Volumen (2026-09-24)*: el PVC `erp-attachments` retirado de los tres ambientes, vacíos (GitOps `ee8c324`, `431092b`).
   - *Hecho (2026-09-24)*: producción activa (GitOps `f1ba464`, `01d5bb6`); `base/api.yaml` sin `AWS_*` y el Secret `erp-adjuntos-s3` borrado de los tres namespaces (GitOps `1fdc852`).
   - el sidecar `aws_signing_helper serve` con el Secret del ambiente;
   - los ARN en cada overlay;
