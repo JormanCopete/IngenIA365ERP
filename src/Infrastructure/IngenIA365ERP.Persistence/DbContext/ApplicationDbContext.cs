@@ -10,6 +10,7 @@ using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -322,6 +323,16 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
     // === Inventory (1: sólo vendedores; el modelo heredado se retiró en RetiroDelInventarioHeredado) ===
     public DbSet<Salesperson> Salespeople => Set<Salesperson>();
+    // Feature 012 (T17, T136): documento generico de inventario, sus satelites, tipos y consecutivos.
+    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
+    public DbSet<InventoryDocumentLine> InventoryDocumentLines => Set<InventoryDocumentLine>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<DocumentLineLink> DocumentLineLinks => Set<DocumentLineLink>();
+    public DbSet<DocumentPartySnapshot> DocumentPartySnapshots => Set<DocumentPartySnapshot>();
+    public DbSet<DocumentTaxLine> DocumentTaxLines => Set<DocumentTaxLine>();
+    public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
+    public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();
@@ -480,6 +491,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).
+        await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
+
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";
 

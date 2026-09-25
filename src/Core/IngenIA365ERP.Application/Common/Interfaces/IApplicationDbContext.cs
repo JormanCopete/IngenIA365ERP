@@ -12,6 +12,7 @@ using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -194,6 +195,17 @@ public interface IApplicationDbContext
 
     // Inventory
     DbSet<Salesperson> Salespeople { get; }
+    // Feature 012 (T17, T136): documento generico de inventario. Number y NextValue los escribe solo Numerador;
+    // DocumentPartySnapshots y DocumentTaxLines son hechos (solo insercion).
+    DbSet<InventoryDocument> InventoryDocuments { get; }
+    DbSet<InventoryDocumentLine> InventoryDocumentLines { get; }
+    DbSet<DocumentLink> DocumentLinks { get; }
+    DbSet<DocumentLineLink> DocumentLineLinks { get; }
+    DbSet<DocumentPartySnapshot> DocumentPartySnapshots { get; }
+    DbSet<DocumentTaxLine> DocumentTaxLines { get; }
+    DbSet<InventoryDocumentType> InventoryDocumentTypes { get; }
+    DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses { get; }
+    DbSet<DocumentSequence> DocumentSequences { get; }
 
     // CDT
     DbSet<Certificate> Certificates { get; }

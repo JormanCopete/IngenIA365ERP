@@ -13,6 +13,7 @@ using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -241,6 +242,16 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Absence> IApplicationDbContext.Absences => throw new NotImplementedException();
     DbSet<TaxCertificate> IApplicationDbContext.TaxCertificates => throw new NotImplementedException();
     public DbSet<Salesperson> Salespeople => Set<Salesperson>();
+    // Feature 012 (T136): documento generico de inventario (Numerador, ciclo comun).
+    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
+    public DbSet<InventoryDocumentLine> InventoryDocumentLines => Set<InventoryDocumentLine>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<DocumentLineLink> DocumentLineLinks => Set<DocumentLineLink>();
+    public DbSet<DocumentPartySnapshot> DocumentPartySnapshots => Set<DocumentPartySnapshot>();
+    public DbSet<DocumentTaxLine> DocumentTaxLines => Set<DocumentTaxLine>();
+    public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
+    public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
     DbSet<Certificate> IApplicationDbContext.Certificates => throw new NotImplementedException();
     DbSet<CdtParameter> IApplicationDbContext.CdtParameters => throw new NotImplementedException();
     DbSet<CdtRateByTerm> IApplicationDbContext.CdtRatesByTerm => throw new NotImplementedException();
@@ -292,6 +303,38 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<Employee>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Associate>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Salesperson>(b => b.Ignore("RowVersion"));
+        // Feature 012 (T136): documento generico. Las dos referencias de anulacion y los dos extremos de los
+        // vinculos son relaciones distintas; sin declararlas la convencion las empareja.
+        modelBuilder.Entity<InventoryDocument>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.DocumentType).WithMany().HasForeignKey(d => d.DocumentTypeId);
+            b.HasMany(d => d.Lines).WithOne(l => l.Document).HasForeignKey(l => l.DocumentId);
+        });
+        modelBuilder.Entity<InventoryDocumentLine>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentLink>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.SourceDocument).WithMany().HasForeignKey(l => l.SourceDocumentId);
+            b.HasOne(l => l.TargetDocument).WithMany().HasForeignKey(l => l.TargetDocumentId);
+            b.HasMany(l => l.LineLinks).WithOne(x => x.DocumentLink).HasForeignKey(x => x.DocumentLinkId);
+        });
+        modelBuilder.Entity<DocumentLineLink>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.SourceLine).WithMany().HasForeignKey(l => l.SourceLineId);
+            b.HasOne(l => l.TargetLine).WithMany().HasForeignKey(l => l.TargetLineId);
+        });
+        modelBuilder.Entity<DocumentPartySnapshot>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentTaxLine>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<InventoryDocumentType>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasMany(t => t.Warehouses).WithOne(w => w.DocumentType).HasForeignKey(w => w.DocumentTypeId);
+            b.HasMany(t => t.Sequences).WithOne(s => s.DocumentType).HasForeignKey(s => s.DocumentTypeId);
+        });
+        modelBuilder.Entity<DocumentTypeWarehouse>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentSequence>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollTransaction>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollConcept>(b => b.Ignore("RowVersion"));
         // City.People choca con las dos navegaciones Person→City (City y MailingCity); aquí no hace falta.

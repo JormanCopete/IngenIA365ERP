@@ -128,6 +128,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
         // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
         services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
+        // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
+        services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.

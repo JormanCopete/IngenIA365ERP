@@ -1,6 +1,9 @@
 using System.Linq.Expressions;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Common;
 
@@ -80,6 +83,56 @@ public static class FiltroDeAlcance
 
         var cuerpo = Expression.OrElse(Expression.OrElse(porOrigen, porDestino), sinBodega);
         return consulta.Where(Expression.Lambda<Func<T, bool>>(cuerpo, parametro));
+    }
+
+    /// <summary>
+    /// La visibilidad de <c>INV_Documents</c> sobre las entidades de la base de inventario (T140; data-model §5.2): por
+    /// bodega de origen <b>o</b> de destino; un documento sin ninguna de las dos, si alguna bodega de sus orígenes
+    /// (<c>INV_DocumentLinks</c> vivos donde es el destino) está en el alcance. Falla cerrado: sin asignaciones, nada.
+    /// <paramref name="vinculos"/> y <paramref name="documentos"/> son los <c>DbSet</c> del contexto (EF los traduce a
+    /// subconsultas).
+    /// </summary>
+    public static IQueryable<InventoryDocument> DocumentosVisibles(
+        this IQueryable<InventoryDocument> consulta,
+        AlcanceDeInventario alcance,
+        IQueryable<DocumentLink> vinculos,
+        IQueryable<InventoryDocument> documentos)
+    {
+        if (alcance.TodasLasBodegas) return consulta;
+        var ids = alcance.Bodegas.ToArray();
+        return consulta.Where(d =>
+            (d.WarehouseId != null && ids.Contains(d.WarehouseId.Value))
+            || (d.DestinationWarehouseId != null && ids.Contains(d.DestinationWarehouseId.Value))
+            || (d.WarehouseId == null && d.DestinationWarehouseId == null
+                && vinculos.Any(l => l.TargetDocumentId == d.Id
+                    && documentos.Any(o => o.Id == l.SourceDocumentId && o.WarehouseId != null && ids.Contains(o.WarehouseId.Value)))));
+    }
+
+    /// <summary>
+    /// Las bodegas de los documentos de los que nace <paramref name="documentId"/> (orígenes de sus vínculos vivos), para
+    /// decidir si un documento sin bodega se ve o se opera (<see cref="DocumentoSinBodegaVisible"/>,
+    /// <see cref="DocumentoSinBodegaOperable"/>).
+    /// </summary>
+    public static async Task<IReadOnlyList<int>> BodegasDeSusOrigenesAsync(IApplicationDbContext db, int documentId, CancellationToken ct = default) =>
+        await db.DocumentLinks.AsNoTracking()
+            .Where(l => l.TargetDocumentId == documentId)
+            .Join(db.InventoryDocuments.AsNoTracking(), l => l.SourceDocumentId, o => o.Id, (l, o) => o.WarehouseId)
+            .Where(b => b != null)
+            .Select(b => b!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// ¿Se ve este documento? Con bodega de origen o de destino, si alguna está en el alcance; sin ninguna, por las
+    /// bodegas de sus orígenes. Falla cerrado.
+    /// </summary>
+    public static bool DocumentoVisible(AlcanceDeInventario alcance, InventoryDocument documento, IEnumerable<int> bodegasDeSusOrigenes)
+    {
+        if (alcance.TodasLasBodegas) return true;
+        if (documento.WarehouseId is null && documento.DestinationWarehouseId is null)
+            return DocumentoSinBodegaVisible(alcance, bodegasDeSusOrigenes);
+        return (documento.WarehouseId is int o && alcance.IncluyeBodega(o))
+            || (documento.DestinationWarehouseId is int d && alcance.IncluyeBodega(d));
     }
 
     /// <summary>Un documento sin bodega se ve si alguna bodega de sus orígenes está en el alcance.</summary>

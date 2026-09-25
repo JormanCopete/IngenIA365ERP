@@ -1031,6 +1031,18 @@ JSON embebidos versionados (T40), no semillas.
   `Inventory/Common/FiltroDeAlcance`, `Inventory/Kardex/{RegistroDeKardex, VerificacionDeIntegridad}`,
   `Inventory/Documents/Numeracion/Numerador`, `Inventory/Documents/Efectos/*` (una estrategia por clase),
   `Inventory/Integration/{EmisionDeInventario, DimensionesDeInventario}`, `Inventory/Reports/InventoryAuditEmitter`, `Inventory/Security/Scopes/{AsignacionesDeBodegaEnBase, AsignacionesDePuntoDeVentaEnBase}` (nuevo; implementaciones reales de `IAsignacionesDeBodega`/`IAsignacionesDePuntoDeVenta`), `Inventory/Replenishment/PosicionDeReposicion` (nuevo; único lector de disponible, en tránsito hacia la bodega y por recibir).
+- Piezas del documento (base de inventario, T130–T141; todas **(nuevo)** salvo las ya nombradas arriba):
+  Domain `Inventory/Documents/ClasesDeDocumento` describe cada clase con el record `DescripcionDeClase` y cuatro
+  enumeraciones de comportamiento que **no se guardan** —`InventoryEffect` { Entry=1, Exit=2, Both=3, CostOnly=4,
+  None=5, Reservation=6 }, `FiscalDirection` { Received=1, Emitted=2 }, `NumberedBy` { Sequence=1, DianResolution=2 },
+  `AdmittedWarehouses` [Flags] { None=0, Operational=1, NotActivated=2, Transit=4 }—, con las constantes de los
+  tipos de mensaje de §2.6 y la entrega por `EntregaDelComercio`; `Domain/Exceptions/{InvalidDocumentTransitionException,
+  ImmutableEntityModifiedException}`; `IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar`/`EstaFijo`.
+  Application `Inventory/Common/ICerrojoDeInventario` con `PedidoDeCerrojo`, `ModoDeBloqueoDelSetup` { Compartido,
+  Exclusivo }, `ClaveDeEstadoDeCosto`, `ClaveDeExistencia`, `ClaveDeDetalleDeExistencia`; `Inventory/Common/InventoryErrors`
+  (catálogo de códigos de §8 y §9.6 de api.md); `FiltroDeAlcance.{DocumentosVisibles, BodegasDeSusOrigenesAsync,
+  DocumentoVisible}`. Persistence `Inventory/SqlDelCerrojo` (+ `SentenciaDelCerrojo`, el SQL puro de cada motor que
+  ejecuta `CerrojoDeInventario`) y `DbContext/GuardaDeInmutabilidad` (la guarda de T137 que llama `SaveChangesAsync`).
 - Comandos: `SaveInventoryDraftCommand`, `ConfirmInventoryDocumentCommand(DocumentPublicId,
   ExpectedGroup)`, `VoidInventoryDocumentCommand`, `DiscardInventoryDraftCommand`,
   `DispatchTransferCommand`, `ReceiveTransferCommand`, `ResolveTransferDiscrepancyCommand`,

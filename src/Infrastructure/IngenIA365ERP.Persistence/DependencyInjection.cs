@@ -135,6 +135,8 @@ public static class DependencyInjection
         services.AddScoped(CooperativaDelAmbito.Crear);
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        // Feature 012 (T15, T138): el cerrojo pesimista de la confirmacion, con el SQL de cada motor sobre el propio contexto.
+        services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
         services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();
