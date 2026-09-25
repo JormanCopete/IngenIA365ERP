@@ -3181,6 +3181,11 @@ De esta sección: `Accounting.InventoryRule.DimensionRequired`, `.DimensionNotAl
   `session`, `product`, `category`, `accountingGroup`, `person` y `documentType`. El rango es de hasta 5
   años, como en la 009.
 - **Pantallas**: `/inventario/informes?vista=` y `/ventas/informes?vista=`.
+- **Registro de vistas** (nuevo, T182): `GET /api/reports/inventory` con `Inventory.Reports.View` devuelve las vistas
+  publicadas `[{ key, name, description, fileName, filters[], ownFilters?[], personalData, personalDataWhen?,
+  requiredPermission? }]`, sin las que exigen un permiso adicional que quien pregunta no tiene. De ahí arma su selector la
+  pantalla; cada vista se publica con `MapVistaDeInventario`, que además valida el rango (422
+  `Inventory.Report.RangeInvalid` / `.RangeTooLong`) y audita la exportación con las filas.
 
 | Vista | E | Filtros propios | Permiso adicional | Columnas (· ocultas) |
 |---|---|---|---|---|

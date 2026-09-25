@@ -103,6 +103,8 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Vacations.VacationNoveltyPlanner>();
         // Feature 009: mismo molde para contabilidad (exportaciones, envios, configuracion).
         services.AddScoped<Accounting.Reports.AccountingAuditEmitter>();
+        // Feature 012 (T181): el de Inventario, por la bandeja encadenada (exportar informes y catalogos con datos).
+        services.AddScoped<Inventory.Reports.InventoryAuditEmitter>();
         // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad
         // de cuentas que parametrizan los demas modulos (FR-016).
         services.AddScoped<Accounting.Posting.AccountingPoster>();

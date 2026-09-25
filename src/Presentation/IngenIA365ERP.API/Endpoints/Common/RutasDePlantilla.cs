@@ -33,7 +33,7 @@ public static class RutasDePlantilla
     public const string PermisoDeDatosPersonales = "Inventory.Reports.ExportPersonalData";
 
     /// <summary>El evento de auditoría de la descarga con datos (T230).</summary>
-    public const string EventoDeExportacion = "Inventory.Catalog.Exported";
+    public const string EventoDeExportacion = AuditEventTypes.InventoryCatalogExported;
 
     /// <summary>Un poco más que el tope del archivo: el cuerpo multipart lleva los separadores y el motivo.</summary>
     private const long TopeDelCuerpo = EjecutorDeImportacion.MaximoDeBytes + 256 * 1024;

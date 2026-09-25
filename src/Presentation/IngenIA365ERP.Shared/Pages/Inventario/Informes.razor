@@ -1,0 +1,187 @@
+@page "/inventario/informes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Informes de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T182 (T44; contracts/api.md §27): la página base del centro de informes de Inventario, en el molde de
+   /contabilidad/informes. El selector se alimenta del REGISTRO DE VISTAS de la API (GET /api/reports/inventory): cada
+   historia publica las suyas (kardex y existencias en US2, comparativos con SOLIDO en US4, mensajes y conciliación en
+   I2…) y aparecen aquí sin tocar esta pantalla. Filtros comunes: el rango y el corte se editan; bodega, producto y los
+   filtros propios llegan por el enlace (?vista=kardex&product=…) y viajan tal cual. Las columnas ocultas (_documento,
+   _producto…) no se pintan ni se exportan. Exportar exige Inventory.Reports.Export y, en las vistas con datos de
+   clientes, además Inventory.Reports.ExportPersonalData. Sin enlace en el menú hasta que exista al menos una vista (US2). *@
+<PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Informes de inventario</h3>
+        <div class="toolbar">
+            @if (_tabla is not null && _vista is not null && _puedeExportar)
+            {
+                <PermissionGate Required="Inventory.Reports.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("docx"))">Word</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_cargaVistas.Activa" Texto="Buscando los informes disponibles…">
+        @if (!_cargaVistas.Activa && _vistas.Count == 0)
+        {
+            <p class="texto-tenue">Todavía no hay informes de inventario publicados. Cada parte del módulo suma los suyos (kardex, existencias, valorizado…) a medida que se entrega.</p>
+        }
+        else if (_vistas.Count > 0)
+        {
+            <div class="toolbar">
+                <label class="campo">Informe
+                    <select class="e-input" value="@(_vista?.Key)" @onchange="@(e => CambiarVista(e.Value?.ToString()))">
+                        @foreach (var v in _vistas) { <option value="@v.Key">@v.Name</option> }
+                    </select>
+                </label>
+                @if (Usa("from"))
+                {
+                    <label class="campo">Desde <input type="date" class="e-input" value="@Fecha(_filtros.From)" @onchange="@(e => _filtros.From = LeerFecha(e.Value))" /></label>
+                }
+                @if (Usa("to"))
+                {
+                    <label class="campo">Hasta <input type="date" class="e-input" value="@Fecha(_filtros.To)" @onchange="@(e => _filtros.To = LeerFecha(e.Value))" /></label>
+                }
+                @if (Usa("asOf"))
+                {
+                    <label class="campo">Con corte al <input type="date" class="e-input" value="@Fecha(_filtros.AsOf)" @onchange="@(e => _filtros.AsOf = LeerFecha(e.Value))" /></label>
+                }
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null)" OnClick="@AplicarAsync">Consultar</SfButton>
+            </div>
+            @if (_filtros.Otros.Count > 0)
+            {
+                <p class="texto-tenue">
+                    Filtros del enlace: @string.Join(" · ", _filtros.Otros.Select(o => $"{o.Key} = {o.Value}"))
+                    <button type="button" class="enlace" @onclick="@QuitarFiltrosDelEnlace">quitarlos</button>
+                </p>
+            }
+            <p class="texto-tenue">@(_vista?.Description)</p>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_vistas.Count > 0)
+        {
+            <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Elija el informe y los filtros y pulse «Consultar»." />
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
+    private List<VistaDeInformeDto> _vistas = [];
+    private VistaDeInformeDto? _vista;
+    private FiltrosDeInformeDeInventarioModelo _filtros = new();
+    private FiltrosDeInformeDeInventarioModelo _aplicados = new();
+    private TablaReporteDto? _tabla;
+    private bool _iniciado, _puedeExportar;
+
+    [SupplyParameterFromQuery(Name = "vista")] public string? Vista { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_iniciado) return;
+        _iniciado = true;
+        _filtros = FiltrosDeInformeDeInventarioModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        _filtros.To ??= hoy;
+        _filtros.From ??= new DateOnly(hoy.Year, hoy.Month, 1);
+        _filtros.AsOf ??= hoy;
+
+        using (_cargaVistas.Iniciar())
+        {
+            var r = await Inventario.VistasDeInformeAsync();
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los informes disponibles.");
+                return;
+            }
+            _vistas = [.. r.Value ?? []];
+        }
+
+        _vista = _vistas.FirstOrDefault(v => v.Key == Vista) ?? _vistas.FirstOrDefault();
+        await EvaluarExportacionAsync();
+        // Llegar con ?vista= es profundizar desde otra pantalla: se consulta sola.
+        if (_vista is not null && !string.IsNullOrWhiteSpace(Vista) && _vista.Key == Vista) await AplicarAsync();
+    }
+
+    private async Task CambiarVista(string? clave)
+    {
+        if (string.IsNullOrWhiteSpace(clave) || clave == _vista?.Key) return;
+        _vista = _vistas.FirstOrDefault(v => v.Key == clave);
+        _tabla = null;
+        await EvaluarExportacionAsync();
+    }
+
+    /// <summary>
+    /// En una vista con datos de clientes, exportar exige además ExportPersonalData (el botón no se ofrece sin él). Si sólo
+    /// los trae con un filtro propio (groupBy=customer), lo decide el servidor al exportar (el mismo 404).
+    /// </summary>
+    private async Task EvaluarExportacionAsync()
+    {
+        _puedeExportar = _vista is not null
+                         && (!_vista.PersonalData || await Permisos.TieneAsync("Inventory.Reports.ExportPersonalData"));
+    }
+
+    private bool Usa(string filtro) => _vista is not null && _vista.Filters.Contains(filtro, StringComparer.OrdinalIgnoreCase);
+
+    private async Task AplicarAsync()
+    {
+        if (_vista is null) return;
+        _aplicados = SoloLosDeLaVista(_filtros);
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.InformeAsync(_vista.Key, _aplicados.ToQuery());
+        if (!r.IsSuccess)
+        {
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el informe.");
+            return;
+        }
+        _tabla = r.Value;
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        if (_vista is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.DescargarInformeAsync(_vista.Key, _aplicados.ToQuery(), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private void QuitarFiltrosDelEnlace()
+    {
+        _filtros.Otros.Clear();
+        _tabla = null;
+    }
+
+    /// <summary>Las fechas que la vista no usa no viajan (una vista «al corte» no recibe rango, y al revés).</summary>
+    private FiltrosDeInformeDeInventarioModelo SoloLosDeLaVista(FiltrosDeInformeDeInventarioModelo f)
+    {
+        var copia = f.Copia();
+        if (!Usa("from")) copia.From = null;
+        if (!Usa("to")) copia.To = null;
+        if (!Usa("asOf")) copia.AsOf = null;
+        return copia;
+    }
+
+    private static string Fecha(DateOnly? f) => f?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

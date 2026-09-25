@@ -92,6 +92,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchiv
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
 // Feature 012 (T170): catalogo tributario de Core (impuestos, tarifas, conceptos de retencion).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
+// Feature 012 (T183): cliente tipado de Inventario (documentos, tipos, plantillas, informes; cada historia suma su parcial).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioClient>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).

@@ -184,6 +184,26 @@ public class LosEndpointsProtegidosExigenPermiso
     }
 
     [Fact]
+    public void Las_vistas_de_inventario_exigen_ver_y_exportar()
+    {
+        // Feature 012 (T182; contracts/api.md §27): toda vista de /api/reports/inventory se publica con
+        // MapVistaDeInventario, que pone Inventory.Reports.View y, al exportar, Inventory.Reports.Export. Una ruta
+        // publicada a mano en el archivo del centro de informes se saltaría la auditoría de la exportación y el permiso
+        // de datos personales: además del registro de vistas, sólo esa extensión puede llamar a MapGet.
+        var archivo = Path.Combine(Api, "Endpoints", "Reports", "InventoryReportsEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+
+        var tramos = Tramos(File.ReadAllText(archivo));
+        Assert.True(tramos.Count == 2,
+            $"InventoryReportsEndpoints.cs publica {tramos.Count} rutas con .Map*(: sólo el registro de vistas (GET /) y la de " +
+            "MapVistaDeInventario. Registrá cada vista con group.MapVistaDeInventario(…).");
+        Assert.All(tramos, t => Assert.Contains(".RequirePermission(PermisoDeVer)", t.Replace("\"Inventory.Reports.View\"", "PermisoDeVer"), StringComparison.Ordinal));
+        Assert.Contains(".RequirePermissionWhenExporting(PermisoDeExportar)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("EmitirExportacionAsync", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales", tramos[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Las_rutas_sueltas_exigen_su_permiso()
     {
         foreach (var (archivo, ruta, permiso) in RutasSueltas)

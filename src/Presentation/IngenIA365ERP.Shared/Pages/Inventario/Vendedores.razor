@@ -12,6 +12,9 @@
         <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo</SfButton>
     </div>
 
+    @* Feature 012 (T118): «Inventario» entró a ModulosMigrados; esta pantalla heredada gana el indicador de carga y el
+       aviso cuando la carga falla, sin más cambios (US12 la rehace sobre el alta de persona en un paso). *@
+    <IndicadorDeCarga Cargando="@_carga.Activa">
     <SfGrid @ref="_grid" TValue="SalespersonItem" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
         <GridColumns>
@@ -32,11 +35,13 @@
             </GridColumn>
         </GridColumns>
     </SfGrid>
+    </IndicadorDeCarga>
 </div>
 
 <SfDialog @bind-Visible="_showDialog" Header="@_dialogTitle" Width="550px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
             <div class="pagina">
                 <div>
                     <label>Cedula *</label>
@@ -66,6 +71,7 @@
                     <SfCheckBox @bind-Checked="_model.AppliesCommission" Label="Aplica Comision" />
                 </div>
             </div>
+            </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
     <DialogButtons>
@@ -78,6 +84,7 @@
     Message="Esta seguro de eliminar este registro?" />
 
 @code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<SalespersonItem>? _grid;
     private List<SalespersonItem> _items = [];
     private SalespersonModel _model = new();
@@ -90,8 +97,13 @@
 
     private async Task LoadData()
     {
+        using var carga = _carga.Iniciar();
         try { _items = await Http.GetListAsync<SalespersonItem>("/api/inventory/salespeople?pageSize=500") ?? []; }
-        catch { _items = []; }
+        catch (Exception ex)
+        {
+            _items = [];
+            await Notification.ErrorAsync($"No se pudieron consultar los vendedores: {ex.Message}");
+        }
     }
 
     private void OpenCreate() { _model = new(); _editId = null; _dialogTitle = "Nuevo Vendedor"; _showDialog = true; }
@@ -117,6 +129,7 @@
 
     private async Task Save()
     {
+        using var guardado = _guardado.Iniciar();
         HttpResponseMessage res;
         if (_editId.HasValue)
             res = await Http.PutAsJsonAsync($"/api/inventory/salespeople/{_editId}", _model);

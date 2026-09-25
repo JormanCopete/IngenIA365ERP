@@ -1179,6 +1179,33 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
 `Shared/Services/IImpresionDeDocumentos`, clientes `InventarioClient` (+ parciales), `ComprasClient`,
 `VentasClient` (`.Pos`, `.Caja`, `.Precios`, `.Documentos`), `ImpuestosClient`, `MediosDePagoClient`,
 `FacturacionElectronicaClient`, `IntegracionContableClient`; `wwwroot/js/pos.js`.
+  Centro de informes y base de Shared (fase 3, sección informes-shared, T181–T185; todos **(nuevo)**): en
+  `Application/Inventory/Reports`, `InventoryAuditEmitter` (`Modulo`, `EmitAsync`, `EmitirExportacionAsync`,
+  `EmitirExportacionDeCatalogoAsync`; por la bandeja encadenada, no directo a Mongo), `FiltrosDeInformeDeInventario`
+  (`Desde`, `Hasta`, `ALaFecha`, `ValidarRango`, `ParaAuditoria`, `RangoMaximoEnAnios`, `RangoInvalido`,
+  `RangoDemasiadoLargo`) y `VistaDeInformeDeInventario` (`Key`, `Name`, `Description`, `FileName`, `Filters`, `OwnFilters`,
+  `PersonalData`, `PersonalDataWhen` —`parametro=valor`—, `RequiredPermission`, `TraeDatosPersonales`);
+  `AuditEventTypes.{InventoryReportExported, InventoryCatalogExported}`; en la API, `InventoryReportsEndpoints.Ruta` y
+  `MapVistas` (donde cada historia registra sus vistas) y `InventoryReportsRoutes.MapVistaDeInventario` (+ `PermisoDeVer`,
+  `PermisoDeExportar`, `PermisoDeDatosPersonales`): **la exportación la audita la ruta**, con las filas de la tabla, y las
+  consultas de las vistas no la repiten; el **registro de vistas** es `GET /api/reports/inventory` (lee la metadata de las
+  rutas publicadas). En Shared, `Services/Inventario/{InventarioClient (+ .Documentos, .TiposDeDocumento, .Plantillas,
+  .Informes), InventarioDtos, ResultadoDeInventario, TextosDeInventario, FiltrosDeInformeDeInventarioModelo}` —
+  `InventarioClient.RutasDeGrupo`, `RutaDeTipos`, `RutaDeInformes`; DTO `ReferenciaDeInventarioDto`,
+  `UsuarioDeInventarioDto`, `ContraparteDeInventarioDto`, `DocumentoReferidoDeInventarioDto`, `AvisoDeInventarioDto`,
+  `PaginaDeInventarioDto<T>`, `MotivoDeInventarioRequest`, `ClaseDeDocumentoDto`, `TipoDeDocumentoDto`,
+  `CamposObligatoriosDelTipoDto`, `ConsecutivoDelTipoDto`, `NivelDePoliticaDelTipoDto`, `PoliticaDelTipoDto`,
+  `ModoDePasoDelTipoDto`, `CrearTipoDeDocumentoRequest`, `EditarTipoDeDocumentoRequest`, `ConsecutivoRequest`,
+  `FiltroDeDocumentosDeInventario`, `ResumenDeDocumentoDto`, `LineaDeDocumentoDto`, `UnidadDeLineaDto`,
+  `TotalesDeDocumentoDto`, `DocumentoDeInventarioDto`, `LineaDeBorradorRequest`, `BorradorDeInventarioRequest`,
+  `NivelPedidoDeInventarioDto`, `AprobacionPedidaDeInventarioDto`, `ResultadoDeConfirmacionDto`,
+  `ResultadoDeAnulacionDto`, `AnulacionRequest`, `ConfirmacionRequest`, `PlantillaDeParametrizacionDto`,
+  `ResumenDeHojaDto`, `CampoCambiadoDto`, `CambioDeFilaDto`, `ErrorDeImportacionDto`, `ResultadoDeImportacionDto`,
+  `VistaDeInformeDto`—; `Components/Inventario/ImportarPlantilla.razor` (el único de importación) y las páginas
+  `Pages/Inventario/{Informes, TiposDeDocumento}.razor`. Pruebas: `InventoryAuditEmitterTests`,
+  `FiltrosDeInformeDeInventarioTests`, `VistaDeInformeDeInventarioTests`, `InventarioClientTests`,
+  `FiltrosDeInformeDeInventarioModeloTests`, `TextosDeInventarioTests` (arquitectura) y
+  `LosEndpointsProtegidosExigenPermiso.Las_vistas_de_inventario_exigen_ver_y_exportar`.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1222,7 +1249,8 @@ cálculo ni el impuesto base de un impuesto existente), `Core.TaxRate.Municipali
 tarifa no está en `COR_Cities.DaneCode`; en la plantilla, `Import.Cell.NotFound` en la columna del municipio); personas →
 `Person.DataAuthorization.PolicyUnknown` (nuevo: la versión de política no es de la cooperativa) y
 `Person.DataAuthorization.PolicyRequired` (nuevo: hay política vigente y la autorización no dice cuál se mostró);
-sucursales → `Branch.MunicipalityUnknown`; vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
+más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

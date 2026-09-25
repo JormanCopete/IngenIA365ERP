@@ -148,6 +148,13 @@ public static class AuditEventTypes
     public const string AccountingReportExported = "Accounting.Report.Exported";
     public const string AccountingCertificateSent = "Accounting.Certificate.Sent";
 
+    // -------------------- Inventario (feature 012, T44, T181) --------------------
+    // Eventos explicitos que no salen de un comando: la exportacion de una vista de
+    // /api/reports/inventory (vista, filtros, formato, filas) y la descarga de un catalogo con
+    // datos (?withData=true: catalogo, filas). Los emite InventoryAuditEmitter, encadenados.
+    public const string InventoryReportExported = "Inventory.Report.Exported";
+    public const string InventoryCatalogExported = "Inventory.Catalog.Exported";
+
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.

@@ -1,0 +1,269 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+@*
+    El ÚNICO componente de importación de plantillas (feature 012, T184; contracts/plantillas.md §0.3–§0.6): lo reutilizan
+    todas las pantallas con plantilla —tipos de documento, catálogos, bodegas, impuestos, saldo inicial…— y ninguna
+    historia crea otro. Sobre la ruta base del catálogo: descarga la plantilla vacía o con datos, sube el libro, lo
+    REVISA (las mismas reglas que aplicar, sin guardar nada) con el resumen por hoja, los cambios campo a campo y los
+    errores y avisos por hoja/fila/columna, pide el motivo cuando la revisión dice `requiresReason`, y APLICA todo o
+    nada. Revisar y aplicar son dos operaciones con su propia Idempotency-Key (ClaveDeOperacion): el doble clic o el
+    reintento no duplican. Un indicador de carga por zona.
+*@
+
+<div class="importar-plantilla">
+    @if (MostrarDescargas && _puedeDescargar)
+    {
+        <IndicadorDeCarga Cargando="@_descarga.Activa" Compacto="true" Texto="Preparando el archivo…">
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarAsync(false))">Plantilla vacía</SfButton>
+                @if (_puedeDescargarConDatos)
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarAsync(true))">Plantilla con los datos actuales</SfButton>
+                }
+            </div>
+        </IndicadorDeCarga>
+    }
+
+    @if (_puedeImportar)
+    {
+        <IndicadorDeCarga Cargando="@(_revisando.Activa || _aplicando.Activa)" Texto="@(_aplicando.Activa ? "Aplicando el archivo…" : "Revisando el archivo…")">
+            <p class="texto-apoyo">
+                Suba el libro diligenciado (.xlsx, o .csv en las plantillas de una sola hoja; hasta 16 MB). Primero se
+                <b>revisa</b>: se valida con las mismas reglas que al aplicar y no se guarda nada. Si no hay errores, se
+                <b>aplica</b> todo junto; con un solo error no se guarda nada. La plantilla nunca borra: lo que no viene en
+                el archivo queda como está.
+            </p>
+            <div class="form-grid">
+                <label class="campo campo-ancho">Archivo
+                    <InputFile OnChange="@ElegirAsync" accept=".xlsx,.csv,.txt" />
+                </label>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@(_contenido is null || Ocupado)" OnClick="@RevisarAsync">Revisar</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_contenido is null || Ocupado)" OnClick="@RevisionEnExcelAsync">Revisión en Excel</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-upload-1" Disabled="@(!PuedeAplicar)" OnClick="@AplicarAsync">Aplicar</SfButton>
+            </div>
+
+            @if (_revision is { } r)
+            {
+                <div class="info-card">
+                    @if (r.Applied)
+                    {
+                        <p>Aplicado: <b>@r.FileName</b>.</p>
+                    }
+                    else if (r.Valid)
+                    {
+                        <p>Revisión sin errores de <b>@r.FileName</b>: puede aplicarse.</p>
+                    }
+                    else
+                    {
+                        <p class="texto-alerta">@r.TotalErrors error(es) en <b>@r.FileName</b>. Corrija el archivo y vuelva a revisarlo; no se guardó nada.</p>
+                    }
+
+                    @if (r.Sheets.Count > 0)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Hoja</th><th class="numero">Filas</th><th class="numero">Crear</th><th class="numero">Actualizar</th><th class="numero">Sin cambio</th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in r.Sheets)
+                                    {
+                                        <tr><td>@h.Sheet</td><td class="numero">@h.Rows</td><td class="numero">@h.Created</td><td class="numero">@h.Updated</td><td class="numero">@h.Unchanged</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (r.RequiresReason && !r.Applied)
+                    {
+                        <label class="campo campo-ancho">Motivo * <span class="texto-tenue">(el archivo abre o cierra vigencias: el motivo queda en cada una y en la auditoría)</span>
+                            <textarea class="e-input" rows="2" maxlength="400" @bind="_motivo" @bind:event="oninput"></textarea>
+                        </label>
+                    }
+
+                    @if (r.Errors.Count > 0)
+                    {
+                        <h4>Errores</h4>
+                        @TablaDeErrores(r.Errors)
+                        @if (r.TotalErrors > r.Errors.Count)
+                        {
+                            <p class="texto-tenue">Se muestran @r.Errors.Count de @r.TotalErrors. «Revisión en Excel» devuelve el mismo libro con el resultado y los errores de cada fila.</p>
+                        }
+                    }
+
+                    @if (r.Warnings.Count > 0)
+                    {
+                        <h4>Avisos</h4>
+                        @TablaDeErrores(r.Warnings)
+                    }
+
+                    @if (r.Changes.Count > 0)
+                    {
+                        <h4>Cambios</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Hoja</th><th class="numero">Fila</th><th>Llave</th><th>Acción</th><th>Campos</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in r.Changes.Take(MaximoDeCambiosEnPantalla))
+                                    {
+                                        <tr>
+                                            <td>@c.Sheet</td>
+                                            <td class="numero">@c.Row</td>
+                                            <td>@c.Key</td>
+                                            <td>@Accion(c.Action)</td>
+                                            <td>@string.Join(" · ", c.Fields.Select(f => f.Before is null ? $"{f.Column}: {f.After}" : $"{f.Column}: {f.Before} → {f.After}"))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (r.ChangesTruncated || r.Changes.Count > MaximoDeCambiosEnPantalla)
+                        {
+                            <p class="texto-tenue">Hay más cambios de los que se muestran: «Revisión en Excel» los trae todos.</p>
+                        }
+                    }
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+@code {
+    /// <summary>Lo que se pinta de la lista de cambios; el resto va en la revisión en Excel.</summary>
+    private const int MaximoDeCambiosEnPantalla = 300;
+
+    /// <summary>Un poco más que el tope de la ruta no hace falta: el servidor responde 413 con su propio mensaje.</summary>
+    private const long MaximoDeBytes = 16L * 1024 * 1024;
+
+    /// <summary>La ruta base del catálogo: <c>/api/inventory/document-types</c>, <c>/api/core/taxes</c>…</summary>
+    [Parameter, EditorRequired] public string RutaBase { get; set; } = "";
+
+    /// <summary>El permiso para descargar la plantilla vacía (contracts/plantillas.md §0.7); nulo = sin comprobación en pantalla.</summary>
+    [Parameter] public string? PermisoDeDescarga { get; set; }
+
+    /// <summary>El permiso de exportar para la descarga con datos (<c>Inventory.Catalog.Export</c>); nulo = el de descarga (Core).</summary>
+    [Parameter] public string? PermisoDeDescargaConDatos { get; set; }
+
+    /// <summary>El permiso de importar (§0.7); nulo = sin comprobación en pantalla (el servidor decide igual).</summary>
+    [Parameter] public string? PermisoDeImportacion { get; set; }
+
+    /// <summary>La pantalla ya tiene sus propios botones de descarga.</summary>
+    [Parameter] public bool MostrarDescargas { get; set; } = true;
+
+    /// <summary>Se aplicó el archivo: la pantalla vuelve a cargar su lista.</summary>
+    [Parameter] public EventCallback<ResultadoDeImportacionDto> Aplicado { get; set; }
+
+    private readonly EstadoDeCarga _descarga = new(), _revisando = new(), _aplicando = new();
+    private bool _puedeDescargar, _puedeDescargarConDatos, _puedeImportar;
+    private string? _archivo;
+    private byte[]? _contenido;
+    private ResultadoDeImportacionDto? _revision;
+    private string? _motivo;
+    private ClaveDeOperacion _claveDeRevision = new(), _claveDeAplicacion = new();
+
+    private bool Ocupado => _revisando.Activa || _aplicando.Activa;
+
+    private bool PuedeAplicar => _contenido is not null && !Ocupado && _revision is { Valid: true, Applied: false } r
+                                 && (!r.RequiresReason || !string.IsNullOrWhiteSpace(_motivo));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _puedeDescargar = PermisoDeDescarga is null || await Permisos.TieneAsync(PermisoDeDescarga);
+        _puedeDescargarConDatos = _puedeDescargar && (PermisoDeDescargaConDatos is null || await Permisos.TieneAsync(PermisoDeDescargaConDatos));
+        _puedeImportar = PermisoDeImportacion is null || await Permisos.TieneAsync(PermisoDeImportacion);
+    }
+
+    private async Task DescargarAsync(bool conDatos)
+    {
+        using var carga = _descarga.Iniciar();
+        var r = await Inventario.DescargarPlantillaAsync(RutaBase, conDatos);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task ElegirAsync(InputFileChangeEventArgs e)
+    {
+        _revision = null;
+        _motivo = null;
+        _archivo = null;
+        _contenido = null;
+        // Un archivo nuevo es otra operación: claves nuevas para revisar y para aplicar.
+        _claveDeRevision = new ClaveDeOperacion();
+        _claveDeAplicacion = new ClaveDeOperacion();
+        if (e.File.Size > MaximoDeBytes) { await Notification.WarningAsync("El archivo pesa más de 16 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(MaximoDeBytes).CopyToAsync(ms);
+        _archivo = e.File.Name;
+        _contenido = ms.ToArray();
+    }
+
+    private async Task RevisarAsync()
+    {
+        if (_contenido is null || _archivo is null) return;
+        using var carga = _revisando.Iniciar();
+        var r = await Inventario.RevisarPlantillaAsync(RutaBase, _archivo, _contenido, _motivo, _claveDeRevision);
+        if (!r.IsSuccess)
+        {
+            _revision = r.ComoImportacion();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar el archivo.");
+            return;
+        }
+        _revision = r.Value;
+    }
+
+    private async Task RevisionEnExcelAsync()
+    {
+        if (_contenido is null || _archivo is null) return;
+        using var carga = _revisando.Iniciar();
+        // Es otra revisión (otro formato de respuesta): su propia clave.
+        var r = await Inventario.RevisionEnExcelAsync(RutaBase, _archivo, _contenido, _motivo, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar la revisión en Excel."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (!PuedeAplicar) return;
+        using var carga = _aplicando.Iniciar();
+        var r = await Inventario.AplicarPlantillaAsync(RutaBase, _archivo!, _contenido!, _motivo, _claveDeAplicacion);
+        if (!r.IsSuccess)
+        {
+            if (r.ComoImportacion() is { } revision) _revision = revision;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar el archivo.");
+            return;
+        }
+        _revision = r.Value;
+        _contenido = null;
+        await Notification.SuccessAsync("Plantilla aplicada.");
+        if (r.Value is not null) await Aplicado.InvokeAsync(r.Value);
+    }
+
+    /// <summary>Errores o avisos por hoja, fila y columna (la fila 0 no es de una fila: el motivo, el archivo).</summary>
+    private static readonly RenderFragment<IReadOnlyList<ErrorDeImportacionDto>> TablaDeErrores = filas =>
+        @<div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hoja</th><th class="numero">Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                <tbody>
+                    @foreach (var e in filas)
+                    {
+                        <tr><td>@e.Sheet</td><td class="numero">@(e.Row > 0 ? e.Row.ToString() : "")</td><td>@e.Column</td><td>@e.Message</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>;
+
+    private static string Accion(string accion) => accion switch
+    {
+        "Create" => "Crear",
+        "Update" => "Actualizar",
+        "Unchanged" => "Sin cambio",
+        _ => accion,
+    };
+}
