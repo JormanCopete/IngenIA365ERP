@@ -71,13 +71,13 @@ public sealed class ArrendamientosEnBase : IArrendamientos
         var hasta = ahora + Duracion(duracion);
         var dueno = _dueno;
 
-        var tomadas = await _db.Set<BackgroundLease>()
+        var tomadas = await _db.BackgroundLeases
             .Where(l => l.Name == nombre && (l.LeaseUntil < ahora || l.Owner == dueno))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(l => l.Owner, dueno)
                 .SetProperty(l => l.LeaseUntil, hasta), ct);
 
-        if (tomadas == 0 && !await _db.Set<BackgroundLease>().AnyAsync(l => l.Name == nombre, ct))
+        if (tomadas == 0 && !await _db.BackgroundLeases.AnyAsync(l => l.Name == nombre, ct))
         {
             // Sin fila no hay a quién ganarle ni con quién coordinar: el trabajo no corre, y eso tiene
             // que verse. La fila la siembra la migración; faltar es un defecto de despliegue, no una
@@ -95,7 +95,7 @@ public sealed class ArrendamientosEnBase : IArrendamientos
         var hasta = _reloj.UtcNow + Duracion(duracion);
         var dueno = _dueno;
 
-        var renovadas = await _db.Set<BackgroundLease>()
+        var renovadas = await _db.BackgroundLeases
             .Where(l => l.Name == nombre && l.Owner == dueno)
             .ExecuteUpdateAsync(s => s.SetProperty(l => l.LeaseUntil, hasta), ct);
 
@@ -115,7 +115,7 @@ public sealed class ArrendamientosEnBase : IArrendamientos
         var libre = _reloj.UtcNow.AddSeconds(-1);
         var dueno = _dueno;
 
-        await _db.Set<BackgroundLease>()
+        await _db.BackgroundLeases
             .Where(l => l.Name == nombre && l.Owner == dueno)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(l => l.Owner, (string?)null)

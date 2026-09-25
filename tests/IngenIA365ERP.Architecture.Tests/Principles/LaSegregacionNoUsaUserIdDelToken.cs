@@ -10,17 +10,20 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// <c>ICurrentUserService</c> ni el correo: el primero es el identificador central y el segundo cambia.
 ///
 /// <para>
-/// Esqueleto del Setup: <see cref="CarpetasDeSegregacion"/> (relativas a <c>src/</c>) empieza vacía
-/// y la prueba afirma la regla sobre cada elemento; con la lista vacía pasa porque no hay nada que
-/// violar, no por un <c>return</c> temprano. La llena la fase 2 (plataforma, T018) con
-/// <c>Core/IngenIA365ERP.Application/Common/Approvals</c> y <c>Core/IngenIA365ERP.Domain/Approvals</c>;
-/// la fase 11 (US12) sólo agrega carpetas. Una carpeta que todavía no existe cuenta como vacía.
+/// Llenada por la fase 2 (plataforma, T018) con <c>Core/IngenIA365ERP.Application/Common/Approvals</c> y
+/// <c>Core/IngenIA365ERP.Domain/Approvals</c>; la regla se escribe aquí y sólo aquí, y la fase 11 (US12)
+/// sólo agrega carpetas. Una carpeta de la lista tiene que existir y tener fuentes: si se movió, la regla
+/// dejaría de mirar sin avisar.
 /// </para>
 /// </summary>
 public class LaSegregacionNoUsaUserIdDelToken
 {
-    /// <summary>Carpetas relativas a <c>src/</c> donde se decide la segregación. Las agrega la plataforma.</summary>
-    private static readonly string[] CarpetasDeSegregacion = [];
+    /// <summary>Carpetas relativas a <c>src/</c> donde se decide la segregación.</summary>
+    private static readonly string[] CarpetasDeSegregacion =
+    [
+        Path.Combine("Core", "IngenIA365ERP.Application", "Common", "Approvals"),
+        Path.Combine("Core", "IngenIA365ERP.Domain", "Approvals"),
+    ];
 
     private static readonly Regex UserIdOCorreo = new(@"\.(UserId|Email)\b", RegexOptions.Compiled);
 
@@ -33,11 +36,13 @@ public class LaSegregacionNoUsaUserIdDelToken
         foreach (var carpeta in CarpetasDeSegregacion)
         {
             var ruta = Path.Combine(root, "src", carpeta);
-            if (!Directory.Exists(ruta)) continue; // carpeta aún no creada: no tiene nada que violar
+            Assert.True(Directory.Exists(ruta), $"No existe src/{carpeta}: si se movió, actualizá CarpetasDeSegregacion.");
+            var archivos = Directory.EnumerateFiles(ruta, "*.cs", SearchOption.AllDirectories).ToList();
+            Assert.True(archivos.Count > 0, $"src/{carpeta} no tiene fuentes: la regla no estaría mirando nada.");
 
-            foreach (var archivo in Directory.EnumerateFiles(ruta, "*.cs", SearchOption.AllDirectories))
+            foreach (var archivo in archivos)
             {
-                var texto = File.ReadAllText(archivo);
+                var texto = FuenteSinComentarios.Leer(archivo);
                 if (texto.Contains("ICurrentUserService", StringComparison.Ordinal) && UserIdOCorreo.IsMatch(texto))
                     infractores.Add($"{Path.GetRelativePath(root, archivo)}: usa ICurrentUserService.UserId o el correo");
             }

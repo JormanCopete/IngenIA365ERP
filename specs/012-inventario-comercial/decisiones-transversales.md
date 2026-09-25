@@ -1159,6 +1159,19 @@ Pos), `PrincipioXI_ContableImmutable` (+ `Entities/Inventory/Transactions`,
 `Feature004_MigrationParity`; `NingunModuloEscribeMovimientosFueraDelContrato` y
 `LaContabilidadNoTieneCuentasEnCodigo` quedan **sin cambios y verdes**.
 
+**Piezas de las reglas de plataforma (nuevo, T018–T019)**: la ayuda `Helpers/FuenteSinComentarios`
+(lee un fuente sin comentarios `/* */` ni líneas `//`, para que un resumen que nombra un tipo no cuente
+como uso); en `NingunTrabajoDeFondoOperaSinCooperativa` las listas `TrabajosDeFondo`,
+`ExcepcionesSinCooperativa` (`AuditIndexBootstrap`, `DatabaseInitializerHostedService`,
+`InvitationExpiryJob`, `PasswordResetTokenCleanupJob`) y `GuardanPorSuCuenta`
+(`NotificationEmailDispatcher`, estado técnico del correo; T448 decide si sigue); en
+`LosComandosDeInventarioLlevanClave` `CarpetasConClave`, `ConsultasPorPost` (vacía: las consultas por POST
+se nombran `*Query`) y `PendientesDeReescritura` (`CreateSalespersonCommand` → T424,
+`UpdateSalespersonCommand` y `DeleteSalespersonCommand` → T425, que las sacan de la lista); en
+`LosEndpointsProtegidosExigenPermiso` `RutasSueltas` (archivo, ruta, permiso) para
+`POST /api/audit/integrity/verify` (`AuditLog.VerifyIntegrity`), porque `AuditLogModule.cs` también
+publica `POST /api/audit/access`, abierta a toda sesión.
+
 **Casos dorados (Domain.Tests)**: `Inventory/Costing/Casos/*.json` (01..16 de `research.md` R10, más el
 17 «segunda bodega activada después de ventas en la primera, ámbito cooperativa», T18),
 `Taxes/Casos/*.json`, `Sales/Pricing/Casos`, `Sales/Cash/Casos`, `Approvals/Casos`,

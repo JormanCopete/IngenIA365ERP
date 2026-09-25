@@ -235,6 +235,10 @@ public interface IApplicationDbContext
     // solo IdempotencyBehavior. (Adelanto de T096, que registra el resto de DbSet de la plataforma.)
     DbSet<OperationKey> OperationKeys { get; }
 
+    // Feature 012 (T10, T047; T096): arrendamientos de los trabajos de fondo, uno por nombre y por cooperativa. Los
+    // toma, renueva y suelta solo ArrendamientosEnBase (IArrendamientos); las filas las siembra la migracion.
+    DbSet<BackgroundLease> BackgroundLeases { get; }
+
     // Feature 012 (T37, T38; T061–T066): auditoria garantizada de los modulos encadenados. Escriben
     // AuditableEntityInterceptor, AuditBehavior y AuditoriaEncadenada; sella y reenvia solo el
     // AuditOutboxForwarder. (Adelanto de T096.)

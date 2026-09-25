@@ -60,6 +60,19 @@ public class LosEndpointsProtegidosExigenPermiso
         "WorkRiskRatesEndpoints.cs",
     };
 
+    /// <summary>
+    /// Rutas sueltas de archivos que no entran enteros a <see cref="Patrones"/> porque conviven con rutas
+    /// abiertas a toda sesión: (archivo, fragmento de la ruta, permiso exigido). Feature 012 (T019):
+    /// <c>AuditLogModule.cs</c> también publica <c>POST /api/audit/access</c>, que registra el ingreso a
+    /// una opción y es de cualquier usuario autenticado; la verificación de integridad (contracts/api.md
+    /// §29) sí exige <c>AuditLog.VerifyIntegrity</c>. Las rutas de <c>Endpoints/Inventory</c> las agrega
+    /// la fase 3 como glob.
+    /// </summary>
+    private static readonly (string Archivo, string Ruta, string Permiso)[] RutasSueltas =
+    [
+        (Path.Combine("Endpoints", "AuditLogModule.cs"), "/api/audit/integrity/verify", "AuditLog.VerifyIntegrity"),
+    ];
+
     private static readonly Regex InicioDeRuta = new(@"\.Map(Get|Post|Put|Delete|Patch)\(", RegexOptions.Compiled);
 
     private static string Api => Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.API");
@@ -155,6 +168,22 @@ public class LosEndpointsProtegidosExigenPermiso
                 conPersona.Contains($"RequirePermission(\"{caso.Rol}\")", StringComparison.Ordinal)
                 && conPersona.Contains("RequirePermission(\"Core.People.Create\")", StringComparison.Ordinal),
                 $"La ruta with-person de {caso.Nombre} debe exigir {caso.Rol} y Core.People.Create.");
+        }
+    }
+
+    [Fact]
+    public void Las_rutas_sueltas_exigen_su_permiso()
+    {
+        foreach (var (archivo, ruta, permiso) in RutasSueltas)
+        {
+            var camino = Path.Combine(Api, archivo);
+            Assert.True(File.Exists(camino), $"No existe {camino}: si el archivo se movió, actualizá RutasSueltas.");
+
+            var tramo = Tramos(File.ReadAllText(camino))
+                .FirstOrDefault(t => t.Contains($"\"{ruta}\"", StringComparison.Ordinal));
+            Assert.True(tramo is not null, $"{archivo} ya no publica {ruta}: actualizá RutasSueltas.");
+            Assert.True(tramo!.Contains($".RequirePermission(\"{permiso}\")", StringComparison.Ordinal),
+                $"{ruta} de {archivo} debe exigir .RequirePermission(\"{permiso}\").");
         }
     }
 }

@@ -10,17 +10,23 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// pudiera llamarlos por HTTP se saltaría la bandeja de salida y el actor de proceso.
 ///
 /// <para>
-/// Esqueleto del Setup: <see cref="ComandosDeConsumo"/> empieza vacía y la prueba afirma la regla
-/// sobre cada elemento; con la lista vacía pasa porque no hay nada que violar, no por un
-/// <c>return</c> temprano. La llena la fase 2 (plataforma, T018) con
-/// <c>RegisterDeliveryResultCommand</c>, <c>PostInventoryMessagesCommand</c>,
-/// <c>PostInventorySummaryGroupCommand</c> y <c>RaiseAlertCommand</c> cuando existan.
+/// Llenada por la fase 2 (plataforma, T018) con <c>RegisterDeliveryResultCommand</c>,
+/// <c>PostInventoryMessagesCommand</c>, <c>PostInventorySummaryGroupCommand</c> y
+/// <c>RaiseAlertCommand</c>; los que todavía no existen (I2) quedan vigilados desde ya. Se busca en el
+/// código sin comentarios: el resumen de <c>AlertsEndpoints</c> nombra <c>RaiseAlertCommand</c> para
+/// decir justamente que no tiene ruta.
 /// </para>
 /// </summary>
 public class LosComandosDeConsumoNoTienenRuta
 {
-    /// <summary>Nombres de tipo de los comandos de consumo. Los agrega la plataforma.</summary>
-    private static readonly string[] ComandosDeConsumo = [];
+    /// <summary>Nombres de tipo de los comandos de consumo (contracts/api.md §17.3).</summary>
+    private static readonly string[] ComandosDeConsumo =
+    [
+        "RegisterDeliveryResultCommand",
+        "PostInventoryMessagesCommand",
+        "PostInventorySummaryGroupCommand",
+        "RaiseAlertCommand",
+    ];
 
     [Fact]
     public void Ningun_endpoint_menciona_un_comando_de_consumo()
@@ -37,7 +43,7 @@ public class LosComandosDeConsumoNoTienenRuta
             var nombre = new Regex($@"\b{Regex.Escape(comando)}\b", RegexOptions.Compiled);
             foreach (var archivo in archivos)
             {
-                if (nombre.IsMatch(File.ReadAllText(archivo)))
+                if (nombre.IsMatch(FuenteSinComentarios.Leer(archivo)))
                     infractores.Add($"{Path.GetRelativePath(root, archivo)}: expone {comando}");
             }
         }

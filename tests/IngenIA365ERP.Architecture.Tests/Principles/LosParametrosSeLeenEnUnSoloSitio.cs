@@ -11,16 +11,20 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// la validación.
 ///
 /// <para>
-/// Esqueleto del Setup: <see cref="SimbolosDeParametros"/> (el <c>DbSet</c> de
-/// <c>ParameterVersion</c> y afines) empieza vacía y la prueba afirma la regla sobre cada elemento;
-/// con la lista vacía pasa porque no hay nada que violar, no por un <c>return</c> temprano. La
-/// llena la fase 2 (plataforma, T018) al crear la entidad.
+/// Llenada por la fase 2 (plataforma, T018): <see cref="SimbolosDeParametros"/> son el <c>DbSet</c>
+/// <c>ParameterVersions</c> y el acceso genérico <c>Set&lt;ParameterVersion&gt;</c>, buscados en el código
+/// sin comentarios. La configuración EF declara la tabla (<c>EntityTypeBuilder&lt;ParameterVersion&gt;</c>)
+/// sin leerla, así que no los nombra.
 /// </para>
 /// </summary>
 public class LosParametrosSeLeenEnUnSoloSitio
 {
-    /// <summary>Identificadores restringidos (el DbSet de ParameterVersion). Los agrega la plataforma.</summary>
-    private static readonly string[] SimbolosDeParametros = [];
+    /// <summary>Accesos restringidos a la tabla de parámetros con vigencia.</summary>
+    private static readonly string[] SimbolosDeParametros =
+    [
+        "ParameterVersions",
+        "Set<ParameterVersion>",
+    ];
 
     /// <summary>Nombres de archivo (sin ruta) autorizados; el contexto y su interfaz declaran el DbSet.</summary>
     private static readonly string[] Autorizados =
@@ -35,12 +39,13 @@ public class LosParametrosSeLeenEnUnSoloSitio
     public void Solo_el_lector_y_el_comando_tocan_los_parametros()
     {
         var root = RepoPath.FindRepoRoot();
-        var fuentes = RepoPath.ProductionCSharpFiles().Select(f => (Archivo: f, Texto: File.ReadAllText(f))).ToList();
+        var fuentes = RepoPath.ProductionCSharpFiles().Select(f => (Archivo: f, Texto: FuenteSinComentarios.Leer(f))).ToList();
         var infractores = new List<string>();
 
         foreach (var simbolo in SimbolosDeParametros)
         {
-            var uso = new Regex($@"\b{Regex.Escape(simbolo)}\b", RegexOptions.Compiled);
+            // Bordes por lookaround y no por \b: «Set<ParameterVersion>» termina en un símbolo.
+            var uso = new Regex($@"(?<!\w){Regex.Escape(simbolo)}(?!\w)", RegexOptions.Compiled);
             foreach (var (archivo, texto) in fuentes)
             {
                 if (Autorizados.Contains(Path.GetFileName(archivo), StringComparer.Ordinal)) continue;

@@ -58,6 +58,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     // Feature 012 (T13): claves de idempotencia de IdempotencyBehavior.
     public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
+    public DbSet<BackgroundLease> BackgroundLeases => Set<BackgroundLease>();
     // Feature 012 (T37, T38): auditoria de los modulos encadenados.
     public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
     public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();

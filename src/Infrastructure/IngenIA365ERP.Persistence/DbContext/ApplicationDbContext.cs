@@ -354,6 +354,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     // Feature 012 (T13, T054): claves de idempotencia (adelanto de T096).
     public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
+    // Feature 012 (T10, T047; T096): arrendamientos de los trabajos de fondo por cooperativa.
+    public DbSet<BackgroundLease> BackgroundLeases => Set<BackgroundLease>();
     // Feature 012 (T37, T38; T061): auditoria garantizada y sello de integridad (adelanto de T096).
     public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
     public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
