@@ -152,6 +152,12 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // existe. No termina en ".NotFound" y sin esta linea caia al 422 por defecto.
             "Parameters.KeyNotFound" => StatusCodes.Status404NotFound,
 
+            // Feature 012 (T49, T154; contracts/api.md §2.1, contracts/plantillas.md §0.3, §0.5): una importación sin
+            // modo o con un archivo que no se puede leer como la plantilla (vacío, ilegible, sin una hoja o una columna
+            // obligatoria) es una petición mal formada, no una regla de negocio. Sin estas líneas caían al 422.
+            "Import.ModeRequired" => StatusCodes.Status400BadRequest,
+            _ when code.StartsWith("Archivo.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

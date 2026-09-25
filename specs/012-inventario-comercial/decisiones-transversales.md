@@ -1017,8 +1017,20 @@ JSON embebidos versionados (T40), no semillas.
   `Domain/Approvals/EvaluadorDePolitica` (puro).
 - `Alerts/`: `IAlertas`, `RaiseAlertCommand`, `AttendAlertCommand`, `IDestinatariosPorPermiso`,
   `SaveAlertTypeCommand`.
-- `Taxation/LectorDeUvt` (`IValorUvt`). `Imports/ErrorDeFila` (movido de `Accounting/Setup`, reexportado)
-  y `ModoDeImportacion { Review, Apply }`.
+- `Taxation/LectorDeUvt` (`IValorUvt`). `Imports/ErrorDeFila` (movido de `Accounting/Setup`, con `Sheet`; sus usos de
+  la 009 se actualizaron, no hay alias) y `ModoDeImportacion { Review, Apply }`. Infraestructura común de importación
+  (fase 3, T154–T160; todos **(nuevo)**): en `Application/Common/Imports`, `ImportResultDto` (+ `ResumenDeHojaDto`,
+  `CambioDeFilaDto`, `CampoCambiadoDto`, `ResultadoDeFila`, `AccionDeImportacion { Create, Update, Unchanged }`),
+  `ImportErrors`, `DefinicionDePlantilla`, `HojaDePlantilla`, `ColumnaDePlantilla`, `TipoDeValor` (los tipos de
+  plantillas.md §0.4), `ArchivoDeImportacion` (el contenido no viaja al JSON; `Sha256` sí), `IComandoDeImportacion`
+  (`Mode`, `File`, `Reason`, `OperationKey`), `DatosDePlantilla`, `EjecutorDeImportacion` (eventos `Import.Reviewed`,
+  `Import.Applied`), `ContextoDeImportacion`, `HojaDeImportacion`, `FilaDeImportacion`, `CatalogoCitado<T>`;
+  `Interfaces/Files/ITabularFileReader.{LeerHojaAsync, ListarHojasAsync}` y `ArchivosTabulares.{HojaFaltante,
+  HojaDeTexto}`; `Reports/TipoDeColumna.{Cantidad, Costo}`. En `Application/Inventory/Imports`,
+  `CatalogoDePlantillas` (+ `PlantillaDeParametrizacion`, claves `core.taxes`, `inventory.*`, `core.payment-means`,
+  `accounting.inventory-rules`), `ListImportTemplatesQuery` (+ `ImportTemplateDto`). En la API,
+  `Endpoints/Common/RutasDePlantilla.MapPlantilla`, `Endpoints/Inventory/TemplatesEndpoints`,
+  `PlantillaDeImportacion.{Xlsx(DefinicionDePlantilla…), ConResultados, Formato}` y `ExportadorDeTablas.FormatoNumerico`.
 
 **Inventario**
 - Domain puro: `Inventory/Costing/{MotorDeCosteo, PromedioPonderado, Peps, Retroactivo, Prorrateo,

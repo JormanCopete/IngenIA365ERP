@@ -43,6 +43,8 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Core", "PaymentMeans*.cs"),
         Path.Combine("Endpoints", "ElectronicInvoicing", "*.cs"),
         Path.Combine("Endpoints", "Reports", "Inventory*.cs"),
+        // Feature 012 (T159): las rutas reutilizables de las plantillas (RutasDePlantilla.MapPlantilla).
+        Path.Combine("Endpoints", "Common", "*.cs"),
     ];
 
     /// <summary>

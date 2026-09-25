@@ -191,7 +191,7 @@ public static class AccountingErrors
     public static readonly Error AccountNotMovement = new("Accounting.Account.NotMovement",
         "Las reglas sólo se configuran en cuentas de movimiento.");
     /// <summary>Carga masiva de auxiliares (E2, 2026-09-22): todas las filas malas juntas; nada se guarda.</summary>
-    public static Error AccountsInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error AccountsInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Accounts.Invalid",
             $"El archivo tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}); no se guardó nada.",
             new { errors = errores });
@@ -210,7 +210,7 @@ public static class AccountingErrors
         "La cuenta de resultado del ejercicio debe ser una cuenta de movimiento activa.");
 
     // ---- catálogos ----
-    public static Error CatalogInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error CatalogInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Catalog.Invalid",
             $"El archivo tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}). Corríjalas y vuelva a importar; no se guardó nada.",
             new { errors = errores });
@@ -221,7 +221,7 @@ public static class AccountingErrors
     // ---- apertura ----
     public static readonly Error OpeningAlreadyExists = new("Accounting.Opening.AlreadyExists",
         "Ya hay una apertura contabilizada: reverse la existente antes de cargar otra.");
-    public static Error OpeningInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error OpeningInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Opening.Invalid",
             $"El archivo de apertura tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}); no se guardó nada.",
             new { errors = errores });

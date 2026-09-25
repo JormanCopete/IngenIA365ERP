@@ -17,22 +17,34 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
 {
     private static readonly char[] Delimitadores = [';', ',', '\t', '|'];
 
-    public Task<Result<TablaLeida>> LeerAsync(byte[] contenido, string nombreArchivo, int filasDeEncabezado = 1, CancellationToken ct = default)
+    public Task<Result<TablaLeida>> LeerAsync(byte[] contenido, string nombreArchivo, int filasDeEncabezado = 1, CancellationToken ct = default) =>
+        LeerHojaAsync(contenido, nombreArchivo, null, filasDeEncabezado, ct);
+
+    /// <inheritdoc />
+    public Task<Result<TablaLeida>> LeerHojaAsync(byte[] contenido, string nombreArchivo, string? hoja, int filasDeEncabezado = 1, CancellationToken ct = default)
     {
         if (contenido is null || contenido.Length == 0)
             return Task.FromResult(Result.Failure<TablaLeida>(ArchivosTabulares.Vacio));
         if (filasDeEncabezado < 0) filasDeEncabezado = 0;
 
-        var extension = Path.GetExtension(nombreArchivo ?? string.Empty).ToLowerInvariant();
         try
         {
-            var tabla = extension switch
+            if (EsLibro(contenido, nombreArchivo))
             {
-                ".xlsx" or ".xlsm" => LeerExcel(contenido, filasDeEncabezado),
-                ".csv" or ".txt" or ".tsv" => LeerTexto(contenido, filasDeEncabezado),
-                _ => EsZip(contenido) ? LeerExcel(contenido, filasDeEncabezado) : LeerTexto(contenido, filasDeEncabezado),
-            };
-            return Task.FromResult(Result.Success(tabla));
+                using var ms = new MemoryStream(contenido);
+                using var libro = new XLWorkbook(ms);
+                var elegida = hoja is null
+                    ? libro.Worksheets.First()
+                    : libro.Worksheets.FirstOrDefault(h => TablaLeida.Normalizar(h.Name) == TablaLeida.Normalizar(hoja));
+                if (elegida is null)
+                    return Task.FromResult(Result.Failure<TablaLeida>(ArchivosTabulares.HojaFaltante(hoja!)));
+                return Task.FromResult(Result.Success(LeerExcel(elegida, filasDeEncabezado)));
+            }
+
+            // Un texto separado es una sola hoja, «Datos».
+            if (hoja is not null && TablaLeida.Normalizar(hoja) != TablaLeida.Normalizar(ArchivosTabulares.HojaDeTexto))
+                return Task.FromResult(Result.Failure<TablaLeida>(ArchivosTabulares.HojaFaltante(hoja)));
+            return Task.FromResult(Result.Success(LeerTexto(contenido, filasDeEncabezado)));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -40,11 +52,35 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
         }
     }
 
-    private static TablaLeida LeerExcel(byte[] contenido, int filasDeEncabezado)
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<string>>> ListarHojasAsync(byte[] contenido, string nombreArchivo, CancellationToken ct = default)
     {
-        using var ms = new MemoryStream(contenido);
-        using var libro = new XLWorkbook(ms);
-        var hoja = libro.Worksheets.First();
+        if (contenido is null || contenido.Length == 0)
+            return Task.FromResult(Result.Failure<IReadOnlyList<string>>(ArchivosTabulares.Vacio));
+        try
+        {
+            if (!EsLibro(contenido, nombreArchivo))
+                return Task.FromResult(Result.Success<IReadOnlyList<string>>([ArchivosTabulares.HojaDeTexto]));
+            using var ms = new MemoryStream(contenido);
+            using var libro = new XLWorkbook(ms);
+            return Task.FromResult(Result.Success<IReadOnlyList<string>>(libro.Worksheets.Select(h => h.Name).ToList()));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Task.FromResult(Result.Failure<IReadOnlyList<string>>(ArchivosTabulares.Ilegible(ex.Message)));
+        }
+    }
+
+    private static bool EsLibro(byte[] contenido, string? nombreArchivo) =>
+        Path.GetExtension(nombreArchivo ?? string.Empty).ToLowerInvariant() switch
+        {
+            ".xlsx" or ".xlsm" => true,
+            ".csv" or ".txt" or ".tsv" => false,
+            _ => EsZip(contenido),
+        };
+
+    private static TablaLeida LeerExcel(IXLWorksheet hoja, int filasDeEncabezado)
+    {
         var usado = hoja.RangeUsed();
         if (usado is null) return new TablaLeida([], [], "xlsx");
 
