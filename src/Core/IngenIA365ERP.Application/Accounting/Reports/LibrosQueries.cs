@@ -183,8 +183,8 @@ public static class LibrosQueries
     {
         if (ids.Count == 0) return [];
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => ids.Contains(p.Id))
-            .Select(p => new { p.Id, p.PublicId, p.FirstName, p.LastName, p.BusinessName, p.TaxId }).ToListAsync(ct);
-        return personas.ToDictionary(p => p.Id, p => (p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.LastName, p.BusinessName), p.TaxId));
+            .Select(p => new { p.Id, p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.TaxId }).ToListAsync(ct);
+        return personas.ToDictionary(p => p.Id, p => (p.PublicId, PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName), p.TaxId));
     }
 }
 
@@ -383,7 +383,9 @@ public sealed class JournalQueryHandler(
                 Cruce = e.CrossDocumentType != null ? e.CrossDocumentType.Code : null,
                 CuentaCodigo = e.Account!.Code, CuentaNombre = e.Account!.Name,
                 PersonaNombre = e.Person != null ? e.Person.FirstName : null,
+                PersonaOtrosNombres = e.Person != null ? e.Person.OtherNames : null,
                 PersonaApellido = e.Person != null ? e.Person.LastName : null,
+                PersonaSegundoApellido = e.Person != null ? e.Person.SecondLastName : null,
                 PersonaRazon = e.Person != null ? e.Person.BusinessName : null,
                 Documento = new { e.Document!.PublicId, e.Document.Number, e.Document.Description, Tipo = e.Document.VoucherType!.Code },
             })
@@ -396,7 +398,7 @@ public sealed class JournalQueryHandler(
                 var referencia = $"{l.Documento.Tipo}-{l.Documento.Number}";
                 var tercero = l.PersonaNombre is null && l.PersonaApellido is null && l.PersonaRazon is null
                     ? string.Empty
-                    : PersonFactory.NombreVisible(l.PersonaNombre ?? string.Empty, l.PersonaApellido ?? string.Empty, l.PersonaRazon);
+                    : PersonFactory.NombreVisible(l.PersonaNombre, l.PersonaOtrosNombres, l.PersonaApellido, l.PersonaSegundoApellido, l.PersonaRazon);
                 return new FilaExportable(
                     [l.Date, referencia, l.CuentaCodigo, l.CuentaNombre, tercero, LibrosQueries.Cruce(l.Cruce, l.CrossDocumentNumber), l.Description ?? string.Empty, l.Debit, l.Credit, l.Documento.PublicId],
                     $"{referencia} · {l.Date:dd/MM/yyyy} · {l.Documento.Description}");

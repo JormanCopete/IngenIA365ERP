@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -72,7 +73,7 @@ public class GetAccrualPreviewQueryHandler(IApplicationDbContext context)
             {
                 PortfolioNumber = p.PortfolioNumber,
                 PersonName = p.Person != null
-                    ? $"{p.Person.FirstName} {p.Person.LastName}"
+                    ? NombreDePersona.Completo(p.Person)
                     : p.IdentificationNumber,
                 CreditLine = p.CreditLine?.Description ?? p.CreditLineId.ToString(),
                 Balance = p.CurrentBalance,

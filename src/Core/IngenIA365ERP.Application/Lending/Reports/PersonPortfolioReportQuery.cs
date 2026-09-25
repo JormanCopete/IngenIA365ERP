@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -111,7 +112,7 @@ public class GetPersonPortfolioReportQueryHandler(IApplicationDbContext context)
 
         return Result.Success(new PersonPortfolioDto(
             person.PublicId,
-            $"{person.FirstName} {person.LastName}",
+            NombreDePersona.Completo(person),
             person.TaxId,
             loanDtos, savingsDtos, cdtDtos,
             [], // Contributions loaded separately if needed

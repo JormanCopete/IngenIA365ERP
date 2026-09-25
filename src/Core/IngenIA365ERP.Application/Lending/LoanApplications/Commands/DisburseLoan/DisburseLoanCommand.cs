@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -253,7 +254,7 @@ public class DisburseLoanCommandHandler(
         var cuentaBanco = await cuentas.ResolverPorCodigoAsync(codigoBanco, ModuloContable.Cartera, ct);
         if (cuentaBanco.IsFailure) return Result.Failure<DisbursementResultDto>(cuentaBanco.Error);
 
-        var detalle = $"Desembolso crédito #{portfolioNumber} - {person.FirstName} {person.LastName}";
+        var detalle = $"Desembolso crédito #{portfolioNumber} - {NombreDePersona.Completo(person)}";
         var posting = await poster.PrepareAsync(new PostingRequest("DS", request.DisbursementDate, detalle,
             new AccountingOrigin(ModuloContable.Cartera, "LoanApplication", application.PublicId),
             [

@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -123,7 +124,7 @@ public class ListSavingsAccountsQueryHandler(IApplicationDbContext context)
             .Where(p => personCodes.Contains(p.LegacyCode!) || personCodes.Contains(p.TaxId))
             .ToDictionaryAsync(
                 p => p.LegacyCode ?? p.TaxId,
-                p => p.FirstName + " " + p.LastName,
+                p => NombreDePersona.Completo(p),
                 ct);
 
         // Batch load savings line names
@@ -179,7 +180,7 @@ public class GetSavingsAccountByIdQueryHandler(IApplicationDbContext context)
         // Person name
         var person = await context.People.AsNoTracking()
             .FirstOrDefaultAsync(p => p.LegacyCode == account.PersonCode || p.TaxId == account.PersonCode, ct);
-        var personName = person is not null ? $"{person.FirstName} {person.LastName}" : account.PersonCode;
+        var personName = person is not null ? NombreDePersona.Completo(person) : account.PersonCode;
 
         // Savings line name
         var savingsParam = await context.SavingsParameters.AsNoTracking()

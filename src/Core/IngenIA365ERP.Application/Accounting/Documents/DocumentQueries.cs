@@ -89,7 +89,7 @@ public sealed class GetDocumentQueryHandler(IApplicationDbContext db, Accounting
             l.Account?.PublicId ?? Guid.Empty, l.Account?.Code ?? string.Empty, l.Account?.Name ?? string.Empty,
             l.Branch?.PublicId ?? Guid.Empty, l.Branch?.Name ?? string.Empty,
             l.CostCenter?.PublicId, l.CostCenter?.Name,
-            l.Person?.PublicId, l.Person is null ? null : PersonFactory.NombreVisible(l.Person.FirstName, l.Person.LastName, l.Person.BusinessName), l.Person?.TaxId,
+            l.Person?.PublicId, l.Person is null ? null : PersonFactory.NombreVisible(l.Person.FirstName, l.Person.OtherNames, l.Person.LastName, l.Person.SecondLastName, l.Person.BusinessName), l.Person?.TaxId,
             l.CrossDocumentType?.Code, l.CrossDocumentNumber,
             l.Debit, l.Credit, l.Description, l.TaxBase)).ToList();
 

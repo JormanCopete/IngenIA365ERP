@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -163,7 +164,7 @@ public class GetSavingsLiquidationPreviewQueryHandler(IApplicationDbContext cont
             var interest = balance > 0 && rate > 0 ? balance * rate / 100m / 360m * days : 0;
 
             var personName = people.TryGetValue(account.PersonCode, out var person)
-                ? $"{person.FirstName} {person.LastName}"
+                ? NombreDePersona.Completo(person)
                 : account.PersonCode;
 
             return new SavingsLiquidationPreviewLineDto

@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,7 +52,7 @@ public class GetPayrollDeductionPreviewQueryHandler(IApplicationDbContext contex
         var result = portfolios.Select(p => new DeductionPreviewLineDto
         {
             EmployeeName = p.Person != null
-                ? $"{p.Person.FirstName} {p.Person.LastName}"
+                ? NombreDePersona.Completo(p.Person)
                 : p.IdentificationNumber,
             IdentificationNumber = p.IdentificationNumber,
             PortfolioNumber = p.PortfolioNumber,
