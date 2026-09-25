@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -43,7 +44,7 @@ public sealed class ExportRunQueryHandler(IApplicationDbContext db, PayrollAudit
             join l in db.PayrollRunLines.AsNoTracking() on re.Id equals l.PayrollRunEmployeeId
             where re.PayrollRunId == run.Id
             orderby p.LastName, p.FirstName, l.Order
-            select new { Nombre = p.FirstName + " " + p.LastName, p.TaxId, re.DaysWorked, l }).ToListAsync(ct);
+            select new { p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, re.DaysWorked, l }).ToListAsync(ct);
 
         var noveltyIds = filas.Where(f => f.l.NoveltyId != null).Select(f => f.l.NoveltyId!.Value).Distinct().ToList();
         var novedades = noveltyIds.Count == 0
@@ -56,7 +57,7 @@ public sealed class ExportRunQueryHandler(IApplicationDbContext db, PayrollAudit
         foreach (var f in filas)
         {
             var exp = Explicar(f.l.ExplanationJson, out var parametro, out var vigencia);
-            sb.Append(Campo(f.Nombre.Trim())).Append(';')
+            sb.Append(Campo(NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName))).Append(';')
               .Append(Campo(f.TaxId)).Append(';')
               .Append(f.DaysWorked).Append(';')
               .Append(Campo(f.l.ConceptCode)).Append(';')

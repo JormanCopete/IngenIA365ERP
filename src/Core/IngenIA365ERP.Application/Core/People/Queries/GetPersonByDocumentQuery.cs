@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,9 +41,7 @@ public sealed class GetPersonByDocumentQueryHandler(IApplicationDbContext contex
             .OrderBy(p => p.IsDeleted) // si hubiera una viva y una eliminada, manda la viva
             .Select(p => new PersonByDocumentDto(
                 p.PublicId,
-                p.BusinessName != null && p.BusinessName.Length > 0
-                    ? p.BusinessName
-                    : p.FirstName + " " + p.LastName,
+                PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
                 p.TaxId,
                 p.IdType,
                 p.IsDeleted,

@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -99,8 +100,8 @@ public sealed class ApprovePayrollRunCommandHandler(
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where idsEmpleados.Contains(e.Id)
-            select new { e.Id, Nombre = (p.FirstName + " " + p.LastName).Trim() })
-            .ToDictionaryAsync(x => x.Id, x => x.Nombre, ct);
+            select new { e.Id, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName })
+            .ToDictionaryAsync(x => x.Id, x => NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), ct);
 
         // --- bloqueos y excepciones (FR-022) ---
         var excepciones = request.Exceptions ?? [];

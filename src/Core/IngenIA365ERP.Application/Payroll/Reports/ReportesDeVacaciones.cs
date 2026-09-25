@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Application.Payroll.Vacations;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -108,7 +109,7 @@ public sealed class MovimientosVacacionesReportQueryHandler(IApplicationDbContex
             var e = await db.Employees.AsNoTracking().Include(x => x.Person).FirstOrDefaultAsync(x => x.PublicId == empleadoId, ct);
             if (e is null) return Result.Failure<TablaExportable>(SettlementErrors.EmployeeNotFound);
             movimientos = movimientos.Where(m => m.EmployeeId == e.Id);
-            nombreFiltro = $"{e.Person.FirstName} {e.Person.LastName}".Trim();
+            nombreFiltro = NombreDePersona.Completo(e.Person);
         }
         var filasMov = await movimientos.OrderBy(m => m.StartDate).ThenBy(m => m.Id).ToListAsync(ct);
 
@@ -117,7 +118,7 @@ public sealed class MovimientosVacacionesReportQueryHandler(IApplicationDbContex
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where idsEmpleado.Contains(e.Id)
-            select new { e.Id, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }
+            select new { e.Id, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }
         ).ToDictionaryAsync(x => x.Id, ct);
         var idsMov = filasMov.Select(m => m.Id).ToList();
         var corridas = await db.PayrollRuns.AsNoTracking().Include(r => r.AccountingDocument)
@@ -137,7 +138,7 @@ public sealed class MovimientosVacacionesReportQueryHandler(IApplicationDbContex
             var r = corridaPorMov.GetValueOrDefault(m.Id);
             return new FilaExportable(
             [
-                e?.Nombre ?? string.Empty, e?.TaxId ?? string.Empty, ReportesDeVacaciones.NombreTipo(m.Kind),
+                e is null ? string.Empty : NombreDePersona.Completo(e.FirstName, e.OtherNames, e.LastName, e.SecondLastName), e?.TaxId ?? string.Empty, ReportesDeVacaciones.NombreTipo(m.Kind),
                 m.StartDate.ToDateTime(TimeOnly.MinValue), m.EndDate?.ToDateTime(TimeOnly.MinValue),
                 m.BusinessDays, m.CalendarDays, m.WeekPolicyUsed, ReportesDeVacaciones.NombreEstado(m.Status),
                 r is null ? string.Empty : $"v{r.Version} · {r.Status}", r?.TotalNet, r?.AccountingDocument is { } d ? d.Referencia() : string.Empty,

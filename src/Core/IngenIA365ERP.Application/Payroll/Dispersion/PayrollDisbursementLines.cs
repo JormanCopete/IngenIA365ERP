@@ -81,7 +81,7 @@ public sealed class PayrollDisbursementLines(IApplicationDbContext db)
         var candidatos = new List<CandidatoDeDispersion>(filas.Count);
         foreach (var f in filas)
         {
-            var nombre = string.Join(" ", new[] { f.FirstName, f.OtherNames, f.LastName, f.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+            var nombre = NombreDePersona.Completo(f.FirstName, f.OtherNames, f.LastName, f.SecondLastName);
             var banco = f.DisbursementBankId is { } bid ? bancos.GetValueOrDefault(bid)
                       : f.PayrollBankId is { } legado ? bancosLegado.GetValueOrDefault(legado) : null;
             var valores = new BankFileLineValues();

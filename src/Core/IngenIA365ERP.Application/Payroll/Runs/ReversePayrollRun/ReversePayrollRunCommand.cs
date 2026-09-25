@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -61,14 +62,16 @@ public sealed class ReversePayrollRunCommandHandler(
         var period = run.PayPeriod!;
 
         // --- pagos vigentes bloquean (FR-032): la constancia de pago manda ---
-        var pagados = await (
+        var pagados = (await (
             from p in db.PayrollPayments.AsNoTracking()
             join re in db.PayrollRunEmployees.AsNoTracking() on p.PayrollRunEmployeeId equals re.Id
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join per in db.People.AsNoTracking() on e.PersonId equals per.Id
             where re.PayrollRunId == run.Id && !p.IsReverted
             orderby per.LastName, per.FirstName
-            select (per.FirstName + " " + per.LastName).Trim()).ToListAsync(ct);
+            select new { per.FirstName, per.OtherNames, per.LastName, per.SecondLastName }).ToListAsync(ct))
+            .Select(x => NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName))
+            .ToList();
         if (pagados.Count > 0)
             return Fallo("Payroll.PaymentBlocksReversal",
                 $"{pagados.Count} empleado(s) tienen marca de pago vigente: {string.Join(", ", pagados)}. Retire las marcas (con motivo) antes de reversar.");

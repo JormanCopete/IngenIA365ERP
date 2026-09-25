@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,7 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id && (employeePublicIds == null || employeePublicIds.Contains(e.PublicId))
             orderby p.LastName, p.FirstName
-            select new { re, e.PublicId, Nombre = p.FirstName + " " + p.LastName, p.TaxId, p.Email, e.PayrollBankId, e.PayrollBankAccountType, e.PayrollBankAccountNumber, e.PositionId })
+            select new { re, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, p.Email, e.PayrollBankId, e.PayrollBankAccountType, e.PayrollBankAccountNumber, e.PositionId })
             .ToListAsync(ct);
         if (employeePublicIds is not null && empleados.Count != employeePublicIds.Distinct().Count())
             return Result.Failure<IReadOnlyList<PayslipBundle>>(new Error("Payroll.RunEmployeeNotFound", "Alguno de los empleados indicados no está en esta corrida."));
@@ -73,7 +74,7 @@ public sealed class PayslipModelBuilder(IApplicationDbContext db, ICurrentTenant
             var model = new PayslipModel(
                 CooperativeName: cooperativa,
                 CooperativeTaxId: null,
-                EmployeeName: x.Nombre.Trim(),
+                EmployeeName: NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName),
                 EmployeeDocument: x.TaxId,
                 EmployeePosition: posiciones.GetValueOrDefault(x.PositionId),
                 PlanName: plan,

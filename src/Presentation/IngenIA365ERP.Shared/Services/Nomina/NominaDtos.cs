@@ -1,3 +1,5 @@
+using IngenIA365ERP.Shared.Models.Personas;
+
 namespace IngenIA365ERP.Shared.Services.Nomina;
 
 /// <summary>Página de resultados tal como la serializa <c>PagedList&lt;T&gt;</c> en la API.</summary>
@@ -382,6 +384,19 @@ public sealed class FichaEmpleadoDto
     public SaldoInicialFichaDto? OpeningBalance { get; init; }
     public PorcentajeRetencionFichaDto? CurrentWithholdingRate { get; init; }
     public TerminacionFichaDto? Termination { get; init; }
+
+    // Las otras dos partes del nombre (feature 010, D-06) y el nombre ya compuesto por el servidor.
+    // Hasta el 2026-09-25 la ficha se titulaba «FirstName LastName» («WILLIAN LAGOS»).
+    public string? OtherNames { get; init; }
+    public string? SecondLastName { get; init; }
+    public string FullName { get; init; } = "";
+
+    /// <summary>«WILLIAN ANDRÉS LAGOS PÉREZ»: el que manda la API o, si no viene, las cuatro partes.</summary>
+    public string NombreCompleto => NombreDePersona.PreferirCompuesto(FullName, FirstName, OtherNames, LastName, SecondLastName);
+    /// <summary>Primer nombre y otros nombres, para el campo «Nombres».</summary>
+    public string Nombres => NombreDePersona.Completo(FirstName, OtherNames, null, null);
+    /// <summary>Primer y segundo apellido, para el campo «Apellidos».</summary>
+    public string Apellidos => NombreDePersona.Completo(null, null, LastName, SecondLastName);
 
     public bool EsAprendizOPasante => EmployeeClass is "Apprentice" or "Intern";
     public string ClaseTexto => EmployeeClass switch

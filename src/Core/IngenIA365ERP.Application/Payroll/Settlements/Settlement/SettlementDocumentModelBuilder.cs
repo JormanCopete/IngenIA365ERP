@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using MediatR;
@@ -61,7 +62,7 @@ public sealed class SettlementDocumentModelBuilder(IApplicationDbContext db, ICu
             d.Description, d.ProposedAmount, d.AppliedAmount, d.AdjustmentReason,
             SettlementDeductionsReader.Item(d, run).RemainingAfter)).ToList();
 
-        var nombre = string.Join(" ", new[] { ficha.p.FirstName, ficha.p.OtherNames, ficha.p.LastName, ficha.p.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var nombre = NombreDePersona.Completo(ficha.p);
         var diasDeServicio = CalendarConventions.Days(ficha.e.JoinDate.Date, terminacion.TerminationDate.ToDateTime(TimeOnly.MinValue));
 
         return Result.Success(new SettlementDocumentModel(

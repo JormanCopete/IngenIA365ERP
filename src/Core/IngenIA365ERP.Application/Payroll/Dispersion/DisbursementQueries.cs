@@ -3,6 +3,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Attachments.DownloadAttachment;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Application.Attachments.Common;
@@ -74,7 +75,7 @@ public sealed class GetDisbursementFileQueryHandler(IApplicationDbContext db, Pa
             join e in db.Employees.AsNoTracking() on re.EmployeeId equals e.Id
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where idsRe.Contains(re.Id)
-            select new { re.Id, e.PublicId, Nombre = (p.FirstName + " " + p.LastName).Trim(), p.TaxId }).ToDictionaryAsync(x => x.Id, ct);
+            select new { re.Id, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).ToDictionaryAsync(x => x.Id, ct);
         var pagos = await db.PayrollPayments.AsNoTracking().Where(p => idsRe.Contains(p.PayrollRunEmployeeId) && !p.IsReverted).ToDictionaryAsync(p => p.PayrollRunEmployeeId, ct);
         var idsBanco = a.Lines.Where(l => l.DestinationBankId.HasValue).Select(l => l.DestinationBankId!.Value).Distinct().ToList();
         var bancos = await db.Banks.AsNoTracking().Where(b => idsBanco.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name, ct);
@@ -83,7 +84,7 @@ public sealed class GetDisbursementFileQueryHandler(IApplicationDbContext db, Pa
         {
             empleados.TryGetValue(l.PayrollRunEmployeeId, out var e);
             pagos.TryGetValue(l.PayrollRunEmployeeId, out var pago);
-            return new DisbursementLineDto(l.LineNumber, e?.PublicId ?? Guid.Empty, e?.Nombre ?? "?", e?.TaxId ?? "?",
+            return new DisbursementLineDto(l.LineNumber, e?.PublicId ?? Guid.Empty, e is null ? "?" : NombreDePersona.Completo(e.FirstName, e.OtherNames, e.LastName, e.SecondLastName), e?.TaxId ?? "?",
                 l.DestinationBankId is { } bid ? bancos.GetValueOrDefault(bid) : null, l.AccountType switch { 1 => "Ahorros", 2 => "Corriente", _ => null },
                 l.AccountNumber, l.Amount, l.RecordText, pago is not null, pago?.PublicId);
         }).ToList();

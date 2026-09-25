@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Payroll.Runs;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
@@ -97,9 +98,9 @@ internal sealed class CargaDeLiquidacionParaReporte(IApplicationDbContext db, IP
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where re.PayrollRunId == run.Id
             orderby p.LastName, p.FirstName
-            select new { re.Id, e.PublicId, Nombre = p.FirstName + " " + p.LastName, p.TaxId, re.DaysWorked, re.TotalEarnings, re.TotalDeductions, re.NetPay, re.EmployeeClass })
+            select new { re.Id, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, re.DaysWorked, re.TotalEarnings, re.TotalDeductions, re.NetPay, re.EmployeeClass })
             .ToListAsync(ct))
-            .Select(x => new Fila(x.Id, x.PublicId, x.Nombre.Trim(), x.TaxId, x.DaysWorked, x.TotalEarnings, x.TotalDeductions, x.NetPay, x.EmployeeClass.ToString()))
+            .Select(x => new Fila(x.Id, x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId, x.DaysWorked, x.TotalEarnings, x.TotalDeductions, x.NetPay, x.EmployeeClass.ToString()))
             .ToList();
         var ids = filas.Select(f => f.RunEmployeeId).ToList();
         var lineas = await db.PayrollRunLines.AsNoTracking()

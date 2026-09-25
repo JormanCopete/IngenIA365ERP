@@ -146,7 +146,7 @@
                 await Notification.ErrorAsync("Persona no encontrada.");
                 return;
             }
-            _personName = $"{person.FirstName} {person.LastName}";
+            _personName = NombreDePersona.Completo(person.FirstName, person.OtherNames, person.LastName, person.SecondLastName);
             _personPublicId = person.PublicId;
         }
         catch (Exception ex)
@@ -232,7 +232,7 @@
     }
 
     // --- Local types ---
-    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record PersonLookup(Guid PublicId, string FirstName, string LastName, string? OtherNames = null, string? SecondLastName = null);
     record CdtParamItem(Guid PublicId, int CreditLineId, string? Description, decimal? AnnualRate,
         decimal? MinAmount, decimal? MaxAmount, int? Term)
     {

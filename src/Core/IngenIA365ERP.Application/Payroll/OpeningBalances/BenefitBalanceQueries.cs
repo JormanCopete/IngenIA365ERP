@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -91,7 +92,9 @@ public sealed class ListBenefitBalancesQueryHandler(IApplicationDbContext db, Pa
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var s = request.Search.Trim();
-            empleados = empleados.Where(e => e.Person.TaxId.Contains(s) || e.Person.FirstName.Contains(s) || e.Person.LastName.Contains(s));
+            empleados = empleados.Where(e => e.Person.TaxId.Contains(s) || e.Person.FirstName.Contains(s) || e.Person.LastName.Contains(s)
+                || (e.Person.OtherNames != null && e.Person.OtherNames.Contains(s))
+                || (e.Person.SecondLastName != null && e.Person.SecondLastName.Contains(s)));
         }
         var fichas = await empleados.OrderBy(e => e.Person.LastName).ThenBy(e => e.Person.FirstName).ToListAsync(ct);
 
@@ -116,7 +119,7 @@ public sealed class ListBenefitBalancesQueryHandler(IApplicationDbContext db, Pa
                 .ToList();
 
             items.Add(new BenefitBalanceSummaryDto(
-                e.PublicId, $"{e.Person.FirstName} {e.Person.LastName}".Trim(), e.Person.TaxId, e.JoinDate, antesDelArranque,
+                e.PublicId, NombreDePersona.Completo(e.Person), e.Person.TaxId, e.JoinDate, antesDelArranque,
                 vigente?.AsOfDate, vigente?.PendingVacationDays, vigente?.AccruedSeverance, vigente?.AccruedSeveranceInterest, vigente?.AccruedServiceBonus,
                 consumidores, consumidores.Count == 0,
                 vigente?.UpdatedAt ?? vigente?.CreatedAt, vigente?.UpdatedBy ?? vigente?.CreatedBy));
@@ -155,7 +158,7 @@ public sealed class GetBenefitBalanceQueryHandler(IApplicationDbContext db, Payr
             BenefitBalanceRules.Map(f, f.AdjustsBalanceId is { } id && publicIdPorId.TryGetValue(id, out var p) ? p : null);
 
         return Result.Success(new BenefitBalanceDetailDto(
-            e.PublicId, $"{e.Person.FirstName} {e.Person.LastName}".Trim(), e.Person.TaxId, e.JoinDate, arranque,
+            e.PublicId, NombreDePersona.Completo(e.Person), e.Person.TaxId, e.JoinDate, arranque,
             arranque is { } a && e.JoinDate < a.ToDateTime(TimeOnly.MinValue),
             vigente is null ? null : Map(vigente),
             filas.OrderByDescending(f => f.AsOfDate).ThenByDescending(f => f.Id).Select(Map).ToList()));

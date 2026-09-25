@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -60,7 +61,9 @@ public class ListPeopleQueryHandler(IApplicationDbContext context)
             query = query.Where(p =>
                 p.TaxId.Contains(term)
                 || p.FirstName.Contains(term)
+                || (p.OtherNames != null && p.OtherNames.Contains(term))
                 || p.LastName.Contains(term)
+                || (p.SecondLastName != null && p.SecondLastName.Contains(term))
                 || (p.BusinessName != null && p.BusinessName.Contains(term))
                 || (p.LegacyCode != null && p.LegacyCode.Contains(term)));
         }
@@ -89,9 +92,7 @@ public class ListPeopleQueryHandler(IApplicationDbContext context)
                 p.FirstName,
                 p.LastName,
                 p.BusinessName,
-                p.BusinessName != null && p.BusinessName.Length > 0
-                    ? p.BusinessName
-                    : p.FirstName + " " + p.LastName,
+                PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
                 p.Email,
                 p.Phone1,
                 p.Mobile,

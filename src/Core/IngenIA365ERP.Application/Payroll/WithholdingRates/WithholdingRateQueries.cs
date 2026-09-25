@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using IngenIA365ERP.Domain.Payroll.Withholding;
@@ -23,7 +24,7 @@ public sealed class ListWithholdingRateCalculationsQueryHandler(IApplicationDbCo
         var q = from c in db.WithholdingRateCalculations.AsNoTracking()
                 join e in db.Employees.AsNoTracking() on c.EmployeeId equals e.Id
                 join p in db.People.AsNoTracking() on e.PersonId equals p.Id
-                select new { Calc = c, e.PublicId, p.FirstName, p.LastName, p.TaxId, e.Id };
+                select new { Calc = c, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId, e.Id };
         if (request.Year is { } y) q = q.Where(x => x.Calc.TargetYear == y);
         if (request.Semester is { } s) q = q.Where(x => x.Calc.TargetSemester == s);
         if (request.Status is { } st) q = q.Where(x => x.Calc.Status == st);
@@ -39,7 +40,7 @@ public sealed class ListWithholdingRateCalculationsQueryHandler(IApplicationDbCo
         return Result.Success<IReadOnlyList<WithholdingRateItemDto>>(lista.Select(x =>
         {
             var (_, desde, hasta) = WithholdingRateInputLoader.Semestre(x.Calc.TargetYear, x.Calc.TargetSemester);
-            return WithholdingRateMappers.Item(x.Calc, x.PublicId, $"{x.FirstName} {x.LastName}", x.TaxId, desde, hasta, vigentePor.GetValueOrDefault(x.Id));
+            return WithholdingRateMappers.Item(x.Calc, x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId, desde, hasta, vigentePor.GetValueOrDefault(x.Id));
         }).ToList());
     }
 }
@@ -61,7 +62,7 @@ public sealed class GetWithholdingRateCalculationQueryHandler(IApplicationDbCont
                        join e in db.Employees.AsNoTracking() on calc.EmployeeId equals e.Id
                        join p in db.People.AsNoTracking() on e.PersonId equals p.Id
                        where calc.PublicId == request.CalculationPublicId
-                       select new { Calc = calc, e.PublicId, p.FirstName, p.LastName, p.TaxId }).FirstOrDefaultAsync(ct);
+                       select new { Calc = calc, e.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId }).FirstOrDefaultAsync(ct);
         if (x is null) return Result.Failure<WithholdingRateDetailDto>(WithholdingRateErrors.CalculationNotFound);
         var c = x.Calc;
         var (_, desde, hasta) = WithholdingRateInputLoader.Semestre(c.TargetYear, c.TargetSemester);
@@ -73,7 +74,7 @@ public sealed class GetWithholdingRateCalculationQueryHandler(IApplicationDbCont
             c.PlanTableUsed ? "Tabla de retención del plan de nómina" : t?.Source ?? string.Empty,
             (t?.Ranges ?? []).Where(r => !r.IsDeleted).OrderBy(r => r.Order).Select(r => new WithholdingRateRangeDto(r.FromValue, r.ToValue, r.Rate, r.FixedValue)).ToList());
         var secuencia = Enum.TryParse<DepurationSequence>(c.DepurationSequence, out var seq) ? seq : DepurationSequence.DepurateThenDivide;
-        var resumen = WithholdingRateMappers.Item(c, x.PublicId, $"{x.FirstName} {x.LastName}", x.TaxId, desde, hasta, null);
+        var resumen = WithholdingRateMappers.Item(c, x.PublicId, NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName), x.TaxId, desde, hasta, null);
         return Result.Success(new WithholdingRateDetailDto(resumen, meses, c.Divisor, ex.DivisorSource ?? string.Empty, secuencia,
             c.TotalGrossIncome, c.TotalMandatoryContributions, c.TotalDeclaredDeductions, c.TotalExemptIncome, c.DepuratedBase,
             c.AverageMonthlyBase, c.UvtValueUsed, c.AverageInUvt, tabla, ex.RangeText ?? string.Empty, c.TheoreticalWithholding, c.RatePercent,
