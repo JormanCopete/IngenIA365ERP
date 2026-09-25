@@ -108,7 +108,13 @@ public class ListPeopleQueryHandler(IApplicationDbContext context)
     }
 }
 
-// --- Get By Id (resumen para edicion) ---
+// --- Get By Id (lo que carga el formulario de edicion) ---
+//
+// Es lo que sirve GET /api/core/people/{id} y lo que abre PersonaDialog, que despues manda todo en
+// el PUT. Por eso tiene que traer TODO lo que PersonInput escribe: un campo que falte aqui llega
+// vacio al formulario y el guardado siguiente lo borra. Hasta el 2026-09-25 faltaban
+// SecondLastName y OtherNames (feature 010): se guardaban, no se veian y la edicion siguiente
+// los vaciaba. Lo vigila LaEdicionDePersonaDevuelveTodoLoQueSeEscribe.
 
 public record PersonEditDto(
     Guid PublicId,
@@ -119,6 +125,8 @@ public record PersonEditDto(
     DateOnly? IdIssueDate,
     string FirstName,
     string LastName,
+    string? SecondLastName,
+    string? OtherNames,
     string? BusinessName,
     string? PersonType,
     string? Address,
@@ -166,6 +174,8 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
             person.IdIssueDate,
             person.FirstName,
             person.LastName,
+            person.SecondLastName,
+            person.OtherNames,
             person.BusinessName,
             person.PersonType,
             person.Address,
