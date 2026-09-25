@@ -1080,7 +1080,8 @@ comandos `EmitElectronicDocumentCommand`, `QueryElectronicDocumentStatusCommand`
 `LinkResolutionToChannelCommand`, `ConfigureEmissionCommand`, `VerifyChannelCredentialCommand`,
 `EmitRadianEventCommand` (I5); consultas `GetDianReadinessQuery`, `ListElectronicDocumentsQuery`.
 
-**Seguridad y cumplimiento**: `PerfilesSugeridos`, `CreateRoleFromTemplateCommand`,
+**Seguridad y cumplimiento**: `PerfilesSugeridos` (+ `PerfilSugerido` (nuevo)), `CreateRoleFromTemplateCommand` (+ `RoleFromTemplateDto` (nuevo)),
+`ListRoleTemplatesQuery` (nuevo; + `RoleTemplateDto` (nuevo)), `ReglasDeRol` (nuevo; reglas de código y nombre de rol compartidas con `CreateRoleCommandValidator`),
 `IAutorizacionDeDatos`, `AutorizacionAlCrear` (en `CreatePersonCommand` y los compuestos
 `with-person`), `VerifyAuditIntegrityQuery`, `SelloDeIntegridad`, `AuditOutboxForwarder`.
 

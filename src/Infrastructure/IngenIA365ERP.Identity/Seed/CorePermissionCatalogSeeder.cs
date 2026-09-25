@@ -42,6 +42,13 @@ public static class CorePermissionCatalogSeeder
         // el administrador de la cooperativa.
         ("Core.BankFileFormats", "View",   "Ver los formatos de archivo plano de cada banco"),
         ("Core.BankFileFormats", "Manage", "Crear, versionar y desactivar formatos de archivo plano de los bancos"),
+
+        // Feature 012 (T125, decisiones-transversales §2.10): el catálogo tributario y los medios de pago son de
+        // Core porque los comparten inventario, compras, ventas y contabilidad.
+        ("Core.Taxes",           "View",   "Ver el catálogo tributario: conceptos de retención, impuestos y tarifas con vigencia"),
+        ("Core.Taxes",           "Manage", "Administrar e importar el catálogo tributario; registrar parámetros tributarios"),
+        ("Core.PaymentMeans",    "View",   "Ver los medios de pago"),
+        ("Core.PaymentMeans",    "Manage", "Administrar los medios de pago"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

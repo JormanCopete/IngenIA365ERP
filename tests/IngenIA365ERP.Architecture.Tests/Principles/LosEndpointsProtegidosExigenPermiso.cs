@@ -36,6 +36,13 @@ public class LosEndpointsProtegidosExigenPermiso
         // Feature 009: todo el módulo contable y su centro de informes.
         Path.Combine("Endpoints", "Accounting", "*.cs"),
         Path.Combine("Endpoints", "Reports", "Accounting*.cs"),
+        // Feature 012 (T118, decisiones-transversales §2.18): ampliación canónica por glob; cubre las rutas de todas
+        // las historias del comercio (US1–US17). Las carpetas o archivos que todavía no existen no fallan.
+        Path.Combine("Endpoints", "Inventory", "*.cs"),
+        Path.Combine("Endpoints", "Core", "Taxes*.cs"),
+        Path.Combine("Endpoints", "Core", "PaymentMeans*.cs"),
+        Path.Combine("Endpoints", "ElectronicInvoicing", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Inventory*.cs"),
     ];
 
     /// <summary>
@@ -65,12 +72,15 @@ public class LosEndpointsProtegidosExigenPermiso
     /// abiertas a toda sesión: (archivo, fragmento de la ruta, permiso exigido). Feature 012 (T019):
     /// <c>AuditLogModule.cs</c> también publica <c>POST /api/audit/access</c>, que registra el ingreso a
     /// una opción y es de cualquier usuario autenticado; la verificación de integridad (contracts/api.md
-    /// §29) sí exige <c>AuditLog.VerifyIntegrity</c>. Las rutas de <c>Endpoints/Inventory</c> las agrega
-    /// la fase 3 como glob.
+    /// §29) sí exige <c>AuditLog.VerifyIntegrity</c>. Las rutas de <c>Endpoints/Inventory</c> entran por glob en
+    /// <see cref="Patrones"/> (fase 3, T118).
     /// </summary>
     private static readonly (string Archivo, string Ruta, string Permiso)[] RutasSueltas =
     [
         (Path.Combine("Endpoints", "AuditLogModule.cs"), "/api/audit/integrity/verify", "AuditLog.VerifyIntegrity"),
+        // Feature 012 (T128, contracts/api.md §1.5): los perfiles sugeridos son parte de crear un rol.
+        (Path.Combine("Endpoints", "RolesModule.cs"), "/templates", "Security.Roles.Create"),
+        (Path.Combine("Endpoints", "RolesModule.cs"), "/from-template", "Security.Roles.Create"),
     ];
 
     private static readonly Regex InicioDeRuta = new(@"\.Map(Get|Post|Put|Delete|Patch)\(", RegexOptions.Compiled);

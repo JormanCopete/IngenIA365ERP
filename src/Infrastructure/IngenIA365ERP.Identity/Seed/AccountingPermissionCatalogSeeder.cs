@@ -65,6 +65,14 @@ public static class AccountingPermissionCatalogSeeder
         ("Accounting.Assets",         "View",         "Ver activos fijos, diferidos y sus cuotas"),
         ("Accounting.Assets",         "Manage",       "Registrar y editar activos y diferidos; dar de baja"),
         ("Accounting.Assets",         "Run",          "Ejecutar y reversar la depreciación y amortización del período"),
+
+        // Feature 012 (T125, decisiones-transversales §2.10): el lado contable del inventario —la matriz de
+        // contabilización y los lotes que pasan los mensajes al libro—; la consulta de lo contabilizado usa
+        // Accounting.Vouchers.View.
+        ("Accounting.InventoryRules",   "View",       "Ver la matriz de contabilización del inventario"),
+        ("Accounting.InventoryRules",   "Manage",     "Parametrizar la matriz de contabilización del inventario"),
+        ("Accounting.InventoryBatches", "View",       "Ver los lotes de contabilización del inventario"),
+        ("Accounting.InventoryBatches", "Run",        "Ejecutar los lotes de contabilización del inventario"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

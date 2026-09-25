@@ -33,6 +33,8 @@ public class LosComandosDeInventarioLlevanClave
         "AttendAlertCommand",
         "SaveAlertTypeCommand",
         "SetUserCommercialScopeCommand",
+        // Fase 3 (T128): crear un rol desde un perfil sugerido, desde la pantalla de Roles.
+        "CreateRoleFromTemplateCommand",
     ];
 
     /// <summary>Carpetas de <c>src/Core/IngenIA365ERP.Application</c> cuyos comandos con ruta llevan clave. Una que no existe todavía cuenta como vacía.</summary>
