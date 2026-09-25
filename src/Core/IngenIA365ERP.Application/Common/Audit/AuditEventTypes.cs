@@ -168,6 +168,11 @@ public static class AuditEventTypes
     // POST /api/audit/integrity/verify: la verificacion misma, con su resultado en la metadata.
     public const string AuditLogIntegrityVerified = "AuditLog.IntegrityVerified";
 
+    // -------------------- Autorizacion de datos al crear (feature 012, T46; T175) --------------------
+    // Alta de una persona con AutorizacionAlCrear cuando la cooperativa no tiene politica publicada: el alta
+    // procede y queda la constancia «sin politica vigente» (la alerta Personas.SinPoliticaDeDatos es de I3, T616).
+    public const string PersonDataAuthorizationNoCurrentPolicy = "Person.DataAuthorization.NoCurrentPolicy";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

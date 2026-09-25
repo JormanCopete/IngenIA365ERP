@@ -89,6 +89,11 @@ public sealed class CreateTaxRateCommandHandler(IApplicationDbContext db)
     {
         if (ReglasDelCatalogoTributario.Tarifa(impuesto, tarifa, concepto) is { } regla) return regla;
 
+        // Feature 012 (T176): el municipio se valida contra COR_Cities.DaneCode (DIVIPOLA), no sólo por su forma.
+        if (tarifa.MunicipalityDaneCode is { } municipio
+            && !await db.Cities.AsNoTracking().AnyAsync(c => c.DaneCode == municipio && !c.IsDeleted, ct))
+            return TaxErrors.MunicipalityUnknown(municipio);
+
         var otroImpuesto = await db.TaxRates.Include(r => r.TaxDefinition)
             .Where(r => r.Code == tarifa.Code && r.TaxDefinitionId != impuesto.Id)
             .Select(r => r.TaxDefinition!.Name).FirstOrDefaultAsync(ct);

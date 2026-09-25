@@ -56,6 +56,23 @@ public record PersonInput
     public bool ReceivesInvoice { get; init; }
 
     public string? Status { get; init; }
+
+    // Perfil tributario (feature 012, T24; T173; contracts/api.md §29). ANULABLES a propósito: nulo = no cambia. Un
+    // cliente que no conoce el perfil (una pantalla vieja, un módulo que sólo manda lo suyo) no lo borra al editar;
+    // al crear, nulo es falso. Las seis primeras son columnas nuevas de COR_People; las otras cuatro ya existían y
+    // hasta ahora no se escribían desde ningún contrato.
+    public bool? IsVatResponsible { get; init; }
+    public bool? IsSelfWithholder { get; init; }
+    public bool? IsVatWithholdingAgent { get; init; }
+    public bool? IsSimpleTaxRegime { get; init; }
+    public bool? IsIncomeTaxFiler { get; init; }
+    public bool? IsObligatedToInvoice { get; init; }
+    public bool? IsLargeContributor { get; init; }
+    public bool? WithholdingExempt { get; init; }
+    public bool? IcaWithholdingExempt { get; init; }
+
+    /// <summary>Actividad económica CIIU (4 a 6 dígitos) para ReteICA. Nulo = no cambia; vacío = la quita.</summary>
+    public string? CiiuCode { get; init; }
 }
 
 /// <summary>
@@ -66,6 +83,9 @@ public record PersonInput
 /// </summary>
 public class PersonInputValidator : AbstractValidator<PersonInput>
 {
+    /// <summary>Actividad CIIU de la persona: el mismo formato que la actividad de una tarifa de ReteICA, sin el comodín «*».</summary>
+    public const string PatronDeCiiu = "^[0-9]{4,6}$";
+
     public PersonInputValidator()
     {
         RuleFor(x => x.LastName)
@@ -99,6 +119,10 @@ public class PersonInputValidator : AbstractValidator<PersonInput>
         RuleFor(x => x.Gender).MaximumLength(2);
         RuleFor(x => x.MaritalStatus).MaximumLength(2);
         RuleFor(x => x.EducationLevel).MaximumLength(2);
+
+        RuleFor(x => x.CiiuCode)
+            .Matches(PatronDeCiiu).When(x => !string.IsNullOrWhiteSpace(x.CiiuCode))
+            .WithMessage("El código CIIU son de 4 a 6 dígitos.");
 
         RuleFor(x => x.DateOfBirth)
             .LessThan(DateOnly.FromDateTime(DateTime.UtcNow))

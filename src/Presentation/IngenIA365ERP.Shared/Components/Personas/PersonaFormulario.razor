@@ -1,7 +1,7 @@
 @using IngenIA365ERP.Shared.Models.Personas
 
 @*
-    Las cuatro secciones de la persona en una SfTab: es el cuerpo del diálogo de Personas.
+    Las secciones de la persona en una SfTab: es el cuerpo del diálogo de Personas.
     Empleados y Asociados no lo usan —arman su propia SfTab con PersonaCampos por pestaña y
     sus pestañas laborales/de afiliación—, así que la pestaña Roles sólo existe aquí.
 *@
@@ -24,6 +24,12 @@
             <ChildContent><TabHeader Text="Demografía" /></ChildContent>
             <ContentTemplate>
                 <PersonaCampos Seccion="SeccionDePersona.Demografia" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
+            <ChildContent><TabHeader Text="Datos tributarios" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.DatosTributarios" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
             </ContentTemplate>
         </TabItem>
         <TabItem>

@@ -19,6 +19,19 @@ public sealed class PersonasClient(HttpClient http, CentralAuthClient auth)
     public Task<InvitationApiResult<Guid>> CrearAsync(PersonaEntradaDto persona, CancellationToken ct = default) =>
         EnviarAsync<Guid>(HttpMethod.Post, "/api/core/people", persona, ct);
 
+    /// <summary>
+    /// La política de tratamiento de datos vigente (feature 012, T175), o nulo si la cooperativa no tiene una publicada
+    /// (404). Otro fallo vuelve como resultado fallido.
+    /// </summary>
+    public async Task<InvitationApiResult<PoliticaDeDatosVigenteDto?>> PoliticaDeDatosVigenteAsync(CancellationToken ct = default)
+    {
+        var r = await EnviarAsync<PoliticaDeDatosVigenteDto>(HttpMethod.Get, "/api/compliance/habeas-data/policies/current", null, ct);
+        if (r.IsSuccess) return InvitationApiResult<PoliticaDeDatosVigenteDto?>.Success(r.Value);
+        return r.StatusCode == 404
+            ? InvitationApiResult<PoliticaDeDatosVigenteDto?>.Success(null)
+            : InvitationApiResult<PoliticaDeDatosVigenteDto?>.Failure(r.ErrorCode ?? "Generic.Failure", r.ErrorMessage ?? "No se pudo leer la política de datos.", r.StatusCode ?? 0);
+    }
+
     public Task<InvitationApiResult<EmptyResponse>> ActualizarAsync(Guid publicId, PersonaEntradaDto persona, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Put, $"/api/core/people/{publicId}", persona, ct);
 

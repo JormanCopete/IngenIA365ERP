@@ -149,7 +149,20 @@ public record PersonEditDto(
     bool IsSupplier,
     bool IsSalesperson,
     bool ReceivesInvoice,
-    string? Status);
+    string? Status)
+{
+    // Perfil tributario (feature 012, T173): lo que PersonInput escribe tiene que volver aquí.
+    public bool IsVatResponsible { get; init; }
+    public bool IsSelfWithholder { get; init; }
+    public bool IsVatWithholdingAgent { get; init; }
+    public bool IsSimpleTaxRegime { get; init; }
+    public bool IsIncomeTaxFiler { get; init; }
+    public bool IsObligatedToInvoice { get; init; }
+    public bool IsLargeContributor { get; init; }
+    public bool WithholdingExempt { get; init; }
+    public bool IcaWithholdingExempt { get; init; }
+    public string? CiiuCode { get; init; }
+}
 
 public record GetPersonByIdQuery(Guid PublicId) : IRequest<Result<PersonEditDto>>;
 
@@ -198,6 +211,18 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
             person.IsSupplier,
             person.IsSalesperson,
             person.ReceivesInvoice,
-            person.Status));
+            person.Status)
+        {
+            IsVatResponsible = person.IsVatResponsible,
+            IsSelfWithholder = person.IsSelfWithholder,
+            IsVatWithholdingAgent = person.IsVatWithholdingAgent,
+            IsSimpleTaxRegime = person.IsSimpleTaxRegime,
+            IsIncomeTaxFiler = person.IsIncomeTaxFiler,
+            IsObligatedToInvoice = person.IsObligatedToInvoice,
+            IsLargeContributor = person.IsLargeContributor,
+            WithholdingExempt = person.WithholdingExempt,
+            IcaWithholdingExempt = person.IcaWithholdingExempt,
+            CiiuCode = person.CiiuCode,
+        });
     }
 }

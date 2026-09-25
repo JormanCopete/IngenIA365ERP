@@ -140,8 +140,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
     DbSet<Reference> IApplicationDbContext.References => throw new NotImplementedException();
-    DbSet<Country> IApplicationDbContext.Countries => throw new NotImplementedException();
-    DbSet<Department> IApplicationDbContext.Departments => throw new NotImplementedException();
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<Department> Departments => Set<Department>();
     DbSet<Section> IApplicationDbContext.Sections => throw new NotImplementedException();
     DbSet<Profession> IApplicationDbContext.Professions => throw new NotImplementedException();
     public DbSet<Position> Positions => Set<Position>();
@@ -272,8 +272,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
-        // Feature 008: City sí entra (PersonFactory valida CityPublicId); lo que cuelga de ella no.
-        modelBuilder.Ignore<Department>();
+        // Feature 008: City sí entra (PersonFactory valida CityPublicId). Feature 012 (T113): también su departamento y
+        // país, que DivipolaSeeder crea cuando faltan.
         modelBuilder.Ignore<Spouse>();
         modelBuilder.Ignore<Subscription>();
         modelBuilder.Ignore<TenantSetting>();

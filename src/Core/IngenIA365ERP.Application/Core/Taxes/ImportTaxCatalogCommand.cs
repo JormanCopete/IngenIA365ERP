@@ -51,13 +51,16 @@ public sealed class ImportTaxCatalogCommandHandler(IApplicationDbContext db, Eje
         var conceptos = await db.WithholdingConcepts.ToListAsync(ct);
         var impuestos = await db.TaxDefinitions.ToListAsync(ct);
         var tarifas = await db.TaxRates.ToListAsync(ct);
+        // Feature 012 (T176): el municipio de una tarifa existe en COR_Cities.DaneCode (DIVIPOLA).
+        var municipios = (await db.Cities.AsNoTracking().Where(c => c.DaneCode != null && !c.IsDeleted).Select(c => c.DaneCode!).ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
 
         var porCodigoDeConcepto = conceptos.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
         var porCodigoDeImpuesto = impuestos.ToDictionary(i => i.Code, StringComparer.OrdinalIgnoreCase);
 
         Conceptos(ctx, porCodigoDeConcepto, tarifas, hoy);
         Impuestos(ctx, porCodigoDeImpuesto);
-        Tarifas(ctx, porCodigoDeImpuesto, porCodigoDeConcepto, tarifas, hoy);
+        Tarifas(ctx, porCodigoDeImpuesto, porCodigoDeConcepto, tarifas, municipios, hoy);
     }
 
     // ---------------------------------------------------------------------------------------------- Conceptos --
@@ -186,7 +189,7 @@ public sealed class ImportTaxCatalogCommandHandler(IApplicationDbContext db, Eje
     // ----------------------------------------------------------------------------------------------- Tarifas --
 
     private void Tarifas(ContextoDeImportacion ctx, Dictionary<string, TaxDefinition> impuestos, Dictionary<string, WithholdingConcept> conceptos,
-        List<TaxRate> tarifas, DateOnly hoy)
+        List<TaxRate> tarifas, HashSet<string> municipios, DateOnly hoy)
     {
         var hoja = ctx.Hoja(P.HojaTarifas);
         var impuestosCitados = CatalogoCitado<TaxDefinition>.Desde(impuestos.Values, i => i, i => i.Code);
@@ -225,6 +228,11 @@ public sealed class ImportTaxCatalogCommandHandler(IApplicationDbContext db, Eje
             var datos = new DatosDeFila(codigo, nombre, porcentaje, porUnidad, municipio, actividad, minimoUvt, minimoPesos, condiciones,
                 aplicaA.Value, (short)Math.Clamp(prioridad, 0, short.MaxValue), desde.Value, hasta, norma, notas);
             if (!Forma(fila, datos, prioridad)) continue;
+            if (datos.MunicipalityDaneCode is { } dane && !municipios.Contains(dane))
+            {
+                fila.Error(P.Municipio, ImportErrors.CellNotFound, TaxErrors.MunicipalityUnknown(dane).Message);
+                continue;
+            }
 
             var propuesta = new TaxRate
             {

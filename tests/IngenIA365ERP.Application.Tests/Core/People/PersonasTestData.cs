@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Core.Associates.Services;
 using IngenIA365ERP.Application.Core.People.Contracts;
 using IngenIA365ERP.Application.Core.People.Services;
@@ -26,6 +27,10 @@ public sealed class PersonasTestData
     public PersonFactory Personas { get; }
     public EmployeeRegistrar Empleados { get; }
     public AssociateRegistrar Asociados { get; }
+    /// <summary>Feature 012 (T175): la auditoría explícita (constancia «sin política vigente»).</summary>
+    public IAuditService Auditoria { get; }
+    public AutorizacionDeDatos Autorizacion { get; }
+    public AltaConAutorizacion Altas { get; }
     public PayrollPlan Plan { get; }
 
     public PersonasTestData()
@@ -45,6 +50,9 @@ public sealed class PersonasTestData
         Personas = new PersonFactory(Db, Clock, User);
         Empleados = new EmployeeRegistrar(Db, Clock, User);
         Asociados = new AssociateRegistrar(Db, Clock, User);
+        Auditoria = Substitute.For<IAuditService>();
+        Autorizacion = new AutorizacionDeDatos(Db, User, Clock, Auditoria);
+        Altas = new AltaConAutorizacion(Db, Personas, Autorizacion);
     }
 
     public static PersonInput Entrada(string taxId = "1023456789", string nombre = "Ana", string apellido = "Pérez") => new()

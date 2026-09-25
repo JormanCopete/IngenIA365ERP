@@ -50,7 +50,7 @@ En cada ruta base: `GET {base}/template.xlsx` y `POST {base}/import?mode=review|
 ### 0.2 Lo que no tiene plantilla y debe existir antes
 
 Sucursales contables (`COR_Branches`, con `MunicipalityDaneCode`, que se escribe por las rutas
-existentes de la 009 `POST/PUT /api/accounting/branches` con `municipalityDaneCode`, validado contra
+existentes `POST/PUT /api/core/branches` (pantalla Maestros › Agencias) con `municipalityDaneCode`, validado contra
 `COR_Cities.DaneCode`: 422 `Branch.MunicipalityUnknown`) y centros de costo de la 009;
 personas del maestro (diálogo único de la 008: la importación **no crea ni modifica personas**,
 FR-031); bancos (`COR_Banks`); canales de venta (`/ventas/canales`); roles de la cooperativa

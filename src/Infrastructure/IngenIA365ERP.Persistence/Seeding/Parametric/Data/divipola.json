@@ -1,0 +1,604 @@
+{
+  "version": "2026-09-25-parcial",
+  "fuente": "DANE, División Político-Administrativa de Colombia (DIVIPOLA). Municipios: https://geoportal.dane.gov.co/geovisores/territorio/consulta-divipola-division-politico-administrativa-de-colombia/",
+  "notas": [
+    "PARCIAL (feature 012, T177): trae los 33 departamentos, sus capitales, el Valle del Cauca completo y otras ciudades principales. Falta cargar el resto de los municipios desde el archivo oficial del DANE; el seeder es idempotente y toma lo que el archivo traiga.",
+    "alias: otros nombres con que la ciudad puede estar ya cargada (sin tildes, el nombre corto); el seeder los usa para ponerle el código a la existente en vez de duplicarla."
+  ],
+  "departamentos": [
+    {
+      "codigo": "05",
+      "nombre": "Antioquia"
+    },
+    {
+      "codigo": "08",
+      "nombre": "Atlántico",
+      "alias": [
+        "Atlantico"
+      ]
+    },
+    {
+      "codigo": "11",
+      "nombre": "Bogotá, D.C.",
+      "alias": [
+        "Bogota D.C.",
+        "Bogotá D.C."
+      ]
+    },
+    {
+      "codigo": "13",
+      "nombre": "Bolívar",
+      "alias": [
+        "Bolivar"
+      ]
+    },
+    {
+      "codigo": "15",
+      "nombre": "Boyacá",
+      "alias": [
+        "Boyaca"
+      ]
+    },
+    {
+      "codigo": "17",
+      "nombre": "Caldas"
+    },
+    {
+      "codigo": "18",
+      "nombre": "Caquetá",
+      "alias": [
+        "Caqueta"
+      ]
+    },
+    {
+      "codigo": "19",
+      "nombre": "Cauca"
+    },
+    {
+      "codigo": "20",
+      "nombre": "Cesar"
+    },
+    {
+      "codigo": "23",
+      "nombre": "Córdoba",
+      "alias": [
+        "Cordoba"
+      ]
+    },
+    {
+      "codigo": "25",
+      "nombre": "Cundinamarca"
+    },
+    {
+      "codigo": "27",
+      "nombre": "Chocó",
+      "alias": [
+        "Choco"
+      ]
+    },
+    {
+      "codigo": "41",
+      "nombre": "Huila"
+    },
+    {
+      "codigo": "44",
+      "nombre": "La Guajira"
+    },
+    {
+      "codigo": "47",
+      "nombre": "Magdalena"
+    },
+    {
+      "codigo": "50",
+      "nombre": "Meta"
+    },
+    {
+      "codigo": "52",
+      "nombre": "Nariño",
+      "alias": [
+        "Narino"
+      ]
+    },
+    {
+      "codigo": "54",
+      "nombre": "Norte de Santander"
+    },
+    {
+      "codigo": "63",
+      "nombre": "Quindío",
+      "alias": [
+        "Quindio"
+      ]
+    },
+    {
+      "codigo": "66",
+      "nombre": "Risaralda"
+    },
+    {
+      "codigo": "68",
+      "nombre": "Santander"
+    },
+    {
+      "codigo": "70",
+      "nombre": "Sucre"
+    },
+    {
+      "codigo": "73",
+      "nombre": "Tolima"
+    },
+    {
+      "codigo": "76",
+      "nombre": "Valle del Cauca"
+    },
+    {
+      "codigo": "81",
+      "nombre": "Arauca"
+    },
+    {
+      "codigo": "85",
+      "nombre": "Casanare"
+    },
+    {
+      "codigo": "86",
+      "nombre": "Putumayo"
+    },
+    {
+      "codigo": "88",
+      "nombre": "Archipiélago de San Andrés, Providencia y Santa Catalina",
+      "alias": [
+        "San Andres",
+        "San Andrés"
+      ]
+    },
+    {
+      "codigo": "91",
+      "nombre": "Amazonas"
+    },
+    {
+      "codigo": "94",
+      "nombre": "Guainía",
+      "alias": [
+        "Guainia"
+      ]
+    },
+    {
+      "codigo": "95",
+      "nombre": "Guaviare"
+    },
+    {
+      "codigo": "97",
+      "nombre": "Vaupés",
+      "alias": [
+        "Vaupes"
+      ]
+    },
+    {
+      "codigo": "99",
+      "nombre": "Vichada"
+    }
+  ],
+  "municipios": [
+    {
+      "codigo": "05001",
+      "nombre": "Medellín",
+      "alias": [
+        "Medellin"
+      ]
+    },
+    {
+      "codigo": "08001",
+      "nombre": "Barranquilla"
+    },
+    {
+      "codigo": "11001",
+      "nombre": "Bogotá, D.C.",
+      "alias": [
+        "Bogota",
+        "Bogotá",
+        "Bogota D.C."
+      ]
+    },
+    {
+      "codigo": "13001",
+      "nombre": "Cartagena de Indias",
+      "alias": [
+        "Cartagena"
+      ]
+    },
+    {
+      "codigo": "15001",
+      "nombre": "Tunja"
+    },
+    {
+      "codigo": "17001",
+      "nombre": "Manizales"
+    },
+    {
+      "codigo": "18001",
+      "nombre": "Florencia"
+    },
+    {
+      "codigo": "19001",
+      "nombre": "Popayán",
+      "alias": [
+        "Popayan"
+      ]
+    },
+    {
+      "codigo": "20001",
+      "nombre": "Valledupar"
+    },
+    {
+      "codigo": "23001",
+      "nombre": "Montería",
+      "alias": [
+        "Monteria"
+      ]
+    },
+    {
+      "codigo": "27001",
+      "nombre": "Quibdó",
+      "alias": [
+        "Quibdo"
+      ]
+    },
+    {
+      "codigo": "41001",
+      "nombre": "Neiva"
+    },
+    {
+      "codigo": "44001",
+      "nombre": "Riohacha"
+    },
+    {
+      "codigo": "47001",
+      "nombre": "Santa Marta"
+    },
+    {
+      "codigo": "50001",
+      "nombre": "Villavicencio"
+    },
+    {
+      "codigo": "52001",
+      "nombre": "Pasto",
+      "alias": [
+        "San Juan de Pasto"
+      ]
+    },
+    {
+      "codigo": "54001",
+      "nombre": "San José de Cúcuta",
+      "alias": [
+        "Cucuta",
+        "Cúcuta"
+      ]
+    },
+    {
+      "codigo": "63001",
+      "nombre": "Armenia"
+    },
+    {
+      "codigo": "66001",
+      "nombre": "Pereira"
+    },
+    {
+      "codigo": "68001",
+      "nombre": "Bucaramanga"
+    },
+    {
+      "codigo": "70001",
+      "nombre": "Sincelejo"
+    },
+    {
+      "codigo": "73001",
+      "nombre": "Ibagué",
+      "alias": [
+        "Ibague"
+      ]
+    },
+    {
+      "codigo": "81001",
+      "nombre": "Arauca"
+    },
+    {
+      "codigo": "85001",
+      "nombre": "Yopal"
+    },
+    {
+      "codigo": "86001",
+      "nombre": "Mocoa"
+    },
+    {
+      "codigo": "88001",
+      "nombre": "San Andrés",
+      "alias": [
+        "San Andres"
+      ]
+    },
+    {
+      "codigo": "91001",
+      "nombre": "Leticia"
+    },
+    {
+      "codigo": "94001",
+      "nombre": "Inírida",
+      "alias": [
+        "Inirida"
+      ]
+    },
+    {
+      "codigo": "95001",
+      "nombre": "San José del Guaviare",
+      "alias": [
+        "San Jose del Guaviare"
+      ]
+    },
+    {
+      "codigo": "97001",
+      "nombre": "Mitú",
+      "alias": [
+        "Mitu"
+      ]
+    },
+    {
+      "codigo": "99001",
+      "nombre": "Puerto Carreño",
+      "alias": [
+        "Puerto Carreno"
+      ]
+    },
+    {
+      "codigo": "76001",
+      "nombre": "Cali",
+      "alias": [
+        "Santiago de Cali"
+      ]
+    },
+    {
+      "codigo": "76020",
+      "nombre": "Alcalá",
+      "alias": [
+        "Alcala"
+      ]
+    },
+    {
+      "codigo": "76036",
+      "nombre": "Andalucía",
+      "alias": [
+        "Andalucia"
+      ]
+    },
+    {
+      "codigo": "76041",
+      "nombre": "Ansermanuevo"
+    },
+    {
+      "codigo": "76054",
+      "nombre": "Argelia"
+    },
+    {
+      "codigo": "76100",
+      "nombre": "Bolívar",
+      "alias": [
+        "Bolivar"
+      ]
+    },
+    {
+      "codigo": "76109",
+      "nombre": "Buenaventura"
+    },
+    {
+      "codigo": "76111",
+      "nombre": "Guadalajara de Buga",
+      "alias": [
+        "Buga"
+      ]
+    },
+    {
+      "codigo": "76113",
+      "nombre": "Bugalagrande"
+    },
+    {
+      "codigo": "76122",
+      "nombre": "Caicedonia"
+    },
+    {
+      "codigo": "76126",
+      "nombre": "Calima",
+      "alias": [
+        "Calima El Darién",
+        "Darien"
+      ]
+    },
+    {
+      "codigo": "76130",
+      "nombre": "Candelaria"
+    },
+    {
+      "codigo": "76147",
+      "nombre": "Cartago"
+    },
+    {
+      "codigo": "76233",
+      "nombre": "Dagua"
+    },
+    {
+      "codigo": "76243",
+      "nombre": "El Águila",
+      "alias": [
+        "El Aguila"
+      ]
+    },
+    {
+      "codigo": "76246",
+      "nombre": "El Cairo"
+    },
+    {
+      "codigo": "76248",
+      "nombre": "El Cerrito"
+    },
+    {
+      "codigo": "76250",
+      "nombre": "El Dovio"
+    },
+    {
+      "codigo": "76275",
+      "nombre": "Florida"
+    },
+    {
+      "codigo": "76306",
+      "nombre": "Ginebra"
+    },
+    {
+      "codigo": "76318",
+      "nombre": "Guacarí",
+      "alias": [
+        "Guacari"
+      ]
+    },
+    {
+      "codigo": "76364",
+      "nombre": "Jamundí",
+      "alias": [
+        "Jamundi"
+      ]
+    },
+    {
+      "codigo": "76377",
+      "nombre": "La Cumbre"
+    },
+    {
+      "codigo": "76400",
+      "nombre": "La Unión",
+      "alias": [
+        "La Union"
+      ]
+    },
+    {
+      "codigo": "76403",
+      "nombre": "La Victoria"
+    },
+    {
+      "codigo": "76497",
+      "nombre": "Obando"
+    },
+    {
+      "codigo": "76520",
+      "nombre": "Palmira"
+    },
+    {
+      "codigo": "76563",
+      "nombre": "Pradera"
+    },
+    {
+      "codigo": "76606",
+      "nombre": "Restrepo"
+    },
+    {
+      "codigo": "76616",
+      "nombre": "Riofrío",
+      "alias": [
+        "Riofrio"
+      ]
+    },
+    {
+      "codigo": "76622",
+      "nombre": "Roldanillo"
+    },
+    {
+      "codigo": "76670",
+      "nombre": "San Pedro"
+    },
+    {
+      "codigo": "76736",
+      "nombre": "Sevilla"
+    },
+    {
+      "codigo": "76823",
+      "nombre": "Toro"
+    },
+    {
+      "codigo": "76828",
+      "nombre": "Trujillo"
+    },
+    {
+      "codigo": "76834",
+      "nombre": "Tuluá",
+      "alias": [
+        "Tulua"
+      ]
+    },
+    {
+      "codigo": "76845",
+      "nombre": "Ulloa"
+    },
+    {
+      "codigo": "76863",
+      "nombre": "Versalles"
+    },
+    {
+      "codigo": "76869",
+      "nombre": "Vijes"
+    },
+    {
+      "codigo": "76890",
+      "nombre": "Yotoco"
+    },
+    {
+      "codigo": "76892",
+      "nombre": "Yumbo"
+    },
+    {
+      "codigo": "76895",
+      "nombre": "Zarzal"
+    },
+    {
+      "codigo": "25754",
+      "nombre": "Soacha"
+    },
+    {
+      "codigo": "25290",
+      "nombre": "Fusagasugá",
+      "alias": [
+        "Fusagasuga"
+      ]
+    },
+    {
+      "codigo": "25307",
+      "nombre": "Girardot"
+    },
+    {
+      "codigo": "25899",
+      "nombre": "Zipaquirá",
+      "alias": [
+        "Zipaquira"
+      ]
+    },
+    {
+      "codigo": "25175",
+      "nombre": "Chía",
+      "alias": [
+        "Chia"
+      ]
+    },
+    {
+      "codigo": "05088",
+      "nombre": "Bello"
+    },
+    {
+      "codigo": "05360",
+      "nombre": "Itagüí",
+      "alias": [
+        "Itagui"
+      ]
+    },
+    {
+      "codigo": "05266",
+      "nombre": "Envigado"
+    },
+    {
+      "codigo": "05615",
+      "nombre": "Rionegro"
+    }
+  ]
+}

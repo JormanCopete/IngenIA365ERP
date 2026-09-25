@@ -21,6 +21,7 @@ public static class TaxErrors
     public const string ConceptNotFoundCode = "Core.WithholdingConcept.NotFound";
     public const string ConceptInUseCode = "Core.WithholdingConcept.InUse";
     public const string InvalidCode = "Validation.Invalid";
+    public const string MunicipalityUnknownCode = "Core.TaxRate.MunicipalityUnknown";
 
     public static Error TaxNotFound(string? codigo = null) => new(TaxNotFoundCode,
         codigo is null ? "El impuesto no existe." : $"No hay un impuesto «{codigo}». Créelo en Maestros › Impuestos o en la hoja Impuestos.");
@@ -50,4 +51,8 @@ public static class TaxErrors
         $"El impuesto {codigo} ya existe: su {campo} no cambia. Para otra, cree un impuesto con otro código.");
 
     public static Error Invalid(string mensaje) => new(InvalidCode, mensaje);
+
+    /// <summary>El municipio de la tarifa no está en <c>COR_Cities.DaneCode</c> (422; feature 012, T176). (nuevo)</summary>
+    public static Error MunicipalityUnknown(string codigo) => new(MunicipalityUnknownCode,
+        $"El municipio {codigo} no está en las ciudades (código DIVIPOLA). Cárguelo en Maestros › Ciudades o revise el código.");
 }

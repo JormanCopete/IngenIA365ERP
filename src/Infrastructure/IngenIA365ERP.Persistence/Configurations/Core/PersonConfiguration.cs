@@ -60,6 +60,13 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.TaxRegime).HasMaxLength(2);
         builder.Property(e => e.IcaType).HasMaxLength(6);
         builder.Property(e => e.IsLargeContributor).HasDefaultValue(false);
+        // Feature 012 (T172, T24): perfil tributario, aditivas con DEFAULT 0; par PlataformaParaInventario.
+        builder.Property(e => e.IsVatResponsible).HasDefaultValue(false);
+        builder.Property(e => e.IsSelfWithholder).HasDefaultValue(false);
+        builder.Property(e => e.IsVatWithholdingAgent).HasDefaultValue(false);
+        builder.Property(e => e.IsSimpleTaxRegime).HasDefaultValue(false);
+        builder.Property(e => e.IsIncomeTaxFiler).HasDefaultValue(false);
+        builder.Property(e => e.IsObligatedToInvoice).HasDefaultValue(false);
         builder.Property(e => e.IcaRate).HasPrecision(10, 5);
         builder.Property(e => e.DataOrigin).HasMaxLength(6);
         builder.Property(e => e.PaymentDays).HasDefaultValue((short)0);

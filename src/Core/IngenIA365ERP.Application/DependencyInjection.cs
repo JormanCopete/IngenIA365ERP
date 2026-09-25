@@ -161,6 +161,10 @@ public static class DependencyInjection
         services.AddScoped<Core.People.Services.PersonFactory>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
+        // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.
+        services.AddScoped<Compliance.HabeasData.AutorizacionDeDatos>();
+        services.AddScoped<Compliance.HabeasData.IAutorizacionDeDatos>(sp => sp.GetRequiredService<Compliance.HabeasData.AutorizacionDeDatos>());
+        services.AddScoped<Core.People.Services.AltaConAutorizacion>();
 
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<

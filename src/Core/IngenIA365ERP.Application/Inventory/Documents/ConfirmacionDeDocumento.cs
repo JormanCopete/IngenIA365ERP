@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
@@ -319,8 +320,8 @@ public sealed class ConfirmacionDeDocumento(
 
 /// <summary>
 /// La copia fiscal de la contraparte al confirmar (<c>INV_DocumentPartySnapshots</c> versión 1; T52, FR-011). El tipo de
-/// identificación DIAN se traduce aquí mientras no exista <c>CatalogoDian</c> (T180), que lo reemplaza; las marcas del
-/// perfil tributario que <c>COR_People</c> todavía no tiene (T172) quedan en falso. (nuevo)
+/// identificación DIAN lo traduce <see cref="CatalogoDian"/> (T180) a la fecha del documento; sin traducción queda vacío y
+/// el canónico lo reporta como dato faltante. El perfil tributario es el de <c>COR_People</c> (T172). (nuevo)
 /// </summary>
 public static class FotoDeLaContraparte
 {
@@ -336,7 +337,7 @@ public static class FotoDeLaContraparte
             Version = 1,
             PersonId = persona.Id,
             DianOrganizationType = juridica ? "1" : "2",
-            DianIdTypeCode = TipoDeIdentificacionDian(persona.IdType),
+            DianIdTypeCode = CatalogoDian.Embebido.TipoDeIdentificacionDe(persona.IdType, documento.OperationDate) ?? string.Empty,
             TaxId = persona.TaxId,
             CheckDigit = persona.TaxIdCheckDigit,
             LegalName = nombre,
@@ -346,22 +347,15 @@ public static class FotoDeLaContraparte
             MunicipalityDaneCode = persona.DaneCityCode,
             Email = persona.Email,
             Phone = persona.Mobile ?? persona.Phone1,
+            IsVatResponsible = persona.IsVatResponsible,
             IsLargeContributor = persona.IsLargeContributor,
+            IsSelfWithholder = persona.IsSelfWithholder,
+            IsVatWithholdingAgent = persona.IsVatWithholdingAgent,
+            IsSimpleTaxRegime = persona.IsSimpleTaxRegime,
+            IsIncomeTaxFiler = persona.IsIncomeTaxFiler,
             WithholdingExempt = persona.WithholdingExempt,
             IcaWithholdingExempt = persona.IcaWithholdingExempt,
             CiiuCode = persona.CiiuCode,
         };
     }
-
-    /// <summary>El código DIAN del tipo de identificación de <c>COR_People.IdType</c> (Res. 42/2020, tabla 13.2.1).</summary>
-    public static string TipoDeIdentificacionDian(string? idType) => (idType ?? string.Empty).Trim().ToUpperInvariant() switch
-    {
-        "N" or "NIT" => "31",
-        "E" or "CE" => "22",
-        "T" or "TI" => "12",
-        "R" or "RC" => "11",
-        "P" or "PA" => "41",
-        "X" => "42",
-        _ => "13",
-    };
 }

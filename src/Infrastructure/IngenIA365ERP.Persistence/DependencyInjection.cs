@@ -188,6 +188,8 @@ public static class DependencyInjection
         // Feature 012 (T152): un tipo de documento por clase operable con su consecutivo, y la política del saldo inicial
         // (Order 80). No hace nada hasta que la base tenga InventarioComercialNucleo (T440), que crea sus tablas.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryDocumentTypesSeeder>();
+        // Feature 012 (T177): codigos DIVIPOLA en COR_Cities.DaneCode (Order 82); la columna llega con PlataformaParaInventario (T186).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DivipolaSeeder>();
         // Feature 012 (T168): catalogo tributario inicial, pendiente de validar por la contadora (Order 81).
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TaxCatalogSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

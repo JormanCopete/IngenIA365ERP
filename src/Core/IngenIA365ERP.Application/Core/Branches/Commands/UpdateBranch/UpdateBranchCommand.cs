@@ -15,6 +15,12 @@ public record UpdateBranchCommand : IRequest<Result>
 
     /// <summary>Oficina administrativa vinculada (ver <c>CreateBranchCommand.TenantBranchPublicId</c>); nulo quita el vínculo.</summary>
     public Guid? TenantBranchPublicId { get; init; }
+
+    /// <summary>
+    /// Municipio DIVIPOLA (feature 012, T178; ver <c>CreateBranchCommand.MunicipalityDaneCode</c>). Nulo = no cambia (un
+    /// cliente que no lo conoce no lo borra); vacío = lo quita.
+    /// </summary>
+    public string? MunicipalityDaneCode { get; init; }
 }
 
 public class UpdateBranchCommandHandler(
@@ -45,6 +51,13 @@ public class UpdateBranchCommandHandler(
 
         var vinculo = await CreateBranch.VinculoConOficina.ValidarAsync(context, request.TenantBranchPublicId, excluirId: entity.Id, cancellationToken);
         if (vinculo.IsFailure) return Result.Failure(vinculo.Error);
+
+        if (request.MunicipalityDaneCode is not null)
+        {
+            var municipio = await CreateBranch.MunicipioDeSucursal.ValidarAsync(context, request.MunicipalityDaneCode, cancellationToken);
+            if (municipio.IsFailure) return Result.Failure(municipio.Error);
+            entity.MunicipalityDaneCode = municipio.Value;
+        }
 
         entity.Name = request.Name;
         entity.ShortName = request.ShortName;

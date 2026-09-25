@@ -1155,6 +1155,23 @@ comandos `EmitElectronicDocumentCommand`, `QueryElectronicDocumentStatusCommand`
 `ListRoleTemplatesQuery` (nuevo; + `RoleTemplateDto` (nuevo)), `ReglasDeRol` (nuevo; reglas de código y nombre de rol compartidas con `CreateRoleCommandValidator`),
 `IAutorizacionDeDatos`, `AutorizacionAlCrear` (en `CreatePersonCommand` y los compuestos
 `with-person`), `VerifyAuditIntegrityQuery`, `SelloDeIntegridad`, `AuditOutboxForwarder`.
+  Personas y DIVIPOLA (fase 3, sección personas-divipola, T172–T180; todos **(nuevo)** salvo los ya nombrados): en
+  `Application/Compliance/HabeasData`, `AutorizacionDeDatos` (implementa `IAutorizacionDeDatos`; `ResolverAsync`,
+  `AgregarConsentimiento`, `DejarConstanciaSinPoliticaAsync`, constantes `SinPoliticaVigente`, `PoliticaDesconocida`,
+  `PoliticaRequerida`, `CanalPorDefecto`), `AutorizacionResuelta`, `AutorizacionVigente`, `DecisionDeAutorizacion
+  { Accepted, Declined }`, `AutorizacionAlCrearValidator`, `AccionesDeConsentimiento { Accepted, Revoked, Declined }`,
+  `PoliticaVigenteDto`, `GetCurrentPolicyQuery`; en `Application/Core/People/Services`, `AltaConAutorizacion`
+  (+ `AltaRealizada<T>`; el único que guarda un alta: `CreatePersonCommand` y los dos compuestos `with-person` lo usan)
+  y `PersonFactory.AplicarPerfilTributario`; `PersonInputValidator.PatronDeCiiu`; en `Application/Core/Branches`,
+  `MunicipioDeSucursal` (`Patron`, `ValidarAsync`, `Desconocido`); `AuditEventTypes.PersonDataAuthorizationNoCurrentPolicy`
+  (`Person.DataAuthorization.NoCurrentPolicy`, la constancia «sin política vigente»); en
+  `Application/ElectronicInvoicing/Catalogs`, `CatalogoDian` (`Embebido`, `DesdeJson`, `Catalogos`) con `CodigoDian`,
+  `ConsumidorFinalDian`, `ConceptoDeCorreccionDian`, `ClaseDeNotaDian { NotaCredito, NotaDebito, NotaDeAjustePos,
+  NotaDeAjusteDelDocumentoSoporte }` y los JSON `Catalogs/Data/{unidades-rec20, medios-de-pago,
+  tipos-de-identificacion, conceptos-de-correccion}.json`; en Persistence, `DivipolaSeeder` (Order 82,
+  `Data/divipola.json`, `SemillaDivipola`, `EntradaDivipola`, `Normalizar`); en Shared, `SeccionDePersona.DatosTributarios`,
+  `AutorizacionAlCrearDto`, `PoliticaDeDatosVigenteDto`, `PersonasClient.PoliticaDeDatosVigenteAsync`,
+  `[Parameter] CanalDeAutorizacion` de `PersonaDialog` y la clase CSS `.texto-politica`.
 
 **API y Shared**: `API/Integration/{DespachadorDeMensajes, EjecutorEnCooperativa, ProgramadorDeTareas,
 SenalDeMensajes, IntegrationOptions}`; `API/Services/{ActorDeLaPeticion, OrigenDeLaPeticion,
@@ -1201,7 +1218,11 @@ de otro módulo → `Accounting.VoucherType.NotAllowedForModule`; cierre contabl
 where, permission }`), `ElectronicInvoicing.NotReady` (`data.missing[]`); catálogo tributario →
 `Core.Tax.NotFound`, `Core.TaxRate.{NotFound, Overlaps, InEffect, Ambiguous}`,
 `Core.WithholdingConcept.{NotFound, InUse}`, `Core.Tax.Immutable` (nuevo: la plantilla no cambia la clase, la forma de
-cálculo ni el impuesto base de un impuesto existente); vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+cálculo ni el impuesto base de un impuesto existente), `Core.TaxRate.MunicipalityUnknown` (nuevo, T176: el municipio de la
+tarifa no está en `COR_Cities.DaneCode`; en la plantilla, `Import.Cell.NotFound` en la columna del municipio); personas →
+`Person.DataAuthorization.PolicyUnknown` (nuevo: la versión de política no es de la cooperativa) y
+`Person.DataAuthorization.PolicyRequired` (nuevo: hay política vigente y la autorización no dice cuál se mostró);
+sucursales → `Branch.MunicipalityUnknown`; vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -1645,7 +1666,7 @@ responsabilidades DIAN (O-13, O-15, O-23, O-47, R-99-PN), el tributo y el tipo d
 **derivan** en `CatalogoDian` (el `IdType` heredado se traduce por tabla, como hace la dispersión). El
 perfil de la cooperativa son los parámetros `TAX` con vigencia. `COR_Cities.DaneCode` con semilla
 DIVIPOLA, `COR_Branches.MunicipalityDaneCode` (lo escriben las rutas existentes `POST/PUT
-/api/accounting/branches` de la 009, validado contra `COR_Cities.DaneCode`: 422
+/api/core/branches` —el contrato decía `/api/accounting/branches`, que no existe; T178—, validado contra `COR_Cities.DaneCode`: 422
 `Branch.MunicipalityUnknown`), y el documento de compra lleva
 `OperationMunicipalityDaneCode`, propuesto desde la sucursal de la bodega que recibe. ReteICA se busca por
 (municipio, CIIU, concepto) y cae a la fila `*` del municipio. `IcaRate` por persona no se usa.

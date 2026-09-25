@@ -564,7 +564,7 @@ edita. Cada bodega nace con su ubicación por defecto `GENERAL`. Una bodega nuev
 (§13.3); la de tránsito se considera activa cuando lo está alguna bodega de su sucursal. Crearla no la
 asigna a nadie: quien no tiene alcance total la ve después de que `Scopes.Manage` se la asigne. Si la
 sucursal no tiene municipio (`COR_Branches.MunicipalityDaneCode`, que se escribe por `POST/PUT
-/api/accounting/branches`: §29), la respuesta trae el aviso
+/api/core/branches`: §29), la respuesta trae el aviso
 `Inventory.Branch.MunicipalityMissing`: las compras de esa bodega no tendrán municipio propuesto para la
 ReteICA. Fuera de ese momento una bodega de tránsito no se crea a mano (un `POST` con un tipo `Transit`: 422
 `Inventory.WarehouseType.TransitIsSystem`).
@@ -3299,7 +3299,9 @@ los tipos de alerta levantados sin destinatario activo, que se enrutaron a `Comp
   en `PersonInput` el perfil tributario: `isVatResponsible`, `isSelfWithholder`,
   `isVatWithholdingAgent`, `isSimpleTaxRegime`, `isIncomeTaxFiler`, `isObligatedToInvoice`,
   `isLargeContributor`, `withholdingExempt`, `icaWithholdingExempt` y `ciiuCode`. Las seis marcas
-  nuevas se escriben **sólo** por `PersonInput`/`PersonaDialog`, como el resto de la persona. Además
+  nuevas se escriben **sólo** por `PersonInput`/`PersonaDialog`, como el resto de la persona. Las diez son
+  anulables en el contrato: nula = no cambia (un `PUT` sin ellas no las borra; al crear, nula es falso), y
+  `ciiuCode` vacío quita el CIIU (4 a 6 dígitos). Además
   aceptan `authorization?: { decision: Accepted | Declined, policyVersionPublicId, channel }`, la
   autorización de tratamiento de datos capturada al crear (`AutorizacionAlCrear`), que se escribe en el
   mismo `SaveChanges` que la persona (`HabeasDataConsent.Action = Declined` cuando se niega).
@@ -3307,9 +3309,12 @@ los tipos de alerta levantados sin destinatario activo, que se enrutaron a `Comp
   version, text, publishedAt }`, la política que el POS y Compras muestran al crear una persona. Sin
   política publicada → 404 `Generic.NotFound`, y la pantalla muestra el aviso «sin política vigente»
   y deja crear la persona sin autorización.
-- `POST/PUT /api/accounting/branches` (009) aceptan `municipalityDaneCode`, el municipio DIVIPOLA de la
+- `POST/PUT /api/core/branches` (`Endpoints/Core/BranchesEndpoints.cs`; el contrato decía `/api/accounting/branches`,
+  que no existe: corregido en T178) aceptan `municipalityDaneCode`, el municipio DIVIPOLA de la
   sucursal, que ReteICA de compras propone (FR-050) y que contracts/plantillas.md §0.2 exige antes de
-  cargar. Se valida contra `COR_Cities.DaneCode` → si no existe, 422 `Branch.MunicipalityUnknown`.
+  cargar. Se valida contra `COR_Cities.DaneCode` → si no existe, 422 `Branch.MunicipalityUnknown`. En el `PUT`,
+  `municipalityDaneCode` nulo no cambia el municipio y vacío lo quita; los fallos de estas dos rutas responden con el
+  sobre canónico (antes el `PUT` respondía 404 a cualquier fallo).
 - `POST /api/audit/integrity/verify` (`AuditLog.VerifyIntegrity`; `VerifyAuditIntegrityQuery`, una
   consulta sin clave de operación, FR-008). Cuerpo `{ from, to, stream? }`: sin `stream`, la cadena de
   10 años de la cooperativa. Respuesta `{ stream, fromSeq, toSeq, checked, anchorsChecked, incidents:
@@ -3415,7 +3420,7 @@ completa de rutas es este contrato, no la tabla:
   `withholding-concepts/{id}`, `taxes/template.xlsx|import`.
 - **Vendedores** (§31, `SalespeopleEndpoints.cs`): `salespeople`, `salespeople/{id}`,
   `salespeople/{id}/retire`, `salespeople/template.xlsx|import`.
-- **Rutas existentes** (§29): `municipalityDaneCode` en `/api/accounting/branches` no agrega ruta;
+- **Rutas existentes** (§29): `municipalityDaneCode` en `/api/core/branches` no agrega ruta;
   `/api/compliance/habeas-data/policies/current` y `/api/audit/integrity/verify` ya están en la tabla.
 
 Nombres nuevos que no están en `decisiones-transversales.md` §2.16:

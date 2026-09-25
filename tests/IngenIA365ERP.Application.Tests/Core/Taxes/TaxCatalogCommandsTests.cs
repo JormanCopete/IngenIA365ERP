@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Entities.Core;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -175,6 +176,14 @@ public class TaxCatalogCommandsTests : IDisposable
 
         var reteica = await ImpuestoAsync("RICA", TaxKind.ReteIca);
         (await CrearTarifaAsync(Tarifa(reteica, "RICAGEN", 0.0066m))).Error.Code.Should().Be("Validation.Invalid", "ReteICA exige municipio");
+        // T176: el municipio se valida contra COR_Cities.DaneCode (DIVIPOLA), no sólo por su forma.
+        (await CrearTarifaAsync(Tarifa(reteica, "RICAGEN", 0.0066m, municipio: "76001"))).Error.Code.Should().Be("Core.TaxRate.MunicipalityUnknown");
+        _db.Cities.Add(new City
+        {
+            Name = "Cali", DaneCode = "76001", CreatedBy = "seed",
+            Department = new Department { Code = "76", Name = "Valle del Cauca", CreatedBy = "seed", Country = new Country { Name = "Colombia", CreatedBy = "seed" } },
+        });
+        await _db.SaveChangesAsync();
         (await CrearTarifaAsync(Tarifa(reteica, "RICAGEN", 0.0066m, municipio: "76001"))).IsSuccess.Should().BeTrue();
 
         (await CrearTarifaAsync(Tarifa(rtf, "RFY", 0.025m, concepto: Guid.NewGuid()))).Error.Code.Should().Be("Core.WithholdingConcept.NotFound");

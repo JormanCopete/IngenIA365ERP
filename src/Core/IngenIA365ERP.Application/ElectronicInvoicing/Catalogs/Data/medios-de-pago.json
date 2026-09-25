@@ -1,0 +1,62 @@
+{
+  "catalogo": "mediosDePago",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla 13.3.4.2 (medios de pago) y 13.3.4.1 (formas de pago)",
+      "porCotejar": false,
+      "codigos": [
+        {
+          "codigo": "10",
+          "nombre": "Efectivo"
+        },
+        {
+          "codigo": "20",
+          "nombre": "Cheque"
+        },
+        {
+          "codigo": "42",
+          "nombre": "Consignación bancaria"
+        },
+        {
+          "codigo": "47",
+          "nombre": "Transferencia débito bancaria"
+        },
+        {
+          "codigo": "48",
+          "nombre": "Tarjeta crédito"
+        },
+        {
+          "codigo": "49",
+          "nombre": "Tarjeta débito"
+        },
+        {
+          "codigo": "71",
+          "nombre": "Bonos"
+        },
+        {
+          "codigo": "72",
+          "nombre": "Vales"
+        },
+        {
+          "codigo": "1",
+          "nombre": "Instrumento no definido"
+        },
+        {
+          "codigo": "ZZZ",
+          "nombre": "Acuerdo mutuo"
+        }
+      ],
+      "formasDePago": [
+        {
+          "codigo": "1",
+          "nombre": "Contado"
+        },
+        {
+          "codigo": "2",
+          "nombre": "Crédito"
+        }
+      ]
+    }
+  ]
+}

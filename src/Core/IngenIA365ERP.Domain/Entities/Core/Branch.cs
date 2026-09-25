@@ -20,4 +20,11 @@ public class Branch : AuditableEntity
     // Feature 009 (R7): vinculo con la oficina registrada en ADM_Branches (por PublicId, sin FK entre bases)
     // para traducir las sucursales asignadas a un usuario al alcance contable.
     public Guid? TenantBranchPublicId { get; set; }
+
+    /// <summary>
+    /// Municipio DIVIPOLA de la sucursal (feature 012, T24; T176), referido por código a <c>COR_Cities.DaneCode</c> sin FK:
+    /// el código es el dato. ReteICA de compras lo propone al documento (FR-050) y la carga de plantillas lo exige.
+    /// </summary>
+    [MaxLength(5)]
+    public string? MunicipalityDaneCode { get; set; }
 }

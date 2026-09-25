@@ -16,7 +16,7 @@ public class RegisterAssociateWithPersonCommandHandlerTests
     public async Task Crea_persona_y_afiliacion_en_un_solo_guardado()
     {
         var d = new PersonasTestData();
-        var handler = new RegisterAssociateWithPersonCommandHandler(d.Db, d.Personas, d.Asociados);
+        var handler = new RegisterAssociateWithPersonCommandHandler(d.Altas, d.Asociados);
 
         var r = await handler.Handle(new RegisterAssociateWithPersonCommand(PersonasTestData.Entrada(), Afiliacion()), CancellationToken.None);
 
@@ -36,7 +36,7 @@ public class RegisterAssociateWithPersonCommandHandlerTests
         var d = new PersonasTestData();
         d.Persona("1", "Carlos", "Gómez");
         d.Persona("2", "Diana", "Ríos", eliminada: true);
-        var handler = new RegisterAssociateWithPersonCommandHandler(d.Db, d.Personas, d.Asociados);
+        var handler = new RegisterAssociateWithPersonCommandHandler(d.Altas, d.Asociados);
 
         var duplicada = await handler.Handle(new RegisterAssociateWithPersonCommand(PersonasTestData.Entrada("1"), Afiliacion()), CancellationToken.None);
         var eliminada = await handler.Handle(new RegisterAssociateWithPersonCommand(PersonasTestData.Entrada("2"), Afiliacion()), CancellationToken.None);

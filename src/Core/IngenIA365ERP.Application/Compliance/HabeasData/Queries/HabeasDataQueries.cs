@@ -151,3 +151,32 @@ public sealed class ListHabeasDataHistoryQueryHandler
         return Result.Success<IReadOnlyList<HabeasDataHistoryItemDto>>(items);
     }
 }
+
+/// <summary>
+/// La política vigente de la cooperativa, la que se le muestra al titular al crear una persona (feature 012, T46, T175;
+/// <c>GET /api/compliance/habeas-data/policies/current</c>, permiso <c>Core.People.Create</c>). Sin política publicada,
+/// <c>Generic.NotFound</c>. (nuevo)
+/// </summary>
+public sealed record GetCurrentPolicyQuery : IRequest<Result<PoliticaVigenteDto>>;
+
+public sealed class GetCurrentPolicyQueryValidator : AbstractValidator<GetCurrentPolicyQuery>;
+
+public sealed class GetCurrentPolicyQueryHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    : IRequestHandler<GetCurrentPolicyQuery, Result<PoliticaVigenteDto>>
+{
+    public async Task<Result<PoliticaVigenteDto>> Handle(GetCurrentPolicyQuery request, CancellationToken ct)
+    {
+        if (!int.TryParse(currentUser.TenantId, out var tenantId))
+            return Result.Failure<PoliticaVigenteDto>("Auth.TenantRequired", "El usuario actual no está asociado a una cooperativa.");
+
+        var dto = await db.HabeasDataPolicyVersions.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.EffectiveTo == null)
+            .OrderByDescending(p => p.VersionNumber)
+            .Select(p => new PoliticaVigenteDto(p.PublicId, p.VersionNumber, p.Title, p.ContentMarkdown, p.EffectiveFrom))
+            .FirstOrDefaultAsync(ct);
+
+        return dto is null
+            ? Result.Failure<PoliticaVigenteDto>("Generic.NotFound", "La cooperativa no tiene una política de tratamiento de datos publicada.")
+            : Result.Success(dto);
+    }
+}
