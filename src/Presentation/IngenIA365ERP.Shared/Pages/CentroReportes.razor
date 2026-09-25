@@ -161,28 +161,7 @@
         </div>
     </div>
 
-    <!-- Inventario -->
-    <div class="report-section">
-        <h4 class="report-section-title">
-            <span class="e-icons e-box"></span>Inventario
-        </h4>
-        <div class="report-cards">
-            <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
-                <div class="report-card-body">
-                    <h5>Inventario Valorizado</h5>
-                    <p>Existencias por producto con costo unitario y valor total por bodega.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/inventario-valorizado")'>Generar</SfButton>
-                </div>
-            </div>
-            <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-print-layout"></span></div>
-                <div class="report-card-body">
-                    <h5>Factura de Venta</h5>
-                    <p>Impresion o reimpresion de facturas de venta emitidas.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturacion")'>Generar</SfButton>
-                </div>
-            </div>
-        </div>
-    </div>
+    @* Inventario: «Inventario Valorizado» y «Factura de Venta» eran del modulo heredado, que
+       retiro la feature 012 (RetiroDelInventarioHeredado). Los informes del inventario nuevo
+       vuelven con su centro de reportes (US12). *@
 </div>

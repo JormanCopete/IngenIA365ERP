@@ -757,57 +757,7 @@ public static class ManualCatalogo
         t.Add(Maestro("/cdt/tasas-plazo", "Tasas por plazo CDT", Modulos.Cdt, "una tasa por plazo", "Tasa según rango de días y monto; con vigencias.", "cdt", "tasas", "plazo", "vigencia"));
 
         // --------------------------------------------------------------- Inventario --
-        t.Add(Proceso("productos", "Productos", Modulos.Inventario, "/inventario/productos",
-            "El catálogo de lo que la cooperativa vende o consume: código, grupo, unidad, precios, impuestos y cuentas.",
-            [
-                P("Inventario → Productos", "«Buscar» por código, nombre o grupo.", "/inventario/productos", "Abrir Productos"),
-                P("Nuevo", "Código, nombre, grupo y grupo primario, unidad de medida, precio por lista, IVA y si maneja existencias."),
-                P("Cuentas", "Las cuentas contables del producto (inventario, costo, venta) vienen de Cuentas de Producto por grupo; si el grupo no las tiene, el movimiento no contabiliza.", "/inventario/cuentas-producto", "Abrir Cuentas de Producto"),
-                P("Existencias", "Se ven por bodega en el detalle y en el Kardex; no se editan a mano: se ajustan con un movimiento de inventario.", "/inventario/kardex", "Abrir Kardex"),
-            ],
-            ["productos", "articulos", "catalogo", "precio", "existencias", "codigo de barras"], ["Cooperativa activa.", "Grupos de producto creados."],
-            ["movimiento-de-inventario", "facturacion", "inventario-grupos"], [], TipoDeTema.Proceso));
-
-        t.Add(Proceso("movimiento-de-inventario", "Movimiento de inventario", Modulos.Inventario, "/inventario/movimientos",
-            "Entradas, salidas, traslados entre bodegas y ajustes. Cada movimiento actualiza existencias y contabiliza según su tipo.",
-            [
-                P("Inventario → Movimientos", "Historial filtrable por tipo, bodega, producto y fecha.", "/inventario/movimientos", "Abrir Movimientos"),
-                P("Nuevo Movimiento", "Tipo (define si suma, resta o traslada y cómo contabiliza), bodega origen/destino, fecha y tercero si aplica.", "/inventario/movimientos/nuevo", "Abrir Nuevo Movimiento"),
-                P("Agregar líneas", "Producto, cantidad y costo unitario en las entradas. Las salidas toman el costo promedio."),
-                P("Guardar", "Actualiza el Kardex y genera el comprobante. Un movimiento guardado se reversa con otro de signo contrario."),
-            ],
-            ["movimiento", "entrada", "salida", "traslado", "ajuste", "bodega", "kardex", "existencias"], ["Cooperativa activa.", "Tipos de movimiento y bodegas creados."],
-            ["productos", "inventario-kardex", "inventario-tipos-movimiento"], ["/inventario/movimientos/nuevo"], TipoDeTema.Proceso));
-
-        t.Add(Proceso("facturacion", "Facturación", Modulos.Inventario, "/inventario/facturacion",
-            "Vender: factura con productos, impuestos, forma de pago y vendedor. Descarga inventario y contabiliza.",
-            [
-                P("Inventario → Facturación", null, "/inventario/facturacion", "Abrir Facturación"),
-                P("Nueva factura", "Cliente (del registro de personas), punto de venta, vendedor y lista de precios."),
-                P("Agregar productos", "Código o búsqueda, cantidad, descuento si el tipo de descuento lo permite. El IVA se calcula por producto."),
-                P("Cobrar", "Forma de pago; contado o crédito según el cliente. Genera la factura, la salida de inventario y el comprobante."),
-                P("Turnos y comisiones", "Si la cooperativa usa turnos de caja, la factura queda en el turno abierto; las comisiones se liquidan con los parámetros de comisiones.", "/inventario/turnos", "Abrir Turnos"),
-            ],
-            ["factura", "venta", "cobrar", "punto de venta", "vendedor", "iva", "descuento"], ["Cooperativa activa.", "Productos con precio e impuestos.", "Punto de venta y, si aplica, turno abierto."],
-            ["productos", "movimiento-de-inventario", "inventario-puntos-venta"], [], TipoDeTema.Proceso));
-
-        t.Add(Consulta("/inventario/kardex", "Kardex", Modulos.Inventario,
-            "Entradas, salidas y saldo de un producto en una bodega, con costo promedio, movimiento a movimiento.",
-            "Producto, bodega y rango de fechas.", "kardex", "existencias", "costo promedio", "historial del producto"));
-        t.Add(Maestro("/inventario/grupos", "Grupos de producto", Modulos.Inventario, "un grupo", null, "grupos", "categoria", "productos"));
-        t.Add(Maestro("/inventario/grupos-primarios", "Grupos primarios", Modulos.Inventario, "un grupo primario", null, "grupos primarios"));
-        t.Add(Maestro("/inventario/grupos-secundarios", "Grupos secundarios", Modulos.Inventario, "un grupo secundario", null, "grupos secundarios"));
-        t.Add(Maestro("/inventario/tipos-movimiento", "Tipos de movimiento", Modulos.Inventario, "un tipo de movimiento", "Si suma, resta o traslada, y cómo contabiliza.", "tipos", "movimiento", "entrada", "salida"));
-        t.Add(Maestro("/inventario/bodegas", "Bodegas", Modulos.Inventario, "una bodega", null, "bodegas", "almacen", "deposito"));
-        t.Add(Maestro("/inventario/ubicaciones", "Ubicaciones", Modulos.Inventario, "una ubicación", "Estantes o posiciones dentro de una bodega.", "ubicaciones", "estante"));
-        t.Add(Maestro("/inventario/puntos-venta", "Puntos de venta", Modulos.Inventario, "un punto de venta", "Resolución de facturación y numerador propios.", "punto de venta", "caja", "resolucion"));
-        t.Add(Maestro("/inventario/turnos", "Turnos", Modulos.Inventario, "un turno de caja", "Apertura con base, cierre con arqueo.", "turnos", "caja", "arqueo"));
         t.Add(Maestro("/inventario/vendedores", "Vendedores", Modulos.Inventario, "un vendedor", null, "vendedores", "comision"));
-        t.Add(Maestro("/inventario/tipos-descuento", "Tipos de descuento", Modulos.Inventario, "un tipo de descuento", null, "descuento", "tipos"));
-        t.Add(Maestro("/inventario/tipos-lista-precios", "Listas de precios", Modulos.Inventario, "una lista de precios", null, "lista de precios", "precio"));
-        t.Add(Maestro("/inventario/parametros-comisiones", "Parámetros de comisiones", Modulos.Inventario, "un parámetro de comisión", null, "comisiones", "vendedores"));
-        t.Add(Maestro("/inventario/cuentas-iva", "Cuentas IVA", Modulos.Inventario, "una cuenta de IVA", null, "iva", "cuentas", "inventario"));
-        t.Add(Maestro("/inventario/cuentas-producto", "Cuentas de producto", Modulos.Inventario, "una cuenta de producto", "Inventario, costo y venta por grupo.", "cuentas", "producto", "contabilizacion"));
 
         // -------------------------------------------------------------------- Nómina --
         t.Add(Proceso("empleados", "Empleados", Modulos.Nomina, "/nomina/empleados",
@@ -1149,7 +1099,7 @@ public static class ManualCatalogo
                 P("SISTEMA → Centro de Reportes", null, "/reportes", "Abrir el Centro de Reportes"),
                 P("Elegir el reporte", "«Generar» abre su pantalla. Todos piden parámetros (fecha de corte o período, y filtros) y muestran el resultado en pantalla."),
                 P("Exportar o imprimir", "Cada reporte ofrece PDF cuando corresponde; para el resto, la impresión del navegador (Ctrl+P) respeta el diseño."),
-                P("Qué hay", "Contabilidad: balance general, estado de resultados, libro mayor, balance de prueba, certificados de retención. Cartera: extracto de crédito, cartera por edades, calificación, extractos, CDT. Nómina: comprobante de pago, liquidación. Inventario: inventario valorizado, facturación."),
+                P("Qué hay", "Contabilidad: balance general, estado de resultados, libro mayor, balance de prueba, certificados de retención. Cartera: extracto de crédito, cartera por edades, calificación, extractos, CDT. Nómina: comprobante de pago, liquidación. El inventario heredado se retiró (feature 012); sus informes vuelven con el módulo nuevo."),
             ],
             ["reportes", "informes", "imprimir", "pdf", "exportar", "centro"], ["Cooperativa activa."], [], [], TipoDeTema.Consulta));
 
@@ -1160,7 +1110,6 @@ public static class ManualCatalogo
         t.Add(Reporte("/reportes/extracto-credito", "Extracto de crédito", Modulos.Reportes, "Estado de cuenta de un crédito para el asociado: cuotas pagadas, pendientes, intereses y saldo.", "Asociado y crédito, y período.", "extracto", "credito", "estado de cuenta"));
         t.Add(Reporte("/reportes/cartera-edades", "Cartera por edades", Modulos.Reportes, "La cartera agrupada por tramos de días de mora: base de la provisión y del seguimiento de cobro.", "Fecha de corte, línea y agencia.", "cartera por edades", "mora", "tramos", "provision"));
         t.Add(Reporte("/reportes/nomina", "Reportes de nómina", Modulos.Reportes, "Doce vistas en una pantalla. Sobre la nómina ordinaria: comprobante por empleado, resumen de la corrida por concepto, detalle empleado × concepto, novedades del período e histórico por empleado entre fechas. Sobre las liquidaciones especiales (feature 010): resumen y detalle de una prima, cesantías, vacaciones o definitiva elegida por tipo y corrida; consignación de cesantías por fondo (Excel con una hoja por fondo); saldos de vacaciones a una fecha; movimientos de vacaciones entre fechas; terminaciones entre fechas; y saldos iniciales de prestaciones vigentes a una fecha. Todas se exportan a Excel, PDF y Word y cada exportación queda en auditoría.", "Período (y su corrida), empleado y rango de fechas, o tipo de liquidación y corrida, según la vista.", "comprobante", "desprendible", "nomina", "pago", "prima", "cesantias", "consignacion", "vacaciones", "terminaciones", "saldos iniciales", "excel", "word", "pdf", "reporte"));
-        t.Add(Reporte("/reportes/inventario-valorizado", "Inventario valorizado", Modulos.Reportes, "Existencias por producto y bodega con su costo promedio y valor total.", "Fecha de corte, bodega y grupo.", "inventario valorizado", "existencias", "costo", "valor"));
 
         return t;
     }

@@ -286,30 +286,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument>();
     public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission>();
 
-    // === Inventory (24) ===
-    public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
-    public DbSet<PrimaryGroup> PrimaryGroups => Set<PrimaryGroup>();
-    public DbSet<SecondaryGroup> SecondaryGroups => Set<SecondaryGroup>();
-    public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
-    public DbSet<OrderTransaction> OrderTransactions => Set<OrderTransaction>();
-    public DbSet<InventoryTransactionType> InventoryTransactionTypes => Set<InventoryTransactionType>();
-    public DbSet<InventoryInvoice> InventoryInvoices => Set<InventoryInvoice>();
-    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
-    public DbSet<OrderDocument> OrderDocuments => Set<OrderDocument>();
-    public DbSet<Price> Prices => Set<Price>();
-    public DbSet<PriceListType> PriceListTypes => Set<PriceListType>();
-    public DbSet<InventoryDiscount> InventoryDiscounts => Set<InventoryDiscount>();
-    public DbSet<DiscountType> DiscountTypes => Set<DiscountType>();
-    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
-    public DbSet<Location> Locations => Set<Location>();
-    public DbSet<SalesPoint> SalesPoints => Set<SalesPoint>();
-    public DbSet<Shift> Shifts => Set<Shift>();
-    public DbSet<ProductAccount> ProductAccounts => Set<ProductAccount>();
-    public DbSet<VatAccount> VatAccounts => Set<VatAccount>();
-    public DbSet<PhysicalInventory> PhysicalInventories => Set<PhysicalInventory>();
-    public DbSet<CommissionParameter> CommissionParameters => Set<CommissionParameter>();
-    public DbSet<CommissionPriceParam> CommissionPriceParams => Set<CommissionPriceParam>();
+    // === Inventory (1: sólo vendedores; el modelo heredado se retiró en RetiroDelInventarioHeredado) ===
     public DbSet<Salesperson> Salespeople => Set<Salesperson>();
 
     // === CDT (7) ===

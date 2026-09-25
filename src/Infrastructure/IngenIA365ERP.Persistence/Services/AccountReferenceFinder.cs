@@ -40,13 +40,6 @@ internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccount
         foreach (var n in await db.Banks.AsNoTracking().Where(b => !b.IsDeleted && b.AccountingAccountCode == code).Select(b => b.Name).ToListAsync(ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Tesoreria), "Bancos", n));
 
-        foreach (var n in await db.ProductAccounts.AsNoTracking().Where(p => !p.IsDeleted && (p.VatAccountCode == code || p.DiscountAccountCode == code || p.TaxableSalesAccountCode == code || p.NonTaxableSalesAccountCode == code || p.NetAccountCode == code))
-                     .Select(p => p.Id.ToString()).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Inventario), "Cuentas por producto", n));
-
-        foreach (var n in await db.VatAccounts.AsNoTracking().Where(v => !v.IsDeleted && v.AccountCode == code).Select(v => v.Id.ToString()).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Inventario), "Cuentas de IVA", n));
-
         return lista;
     }
 }

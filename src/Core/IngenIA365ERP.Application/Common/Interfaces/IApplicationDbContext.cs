@@ -187,25 +187,7 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions { get; }
 
     // Inventory
-    DbSet<Product> Products { get; }
-    DbSet<ProductGroup> ProductGroups { get; }
-    DbSet<PrimaryGroup> PrimaryGroups { get; }
-    DbSet<SecondaryGroup> SecondaryGroups { get; }
-    DbSet<InventoryTransactionType> InventoryTransactionTypes { get; }
-    DbSet<Warehouse> Warehouses { get; }
-    DbSet<Location> Locations { get; }
-    DbSet<SalesPoint> SalesPoints { get; }
-    DbSet<Shift> Shifts { get; }
     DbSet<Salesperson> Salespeople { get; }
-    DbSet<DiscountType> DiscountTypes { get; }
-    DbSet<PriceListType> PriceListTypes { get; }
-    DbSet<ProductAccount> ProductAccounts { get; }
-    DbSet<VatAccount> VatAccounts { get; }
-    DbSet<CommissionParameter> CommissionParameters { get; }
-    DbSet<InventoryDocument> InventoryDocuments { get; }
-    DbSet<InventoryTransaction> InventoryTransactions { get; }
-    DbSet<InventoryInvoice> InventoryInvoices { get; }
-    DbSet<PhysicalInventory> PhysicalInventories { get; }
 
     // CDT
     DbSet<Certificate> Certificates { get; }
