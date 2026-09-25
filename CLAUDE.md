@@ -578,11 +578,12 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/011-adjuntos-s3-prefirmadas/plan.md](specs/011-adjuntos-s3-prefirmadas/plan.md)
+[specs/012-inventario-comercial/plan.md](specs/012-inventario-comercial/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/011-adjuntos-s3-prefirmadas/spec.md)
-- [research.md](specs/011-adjuntos-s3-prefirmadas/research.md)
-- [data-model.md](specs/011-adjuntos-s3-prefirmadas/data-model.md)
-- [quickstart.md](specs/011-adjuntos-s3-prefirmadas/quickstart.md)
-- [contracts/](specs/011-adjuntos-s3-prefirmadas/contracts/)
+- [spec.md](specs/012-inventario-comercial/spec.md)
+- [research.md](specs/012-inventario-comercial/research.md)
+- [data-model.md](specs/012-inventario-comercial/data-model.md)
+- [quickstart.md](specs/012-inventario-comercial/quickstart.md)
+- [decisiones-transversales.md](specs/012-inventario-comercial/decisiones-transversales.md)
+- [contracts/](specs/012-inventario-comercial/contracts/)
 <!-- SPECKIT END -->
