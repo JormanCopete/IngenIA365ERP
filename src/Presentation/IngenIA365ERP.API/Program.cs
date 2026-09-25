@@ -172,6 +172,32 @@ try
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IActorActual, IngenIA365ERP.API.Services.ActorDeLaPeticion>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa, IngenIA365ERP.API.Integration.EjecutorEnCooperativa>();
 
+    // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
+    // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando
+    // DatabaseReadiness. El servicio queda registrado aunque este apagado, para que las pruebas
+    // conduzcan una pasada a mano (la fixture los apaga todos).
+    builder.Services
+        .AddOptions<IngenIA365ERP.API.Integration.IntegrationOptions>()
+        .Bind(builder.Configuration.GetSection(IngenIA365ERP.API.Integration.IntegrationOptions.SectionName))
+        .Validate(o => o.Problemas().Count == 0, "La sección Integration de la configuración no es válida; ver IntegrationOptions.Problemas.")
+        .ValidateOnStart();
+    var integracion = builder.Configuration.GetSection(IngenIA365ERP.API.Integration.IntegrationOptions.SectionName)
+        .Get<IngenIA365ERP.API.Integration.IntegrationOptions>() ?? new IngenIA365ERP.API.Integration.IntegrationOptions();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Execution.IArrendamientos, IngenIA365ERP.Persistence.Services.ArrendamientosEnBase>();
+
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
+    if (integracion.ScheduledTasks.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
+
+    builder.Services.AddSingleton(sp => new IngenIA365ERP.Storage.Services.NotificationEmailDispatcher(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>(),
+        sp.GetRequiredService<ILogger<IngenIA365ERP.Storage.Services.NotificationEmailDispatcher>>(),
+        () => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady,
+        TimeSpan.FromSeconds(integracion.EmailDispatcher.IntervalSeconds)));
+    if (integracion.EmailDispatcher.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.Storage.Services.NotificationEmailDispatcher>());
+
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);

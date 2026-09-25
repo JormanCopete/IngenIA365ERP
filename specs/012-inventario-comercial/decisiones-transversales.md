@@ -838,6 +838,18 @@ JSON embebidos versionados (T40), no semillas.
     `ResultadoEnCooperativa { Ejecutada=1, Omitida=2 }`; `IArrendamientos.ArrendarAsync(nombre, duracion?)`,
     `RenovarAsync(nombre, duracion?)` (bool) y `SoltarAsync(nombre)`; `IActorActual.ObtenerAsync(ct) → Task<Actor>`;
     `IOrigenDeLaPeticion { Ip, UserAgent, Endpoint, Canal (ExecutionChannel), Origen }`.
+  - **(nuevo, T047–T051)** `Application/Common/Execution/NombresDeArrendamiento` (`Despacho`,
+    `ReenvioDeAuditoria`, `FacturacionElectronica`, `TareasProgramadas`, `Correo`, `Todos`: los cinco nombres de
+    `COR_BackgroundLeases`); `ITareaProgramada { string Nombre; bool DebeCorrer(DateTimeOffset ahoraLocal,
+    DateTimeOffset? ultimaCorrida); Task EjecutarAsync(IServiceProvider servicios, CancellationToken ct) }` (se
+    registra como singleton; recibe el ámbito de la cooperativa); `Persistence/Services/ArrendamientosEnBase`
+    (`DuenoDelProceso`, `DuracionPorDefecto` = 120 s; constructor con dueño explícito para las pruebas);
+    `Domain/Common/SinDiffDeAuditoriaAttribute` (lo necesitó `BackgroundLease`; `NoAuditarAttribute` sigue en T058);
+    claves de `IntegrationOptions`: `Retries:{BaseDelaySeconds, MaxDelayMinutes, AlertAfterAttempts,
+    AlertAfterMinutes}` y `ScheduledTasks:IntervalSeconds` (60) / `EmailDispatcher:IntervalSeconds` (15), validadas
+    por `IntegrationOptions.Problemas()`; pasadas manuales `ProgramadorDeTareas.CorrerUnaPasadaAsync(ct)` /
+    `(tenantPublicId, ct)` y `NotificationEmailDispatcher.DespacharUnaPasadaAsync(ct)`; en la fixture
+    `CentralIdentityApiFixture.CorrerTareasProgramadasAsync(tenantPublicId)`. Origen del correo: `Tarea:email.dispatch`.
   - **(nuevo, T038/T044)** `API/Services/PlataformaOptions` (sección `Plataforma`, `ZonaHoraria`);
     `Persistence/MultiTenancy/CooperativaDelAmbito.Crear` (la fábrica de `ErpTenantInfo`, sacada de
     `DependencyInjection`); `Shared/Services/Http/CanalDeOrigenHandler` con `Cabecera = "X-Canal"`, `Web = "web"`,
