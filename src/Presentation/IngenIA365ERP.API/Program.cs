@@ -163,6 +163,9 @@ try
         CurrentCentralUserContextAccessor>();
     // Feature 012 (T20): AhoraLocal/HoyLocal con la zona de Plataforma:ZonaHoraria.
     builder.Services.Configure<PlataformaOptions>(builder.Configuration.GetSection(PlataformaOptions.SectionName));
+    // Feature 012 (T317, api.md §13.3): activar una bodega sin la comparación contable (antes de I2) sólo fuera de producción.
+    builder.Services.Configure<IngenIA365ERP.Application.Inventory.GoLive.PuestaEnMarchaOptions>(o =>
+        o.PermitirActivacionSinComparacion = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();

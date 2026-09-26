@@ -71,6 +71,9 @@ public static class ReglasDelDocumento
             if (bodega.Inactiva) errores.Add(InventoryErrors.WarehouseInactive(bodega.PublicId, bodega.Code));
             else if (!bodega.Activa && documento.Class is not (DocumentClass.OpeningBalance or DocumentClass.Voiding))
                 errores.Add(InventoryErrors.WarehouseNotActive(bodega.PublicId, bodega.Code));
+            // US4 (T299, FR-091): el saldo inicial es sólo de una bodega que todavía no opera (su anulación la mira la estrategia).
+            else if (bodega.Activa && documento.Class == DocumentClass.OpeningBalance)
+                errores.Add(GoLive.GoLiveErrors.OpeningBalanceWarehouseActive(bodega.PublicId, bodega.Code));
 
             if (bodega.EsTransito && !esAnulacion && !clase.Warehouses.HasFlag(AdmittedWarehouses.Transit))
                 errores.Add(InventoryErrors.TransitNotAllowed(bodega.Code));

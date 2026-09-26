@@ -41,6 +41,12 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "VerifyInventoryIntegrityQueryHandler",
         "KardexReportQueryHandler",
         "StockReportQueryHandler",
+        // Fase 7, US4 (T312–T314): los lotes y filas de cifras de SOLIDO, la vista previa de la activación y los comparativos.
+        "ListLegacyFigureBatchesQueryHandler",
+        "ListLegacyFigureRowsQueryHandler",
+        "GetWarehouseActivationPreviewQueryHandler",
+        "LegacyComparisonKardexQueryHandler",
+        "LegacyComparisonValuationQueryHandler",
     ];
 
     [Fact]

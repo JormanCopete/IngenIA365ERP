@@ -49,6 +49,9 @@ public static class NucleoComercialSinMigracion
         "INV_Setup",
         "INV_Periods",
         "INV_PeriodClosingBalances",
+        // Fase 7 (US4, T307): activaciones de bodega y cifras de SOLIDO.
+        "INV_WarehouseActivations",
+        "INV_LegacyFigures",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

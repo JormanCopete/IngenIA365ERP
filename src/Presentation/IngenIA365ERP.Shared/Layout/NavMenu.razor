@@ -123,6 +123,13 @@
             <PermissionGate Required="Inventory.Periods.View">
                 <NavLink href="/inventario/periodos" class="nav-subitem">Períodos</NavLink>
             </PermissionGate>
+            @* US4 (T323): saldo inicial bodega por bodega y cifras de SOLIDO para comparar. *@
+            <PermissionGate Required="Inventory.OpeningBalance.Load">
+                <NavLink href="/inventario/saldo-inicial" class="nav-subitem">Saldo inicial</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.LegacyFigures.Import">
+                <NavLink href="/inventario/cifras-solido" class="nav-subitem">Cifras de SOLIDO</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Reports.View">
                 <NavLink href="/inventario/informes" class="nav-subitem">Informes</NavLink>
             </PermissionGate>

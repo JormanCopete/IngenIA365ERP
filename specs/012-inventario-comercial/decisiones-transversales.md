@@ -1185,6 +1185,32 @@ JSON embebidos versionados (T40), no semillas.
   en el menú); pestaña «Grupo contable» de `ProductoDetalle`. Pruebas `Application.Tests/Inventory/{Costing/RetroactivoMinimoTests,
   Common/ReglasDePlataformaDeInventarioTests, Catalog/ChangeProductAccountingGroupCommandTests,
   Periods/{PeriodosDePrueba, InventoryPeriodCommandsTests}, Reports/ValuationReportQueryTests}`.
+- Puesta en marcha (fase 7, US4, T297–T324; todos **(nuevo)** salvo los de data-model y api.md): Domain
+  `Entities/Inventory/GoLive/{WarehouseActivation (LargoDelMotivo), LegacyFigure (+ AccountingGroupId, columna nueva)}` y en
+  `Warehouse` los métodos `FijarFechaDeCorte(DateOnly, bool conSaldoConfirmado = false)`, `Activar(DateOnly, int, DateTimeOffset)`
+  y `EstaActiva` (las cuatro columnas de la activación con `init` y campo de respaldo: sólo cambian por esos métodos);
+  Persistence `Configurations/Inventory/GoLive/{WarehouseActivationConfiguration (UK_INV_WarehouseActivations_Warehouse filtrado),
+  LegacyFigureConfiguration (IX_INV_LegacyFigures_AsOf_Warehouse, IX_INV_LegacyFigures_Batch)}` en `NucleoComercialSinMigracion`;
+  `DbSet` `WarehouseActivations`, `LegacyFigures`. Application `Inventory/GoLive/{GoLiveErrors (+ SaldoConfirmado),
+  PlantillasDePuestaEnMarcha (PlantillaDeSaldoInicial, PlantillaDeCifrasDeSolido), ImportOpeningBalanceCommand (+
+  ResumenDeSaldoInicialDto, ValorPorGrupoDto, DocumentoDeSaldoInicialDto, BodegaDeSaldoInicialDto; `ExtraPorBodega = "byWarehouse"`,
+  `ExtraDocumentos = "documents"`, `MotivoDeDescarte`), ImportLegacyFiguresCommand (+ CifraPorFechaBodegaGrupoDto; `ExtraLote`,
+  `ExtraReemplazados`, `ExtraPorFechaBodegaGrupo`), LegacyFiguresQueries (ListLegacyFigureBatchesQuery, ListLegacyFigureRowsQuery,
+  LoteDeCifrasDto, FilaDeCifraDto), PuestaEnMarchaOptions, ActivateWarehouseCommand (+ GetWarehouseActivationPreviewQuery,
+  ActivationPreviewDto, BodegaDeActivacionDto, SaldoInicialDeActivacionDto, DocumentoDeActivacionDto, ConjuntoDeCuentasDto,
+  CuentaDelConjuntoDto, BloqueoDeActivacionDto, ActivationResultDto; `PermisoDeAceptarDiferencia`, `PrefijoSinComparacion`), y
+  ComparacionDeActivacion (el cálculo común de la vista previa y la activación; `ConjuntosAsync` lo llena US7 con
+  IContabilidadParaInventario)}`; `Inventory/Documents/Efectos/EfectoSaldoInicial`; `EmisionDeInventario.SaldoInicialCargadoAsync`;
+  `Inventory/Reports/ComparativosConSolidoQueries` (`LegacyComparisonKardexQuery`, `LegacyComparisonValuationQuery`);
+  `ReglasDelDocumento` suma «saldo inicial en bodega activa → `Inventory.OpeningBalance.WarehouseActive`». API
+  `Endpoints/Inventory/GoLiveEndpoints`, en `WarehousesEndpoints` las rutas `/{id}/activation` (`Activar`, `ActivacionRequest`), las
+  vistas `legacy-comparison-kardex` y `legacy-comparison-valuation` y `PuestaEnMarchaOptions` en `Program.cs`. Shared
+  `InventarioClient.PuestaEnMarcha` (con sus DTO espejo), `ResultadoDeImportacionDto.{Extra, ExtraComo}`,
+  `ImportarPlantilla.{Revisado, ConDatos}`, `Components/Inventario/ActivacionDeBodegaDialog.razor` y las páginas
+  `Pages/Inventario/{SaldoInicial, CifrasSolido}.razor` con sus enlaces del menú. Guion `database/migration/solido-cifras-inventario.sql`.
+  Pruebas `Application.Tests/Inventory/GoLive/{PuestaEnMarchaDePrueba, ImportOpeningBalanceCommandHandlerTests,
+  SaldoInicialConfirmacionTests, ConvivenciaDeBodegasTests, ImportLegacyFiguresCommandHandlerTests,
+  ActivateWarehouseCommandHandlerTests}` y `Reports/ComparativosConSolidoTests`.
 - Comandos: `SaveInventoryDraftCommand`, `ConfirmInventoryDocumentCommand(DocumentPublicId,
   ExpectedGroup)`, `VoidInventoryDocumentCommand`, `DiscardInventoryDraftCommand`,
   `DispatchTransferCommand`, `ReceiveTransferCommand`, `ResolveTransferDiscrepancyCommand`,
@@ -1385,7 +1411,11 @@ lineNumber, productCode, laterMovement { documentPublicId, displayNumber, operat
 T286: aviso de una celda que la clase ignora, como el modo de paso del saldo inicial);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
 más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
-data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; puesta en marcha (US4) → `Inventory.OpeningBalance.{WarehouseActive,
+TransitNotAllowed, AlreadyConfirmed (data.documents[])}`, `Inventory.OpeningBalance.ZeroCost` (nuevo, T308: aviso de fila, costo
+unitario cero), `Inventory.LegacyFigures.CodeUnresolved` (aviso), `Inventory.LegacyFigures.GroupMismatch` (nuevo, T311: aviso, el
+grupo del archivo no es el del producto a la fecha), `Inventory.Activation.{OpeningBalanceNotConfirmed, CutoffMismatch,
+AccountingUnavailable, AlreadyActive, Difference, AcceptDifferenceNotAllowed (data.permissionCode)}`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

@@ -95,6 +95,19 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
             .ToList();
     }
 
+    // ------------------------------------------------------------------------------------- saldo inicial --
+
+    /// <summary>
+    /// <c>SaldoInicialCargado</c> v1 de un documento <c>OpeningBalance</c> (US4, T309; mensajes.md §7.1): informativo, con la fecha
+    /// de corte y una línea <c>Entry</c> por grupo contable y bodega, al costo cargado. Sin comprobante: ese valor ya está en los
+    /// libros.
+    /// </summary>
+    public async Task<SaldoInicialCargadoV1> SaldoInicialCargadoAsync(InventoryDocument documento, IEnumerable<KardexEntry> kardex, CancellationToken ct) => new()
+    {
+        CutoffDate = documento.OperationDate,
+        Lines = await LineasDeCostoAsync(documento, kardex.ToList(), KardexEntryKind.Entry, ct),
+    };
+
     // ---------------------------------------------------------------------------------------- anulación --
 
     /// <summary>

@@ -234,6 +234,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups { get; }
     DbSet<Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods { get; }
     DbSet<Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances { get; }
+    // Feature 012 (T307, US4): la activación de cada bodega y las cifras de SOLIDO (sólo informativas: nunca kardex).
+    DbSet<Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations { get; }
+    DbSet<Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

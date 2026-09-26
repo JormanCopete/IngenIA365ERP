@@ -1,0 +1,265 @@
+@page "/inventario/saldo-inicial"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Inventario
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Saldo inicial de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T320 (FR-089, FR-091, US4-1; contracts/api.md §13.1, contracts/plantillas.md §14): el saldo inicial, bodega por
+   bodega. La plantilla 14 se revisa (las mismas reglas que al aplicar, sin guardar nada) con los errores por fila y columna y el
+   resumen por bodega —líneas, documentos, cantidad y valor por grupo contable, el insumo de la comparación con Contabilidad— y se
+   aplica todo o nada: quedan borradores por bodega, fechados en su corte y partidos en tramos de 4.000 líneas. La lista muestra
+   los documentos con su estado y valor; al elegir uno, las acciones son las que manda el servidor (allowedActions): confirmar
+   (normalmente queda en aprobación de otra persona), descartar o anular con motivo (sólo mientras la bodega no opera). Desde la
+   bodega se abre la activación (ActivacionDeBodegaDialog). *@
+<PermissionGate Required="Inventory.OpeningBalance.Load" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Saldo inicial de inventario</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_lista.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <a class="e-btn e-outline" href="/inventario/cifras-solido">Cifras de SOLIDO</a>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Importar la plantilla</h4>
+        <p class="texto-apoyo">
+            Una fila por bodega, producto y ubicación, en unidad base, con el costo unitario cargado. La fecha de corte es la víspera de
+            la activación de la bodega y la misma en todas sus filas. Volver a importar reemplaza las líneas de los borradores de esas
+            bodegas; una bodega con saldo confirmado se anula primero.
+        </p>
+        <ImportarPlantilla RutaBase="@InventarioClient.RutaDeSaldoInicial" PermisoDeDescarga="Inventory.Warehouses.View"
+                           PermisoDeImportacion="Inventory.OpeningBalance.Load" ConDatos="false"
+                           Revisado="@VerResumen" Aplicado="@AplicadoAsync" />
+        <IndicadorDeCarga Cargando="@_importacion.Activa">
+            @if (_resumen.Count > 0)
+            {
+                <h4>Resumen por bodega</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Bodega</th><th>Corte</th><th class="numero">Líneas</th><th class="numero">Documentos</th><th class="numero">Cantidad</th><th class="numero">Valor</th><th>Por grupo contable</th></tr></thead>
+                        <tbody>
+                            @foreach (var b in _resumen)
+                            {
+                                <tr>
+                                    <td>@b.Bodega</td>
+                                    <td>@b.FechaDeCorte.ToString("dd/MM/yyyy")</td>
+                                    <td class="numero">@b.Lineas.ToString("N0")</td>
+                                    <td class="numero">@b.Documentos</td>
+                                    <td class="numero">@b.CantidadTotal.ToString("N4")</td>
+                                    <td class="numero">@b.ValorTotal.ToString("N2")</td>
+                                    <td>@string.Join(" · ", b.ValorPorGrupo.Select(g => $"{g.GrupoContable}: {g.Valor:N2}"))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Bodega
+            <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(async e => { _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; await CargarAsync(); })">
+                <option value="">Todas las del alcance</option>
+                @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name · @TextosDeInventario.Texto(TextosDeInventario.ActivacionesDeBodega, b.ActivationStatus)</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(async e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; await CargarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        @if (BodegaElegida is { IsTransit: false } elegida)
+        {
+            <PermissionGate Required="Inventory.Warehouses.Activate">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-check" OnClick="@(() => _activar = true)">
+                    @(elegida.ActivationStatus == BodegaActiva ? "Ver la activación" : "Activar la bodega…")
+                </SfButton>
+            </PermissionGate>
+        }
+    </div>
+
+    <IndicadorDeCarga Cargando="@_lista.Activa">
+        @if (!_lista.Activa && _documentos.Count == 0)
+        {
+            <p class="texto-tenue">No hay documentos de saldo inicial en las bodegas de su alcance: importe la plantilla.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Corte</th><th>Bodega</th><th>Estado</th><th>Creado por</th><th class="numero">Valor</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _documentos)
+                        {
+                            <tr>
+                                <td>@(d.DisplayNumber ?? "(borrador)")</td>
+                                <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@d.Warehouse?.Code</td>
+                                <td>@TextosDeInventario.Estado(d.Status)@(d.VoidedBy is { } a ? $" por {a.DisplayNumber}" : "")</td>
+                                <td>@d.CreatedBy.Name</td>
+                                <td class="numero">@d.CostValue?.ToString("N2")</td>
+                                <td><SfButton CssClass="e-flat" Disabled="@_detalle.Activa" OnClick="@(() => ElegirAsync(d.PublicId))">Acciones</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@(_detalle.Activa || _accion.Activa)">
+        @if (_elegido is { } doc)
+        {
+            <div class="info-card">
+                <h4>@(doc.DisplayNumber ?? "Borrador") · bodega @doc.Warehouse?.Code · corte @doc.OperationDate.ToString("dd/MM/yyyy")</h4>
+                <p>@TextosDeInventario.Estado(doc.Status) · @doc.Lines.Count línea(s)</p>
+                @if (doc.AllowedActions.Count == 0)
+                {
+                    <p class="texto-tenue">No hay acciones disponibles para este documento.</p>
+                }
+                @if (Puede("Discard") || Puede("Void"))
+                {
+                    <label class="campo campo-ancho">Motivo (para descartar o anular) <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" /></label>
+                }
+                <div class="toolbar">
+                    @if (Puede("Confirm"))
+                    {
+                        <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                    }
+                    @if (Puede("Discard"))
+                    {
+                        <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@DescartarAsync">Descartar</SfButton>
+                    }
+                    @if (Puede("Void"))
+                    {
+                        <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    }
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@if (BodegaElegida is { } paraActivar)
+{
+    <ActivacionDeBodegaDialog @bind-Visible="_activar" Bodega="@paraActivar.PublicId" CorteSugerido="@paraActivar.CutoffDate" Activada="@ActivadaAsync" />
+}
+</PermissionGate>
+
+@code {
+    private const int BodegaActiva = 1;
+
+    private readonly EstadoDeCarga _lista = new(), _detalle = new(), _accion = new(), _importacion = new();
+    private ClaveDeOperacion _clave = new();
+    private List<ResumenDeDocumentoDto> _documentos = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<ResumenDeSaldoInicialDto> _resumen = [];
+    private DocumentoDeInventarioDto? _elegido;
+    private Guid? _bodega;
+    private int? _estado;
+    private string? _motivo;
+    private bool _activar;
+
+    private BodegaDto? BodegaElegida => _bodega is { } b ? _bodegas.FirstOrDefault(x => x.PublicId == b) : null;
+
+    private bool Puede(string accion) => _elegido?.AllowedActions.Contains(accion) == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarBodegasAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarBodegasAsync()
+    {
+        var r = await Inventario.ListarBodegasAsync();
+        _bodegas = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _lista.Iniciar();
+        var r = await Inventario.SaldosInicialesAsync(_bodega, _estado);
+        if (!r.IsSuccess)
+        {
+            _documentos = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los saldos iniciales.");
+            return;
+        }
+        _documentos = [.. r.Value!.Items];
+    }
+
+    private void VerResumen(ResultadoDeImportacionDto r)
+    {
+        using var carga = _importacion.Iniciar();
+        _resumen = [.. r.ExtraComo<List<ResumenDeSaldoInicialDto>>(InventarioClient.ExtraSaldoPorBodega) ?? []];
+    }
+
+    private async Task AplicadoAsync(ResultadoDeImportacionDto r)
+    {
+        VerResumen(r);
+        await CargarBodegasAsync();
+        await CargarAsync();
+    }
+
+    private async Task ElegirAsync(Guid id)
+    {
+        using var carga = _detalle.Iniciar();
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        var r = await Inventario.SaldoInicialAsync(id);
+        if (!r.IsSuccess) { _elegido = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el documento."); return; }
+        _elegido = r.Value;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_elegido is not { } doc) return;
+        using var carga = _accion.Iniciar();
+        var r = await Inventario.ConfirmarSaldoInicialAsync(doc.PublicId, doc.RowVersion, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar."); return; }
+        await Notification.SuccessAsync(r.Value!.Status == 1
+            ? "Quedó en aprobación: lo confirma quien tenga Inventory.OpeningBalance.Approve."
+            : "Saldo inicial confirmado.");
+        await DespuesDeLaAccionAsync(doc.PublicId);
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (_elegido is not { } doc || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Inventario.DescartarSaldoInicialAsync(doc.PublicId, _motivo, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+        await Notification.SuccessAsync("Borrador descartado.");
+        await DespuesDeLaAccionAsync(doc.PublicId);
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_elegido is not { } doc || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Inventario.AnularSaldoInicialAsync(doc.PublicId, _motivo, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+        await Notification.SuccessAsync($"Saldo inicial anulado ({r.Value!.DisplayNumber}).");
+        await DespuesDeLaAccionAsync(doc.PublicId);
+    }
+
+    private async Task DespuesDeLaAccionAsync(Guid id)
+    {
+        await CargarAsync();
+        await ElegirAsync(id);
+    }
+
+    private async Task ActivadaAsync(ResultadoDeActivacionDto _)
+    {
+        await CargarBodegasAsync();
+        await CargarAsync();
+    }
+}

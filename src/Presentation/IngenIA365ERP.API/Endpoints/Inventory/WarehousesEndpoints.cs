@@ -3,6 +3,7 @@ using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
+using IngenIA365ERP.Application.Inventory.GoLive;
 using IngenIA365ERP.Application.Inventory.Imports;
 using IngenIA365ERP.Application.Inventory.Warehouses;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -22,6 +23,7 @@ public class WarehousesEndpoints : ICarterModule
 {
     public const string Ver = "Inventory.Warehouses.View";
     public const string Administrar = "Inventory.Warehouses.Manage";
+    public const string Activar = "Inventory.Warehouses.Activate";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -122,6 +124,17 @@ public class WarehousesEndpoints : ICarterModule
                 await sender.Send(new SetWarehouseLocationActiveCommand(id, locationId, true, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Inventory_Warehouses_Locations_Reactivate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
 
+        // US4 (T317, api.md §13.3): la vista previa y la activación de una bodega, con Inventory.Warehouses.Activate (404 sin él).
+        // Antes de I2 no hay comparación contable: fuera de producción sólo aceptando la diferencia (PuestaEnMarchaOptions).
+        g.MapGet("/{id:guid}/activation", async (Guid id, DateOnly? cutoffDate, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetWarehouseActivationPreviewQuery(id, cutoffDate), ct))
+            .WithName("Inventory_Warehouses_Activation_Preview").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Activar);
+
+        g.MapPost("/{id:guid}/activation", async (Guid id, ActivacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ActivateWarehouseCommand(id, body.CutoffDate, body.AcceptDifference ?? false, body.Reason ?? string.Empty)
+                    { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Warehouses_Activate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Activar);
+
         // Plantilla 7 (contracts/plantillas.md §7, §0.7): descarga con Warehouses.View, con datos además Catalog.Export;
         // importar con Warehouses.Manage; la columna stockNegativo exige además Inventory.Parameters.Manage (el ejecutor).
         g.MapPlantilla(Ver, Administrar, PlantillaDeBodegas.Clave, "Inventory_Warehouses",
@@ -162,4 +175,7 @@ public class WarehousesEndpoints : ICarterModule
     public sealed record ReordenRequest(Guid ProductPublicId, Guid WarehousePublicId, decimal Minimum, decimal Maximum, decimal ReorderPoint);
 
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>El cuerpo de la activación (§13.3).</summary>
+    public sealed record ActivacionRequest(DateOnly CutoffDate, bool? AcceptDifference, string? Reason);
 }

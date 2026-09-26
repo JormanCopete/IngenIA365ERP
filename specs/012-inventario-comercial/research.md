@@ -3808,6 +3808,12 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 | I6 | Documento soporte: ¿por operación o semanal? ¿Y una cooperativa no obligada, con compras a no obligados? | Por operación; el DS sigue su propia norma, independiente del parámetro de venta | No |
 | I7 | Si el comprador pide factura después del DEE POS, ¿se agrega el flujo nota de ajuste + factura? | **Resuelta en la spec** (FR-063): sí, en I4; contrato en `contracts/api.md` §18.3.1 | No |
 
+### US4 · Regla de cantidad del saldo inicial (T325, pendiente)
+
+| # | Pregunta | Propuesta por defecto | Bloquea |
+|---|---|---|---|
+| T325 | La cantidad del saldo inicial de cada bodega (plantilla 14, FR-089), ¿es la del **conteo físico más o menos los movimientos que la bodega tuvo en SOLIDO entre el conteo y la fecha de corte**, o la bodega **deja de operar en SOLIDO desde el conteo hasta su activación** (bodega congelada) y la cantidad es la del conteo sin más? | Conteo ± movimientos de SOLIDO hasta el corte: la bodega sigue vendiendo en SOLIDO hasta la víspera de su activación y el archivo trae la cantidad ya corregida. La importación no distingue los dos casos (recibe la cantidad final); la regla la aplica quien arma el archivo. Registrada el 2026-09-26 en la implementación de US4, sin respuesta del dueño todavía: **rige la propuesta**. | No (la carga funciona con cualquiera de las dos; cambia el procedimiento de conteo de la guía de COOFLOPAL) |
+
 ## Riesgos
 
 - **Ruta crítica de la salida.** COOFLOPAL necesita I1 → I2 → I3 → I4, y I4 depende sólo de un contrato

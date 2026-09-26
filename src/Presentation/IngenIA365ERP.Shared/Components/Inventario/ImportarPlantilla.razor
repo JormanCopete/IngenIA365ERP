@@ -160,11 +160,23 @@
     /// </summary>
     [Parameter] public bool Importable { get; set; } = true;
 
+    /// <summary>
+    /// Falso cuando la plantilla no tiene descarga con datos (saldo inicial y cifras de SOLIDO, US4: no hay «lo que hoy tiene la
+    /// cooperativa» que exportar): sólo la vacía.
+    /// </summary>
+    [Parameter] public bool ConDatos { get; set; } = true;
+
     /// <summary>La pantalla ya tiene sus propios botones de descarga.</summary>
     [Parameter] public bool MostrarDescargas { get; set; } = true;
 
     /// <summary>Se aplicó el archivo: la pantalla vuelve a cargar su lista.</summary>
     [Parameter] public EventCallback<ResultadoDeImportacionDto> Aplicado { get; set; }
+
+    /// <summary>
+    /// Terminó una revisión (válida o con errores): la pantalla puede mostrar lo propio de su plantilla (<c>extra</c>, US4 T320:
+    /// el resumen por bodega del saldo inicial).
+    /// </summary>
+    [Parameter] public EventCallback<ResultadoDeImportacionDto> Revisado { get; set; }
 
     private readonly EstadoDeCarga _descarga = new(), _revisando = new(), _aplicando = new();
     private bool _puedeDescargar, _puedeDescargarConDatos, _puedeImportar;
@@ -182,7 +194,7 @@
     protected override async Task OnParametersSetAsync()
     {
         _puedeDescargar = PermisoDeDescarga is null || await Permisos.TieneAsync(PermisoDeDescarga);
-        _puedeDescargarConDatos = _puedeDescargar && Importable && (PermisoDeDescargaConDatos is null || await Permisos.TieneAsync(PermisoDeDescargaConDatos));
+        _puedeDescargarConDatos = _puedeDescargar && Importable && ConDatos && (PermisoDeDescargaConDatos is null || await Permisos.TieneAsync(PermisoDeDescargaConDatos));
         _puedeImportar = Importable && (PermisoDeImportacion is null || await Permisos.TieneAsync(PermisoDeImportacion));
     }
 
@@ -222,6 +234,7 @@
             return;
         }
         _revision = r.Value;
+        if (r.Value is not null) await Revisado.InvokeAsync(r.Value);
     }
 
     private async Task RevisionEnExcelAsync()

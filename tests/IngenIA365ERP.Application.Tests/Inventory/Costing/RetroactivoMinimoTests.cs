@@ -195,7 +195,7 @@ public class RetroactivoMinimoTests
         (await registro.EsExentoAsync(saldo, default)).Should().BeTrue();
         (await registro.EsExentoAsync(anulacion, default)).Should().BeTrue();
 
-        bodega.ActivationStatus = WarehouseActivationStatus.Active;
+        bodega.Activar(D10, KardexDePrueba.Usuario, DateTimeOffset.UtcNow);
         await k.C.Db.SaveChangesAsync();
         (await registro.EsExentoAsync(saldo, default)).Should().BeFalse("una bodega ya activa no admite saldo inicial retroactivo");
     }

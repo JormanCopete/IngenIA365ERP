@@ -171,6 +171,10 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeConsumoInterno>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeBaja>();
+        // Feature 012 (US4, T309, T313): el saldo inicial por bodega y la activación bodega por bodega. Sin
+        // IContabilidadParaInventario (llega con US7, I2) la activación sólo se ensaya fuera de producción.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoSaldoInicial>();
+        services.AddScoped<Inventory.GoLive.ComparacionDeActivacion>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();

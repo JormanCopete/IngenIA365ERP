@@ -359,6 +359,18 @@ public sealed record ResultadoDeImportacionDto
     public IReadOnlyList<ErrorDeImportacionDto> Warnings { get; init; } = [];
     public IReadOnlyList<ErrorDeImportacionDto> Errors { get; init; } = [];
     public int TotalErrors { get; init; }
+
+    /// <summary>
+    /// Lo propio de cada plantilla (§8, §14, §15): la lee la pantalla de esa plantilla con <see cref="ExtraComo{T}"/> (US4, T320:
+    /// <c>byWarehouse</c> del saldo inicial, <c>byDateWarehouseGroup</c> de las cifras de SOLIDO).
+    /// </summary>
+    public IReadOnlyDictionary<string, System.Text.Json.JsonElement>? Extra { get; init; }
+
+    /// <summary><see cref="Extra"/>[<paramref name="clave"/>] leído como <typeparamref name="T"/>; nulo si no vino.</summary>
+    public T? ExtraComo<T>(string clave) =>
+        Extra is not null && Extra.TryGetValue(clave, out var valor) && valor.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined)
+            ? System.Text.Json.JsonSerializer.Deserialize<T>(valor, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+            : default;
 }
 
 // --------------------------------------------------------------------------------------------- informes --
