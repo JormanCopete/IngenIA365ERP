@@ -125,6 +125,12 @@ public static class DependencyInjection
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
         services.AddScoped<Common.Integration.EmisorDeMensajes>();
+        // Feature 012, I2 (T496-T498): el lado consumidor de la plataforma. Los destinos (IDestinoDeMensajes) los registra cada
+        // modulo; sin ninguno registrado, el selector no devuelve nada y la bandeja los muestra como no disponibles. Los reintentos
+        // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
+        services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
+        services.AddScoped<Common.Integration.EntregasElegibles>();
+        services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
         // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
         // historia. TryAdd para que el modulo que los implementa los reemplace sin quitar estas lineas.

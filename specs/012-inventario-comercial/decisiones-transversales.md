@@ -1392,6 +1392,26 @@ los nombres de índice como constantes `IntegrationBatchConfiguration.UnicoDeLaF
 `EmitirContabilizacionDeInventarioAsync`, `EmitirRechazoDeInventarioAsync`, `EmitirLoteDeInventarioProcesadoAsync`; en Shared la
 página de paso `Pages/Inventario/DocumentoPorId.razor` (`/inventario/documentos/{id:guid}`), que lleva a la página del grupo del
 documento (el comprobante sólo sabe que su origen es un `InventoryDocument`).
+**(nuevos, T496–T504)** en la plataforma de mensajería (`Application/Common/Integration`): `IDestinoDeMensajes` con
+`ConsumirAsync(TrabajoDeConsumo)` → `IReadOnlyList<ResultadoDeUnidad>` y `PlanearLote(entregas)` → `IReadOnlyList<TrabajoDeConsumo>`
+(un trabajo es una unidad sola —`TrabajoDeConsumo.DeUnaUnidad`— o un grupo resumido con `ClaveDeGrupo`); `UnidadDeConsumo(Destino,
+OriginPublicId, OriginEventKey, MessagePublicIds, BatchPublicId?, IntentosLeidos)`; `ResultadoDeConsumo.Processed/AlreadyProcessed`
+admiten el recibo sin comprobante (`MotivoSinComprobante` `Informational`/`ZeroValue`) y `ReferenciasDeResultado` fija el texto de
+`ResultReference` (`informativo`, `sin comprobante (valor cero)`); `IMensajesEntrantes.LeerAsync(ids, destino)` → `MensajeEntrante(Envelope,
+Payload, PayloadJson, PayloadSha256, PrevalidationOutcome, EntregaEntrante)` y su implementación `MensajesEntrantes`; el selector
+`EntregasElegibles` (`EnLineaAsync`, `DelLoteAsync`, `DestinosConConsumidor`, `Bloqueantes`); `ErroresDeIntegracion`
+(`Integration.Message.NotFound/.PayloadAltered/.NotRejected`, `Integration.SendNotApplicable.ModeStillNotPosted`,
+`Integration.VersionNotAccepted`, `Integration.Batch.NotFound/.HasPendingDeliveries/.NotRunning`, `Integration.Destination.Unavailable`);
+`ReintentosDeIntegracion` (opciones con los defectos de `Integration:Retries` y la espera `Espera(n, aleatorio)`, que la API reemplaza en
+T527); `LotesDeIntegracion` (número del contador, lote nuevo, asignación, dependientes y clausura) y `LoteOrdenadoDto`; `AlcanceDeLote`
+(el alcance compartido de `OrderIntegrationBatchCommand` y `PreviewIntegrationBatchQuery`); `RegistroDeEntregaDto`;
+`LotesProgramadosDto`/`LoteProgramadoDto` y `ScheduleIntegrationBatchesCommandHandler.IndiceUnicoDeLaFranja`; `ClavesDeLote.Leer(scheduleKey)`
+→ `HorarioDeLote` y `ClavesDeLote.HoraDiaria`; la bandeja `BandejaDeMensajesDto`, `ConteoPorEstadoDto`, `IntegrationMessageDto` con
+`LoteDelMensajeDto`, `ErrorDelMensajeDto`, `ResultadoDelMensajeDto`, `OrigenDelMensajeDto`, `RelacionadoDelMensajeDto`, `BloqueoDelMensajeDto`,
+el detalle `IntegrationMessageDetailDto` con `IntentoDelMensajeDto`, `ActorDelIntentoDto`, `VecinoDelMensajeDto`, y `VistaDeMensajes`.
+`Integration/Accounting/IContabilidadParaInventario` y sus DTO (§4.1, §7.2 de contracts/contabilidad.md) nacen aquí porque la vista previa
+del lote la usa; los pares del conjunto son `ParGrupoBodegaDto` y los saldos por sucursal `SaldoPorSucursalDto` (el contrato los escribía
+como tuplas, que no se serializan), y la completitud y la vista previa llevan los campos de api.md §26.3 y §26.4.
 
 **Facturación electrónica**: `Application/ElectronicInvoicing/Channels/{ICanalDeEmisionElectronica,
 ICanalesDeEmision, ICredencialesDeCanal, ResultadoDeCanal, CapacidadesDelCanal}`,
