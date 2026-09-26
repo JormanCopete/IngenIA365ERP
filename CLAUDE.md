@@ -510,6 +510,85 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `NominaDispersionBancaria` (su scaffold arrastró un cambio de índice de vacaciones ya hecho y se
   limpió antes de salir). Receta: `docs/manual/dispersion-bancaria.md`; runbook §4e.
 
+- **Inventario comercial (feature 012, rama `012-inventario-comercial`, entrega I1, 2026-09-26; rama
+  local, sin merge ni despliegue)**: un módulo comercial nuevo en reemplazo del traslado a medias de
+  SOLIDO, por entregas (I1 núcleo; I2 integración con Contabilidad; I3 ventas y POS; I4 documentos
+  electrónicos DIAN; I5 compras completas y costeo avanzado; I6 comercio ampliado; IC crédito con
+  Cartera, bloqueada por D-02). **I1 construyó**: catálogo (unidades con conversiones, categorías,
+  marcas, grupos contables con vigencia por producto, productos con códigos de barras e impuestos,
+  causas de ajuste, canales), bodegas con ubicaciones y **bodega de tránsito por sucursal**, kardex y
+  existencias, costo promedio ponderado (cooperativa o bodega), períodos con cierre y reapertura,
+  saldo inicial y **activación bodega por bodega** con cifras de SOLIDO y comparativos, compra directa,
+  recepción, factura y notas del proveedor, devolución y eventos RADIAN, traslados en dos pasos con
+  diferencias aprobadas, movimiento entre ubicaciones, conteo físico con foto y ajuste aprobado, reorden
+  y quiebre, nueve vistas en `/api/reports/inventory/{vista}` (`kardex`, `stock`, `valuation`,
+  `legacy-comparison-kardex`, `legacy-comparison-valuation`, `radian-events`, `count-differences`,
+  `documents`, `reorder-alerts`), vendedores como rol (`RolDeVendedor`, `/ventas/vendedores`), y la
+  **plataforma** en `Application/Common` que no sabe de inventario: bandeja de salida de mensajes
+  (`COR_IntegrationMessages`), ejecución por cooperativa (`IEjecutorEnCooperativa`, actor «Proceso de
+  integración», `ProgramadorDeTareas`, arrendamientos `COR_BackgroundLeases`), idempotencia
+  (`Idempotency-Key` → `COR_OperationKeys`), parámetros con vigencia (`COR_ParameterVersions`, un
+  lector y un escritor), aprobaciones multinivel con montos por permiso (`COR_Approval*`,
+  `SEC_PermissionAmountLimits`, aprobador presente con passkey o TOTP), alcance por bodega, alertas
+  (`COR_Alerts` sobre `COR_Notifications`), catálogo tributario de Core, perfil tributario de la
+  persona, DIVIPOLA, dieciséis plantillas de importación con revisión previa y auditoría con entrega
+  garantizada y **cadena de sellos**. Tres migraciones pares: `RetiroDelInventarioHeredado`
+  (**destructiva con guarda**: borra 23 tablas `INV_*` heredadas, conserva `INV_Salespeople`, se niega
+  si alguna tiene filas sin la fila `COR_SystemSettings` `INV.RetiroHeredado.Aprobado`; diagnóstico del
+  2026-09-25: 0 filas en todas las bases de DEV, QA y PDN), `PlataformaParaInventario` (19 tablas de
+  plataforma y columnas en `COR_People`, `COR_Cities`, `COR_Branches`, `COR_Notifications`) e
+  `InventarioComercialNucleo` (39 tablas `INV_`, `pg_trgm` para la búsqueda). Semillas Order 77–83
+  (unidades, tipos de bodega, causas, un tipo de documento por clase con su consecutivo, tributario,
+  DIVIPOLA, tipos de alerta); los permisos `Inventory.*` los siembra la API al arrancar, enteros desde
+  I1. Rutas de pantalla `/inventario/*` (31), `/compras/*` (9), `/ventas/canales`, `/ventas/vendedores`,
+  `/maestros/impuestos`. Reglas que no se negocian:
+  **Inventario no escribe asientos ni conoce cuentas** (Q2 B): no lee ni escribe tablas de
+  Contabilidad ni de Cartera (`InventarioNoConoceContabilidadNiCartera`); lo que cruza, cruza por
+  **mensajes nacidos en la misma transacción** que el documento, por el único escritor
+  `EmisorDeMensajes`, que nunca guarda (T7–T12); el mensaje lo origina la persona, nunca el proceso.
+  En I1 **no hay despachador**: los mensajes quedan `Pending`/`InBatch` hasta I2, y el modo de paso
+  (`EnLinea`, `PorLotes`, `NoPasa`) se sella al confirmar. **Todo lo que mueve inventario es un
+  `INV_Documents`** con su clase (34, fijas en `ClasesDeDocumento`, no son columna) y un tipo de la
+  cooperativa; **un solo flujo de confirmación**, `ConfirmacionDeDocumento` (relectura → aprobación →
+  guardia fiscal y validación previa → cerrojo → efecto de la clase → número → mensajes → un
+  `SaveChanges`), con una estrategia `IEfectoDeClase` por clase. **El kardex es un hecho y las
+  existencias son proyección**: `RegistroDeKardex` es su único escritor (más la reconstrucción, que no
+  toca el kardex; `NadieEscribeElKardexFueraDelRegistro`), rechaza todas las líneas que no caben antes
+  de escribir, y la verificación nocturna `inventario.integridad` compara. **Cerrojo pesimista en orden
+  fijo** (setup → bodegas → orígenes → costo/existencias/detalle → numeración, por `Id`, igual en los
+  dos motores) **y la numeración al final** por `Numerador` (`SoloElNumeradorNumera`; el borrador y lo
+  que queda en aprobación no consumen número) (T15, T16). Lo confirmado **no se edita ni se reversa**:
+  la **anulación es un documento nuevo** (`Voiding`, con su fecha, al costo del original, con
+  `AjusteDeCostoReconocido` si la entrada ya promedió; `LoDeInventarioNoSeReversa`). Retroactivo
+  rechazado en I1 salvo el saldo inicial de una bodega `NotActivated` y los ajustes de conteo
+  (excepción de puesta en marcha, caso dorado 17). Precisión por alias (`PrecisionDeInventario`:
+  cantidad 18,4; costo y factor 18,6; monto 18,2; tarifa 9,6 como fracción;
+  `LasCantidadesYCostosTienenSuPrecision`). Toda escritura con `Idempotency-Key`
+  (`LosComandosDeInventarioLlevanClave`); todo trabajo de fondo por `IEjecutorEnCooperativa`
+  (`NingunTrabajoDeFondoOperaSinCooperativa`); la segregación compara `SEC_Users.Id`, nunca el entero
+  del token (`LaSegregacionNoUsaUserIdDelToken`); sin valores legales en el código
+  (`ElComercioNoTieneValoresLegalesFijos`, `LaUvtSeLeeEnUnSoloSitio`). **En producción ninguna bodega
+  se activa en I1**: sin la consulta de saldos de I2, `POST …/activation` responde
+  `Inventory.Activation.AccountingUnavailable` (fuera de producción se activa aceptando la diferencia
+  con permiso y motivo). Para las entregas que siguen quedan fijadas en el diseño —sus puertos todavía
+  no existen en el código; sí las pruebas de arquitectura que los vigilan—: **la factura por el puerto
+  `ICanalDeEmisionElectronica`** con modelo canónico propio y el proveedor tecnológico sólo en su
+  adaptador (`ElProveedorTecnologicoSoloLoConoceSuAdaptador`, `LasCredencialesDeFacturacionNoTocanLaBase`),
+  **crédito provisional hasta IC** (consultas a Cartera por `IConsultasDeCartera`, sin HTTP), y el
+  número de tarjeta que no se guarda (`LosPagosNoGuardanElNumeroDeTarjeta`). La auditoría de los módulos
+  encadenados (Inventory, ElectronicInvoicing, Integration, Approvals, Alerts, Parameters, Taxes,
+  PaymentMeans, Navigation; **Accounting fuera**, C1) va por `COR_AuditOutbox` en la transacción y la
+  sella y lleva a Mongo `AuditOutboxForwarder`, con anclas HMAC de una clave propia (`AnchorKeyVersion`,
+  nunca `dev-v1`; la de desarrollo tiene su secreto en el repositorio); la verificación es manual
+  (`POST /api/audit/integrity/verify`, pestaña «Integridad» de `/admin/auditoria`): **no hay verificación
+  nocturna de la cadena**. Verde al cierre de I1: e2e «Inventario e2e» en PostgreSQL y SQL Server (398
+  pasan y 6 omitidas con motivo en cada motor). Recetas: `docs/manual/inventario-documentos-y-kardex.md`,
+  `docs/manual/plataforma-de-integracion.md`, `docs/manual/plantillas-de-importacion.md`; runbooks
+  `docs/operaciones/inventario-retiro-heredado.md`, `docs/operaciones/inventario-puesta-en-marcha.md`,
+  `docs/operaciones/auditoria-cadena-de-sellos.md`. Pendiente del dueño antes de promover: segundo
+  revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
+  producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application

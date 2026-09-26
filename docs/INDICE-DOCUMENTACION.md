@@ -43,7 +43,7 @@
 | Archivo | Descripción |
 |---|---|
 | CLAUDE-FASE1.md | Instrucciones y progreso de Claude Code Fase 1 |
-| INVENTARIO.md | Inventario de los 33 proyectos originales |
+| INVENTARIO.md | Listado de los 33 proyectos VB.NET originales de SOLIDO (inventario de la solución, Fase 1). **No es el módulo de inventario**: ése es la feature 012, más abajo |
 | CLASIFICACION.md | Clasificación de clases por módulo |
 | DEPENDENCIAS.md | Grafo de dependencias entre proyectos |
 | PROGRESO.md | Log de 8 lotes de migración |
@@ -119,6 +119,28 @@ con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
 | `docs/operaciones/ci-multi-motor.md` | Matriz de CI por proveedor y gate de paridad de migraciones. |
 | `docs/operaciones/limpieza-datos-demo.md` | Procedimiento para depurar datos `system:seed-demo`. |
 | `database/schema/README-CONGELADO.md` | Declaración de congelamiento del corpus DDL histórico. |
+
+### Feature 012: Inventario comercial (EN CURSO — entrega I1 terminada en la rama `012-inventario-comercial`, sin merge ni despliegue)
+Módulo comercial nuevo en reemplazo del traslado a medias de SOLIDO: catálogo, bodegas con tránsito,
+kardex inmutable y costeo, compras, traslados, conteos y puesta en marcha bodega por bodega (I1); después
+integración con Contabilidad por mensajes (I2), ventas y POS (I3), documentos electrónicos DIAN (I4),
+compras completas y costeo avanzado (I5) y comercio ampliado (I6). Trae la plataforma de mensajes,
+procesos por cooperativa, parámetros con vigencia, aprobaciones, alertas y auditoría encadenada.
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `specs/012-inventario-comercial/spec.md` | — | Spec — 17 historias, FR-001..FR-101, SC-001..SC-025. |
+| `specs/012-inventario-comercial/plan.md` | — | Plan técnico, entregas I1–I6 e IC, Constitution Check. |
+| `specs/012-inventario-comercial/decisiones-transversales.md` | — | Nombres canónicos y decisiones T1–T52; manda sobre cualquier otra redacción. Preguntas abiertas al dueño en §4. |
+| `specs/012-inventario-comercial/research.md` · `data-model.md` · `quickstart.md` · `tasks.md` | — | Investigación R1–R34, modelo de datos, recorrido de ensayo por entrega y tareas. |
+| `specs/012-inventario-comercial/contracts/` | — | `api.md` (rutas, permisos, errores), `mensajes.md` (catálogo de mensajes y estados de entrega), `plantillas.md` (las dieciséis plantillas, única fuente de su orden y columnas), `contabilidad.md`, `dian.md`. |
+| `specs/012-inventario-comercial/diagnostico-inventario-heredado.sql` | I1 | Diagnóstico de sólo lectura de las 23 tablas heredadas por base, antes del retiro. |
+| `docs/manual/inventario-documentos-y-kardex.md` | I1 | **Cómo se agrega una clase o un tipo de documento** sobre `INV_Documents` y el ciclo común; el flujo canónico de confirmación, el kardex con un solo escritor, el cerrojo en orden fijo con la numeración al final, la precisión de cada número, la idempotencia y la anulación como documento nuevo. |
+| `docs/manual/plataforma-de-integracion.md` | I1 | **Receta para que otro módulo use la plataforma**: la bandeja de salida (y lo que falta abrir para que emita otro módulo que Inventario), `IEjecutorEnCooperativa` y el actor «Proceso de integración», tareas programadas, parámetros con vigencia, aprobaciones con montos por permiso y alertas. |
+| `docs/manual/plantillas-de-importacion.md` | I1 | **La mecánica común de las plantillas** (encabezados en la fila 1, revisión y aplicación todo o nada, errores por hoja, fila y columna, `ImportResultDto`) y cómo se agrega una plantilla nueva. |
+| `docs/operaciones/inventario-retiro-heredado.md` | I1 | **Runbook de la migración destructiva** `RetiroDelInventarioHeredado`: diagnóstico por base, `pg_dump` `*-pre-f012.dump`, la fila de aprobación, el segundo revisor, qué hace la guarda, el `Down()` y el retorno desde el respaldo. |
+| `docs/operaciones/inventario-puesta-en-marcha.md` | I1 (el cuadre, I2) | **Runbook de la puesta en marcha**: semillas, plantillas en orden, conteo físico, cifras de SOLIDO, saldo inicial con aprobación, excepción de puesta en marcha, comparativos, marcha paralela y activación bodega por bodega (en producción, sólo con I2). |
+| `docs/operaciones/auditoria-cadena-de-sellos.md` | I1 | **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
