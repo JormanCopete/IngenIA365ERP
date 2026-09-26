@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.GoLive;
 
 /// <summary>
 /// <c>INV_LegacyFigures</c> (feature 012, T307; data-model §6.5): las cifras de SOLIDO con sus códigos crudos, los Id resueltos
-/// y el lote. Cantidades en <c>Cantidad</c>, valores en <c>Monto</c>. Sin migración propia (<see cref="NucleoComercialSinMigracion"/>).
+/// y el lote. Cantidades en <c>Cantidad</c>, valores en <c>Monto</c>. Su migración es el par <c>InventarioComercialNucleo</c> (T440).
 /// </summary>
 public class LegacyFigureConfiguration : IEntityTypeConfiguration<LegacyFigure>
 {

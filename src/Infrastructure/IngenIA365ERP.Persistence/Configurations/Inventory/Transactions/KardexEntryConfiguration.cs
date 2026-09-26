@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Transactions;
 /// sin FK hasta I6. Índices del motor de costo y los retroactivos <c>(ProductId, CostScopeWarehouseId, OperationDate, Id)</c>, del
 /// kardex por bodega y el valorizado a una fecha <c>(ProductId, WarehouseId, OperationDate, Id)</c>, por fecha, por documento y
 /// el de ajustes por la entrada que corrigen (filtrado). Cantidad (18,4), costo unitario (18,6), monto (18,2). Nace con
-/// <c>InventarioComercialNucleo</c> (T440); hasta entonces va excluida de las migraciones (<c>NucleoComercialSinMigracion</c>).
+/// <c>InventarioComercialNucleo</c> (T440).
 /// </summary>
 public class KardexEntryConfiguration : IEntityTypeConfiguration<KardexEntry>
 {

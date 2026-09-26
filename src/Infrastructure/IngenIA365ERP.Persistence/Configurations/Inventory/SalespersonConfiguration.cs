@@ -15,9 +15,10 @@ public class SalespersonConfiguration : IEntityTypeConfiguration<Salesperson>
         builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_INV_Salespeople_PublicId");
 
-        // PersonId NOT NULL — every salesperson is a Person
+        // PersonId NOT NULL — every salesperson is a Person. Único entre las filas vivas (feature 012, T427; data-model §11):
+        // RolDeVendedor restaura la misma fila, y el filtro deja además que una baja histórica no estorbe.
         builder.Property(e => e.PersonId).IsRequired();
-        builder.HasIndex(e => e.PersonId).IsUnique().HasDatabaseName("UK_INV_Salespeople_PersonId");
+        builder.HasIndex(e => e.PersonId).IsUnique().HasDatabaseName("UK_INV_Salespeople_PersonId").HasFilter("[IsDeleted] = 0");
 
         builder.HasOne(e => e.Person)
             .WithMany()

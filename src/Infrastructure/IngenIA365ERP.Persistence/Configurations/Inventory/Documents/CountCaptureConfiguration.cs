@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Documents;
 /// <c>INV_CountCaptures</c> (feature 012, US11, T391; data-model §8.2): las tandas de lecturas de cada contador, sólo inserción
 /// (<c>IHechoInmutable</c>). <c>IX_INV_CountCaptures_Document_Round_Line (DocumentId, Round, SnapshotLineId)</c> es el que suma
 /// lo contado por ronda. Cantidad con <c>PrecisionDeInventario.Cantidad</c>. Sin migración propia: entra al par
-/// <c>InventarioComercialNucleo</c> (<see cref="NucleoComercialSinMigracion"/>). (nuevo)
+/// <c>InventarioComercialNucleo</c> (T440). (nuevo)
 /// </summary>
 public class CountCaptureConfiguration : IEntityTypeConfiguration<CountCapture>
 {

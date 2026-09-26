@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Documents;
 /// lote. Dos únicos filtrados <b>por lote</b> como en <c>INV_StockDetails</c>: <c>UK_INV_CountSnapshotLines_Location</c> con
 /// <c>[LotId] IS NULL</c> y <c>UK_INV_CountSnapshotLines_Location_Lot</c> con <c>[LotId] IS NOT NULL</c>. Cantidades con
 /// <c>PrecisionDeInventario.Cantidad</c>, el costo de la foto con <c>.CostoUnitario</c>. Sin migración propia: entra al par
-/// <c>InventarioComercialNucleo</c> (<see cref="NucleoComercialSinMigracion"/>). (nuevo)
+/// <c>InventarioComercialNucleo</c> (T440). (nuevo)
 /// </summary>
 public class CountSnapshotLineConfiguration : IEntityTypeConfiguration<CountSnapshotLine>
 {

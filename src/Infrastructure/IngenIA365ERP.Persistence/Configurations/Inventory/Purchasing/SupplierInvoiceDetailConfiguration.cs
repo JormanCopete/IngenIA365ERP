@@ -12,7 +12,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Purchasing;
 /// (<c>UK (DocumentId)</c>), y la misma factura no se registra dos veces entre los no liberados: por (proveedor, clase, prefijo,
 /// número) y por CUFE. Los nombres de los dos índices los conoce <see cref="ColisionDeFacturaDeProveedor"/>, que traduce la
 /// violación (una carrera entre dos usuarios) a <c>Inventory.SupplierInvoice.Duplicate</c> / <c>.CufeDuplicate</c>. Sin
-/// migración propia: entra al par <c>InventarioComercialNucleo</c> (<see cref="NucleoComercialSinMigracion"/>).
+/// migración propia: entra al par <c>InventarioComercialNucleo</c> (T440).
 /// </summary>
 public class SupplierInvoiceDetailConfiguration : IEntityTypeConfiguration<SupplierInvoiceDetail>
 {

@@ -515,9 +515,6 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         // Feature 012 (T206, T43): el indice de la busqueda de productos depende del motor.
         IngenIA365ERP.Persistence.Configurations.Inventory.Catalog.IndiceDeBusquedaDeProductos.Aplicar(modelBuilder, Database.ProviderName);
 
-        // Feature 012: el documento genérico espera su par InventarioComercialNucleo (T440), que borra esta línea.
-        IngenIA365ERP.Persistence.Configurations.Inventory.NucleoComercialSinMigracion.ExcluirDeLasMigraciones(modelBuilder);
-
         base.OnModelCreating(modelBuilder);
     }
 

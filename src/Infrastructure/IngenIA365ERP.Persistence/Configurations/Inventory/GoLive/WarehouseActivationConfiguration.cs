@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.GoLive;
 /// <summary>
 /// <c>INV_WarehouseActivations</c> (feature 012, T307; data-model §6.4): una fila por bodega activada (<c>UK (WarehouseId)</c>
 /// filtrado a las vivas), la comparación en JSON y la diferencia en <c>Monto</c>. Sin migración propia: entra al par
-/// <c>InventarioComercialNucleo</c> del cierre de I1 (<see cref="NucleoComercialSinMigracion"/>).
+/// <c>InventarioComercialNucleo</c> del cierre de I1 (T440).
 /// </summary>
 public class WarehouseActivationConfiguration : IEntityTypeConfiguration<WarehouseActivation>
 {

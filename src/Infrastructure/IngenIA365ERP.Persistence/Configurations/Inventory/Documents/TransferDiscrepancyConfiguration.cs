@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Documents;
 /// por recepción, línea de despacho y tipo (<c>UK (ReceiptDocumentId, DispatchLineId, Kind)</c> entre los vivos) y el índice de
 /// las pendientes (<c>IX (ResolvedAt)</c> filtrado a nulos) que usan la bandeja y el cierre del mes. Cantidades con
 /// <c>PrecisionDeInventario.Cantidad</c>, costo con <c>.CostoUnitario</c>. Sin migración propia: entra al par
-/// <c>InventarioComercialNucleo</c> (<see cref="NucleoComercialSinMigracion"/>).
+/// <c>InventarioComercialNucleo</c> (T440).
 /// </summary>
 public class TransferDiscrepancyConfiguration : IEntityTypeConfiguration<TransferDiscrepancy>
 {

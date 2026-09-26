@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Purchasing;
 /// <summary>
 /// <c>INV_SupplierInvoiceEvents</c> (feature 012, T337; data-model §9.3): los eventos 030 y 032 de una factura del proveedor,
 /// uno de cada por factura (<c>UK (DocumentId, EventCode)</c> entre los vivos). Sin migración propia: entra al par
-/// <c>InventarioComercialNucleo</c> (<see cref="NucleoComercialSinMigracion"/>).
+/// <c>InventarioComercialNucleo</c> (T440).
 /// </summary>
 public class SupplierInvoiceEventConfiguration : IEntityTypeConfiguration<SupplierInvoiceEvent>
 {
