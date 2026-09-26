@@ -723,7 +723,7 @@ Administración.
 | Grupo | Ruta | E |
 |---|---|---|
 | Inventario | `/inventario/productos`, `/inventario/productos/{id:guid}`, `/inventario/categorias`, `/inventario/marcas`, `/inventario/unidades`, `/inventario/grupos-contables`, `/inventario/bodegas`, `/inventario/bodegas/{id:guid}`, `/inventario/tipos-de-documento`, `/inventario/causas-de-ajuste`, `/inventario/existencias`, `/inventario/kardex`, `/inventario/ajustes`, `/inventario/ajustes/{id:guid}`, `/inventario/traslados`, `/inventario/traslados/{id:guid}`, `/inventario/conteos`, `/inventario/conteos/{id:guid}`, `/inventario/periodos`, `/inventario/saldo-inicial`, `/inventario/cifras-solido`, `/inventario/parametros`, `/inventario/plantillas`, `/inventario/alertas`, `/inventario/aprobaciones`, `/inventario/politicas-de-aprobacion`, `/inventario/alcances`, `/inventario/integridad`, `/inventario/informes?vista=` | I1 |
-| Inventario | `/inventario/activacion`, `/inventario/bandeja-de-mensajes`, `/inventario/conciliacion` | I2 |
+| Inventario | `/inventario/activacion`, `/inventario/bandeja-de-mensajes`, `/inventario/conciliacion`, `/inventario/documentos/{id:guid}` (página de paso de «Ver en Inventario», sin enlace de menú; nuevo, T493) | I2 |
 | Inventario | `/inventario/tablero` | I6 |
 | Compras | `/compras/recepciones`, `/compras/recepciones/{id:guid}`, `/compras/compra-directa`, `/compras/facturas-proveedor`, `/compras/facturas-proveedor/{id:guid}`, `/compras/notas-proveedor`, `/compras/devoluciones` | I1 |
 | Compras | `/compras/documentos-soporte` | I4 |
@@ -1382,6 +1382,16 @@ los nombres de índice como constantes `IntegrationBatchConfiguration.UnicoDeLaF
 `InventoryPostingConfiguration.IndiceUnicoDelMensaje`; `VoucherTypesSeeder.AplicarAsync(db, logger, ct)` (aviso
 `[Semilla.TipoDeComprobanteEnUso]`) e `InventoryVoucherMappingsSeeder.AplicarAsync(db, logger, ct)` (avisos
 `[Semilla.MapeoDeInventarioSinTipo]`, `[Semilla.MapeoDeInventarioSinCruce]`).
+**(nuevos, T487–T495)** en la enmienda de código de la 009: `Accounting/Posting/OrigenesDeInventario` (constantes de
+`SourceType`: `Documento` = `InventoryDocument`, `LoteResumido` = `InventoryPostingBatch`, `Producto` = `InventoryProduct`);
+`AccountingErrors.MensajeDeComprobanteDeInventario(documentosDelResumido)` (el texto de `ModuleOwned` para INV) y las fábricas
+`InventoryRuleDimensionRequired/NotAllowed/CodeUnknown`, `InventoryMessageCurrencyNotSupported/WaitingForOriginal/Unbalanced`,
+`InventoryBatchAlreadyRunning`; `PendientesDeInventarioDto` y `PendingInventoryMessagesQueryHandler.ContarAsync(db, desde, hasta, ct)`
+(la usa `ClosePeriodCommand` sin pasar por `ISender`); en la API `PeriodsEndpoints.CerrarPeriodoRequest(bool? AcknowledgeInventoryPending)`;
+`AuditEventTypes.AccountingInventoryPosted/Rejected/BatchProcessed` y en `AccountingAuditEmitter` los métodos
+`EmitirContabilizacionDeInventarioAsync`, `EmitirRechazoDeInventarioAsync`, `EmitirLoteDeInventarioProcesadoAsync`; en Shared la
+página de paso `Pages/Inventario/DocumentoPorId.razor` (`/inventario/documentos/{id:guid}`), que lleva a la página del grupo del
+documento (el comprobante sólo sabe que su origen es un `InventoryDocument`).
 
 **Facturación electrónica**: `Application/ElectronicInvoicing/Channels/{ICanalDeEmisionElectronica,
 ICanalesDeEmision, ICredencialesDeCanal, ResultadoDeCanal, CapacidadesDelCanal}`,

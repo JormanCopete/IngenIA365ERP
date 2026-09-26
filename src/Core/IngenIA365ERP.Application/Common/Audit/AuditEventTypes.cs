@@ -147,6 +147,10 @@ public static class AuditEventTypes
     public const string AccountingCatalogValidated = "Accounting.Catalog.Validated";
     public const string AccountingReportExported = "Accounting.Report.Exported";
     public const string AccountingCertificateSent = "Accounting.Certificate.Sent";
+    // Feature 012, I2 (contracts/contabilidad.md §10): el consumo de los mensajes de Inventario.
+    public const string AccountingInventoryPosted = "Accounting.Inventory.Posted";
+    public const string AccountingInventoryRejected = "Accounting.Inventory.Rejected";
+    public const string AccountingInventoryBatchProcessed = "Accounting.Inventory.BatchProcessed";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

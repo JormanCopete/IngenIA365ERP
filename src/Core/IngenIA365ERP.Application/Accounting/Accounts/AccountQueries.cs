@@ -138,7 +138,8 @@ public sealed class GetAccountHistoryQueryHandler(ISender sender) : IRequestHand
 /// <summary>
 /// FR-017 y FR-088: cuentas parametrizadas en otros módulos que ya no cumplen (agrupación,
 /// inactivas, no habilitadas) y entidades institucionales sin persona vinculada cuando alguna
-/// cuenta de nómina exige tercero. En E1 mira nómina; las demás tablas entran en E3.
+/// cuenta de nómina exige tercero. En E1 mira nómina; desde la feature 012 también la matriz de
+/// Inventario; las demás tablas entran en E3.
 /// </summary>
 public sealed record ListInvalidParameterizationsQuery : IRequest<Result<IReadOnlyList<ParametrizacionInvalidaDto>>>;
 
@@ -181,6 +182,24 @@ public sealed class ListInvalidParameterizationsQueryHandler(IApplicationDbConte
             foreach (var nombre in await Payroll.Services.VinculosInstitucionales.TodasSinPersonaAsync(db, entidad, ct))
                 lista.Add(new ParametrizacionInvalidaDto(nomina, Payroll.Services.TercerosDeNomina.Pantalla(entidad).Replace("Nómina › ", string.Empty), nombre, null,
                     "Sin persona vinculada como tercero: la aprobación de nómina fallará en los aportes a esta entidad."));
+        }
+
+        // Feature 012 (T494): las reglas de la matriz de Inventario sin fecha de cierre (la vigente de cada clave y las
+        // futuras) cuya cuenta dejó de servir para Inventario. Las versiones cerradas son historia.
+        var inventario = ModuloContable.Nombre(ModuloContable.Inventario);
+        var reglas = await db.InventoryPostingRules.AsNoTracking().Where(r => !r.IsDeleted && r.ValidTo == null)
+            .OrderBy(r => r.Operation).ThenBy(r => r.Role).ThenBy(r => r.ValidFrom)
+            .Select(r => new { r.Operation, r.Role, r.AccountingGroupCode, r.WarehouseCode, r.PointOfSaleCode, r.ValidFrom, r.AccountId })
+            .ToListAsync(ct);
+        var idsDeReglas = reglas.Select(r => r.AccountId).Distinct().ToList();
+        var cuentasDeReglas = await db.ChartOfAccounts.AsNoTracking().Where(c => idsDeReglas.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        foreach (var r in reglas)
+        {
+            var cuenta = cuentasDeReglas.GetValueOrDefault(r.AccountId);
+            var reparo = cuenta is null || cuenta.IsDeleted ? "la cuenta no existe" : AccountEligibility.Reparo(cuenta, ModuloContable.Inventario);
+            if (reparo is null) continue;
+            var dimensiones = string.Join(" · ", new[] { r.Operation, r.Role, r.AccountingGroupCode, r.WarehouseCode, r.PointOfSaleCode }.Where(x => !string.IsNullOrEmpty(x)));
+            lista.Add(new ParametrizacionInvalidaDto(inventario, "Matriz de contabilización", $"{dimensiones} (desde {r.ValidFrom:yyyy-MM-dd})", cuenta?.Code, $"La cuenta {reparo}."));
         }
 
         return Result.Success<IReadOnlyList<ParametrizacionInvalidaDto>>(lista);

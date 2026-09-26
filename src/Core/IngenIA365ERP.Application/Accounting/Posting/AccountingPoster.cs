@@ -27,12 +27,14 @@ namespace IngenIA365ERP.Application.Accounting.Posting;
 public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, IUserBranchScope scope)
 {
     public const int LargoDeDescripcion = 200;
+    /// <summary>Largo de <c>RegisteredBy</c> en <c>ACC_Documents</c>.</summary>
+    private const int LargoDeUsuario = 100;
     private const string PersonaInactiva = "I";
 
     /// <summary>Valida, construye y agrega documento + líneas contabilizadas, con número; no guarda.</summary>
     public async Task<Result<AccountingDocument>> PrepareAsync(PostingRequest request, CancellationToken ct)
     {
-        var analisis = await AnalizarAsync(request, ct);
+        var analisis = await AnalizarAsync(request, await CargarAsync([request], seguimiento: true, ct), ct);
         if (analisis.IsFailure) return Result.Failure<AccountingDocument>(analisis.Error);
 
         var a = analisis.Value;
@@ -81,7 +83,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
     public async Task<Result<AccountingDocument>> ContabilizarBorradorAsync(AccountingDocument borrador, PostingRequest request, CancellationToken ct)
     {
         if (borrador.Status != DocumentStatus.Draft) return Fallo(AccountingErrors.DocumentNotDraft);
-        var analisis = await AnalizarAsync(request, ct);
+        var analisis = await AnalizarAsync(request, await CargarAsync([request], seguimiento: true, ct), ct);
         if (analisis.IsFailure) return Fallo(analisis.Error);
         var a = analisis.Value;
         if (a.Errores.Count > 0)
@@ -138,19 +140,39 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
     /// que la pantalla los señale antes de guardar (<c>POST /documents/validate</c>). Un fallo de
     /// encabezado (contabilidad sin iniciar, tipo, fecha) llega como infracción de la línea 0.
     /// </summary>
-    public async Task<ValidacionDeComprobante> ValidarAsync(PostingRequest request, CancellationToken ct)
+    public async Task<ValidacionDeComprobante> ValidarAsync(PostingRequest request, CancellationToken ct) =>
+        (await ValidarVariosAsync([request], ct))[0];
+
+    /// <summary>
+    /// <see cref="ValidarAsync"/> para varios comprobantes a la vez (feature 012, T488; contracts/contabilidad.md §4 y
+    /// §5.5): el mismo análisis —reglas 1 a 11, en el mismo orden— con la configuración, los tipos, los períodos, las
+    /// cuentas con sus tarifas, las sucursales, los terceros, los centros y los cruces cargados <b>una vez para todos</b>
+    /// y sin seguimiento. No numera, no agrega y no deja nada en el <c>ChangeTracker</c>: lo usan la validación previa
+    /// de Inventario y la vista previa de un lote, que no pueden tocar el contexto de quien las llama. Devuelve un
+    /// resultado por comprobante, en el orden recibido; <see cref="ValidarAsync"/> es este mismo análisis con uno solo,
+    /// así los dos no divergen.
+    /// </summary>
+    public async Task<IReadOnlyList<ValidacionDeComprobante>> ValidarVariosAsync(IReadOnlyList<PostingRequest> requests, CancellationToken ct)
     {
-        var analisis = await AnalizarAsync(request, ct);
-        if (analisis.IsFailure)
+        if (requests.Count == 0) return [];
+        var referencias = await CargarAsync(requests, seguimiento: false, ct);
+        var resultados = new List<ValidacionDeComprobante>(requests.Count);
+        foreach (var request in requests)
         {
-            var campo = analisis.Error.Code.Contains("Period", StringComparison.Ordinal) || analisis.Error.Code.Contains("Date", StringComparison.Ordinal)
-                ? "Date"
-                : analisis.Error.Code.Contains("VoucherType", StringComparison.Ordinal) ? "VoucherType" : "Header";
-            return new ValidacionDeComprobante([ErrorDeLinea.DeEncabezado(analisis.Error, campo)], [],
-                request.Lines.Sum(l => l.Debit), request.Lines.Sum(l => l.Credit));
+            var analisis = await AnalizarAsync(request, referencias, ct);
+            if (analisis.IsFailure)
+            {
+                var campo = analisis.Error.Code.Contains("Period", StringComparison.Ordinal) || analisis.Error.Code.Contains("Date", StringComparison.Ordinal)
+                    ? "Date"
+                    : analisis.Error.Code.Contains("VoucherType", StringComparison.Ordinal) ? "VoucherType" : "Header";
+                resultados.Add(new ValidacionDeComprobante([ErrorDeLinea.DeEncabezado(analisis.Error, campo)], [],
+                    request.Lines.Sum(l => l.Debit), request.Lines.Sum(l => l.Credit)));
+                continue;
+            }
+            var a = analisis.Value;
+            resultados.Add(new ValidacionDeComprobante(a.Errores, a.Avisos, a.TotalDebit, a.TotalCredit));
         }
-        var a = analisis.Value;
-        return new ValidacionDeComprobante(a.Errores, a.Avisos, a.TotalDebit, a.TotalCredit);
+        return resultados;
     }
 
     /// <summary>
@@ -162,6 +184,13 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
     public async Task<Result<AccountingDocument>> PrepareReversalAsync(
         AccountingDocument original, DateOnly date, string reason, AccountingOrigin origin, CancellationToken ct)
     {
+        // Feature 012 (T29, contracts/contabilidad.md §6): lo de Inventario no se reversa nunca. Cada anulación, nota o
+        // ajuste llega como un comprobante nuevo de su propio mensaje; el original no se marca ni se toca. La guarda mira
+        // las dos puntas: un original de Inventario, lo pida quien lo pida, y una petición de Inventario sobre cualquier
+        // comprobante. Lo vigila LoDeInventarioNoSeReversa.
+        if (string.Equals(original.OriginModule, ModuloContable.Inventario, StringComparison.Ordinal)
+            || string.Equals(origin.Module, ModuloContable.Inventario, StringComparison.Ordinal))
+            return Fallo(AccountingErrors.DocumentInventoryCorrectsWithNewVoucher(original.OriginModule, original.SourceType, original.SourcePublicId));
         if (string.IsNullOrWhiteSpace(reason)) return Fallo(AccountingErrors.ReasonRequired);
         if (original.Kind == DocumentKind.Reversal || original.ReversesDocumentId is not null) return Fallo(AccountingErrors.DocumentIsReversal);
         if (original.Status == DocumentStatus.Reversed || original.ReversedByDocumentId is not null) return Fallo(AccountingErrors.DocumentAlreadyReversed);
@@ -295,16 +324,98 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         decimal TotalDebit,
         decimal TotalCredit);
 
+    /// <summary>
+    /// Lo que el análisis consulta, cargado una vez para uno o varios comprobantes: configuración, tipos, períodos,
+    /// cuentas con sus tarifas y las referencias vigentes (sucursales, terceros, centros, cruces). Con
+    /// <c>seguimiento</c> los tipos y las cuentas quedan rastreados —<see cref="PrepareAsync"/> incrementa el
+    /// consecutivo y fija <c>FirstMovementAt</c>—; sin él nada queda en el contexto (<see cref="ValidarVariosAsync"/>).
+    /// Un conjunto más grande que el de un solo comprobante no cambia ninguna respuesta: las reglas preguntan por
+    /// pertenencia de un Id o un código concreto.
+    /// </summary>
+    private sealed record Referencias(
+        AccountingSetup? Setup,
+        IReadOnlyDictionary<string, VoucherType> Tipos,
+        IReadOnlyList<AccountingPeriod> Periodos,
+        IReadOnlyDictionary<int, ChartOfAccount> CuentasPorId,
+        IReadOnlyDictionary<string, ChartOfAccount> CuentasPorCodigo,
+        AlcanceDeSucursales? AlcanceDelUsuario,
+        HashSet<int> Sucursales,
+        HashSet<int> Terceros,
+        HashSet<int> Centros,
+        IReadOnlyDictionary<string, int> TiposDeCruce)
+    {
+        public AccountingPeriod? PeriodoDe(DateOnly fecha) => Periodos.FirstOrDefault(p => p.StartDate <= fecha && p.EndDate >= fecha);
+    }
+
+    /// <summary>El alcance de sucursal sólo se aplica al digitar (FR-035); el cierre cancela las cuentas de resultado de todas.</summary>
+    private static bool UsaAlcanceDelUsuario(PostingRequest request) => request.Origin.EsContabilidad && request.Kind != DocumentKind.Closing;
+
+    private async Task<Referencias> CargarAsync(IReadOnlyList<PostingRequest> requests, bool seguimiento, CancellationToken ct)
+    {
+        var setup = await db.AccountingSetups.AsNoTracking().FirstOrDefaultAsync(s => !s.IsDeleted, ct);
+        if (setup is null)
+            return new Referencias(null, new Dictionary<string, VoucherType>(), [], new Dictionary<int, ChartOfAccount>(),
+                new Dictionary<string, ChartOfAccount>(), null, [], [], [], new Dictionary<string, int>());
+
+        var codigosDeTipo = requests.Select(r => r.VoucherTypeCode.Trim().ToUpperInvariant()).Distinct().ToList();
+        var tiposQuery = db.VoucherTypes.Where(v => codigosDeTipo.Contains(v.Code) && !v.IsDeleted);
+        var tipos = await (seguimiento ? tiposQuery : tiposQuery.AsNoTracking()).ToListAsync(ct);
+
+        var periodos = await db.AccountingPeriods.AsNoTracking().Where(p => !p.IsDeleted).ToListAsync(ct);
+
+        var lineas = requests.SelectMany(r => r.Lines).ToList();
+        var codigos = lineas.Where(l => l.AccountId is null && !string.IsNullOrWhiteSpace(l.AccountCode)).Select(l => l.AccountCode!.Trim()).Distinct().ToList();
+        var ids = lineas.Where(l => l.AccountId is not null).Select(l => l.AccountId!.Value).Distinct().ToList();
+        var cuentasQuery = db.ChartOfAccounts.Include(c => c.TaxRates).Where(c => !c.IsDeleted && (ids.Contains(c.Id) || codigos.Contains(c.Code)));
+        var cuentas = await (seguimiento ? cuentasQuery : cuentasQuery.AsNoTracking()).ToListAsync(ct);
+
+        // sucursal propuesta: la del usuario al digitar, si no la principal (R7)
+        var alcanceDelUsuario = requests.Any(UsaAlcanceDelUsuario) ? await scope.ObtenerAsync(ct) : null;
+        var sucursalesRef = lineas.Where(l => l.BranchId is not null).Select(l => l.BranchId!.Value).ToList();
+        sucursalesRef.Add(setup.MainBranchId);
+        if (alcanceDelUsuario?.SucursalPorDefecto is { } porDefecto) sucursalesRef.Add(porDefecto);
+        sucursalesRef = sucursalesRef.Distinct().ToList();
+        var sucursales = (await db.Branches.AsNoTracking().Where(b => !b.IsDeleted && sucursalesRef.Contains(b.Id)).Select(b => b.Id).ToListAsync(ct)).ToHashSet();
+
+        var tercerosRef = lineas.Where(l => l.PersonId is not null).Select(l => l.PersonId!.Value).Distinct().ToList();
+        var terceros = tercerosRef.Count == 0
+            ? new HashSet<int>()
+            : (await db.People.AsNoTracking().Where(p => !p.IsDeleted && (p.Status == null || p.Status != PersonaInactiva) && tercerosRef.Contains(p.Id)).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
+
+        var centrosRef = lineas.Where(l => l.CostCenterId is not null).Select(l => l.CostCenterId!.Value).Distinct().ToList();
+        var centros = centrosRef.Count == 0
+            ? new HashSet<int>()
+            : (await db.CostCenters.AsNoTracking().Where(c => !c.IsDeleted && centrosRef.Contains(c.Id)).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+
+        var tiposRef = lineas.Where(l => !string.IsNullOrWhiteSpace(l.CrossDocumentType)).Select(l => l.CrossDocumentType!.Trim().ToUpperInvariant()).Distinct().ToList();
+        var tiposDeCruce = tiposRef.Count == 0
+            ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            : await db.CrossDocumentTypes.AsNoTracking().Where(t => !t.IsDeleted && t.IsActive && tiposRef.Contains(t.Code))
+                .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct);
+
+        return new Referencias(
+            setup,
+            tipos.ToDictionary(v => v.Code, StringComparer.Ordinal),
+            periodos,
+            cuentas.ToDictionary(c => c.Id),
+            cuentas.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase),
+            alcanceDelUsuario,
+            sucursales,
+            terceros,
+            centros,
+            tiposDeCruce);
+    }
+
     /// <summary>Comprobaciones 1 a 11 del contrato, en ese orden; las de encabezado cortan, las de línea se acumulan.</summary>
-    private async Task<Result<Analisis>> AnalizarAsync(PostingRequest request, CancellationToken ct)
+    private async Task<Result<Analisis>> AnalizarAsync(PostingRequest request, Referencias r, CancellationToken ct)
     {
         // 1. contabilidad iniciada
-        var setup = await db.AccountingSetups.AsNoTracking().FirstOrDefaultAsync(s => !s.IsDeleted, ct);
+        var setup = r.Setup;
         if (setup is null) return Result.Failure<Analisis>(AccountingErrors.NotInitialized);
 
         // 2. tipo de comprobante coherente con el origen
         var codigoTipo = request.VoucherTypeCode.Trim().ToUpperInvariant();
-        var voucher = await db.VoucherTypes.FirstOrDefaultAsync(v => v.Code == codigoTipo && !v.IsDeleted, ct);
+        var voucher = r.Tipos.GetValueOrDefault(codigoTipo);
         if (voucher is null) return Result.Failure<Analisis>(AccountingErrors.VoucherTypeNotFound(codigoTipo));
         if (!voucher.IsActive) return Result.Failure<Analisis>(AccountingErrors.VoucherTypeInactive(codigoTipo));
         var permitido = voucher.Usage switch
@@ -336,7 +447,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             // El cierre se fecha el último día del ejercicio, que a esa altura está cerrado —cerrar los
             // doce meses es requisito, no impedimento (FR-023)— y puede estar en el futuro del reloj si
             // el año se cierra por anticipado en pruebas; la fecha no la elige nadie, la fija el ejercicio.
-            periodo = await PeriodoDeAsync(request.Date, ct);
+            periodo = r.PeriodoDe(request.Date);
             if (periodo is null) return Result.Failure<Analisis>(AccountingErrors.PeriodNotFound(request.Date));
             if (request.Date.Month != 12 || request.Date != periodo.EndDate) return Result.Failure<Analisis>(AccountingErrors.ClosingDateInvalid(new DateOnly(request.Date.Year, 12, 31)));
         }
@@ -346,7 +457,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             // nómina, al último día del período, que se aprueba unos días antes), y el período tiene
             // que existir y estar abierto de todos modos.
             if (request.Origin.EsContabilidad && request.Date > clock.TodayUtc) return Result.Failure<Analisis>(AccountingErrors.DateInFuture(request.Date));
-            periodo = await PeriodoDeAsync(request.Date, ct);
+            periodo = r.PeriodoDe(request.Date);
             if (periodo is null) return Result.Failure<Analisis>(AccountingErrors.PeriodNotFound(request.Date));
             if (periodo.Status != PeriodStatus.Open) return Result.Failure<Analisis>(AccountingErrors.PeriodClosed(request.Date));
         }
@@ -354,42 +465,12 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         // 4. al menos dos líneas (el importe de cada una lo revisan las reglas)
         if (request.Lines.Count < 2) return Result.Failure<Analisis>(AccountingErrors.DocumentTooFewLines);
 
-        // cuentas referenciadas, con sus tarifas; con seguimiento porque se fija FirstMovementAt
-        var codigos = request.Lines.Where(l => l.AccountId is null && !string.IsNullOrWhiteSpace(l.AccountCode)).Select(l => l.AccountCode!.Trim()).Distinct().ToList();
-        var ids = request.Lines.Where(l => l.AccountId is not null).Select(l => l.AccountId!.Value).Distinct().ToList();
-        var cuentas = await db.ChartOfAccounts.Include(c => c.TaxRates)
-            .Where(c => !c.IsDeleted && (ids.Contains(c.Id) || codigos.Contains(c.Code)))
-            .ToListAsync(ct);
-        var porId = cuentas.ToDictionary(c => c.Id);
-        var porCodigo = cuentas.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
-
         // sucursal propuesta: la del usuario al digitar, si no la principal (R7); alcance sólo en CNT (FR-035)
-        // El cierre cancela las cuentas de resultado de todas las sucursales, las vea o no quien lo corre.
-        var alcance = request.Origin.EsContabilidad && request.Kind != DocumentKind.Closing ? await scope.ObtenerAsync(ct) : AlcanceDeSucursales.SinRestriccion;
+        var alcance = UsaAlcanceDelUsuario(request) ? r.AlcanceDelUsuario ?? AlcanceDeSucursales.SinRestriccion : AlcanceDeSucursales.SinRestriccion;
         var propuesta = alcance.SucursalPorDefecto ?? setup.MainBranchId;
 
-        // referencias vigentes, consultadas una vez para todo el comprobante
-        var sucursalesRef = request.Lines.Select(l => l.BranchId ?? propuesta).Distinct().ToList();
-        var sucursalesVigentes = (await db.Branches.AsNoTracking().Where(b => !b.IsDeleted && sucursalesRef.Contains(b.Id)).Select(b => b.Id).ToListAsync(ct)).ToHashSet();
-
-        var tercerosRef = request.Lines.Where(l => l.PersonId is not null).Select(l => l.PersonId!.Value).Distinct().ToList();
-        var tercerosVigentes = tercerosRef.Count == 0
-            ? new HashSet<int>()
-            : (await db.People.AsNoTracking().Where(p => !p.IsDeleted && (p.Status == null || p.Status != PersonaInactiva) && tercerosRef.Contains(p.Id)).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
-
-        var centrosRef = request.Lines.Where(l => l.CostCenterId is not null).Select(l => l.CostCenterId!.Value).Distinct().ToList();
-        var centrosVigentes = centrosRef.Count == 0
-            ? new HashSet<int>()
-            : (await db.CostCenters.AsNoTracking().Where(c => !c.IsDeleted && centrosRef.Contains(c.Id)).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
-
-        var tiposRef = request.Lines.Where(l => !string.IsNullOrWhiteSpace(l.CrossDocumentType)).Select(l => l.CrossDocumentType!.Trim().ToUpperInvariant()).Distinct().ToList();
-        var tiposDeCruce = tiposRef.Count == 0
-            ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            : await db.CrossDocumentTypes.AsNoTracking().Where(t => !t.IsDeleted && t.IsActive && tiposRef.Contains(t.Code))
-                .ToDictionaryAsync(t => t.Code, t => t.Id, StringComparer.OrdinalIgnoreCase, ct);
-
         var contexto = new ContextoDeReglas(request.Origin.Module, setup.TaxTolerance, alcance,
-            sucursalesVigentes, tercerosVigentes, centrosVigentes, new HashSet<string>(tiposDeCruce.Keys, StringComparer.OrdinalIgnoreCase), request.Kind);
+            r.Sucursales, r.Terceros, r.Centros, new HashSet<string>(r.TiposDeCruce.Keys, StringComparer.OrdinalIgnoreCase), request.Kind);
 
         // 5 a 10. reglas de cada línea
         var errores = new List<ErrorDeLinea>();
@@ -400,8 +481,8 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             var l = request.Lines[i];
             var numero = i + 1;
             var cuenta = l.AccountId is { } id
-                ? porId.GetValueOrDefault(id)
-                : string.IsNullOrWhiteSpace(l.AccountCode) ? null : porCodigo.GetValueOrDefault(l.AccountCode.Trim());
+                ? r.CuentasPorId.GetValueOrDefault(id)
+                : string.IsNullOrWhiteSpace(l.AccountCode) ? null : r.CuentasPorCodigo.GetValueOrDefault(l.AccountCode.Trim());
             var explicita = l.BranchId is not null;
             var sucursal = l.BranchId ?? propuesta;
 
@@ -415,9 +496,9 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
                 cuenta is null ? null : CuentaParaReglas.De(cuenta, request.Date),
                 new LineaParaReglas(numero, l.AccountRef, l.Debit, l.Credit, sucursal, explicita, l.PersonId, centro, tipo, l.CrossDocumentNumber?.Trim(), l.TaxBase),
                 contexto);
-            errores.AddRange(reglas.Where(r => r.Bloquea));
-            avisos.AddRange(reglas.Where(r => !r.Bloquea));
-            resueltas.Add(new LineaResuelta(l, numero, cuenta, sucursal, centro, tipo is null ? null : tiposDeCruce.GetValueOrDefault(tipo), tipo));
+            errores.AddRange(reglas.Where(x => x.Bloquea));
+            avisos.AddRange(reglas.Where(x => !x.Bloquea));
+            resueltas.Add(new LineaResuelta(l, numero, cuenta, sucursal, centro, tipo is null ? null : r.TiposDeCruce.GetValueOrDefault(tipo), tipo));
         }
 
         // 11. cuadre
@@ -450,7 +531,8 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             TotalDebit = a.TotalDebit,
             TotalCredit = a.TotalCredit,
             RegisteredByUserId = user.UserId ?? 0,
-            RegisteredBy = quien,
+            // Feature 012 (T6): el usuario de origen de un documento de otro módulo queda como dato; el actor sigue siendo quien contabiliza.
+            RegisteredBy = request.RegistradoPor is { Name: { } nombre } && !string.IsNullOrWhiteSpace(nombre) ? Recortar(nombre.Trim(), LargoDeUsuario) : quien,
             PostedByUserId = user.UserId,
             PostedBy = quien,
             PostedAt = ahora,
@@ -516,6 +598,6 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
 
     private static Result<AccountingDocument> Fallo(Error error) => Result.Failure<AccountingDocument>(error);
 
-    private static string Recortar(string? texto) =>
-        texto is null ? string.Empty : texto.Length <= LargoDeDescripcion ? texto : texto[..LargoDeDescripcion];
+    private static string Recortar(string? texto, int largo = LargoDeDescripcion) =>
+        texto is null ? string.Empty : texto.Length <= largo ? texto : texto[..largo];
 }
