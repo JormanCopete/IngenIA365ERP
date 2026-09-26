@@ -1185,6 +1185,52 @@ JSON embebidos versionados (T40), no semillas.
   en el menú); pestaña «Grupo contable» de `ProductoDetalle`. Pruebas `Application.Tests/Inventory/{Costing/RetroactivoMinimoTests,
   Common/ReglasDePlataformaDeInventarioTests, Catalog/ChangeProductAccountingGroupCommandTests,
   Periods/{PeriodosDePrueba, InventoryPeriodCommandsTests}, Reports/ValuationReportQueryTests}`.
+- Compras de I1 (fase 8, US9, T326–T358; todos **(nuevo)** salvo los de data-model y api.md): Domain
+  `Entities/Inventory/Purchasing/{SupplierInvoiceDetail (Contado/Credito, NormalizarCufe, NormalizarNumero, PaymentForm, NumeroVisible,
+  navegación Document), SupplierInvoiceEvent (FuenteDian/FuenteProveedor/FuenteErp, columna nueva `RegisteredAt`)}`,
+  `Inventory/Purchasing/TransicionesDeEventoRadian` (+ `EventoRadianActual`; `Iniciales`, `RegistrarExterno`, `QuedaPendiente`,
+  `Hecho`), `Inventory/Costing/DiferenciaDePrecio` (+ `PedidoDeDiferenciaDePrecio`; `MotorDeCosteo.DiferenciaDePrecio`), columna
+  nueva `InventoryDocumentLine.AffectsCost` (nota del proveedor); Persistence `Configurations/Inventory/Purchasing/{SupplierInvoiceDetailConfiguration
+  (UK_INV_SupplierInvoiceDetails_Document, UK_INV_SupplierInvoiceDetails_Supplier_Class_Number, UK_INV_SupplierInvoiceDetails_Cufe),
+  SupplierInvoiceEventConfiguration (UK_INV_SupplierInvoiceEvents_Document_EventCode, IX_INV_SupplierInvoiceEvents_Status)}` en
+  `NucleoComercialSinMigracion`; `DbSet` `SupplierInvoiceDetails`, `SupplierInvoiceEvents`. Application: en el ciclo común
+  `Documents/IBorradorDeGrupo` (+ `BorradorEnCurso`, `ResultadoDelBorrador`; `SaveInventoryDraftCommandHandler` lo recibe
+  opcional), `IConfirmacionEncadenada` (en `PasosOpcionalesDeConfirmacion`; la llama `FuenteDeAprobacionDeDocumento`),
+  `IEfectoDeClase.OrigenesDelModoAsync` (los derivados copian el modo de su origen y sus mensajes lo heredan, con `related` =
+  el origen), `SaveInventoryDraftRequest.{OperationMunicipalityDaneCode, SupplierPersonPublicId, Supplier, SupplierInvoicePublicId,
+  NoteKind, Contraparte, TraeCamposDeCompra}` y `SupplierDocumentRequest`, `SaveInventoryDraftLine.{ReceiptLinePublicId,
+  InvoiceLinePublicId, Amount, AffectsCost, Origen}`; `Inventory/Purchasing/Common/{CalculoTributarioDeCompra (+ CalculoDeCompra,
+  TotalesDeCompra; `Perfil`, `Foto`, `DesdeLaFoto`, `AplicarTotales`), BorradorDeCompra (+ ContextoDeCompraDirecta),
+  VinculosDeCompra (+ ConsumoDeRecepcion), DiferenciasDePrecioDeCompra, ColisionDeFacturaDeProveedor (IndiceDelNumero,
+  IndiceDelCufe), ErroresDeCompras}`; `Documents/Efectos/{EfectoRecepcionDeCompra (+ ReglasDeCompra), EfectoFacturaDeProveedor,
+  EfectoNotaDeProveedor, EfectoDevolucionAProveedor (SupportDocumentAdjustmentNoteRequired = false hasta I4)}`;
+  `RegistroDeKardex.{CerrojoDeDiferenciasAsync, RegistrarDiferenciasDePrecioAsync}` (+ `DiferenciaDePrecioPedida`,
+  `DiferenciaDePrecioRegistrada`); `EmisionDeInventario.{CompraRecibidaAsync, DevolucionAProveedorAsync,
+  FacturaProveedorRegistradaAsync (+ LineaDeFacturaDeProveedor), AjusteDeDiferenciaDePrecioAsync}`;
+  `Inventory/Purchasing/{PurchaseDtos (RadianEventDto, SupplierInvoiceInfoDto, ReceiptLineBalanceDto, PurchaseDocumentDto,
+  SupplierInvoiceSummaryDto, PurchaseReceiptSummaryDto, DocumentoCreadoDto, FacturaCreadaDto, DirectPurchaseResultDto,
+  DirectPurchaseInvoiceRequest, RegistrarEventoRadianRequest (con `Correct`: corregir un registro externo), SupplierInvoicePrefillDto,
+  PrefillSupplierDto, PrefillLineDto, PrefillTaxDto, PrefillTotalsDto), ConfirmDirectPurchaseCommand (+ CompraDirectaEncadenada),
+  RadianEventCommands (RegisterExternalRadianEventCommand, `AccionDeCorreccion = "Inventory.RadianEvent.Corrected"`,
+  ListRadianEventsQuery), RevisionDeEventosRadian (`ClaveDeLaAlerta`, `RadianPendiente:{facturaPublicId}`) y la tarea
+  `TareaDeEventosRadian` (`compras.eventos-radian`, 06:00 local, registrada en `Program.cs`), PurchaseQueries (FiltrosDeCompras,
+  ConsultasDeCompras, ListPurchaseReceiptsQuery, ListSupplierInvoicesQuery, GetPurchaseDocumentQuery), LectorDeFacturaUbl
+  (+ FacturaLeida, LineaLeida, ImpuestoLeido), PrefillSupplierInvoiceQuery}`; `Inventory/Reports/RadianEventsReportQuery`. API
+  `Endpoints/Inventory/PurchasesEndpoints` (+ `CompraDirectaRequest`, `FiltrosDeComprasRequest`) y
+  `CicloDeDocumentoRutas.MapCicloDeDocumento(…, conConsultas)`; vista `radian-events` (`onlyPending`). Shared
+  `Services/Compras/ComprasClient` (+ `.Recepciones`, `.Facturas`, `.Devoluciones`; `Rutas`), `Models/Compras/ComprasDtos`
+  (ClasesDeCompra, EventosRadian, DocumentoDelProveedorRequest, LineaDeCompraRequest, BorradorDeCompraRequest,
+  FacturaDeCompraDirectaRequest, CompraDirectaRequest, EventoRadianDto, RegistrarEventoRadianRequest, InfoDelProveedorDto,
+  SaldoDeLineaDeRecepcionDto, DocumentoDeCompraDto, ResumenDeRecepcionDto, ResumenDeFacturaDeProveedorDto, DocumentoCreadoDto,
+  FacturaCreadaDto, ResultadoDeCompraDirectaDto, PrellenadoDeFacturaDto, ProveedorDelXmlDto, LineaDelXmlDto, ImpuestoDelXmlDto,
+  TotalesDelXmlDto, FiltroDeCompras), en `InventarioDtos` `DocumentoDeInventarioDto.{Links, TaxLines}`,
+  `LineaDeDocumentoDto.Links`, `VinculoDeDocumentoDto`, `RenglonDeImpuestoDto`, `VinculoDeLineaDeInventarioDto`;
+  `Components/Compras/{SelectorDeProveedor, ImpuestosDeCompra}` y `Pages/Compras/{Recepciones, Recepcion, CompraDirecta,
+  FacturasProveedor, FacturaProveedor, NotasProveedor, Devoluciones}.razor` con el grupo **Compras** del menú. Pruebas
+  `Domain.Tests/Inventory/Purchasing/{TransicionesDeEventoRadianTests, DiferenciaDePrecioTests}`,
+  `Application.Tests/Inventory/Purchasing/{ComprasDePrueba (+ AlertasDePrueba), RecepcionDeCompraTests, FacturaDeProveedorTests,
+  NotaDeProveedorTests, DevolucionAProveedorTests, CompraDirectaCommandTests, EventosRadianTests, LectorDeFacturaUblTests}` y sus
+  `Muestras/*.xml`.
 - Puesta en marcha (fase 7, US4, T297–T324; todos **(nuevo)** salvo los de data-model y api.md): Domain
   `Entities/Inventory/GoLive/{WarehouseActivation (LargoDelMotivo), LegacyFigure (+ AccountingGroupId, columna nueva)}` y en
   `Warehouse` los métodos `FijarFechaDeCorte(DateOnly, bool conSaldoConfirmado = false)`, `Activar(DateOnly, int, DateTimeOffset)`
@@ -1415,7 +1461,10 @@ data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T21
 TransitNotAllowed, AlreadyConfirmed (data.documents[])}`, `Inventory.OpeningBalance.ZeroCost` (nuevo, T308: aviso de fila, costo
 unitario cero), `Inventory.LegacyFigures.CodeUnresolved` (aviso), `Inventory.LegacyFigures.GroupMismatch` (nuevo, T311: aviso, el
 grupo del archivo no es el del producto a la fecha), `Inventory.Activation.{OpeningBalanceNotConfirmed, CutoffMismatch,
-AccountingUnavailable, AlreadyActive, Difference, AcceptDifferenceNotAllowed (data.permissionCode)}`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+AccountingUnavailable, AlreadyActive, Difference, AcceptDifferenceNotAllowed (data.permissionCode)}`; compras (US9) → `Inventory.Purchase.GoodsWithoutReceipt` (nuevo, T341: una línea de mercancía de la factura sin línea de
+recepción; sin recepción sólo van servicios), `Inventory.SupplierInvoice.IssueDateInvalid` (nuevo, T339: emisión posterior a hoy,
+data-model §9.2), `Inventory.SupplierNote.{InvoiceFromOtherSupplier, InvoiceNotConfirmed, InvoiceLineRequired}` (nuevos, T342: la
+nota va contra una factura confirmada del mismo proveedor, línea por línea); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

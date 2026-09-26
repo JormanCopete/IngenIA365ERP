@@ -35,6 +35,12 @@ public sealed class FuenteDeAprobacionDeDocumento(
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(solicitud.SourcePublicId, null, PorAprobacion: true), ct);
         if (confirmada.IsFailure) return Result.Failure<EstadoDeFuenteDto>(confirmada.Error);
         var r = confirmada.Value;
+        // Lo que se confirma con él (US9: la factura de la compra directa), en la misma transacción.
+        foreach (var encadenada in servicios.GetServices<IConfirmacionEncadenada>())
+        {
+            var hecha = await encadenada.AlConfirmarPorAprobacionAsync(r.PublicId, ct);
+            if (hecha.IsFailure) return Result.Failure<EstadoDeFuenteDto>(hecha.Error);
+        }
         var clase = await db.InventoryDocuments.AsNoTracking().Where(d => d.PublicId == r.PublicId).Select(d => d.Class).FirstAsync(ct);
         return Result.Success(new EstadoDeFuenteDto(r.PublicId, clase.ToString(), r.Status.ToString(), r.DisplayNumber));
     }

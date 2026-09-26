@@ -1,0 +1,140 @@
+@page "/compras/facturas-proveedor"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Facturas de proveedor - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T355 (FR-050, US9-4; contracts/api.md §14.4, §14.8): las facturas del proveedor registradas (visibles por el alcance
+   de sus recepciones), con el número y el CUFE del proveedor, la forma de pago y el estado del acuse (030) y del recibo del bien
+   (032). Filtros por proveedor, estado, forma de pago, eventos pendientes, fechas y número. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Facturas de proveedor</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Purchases.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/compras/facturas-proveedor/nueva"))">Registrar factura</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Proveedor <SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" /></label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        <label class="campo">Forma de pago
+            <select class="e-input" value="@(_forma ?? "")" @onchange="@(e => { _forma = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString(); return BuscarAsync(); })">
+                <option value="">Todas</option><option value="Cash">Contado</option><option value="Credit">Crédito</option>
+            </select>
+        </label>
+        <label class="campo"><input type="checkbox" checked="@_soloPendientes" @onchange="@(e => { _soloPendientes = e.Value is true; return BuscarAsync(); })" /> Con eventos RADIAN pendientes</label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Número <input class="e-input" @bind="_numero" @bind:after="BuscarAsync" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay facturas de proveedor con estos filtros.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Registro</th><th>Factura</th><th>Fecha</th><th>Proveedor</th><th>Pago</th><th>Estado</th><th class="numero">Total</th><th>030</th><th>032</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _filas)
+                        {
+                            var d = f.Document;
+                            <tr>
+                                <td><a href="@($"/compras/facturas-proveedor/{d.PublicId}")">@(d.DisplayNumber ?? "(borrador)")</a></td>
+                                <td>@f.Supplier?.Prefix@f.Supplier?.Number</td>
+                                <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@d.Counterparty?.Name</td>
+                                <td>@(f.Supplier?.PaymentForm == "Credit" ? "Crédito" : "Contado")</td>
+                                <td>@TextosDeInventario.Estado(d.Status)</td>
+                                <td class="numero">@d.Total?.ToString("N2")</td>
+                                <td>@EventosRadian.Estado(f.Receipt030)</td>
+                                <td>@EventosRadian.Estado(f.GoodsReceived032)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina · @_total factura(s)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<ResumenDeFacturaDeProveedorDto> _filas = [];
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private int? _estado;
+    private string? _forma, _numero;
+    private bool _soloPendientes;
+    private DateOnly? _desde, _hasta;
+    private int _pagina = 1;
+    private long _total;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        return BuscarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarFacturasAsync(new FiltroDeCompras
+        {
+            SupplierPersonPublicId = _proveedor?.PublicId, Status = _estado, PaymentForm = _forma, RadianPending = _soloPendientes ? true : null,
+            From = _desde, To = _hasta, Number = string.IsNullOrWhiteSpace(_numero) ? null : _numero, Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las facturas.");
+            return;
+        }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

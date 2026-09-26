@@ -95,6 +95,13 @@ public class InventoryReportsEndpoints : ICarterModule
                 "comparativo-valorizado-solido", ["asOf", "warehouse", "accountingGroup"], [],
                 RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
             (f, _) => new LegacyComparisonValuationQuery(f));
+
+        // US9 (T351): los eventos RADIAN de las facturas del proveedor (acuse 030 y recibo del bien 032).
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("radian-events", "Eventos RADIAN",
+                "Por factura del proveedor: CUFE, emisión, vencimiento, forma de pago y el estado, la fecha y la fuente del 030 y del 032.",
+                "eventos-radian", ["from", "to", "person"], ["onlyPending"]),
+            (f, q) => new RadianEventsReportQuery(f, bool.TryParse(q["onlyPending"].ToString(), out var pendientes) && pendientes));
     }
 }
 

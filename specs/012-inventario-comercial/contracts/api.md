@@ -1421,7 +1421,7 @@ operación o semanal la decide `DocumentoSoporte.Generacion`. Un documento sopor
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
 | `GET /` | Purchases.View | `[{ eventCode: Receipt030 \| GoodsReceived032, status: Pending \| RegisteredExternally \| Emitted \| Rejected \| NotApplicable, date?, source?: DianPortal \| SupplierPortal \| Erp, cude?, registeredBy?, registeredAt?, notes?, electronicDocumentPublicId? }]` |
-| `POST /` | Purchases.RegisterRadianEvent | `{ eventCode, date, source: DianPortal \| SupplierPortal, cude?, notes? }` → la lista actualizada (`RegisterExternalRadianEventCommand`, I1) |
+| `POST /` | Purchases.RegisterRadianEvent | `{ eventCode, date, source: DianPortal \| SupplierPortal, cude?, notes?, correct? }` → la lista actualizada (`RegisterExternalRadianEventCommand`, I1). `correct: true` **(nuevo, US9)** corrige un registro externo ya hecho (antes y después en la auditoría, `Inventory.RadianEvent.Corrected`); sin él, un evento hecho responde `.AlreadyRegistered` |
 | `POST /emit` | Purchases.EmitRadianEvent | `{ eventCodes: [Receipt030, GoodsReceived032] }` → 202 `{ events: [{ eventCode, electronicDocumentPublicId, status: Pending }] }` (`EmitRadianEventCommand`, I5) |
 
 Reglas (FR-050, US9-4, US13-4, T42):
@@ -1496,6 +1496,7 @@ que queda sin repartir de la factura), `.InvoiceNotService`, `Inventory.Purchase
 | `Inventory.Purchase.OrderFromOtherSupplier` · `.OverReceiptBeyondTolerance` · `Inventory.PurchaseOrder.NotOpen` · `.NotConfirmed` · `.SupplierEmailMissing` | 422 | §14.9 | `{ lineNumber, ordered, received, tolerance }` |
 | `Inventory.SupplierInvoice.Duplicate` · `.CufeDuplicate` · `.CufeRequired` · `.DueDateInvalid` · `.FileUnreadable` · `.NotAnInvoice` | 422 | §14.4 | `{ documentPublicId, displayNumber }` |
 | `Inventory.SupplierNote.ExceedsInvoice` | 422 | §14.5 | `{ remaining }` |
+| `Inventory.Purchase.GoodsWithoutReceipt` · `Inventory.SupplierInvoice.IssueDateInvalid` · `Inventory.SupplierNote.InvoiceFromOtherSupplier` · `.InvoiceNotConfirmed` · `.InvoiceLineRequired` **(nuevos, US9)** | 422 | §14.4, §14.5 | `{ lineNumber, productCode }` · `{ today }` · `{ invoicePublicId, displayNumber }` · `{ lineNumber }` |
 | `Inventory.Return.ReceiptLineRequired` · `.ExceedsReceived` | 422 | §14.6 | `{ received, alreadyReturned }` |
 | `Inventory.RadianEvent.NotApplicable` · `.OutOfOrder` · `.DateInvalid` · `.AlreadyRegistered` · `.ReceiptNotConfirmed` | 422 | §14.8 | |
 | `Inventory.LandedCost.BasisMissing` · `.ManualNotBalanced` · `.ExceedsInvoice` · `.InvoiceNotService` | 422 | §14.9 | |

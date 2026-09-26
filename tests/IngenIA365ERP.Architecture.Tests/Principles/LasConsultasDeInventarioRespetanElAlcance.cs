@@ -47,6 +47,10 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "GetWarehouseActivationPreviewQueryHandler",
         "LegacyComparisonKardexQueryHandler",
         "LegacyComparisonValuationQueryHandler",
+        // Fase 8, US9 (T348, T349): las listas y el detalle de compras y la vista radian-events.
+        "ListPurchaseReceiptsQueryHandler",
+        "ListSupplierInvoicesQueryHandler",
+        "RadianEventsReportQueryHandler",
     ];
 
     [Fact]

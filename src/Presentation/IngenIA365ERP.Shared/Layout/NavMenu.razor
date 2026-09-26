@@ -139,6 +139,19 @@
             <NavLink href="/inventario/vendedores" class="nav-subitem">Vendedores</NavLink>
         </NavMenuGroup>
 
+        @* US9 (T357): compras de I1. Sólo enlaces con su página publicada (TodoEnlaceDelMenuTieneSuPagina). *@
+        <PermissionGate Required="Inventory.Purchases.View">
+        <NavMenuGroup Icon="e-grid-view" Title="Compras" Expanded="SidebarOpen">
+            <PermissionGate Required="Inventory.Purchases.Confirm">
+                <NavLink href="/compras/compra-directa" class="nav-subitem">Compra directa</NavLink>
+            </PermissionGate>
+            <NavLink href="/compras/recepciones" class="nav-subitem">Recepciones</NavLink>
+            <NavLink href="/compras/facturas-proveedor" class="nav-subitem">Facturas de proveedor</NavLink>
+            <NavLink href="/compras/notas-proveedor" class="nav-subitem">Notas de proveedor</NavLink>
+            <NavLink href="/compras/devoluciones" class="nav-subitem">Devoluciones</NavLink>
+        </NavMenuGroup>
+        </PermissionGate>
+
         <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/ventas/canales" class="nav-subitem">Canales de venta</NavLink>

@@ -175,6 +175,23 @@ public static class DependencyInjection
         // IContabilidadParaInventario (llega con US7, I2) la activación sólo se ensaya fuera de producción.
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoSaldoInicial>();
         services.AddScoped<Inventory.GoLive.ComparacionDeActivacion>();
+        // Feature 012 (US9, T338-T349): compras. El borrador del grupo Purchases (documento del proveedor, vinculos, impuestos
+        // y totales en cada guardado), el calculo tributario de compra y las cuatro estrategias de I1.
+        services.AddScoped<Inventory.Purchasing.Common.CalculoTributarioDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.VinculosDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.DiferenciasDePrecioDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.ContextoDeCompraDirecta>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Purchasing.Common.BorradorDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeProveedor>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeProveedor>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
+        services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
+        services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
+        services.AddScoped<Inventory.Purchasing.RevisionDeEventosRadian>();
+        // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
+        // reintentable anidado vaciaria el ChangeTracker de afuera).
+        services.AddScoped<Inventory.Documents.SaveInventoryDraftCommandHandler>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();

@@ -237,6 +237,9 @@ public interface IApplicationDbContext
     // Feature 012 (T307, US4): la activación de cada bodega y las cifras de SOLIDO (sólo informativas: nunca kardex).
     DbSet<Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations { get; }
     DbSet<Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures { get; }
+    // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails { get; }
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

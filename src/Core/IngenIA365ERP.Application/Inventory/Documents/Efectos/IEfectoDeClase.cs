@@ -81,6 +81,14 @@ public interface IEfectoDeClase
 
     /// <summary>Los contenidos de la anulación (<c>DocumentoAnulado</c>, ajustes de costo), vacío si no emite.</summary>
     Task<IReadOnlyList<object>> MensajesDeAnulacionAsync(ContextoDeEfecto contexto, CancellationToken ct);
+
+    /// <summary>
+    /// Los orígenes de los que el documento es <b>derivado</b> (data-model §5.3; FR-075): la factura del proveedor o la devolución
+    /// contra sus recepciones (US9). No lee <c>Contabilidad.ModoDePaso</c>: copia el modo de la entrega de su origen y sus
+    /// mensajes lo heredan. Vacío (lo común) = sella el modo vigente. (nuevo)
+    /// </summary>
+    Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<InventoryDocument>>([]);
 }
 
 /// <summary>
@@ -116,4 +124,7 @@ public abstract class EfectoDeClaseBase : IEfectoDeClase
 
     public virtual Task<IReadOnlyList<object>> MensajesDeAnulacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<object>>([]);
+
+    public virtual Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<InventoryDocument>>([]);
 }

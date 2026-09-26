@@ -24,7 +24,35 @@ public sealed record SaveInventoryDraftRequest(
     string? Currency,
     decimal? ExchangeRate,
     byte[]? RowVersion,
-    IReadOnlyList<SaveInventoryDraftLine> Lines);
+    IReadOnlyList<SaveInventoryDraftLine> Lines,
+    string? OperationMunicipalityDaneCode = null,
+    Guid? SupplierPersonPublicId = null,
+    SupplierDocumentRequest? Supplier = null,
+    Guid? SupplierInvoicePublicId = null,
+    string? NoteKind = null)
+{
+    /// <summary>La contraparte: la del ciclo común o, en compras, el proveedor (<c>supplierPersonPublicId</c>, api.md §14).</summary>
+    public Guid? Contraparte => CounterpartyPersonPublicId ?? SupplierPersonPublicId;
+
+    /// <summary>¿Trae algún campo que sólo admite el grupo de compras (§14.1)?</summary>
+    public bool TraeCamposDeCompra =>
+        OperationMunicipalityDaneCode is not null || SupplierPersonPublicId is not null || Supplier is not null
+        || SupplierInvoicePublicId is not null || NoteKind is not null
+        || Lines.Any(l => l.ReceiptLinePublicId is not null || l.InvoiceLinePublicId is not null || l.Amount is not null || l.AffectsCost is not null);
+}
+
+/// <summary>
+/// El documento del proveedor en una factura o nota (<c>supplier</c>, api.md §14.4–§14.5): prefijo, número, CUFE o CUDE,
+/// emisión, vencimiento, forma de pago (<c>Cash</c> o <c>Credit</c>) y si es electrónico. (nuevo)
+/// </summary>
+public sealed record SupplierDocumentRequest(
+    string? Prefix,
+    string Number,
+    string? Cufe,
+    DateOnly IssueDate,
+    DateOnly? DueDate = null,
+    string? PaymentForm = null,
+    bool IsElectronic = false);
 
 /// <summary>Una línea del borrador. <see cref="LinePublicId"/> en un <c>PUT</c> conserva la línea; sin él, es nueva.</summary>
 public sealed record SaveInventoryDraftLine(
@@ -42,7 +70,15 @@ public sealed record SaveInventoryDraftLine(
     string? LotCode = null,
     string? SerialNumber = null,
     DateOnly? ExpiryDate = null,
-    string? Notes = null);
+    string? Notes = null,
+    Guid? ReceiptLinePublicId = null,
+    Guid? InvoiceLinePublicId = null,
+    decimal? Amount = null,
+    bool? AffectsCost = null)
+{
+    /// <summary>La línea de origen: la de la recepción (factura, devolución), la de la factura (nota) o la genérica.</summary>
+    public Guid? Origen => SourceLinePublicId ?? ReceiptLinePublicId ?? InvoiceLinePublicId;
+}
 
 // -------------------------------------------------------------------------------------------- referencias --
 

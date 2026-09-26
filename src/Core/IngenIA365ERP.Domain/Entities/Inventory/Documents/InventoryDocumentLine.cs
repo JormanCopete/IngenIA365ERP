@@ -60,4 +60,10 @@ public class InventoryDocumentLine : AuditableEntity
     public int? AdjustmentCauseId { get; set; }
 
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Nota del proveedor (US9, T342; api.md §14.5): la línea cambia el precio de lo recibido y deja un ajuste de costo
+    /// <c>PriceDifference</c> sobre la recepción. Falso en toda otra clase. (nuevo)
+    /// </summary>
+    public bool AffectsCost { get; set; }
 }

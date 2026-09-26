@@ -878,6 +878,7 @@ y en las informativas (`OpeningBalance` y su anulación): esos mensajes se entre
 | `LotId` · `SerialId` | int | sí | I1 (FK I6) | §3.0 |
 | `AdjustmentCauseId` | int FK `INV_AdjustmentCauses` | sí | I1 | **(nuevo)** obligatoria en `NegativeAdjustment`, `WriteOff` y en los ajustes de un conteo |
 | `Description` | nvarchar(200) | sí | I1 | texto de un servicio o del documento soporte |
+| `AffectsCost` | bit | no | I1 | **(nuevo, US9 T342)** sólo en `SupplierNote`: la línea cambia el precio de lo recibido y deja `PriceDifference` sobre la recepción; `DEFAULT 0` |
 
 `IX (ProductId)`. Un servicio no produce kardex; el resto de la línea no cambia al confirmar salvo
 `UnitCost`/`TotalCost` de las salidas y `LocationId` por defecto, que se escriben en la misma transacción
@@ -1321,6 +1322,7 @@ los eventos ya registrados o emitidos.
 | `Source` | nvarchar(20) | sí | `DianPortal`, `SupplierPortal` o `Erp` (lista cerrada) |
 | `Cude` | nvarchar(96) | sí | |
 | `RegisteredByUserId` | int FK | sí | |
+| `RegisteredAt` | datetime2 | sí | **(nuevo, US9 T336)** cuándo se registró (o corrigió) el evento externo; lo devuelve §14.8 como `registeredAt` |
 | `EvidenceAttachmentPublicId` | uniqueidentifier | sí | constancia opcional |
 | `ElectronicDocumentPublicId` | uniqueidentifier | sí | I5: el `COR_ElectronicDocuments` de `Kind = RadianEvent030/032` |
 | `Notes` | nvarchar(300) | sí | |

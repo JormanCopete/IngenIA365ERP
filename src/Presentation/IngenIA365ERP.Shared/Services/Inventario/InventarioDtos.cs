@@ -194,7 +194,13 @@ public sealed record LineaDeDocumentoDto
     public string? Serial { get; init; }
     public DateOnly? ExpiryDate { get; init; }
     public string? Notes { get; init; }
+
+    /// <summary>US9 (T352): los vínculos de la línea con la de otro documento (la recepción de una factura, la factura de una nota…).</summary>
+    public IReadOnlyList<VinculoDeLineaDeInventarioDto> Links { get; init; } = [];
 }
+
+/// <summary>Un vínculo de una línea con la de otro documento (<c>VinculoDeLineaDto</c>). (nuevo, US9)</summary>
+public sealed record VinculoDeLineaDeInventarioDto(int Kind, Guid DocumentPublicId, string? DisplayNumber, Guid LinePublicId, decimal QuantityBase);
 
 /// <summary>La unidad de una línea.</summary>
 public sealed record UnidadDeLineaDto(Guid PublicId, string Code);
@@ -242,7 +248,23 @@ public sealed record DocumentoDeInventarioDto
     public TotalesDeDocumentoDto? Totals { get; init; }
     public IReadOnlyList<string> AllowedActions { get; init; } = [];
     public IReadOnlyList<AvisoDeInventarioDto> Warnings { get; init; } = [];
+
+    /// <summary>US9 (T352): los vínculos con otros documentos (recepción ← factura, nota, devolución…).</summary>
+    public IReadOnlyList<VinculoDeDocumentoDto> Links { get; init; } = [];
+
+    /// <summary>US9 (T352): la foto tributaria del confirmado, o la vista previa del borrador de compras.</summary>
+    public IReadOnlyList<RenglonDeImpuestoDto> TaxLines { get; init; } = [];
 }
+
+/// <summary>Un vínculo del documento con otro (<c>DocumentLinkDto</c>, §9.2). <c>Kind</c> es <c>DocumentLinkKind</c>. (nuevo, US9)</summary>
+public sealed record VinculoDeDocumentoDto(int Kind, Guid DocumentPublicId, int Class, string? DisplayNumber, int Status);
+
+/// <summary>
+/// Un renglón de impuesto o retención (<c>DocumentTaxLineDto</c>, §9.2): <c>Kind</c> es <c>TaxKind</c> y <c>Treatment</c>
+/// <c>TaxTreatment</c> (1 generado, 2 descontable, 3 al costo, 4 retención practicada, 5 sufrida). (nuevo, US9)
+/// </summary>
+public sealed record RenglonDeImpuestoDto(int? LineNumber, int Kind, string RateCode, decimal? Rate, decimal? AmountPerUnit, decimal Base,
+    decimal Amount, int Treatment, string? MunicipalityDaneCode, string ExplanationJson);
 
 /// <summary>Una línea del borrador (<c>SaveInventoryDraftLine</c>): con <see cref="LinePublicId"/> se conserva; sin él, es nueva.</summary>
 public sealed record LineaDeBorradorRequest(

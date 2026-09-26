@@ -52,6 +52,9 @@ public static class NucleoComercialSinMigracion
         // Fase 7 (US4, T307): activaciones de bodega y cifras de SOLIDO.
         "INV_WarehouseActivations",
         "INV_LegacyFigures",
+        // Fase 8 (US9, T337): el documento del proveedor y sus eventos RADIAN.
+        "INV_SupplierInvoiceDetails",
+        "INV_SupplierInvoiceEvents",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

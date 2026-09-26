@@ -1,0 +1,149 @@
+@page "/compras/recepciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Recepciones de compra - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T353 (FR-044, FR-049; contracts/api.md §14.2): las recepciones de compra de las bodegas del alcance, con lo que
+   falta facturar y lo devuelto por documento (calculados de los vínculos), filtros por proveedor, estado, bodega, fechas y número.
+   «Nueva recepción» abre el borrador; la compra en un paso está en Compra directa. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Recepciones de compra</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Purchases.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/compras/recepciones/nueva"))">Nueva recepción</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Proveedor
+            <IngenIA365ERP.Shared.Components.Compras.SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" />
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        <label class="campo">Bodega
+            <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => { _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; return BuscarAsync(); })">
+                <option value="">Todas las del alcance</option>
+                @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Número <input class="e-input" @bind="_numero" @bind:after="BuscarAsync" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay recepciones con estos filtros en las bodegas de su alcance.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Número</th><th>Fecha</th><th>Proveedor</th><th>Bodega</th><th>Estado</th><th class="numero">Total</th><th class="numero">Por facturar</th><th class="numero">Devuelto</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _filas)
+                        {
+                            var d = r.Document;
+                            <tr>
+                                <td><a href="@($"/compras/recepciones/{d.PublicId}")">@(d.DisplayNumber ?? "(borrador)")</a></td>
+                                <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@d.Counterparty?.Name</td>
+                                <td>@d.Warehouse?.Code</td>
+                                <td>@TextosDeInventario.Estado(d.Status)@(d.VoidedBy is { } a ? $" por {a.DisplayNumber}" : "")</td>
+                                <td class="numero">@d.Total?.ToString("N2")</td>
+                                <td class="numero">@r.PendingToInvoice.ToString("N4")</td>
+                                <td class="numero">@r.Returned.ToString("N4")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina · @_total recepción(es)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<ResumenDeRecepcionDto> _filas = [];
+    private List<BodegaDto> _bodegas = [];
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private int? _estado;
+    private Guid? _bodega;
+    private DateOnly? _desde, _hasta;
+    private string? _numero;
+    private int _pagina = 1;
+    private long _total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit)] : [];
+        await CargarAsync();
+    }
+
+    private Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        return BuscarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarRecepcionesAsync(new FiltroDeCompras
+        {
+            SupplierPersonPublicId = _proveedor?.PublicId, Status = _estado, WarehousePublicId = _bodega, From = _desde, To = _hasta,
+            Number = string.IsNullOrWhiteSpace(_numero) ? null : _numero, Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las recepciones.");
+            return;
+        }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -26,31 +26,19 @@ public static class CicloDeDocumentoRutas
     /// <param name="grupoDeDocumentos">El <see cref="DocumentClassGroup"/> que se compara con la clase de cada documento.</param>
     /// <param name="prefijoDePermiso"><c>Inventory.Adjustments</c>, <c>Inventory.Purchases</c>…</param>
     /// <param name="nombre">Prefijo de los nombres de ruta (<c>Inventory_Adjustments</c>).</param>
+    /// <param name="conConsultas">
+    /// Falso cuando la historia publica su propia lista y su propio detalle (compras, US9: cada clase bajo su ruta, con lo que
+    /// falta facturar y el documento del proveedor).
+    /// </param>
     public static RouteGroupBuilder MapCicloDeDocumento(
-        this RouteGroupBuilder grupo, DocumentClassGroup grupoDeDocumentos, string prefijoDePermiso, string nombre)
+        this RouteGroupBuilder grupo, DocumentClassGroup grupoDeDocumentos, string prefijoDePermiso, string nombre, bool conConsultas = true)
     {
         var ver = $"{prefijoDePermiso}.View";
         var crear = $"{prefijoDePermiso}.Create";
         var confirmar = $"{prefijoDePermiso}.Confirm";
         var anular = $"{prefijoDePermiso}.Void";
 
-        grupo.MapGet("/", async (
-                DocumentClass? @class, Guid? documentTypePublicId, DocumentStatus? status, DateOnly? from, DateOnly? to,
-                Guid? warehousePublicId, Guid? counterpartyPersonPublicId, string? number, string? search, int? page, int? pageSize,
-                ISender sender, CancellationToken ct) =>
-                await sender.Send(new ListInventoryDocumentsQuery(
-                    new FiltrosDeDocumentos(grupoDeDocumentos, @class, documentTypePublicId, status, from, to, warehousePublicId,
-                        counterpartyPersonPublicId, number, search),
-                    new PageRequest(page ?? 1, pageSize ?? 20)), ct))
-            .WithName($"{nombre}_List")
-            .AddEndpointFilter<ErrorEnvelopeFilter>()
-            .RequirePermission(ver);
-
-        grupo.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
-                await sender.Send(new GetInventoryDocumentQuery(id, grupoDeDocumentos), ct))
-            .WithName($"{nombre}_Get")
-            .AddEndpointFilter<ErrorEnvelopeFilter>()
-            .RequirePermission(ver);
+        if (conConsultas) MapConsultas(grupo, grupoDeDocumentos, ver, nombre);
 
         grupo.MapPost("/", async (SaveInventoryDraftRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
@@ -101,6 +89,27 @@ public static class CicloDeDocumentoRutas
             .RequirePermission(anular);
 
         return grupo;
+    }
+
+    private static void MapConsultas(RouteGroupBuilder grupo, DocumentClassGroup grupoDeDocumentos, string ver, string nombre)
+    {
+        grupo.MapGet("/", async (
+                DocumentClass? @class, Guid? documentTypePublicId, DocumentStatus? status, DateOnly? from, DateOnly? to,
+                Guid? warehousePublicId, Guid? counterpartyPersonPublicId, string? number, string? search, int? page, int? pageSize,
+                ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListInventoryDocumentsQuery(
+                    new FiltrosDeDocumentos(grupoDeDocumentos, @class, documentTypePublicId, status, from, to, warehousePublicId,
+                        counterpartyPersonPublicId, number, search),
+                    new PageRequest(page ?? 1, pageSize ?? 20)), ct))
+            .WithName($"{nombre}_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(ver);
+
+        grupo.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetInventoryDocumentQuery(id, grupoDeDocumentos), ct))
+            .WithName($"{nombre}_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(ver);
     }
 
     /// <summary>El cuerpo de descartar (§9.3).</summary>

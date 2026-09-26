@@ -1,0 +1,208 @@
+@page "/compras/devoluciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Devoluciones a proveedor - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T356 (FR-044, FR-051, US9-3; contracts/api.md §14.6): la devolución a proveedor se arma desde las líneas de una
+   recepción confirmada con lo devolvible (recibido − ya devuelto); sale al costo con que entró y la diferencia con el promedio la
+   registra el servidor como ajuste de costo. Se guarda el borrador (con sus avisos) y se confirma; la lista muestra las devoluciones
+   de las bodegas del alcance. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Devoluciones a proveedor</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Inventory.Purchases.Create">
+        <div class="info-card">
+            <h4>Nueva devolución</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Proveedor * <SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" /></label>
+                    <label class="campo">Recepción *
+                        <select class="e-input" value="@(_recepcion?.ToString() ?? "")" @onchange="@(e => ElegirRecepcionAsync(e.Value?.ToString()))">
+                            <option value="">Elija…</option>
+                            @foreach (var r in _recepciones) { <option value="@r.Document.PublicId">@r.Document.DisplayNumber · @r.Document.OperationDate.ToString("dd/MM/yyyy") · @r.Document.Warehouse?.Code</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tipo *
+                        <select class="e-input" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                @if (_lineas.Count > 0)
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Producto</th><th>Unidad</th><th class="numero">Recibido</th><th class="numero">Devolvible</th><th class="numero">A devolver</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in _lineas)
+                                {
+                                    <tr>
+                                        <td>@l.Producto</td>
+                                        <td>@l.Unidad</td>
+                                        <td class="numero">@l.Recibido.ToString("N4")</td>
+                                        <td class="numero">@l.Devolvible.ToString("N4")</td>
+                                        <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="texto-tenue">Cantidades en la unidad de la recepción; salen al costo con que entraron.</p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    @if (_borrador is not null) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="@ConfirmarAsync">Confirmar la devolución</SfButton> }
+                </div>
+                @if (_borrador?.Warnings is { Count: > 0 } avisos)
+                {
+                    <div class="aviso aviso-alerta"><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _devoluciones.Count == 0)
+        {
+            <p class="texto-tenue">No hay devoluciones a proveedor en las bodegas de su alcance.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Fecha</th><th>Proveedor</th><th>Bodega</th><th>Estado</th>@if (_devoluciones.Any(d => d.CostValue is not null)) { <th class="numero">Valor al costo</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var d in _devoluciones)
+                        {
+                            <tr>
+                                <td>@(d.DisplayNumber ?? "(borrador)")</td>
+                                <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@d.Counterparty?.Name</td>
+                                <td>@d.Warehouse?.Code</td>
+                                <td>@TextosDeInventario.Estado(d.Status)</td>
+                                @if (_devoluciones.Any(x => x.CostValue is not null)) { <td class="numero">@d.CostValue?.ToString("N2")</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private sealed class LineaDeDevolucion
+    {
+        public Guid ReceiptLinePublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public string Unidad { get; set; } = "";
+        public decimal Recibido { get; set; }
+        public decimal Devolvible { get; set; }
+        public decimal Cantidad { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new();
+    private List<ResumenDeDocumentoDto> _devoluciones = [];
+    private List<ResumenDeRecepcionDto> _recepciones = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<LineaDeDevolucion> _lineas = [];
+    private DocumentoDeCompraDto? _recepcionElegida;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private Guid? _recepcion, _tipo;
+    private string? _motivo;
+    private DocumentoDeInventarioDto? _borrador;
+
+    private bool PuedeGuardar => _proveedor is not null && _recepcion is not null && _tipo is not null && !string.IsNullOrWhiteSpace(_motivo)
+                                 && _lineas.Any(l => l.Cantidad > 0m) && !_guardado.Activa;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tipos = await Inventario.ListarTiposAsync(grupo: 1);
+        _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && t.Class == ClasesDeCompra.Devolucion)] : [];
+        _tipo = _tipos.FirstOrDefault()?.PublicId;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarDevolucionesAsync(new FiltroDeCompras { PageSize = 50 });
+        _devoluciones = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las devoluciones.");
+    }
+
+    private async Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        _recepcion = null;
+        _lineas = [];
+        _recepciones = [];
+        if (proveedor is null) return;
+        var r = await Compras.ListarRecepcionesAsync(new FiltroDeCompras { SupplierPersonPublicId = proveedor.PublicId, Status = 2, PageSize = 100 });
+        _recepciones = r.IsSuccess ? [.. r.Value!.Items] : [];
+    }
+
+    private async Task ElegirRecepcionAsync(string? valor)
+    {
+        _recepcion = Guid.TryParse(valor, out var g) ? g : null;
+        _lineas = [];
+        _borrador = null;
+        if (_recepcion is not { } id) return;
+        var r = await Compras.ObtenerRecepcionAsync(id);
+        if (!r.IsSuccess || r.Value is null) return;
+        _recepcionElegida = r.Value;
+        _lineas = r.Value.Document.Lines.OrderBy(l => l.LineNumber).Select(l =>
+        {
+            var saldo = r.Value.LineBalances.FirstOrDefault(s => s.LinePublicId == l.LinePublicId);
+            return new LineaDeDevolucion
+            {
+                ReceiptLinePublicId = l.LinePublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", Unidad = l.Unit.Code,
+                Recibido = l.Quantity, Devolvible = l.Factor == 0m ? saldo?.Returnable ?? l.Quantity : Math.Round((saldo?.Returnable ?? l.QuantityBase) / l.Factor, 4),
+            };
+        }).ToList();
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_recepcionElegida is null) return;
+        using var guardado = _guardado.Iniciar();
+        var pedido = new BorradorDeCompraRequest(_tipo!.Value, null, _recepcionElegida.Document.Warehouse?.PublicId, _proveedor!.PublicId, null, _motivo,
+            null, _borrador?.RowVersion,
+            _lineas.Where(l => l.Cantidad > 0m).Select(l => new LineaDeCompraRequest(null, Guid.Empty, Guid.Empty, l.Cantidad, ReceiptLinePublicId: l.ReceiptLinePublicId)).ToList());
+        var r = await Compras.GuardarAsync(ComprasClient.Rutas.Devoluciones, _borrador?.PublicId, pedido, _claveGuardar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la devolución."); return; }
+        _borrador = r.Value;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_borrador is null) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.Devoluciones, _borrador.PublicId, _borrador.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la devolución."); return; }
+        await Notification.SuccessAsync(r.Value.Status == 1 ? "La devolución quedó en aprobación." : $"Devolución {r.Value.DisplayNumber} confirmada.");
+        _borrador = null;
+        _claveGuardar = new();
+        _claveConfirmar = new();
+        _motivo = null;
+        await ElegirRecepcionAsync(_recepcion?.ToString());
+        await CargarAsync();
+    }
+}

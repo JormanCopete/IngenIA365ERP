@@ -156,10 +156,14 @@ public sealed class ConfirmacionDeDocumento(
         if (clase.NumberedBy == NumberedBy.DianResolution && !pasosFiscales.Any())
             return Falla(InventoryErrors.DocumentClassNotAvailable(documento.Class));
 
-        // Los relacionados (la anulación) no leen el parámetro: copian el modo de su original (FR-079).
+        // Los relacionados (la anulación) no leen el parámetro: copian el modo de su original (FR-079); los derivados (la
+        // factura o la devolución contra sus recepciones, US9) copian el de su origen (data-model §5.3).
+        var origenes = original is null ? await efecto.OrigenesDelModoAsync(contexto, ct) : [];
         var modo = original is not null
             ? Result.Success(original.PostingMode)
-            : await ModoASellarAsync(documento, tipo, clase, hoy, ct);
+            : origenes.Count > 0
+                ? Result.Success(origenes[0].PostingMode)
+                : await ModoASellarAsync(documento, tipo, clase, hoy, ct);
         if (modo.IsFailure) return Falla(modo.Error);
 
         var validacion = new ValidacionPreviaDto(PrevalidationOutcome.NotApplicable, []);
@@ -189,7 +193,7 @@ public sealed class ConfirmacionDeDocumento(
 
         var contenidos = original is null ? await efecto.MensajesAsync(contexto, ct) : await efecto.MensajesDeAnulacionAsync(contexto, ct);
         if (contenidos.Count > 0)
-            await EmitirAsync(documento, tipo, bodega, original, contenidos, validacion.Outcome, hoy, ct);
+            await EmitirAsync(documento, tipo, bodega, original, contenidos, validacion.Outcome, hoy, ct, origenes);
 
         if (documento.CounterpartyPersonId is int personaId && !await db.DocumentPartySnapshots.AnyAsync(s => s.DocumentId == documento.Id, ct))
         {
@@ -261,7 +265,8 @@ public sealed class ConfirmacionDeDocumento(
         IReadOnlyList<object> contenidos,
         PrevalidationOutcome validacion,
         DateOnly hoy,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<InventoryDocument>? origenes = null)
     {
         var sucursal = await db.Branches.AsNoTracking().Where(s => s.Id == documento.BranchId).Select(s => s.PublicId).FirstAsync(ct);
         Guid? centro = documento.CostCenterId is int cc ? await db.CostCenters.AsNoTracking().Where(c => c.Id == cc).Select(c => c.PublicId).FirstAsync(ct) : null;
@@ -280,7 +285,16 @@ public sealed class ConfirmacionDeDocumento(
         if (delEvento.Count > 0)
         {
             SolicitudDeEmision solicitud;
-            if (original is null)
+            if (original is null && origenes is { Count: > 0 })
+            {
+                // Derivado: sigue el destino del mensaje de su origen (FR-075) y depende de las cadenas de todos sus orígenes.
+                var raiz = origenes[0];
+                solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, delEvento, new ModoDeEntrega.Heredado(raiz.PublicId),
+                    CadenasDeLasQueDepende: origenes.Select(o => o.PublicId).ToList(),
+                    Relacionado: new DocumentoRelacionado(raiz.PublicId, raiz.Class.ToString(), VistaDeDocumentos.NumeroVisible(raiz.Prefix, raiz.Number) ?? string.Empty),
+                    ValidacionPrevia: validacion);
+            }
+            else if (original is null)
             {
                 solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, delEvento, await ModoDeEntregaAsync(documento, tipo, hoy, ct),
                     ValidacionPrevia: validacion);

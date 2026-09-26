@@ -39,10 +39,14 @@ public sealed class SaveInventoryDraftCommandValidator : AbstractValidator<SaveI
         RuleFor(x => x.Draft.ExchangeRate).GreaterThan(0).When(x => x.Draft.ExchangeRate is not null);
         RuleForEach(x => x.Draft.Lines).ChildRules(l =>
         {
-            l.RuleFor(x => x.ProductPublicId).NotEmpty().WithMessage("Cada línea lleva su producto.");
-            l.RuleFor(x => x.UnitPublicId).NotEmpty().WithMessage("Cada línea lleva su unidad.");
-            l.RuleFor(x => x.Quantity).GreaterThan(0).WithMessage("La cantidad va positiva: el signo lo pone la clase.")
-                .Must(q => Decimales(q) <= 4).WithMessage("La cantidad admite hasta 4 decimales.");
+            // Una línea con origen (recepción o factura, compras US9) toma de él producto, unidad y, en una nota, la cantidad.
+            l.RuleFor(x => x.ProductPublicId).NotEmpty().When(x => x.Origen is null).WithMessage("Cada línea lleva su producto.");
+            l.RuleFor(x => x.UnitPublicId).NotEmpty().When(x => x.Origen is null).WithMessage("Cada línea lleva su unidad.");
+            l.RuleFor(x => x.Quantity).GreaterThan(0).When(x => x.InvoiceLinePublicId is null || x.Quantity != 0)
+                .WithMessage("La cantidad va positiva: el signo lo pone la clase.");
+            l.RuleFor(x => x.Quantity).Must(q => Decimales(q) <= 4).WithMessage("La cantidad admite hasta 4 decimales.");
+            l.RuleFor(x => x.Amount).GreaterThanOrEqualTo(0).Must(a => a is null || Decimales(a.Value) <= 2)
+                .WithMessage("El valor de la línea admite hasta 2 decimales.");
             l.RuleFor(x => x.UnitPrice).GreaterThanOrEqualTo(0).Must(p => p is null || Decimales(p.Value) <= 6)
                 .WithMessage("El precio unitario admite hasta 6 decimales.");
             l.RuleFor(x => x.UnitCost).GreaterThanOrEqualTo(0).Must(c => c is null || Decimales(c.Value) <= 6)
@@ -82,9 +86,12 @@ public sealed class SaveInventoryDraftCommandHandler(
     IActorActual actorActual,
     IDateTimeService reloj,
     EfectosDeClase efectos,
-    VistaDeDocumentos vista)
+    VistaDeDocumentos vista,
+    IEnumerable<IBorradorDeGrupo>? borradoresDeGrupo = null)
     : IRequestHandler<SaveInventoryDraftCommand, Result<InventoryDocumentDto>>
 {
+    private readonly IReadOnlyList<IBorradorDeGrupo> _deGrupo = borradoresDeGrupo?.ToList() ?? [];
+
     public async Task<Result<InventoryDocumentDto>> Handle(SaveInventoryDraftCommand request, CancellationToken ct)
     {
         var borrador = request.Draft;
@@ -112,6 +119,17 @@ public sealed class SaveInventoryDraftCommandHandler(
         if (!tipo.IsActive && (documento is null || documento.DocumentTypeId != tipo.Id)) return Falla(InventoryErrors.DocumentTypeInactive(tipo.Code));
         var efecto = efectos.Para(tipo.Class);
         if (efecto.IsFailure) return Falla(efecto.Error);
+
+        // (2b) Lo que agrega el grupo (compras, US9): sin implementación, sus campos no se admiten.
+        var deGrupo = _deGrupo.FirstOrDefault(g => g.Grupo == request.ExpectedGroup);
+        if (deGrupo is null && borrador.TraeCamposDeCompra)
+            return Falla(new Error("Validation.Invalid", $"Los campos de compras no aplican a un documento de clase {tipo.Class}."));
+        if (deGrupo is not null)
+        {
+            var preparado = await deGrupo.PrepararAsync(tipo, borrador, documento, ct);
+            if (preparado.IsFailure) return Falla(preparado.Error);
+            borrador = preparado.Value;
+        }
 
         // (3) Moneda y tamaño.
         if ((borrador.Currency is { } moneda && !string.Equals(moneda, InventoryDocument.MonedaPorDefecto, StringComparison.OrdinalIgnoreCase))
@@ -142,7 +160,7 @@ public sealed class SaveInventoryDraftCommandHandler(
             if (centroId is null) return Falla(ErroresDelDocumento.CentroDeCostoInexistente());
         }
         int? personaId = null;
-        if (borrador.CounterpartyPersonPublicId is { } per)
+        if (borrador.Contraparte is { } per)
         {
             personaId = await db.People.Where(p => p.PublicId == per).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
             if (personaId is null) return Falla(ErroresDelDocumento.PersonaInexistente());
@@ -265,6 +283,7 @@ public sealed class SaveInventoryDraftCommandHandler(
             linea.ToLocationId = c.HaciaId;
             linea.AdjustmentCauseId = causaId;
             linea.Description = Limpio(c.Pedida.Notes);
+            linea.AffectsCost = c.Pedida.AffectsCost == true;
         }
         foreach (var sobrante in existentes.Values.Where(l => !conservadas.Contains(l.PublicId)))
         {
@@ -283,13 +302,44 @@ public sealed class SaveInventoryDraftCommandHandler(
         documento.AmountDue = documento.Total - documento.WithholdingTotal;
         documento.CostTotal = vivas.Sum(l => l.TotalCost ?? 0m);
 
-        // (9) Avisos: lo que impediría confirmar hoy, comunes y de la clase.
+        // (8b) Lo del grupo: satélites, vínculos, impuestos y totales (compras).
+        var enCurso = new BorradorEnCurso(documento, tipo, borrador, bodega);
+        var delGrupo = ResultadoDelBorrador.Vacio;
+        if (deGrupo is not null)
+        {
+            var aplicado = await deGrupo.AplicarAsync(enCurso, ct);
+            if (aplicado.IsFailure)
+            {
+                // Nada de este intento queda en el seguimiento: otro guardado de la misma unidad de trabajo no lo arrastra.
+                db.DescartarCambios();
+                return Falla(aplicado.Error);
+            }
+            delGrupo = aplicado.Value;
+            if (documento.WarehouseId is int propia && propia != bodega?.Id)
+                bodega = (await maestros.BodegasPorIdAsync([propia], ct)).FirstOrDefault();
+        }
+
+        // (9) Avisos: lo que impediría confirmar hoy, comunes, del grupo y de la clase.
         var corte = await maestros.CorteAsync(ct);
         var avisos = ReglasDelDocumento.Evaluar(documento, tipo, bodega, corte, hoy).ToList();
+        avisos.AddRange(delGrupo.Avisos);
         avisos.AddRange(await efecto.Value.AvisosDelBorradorAsync(new ContextoDeEfecto(documento, tipo, clase), ct));
 
-        await db.SaveChangesAsync(ct);
-        return Result.Success(await vista.DetalleAsync(documento, avisos.Select(ReglasDelDocumento.ComoAviso).ToList(), ct));
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (deGrupo is not null)
+        {
+            var colision = await deGrupo.TraducirColisionAsync(ex, enCurso, ct);
+            if (colision is null) throw;
+            return Falla(colision);
+        }
+
+        var detalle = await vista.DetalleAsync(documento, avisos.Select(ReglasDelDocumento.ComoAviso).ToList(), ct);
+        return Result.Success(delGrupo.ImpuestosPrevistos.Count > 0 && detalle.TaxLines.Count == 0
+            ? detalle with { TaxLines = delGrupo.ImpuestosPrevistos }
+            : detalle);
     }
 
     private static Result<InventoryDocumentDto> Falla(Error error) => Result.Failure<InventoryDocumentDto>(error);

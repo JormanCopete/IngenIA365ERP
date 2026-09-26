@@ -27,3 +27,13 @@ public interface IPasoDeValidacionPrevia
 
 /// <summary>Lo que devuelve la validación previa: el desenlace y sus avisos. (nuevo)</summary>
 public sealed record ResultadoDeValidacionPrevia(PrevalidationOutcome Outcome, IReadOnlyList<AvisoDto> Warnings);
+
+/// <summary>
+/// Lo que la <b>última aprobación</b> de un documento confirma además de él, en la misma transacción del aprobador (feature
+/// 012, US9, T344): la factura de una compra directa queda en borrador enlazada a su recepción en aprobación, y se confirma
+/// cuando la recepción se aprueba. La llama <c>FuenteDeAprobacionDeDocumento</c> después de confirmar. (nuevo)
+/// </summary>
+public interface IConfirmacionEncadenada
+{
+    Task<Result> AlConfirmarPorAprobacionAsync(Guid documentoPublicId, CancellationToken ct);
+}

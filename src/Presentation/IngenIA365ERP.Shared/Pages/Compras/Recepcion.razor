@@ -1,0 +1,315 @@
+@page "/compras/recepciones/nueva"
+@page "/compras/recepciones/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Recepción de compra - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T353 (FR-011, FR-020, FR-044, FR-049; contracts/api.md §14.1, §14.2): el borrador de una recepción —tipo, bodega que
+   recibe, fecha, proveedor (buscador y alta con autorización de datos, T46), remisión o guía, municipio de la operación (se propone
+   el de la sucursal) y líneas leídas con el lector (SelectorDeProducto: el empaque leído es la unidad)— con la vista previa de
+   impuestos que calcula el servidor en cada guardado; confirmada, las líneas con lo que falta facturar y lo devuelto, los vínculos
+   (facturas, devoluciones) y las acciones que el SERVIDOR permite (AllowedActions). *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/compras/recepciones">Volver a la lista</a>
+            @if (Editable)
+            {
+                <PermissionGate Required="Inventory.Purchases.Create">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Guardar</SfButton>
+                </PermissionGate>
+            }
+            @if (Puede("Discard")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(false))">Descartar</SfButton> }
+            @if (Puede("Confirm")) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton> }
+            @if (Puede("Void")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(true))">Anular</SfButton> }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_doc?.Document is { Status: 1 })
+        {
+            <p class="aviso aviso-info">En aprobación: queda congelada y sin número; la confirma la última aprobación.</p>
+        }
+        @if (_doc?.Document.Warnings is { Count: > 0 } avisos)
+        {
+            <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarla:</b><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
+        }
+
+        <div class="form-grid">
+            <label class="campo">Tipo *
+                <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Elija…</option>
+                    @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Bodega que recibe *
+                <select class="e-input" disabled="@(!Editable)" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Elija…</option>
+                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+            <label class="campo campo-ancho">Proveedor *
+                <SelectorDeProveedor @bind-Seleccionado="_proveedor" Deshabilitado="@(!Editable)" />
+            </label>
+            <label class="campo">Remisión o guía <input class="e-input" disabled="@(!Editable)" @bind="_remision" maxlength="60" /></label>
+            <label class="campo">Municipio (DANE) <input class="e-input" disabled="@(!Editable)" @bind="_municipio" maxlength="5" placeholder="el de la sucursal" /></label>
+            <label class="campo campo-ancho">Notas <input class="e-input" disabled="@(!Editable)" @bind="_notas" maxlength="1000" /></label>
+        </div>
+
+        @if (Editable)
+        {
+            <div class="info-card">
+                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+            </div>
+        }
+
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
+                        @if (_doc?.Document.Lines.Any(l => l.UnitCost is not null) == true) { <th class="numero">Costo unitario</th> }
+                        @if (_doc?.LineBalances.Count > 0) { <th class="numero">Por facturar</th><th class="numero">Devuelto</th> }
+                        @if (Editable) { <th></th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _lineas.Count; i++)
+                    {
+                        var indice = i;
+                        var l = _lineas[i];
+                        var guardada = _doc?.Document.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+                        var saldo = _doc?.LineBalances.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+                        <tr>
+                            <td>@(indice + 1)</td>
+                            <td>@l.Producto</td>
+                            <td>@l.Unidad</td>
+                            <td class="numero">@CampoNumero(l.Cantidad, v => l.Cantidad = v)</td>
+                            <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
+                            <td class="numero">@CampoNumero(l.Precio, v => l.Precio = v)</td>
+                            <td class="numero">@CampoNumero(l.Descuento, v => l.Descuento = v)</td>
+                            @if (_doc?.Document.Lines.Any(x => x.UnitCost is not null) == true) { <td class="numero">@guardada?.UnitCost?.ToString("N6")</td> }
+                            @if (_doc?.LineBalances.Count > 0) { <td class="numero">@saldo?.PendingToInvoice.ToString("N4")</td><td class="numero">@saldo?.Returned.ToString("N4")</td> }
+                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <ImpuestosDeCompra Renglones="@(_doc?.Document.TaxLines ?? [])" Totales="@_doc?.Document.Totals" />
+
+        @if (_doc?.Document.Links is { Count: > 0 } vinculos)
+        {
+            <h4>Documentos relacionados</h4>
+            <ul>
+                @foreach (var v in vinculos)
+                {
+                    <li>@TextosDeInventario.Clase(v.Class) @(v.DisplayNumber ?? "(borrador)") · @TextosDeInventario.Estado(v.Status)</li>
+                }
+            </ul>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_anular ? "Anular la recepción" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_anular ? "Se crea el documento contrario al costo con que entró. Con factura o devolución vigente no se anula: anúlelas primero." : "El borrador queda descartado con su motivo; no consume número.")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class LineaForm
+    {
+        public Guid? LinePublicId { get; set; }
+        public Guid ProductPublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public Guid UnitPublicId { get; set; }
+        public string Unidad { get; set; } = "";
+        public decimal Cantidad { get; set; } = 1m;
+        public decimal Precio { get; set; }
+        public decimal Descuento { get; set; }
+    }
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
+    private DocumentoDeCompraDto? _doc;
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<LineaForm> _lineas = [];
+    private Guid? _tipo, _bodega;
+    private DateOnly? _fecha;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private string? _remision, _municipio, _notas, _motivo;
+    private bool _mostrarMotivo, _anular, _cargado;
+
+    private string Titulo => _doc is null ? "Nueva recepción de compra" : $"Recepción {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
+    private bool Editable => _doc is null || Puede("Edit");
+    private bool Puede(string accion) => _doc?.Document.AllowedActions.Contains(accion) == true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_cargado && _doc?.Document.PublicId == Id) return;
+        using var carga = _carga.Iniciar();
+        if (!_cargado)
+        {
+            var tipos = await Inventario.ListarTiposAsync(grupo: 1);
+            _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && t.Class == ClasesDeCompra.Recepcion)] : [];
+            var bodegas = await Inventario.ListarBodegasAsync();
+            _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
+            _cargado = true;
+        }
+        if (Id is { } id) await CargarAsync(id);
+        else
+        {
+            _doc = null;
+            _tipo = _tipos.FirstOrDefault()?.PublicId;
+            _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
+            _fecha = DateOnly.FromDateTime(DateTime.Today);
+            _lineas = [];
+        }
+    }
+
+    private async Task CargarAsync(Guid id)
+    {
+        var r = await Compras.ObtenerRecepcionAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la recepción."); return; }
+        Mostrar(r.Value);
+    }
+
+    private void Mostrar(DocumentoDeCompraDto doc)
+    {
+        _doc = doc;
+        var d = doc.Document;
+        _tipo = d.DocumentType.PublicId;
+        _bodega = d.Warehouse?.PublicId;
+        _fecha = d.OperationDate;
+        _proveedor = SelectorDeProveedor.Desde(d.Counterparty);
+        _remision = d.ExternalReference;
+        _municipio = doc.OperationMunicipalityDaneCode;
+        _notas = d.Notes;
+        _lineas = d.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
+        {
+            LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
+            UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
+        }).ToList();
+    }
+
+    private async Task AgregarLineaAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return; }
+        var p = producto.Value;
+        var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _lineas.Add(new LineaForm
+        {
+            ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
+            UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+        });
+        if (_doc is not null) await GuardarAsync(true);
+    }
+
+    private async Task QuitarAsync(int indice)
+    {
+        _lineas.RemoveAt(indice);
+        if (_doc is not null) await GuardarAsync(true);
+    }
+
+    private RenderFragment CampoNumero(decimal valor, Action<decimal> fijar) => __builder =>
+    {
+        if (Editable)
+        {
+            <input class="e-input numero" type="number" min="0" step="any" value="@valor.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @onchange="@(e => { if (decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v)) fijar(v); })"
+                   @onblur="@(() => _doc is not null ? GuardarAsync(true) : Task.CompletedTask)" />
+        }
+        else
+        {
+            @valor.ToString("N2")
+        }
+    };
+
+    private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, _bodega, _proveedor?.PublicId,
+        string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, string.IsNullOrWhiteSpace(_notas) ? null : _notas, _doc?.Document.RowVersion,
+        _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null)).ToList(),
+        OperationMunicipalityDaneCode: string.IsNullOrWhiteSpace(_municipio) ? null : _municipio.Trim());
+
+    private async Task<bool> GuardarAsync(bool silencioso)
+    {
+        if (_tipo is null) { await Notification.WarningAsync("Elija el tipo de recepción."); return false; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.GuardarAsync(ComprasClient.Rutas.Recepciones, _doc?.Document.PublicId, Pedido(), _claveGuardar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el borrador."); return false; }
+        var nueva = _doc is null;
+        await CargarAsync(r.Value.PublicId);
+        if (!silencioso) await Notification.SuccessAsync("Borrador guardado.");
+        if (nueva) Nav.NavigateTo($"/compras/recepciones/{r.Value.PublicId}", replace: true);
+        return true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_doc is null) return;
+        if (Editable && !await GuardarAsync(true)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.Recepciones, _doc.Document.PublicId, _doc.Document.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la recepción."); return; }
+        if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: la confirma la última aprobación.");
+        else await Notification.SuccessAsync($"Recepción {r.Value.DisplayNumber} confirmada.");
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private void AbrirMotivo(bool anular)
+    {
+        _anular = anular;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_anular)
+        {
+            var r = await Compras.AnularAsync(ComprasClient.Rutas.Recepciones, _doc.Document.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulada con {r.Value?.DisplayNumber}.");
+        }
+        else
+        {
+            var r = await Compras.DescartarAsync(ComprasClient.Rutas.Recepciones, _doc.Document.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

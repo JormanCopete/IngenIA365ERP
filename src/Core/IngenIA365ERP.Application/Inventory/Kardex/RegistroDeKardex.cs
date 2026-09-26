@@ -61,6 +61,15 @@ public sealed record LineaRetroactivaEscrita(KardexEntry Fila, PorcionDelAjuste 
 /// </summary>
 public sealed record AjusteRetroactivoRegistrado(int AffectedDocumentId, decimal EnExistencia, decimal Vendida, IReadOnlyList<LineaRetroactivaEscrita> Lineas);
 
+/// <summary>
+/// Una diferencia de precio que pide la factura o la nota del proveedor (US9, T341): la línea del documento, la entrada del
+/// kardex que corrige, la cantidad facturada en unidad base y la diferencia de costo total. (nuevo)
+/// </summary>
+public sealed record DiferenciaDePrecioPedida(InventoryDocumentLine Linea, KardexEntry Entrada, decimal CantidadFacturada, decimal Diferencia);
+
+/// <summary>Una diferencia de precio ya escrita: lo que quedó en existencia, lo que pasó a lo vendido y sus filas. (nuevo)</summary>
+public sealed record DiferenciaDePrecioRegistrada(DiferenciaDePrecioPedida Pedida, decimal EnExistencia, decimal Vendida, IReadOnlyList<KardexEntry> Lineas);
+
 /// <summary>Lo que dejó el registro de un documento. (nuevo)</summary>
 public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 {
@@ -377,6 +386,98 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         documento.CostTotal = documento.Lines.Where(l => !l.IsDeleted).Sum(l => l.TotalCost ?? 0m);
 
         return Result.Success(new RegistroHecho(escritos) { AjustesRetroactivos = ajustesRetroactivos });
+    }
+
+    // ------------------------------------------------------------------------- diferencia de precio (US9) --
+
+    /// <summary>
+    /// Lo que bloquea un documento que sólo corrige costos (factura o nota del proveedor con diferencia de precio, US9, T341):
+    /// los estados de costo de las entradas que corrige y sus bodegas.
+    /// </summary>
+    public async Task<Result<PedidoDeCerrojo>> CerrojoDeDiferenciasAsync(InventoryDocument documento, IReadOnlyList<DiferenciaDePrecioPedida> pedidas, CancellationToken ct)
+    {
+        if (pedidas.Count == 0) return Result.Success(new PedidoDeCerrojo());
+        var bodegas = pedidas.Select(d => d.Entrada.WarehouseId).Distinct().ToList();
+        var leidos = await LeerParametrosAsync(documento.OperationDate, bodegas, ct);
+        if (leidos.IsFailure) return Result.Failure<PedidoDeCerrojo>(leidos.Error);
+        var p = leidos.Value;
+        return Result.Success(new PedidoDeCerrojo
+        {
+            Bodegas = bodegas,
+            EstadosDeCosto = pedidas.Select(d => new ClaveDeEstadoDeCosto(d.Entrada.ProductId, p.AmbitoDe(d.Entrada.WarehouseId), p.Metodo)).Distinct().ToList(),
+        });
+    }
+
+    /// <summary>
+    /// Registra las diferencias de precio de una factura o nota del proveedor contra las entradas de sus recepciones (US9,
+    /// T341; FR-050, E6): pide a <see cref="MotorDeCosteo.DiferenciaDePrecio"/> el reparto entre existencia y vendido, escribe
+    /// las líneas <c>CostAdjustment</c> <c>PriceDifference</c> bajo el documento (fechadas en él, sobre la entrada) y mueve el
+    /// valor del ámbito. Sin cantidades, no mira disponibilidad. Nunca guarda.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<DiferenciaDePrecioRegistrada>>> RegistrarDiferenciasDePrecioAsync(
+        InventoryDocument documento, IReadOnlyList<DiferenciaDePrecioPedida> pedidas, CancellationToken ct)
+    {
+        var conDiferencia = pedidas.Where(d => d.Diferencia != 0m).ToList();
+        if (conDiferencia.Count == 0) return Result.Success<IReadOnlyList<DiferenciaDePrecioRegistrada>>([]);
+
+        var bodegas = conDiferencia.Select(d => d.Entrada.WarehouseId).Distinct().ToList();
+        var leidos = await LeerParametrosAsync(documento.OperationDate, bodegas, ct);
+        if (leidos.IsFailure) return Result.Failure<IReadOnlyList<DiferenciaDePrecioRegistrada>>(leidos.Error);
+        var p = leidos.Value;
+
+        var productos = conDiferencia.Select(d => d.Entrada.ProductId).Distinct().ToList();
+        var costos = (await db.CostStates.Where(c => productos.Contains(c.ProductId)).ToListAsync(ct))
+            .ToDictionary(c => (c.ProductId, c.ScopeWarehouseId));
+        var ahora = reloj.UtcNow;
+        var hechas = new List<DiferenciaDePrecioRegistrada>(conDiferencia.Count);
+
+        foreach (var pedida in conDiferencia)
+        {
+            var entrada = pedida.Entrada;
+            var ambito = p.AmbitoDe(entrada.WarehouseId);
+            if (!costos.TryGetValue((entrada.ProductId, ambito), out var fila))
+            {
+                fila = new CostState { ProductId = entrada.ProductId, ScopeWarehouseId = ambito, Method = p.Metodo };
+                db.CostStates.Add(fila);
+                costos[(entrada.ProductId, ambito)] = fila;
+            }
+            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost);
+            var resultado = MotorDeCosteo.DiferenciaDePrecio(estado,
+                new PedidoDeDiferenciaDePrecio(ReferenciaDeKardex.A(entrada.Id), pedida.CantidadFacturada, pedida.Diferencia), p.Montos);
+
+            var filas = new List<KardexEntry>(resultado.Lineas.Count);
+            foreach (var propuesta in resultado.Lineas)
+            {
+                var escrita = new KardexEntry
+                {
+                    DocumentId = documento.Id,
+                    DocumentLineId = pedida.Linea.Id,
+                    ProductId = entrada.ProductId,
+                    WarehouseId = entrada.WarehouseId,
+                    LocationId = entrada.LocationId,
+                    LotId = entrada.LotId,
+                    OperationDate = documento.OperationDate,
+                    RegisteredAt = ahora,
+                    Kind = KardexEntryKind.CostAdjustment,
+                    Reason = KardexReason.PriceDifference,
+                    QuantityBase = 0m,
+                    UnitCost = propuesta.UnitCost,
+                    TotalCost = propuesta.TotalCost,
+                    CostScopeWarehouseId = ambito,
+                    CostMethod = p.Metodo,
+                    AffectsEntryId = entrada.Id,
+                };
+                db.KardexEntries.Add(escrita);
+                filas.Add(escrita);
+            }
+            fila.Method = p.Metodo;
+            fila.Quantity = resultado.Estado.Quantity;
+            fila.Value = resultado.Estado.Value;
+            fila.AverageCost = resultado.Estado.AverageCost;
+            fila.LastUnitCost = resultado.Estado.LastUnitCost;
+            hechas.Add(new DiferenciaDePrecioRegistrada(pedida, DiferenciaDePrecio.EnExistencia(resultado), DiferenciaDePrecio.Vendida(resultado), filas));
+        }
+        return Result.Success<IReadOnlyList<DiferenciaDePrecioRegistrada>>(hechas);
     }
 
     // ------------------------------------------------------------------------------------ retroactivo --

@@ -63,6 +63,10 @@ public sealed class DiscardInventoryDraftCommandHandler(
             }
         }
 
+        // US9 (T337): el documento del proveedor de una factura o nota descartada deja libre su número.
+        var detalle = await db.SupplierInvoiceDetails.FirstOrDefaultAsync(d => d.DocumentId == documento.Id, ct);
+        if (detalle is not null) detalle.IsReleased = true;
+
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

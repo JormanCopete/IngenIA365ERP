@@ -42,4 +42,11 @@ public static class MotorDeCosteo
             _ => throw new ArgumentOutOfRangeException(nameof(parametros), parametros.Metodo, "Método de costeo desconocido."),
         };
     }
+
+    /// <summary>
+    /// El ajuste de costo <c>PriceDifference</c> de una factura o nota del proveedor sobre una entrada (US9, T341): partido
+    /// entre existencia y vendido (<see cref="Costing.DiferenciaDePrecio"/>).
+    /// </summary>
+    public static ResultadoDeCosteo DiferenciaDePrecio(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos) =>
+        Costing.DiferenciaDePrecio.Aplicar(estado, pedido, montos);
 }
