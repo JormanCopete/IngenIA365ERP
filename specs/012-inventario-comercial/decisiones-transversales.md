@@ -1412,6 +1412,26 @@ el detalle `IntegrationMessageDetailDto` con `IntentoDelMensajeDto`, `ActorDelIn
 `Integration/Accounting/IContabilidadParaInventario` y sus DTO (§4.1, §7.2 de contracts/contabilidad.md) nacen aquí porque la vista previa
 del lote la usa; los pares del conjunto son `ParGrupoBodegaDto` y los saldos por sucursal `SaldoPorSucursalDto` (el contrato los escribía
 como tuplas, que no se serializan), y la completitud y la vista previa llevan los campos de api.md §26.3 y §26.4.
+**(nuevos, T505–T510)** en la matriz contable de Inventario (`Application/Accounting/Inventory/Reglas`): `OperacionDeInventario`
+(`Codigo`, `Mensaje`, `RolesDebito`, `RolesCredito`, `RolesExigidos`; `OperacionesDeInventario.Buscar`/`DelMensaje`); `RolDeCuenta`,
+`DimensionDeRegla` y `TerceroNatural` (`RolesDeCuenta.Buscar`, `DimensionesDe`, `ContrapartidaExigeMotivo`, `MotivosAdmitidos`,
+`RazonesDeAjusteDeCosto`, `DestinosDeCaja`, `RolDeLaBodega`, `CuentaCompatibleConTarifa`, `NombreDe`); `ValoresBuscados`,
+`PeticionDeRegla`, `ReglaResuelta`, `MensajeContabilizado`, `MatrizVigente` (`Resolver`) y en `ResolutorDeReglas` `CargarAsync`,
+`FechaDeLasReglas`, `FechaDeLasReglasDelAnulado`, `UltimoContabilizadoAsync`, `ContabilizadoQueCoincideAsync`; `ReglasDeLaMatriz`
+(`Presentes`, `Forma`, `CargarAsync`, `ValidarAsync`, `RetroactividadDelCierreAsync`) con `ReglaPropuesta`, `ValidacionDeRegla`,
+`AvisoDeReglaDto`, `CatalogosDeLaMatriz`, `TarifaDelCatalogo`; `DimensionesDeLaReglaDto`, `ReglaGuardadaDto`; las consultas
+`GetInventoryRulesCatalogQuery`, `ListInventoryPostingRulesQuery`, `GetInventoryPostingRuleQuery`, `ListInventoryPostingRuleVersionsQuery`
+con `InventoryPostingRuleDto`, `DimensionesDeReglaGuardadaDto`, `ReferenciaDeReglaDto`, `CuentaDeReglaDto`, `InventoryRulesCatalogDto`,
+`OperacionDelCatalogoDto`, `RolDelCatalogoDto`, `DimensionesDelCatalogoDto`, `BodegaDelCatalogoDto`, `TarifaDelCatalogoDto`;
+`PlantillaDeMatrizDeInventario` (plantilla 16; `GetInventoryRulesTemplateQuery` devuelve `DatosDePlantilla`); `ListInventoryVoucherMappingsQuery`
+con `InventoryVoucherMappingDto`, `TipoDelMapeoDto`, `CruceDelMapeoDto`; `TiposDeComprobanteDeInventario` (`CargarAsync`, `OperacionDe`,
+`OperacionDelContenido`, `EsDeInventario`, `CreadoPorLaSemilla`), `MapeosDeInventario`, `TipoDeLaUnidad`, `OperacionDeLaUnidad`. En
+`AccountingErrors`: `InventoryRuleNotFound`, `InventoryRuleOperationUnknown` (`Accounting.InventoryRule.OperationUnknown`),
+`InventoryRuleRoleNotInOperation` (`.RoleNotInOperation`), `InventoryRuleValidToInvalid` (`.ValidToInvalid`); en `AuditEventTypes`,
+`AccountingInventoryRulesImported`. `Integration/Accounting/IDimensionesDeInventario` nace aquí (ninguna tarea la creaba y la validación
+de una regla la usa): `CatalogoAsync` → `CatalogoDeDimensionesDto` (`CodigoDeDimensionDto`, `BodegaDeDimensionDto`,
+`MedioDePagoDeDimensionDto`; `PaymentMeans` nulo hasta T622) y `CombinacionesEnUsoAsync(fecha)` → `CombinacionEnUsoDto`; la implementa
+Inventario en T519.
 
 **Facturación electrónica**: `Application/ElectronicInvoicing/Channels/{ICanalDeEmisionElectronica,
 ICanalesDeEmision, ICredencialesDeCanal, ResultadoDeCanal, CapacidadesDelCanal}`,

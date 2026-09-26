@@ -151,6 +151,8 @@ public static class AuditEventTypes
     public const string AccountingInventoryPosted = "Accounting.Inventory.Posted";
     public const string AccountingInventoryRejected = "Accounting.Inventory.Rejected";
     public const string AccountingInventoryBatchProcessed = "Accounting.Inventory.BatchProcessed";
+    // Feature 012, T509 (api.md §26.1): la importación aplicada de la matriz de reglas de Inventario.
+    public const string AccountingInventoryRulesImported = "Accounting.InventoryRules.Imported";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

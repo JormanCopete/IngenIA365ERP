@@ -130,6 +130,12 @@ public static class DependencyInjection
         // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
         services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
         services.AddScoped<Common.Integration.EntregasElegibles>();
+        // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
+        // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
+        // unidad. IDimensionesDeInventario lo registra Inventario (T519).
+        services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
+        services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
+        services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
         services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
         // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su

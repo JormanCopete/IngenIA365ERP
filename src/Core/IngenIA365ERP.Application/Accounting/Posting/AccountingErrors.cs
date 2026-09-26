@@ -296,6 +296,27 @@ public static class AccountingErrors
             $"El código {code} no existe en Inventario como {dimension}.",
             new { dimension, code });
 
+    /// <summary>Feature 012, T507: la regla pedida no existe (o está borrada). (nuevo)</summary>
+    public static readonly Error InventoryRuleNotFound = new("Accounting.InventoryRule.NotFound", "No existe esa regla de la matriz de Inventario.");
+
+    /// <summary>Feature 012, T507: la operación no es de <c>OperacionesDeInventario</c>. (nuevo)</summary>
+    public static Error InventoryRuleOperationUnknown(string operation) =>
+        new ErrorConDatos("Accounting.InventoryRule.OperationUnknown",
+            $"«{operation}» no es una operación de la matriz de Inventario.",
+            new { operation });
+
+    /// <summary>Feature 012, T507: el rol no es de <c>RolesDeCuenta</c> o no lo usa la operación. (nuevo)</summary>
+    public static Error InventoryRuleRoleNotInOperation(string operation, string role, IReadOnlyList<string> roles) =>
+        new ErrorConDatos("Accounting.InventoryRule.RoleNotInOperation",
+            $"La operación {operation} no usa el rol «{role}». Admite: {string.Join(", ", roles)}.",
+            new { operation, role, roles });
+
+    /// <summary>Feature 012, T507: una vigencia que termina antes de la víspera de su inicio. (nuevo)</summary>
+    public static Error InventoryRuleValidToInvalid(DateOnly validFrom, DateOnly validTo) =>
+        new ErrorConDatos("Accounting.InventoryRule.ValidToInvalid",
+            $"La vigencia empieza el {validFrom:yyyy-MM-dd}: no puede terminar el {validTo:yyyy-MM-dd}.",
+            new { validFrom, validTo });
+
     public static Error InventoryMessageUnbalanced(decimal difference) =>
         new ErrorConDatos("Accounting.InventoryMessage.Unbalanced",
             $"El contenido del mensaje no cuadra (diferencia {difference:N2}): es un defecto de quien lo emitió, no de la matriz.",
