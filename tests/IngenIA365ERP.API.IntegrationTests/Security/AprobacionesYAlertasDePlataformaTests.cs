@@ -58,6 +58,13 @@ public class AprobacionesYAlertasDePlataformaTests(CentralIdentityApiFixture fx)
         levels = niveles,
     };
 
+    /// <summary>
+    /// La política de todos los tipos (la que escriben estas pruebas). Desde el cierre de I1 la cooperativa trae además las
+    /// sembradas de un tipo (saldo inicial, diferencias de traslado, ajustes de conteo), vigentes desde siempre.
+    /// </summary>
+    private static bool ParaTodosLosTipos(JsonElement politica) =>
+        !politica.TryGetProperty("documentType", out var tipo) || tipo.ValueKind == JsonValueKind.Null;
+
     private static async Task<JsonElement> DatosAsync(HttpResponseMessage resp) =>
         (await InventarioE2E.LeerAsync(resp)).GetProperty("data");
 
@@ -82,7 +89,7 @@ public class AprobacionesYAlertasDePlataformaTests(CentralIdentityApiFixture fx)
         var vigentes = await InventarioE2E.GetAsync(http, coop.TokenAdmin, $"{Politicas}?subject=DocumentConfirmation&asOf=2026-10-15");
         vigentes.EnumerateArray().Should().ContainSingle(p => p.GetProperty("publicId").GetGuid() == creada.GetProperty("publicId").GetGuid());
         var antes = await InventarioE2E.GetAsync(http, coop.TokenAdmin, $"{Politicas}?subject=DocumentConfirmation&asOf=2026-09-15");
-        antes.GetArrayLength().Should().Be(0, "no rige antes de su validFrom");
+        antes.EnumerateArray().Where(ParaTodosLosTipos).Should().BeEmpty("no rige antes de su validFrom (las sembradas son de un tipo)");
     }
 
     [Fact]
@@ -101,7 +108,7 @@ public class AprobacionesYAlertasDePlataformaTests(CentralIdentityApiFixture fx)
         siguiente.StatusCode.Should().Be(HttpStatusCode.Created, "levels: [] desde una fecha posterior es una versión sin aprobación");
 
         var historia = await InventarioE2E.GetAsync(http, coop.TokenAdmin, $"{Politicas}?subject=DocumentConfirmation&includeHistory=true");
-        historia.EnumerateArray().Select(p => p.GetProperty("validTo").ValueKind == JsonValueKind.Null ? null : p.GetProperty("validTo").GetString())
+        historia.EnumerateArray().Where(ParaTodosLosTipos).Select(p => p.GetProperty("validTo").ValueKind == JsonValueKind.Null ? null : p.GetProperty("validTo").GetString())
             .Should().Equal("2026-10-31", null);
     }
 

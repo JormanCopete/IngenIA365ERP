@@ -26,7 +26,7 @@ public sealed class InventarioCollection : ICollectionFixture<CentralIdentityApi
 /// <see cref="CooperativaAisladaAsync">cooperativa aislada</see> del mismo host, en el molde de
 /// <see cref="Accounting.ContabilidadE2E.CooperativaAisladaAsync"/>.
 /// </summary>
-public static class InventarioE2E
+public static partial class InventarioE2E
 {
     /// <summary>Cabecera de idempotencia de las operaciones de pantalla (contracts/api.md §2.3).</summary>
     public const string CabeceraDeClave = "Idempotency-Key";
@@ -78,6 +78,8 @@ public static class InventarioE2E
         }
     }
 
+    private static int _siguienteNit;
+
     private static readonly Dictionary<CentralIdentityApiFixture, (string Token, DateTime Renovar)> TokensDelMaestro = [];
     private static readonly SemaphoreSlim CerrojoDelMaestro = new(1, 1);
 
@@ -112,7 +114,8 @@ public static class InventarioE2E
             name = $"Coop. Inventario {nombre}",
             schemaName = $"tenant_inv_{nombre}",
             subdomain = $"tenant_inv_{nombre}",
-            nit = (900_600_000 + Math.Abs(nombre.Sum(c => c) % 100_000)).ToString(),
+            // Un NIT por alta: la suma de las letras del nombre repetía NIT entre nombres parecidos (Tenant.NitConflict).
+            nit = (900_600_000 + Interlocked.Increment(ref _siguienteNit)).ToString(),
             legalName = $"Cooperativa Inventario {nombre} E2E",
             contactEmail = $"contacto.{nombre}@coop.inventario.test",
             planType = "Basic",

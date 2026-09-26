@@ -120,6 +120,23 @@ public class ActivateWarehouseCommandHandlerTests
     }
 
     [Fact]
+    public async Task La_primera_activacion_sin_saldo_inicial_arranca_el_modulo_en_el_mes_del_corte()
+    {
+        var p = await PuestaEnMarchaDePrueba.CrearAsync();
+
+        var r = await ActivarAsync(p, p.B4.PublicId, new DateOnly(2026, 7, 31));
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var setup = await p.Db.InventorySetups.SingleAsync();
+        setup.StartDate.Should().Be(new DateOnly(2026, 7, 1), "INV_Setup la crea el primer registro de una fecha de corte (data-model §6.1)");
+        setup.LastClosedDate.Should().BeNull();
+
+        var otra = await ActivarAsync(p, p.B5.PublicId, new DateOnly(2026, 9, 24));
+        otra.IsSuccess.Should().BeTrue(otra.IsFailure ? $"{otra.Error.Code}: {otra.Error.Message}" : string.Empty);
+        (await p.Db.InventorySetups.SingleAsync()).StartDate.Should().Be(new DateOnly(2026, 7, 1), "la segunda no lo mueve");
+    }
+
+    [Fact]
     public async Task Los_bloqueos_duros_responden_con_su_codigo()
     {
         var p = await PuestaEnMarchaDePrueba.CrearAsync();

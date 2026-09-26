@@ -19,11 +19,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Inventory;
 /// cambian. La prueba sin contenedores de la misma guarda es <c>GuardaDeInmutabilidadTests</c>.
 ///
 /// <para>
-/// <b>Escrita, no corrida</b> hasta que exista el par <c>InventarioComercialNucleo</c> (T440), que crea las tablas
-/// <c>INV_</c>; se corre en T443. Escribe a la base por debajo a propósito: lo que se prueba es la guarda del contexto,
-/// no la API. Las líneas y la foto tributaria referencian el catálogo (producto, unidad, impuesto, tarifa): los toma
-/// de lo que ya haya en la cooperativa (la semilla tributaria de T168 y el catálogo que siembra la e2e de US1) y, si no
-/// hay, la prueba lo dice en vez de fallar con una FK.
+/// Escribe a la base por debajo a propósito: lo que se prueba es la guarda del contexto, no la API. Las líneas y la foto
+/// tributaria referencian el catálogo (producto, unidad, impuesto, tarifa): los toma de la semilla tributaria (T168) y del
+/// catálogo que deja <see cref="EscenarioDeInventario"/>.
 /// </para>
 /// </summary>
 [Collection(InventarioCollection.Nombre)]
@@ -34,7 +32,9 @@ public class InmutabilidadDeDocumentosTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task Un_hecho_no_se_modifica_ni_se_borra_y_un_confirmado_solo_se_anula()
     {
-        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "inmutables");
+        // El catálogo (producto y unidad) lo deja el escenario de ensayo; las bodegas no hacen falta activas.
+        var coop = (await EscenarioDeInventario.PrepararAsync(fx, "inmutables", activar: false)).Coop;
+        using (var http = fx.CreateClient()) await Accounting.ContabilidadE2E.CrearPersonaAsync(http, coop.TokenAdmin, "Inmutable");
         using var alcance = fx.Factory.Services.CreateScope();
         var servicios = alcance.ServiceProvider;
         var entrada = (await servicios.GetRequiredService<ITenantDirectory>().ListActiveAsync(CancellationToken.None))

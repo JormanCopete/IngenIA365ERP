@@ -27,8 +27,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Security;
 /// Escrita en la fase 2; se ejecuta tras la migración <c>PlataformaParaInventario</c> (T186), que crea
 /// <c>COR_AuditOutbox</c>, <c>COR_AuditChainHeads</c>, <c>COR_AuditAnchors</c> y <c>COR_BackgroundLeases</c>, cuando
 /// exista la ruta de parámetros (T067–T071) y cuando <c>DomainPermissionCatalogSeeder</c> siembre
-/// <c>AuditLog.VerifyIntegrity</c> (fase 3). La fase 11 (US12) <b>amplía</b> este archivo con la auditoría completa
-/// por HTTP (US12-4); no crea otro.
+/// <c>AuditLog.VerifyIntegrity</c> (fase 3). La fase 11 (US12, T420) lo <b>amplió</b> con la auditoría completa por HTTP
+/// (US12-4, <see cref="La_auditoria_completa_registra_origen_motivo_rechazos_y_navegacion"/>).
 /// </para>
 ///
 /// <para>
@@ -200,7 +200,96 @@ public class IntegridadDeAuditoriaTests(CentralIdentityApiFixture fx)
         evento["module"].AsString.Should().Be("Parameters");
     }
 
+    /// <summary>
+    /// T420 (US12-4, SC-012; quickstart §3.13 paso 6), en el escenario aislado «auditoria» con los usuarios del ensayo: crear,
+    /// confirmar, aprobar, rechazar y anular un documento, cambiar un parámetro, exportar un informe e ingresar a una opción dejan
+    /// eventos con actor, IP, canal (<c>web</c> por <c>X-Canal</c>) y motivo donde se exige; un rechazo queda <c>Rejected</c> con
+    /// su código; la clave de idempotencia va en la metadata; el ingreso queda con <c>Module = Navigation</c>; <c>auditor</c>
+    /// verifica la cadena sin incidentes y <c>lectura</c> (sin <c>AuditLog.VerifyIntegrity</c>) recibe 404.
+    /// </summary>
+    [Fact]
+    public async Task La_auditoria_completa_registra_origen_motivo_rechazos_y_navegacion()
+    {
+        var esc = await EscenarioDeInventario.PrepararAsync(fx, "auditoria");
+        var u = await UsuariosDelEnsayo.CrearAsync(fx, esc);
+        using var http = fx.CreateClient();
+        http.DefaultRequestHeaders.Add("X-Canal", "web");
+        // El host de pruebas no tiene conexión real: la IP del visitante llega como la pone Cloudflare (IpAddressAccessor).
+        http.DefaultRequestHeaders.Add("CF-Connecting-IP", "203.0.113.7");
+        var desde = DateTime.UtcNow.AddMinutes(-1);
+
+        // Crear y confirmar; anular con motivo.
+        var entrada = await esc.AjusteAsync(http, esc.Admin, "AJP", "PRIN", [new("P1", 5, 100m)]);
+        await InventarioE2E.ConfirmarAsync(http, esc.Admin, "/api/inventory/adjustments", entrada);
+        await InventarioE2E.ExitoAsync(http, esc.Admin, HttpMethod.Post, $"/api/inventory/adjustments/{entrada}/void", new { reason = "Anulado para la auditoría" });
+        await esc.AjusteConfirmadoAsync(http, esc.Admin, "AJP", "PRIN", [new("P1", 20, 100m)]);
+
+        // Un rechazo del servidor: la salida que no cabe (antes de la política, que la mandaría a aprobación).
+        var imposible = await esc.AjusteAsync(http, esc.Admin, "AJN", "PRIN", [new("P1", 9_999)], causa: "MERMA");
+        await InventarioE2E.FallaAsync(await InventarioE2E.PedirConfirmarAsync(http, esc.Admin, "/api/inventory/adjustments", imposible), "Inventory.Stock.Insufficient");
+
+        // Aprobar y rechazar (política de un nivel sobre los ajustes negativos).
+        await InventarioE2E.PoliticaAsync(http, esc.Admin, esc.Tipos["AJN"], esc.Corte.AddDays(1), (0m, "Inventory.Adjustments.Approve"));
+        var aprobar = await esc.AjusteAsync(http, u.BodegaA.Token, "AJN", "PRIN", [new("P1", 1)], causa: "MERMA");
+        var s1 = (await InventarioE2E.ConfirmarAsync(http, u.BodegaA.Token, "/api/inventory/adjustments", aprobar)).GetProperty("approval").GetProperty("requestPublicId").GetGuid();
+        (await InventarioE2E.DecidirAsync(http, esc.Admin, u.Aprobador.Token, s1, aprobar: true)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var rechazar = await esc.AjusteAsync(http, u.BodegaA.Token, "AJN", "PRIN", [new("P1", 1)], causa: "MERMA");
+        var s2 = (await InventarioE2E.ConfirmarAsync(http, u.BodegaA.Token, "/api/inventory/adjustments", rechazar)).GetProperty("approval").GetProperty("requestPublicId").GetGuid();
+        (await InventarioE2E.DecidirAsync(http, esc.Admin, u.Aprobador.Token, s2, aprobar: false, motivo: "Merma sin soporte")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Parámetro, exportación e ingreso a una opción.
+        await InventarioE2E.ExitoAsync(http, esc.Admin, HttpMethod.Post, Ruta, new
+        {
+            scopeKind = "None", value = "false", validFrom = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1).ToString("yyyy-MM-dd"),
+            reason = "Parámetro para la auditoría",
+        });
+        var hoy = InventarioE2E.HoyEnColombia.ToString("yyyy-MM-dd");
+        (await InventarioE2E.MandarAsync(http, esc.Admin, HttpMethod.Get,
+            $"/api/reports/inventory/kardex?format=xlsx&product={esc.P("P1").Id}&warehouse={esc.Bodega("PRIN")}&from={hoy}&to={hoy}"))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await InventarioE2E.EnviarAsync(http, esc.Admin, HttpMethod.Post, "/api/audit/access", new { route = "/inventario/kardex", title = "Kardex" }))
+            .IsSuccessStatusCode.Should().BeTrue();
+
+        await fx.ReenviarAuditoriaAsync(esc.Coop.TenantPublicId);
+        await fx.Factory.Services.GetRequiredService<IAuditService>().FlushAsync();
+        var hasta = DateTime.UtcNow.AddMinutes(1);
+        var eventos = new List<JsonElement>();
+        for (var pagina = 1; pagina <= 10; pagina++)
+        {
+            var lote = await InventarioE2E.GetAsync(http, esc.Admin,
+                $"/api/audit/logs?modules=Inventory,Approvals,Parameters,Navigation&from={desde:O}&to={hasta:O}&page={pagina}&pageSize=100");
+            var items = lote.GetProperty("items").EnumerateArray().ToList();
+            eventos.AddRange(items);
+            if (items.Count < 100) break;
+        }
+        static string? Texto(JsonElement e, string campo) => e.TryGetProperty(campo, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        var filas = eventos.Select(e => new EventoDeAuditoria(Texto(e, "module"), Texto(e, "action"), Texto(e, "channel"), Texto(e, "ipAddress"),
+            Texto(e, "userName"), Texto(e, "operationKey"), Texto(e, "reason"), Texto(e, "result"), Texto(e, "errorCode"))).ToList();
+
+        filas.Should().Contain(e => e.Module == "Inventory" && e.Channel == "web" && e.Ip == "203.0.113.7" && e.UserName != null,
+            "cada operación lleva actor, IP y canal");
+        filas.Should().Contain(e => e.Module == "Inventory" && e.Action == "ConfirmInventoryDocument" && e.OperationKey != null,
+            "la clave de idempotencia de la confirmación va en la metadata");
+        filas.Should().Contain(e => e.Reason == "Anulado para la auditoría");
+        filas.Should().Contain(e => e.Reason == "Merma sin soporte");
+        filas.Should().Contain(e => e.Reason == "Parámetro para la auditoría");
+        filas.Should().Contain(e => e.Result == "Rejected" && e.ErrorCode == "Inventory.Stock.Insufficient");
+        filas.Should().Contain(e => e.Action == "Inventory.Report.Exported");
+        filas.Should().Contain(e => e.Module == "Navigation");
+        filas.Should().Contain(e => e.Module == "Approvals");
+
+        var verificacion = await InventarioE2E.EnviarAsync(http, u.Auditor.Token, HttpMethod.Post, Verificar,
+            new { from = DateTime.UtcNow.AddHours(-2), to = DateTime.UtcNow.AddHours(1) });
+        verificacion.StatusCode.Should().Be(HttpStatusCode.OK, await verificacion.Content.ReadAsStringAsync());
+        (await InventarioE2E.LeerAsync(verificacion)).GetProperty("incidents").GetArrayLength().Should().Be(0);
+        (await InventarioE2E.EnviarAsync(http, u.Lectura.Token, HttpMethod.Post, Verificar, new { from = DateTime.UtcNow.AddHours(-2), to = DateTime.UtcNow }))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ------------------------------------------------------------- ayudantes --
+
+    private sealed record EventoDeAuditoria(string? Module, string? Action, string? Channel, string? Ip, string? UserName, string? OperationKey,
+        string? Reason, string? Result, string? ErrorCode);
 
     private static async Task AltasAsync(HttpClient http, string token, params string[] vigencias)
     {

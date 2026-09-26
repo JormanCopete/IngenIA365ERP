@@ -232,8 +232,8 @@ public class ResolverDiferenciaDeTrasladoTests
     {
         var c = await CatalogoDePrueba.CrearAsync();
 
-        await InventoryDocumentTypesSeeder.AplicarAsync(c.Db, new DateOnly(2026, 9, 1), default);
-        var otraVez = await InventoryDocumentTypesSeeder.AplicarAsync(c.Db, new DateOnly(2026, 9, 1), default);
+        await InventoryDocumentTypesSeeder.AplicarAsync(c.Db, default);
+        var otraVez = await InventoryDocumentTypesSeeder.AplicarAsync(c.Db, default);
 
         otraVez.Should().Be(0, "es idempotente");
         var recepcion = await c.Db.InventoryDocumentTypes.SingleAsync(x => x.Class == DocumentClass.TransferReceipt);

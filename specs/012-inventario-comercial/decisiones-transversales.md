@@ -1517,8 +1517,18 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   AlertTypeQueriesTests}`, `Application.Tests/Audit/VerifyAuditIntegrityQueryHandlerTests`,
   `Application.Tests/Inventory/Salespeople/SalespeopleCommandsTests` y `Shared.Tests/Inventario/InventarioClientSeguridadTests`;
   las e2e de US12 (`UsuariosDelEnsayo`, `AprobacionMultinivelTests`, `AlcancePorBodegaTests`, `IntegridadDeAuditoriaTests`
-  ampliada, `ParametrosConVigenciaTests`, `VendedoresTests`) se escriben y corren en el cierre de I1, y el índice filtrado
-  `UK_INV_Salespeople_PersonId` (T427) entra con el par `InventarioComercialNucleo`.
+  ampliada, `ParametrosConVigenciaTests`, `VendedoresTests`) se escribieron y corrieron en el cierre de I1 (T443), y el índice
+  filtrado `UK_INV_Salespeople_PersonId` (T427) entró con el par `InventarioComercialNucleo`.
+  - **(nuevo, cierre de I1, T443)** `DecideApprovalCommand` implementa `IConMotivo` (explícito: `Reason ?? ""`): el motivo de un
+    rechazo llega a la metadata `Reason` de la auditoría como el de toda operación con motivo (prueba `DecisionConMotivoTests`).
+  - **(nuevo, cierre de I1, T443)** `InventoryDocumentTypesSeeder.VigenciaDeLaSemilla` (2000-01-01): los consecutivos y las
+    políticas sembrados rigen «desde siempre» (antes, desde el primer día del mes en que corrió la semilla, y un saldo inicial
+    con corte anterior respondía `Inventory.Numbering.SequenceMissing`); `AplicarAsync(db, ct)` ya no recibe la fecha.
+  - **(nuevo, cierre de I1, T443)** `ActivateWarehouseCommandHandler` crea `INV_Setup` (inicio en el mes del corte) si la primera
+    bodega se activa sin saldo inicial, como manda data-model §6.1; sin eso el módulo no tenía inicio y ningún mes cerraba
+    (`Inventory.Period.NotStarted`).
+  - **(nuevo, cierre de I1, T443)** `EjecutorDeImportacion.Deshacer` suelta las altas de la última a la primera y cada una después
+    de sus dependientes (`SoltarConSusDependientes`): la revisión de una bodega nueva con ubicaciones nuevas respondía 500.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1646,6 +1656,19 @@ mismo host (patrón `ContabilidadE2E.CooperativaAisladaAsync`), colección «Inv
 **(nuevo, T186)** `InventarioE2E.TokenMaestroAsync(fx, http)`: un access del maestro por fixture y por diez minutos,
 que usa `CooperativaAisladaAsync` (una sesión por alta superaba el límite de 10 inicios de sesión por minuto). La
 fixture levanta Redis con `--databases 256` (una ranura de caché por cooperativa aislada).
+**(nuevo, cierre de I1, T443)** Integración de I1 escrita y corrida en el cierre: `Inventory/{KardexYAjustesTests,
+CostoPromedioTests, VendedoresTests, ReordenYQuiebreTests, InformesDeInventarioTests, EnsayoDeI1Tests}` y
+`Security/ParametrosConVigenciaTests`, sobre dos ayudantes: `Inventory/EscenarioDeInventario` (la cooperativa de ensayo de quickstart
+§2 reducida —`ASEO`/`ABARROTES`, `CAJA12` con código DIAN `DZN`, P1..P7, S2, PRIN/PV1/PV2 con tránsitos TR1/TR2, activación fuera
+de producción con corte en el mes antepasado—, uno por nombre y fixture, con `AjusteAsync`, `AjusteConfirmadoAsync`, `Lineas`,
+`ExistenciaAsync`, `FisicaAsync` y `ActivarAsync`) y `Security/UsuariosDelEnsayo` (T417: `jefe`, `bodega.a`, `bodega.b`,
+`comprador`, `aprobador`, `auditor`, `lectura`, cada uno con un rol propio desde su plantilla, su alcance y el límite del
+comprador); y los ayudantes de `InventarioE2E` (parcial `InventarioE2E.Documentos`: `MandarAsync` con clave, `ExitoAsync`,
+`FallaAsync`, `Libro`, `ImportarAsync`, `RevisarYAplicarAsync`, `UsuarioAsync`, `RolAsync`, `AlcanceAsync`, `BorradorAsync`,
+`ConfirmarAsync`, `DecidirAsync`, `HuellaAsync`, `PoliticaAsync`, `InformeAsync`, `SqlEnLaCooperativaAsync`,
+`EscalarEnLaCooperativaAsync`). `CentralIdentityApiFixture.CorrerTareaAsync(tenantPublicId, nombre)`: corre **una** tarea
+programada ahora, sin mirar su horario (`DebeCorrer`) ni si ya corrió hoy —la revisión de eventos RADIAN corre desde las 6:00 de
+Colombia y la de reorden desde la hora configurada—, el «disparo manual» de las e2e.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

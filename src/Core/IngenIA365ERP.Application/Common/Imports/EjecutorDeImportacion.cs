@@ -287,20 +287,35 @@ public sealed class EjecutorDeImportacion(
     private void Deshacer(HashSet<object> antes)
     {
         if (db is not DbContext ctx) return;
-        foreach (var entrada in ctx.ChangeTracker.Entries().ToList())
+        var entradas = ctx.ChangeTracker.Entries().Where(e => !antes.Contains(e.Entity)).ToList();
+        foreach (var entrada in entradas.Where(e => e.State is EntityState.Modified or EntityState.Deleted))
+            Restaurar(entrada);
+        // Las altas se sueltan de la última a la primera y cada una después de sus dependientes: soltar una bodega nueva con sus
+        // ubicaciones nuevas todavía seguidas cortaba una relación obligatoria y EF lanzaba (feature 012, T443).
+        foreach (var entrada in Enumerable.Reverse(entradas).Where(e => e.State == EntityState.Added))
+            SoltarConSusDependientes(entrada, antes);
+    }
+
+    private static void SoltarConSusDependientes(EntityEntry entrada, HashSet<object> antes)
+    {
+        if (entrada.State != EntityState.Added) return;
+        foreach (var navegacion in entrada.Navigations)
         {
-            if (antes.Contains(entrada.Entity)) continue;
-            switch (entrada.State)
+            if (navegacion.Metadata is Microsoft.EntityFrameworkCore.Metadata.INavigation { IsOnDependent: true }) continue;
+            var dependientes = navegacion.CurrentValue switch
             {
-                case EntityState.Added:
-                    entrada.State = EntityState.Detached;
-                    break;
-                case EntityState.Modified:
-                case EntityState.Deleted:
-                    Restaurar(entrada);
-                    break;
+                null => [],
+                System.Collections.IEnumerable coleccion when navegacion.Metadata.IsCollection => coleccion.Cast<object>().ToList(),
+                var uno => new List<object> { uno },
+            };
+            foreach (var dependiente in dependientes)
+            {
+                if (antes.Contains(dependiente)) continue;
+                var suya = entrada.Context.Entry(dependiente);
+                if (!ReferenceEquals(suya.Entity, entrada.Entity)) SoltarConSusDependientes(suya, antes);
             }
         }
+        if (entrada.State == EntityState.Added) entrada.State = EntityState.Detached;
     }
 
     private static void Restaurar(EntityEntry entrada)

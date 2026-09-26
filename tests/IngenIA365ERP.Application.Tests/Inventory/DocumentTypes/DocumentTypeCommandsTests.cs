@@ -303,7 +303,7 @@ public class DocumentTypeCommandsTests
     [Fact]
     public async Task La_semilla_deja_un_tipo_por_clase_operable_con_su_consecutivo_y_la_politica_del_saldo_inicial()
     {
-        var insertadas = await InventoryDocumentTypesSeeder.AplicarAsync(_db, Hoy, default);
+        var insertadas = await InventoryDocumentTypesSeeder.AplicarAsync(_db, default);
 
         var tipos = await _db.InventoryDocumentTypes.Include(t => t.Sequences).ToListAsync();
         var operables = Domain.Inventory.Documents.ClasesDeDocumento.Todas.Where(c => c.Operable()).Select(c => c.Class).ToList();
@@ -312,7 +312,7 @@ public class DocumentTypeCommandsTests
         tipos.Where(t => !deConteo.Contains(t.Code)).Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase de I1, incluida la anulación");
         tipos.Should().OnlyContain(t => t.IsSeeded && t.IsActive);
         tipos.Should().OnlyContain(t => t.Sequences.Count == 1 && t.Sequences.Single().Prefix == string.Empty
-            && t.Sequences.Single().ValidFrom == new DateOnly(2026, 9, 1) && t.Sequences.Single().NextValue == 1);
+            && t.Sequences.Single().ValidFrom == InventoryDocumentTypesSeeder.VigenciaDeLaSemilla && t.Sequences.Single().NextValue == 1);
         tipos.Should().Contain(t => t.Class == DocumentClass.Voiding);
 
         var saldo = tipos.Single(t => t.Class == DocumentClass.OpeningBalance);
@@ -326,7 +326,7 @@ public class DocumentTypeCommandsTests
         insertadas.Should().Be(operables.Count + 2 + 4,
             "los tipos, la política del saldo inicial, la de diferencias de traslado (US10) y los dos tipos de ajuste de conteo con su política (US11)");
 
-        (await InventoryDocumentTypesSeeder.AplicarAsync(_db, Hoy, default)).Should().Be(0, "idempotente por código");
+        (await InventoryDocumentTypesSeeder.AplicarAsync(_db, default)).Should().Be(0, "idempotente por código");
     }
 
     [Fact]
@@ -334,7 +334,7 @@ public class DocumentTypeCommandsTests
     {
         TipoDirecto(DocumentClass.PositiveAdjustment, "AJP");
 
-        await InventoryDocumentTypesSeeder.AplicarAsync(_db, Hoy, default);
+        await InventoryDocumentTypesSeeder.AplicarAsync(_db, default);
 
         (await _db.InventoryDocumentTypes.CountAsync(t => t.Code == "AJP")).Should().Be(1);
         (await _db.InventoryDocumentTypes.SingleAsync(t => t.Code == "AJP")).IsSeeded.Should().BeFalse();

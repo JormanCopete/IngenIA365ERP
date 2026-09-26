@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// Feature 012 (T152; contracts/api.md §8; data-model §5.8; decisiones-transversales §2.14): un tipo de documento por
 /// cada clase operable en este despliegue (en I1: compras recibidas, factura, nota y devolución al proveedor, ajustes,
 /// consumo interno, baja, saldo inicial, traslados, movimiento entre ubicaciones, conteo, ajuste de costo y la
-/// anulación), cada uno con su consecutivo de prefijo vacío desde el primer día del mes y <c>IsSeeded = true</c>. El de
+/// anulación), cada uno con su consecutivo de prefijo vacío vigente desde <see cref="VigenciaDeLaSemilla"/> y <c>IsSeeded = true</c>. El de
 /// <c>OpeningBalance</c> lleva además la política de un nivel, umbral 0 y permiso <c>Inventory.OpeningBalance.Approve</c>
 /// en <c>COR_ApprovalPolicies</c>: <b>ésta es la única siembra de esa política</b> (US4 sólo agrega la regla
 /// <c>Approvals.Policy.RequiredForClass</c>). El de <c>TransferReceipt</c> lleva la política <c>Subject = TransferDiscrepancy</c>
@@ -92,13 +92,22 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
                 MigracionQueCreaLasTablas);
             return 0;
         }
-        return await AplicarAsync(db, HoyEnColombia(), ct);
+        return await AplicarAsync(db, ct);
     }
 
+    /// <summary>
+    /// Desde cuándo rigen los consecutivos y las políticas sembrados: «desde siempre». Hasta el 2026-09-26 regían desde el primer
+    /// día del mes en que corrió la semilla (el despliegue), y una bodega con fecha de corte anterior —la cooperativa de ensayo, o
+    /// una puesta en marcha que despliega después del corte— no podía confirmar su saldo inicial (<c>Inventory.Numbering.SequenceMissing</c>)
+    /// ni lo mandaba a aprobación, porque la política tampoco regía a esa fecha (lo destapó la e2e del cierre de I1, T443). El
+    /// inicio real del módulo lo pone <c>INV_Setup.StartDate</c>, que ya impide documentos anteriores.
+    /// </summary>
+    public static readonly DateOnly VigenciaDeLaSemilla = new(2000, 1, 1);
+
     /// <summary>La semilla sobre cualquier contexto de la cooperativa (probable con InMemory).</summary>
-    public static async Task<int> AplicarAsync(IApplicationDbContext db, DateOnly hoy, CancellationToken ct)
+    public static async Task<int> AplicarAsync(IApplicationDbContext db, CancellationToken ct)
     {
-        var desde = new DateOnly(hoy.Year, hoy.Month, 1);
+        var desde = VigenciaDeLaSemilla;
         var existentes = (await db.InventoryDocumentTypes.IgnoreQueryFilters().Select(t => t.Code).ToListAsync(ct))
             .ToHashSet(StringComparer.Ordinal);
 
@@ -221,6 +230,4 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         return true;
     }
 
-    /// <summary>Hoy en Colombia (−05:00 fijo, como <c>IDateTimeService.HoyLocal</c>).</summary>
-    private static DateOnly HoyEnColombia() => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-5));
 }

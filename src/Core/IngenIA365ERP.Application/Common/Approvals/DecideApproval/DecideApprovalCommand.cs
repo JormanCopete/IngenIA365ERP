@@ -26,9 +26,12 @@ public sealed record DecideApprovalCommand(
     ApprovalMethod Method,
     PresenciaDto? Presence,
     string ExpectedContentSha256)
-    : IRequest<Result<DecisionResultDto>>, IOperacionIdempotente
+    : IRequest<Result<DecisionResultDto>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>El motivo (obligatorio al rechazar) va a la auditoría como el de toda operación con motivo (T420, US12-4).</summary>
+    string IConMotivo.Reason => Reason ?? string.Empty;
 }
 
 /// <summary>Rechazar exige motivo (400 si falta); lo presencial exige el desafío y la prueba de su método.</summary>

@@ -32,7 +32,7 @@ public sealed class FactDeRendimientoAttribute : FactAttribute
 /// US5 (fases 13–14) agrega aquí el caso de <c>/pos/lookup</c>.
 ///
 /// <para>
-/// <b>Escrita, no corrida</b> hasta el par <c>InventarioComercialNucleo</c> (T440). Cooperativa aislada «busqueda50k».
+/// Cooperativa aislada «busqueda50k».
 /// </para>
 /// </summary>
 [Collection(InventarioCollection.Nombre)]

@@ -234,7 +234,7 @@ public class CerrarYAjustarConteoTests
     public async Task La_semilla_deja_los_tipos_de_ajuste_de_conteo_con_su_politica()
     {
         var k = await Kardex.KardexDePrueba.CrearAsync();
-        await InventoryDocumentTypesSeeder.AplicarAsync(k.C.Db, new DateOnly(2026, 9, 1), default);
+        await InventoryDocumentTypesSeeder.AplicarAsync(k.C.Db, default);
 
         foreach (var (clase, (codigo, _)) in InventoryDocumentTypesSeeder.AjustesDeConteo)
         {
@@ -251,7 +251,7 @@ public class CerrarYAjustarConteoTests
             "la causa «diferencia de conteo» la trae AdjustmentCausesSeeder");
         AdjustmentCausesSeeder.CodigoDiferenciaDeConteo.Should().Be(ReglaDelAjusteDeConteo.CausaDiferenciaDeConteo);
 
-        var otraVez = await InventoryDocumentTypesSeeder.AplicarAsync(k.C.Db, new DateOnly(2026, 9, 1), default);
+        var otraVez = await InventoryDocumentTypesSeeder.AplicarAsync(k.C.Db, default);
         otraVez.Should().Be(0, "idempotente");
     }
 }

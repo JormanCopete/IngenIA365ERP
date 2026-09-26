@@ -82,7 +82,7 @@ public sealed class PuestaEnMarchaDePrueba
         db.Warehouses.AddRange(p.B3, p.B4, p.B5, p.TR05);
         await db.SaveChangesAsync();
 
-        await InventoryDocumentTypesSeeder.AplicarAsync(db, new DateOnly(2026, 1, 1), default);
+        await InventoryDocumentTypesSeeder.AplicarAsync(db, default);
         return p;
     }
 

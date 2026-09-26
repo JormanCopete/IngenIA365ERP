@@ -163,6 +163,7 @@ public sealed class ActivateWarehouseCommandHandler(
         var ahora = new DateTimeOffset(reloj.UtcNow, TimeSpan.Zero);
         bodega.Activar(request.CutoffDate, usuario, ahora);
         await ActivarTransitoAsync(bodega, request.CutoffDate, usuario, ahora, ct);
+        await ArrancarElModuloAsync(request.CutoffDate, usuario, ct);
 
         var motivo = aceptada ? Motivo(request.Reason, sinComparacion) : null;
         var activacion = new WarehouseActivation
@@ -183,6 +184,23 @@ public sealed class ActivateWarehouseCommandHandler(
 
         return Result.Success(new ActivationResultDto(activacion.PublicId, bodega.PublicId, activacion.ActivatedAt, usuario, activacion.CutoffDate,
             activacion.TotalDifference, aceptada, motivo));
+    }
+
+    /// <summary>
+    /// <c>INV_Setup</c> la crea el primer registro de una fecha de corte (data-model §6.1): la carga del saldo inicial o, si la
+    /// primera bodega se activa sin saldo, esta activación, con <c>StartDate</c> el primer día del mes del corte. Sin ella el
+    /// módulo no tenía inicio y ningún mes se podía cerrar (<c>Inventory.Period.NotStarted</c>; lo destapó la e2e del cierre
+    /// de I1, T443). Si ya existe, no se toca.
+    /// </summary>
+    private async Task ArrancarElModuloAsync(DateOnly corte, int usuario, CancellationToken ct)
+    {
+        if (await db.InventorySetups.AnyAsync(ct) || db.InventorySetups.Local.Count > 0) return;
+        db.InventorySetups.Add(new Domain.Entities.Inventory.Periods.InventorySetup
+        {
+            StartDate = new DateOnly(corte.Year, corte.Month, 1),
+            StartedAt = reloj.UtcNow,
+            StartedByUserId = usuario,
+        });
     }
 
     /// <summary>La bodega de tránsito de la sucursal se activa con la primera bodega operativa activa de ella (data-model §6.4).</summary>

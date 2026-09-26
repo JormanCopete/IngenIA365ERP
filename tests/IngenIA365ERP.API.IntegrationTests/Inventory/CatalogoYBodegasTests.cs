@@ -18,9 +18,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Inventory;
 /// vacías y su importación no existe (404); sin permiso, el 404 genérico.
 ///
 /// <para>
-/// <b>Escrita, no corrida</b> hasta el par <c>InventarioComercialNucleo</c> (T440), que crea las tablas <c>INV_</c> del catálogo
-/// y las bodegas (hoy excluidas por <c>NucleoComercialSinMigracion</c>). El borrador del caso de <c>HasHistory</c> usa la ruta
-/// de ajustes de US2 (<c>/api/inventory/adjustments</c>). Se corre en T443. Cooperativa aislada «catalogo».
+/// El borrador del caso de <c>HasHistory</c> usa la ruta de ajustes de US2 (<c>/api/inventory/adjustments</c>). Cooperativa
+/// aislada «catalogo».
 /// </para>
 /// </summary>
 [Collection(InventarioCollection.Nombre)]
@@ -106,7 +105,7 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
         await RevisarYAplicarAsync(http, t, "/api/inventory/accounting-groups",
             Libro(("Datos", ["codigo", "nombre"], [["ABARROTES", "Abarrotes"], ["SERVICIOS", "Servicios"]])));
         await RevisarYAplicarAsync(http, t, "/api/inventory/units",
-            Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CAJA12", "Caja x 12", "0", "XBX"]])));
+            Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CAJA12", "Caja x 12", "0", "DZN"]])));
         await RevisarYAplicarAsync(http, t, "/api/inventory/brands", Libro(("Datos", ["codigo", "nombre"], [["DIANA", "Arroz Diana"]])));
         await RevisarYAplicarAsync(http, t, "/api/inventory/product-categories",
             Libro(("Datos", ["codigo", "nombre", "padre"], [["ARROZ", "Arroz", "ALIM"], ["ALIM", "Alimentos", null]])));
@@ -135,9 +134,12 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
         exacta.GetProperty("packUnit").GetProperty("unitCode").GetString().Should().Be("CAJA12");
         exacta.GetProperty("packUnit").GetProperty("factor").GetDecimal().Should().Be(12m);
 
-        // Bodegas: la sucursal Principal no tiene código, así que la fila de tránsito fija el suyo.
+        // Bodegas en una sucursal propia de esta prueba (las otras de la clase crean bodegas en la Principal, y una sucursal
+        // sólo recibe su tránsito con su primera bodega operativa); la fila de tránsito fija el código.
+        var norte = await Peticion(http, t, HttpMethod.Post, "/api/core/branches", new { code = "NO", name = "Norte", shortName = "NORTE" });
+        norte.IsSuccessStatusCode.Should().BeTrue(await norte.Content.ReadAsStringAsync());
         var bodegas = Libro(
-            ("Bodegas", ["codigo", "nombre", "sucursal", "tipo"], [["B01", "Bodega principal", "Principal", "PRINCIPAL"], ["TRPPAL", "Tránsito Principal", "Principal", "TRANSITO"]]),
+            ("Bodegas", ["codigo", "nombre", "sucursal", "tipo"], [["B01", "Bodega principal", "Norte", "PRINCIPAL"], ["TRPPAL", "Tránsito Norte", "Norte", "TRANSITO"]]),
             ("Ubicaciones", ["bodega", "codigo", "nombre", "porDefecto"], [["B01", "A-01", "Pasillo A", "sí"]]));
         await RevisarYAplicarAsync(http, t, "/api/inventory/warehouses", bodegas);
         var lista = (await InventarioE2E.GetAsync(http, t, "/api/inventory/warehouses?includeTransit=true")).EnumerateArray().ToList();

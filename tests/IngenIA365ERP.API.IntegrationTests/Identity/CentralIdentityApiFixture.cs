@@ -51,6 +51,9 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             .WithUsername("ingenia")
             .WithPassword("IngenIA365_Test2026!")
             .WithDatabase("ingenia365erp_test")
+            // Una base por cooperativa y un pool por base: con las cooperativas aisladas de «Inventario e2e» (feature 012) las
+            // 100 conexiones por defecto se agotaban («53300: sorry, too many clients already») a mitad de la suite.
+            .WithCommand("-c", "max_connections=1000")
             .Build();
 
     private readonly MongoDbContainer _mongo = new MongoDbBuilder()
@@ -200,6 +203,28 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     public Task CorrerTareasProgramadasAsync(Guid tenantPublicId, CancellationToken ct = default) =>
         Factory.Services.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>()
             .CorrerUnaPasadaAsync(tenantPublicId, ct);
+
+    /// <summary>
+    /// Corre <b>una</b> tarea programada por su nombre en la cooperativa, ahora y sin mirar su horario (<c>DebeCorrer</c>) ni si
+    /// ya corrió hoy: el «disparo manual» de las e2e del comercio (feature 012, T443). <see cref="CorrerTareasProgramadasAsync"/>
+    /// respeta el horario de cada tarea (la revisión de eventos RADIAN corre desde las 6:00 de Colombia), así que una prueba
+    /// que corre de madrugada no la vería correr.
+    /// </summary>
+    public async Task CorrerTareaAsync(Guid tenantPublicId, string nombreDeLaTarea, CancellationToken ct = default)
+    {
+        var tarea = Factory.Services.GetServices<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>()
+            .Single(t => t.Nombre == nombreDeLaTarea);
+        IngenIA365ERP.Application.Common.Interfaces.TenantDirectoryEntry cooperativa;
+        using (var alcance = Factory.Services.CreateScope())
+        {
+            cooperativa = (await alcance.ServiceProvider.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDirectory>()
+                .ListActiveAsync(ct)).Single(c => c.PublicId == tenantPublicId);
+        }
+        var origen = IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(tarea.Nombre);
+        await Factory.Services.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>().EjecutarAsync(
+            cooperativa, IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(origen), origen,
+            (servicios, c) => tarea.EjecutarAsync(servicios, c), ct);
+    }
 
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
     private string? _secretoMaestro;

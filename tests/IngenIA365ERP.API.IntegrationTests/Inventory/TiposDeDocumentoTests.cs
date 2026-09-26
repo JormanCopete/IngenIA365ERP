@@ -13,10 +13,6 @@ namespace IngenIA365ERP.API.IntegrationTests.Inventory;
 /// prefijo y primer número, se cambia de prefijo con <c>POST /{id}/sequences</c> y se ve el historial; sin permiso, las
 /// rutas responden el mismo 404 que lo inexistente.
 ///
-/// <para>
-/// <b>Escrita, no corrida</b> hasta que exista el par <c>InventarioComercialNucleo</c> (T440), que crea
-/// <c>INV_DocumentTypes</c> y <c>INV_DocumentSequences</c>: la semilla no hace nada antes. Se corre en T443.
-/// </para>
 /// </summary>
 [Collection(InventarioCollection.Nombre)]
 public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
@@ -43,8 +39,10 @@ public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
 
         foreach (var clase in ClasesDeI1)
         {
-            // US11 (T397): los ajustes de conteo (CONP, CONN) son un segundo tipo de las clases de ajuste.
+            // US11 (T397): los ajustes de conteo (CONP, CONN) son un segundo tipo de las clases de ajuste. Los tipos que
+            // crean las otras pruebas de la clase en la misma cooperativa (AJE) no son de la semilla.
             var delaClase = tipos.Where(t => t.GetProperty("class").GetInt32() == Numero(clase)
+                && t.GetProperty("isSeeded").GetBoolean()
                 && t.GetProperty("code").GetString() is not ("CONP" or "CONN")).ToList();
             delaClase.Should().ContainSingle($"la semilla deja un tipo de {clase}");
             var tipo = delaClase[0];
