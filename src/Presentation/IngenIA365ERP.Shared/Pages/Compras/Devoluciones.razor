@@ -68,6 +68,8 @@
                     <SfButton CssClass="e-outline" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
                     @if (_borrador is not null) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="@ConfirmarAsync">Confirmar la devolución</SfButton> }
                 </div>
+                @* US7 (T539): lo que dijo Contabilidad antes de confirmar. *@
+                <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_borrador?.PublicId" />
                 @if (_borrador?.Warnings is { Count: > 0 } avisos)
                 {
                     <div class="aviso aviso-alerta"><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
@@ -128,6 +130,7 @@
     private Guid? _recepcion, _tipo;
     private string? _motivo;
     private DocumentoDeInventarioDto? _borrador;
+    private ResultadoDeValidacionPrevia? _validacion;
 
     private bool PuedeGuardar => _proveedor is not null && _recepcion is not null && _tipo is not null && !string.IsNullOrWhiteSpace(_motivo)
                                  && _lineas.Any(l => l.Cantidad > 0m) && !_guardado.Activa;
@@ -194,9 +197,15 @@
     private async Task ConfirmarAsync()
     {
         if (_borrador is null) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
         using var guardado = _guardado.Iniciar();
         var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.Devoluciones, _borrador.PublicId, _borrador.RowVersion, _claveConfirmar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la devolución."); return; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la devolución.");
+            return;
+        }
+        _validacion?.Limpiar();
         await Notification.SuccessAsync(r.Value.Status == 1 ? "La devolución quedó en aprobación." : $"Devolución {r.Value.DisplayNumber} confirmada.");
         _borrador = null;
         _claveGuardar = new();

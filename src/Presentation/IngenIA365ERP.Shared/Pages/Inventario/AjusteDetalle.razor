@@ -68,6 +68,9 @@
             </div>
         }
 
+        @* US7 (T539): lo que dijo Contabilidad antes de confirmar, con quién corrige cada hallazgo. *@
+        <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.PublicId" />
+
         <div class="form-grid">
             <label class="campo">Tipo *
                 <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_f.Tipo?.ToString() ?? "")" @onchange="@(e => _f.Tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
@@ -269,6 +272,7 @@
     private Accion _accion;
     private string? _motivo;
     private AttachmentList? _soportes;
+    private ResultadoDeValidacionPrevia? _validacion;
 
     private string Titulo => _doc is null ? "Nuevo ajuste" : $"{TextosDeInventario.Clase(_doc.Class)} {_doc.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Status)}";
     private bool Editable => _doc is null || Puede("Edit");
@@ -415,13 +419,15 @@
     {
         if (_doc is null) return;
         if (Editable && !await GuardarAsync(true)) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
         using var guardado = _guardado.Iniciar();
         var r = await Inventario.ConfirmarAjusteAsync(_doc.PublicId, _doc.RowVersion, _claveConfirmar);
         if (!r.IsSuccess || r.Value is null)
         {
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el ajuste.");
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el ajuste.");
             return;
         }
+        _validacion?.Limpiar();
         if (r.Value.Status == 1)
             await Notification.InfoAsync("Quedó en aprobación: lo confirma la última aprobación.");
         else

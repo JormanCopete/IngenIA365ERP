@@ -1,0 +1,151 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+
+@*
+    Feature 012, US7 (T539; FR-074, FR-075; contracts/api.md §25.1): lo que dijo Contabilidad de un borrador antes de confirmarlo.
+    La pantalla de compras, ajustes o traslados lo pone junto a su «Confirmar» y, antes de confirmar, llama a ValidarAsync: pregunta
+    por POST /api/inventory/documents/{id}/prevalidate (una consulta, sin clave ni cerrojo) y muestra cada hallazgo con la línea del
+    documento, la cuenta, la regla y quién corrige (módulo, pantalla y permiso). Si Contabilidad no respondió a tiempo, dice la
+    política vigente (Contabilidad.PoliticaSinRespuesta): con «ConfirmarConPendiente» se confirma igual y el documento queda con la
+    validación pendiente; con «Bloquear» no. La confirmación repite la evaluación: si responde 422 Inventory.Prevalidation.NotPostable
+    (o .NoResponse), MostrarRechazo pinta aquí los mismos errors[]. Las pantallas de venta y POS lo toman en I3. (nuevo)
+*@
+
+<IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Preguntando a Contabilidad…">
+    @if (_hallazgos.Count > 0)
+    {
+        <div class="aviso aviso-error">
+            <b>Contabilidad no podría contabilizar este documento tal como está.</b> Corrija lo indicado y vuelva a confirmar; el documento no se
+            confirmó ni consumió número.
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Línea</th><th>Mensaje</th><th>Cuenta</th><th>Regla</th><th>Qué pasa</th><th>Quién corrige</th></tr></thead>
+                    <tbody>
+                        @foreach (var h in _hallazgos)
+                        {
+                            <tr>
+                                <td>@(h.LineNumber?.ToString() ?? "Documento")</td>
+                                <td>@TextosDeInventario.TipoDeMensaje(h.MessageType)</td>
+                                <td>@(h.Account ?? "—")</td>
+                                <td><code>@h.Rule</code></td>
+                                <td>@h.Message</td>
+                                <td>
+                                    @if (h.WhoFixes is { } q)
+                                    {
+                                        @q.Module
+                                        @if (q.Page is { } pagina) { <br /><a href="@pagina">Ir a corregirlo</a> }
+                                        @if (q.Permission is { } permiso) { <br /><span class="texto-tenue">Permiso @permiso</span> }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    @if (_sinRespuesta)
+    {
+        <p class="aviso aviso-alerta">
+            Contabilidad no respondió a tiempo. @TextoDeLaPolitica
+        </p>
+    }
+    @if (_avisos.Count > 0)
+    {
+        <div class="aviso aviso-info">
+            <b>Avisos de Contabilidad (no impiden confirmar):</b>
+            <ul>@foreach (var a in _avisos) { <li>@TextosDeInventario.TipoDeMensaje(a.MessageType): @a.Message</li> }</ul>
+        </div>
+    }
+    @if (_noAplica)
+    {
+        <p class="texto-tenue">Este documento no pasa a Contabilidad (su modo de paso es «no pasa» o sólo emite mensajes informativos).</p>
+    }
+    else if (_contabilizable)
+    {
+        <p class="aviso aviso-ok">Contabilidad lo puede contabilizar@(_modo is { } m ? $" ({TextosDeInventario.ModoDePaso(m).ToLowerInvariant()})" : "").</p>
+    }
+</IndicadorDeCarga>
+
+@code {
+    private const string ConfirmarConPendiente = "ConfirmarConPendiente";
+    private const string Bloquear = "Bloquear";
+    private const string ClaveDeLaPolitica = "Contabilidad.PoliticaSinRespuesta";
+    private const string ModuloDeParametros = "INV";
+
+    /// <summary>El borrador a validar; sin él (compra directa, antes de guardar) no se pregunta nada.</summary>
+    [Parameter] public Guid? Documento { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<HallazgoDeValidacionPreviaDto> _hallazgos = [];
+    private IReadOnlyList<AvisoDeValidacionPreviaDto> _avisos = [];
+    private bool _sinRespuesta, _noAplica, _contabilizable;
+    private int? _modo;
+    private string? _politica;
+
+    private string TextoDeLaPolitica => _politica switch
+    {
+        ConfirmarConPendiente => "La política de la cooperativa es confirmar igual: el documento queda confirmado y su validación contable, pendiente.",
+        Bloquear => "La política de la cooperativa es no confirmar sin la validación de Contabilidad: intente de nuevo en un momento.",
+        _ => "Lo que pasa ahora lo decide la política de la cooperativa (Contabilidad.PoliticaSinRespuesta en Parámetros de Inventario).",
+    };
+
+    /// <summary>
+    /// Pregunta a Contabilidad por el borrador. <c>true</c> si se puede seguir con la confirmación: no aplica, es contabilizable, o no
+    /// respondió y la política confirma con pendiente. Un fallo de la consulta no la impide: la confirmación vuelve a evaluar.
+    /// </summary>
+    public async Task<bool> ValidarAsync()
+    {
+        Limpiar();
+        if (Documento is not { } documento) return true;
+        using var carga = _carga.Iniciar();
+        StateHasChanged();
+        var r = await Inventario.ValidarConContabilidadAsync(documento);
+        if (!r.IsSuccess || r.Value is not { } v) return true;
+
+        _modo = v.PostingMode;
+        _avisos = v.Warnings;
+        if (!v.Applies)
+        {
+            _noAplica = true;
+            return true;
+        }
+        if (!v.Responded)
+        {
+            _sinRespuesta = true;
+            await LeerPoliticaAsync();
+            return _politica != Bloquear;
+        }
+        _hallazgos = v.Hallazgos();
+        _contabilizable = v.IsPostable == true;
+        return v.IsPostable != false;
+    }
+
+    /// <summary>Pinta los <c>errors[]</c> del 422 de la validación previa en una confirmación; <c>false</c> si el error es otro.</summary>
+    public bool MostrarRechazo<T>(ResultadoDeInventario<T> resultado)
+    {
+        var hallazgos = HallazgosDeValidacionPrevia.DelRechazo(resultado.ErrorCode, resultado.Data);
+        if (hallazgos is null) return false;
+        Limpiar();
+        _hallazgos = hallazgos;
+        _sinRespuesta = resultado.ErrorCode == InventarioClient.ValidacionPreviaSinRespuesta;
+        if (_sinRespuesta) _politica = Bloquear;
+        StateHasChanged();
+        return true;
+    }
+
+    /// <summary>Borra lo mostrado (otro borrador, o confirmado).</summary>
+    public void Limpiar()
+    {
+        _hallazgos = [];
+        _avisos = [];
+        _sinRespuesta = _noAplica = _contabilizable = false;
+        _modo = null;
+    }
+
+    private async Task LeerPoliticaAsync()
+    {
+        var r = await Inventario.ParametrosAsync(ModuloDeParametros);
+        _politica = r.IsSuccess ? r.Value?.FirstOrDefault(p => p.Key == ClaveDeLaPolitica)?.Current.Value : null;
+    }
+}

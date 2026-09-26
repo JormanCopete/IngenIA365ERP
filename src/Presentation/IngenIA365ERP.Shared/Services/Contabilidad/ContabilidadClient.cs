@@ -129,6 +129,18 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<EmptyResponse>> CerrarPeriodoAsync(int year, int month, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/close", null, ct);
 
+    /// <summary>
+    /// Feature 012, US7 (T536; contracts/contabilidad.md §8): cerrar conservando el <c>data</c> del error. Con operaciones de
+    /// Inventario del mes que Contabilidad aún no recibe responde <see cref="CodigoInventarioPendiente"/> con
+    /// <c>{ pending, inBatch, rejected, oldestOperationDate, types[] }</c>; <paramref name="reconocerPendientesDeInventario"/> cierra
+    /// de todos modos (queda auditado).
+    /// </summary>
+    public Task<ResultadoContable<EmptyResponse>> CerrarPeriodoAsync(int year, int month, bool reconocerPendientesDeInventario, CancellationToken ct = default) =>
+        EnviarConDatosAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/close",
+            new CerrarPeriodoContableRequest(reconocerPendientesDeInventario), ct);
+
+    public const string CodigoInventarioPendiente = "Accounting.Period.InventoryPending";
+
     public Task<InvitationApiResult<EmptyResponse>> ReabrirPeriodoAsync(int year, int month, string motivo, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/reopen", new MotivoRequest(motivo), ct);
 

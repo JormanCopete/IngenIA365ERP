@@ -99,6 +99,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeA
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
+// Feature 012, US7 (T532): el lado contable de la integración con Inventario (matriz, tipos de comprobante, completitud, lotes).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).

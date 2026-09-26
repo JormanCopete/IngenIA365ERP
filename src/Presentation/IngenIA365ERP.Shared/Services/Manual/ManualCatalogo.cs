@@ -523,6 +523,7 @@ public static class ManualCatalogo
             [
                 P("Antes", "Todos los módulos deben haber contabilizado el mes: causación de intereses, liquidación de nómina, movimientos de inventario. Revisá el balance de prueba: debe cuadrar.", "/contabilidad/informes?vista=trial-balance", "Abrir Balance de Prueba"),
                 P("Contabilidad → Períodos", "Cada mes tiene su botón «Cerrar». La pantalla cuenta los comprobantes en borrador fechados en el mes; no cierra con pendientes.", "/contabilidad/periodos", "Abrir Períodos contables"),
+                P("Operaciones de Inventario pendientes", "Si Inventario tiene operaciones del mes que Contabilidad aún no recibe, cerrar lo avisa con cuántas hay por estado y la más antigua: «Procesar ahora» ordena el lote del mes (Accounting.InventoryBatches.Run) y «Cerrar de todos modos» cierra igual y queda en la auditoría (lo pendiente se rechazará por período cerrado y se recupera reabriendo el mes)."),
                 P("Cerrar", "El período pasa a cerrado. Un comprobante con fecha en un período cerrado es rechazado. Reabrir requiere permiso y queda en auditoría."),
                 P("Cierre anual", "Con los doce meses cerrados, el anterior cerrado y la cuenta de resultado definida en Configuración inicial, «Cerrar el ejercicio» genera el comprobante CI del 31 de diciembre: cancela ingresos, costos y gastos contra la cuenta de resultado, sucursal por sucursal. Los informes lo dejan fuera salvo que pidás «incluir cierre»; el balance del año siguiente arranca sin resultados."),
                 P("Reabrir el ejercicio", "Si faltó algo, «Reabrir el ejercicio» pide motivo, reversa el CI en su misma fecha y deja el año abierto con los meses todavía cerrados: reabrí el mes que necesités corregir, corregí, y volvé a cerrar mes y año."),
@@ -811,6 +812,87 @@ public static class ManualCatalogo
             ],
             ["alertas", "quiebre", "reorden", "atender", "destinatarios", "notificaciones"],
             ["Permiso Inventory.Alerts.View; atender, Inventory.Alerts.Attend; tipos, Inventory.Alerts.Manage."], [], [], TipoDeTema.Proceso));
+
+        // Feature 012, US7 (T540): la integración de Inventario con Contabilidad —el lado contable (enmienda de la 009) y el de
+        // Inventario—. Un tema por opción del menú.
+        t.Add(Proceso("contabilidad-inventario-matriz", "Matriz contable de Inventario", Modulos.Contabilidad, "/contabilidad/inventario/matriz",
+            "Con qué cuentas contabiliza Contabilidad cada operación de Inventario. Inventario no conoce cuentas: manda el grupo contable, la bodega, el medio de pago, la tarifa o la causa, y la regla más específica vigente a la fecha de la operación dice la cuenta.",
+            [
+                P("Contabilidad → Matriz contable", "Una pestaña por familia de rol: inventario y costo, ventas, compras, impuestos y retenciones, medios de pago, caja, traslados y puentes.", "/contabilidad/inventario/matriz", "Abrir la Matriz"),
+                P("Nueva regla", "Operación, rol, las dimensiones que el rol exige (*) o admite, la cuenta (sólo auxiliares habilitadas para Inventario), la vigencia, notas y motivo. Al elegir la cuenta se ven sus reglas: tercero, cruce, centro, sucursal, base y tarifas."),
+                P("Qué gana", "La más específica: bodega o punto de venta pesan 16, centro de costo 8, sucursal 4 y grupo 2."),
+                P("Nueva versión o desactivar", "Una versión nueva cierra la vigente la víspera; no puede empezar en o antes del último mensaje ya contabilizado con esa clave (lo pasado se corrige con un comprobante manual). Desactivar cierra la vigencia con motivo; nunca borra."),
+                P("Plantilla 16", "Se revisa sin guardar nada y se aplica todo o nada, con los errores por fila y columna. tarifaPorcentaje va en puntos (19 = 19 %)."),
+            ],
+            ["matriz", "cuentas", "inventario", "reglas", "plantilla 16", "grupo contable", "medio de pago", "tarifa"],
+            ["Permiso Accounting.InventoryRules.View; para crear, versionar, desactivar o importar, Accounting.InventoryRules.Manage."],
+            ["contabilidad-inventario-completitud", "contabilidad-inventario-tipos-de-comprobante", "plan-de-cuentas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("contabilidad-inventario-tipos-de-comprobante", "Tipos de comprobante de Inventario", Modulos.Contabilidad, "/contabilidad/inventario/tipos-de-comprobante",
+            "Qué tipo de comprobante y qué documento cruce usa cada operación de Inventario, en general o para un tipo de documento en particular. La semilla deja FV, EI, SI, NV, CP, TR, AC y CJ.",
+            [
+                P("Contabilidad → Tipos de comprobante (Inventario)", null, "/contabilidad/inventario/tipos-de-comprobante", "Abrir"),
+                P("Cambiar", "Elegí el tipo de comprobante —sólo los de uso «Módulo» de Inventario y activos— y el cruce, con motivo. El cambio queda en la auditoría."),
+            ],
+            ["tipos de comprobante", "mapeo", "inventario", "documento cruce"],
+            ["Permiso Accounting.InventoryRules.View; para cambiar, Accounting.InventoryRules.Manage."],
+            ["contabilidad-inventario-matriz"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("contabilidad-inventario-completitud", "Completitud de la matriz", Modulos.Contabilidad, "/contabilidad/inventario/completitud",
+            "Lo que le falta a la matriz a una fecha para que todo lo que Inventario usa se pueda contabilizar. Vacía, se pueden poner los tipos en línea.",
+            [
+                P("Contabilidad → Completitud de la matriz", "Elegí la fecha y «Consultar».", "/contabilidad/inventario/completitud", "Abrir la Completitud"),
+                P("Las cinco listas", "Combinaciones en uso sin regla, medios de pago sin cuenta, reglas con una cuenta que ya no es elegible, tarifas distintas entre el catálogo y la cuenta, y operaciones sin tipo de comprobante. Cada fila lleva a donde se corrige."),
+                P("Avisos", "No impiden contabilizar: un impuesto por unidad con una cuenta que exige base, o mercancía por facturar con una cuenta que exige cruce."),
+            ],
+            ["completitud", "matriz", "reglas faltantes", "puesta en marcha"],
+            ["Permiso Accounting.InventoryRules.View."],
+            ["contabilidad-inventario-matriz", "contabilidad-inventario-tipos-de-comprobante"], [], TipoDeTema.Consulta));
+
+        t.Add(Proceso("contabilidad-inventario-lotes", "Lotes de contabilización de Inventario", Modulos.Contabilidad, "/contabilidad/inventario/lotes",
+            "Los lotes con que Contabilidad recibe lo de Inventario que no pasa en línea —programados, al cierre de turno o de período, manuales, reprocesos y envíos posteriores— y el lote manual de un rango.",
+            [
+                P("Contabilidad → Lotes de contabilización", "Filtrá por fechas, estado y disparador; «Ver» abre el lote con sus comprobantes y sus rechazos.", "/contabilidad/inventario/lotes", "Abrir los Lotes"),
+                P("Lote manual", "Pestaña «Lote manual»: rango y tipo de documento, «Previsualizar» muestra los comprobantes que se generarían y los documentos que se excluyen con quién los corrige. «Ordenar el lote», con motivo, procesa exactamente lo previsualizado en segundo plano."),
+                P("Rechazos", "Cada rechazo dice quién lo corrige; corregido, se reprocesa desde la bandeja de mensajes de Inventario."),
+            ],
+            ["lotes", "contabilizacion", "inventario", "resumido", "lote manual", "rechazos"],
+            ["Permiso Accounting.InventoryBatches.View; para ordenar, Accounting.InventoryBatches.Run."],
+            ["inventario-bandeja-de-mensajes", "cierre-de-periodo"], ["/contabilidad/inventario/lotes/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-bandeja-de-mensajes", "Bandeja de mensajes", Modulos.Inventario, "/inventario/bandeja-de-mensajes",
+            "Lo que Inventario le mandó a Contabilidad y qué pasó con cada mensaje, en orden de emisión: pendiente, en lote, procesado con su comprobante, rechazado con el motivo, o «no aplica».",
+            [
+                P("Inventario → Bandeja de mensajes", "Filtros por estado, destino, tipo, documento, fechas y validación previa; los contadores de arriba filtran por estado.", "/inventario/bandeja-de-mensajes", "Abrir la Bandeja"),
+                P("Ver", "El contenido del mensaje tal como se emitió, cada intento de entrega, de qué depende y quién lo espera. «Espera al mensaje X» dice qué tiene que pasar antes."),
+                P("Reprocesar", "Marcá los rechazados, ya corregidos, y «Reprocesar» con motivo: arrastra a los que esperaban y cada uno se contabiliza con su fecha original."),
+                P("Enviar lo que no aplicaba", "Para un tipo que antes no pasaba y ahora sí: rango, vista previa con toda la clausura de dependencias y «Enviar» con motivo."),
+            ],
+            ["mensajes", "bandeja", "contabilidad", "rechazados", "reprocesar", "no aplica", "validacion previa"],
+            ["Permiso Inventory.Messages.View; reprocesar, Inventory.Messages.Reprocess; enviar después, Inventory.Messages.SendNotApplicable."],
+            ["contabilidad-inventario-lotes", "inventario-conciliacion"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-conciliacion", "Conciliación con Contabilidad", Modulos.Inventario, "/inventario/conciliacion",
+            "El inventario valorizado contra el saldo contable, por conjunto de cuentas, a una fecha, con lo que explica la diferencia.",
+            [
+                P("Inventario → Conciliación con Contabilidad", "Elegí la fecha y «Conciliar»; Excel o PDF con Inventory.Reports.Export.", "/inventario/conciliacion", "Abrir la Conciliación"),
+                P("Las cinco secciones", "Conjuntos de cuentas (valorizado, saldo, diferencia, pendientes, en lote, rechazados y sin explicar), detalle por bodega, lo movido por tipos que no pasan, ventas a crédito de esos tipos y bodegas todavía en SOLIDO con sus cifras."),
+                P("Profundizar", "Una fila con mensaje abre ese mensaje en la bandeja."),
+            ],
+            ["conciliacion", "valorizado", "saldo contable", "diferencia", "cuadre"],
+            ["Permisos Inventory.Reports.View e Inventory.Reconciliation.View."],
+            ["inventario-bandeja-de-mensajes", "inventario-activacion"], [], TipoDeTema.Reporte));
+
+        t.Add(Proceso("inventario-activacion", "Activación de bodegas", Modulos.Inventario, "/inventario/activacion",
+            "Pasar una bodega de SOLIDO al módulo nuevo con cuadre contable: el valorizado de su conjunto de cuentas contra el saldo contable al corte.",
+            [
+                P("Inventario → Activación de bodegas", "Elegí la bodega y la fecha de corte.", "/inventario/activacion", "Abrir la Activación"),
+                P("Revisar", "Por conjunto: saldo contable, esta bodega, las activas que comparten cuentas y, aparte, las que siguen en SOLIDO con sus cifras al corte; la diferencia y los mensajes que la explican. Los bloqueos dicen qué falta."),
+                P("Activar", "Sin diferencia, «Activar la bodega». Con diferencia, aceptarla con motivo exige Inventory.Warehouses.AcceptActivationDifference."),
+            ],
+            ["activar", "bodega", "puesta en marcha", "cuadre", "solido", "corte"],
+            ["Permiso Inventory.Warehouses.Activate.", "Saldo inicial confirmado y cifras de SOLIDO de las bodegas que comparten cuentas."],
+            ["inventario-saldo-inicial", "inventario-cifras-solido", "inventario-conciliacion"], [], TipoDeTema.Proceso));
 
         // Feature 012, I1 (T983): un tema por opción del menú de decisiones-transversales §2.11. Los catálogos simples
         // comparten CatalogoDeInventario (Nuevo, Editar, Inactivar/Reactivar con motivo, Plantilla) y por eso su guía.

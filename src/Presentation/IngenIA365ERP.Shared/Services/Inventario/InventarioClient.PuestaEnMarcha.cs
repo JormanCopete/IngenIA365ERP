@@ -90,7 +90,7 @@ public sealed record LoteDeCifrasDto(Guid BatchPublicId, DateOnly AsOf, string W
 public sealed record FilaDeCifraDto(string WarehouseCode, string ProductCode, Guid? WarehousePublicId, Guid? ProductPublicId, string? AccountingGroupCode,
     DateOnly AsOf, decimal? Quantity, decimal? Value);
 
-/// <summary>La vista previa de la activación (<c>ActivationPreviewDto</c>, §13.3). En I1 no trae conjuntos.</summary>
+/// <summary>La vista previa de la activación (<c>ActivationPreviewDto</c>, §13.3). Desde I2 trae los conjuntos de cuentas.</summary>
 public sealed record VistaPreviaDeActivacionDto
 {
     public BodegaDeActivacionDto Warehouse { get; init; } = new(Guid.Empty, "", "");
@@ -111,10 +111,29 @@ public sealed record SaldoDeActivacionDto(bool Confirmed, decimal Value, IReadOn
 /// <summary><c>Status</c>: el <c>DocumentStatus</c> (0 borrador, 1 en aprobación, 2 confirmado).</summary>
 public sealed record DocumentoDeActivacionDto(Guid PublicId, string? DisplayNumber, int Status, decimal Value);
 
-public sealed record ConjuntoDeActivacionDto(IReadOnlyList<CodigoYNombreDeActivacionDto> AccountingGroups, decimal LedgerBalance, ValorizadoDeActivacionDto Valuation, decimal Difference);
+/// <summary>
+/// Un conjunto de cuentas (api.md §13.3). US7 (T532, T538) suma sus cuentas con el saldo contable de cada una y la explicación de la
+/// diferencia por los mensajes que todavía no llegan al libro.
+/// </summary>
+public sealed record ConjuntoDeActivacionDto(IReadOnlyList<CodigoYNombreDeActivacionDto> AccountingGroups, decimal LedgerBalance, ValorizadoDeActivacionDto Valuation,
+    decimal Difference, IReadOnlyList<CuentaDeActivacionDto>? Accounts = null, ExplicacionDeActivacionDto? Explanation = null);
 
-/// <summary>El valorizado de un conjunto (api.md §13.3; T523): la pantalla muestra el total; el desglose lo trae el JSON.</summary>
-public sealed record ValorizadoDeActivacionDto(decimal ThisWarehouse, decimal Total);
+/// <summary>Una cuenta del conjunto: su rol (<c>Inventario</c> o <c>Transito</c>) y su saldo contable al corte. US7 (T538).</summary>
+public sealed record CuentaDeActivacionDto(string Code, string Name, string Role, decimal LedgerBalance);
+
+/// <summary>
+/// El valorizado de un conjunto (api.md §13.3; T523): el de la bodega que se activa, el de las activas que comparten cuentas y, aparte,
+/// el de las no activas con sus cifras de SOLIDO al corte (suman al conjunto; la diferencia no se les atribuye). US7 (T538).
+/// </summary>
+public sealed record ValorizadoDeActivacionDto(decimal ThisWarehouse, decimal Total, IReadOnlyList<BodegaActivaDeActivacionDto>? ActiveWarehouses = null,
+    IReadOnlyList<BodegaDeSolidoDeActivacionDto>? LegacyWarehouses = null);
+
+public sealed record BodegaActivaDeActivacionDto(Guid WarehousePublicId, string Code, decimal Value);
+
+public sealed record BodegaDeSolidoDeActivacionDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
+
+/// <summary>Los mensajes a Contabilidad hasta el corte que explican parte de la diferencia (cantidades). US7 (T538).</summary>
+public sealed record ExplicacionDeActivacionDto(int Pending, int InBatch, int Rejected, int NotPosted);
 
 public sealed record CodigoYNombreDeActivacionDto(string Code, string Name);
 

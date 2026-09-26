@@ -1,0 +1,279 @@
+@page "/contabilidad/inventario/lotes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableClient Integracion
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Lotes de contabilización - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T535; FR-076, FR-077, FR-083; contracts/api.md §26.4, contracts/contabilidad.md §5): los lotes con que Contabilidad
+   recibe lo de Inventario que no pasa en línea —programados a la hora del parámetro, al cierre de turno o de período, manuales, de
+   reproceso y de envío posterior— y el lote manual: la vista previa de un rango (los comprobantes que generaría, sin numerar ni guardar,
+   y los documentos que excluiría con su error y quién lo corrige) y la orden, que procesa EXACTAMENTE lo previsualizado hasta el corte
+   (cutoffMessagePublicId de la vista previa), en segundo plano y con la persona como actor. La orden lleva su Idempotency-Key, creada
+   al tener la vista previa y conservada en el reintento. *@
+<PermissionGate Required="Accounting.InventoryBatches.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Lotes de contabilización de Inventario</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Lotes</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Lote manual</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => _estado = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                    <option value="">Todos</option>
+                    @foreach (var (k, v) in TextosDeInventario.EstadosDeLote) { <option value="@k">@v</option> }
+                </select>
+            </label>
+            <label class="campo">Disparador
+                <select class="e-input" value="@(_disparador?.ToString() ?? "")" @onchange="@(e => _disparador = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                    <option value="">Todos</option>
+                    @foreach (var (k, v) in TextosDeInventario.DisparadoresDeLote) { <option value="@k">@v</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <p class="texto-apoyo">@_total lote(s).</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Número</th><th>Disparador</th><th>Rango</th><th>Estado</th><th>Pedido por</th><th class="numero">Mensajes</th><th class="numero">Comprobantes</th><th class="numero">Rechazos</th><th class="numero">Débitos</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _lotes)
+                        {
+                            <tr class="@(l.Late || l.Totals.Rejected > 0 ? "resaltada" : "")">
+                                <td>@l.Number</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.DisparadoresDeLote, l.Trigger)@(l.ScheduleKey is { } k ? $" · {k}" : "")</td>
+                                <td>@Rango(l)</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeLote, l.Status)@(l.Late ? " · atrasado" : "")</td>
+                                <td>@(l.RequestedBy.Name ?? TextosDeInventario.Texto(TextosDeInventario.ActoresDeIntegracion, l.RequestedBy.Kind)) · @l.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="numero">@l.Totals.Messages</td>
+                                <td class="numero">@l.Totals.Vouchers</td>
+                                <td class="numero">@l.Totals.Rejected</td>
+                                <td class="numero">@l.Totals.Debit.ToString("N2")</td>
+                                <td><a href="@($"/contabilidad/inventario/lotes/{l.BatchPublicId}")">Ver</a></td>
+                            </tr>
+                        }
+                        @if (_lotes.Count == 0 && !_carga.Activa)
+                        {
+                            <tr><td colspan="10" class="texto-tenue">@(_error ?? "Sin lotes con estos filtros.")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_total > TamanoDePagina)
+            {
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                    <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                    <SfButton CssClass="e-outline" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <p class="texto-apoyo">Previsualice un rango y ordene el lote: se procesa exactamente lo que ve, en segundo plano, y cada comprobante lleva la fecha de operación de sus documentos, nunca la del lote.</p>
+        <div class="toolbar">
+            <label class="campo">Desde * <input type="date" class="e-input" value="@(_mDesde?.ToString("yyyy-MM-dd"))" @onchange="@(e => CambiarRango(() => _mDesde = LeerFecha(e.Value)))" /></label>
+            <label class="campo">Hasta * <input type="date" class="e-input" value="@(_mHasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => CambiarRango(() => _mHasta = LeerFecha(e.Value)))" /></label>
+            <label class="campo">Tipo de documento
+                <select class="e-input" value="@(_mTipo ?? "")" @onchange="@(e => CambiarRango(() => _mTipo = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString()))">
+                    <option value="">Todos</option>
+                    @foreach (var t in _tipos) { <option value="@t.Code">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-eye" Disabled="@(_vistaPrevia.Activa || _mDesde is null || _mHasta is null)" OnClick="@PrevisualizarAsync">Previsualizar</SfButton>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_vistaPrevia.Activa" Texto="Armando los comprobantes…">
+            @if (_previa is { } p)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@p.Documents.Count</span><span class="kpi-label">Documentos</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@p.Vouchers.Count</span><span class="kpi-label">Comprobantes propuestos</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@p.Excluded.Count</span><span class="kpi-label">Excluidos</span></div>
+                </div>
+
+                @foreach (var v in p.Vouchers)
+                {
+                    <div class="info-card">
+                        <h4>@v.VoucherTypeCode · @v.OperationDate.ToString("dd/MM/yyyy") · @(v.Branch ?? "sin sucursal")@(v.CostCenter is { } cc ? $" · {cc}" : "")</h4>
+                        <p class="texto-tenue">@TextosDeInventario.Texto(TextosDeInventario.Granularidades, v.Granularity) · @v.DocumentsCount documento(s) · débitos @v.Totals.Debit.ToString("N2") · créditos @v.Totals.Credit.ToString("N2")</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Cuenta</th><th class="numero">Débito</th><th class="numero">Crédito</th><th>Tercero</th><th>Cruce</th><th class="numero">Base</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in v.Lines)
+                                    {
+                                        <tr>
+                                            <td>@l.Account.Code · @l.Account.Name</td>
+                                            <td class="numero">@(l.Debit == 0 ? "" : l.Debit.ToString("N2"))</td>
+                                            <td class="numero">@(l.Credit == 0 ? "" : l.Credit.ToString("N2"))</td>
+                                            <td>@l.ThirdParty</td><td>@l.CrossDocument</td>
+                                            <td class="numero">@l.TaxBase?.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                @if (p.Excluded.Count > 0)
+                {
+                    <h4>Documentos excluidos (y sus relacionados)</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Documento</th><th>Línea</th><th>Cuenta</th><th>Regla</th><th>Quién corrige</th></tr></thead>
+                            <tbody>
+                                @foreach (var x in p.Excluded)
+                                {
+                                    @foreach (var e in x.Errors)
+                                    {
+                                        <tr>
+                                            <td><a href="@($"/inventario/documentos/{x.DocumentPublicId}")">@(x.Number ?? "(sin número)")</a></td>
+                                            <td>@(e.LineNumber?.ToString() ?? "—")</td>
+                                            <td>@(e.Account ?? "—")</td>
+                                            <td><code>@e.Rule</code></td>
+                                            <td>@if (e.WhoFixes is { } q) { @q.Module @if (q.Page is { } pg) { <text> · </text><a href="@pg">corregir</a> } }</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (p.CutoffMessagePublicId is null)
+                {
+                    <p class="texto-tenue">No hay nada que contabilizar en este rango.</p>
+                }
+                else
+                {
+                    <PermissionGate Required="Accounting.InventoryBatches.Run">
+                        <div class="info-card">
+                            <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" placeholder="Por qué se ordena el lote" /></label>
+                            <IndicadorDeCarga Cargando="@_orden.Activa" Compacto="true" Texto="Ordenando…">
+                                <div class="toolbar">
+                                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_orden.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@OrdenarAsync">Ordenar el lote</SfButton>
+                                </div>
+                            </IndicadorDeCarga>
+                            @if (_enCurso is { } enCurso)
+                            {
+                                <p class="aviso aviso-alerta">Ya hay un lote en curso con este alcance: <a href="@($"/contabilidad/inventario/lotes/{enCurso}")">verlo</a>.</p>
+                            }
+                        </div>
+                    </PermissionGate>
+                }
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private const string LoteEnCurso = "Accounting.InventoryBatch.AlreadyRunning";
+
+    private readonly EstadoDeCarga _carga = new(), _vistaPrevia = new(), _orden = new();
+    private int _pestana, _pagina = 1;
+    private long _total;
+    private DateOnly? _desde, _hasta, _mDesde, _mHasta;
+    private int? _estado, _disparador;
+    private string? _mTipo, _motivo, _error;
+    private List<LoteDeIntegracionDto> _lotes = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private VistaPreviaDeLoteDeIntegracionDto? _previa;
+    private ClaveDeOperacion _clave = new();
+    private Guid? _enCurso;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        _mDesde = new DateOnly(hoy.Year, hoy.Month, 1);
+        _mHasta = hoy;
+        var tipos = await Inventario.ListarTiposAsync();
+        _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive).OrderBy(t => t.Code)] : [];
+        await CargarAsync(1);
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.LotesAsync(new FiltroDeLotesDeIntegracion(_desde, _hasta, _estado, _disparador, TextosDeInventario.DestinoContabilidad, pagina, TamanoDePagina));
+        _error = r.IsSuccess ? null : r.ErrorMessage;
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _lotes = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los lotes.");
+            return;
+        }
+        _pagina = pagina;
+        _lotes = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    /// <summary>Cambiar el rango invalida la vista previa: se ordena exactamente lo previsualizado.</summary>
+    private void CambiarRango(System.Action cambio)
+    {
+        cambio();
+        _previa = null;
+        _enCurso = null;
+    }
+
+    private async Task PrevisualizarAsync()
+    {
+        if (_mDesde is not { } desde || _mHasta is not { } hasta) return;
+        using var carga = _vistaPrevia.Iniciar();
+        _enCurso = null;
+        var r = await Integracion.VistaPreviaDeLoteAsync(new VistaPreviaDeLoteDeIntegracionRequest(desde, hasta, _mTipo is null ? null : [_mTipo], null, null));
+        if (!r.IsSuccess)
+        {
+            _previa = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo previsualizar el lote.");
+            return;
+        }
+        _previa = r.Value;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task OrdenarAsync()
+    {
+        if (_previa?.CutoffMessagePublicId is not { } corte || _mDesde is not { } desde || _mHasta is not { } hasta || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var orden = _orden.Iniciar();
+        var r = await Integracion.OrdenarLoteAsync(new OrdenDeLoteDeIntegracionRequest(corte, desde, hasta, _mTipo is null ? null : [_mTipo], null, null,
+            _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _enCurso = r.ErrorCode == LoteEnCurso ? r.Dato<Guid>("batchPublicId") : null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ordenar el lote.");
+            return;
+        }
+        await Notification.SuccessAsync($"Lote {r.Value.Number} ordenado: se procesa en segundo plano.");
+        Nav.NavigateTo($"/contabilidad/inventario/lotes/{r.Value.BatchPublicId}");
+    }
+
+    private static string Rango(LoteDeIntegracionDto l) =>
+        l.Period is { } p ? $"{p.Month:00}/{p.Year}"
+        : l.DateFrom is { } d ? $"{d:dd/MM/yyyy} – {l.DateTo?.ToString("dd/MM/yyyy")}"
+        : l.ScheduledFor is { } s ? s.ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -77,6 +77,8 @@ namespace IngenIA365ERP.App
             // Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
+            // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 

@@ -1,0 +1,151 @@
+@page "/contabilidad/inventario/lotes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableClient Integracion
+@inject INotificationService Notification
+
+<PageTitle>Lote de contabilización - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T535; contracts/api.md §26.4; contracts/contabilidad.md §5.4): un lote con sus documentos, los comprobantes que
+   generó —cada uno con su enlace al comprobante (/contabilidad/comprobantes/{id}); un resumido reúne varios documentos— y los rechazos
+   con quién los corrige. Un rechazo se reprocesa desde la bandeja de mensajes de Inventario una vez corregido. Es también el destino
+   de «ver comprobante» de los mensajes de un resumido (result.route). *@
+<PermissionGate Required="Accounting.InventoryBatches.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/contabilidad/inventario/lotes">Volver a los lotes</a>
+            <a class="e-btn e-outline" href="@($"/inventario/bandeja-de-mensajes?lote={Id}")">Mensajes del lote</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_d is { } d)
+        {
+            var b = d.Batch;
+            <div class="info-card">
+                <p>
+                    @TextosDeInventario.Texto(TextosDeInventario.DisparadoresDeLote, b.Trigger)@(b.ScheduleKey is { } k ? $" ({k})" : "") ·
+                    <b>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeLote, b.Status)</b>@(b.Late ? " · atrasado" : "")
+                    @if (b.Granularity is { } g) { <text> · @TextosDeInventario.Texto(TextosDeInventario.Granularidades, g)</text> }
+                </p>
+                <p class="texto-tenue">
+                    Pedido por @(b.RequestedBy.Name ?? TextosDeInventario.Texto(TextosDeInventario.ActoresDeIntegracion, b.RequestedBy.Kind)) el @b.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    @if (b.StartedAt is { } i) { <text> · empezó @i.ToLocalTime().ToString("HH:mm:ss")</text> }
+                    @if (b.FinishedAt is { } f) { <text> · terminó @f.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</text> }
+                    @if (b.DateFrom is { } desde) { <text> · rango @desde.ToString("dd/MM/yyyy") – @b.DateTo?.ToString("dd/MM/yyyy")</text> }
+                    @if (b.Period is { } p) { <text> · período @p.Month.ToString("00")/@p.Year</text> }
+                </p>
+                @if (b.Status is 0 or 1)
+                {
+                    <p class="aviso aviso-info">El lote corre en segundo plano; «Actualizar» trae su avance.</p>
+                }
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Messages</span><span class="kpi-label">Mensajes</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Documents</span><span class="kpi-label">Documentos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Vouchers</span><span class="kpi-label">Comprobantes</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Rejected</span><span class="kpi-label">Rechazos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Debit.ToString("N2")</span><span class="kpi-label">Débitos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Credit.ToString("N2")</span><span class="kpi-label">Créditos</span></div>
+            </div>
+
+            <h4>Comprobantes</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Comprobante</th><th>Fecha</th><th>Sucursal</th><th>Centro</th><th>Forma</th><th class="numero">Documentos</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in d.Vouchers)
+                        {
+                            <tr>
+                                <td><a href="@($"/contabilidad/comprobantes/{v.AccountingDocumentPublicId}")">@v.VoucherTypeCode @(v.Number?.ToString() ?? "")</a></td>
+                                <td>@v.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@v.Branch</td><td>@v.CostCenter</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.Granularidades, v.Granularity)</td>
+                                <td class="numero">@v.DocumentsCount</td>
+                            </tr>
+                        }
+                        @if (d.Vouchers.Count == 0) { <tr><td colspan="6" class="texto-tenue">Sin comprobantes.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (d.Rejected.Count > 0)
+            {
+                <h4>Rechazos</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Documento</th><th>Código</th><th>Qué pasa</th><th>Quién corrige</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var x in d.Rejected)
+                            {
+                                <tr class="resaltada">
+                                    <td>@(x.DocumentNumber ?? "—")</td>
+                                    <td><code>@x.Code</code></td>
+                                    <td>@x.Message</td>
+                                    <td>
+                                        @if (x.WhoFixes is { } q)
+                                        {
+                                            @q.Module
+                                            @if (q.Page is { } pg) { <br /><a href="@pg">Ir a corregirlo</a> }
+                                            @if (q.Permission is { } pm) { <br /><span class="texto-tenue">Permiso @pm</span> }
+                                        }
+                                    </td>
+                                    <td><a href="@($"/inventario/bandeja-de-mensajes?mensaje={x.MessagePublicId}")">Mensaje</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <h4>Documentos</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Documento</th><th>Tipo</th><th>Fecha</th><th>Sucursal</th><th class="numero">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var doc in d.Documents)
+                        {
+                            <tr>
+                                <td><a href="@($"/inventario/documentos/{doc.DocumentPublicId}")">@(doc.Number ?? "(sin número)")</a></td>
+                                <td>@doc.DocumentTypeCode</td>
+                                <td>@doc.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@doc.Branch</td>
+                                <td class="numero">@doc.Total.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private DetalleDeLoteDeIntegracionDto? _d;
+    private string? _error;
+
+    private string Titulo => _d is { } d ? $"Lote {d.Batch.Number}" : "Lote de contabilización";
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.LoteAsync(Id);
+        _d = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo consultar el lote.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+}

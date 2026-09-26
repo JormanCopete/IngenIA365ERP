@@ -53,6 +53,8 @@
         {
             <p class="aviso aviso-info">En aprobación: queda congelado y sin número; lo despacha la última aprobación.</p>
         }
+        @* US7 (T539): lo que dijo Contabilidad antes de despachar, con quién corrige cada hallazgo. *@
+        <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.PublicId" />
         @if (_doc?.VoidedBy is { } anulado)
         {
             <p class="aviso aviso-alerta">Anulado por @anulado.DisplayNumber: la mercancía volvió del tránsito al origen.</p>
@@ -346,6 +348,7 @@
     private readonly ClaveDeOperacion _claveGuardar = new(), _claveDespachar = new(), _claveMotivo = new(), _claveRecibir = new(), _claveResolver = new();
     private DocumentoDeInventarioDto? _doc;
     private TrasladoDto? _traslado;
+    private ResultadoDeValidacionPrevia? _validacion;
     private Formulario _f = new();
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _origenes = [];
@@ -482,13 +485,15 @@
     {
         if (_doc is null) return;
         if (Editable && !await GuardarAsync(true)) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
         using var guardado = _guardado.Iniciar();
         var r = await Inventario.DespacharTrasladoAsync(_doc.PublicId, _doc.RowVersion, _claveDespachar);
         if (!r.IsSuccess || r.Value is null)
         {
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo despachar el traslado.");
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo despachar el traslado.");
             return;
         }
+        _validacion?.Limpiar();
         if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: lo despacha la última aprobación.");
         else await Notification.SuccessAsync($"Traslado {r.Value.DisplayNumber} despachado: va en tránsito.");
         await CargarAsync(_doc.PublicId);

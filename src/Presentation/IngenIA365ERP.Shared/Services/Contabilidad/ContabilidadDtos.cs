@@ -309,3 +309,9 @@ public sealed record AperturaResumenDto(Guid PublicId, long? Number, DateOnly Da
 
 /// <summary><c>GET /api/accounting/opening</c> (E2, US13): la fecha que le toca a la apertura, la vigente, los borradores pendientes y las reversadas.</summary>
 public sealed record EstadoDeAperturaDto(DateOnly ExpectedDate, DateOnly MaxDate, int FirstFiscalYear, AperturaResumenDto? Posted, IReadOnlyList<AperturaResumenDto> Drafts, IReadOnlyList<AperturaResumenDto> Reversed);
+
+/// <summary>El cuerpo de cerrar un mes (feature 012, T536): reconocer los pendientes de Inventario y cerrar igual.</summary>
+public sealed record CerrarPeriodoContableRequest(bool AcknowledgeInventoryPending);
+
+/// <summary>El <c>data</c> de <c>Accounting.Period.InventoryPending</c> (feature 012, T536; contracts/contabilidad.md §8).</summary>
+public sealed record PendientesDeInventarioDelMesDto(int Pending, int InBatch, int Rejected, DateOnly? OldestOperationDate, IReadOnlyList<string> Types);

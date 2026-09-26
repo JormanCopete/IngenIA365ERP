@@ -22,6 +22,14 @@ public sealed record ResultadoContable<T>(bool IsSuccess, T? Value, string? Erro
 
     public List<ErrorDeLineaDto> ErroresDeLinea() => Lista<ErrorDeLineaDto>("errors");
 
+    /// <summary>El <c>data</c> entero leído como <typeparamref name="TDato"/> (feature 012, T536: los pendientes de Inventario del mes).</summary>
+    public TDato? DatosComo<TDato>()
+    {
+        if (Data is not { ValueKind: JsonValueKind.Object } data) return default;
+        try { return data.Deserialize<TDato>(Opciones); }
+        catch (JsonException) { return default; }
+    }
+
     private List<TItem> Lista<TItem>(string propiedad)
     {
         if (Data is not { ValueKind: JsonValueKind.Object } data || !data.TryGetProperty(propiedad, out var arreglo) || arreglo.ValueKind != JsonValueKind.Array)

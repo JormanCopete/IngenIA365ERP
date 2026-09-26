@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using IngenIA365ERP.Architecture.Tests.Helpers;
+using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
 
@@ -76,6 +77,47 @@ public class TextosDeInventarioTests
     [Fact]
     public void Cada_alcance_de_conteo_tiene_su_texto() => Cubre<CountScope>("AlcancesDeConteo");
 
+    // US7 (T532, T537): la bandeja, los lotes y la validación previa de la integración contable.
+    [Fact]
+    public void Cada_estado_de_entrega_tiene_su_texto_y_su_nombre() { Cubre<DeliveryStatus>("EstadosDeEntrega"); Nombra<DeliveryStatus>("NombresDeEstadoDeEntrega"); }
+
+    [Fact]
+    public void Cada_modo_de_entrega_tiene_su_texto() => Cubre<DeliveryMode>("ModosDeEntrega");
+
+    [Fact]
+    public void Cada_disparador_de_lote_tiene_su_texto_y_su_nombre() { Cubre<BatchTrigger>("DisparadoresDeLote"); Nombra<BatchTrigger>("NombresDeDisparador"); }
+
+    [Fact]
+    public void Cada_estado_de_lote_tiene_su_texto_y_su_nombre() { Cubre<BatchStatus>("EstadosDeLote"); Nombra<BatchStatus>("NombresDeEstadoDeLote"); }
+
+    [Fact]
+    public void Cada_resultado_de_la_validacion_previa_tiene_su_texto_y_su_nombre()
+    {
+        Cubre<PrevalidationOutcome>("ValidacionesPrevias");
+        Nombra<PrevalidationOutcome>("NombresDeValidacionPrevia");
+    }
+
+    [Fact]
+    public void Cada_granularidad_tiene_su_texto() => Cubre<PostingGranularity>("Granularidades");
+
+    [Fact]
+    public void Cada_resultado_de_intento_tiene_su_texto() => Cubre<DeliveryAttemptOutcome>("ResultadosDeIntento");
+
+    [Fact]
+    public void Cada_clase_de_actor_tiene_su_texto() => Cubre<ActorKind>("ActoresDeIntegracion");
+
+    /// <summary>Los filtros viajan por nombre (la API los lee por nombre o número): el nombre tiene que ser el del enum.</summary>
+    private static void Nombra<TEnum>(string diccionario) where TEnum : struct, Enum
+    {
+        var inicio = Fuente.IndexOf($" {diccionario} {{ get; }}", StringComparison.Ordinal);
+        Assert.True(inicio >= 0, $"TextosDeInventario ya no declara {diccionario}.");
+        var fin = Fuente.IndexOf("};", inicio, StringComparison.Ordinal);
+        var pares = Regex.Matches(Fuente[inicio..fin], @"\[(\d+)\]\s*=\s*""([^""]+)""")
+            .ToDictionary(m => int.Parse(m.Groups[1].Value), m => m.Groups[2].Value);
+        var esperados = Enum.GetValues<TEnum>().ToDictionary(v => Convert.ToInt32(v), v => v.ToString());
+        Assert.Equal(esperados.OrderBy(p => p.Key), pares.OrderBy(p => p.Key));
+    }
+
     [Fact]
     public void Las_constantes_nombran_el_valor_del_dominio()
     {
@@ -87,5 +129,9 @@ public class TextosDeInventarioTests
         Assert.Contains($"ClasesDeProductoDeI1 = [{(int)ProductKind.Inventoriable}, {(int)ProductKind.Service}];", Fuente, StringComparison.Ordinal);
         Assert.Contains($"GrupoDeCompras = {(int)DocumentClassGroup.Purchases};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ClaseDeConsumoInterno = {(int)DocumentClass.InternalConsumption};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"EntregaRechazada = {(int)DeliveryStatus.Rejected};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"EntregaNoAplica = {(int)DeliveryStatus.NotApplicable};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"ActorPersona = {(int)ActorKind.Person};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"GranularidadResumida = {(int)PostingGranularity.Summarized};", Fuente, StringComparison.Ordinal);
     }
 }

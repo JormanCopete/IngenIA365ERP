@@ -216,6 +216,160 @@ public static class TextosDeInventario
     /// <summary><c>ProductStatus.Blocked</c>.</summary>
     public const int EstadoBloqueado = 3;
 
+    // ------------------------------------------------------------- integración contable (US7, I2: T532, T537) --
+
+    /// <summary><c>DeliveryStatus</c> (0..5): el estado de una entrega en la bandeja.</summary>
+    public static IReadOnlyDictionary<int, string> EstadosDeEntrega { get; } = new Dictionary<int, string>
+    {
+        [0] = "Pendiente",
+        [1] = "En lote",
+        [2] = "Procesado",
+        [3] = "Rechazado",
+        [4] = "No aplica",
+        [5] = "Validación fallida",
+    };
+
+    /// <summary>Los nombres de <c>DeliveryStatus</c> con que viajan los filtros (la API los lee por nombre o por número).</summary>
+    public static IReadOnlyDictionary<int, string> NombresDeEstadoDeEntrega { get; } = new Dictionary<int, string>
+    {
+        [0] = "Pending",
+        [1] = "InBatch",
+        [2] = "Processed",
+        [3] = "Rejected",
+        [4] = "NotApplicable",
+        [5] = "ValidationFailed",
+    };
+
+    /// <summary><c>DeliveryMode</c> (1..4): el modo sellado en la entrega al confirmar.</summary>
+    public static IReadOnlyDictionary<int, string> ModosDeEntrega { get; } = new Dictionary<int, string>
+    {
+        [1] = "En línea",
+        [2] = "Por lotes",
+        [3] = "No pasa",
+        [4] = "Siempre",
+    };
+
+    /// <summary><c>BatchTrigger</c> (1..6).</summary>
+    public static IReadOnlyDictionary<int, string> DisparadoresDeLote { get; } = new Dictionary<int, string>
+    {
+        [1] = "Programado",
+        [2] = "Cierre de turno",
+        [3] = "Cierre de período",
+        [4] = "Manual",
+        [5] = "Reproceso",
+        [6] = "Envío posterior",
+    };
+
+    public static IReadOnlyDictionary<int, string> NombresDeDisparador { get; } = new Dictionary<int, string>
+    {
+        [1] = "Scheduled",
+        [2] = "CashSessionClose",
+        [3] = "PeriodClose",
+        [4] = "Manual",
+        [5] = "Reprocess",
+        [6] = "SendNotApplicable",
+    };
+
+    /// <summary><c>BatchStatus</c> (0..4).</summary>
+    public static IReadOnlyDictionary<int, string> EstadosDeLote { get; } = new Dictionary<int, string>
+    {
+        [0] = "Pedido",
+        [1] = "En curso",
+        [2] = "Completo",
+        [3] = "Completo con rechazos",
+        [4] = "Vacío",
+    };
+
+    public static IReadOnlyDictionary<int, string> NombresDeEstadoDeLote { get; } = new Dictionary<int, string>
+    {
+        [0] = "Requested",
+        [1] = "Running",
+        [2] = "Completed",
+        [3] = "CompletedWithRejections",
+        [4] = "Empty",
+    };
+
+    /// <summary><c>PrevalidationOutcome</c> (1..3): lo que dijo la validación previa al confirmar (SC-021).</summary>
+    public static IReadOnlyDictionary<int, string> ValidacionesPrevias { get; } = new Dictionary<int, string>
+    {
+        [1] = "Contabilizable",
+        [2] = "Sin respuesta",
+        [3] = "No aplica",
+    };
+
+    public static IReadOnlyDictionary<int, string> NombresDeValidacionPrevia { get; } = new Dictionary<int, string>
+    {
+        [1] = "Postable",
+        [2] = "NoResponse",
+        [3] = "NotApplicable",
+    };
+
+    /// <summary><c>PostingGranularity</c> (1..2).</summary>
+    public static IReadOnlyDictionary<int, string> Granularidades { get; } = new Dictionary<int, string>
+    {
+        [1] = "Por documento",
+        [2] = "Resumido",
+    };
+
+    /// <summary><c>DeliveryAttemptOutcome</c> (1..4): cada intento de entrega en el detalle del mensaje.</summary>
+    public static IReadOnlyDictionary<int, string> ResultadosDeIntento { get; } = new Dictionary<int, string>
+    {
+        [1] = "Procesado",
+        [2] = "Ya procesado",
+        [3] = "Rechazado",
+        [4] = "Reintento",
+    };
+
+    /// <summary><c>ActorKind</c> (1..2): quién pidió un lote o hizo un intento.</summary>
+    public static IReadOnlyDictionary<int, string> ActoresDeIntegracion { get; } = new Dictionary<int, string>
+    {
+        [1] = "Persona",
+        [2] = "Proceso",
+    };
+
+    /// <summary><c>DeliveryStatus.Rejected</c>: lo único que se reprocesa.</summary>
+    public const int EntregaRechazada = 3;
+
+    /// <summary><c>DeliveryStatus.NotApplicable</c>: lo que se envía después (FR-078).</summary>
+    public const int EntregaNoAplica = 4;
+
+    /// <summary><c>ActorKind.Person</c>.</summary>
+    public const int ActorPersona = 1;
+
+    /// <summary><c>PostingGranularity.Summarized</c>.</summary>
+    public const int GranularidadResumida = 2;
+
+    /// <summary>Los destinos de la bandeja (<c>IntegrationDestinations</c>).</summary>
+    public const string DestinoContabilidad = "Accounting";
+    public const string DestinoCartera = "Lending";
+
+    /// <summary>
+    /// Los tipos de mensaje se guardan sin tildes (decisiones-transversales §2.1) y la pantalla los muestra con ellas:
+    /// «DevoluciónRegistrada», «NotaCréditoEmitida», «NotaDébitoEmitida». Los demás no llevan tilde.
+    /// </summary>
+    public static string TipoDeMensaje(string? tipo) => tipo switch
+    {
+        null => "",
+        "DevolucionRegistrada" => "DevoluciónRegistrada",
+        "NotaCreditoEmitida" => "NotaCréditoEmitida",
+        "NotaDebitoEmitida" => "NotaDébitoEmitida",
+        _ => tipo,
+    };
+
+    public static string EstadoDeEntrega(int estado) => Texto(EstadosDeEntrega, estado);
+
+    public static string Destino(string? destino) => destino switch
+    {
+        DestinoContabilidad => "Contabilidad",
+        DestinoCartera => "Cartera",
+        null => "",
+        _ => destino,
+    };
+
+    /// <summary>El nombre de un valor para un filtro de la API, o nulo si no hay valor.</summary>
+    public static string? Nombre(IReadOnlyDictionary<int, string> nombres, int? valor) =>
+        valor is { } v && nombres.TryGetValue(v, out var n) ? n : null;
+
     public static string Texto(IReadOnlyDictionary<int, string> textos, int valor) => textos.TryGetValue(valor, out var t) ? t : valor.ToString();
 
     /// <summary>El grupo de Compras (<c>DocumentClassGroup.Purchases</c>): sólo sus clases admiten «IVA no descontable».</summary>

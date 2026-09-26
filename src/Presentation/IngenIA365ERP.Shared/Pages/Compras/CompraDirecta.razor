@@ -95,6 +95,9 @@
                 </table>
             </div>
             <p class="texto-tenue">Los impuestos y las retenciones los calcula el servidor con el catálogo vigente a la fecha, el concepto de cada producto y el régimen de las dos partes; se ven en el resultado.</p>
+            @* US7 (T539): la compra directa no tiene un borrador que validar antes; si Contabilidad no puede contabilizarla, la
+               confirmación responde con los mismos hallazgos y se muestran aquí. *@
+            <ResultadoDeValidacionPrevia @ref="_validacion" />
             <div class="toolbar">
                 <SfButton CssClass="e-outline" OnClick="@(() => _paso = 1)">Volver</SfButton>
                 <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra</SfButton>
@@ -151,6 +154,7 @@
     private bool _electronica;
     private int _paso = 1;
     private ResultadoDeCompraDirectaDto? _resultado;
+    private ResultadoDeValidacionPrevia? _validacion;
 
     private bool PuedeAbrir => _proveedor is not null && _bodega is not null && _tipoRecepcion is not null && _tipoFactura is not null
                                && !string.IsNullOrWhiteSpace(_numero) && _emision is not null && (_formaDePago == "Cash" || _vence is not null);
@@ -208,7 +212,7 @@
         var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura), _clave);
         if (!r.IsSuccess || r.Value is null)
         {
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la compra.");
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la compra.");
             return;
         }
         _resultado = r.Value;
