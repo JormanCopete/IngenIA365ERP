@@ -7,6 +7,7 @@ using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.Application.Inventory.Documents;
 
@@ -15,16 +16,22 @@ namespace IngenIA365ERP.Application.Inventory.Documents;
 /// contracts/api.md §15.2). La última aprobación reentra por el flujo canónico de <see cref="ConfirmacionDeDocumento"/>
 /// en la transacción del aprobador (existencia, período, numeración se vuelven a comprobar); el rechazo o el retiro
 /// devuelven el documento a borrador para corregirlo. (nuevo)
+/// <para>
+/// <see cref="ConfirmacionDeDocumento"/> se resuelve al aprobar, no en el constructor: depende del motor de aprobaciones, y
+/// el motor (por <c>VistaDeSolicitudes</c>) de todas las fuentes. Inyectarla directo cerraba el círculo y la API no
+/// arrancaba (validación del contenedor al construir el host).
+/// </para>
 /// </summary>
 public sealed class FuenteDeAprobacionDeDocumento(
     IApplicationDbContext db,
     IMaestrosDelDocumento maestros,
-    ConfirmacionDeDocumento confirmacion) : IFuenteDeAprobacion
+    IServiceProvider servicios) : IFuenteDeAprobacion
 {
     public string SourceType => ApprovalSourceTypes.InventoryDocument;
 
     public async Task<Result<EstadoDeFuenteDto>> AlAprobarAsync(ApprovalRequest solicitud, CancellationToken ct)
     {
+        var confirmacion = servicios.GetRequiredService<ConfirmacionDeDocumento>();
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(solicitud.SourcePublicId, null, PorAprobacion: true), ct);
         if (confirmada.IsFailure) return Result.Failure<EstadoDeFuenteDto>(confirmada.Error);
         var r = confirmada.Value;

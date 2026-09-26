@@ -78,10 +78,34 @@ public static class InventarioE2E
         }
     }
 
+    private static readonly Dictionary<CentralIdentityApiFixture, (string Token, DateTime Renovar)> TokensDelMaestro = [];
+    private static readonly SemaphoreSlim CerrojoDelMaestro = new(1, 1);
+
+    /// <summary>
+    /// El access del maestro, uno por fixture y por diez minutos (vive quince). La colección crea una
+    /// cooperativa por caso y cada alta iniciaba sesión: pasadas diez en un minuto, el limitador de
+    /// <c>POST /api/auth/login</c> (10/min por IP) respondía 429 y la colección caía entera.
+    /// </summary>
+    public static async Task<string> TokenMaestroAsync(CentralIdentityApiFixture fx, HttpClient http)
+    {
+        await CerrojoDelMaestro.WaitAsync();
+        try
+        {
+            if (TokensDelMaestro.TryGetValue(fx, out var vigente) && DateTime.UtcNow < vigente.Renovar) return vigente.Token;
+            var token = await fx.IniciarSesionMaestroAsync(http);
+            TokensDelMaestro[fx] = (token, DateTime.UtcNow.AddMinutes(10));
+            return token;
+        }
+        finally
+        {
+            CerrojoDelMaestro.Release();
+        }
+    }
+
     private static async Task<CooperativaAislada> CooperativaAisladaDeVerdadAsync(CentralIdentityApiFixture fx, string nombre, int? primerEjercicioContable)
     {
         using var http = fx.CreateClient();
-        var tokenMaestro = await fx.IniciarSesionMaestroAsync(http);
+        var tokenMaestro = await TokenMaestroAsync(fx, http);
         var correoAdmin = $"admin.{nombre}@coop.inventario.test";
         var alta = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, "/api/saas/tenants/with-admin", new
         {

@@ -66,6 +66,20 @@ public class ArrendamientosYTransaccionTests(CentralIdentityApiFixture fx)
         new(servicios.GetRequiredService<ApplicationDbContext>(), servicios.GetRequiredService<IDateTimeService>(),
             NullLogger<ArrendamientosEnBase>.Instance, dueno);
 
+    /// <summary>El ejecutor del host, pero con <see cref="IArrendamientos"/> a nombre de otra réplica.</summary>
+    private sealed class EjecutorConDueno(IEjecutorEnCooperativa interno, string dueno) : IEjecutorEnCooperativa
+    {
+        public Task<ResultadoEnCooperativa> EjecutarAsync(TenantDirectoryEntry cooperativa, Actor actor, string origen,
+            Func<IServiceProvider, CancellationToken, Task> trabajo, CancellationToken ct = default) =>
+            interno.EjecutarAsync(cooperativa, actor, origen, (s, c) => trabajo(new ServiciosConDueno(s, dueno), c), ct);
+    }
+
+    private sealed class ServiciosConDueno(IServiceProvider interno, string dueno) : IServiceProvider
+    {
+        public object? GetService(Type tipo) =>
+            tipo == typeof(IArrendamientos) ? Dueno(interno, dueno) : interno.GetService(tipo);
+    }
+
     private Task<bool> ArrendarAsync(TenantDirectoryEntry entrada, string dueno, string nombre, TimeSpan duracion) =>
         EnLaCooperativaAsync(entrada, s => Dueno(s, dueno).ArrendarAsync(nombre, duracion));
 
@@ -183,8 +197,11 @@ public class ArrendamientosYTransaccionTests(CentralIdentityApiFixture fx)
 
         var ambitos = fx.Factory.Services.GetRequiredService<IServiceScopeFactory>();
         var ejecutor = fx.Factory.Services.GetRequiredService<IEjecutorEnCooperativa>();
-        var uno = new NotificationEmailDispatcher(ambitos, ejecutor, NullLogger<NotificationEmailDispatcher>.Instance);
-        var otro = new NotificationEmailDispatcher(ambitos, ejecutor, NullLogger<NotificationEmailDispatcher>.Instance);
+        // Dos réplicas, no dos despachadores del mismo proceso: el dueño del arrendamiento es el del
+        // proceso (ArrendamientosEnBase.DuenoDelProceso) y quien ya es dueño lo vuelve a tomar, así que
+        // dos instancias en este host se lo pasaban entre sí y a veces mandaban el correo dos veces.
+        var uno = new NotificationEmailDispatcher(ambitos, new EjecutorConDueno(ejecutor, "réplica-a"), NullLogger<NotificationEmailDispatcher>.Instance);
+        var otro = new NotificationEmailDispatcher(ambitos, new EjecutorConDueno(ejecutor, "réplica-b"), NullLogger<NotificationEmailDispatcher>.Instance);
 
         await Task.WhenAll(uno.DespacharUnaPasadaAsync(CancellationToken.None), otro.DespacharUnaPasadaAsync(CancellationToken.None));
         await Task.WhenAll(uno.DespacharUnaPasadaAsync(CancellationToken.None), otro.DespacharUnaPasadaAsync(CancellationToken.None));

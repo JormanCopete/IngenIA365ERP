@@ -1033,6 +1033,9 @@ JSON embebidos versionados (T40), no semillas.
   `PlantillaDeImportacion.{Xlsx(DefinicionDePlantilla…), ConResultados, Formato}` y `ExportadorDeTablas.FormatoNumerico`.
 
 **Inventario**
+- **(nuevo, T186)** `Persistence/Configurations/Inventory/NucleoComercialSinMigracion` (`Tablas`,
+  `ExcluirDeLasMigraciones(ModelBuilder)`): las nueve tablas `INV_` del documento genérico quedan fuera de las
+  migraciones (`ExcludeFromMigrations`) entre `PlataformaParaInventario` y `InventarioComercialNucleo`; T440 la borra.
 - Domain puro: `Inventory/Costing/{MotorDeCosteo, PromedioPonderado, Peps, Retroactivo, Prorrateo,
   CostoDeEntrada, Redondeo, ExplicacionDeCosto}`, `Inventory/Units/ConversionDeUnidades`,
   `Inventory/Documents/ClasesDeDocumento` (efecto, fiscal, mensajes, cadena, grupo, bodegas admitidas),
@@ -1311,6 +1314,11 @@ UnaSesionPorCajaTests, BusquedaDeProductos50kTests, CreditoProvisionalTests}`,
 de la letra, 50.000 productos, SC-020) reportan **Skip explícito** sin `RUN_PERF_TESTS=1`, nunca un
 `return` que cuente como aprobada. Las que cambian todo el libro corren en cooperativas aisladas del
 mismo host (patrón `ContabilidadE2E.CooperativaAisladaAsync`), colección «Inventario e2e».
+**(nuevo, T186)** `InventarioE2E.TokenMaestroAsync(fx, http)`: un access del maestro por fixture y por diez minutos,
+que usa `CooperativaAisladaAsync` (una sesión por alta superaba el límite de 10 inicios de sesión por minuto). La
+fixture levanta Redis con `--databases 256` (una ranura de caché por cooperativa aislada).
+**(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
+choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 
 ---
 

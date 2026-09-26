@@ -60,8 +60,10 @@ public class MongoAuditService : IAuditService, IDisposable
     /// </summary>
     private string CooperativaOGlobal()
     {
+        // Vacío cuenta como «sin cooperativa»: AuditDatabaseNames.Para lo manda a la global, que es
+        // justo lo que esta guarda impide desde un trabajo de fondo.
         var cooperativa = _tenantService.TenantId;
-        if (cooperativa is not null) return cooperativa;
+        if (!string.IsNullOrWhiteSpace(cooperativa)) return cooperativa;
 
         if (ContextoAmbiental.Activo)
         {
@@ -168,14 +170,20 @@ public class MongoAuditService : IAuditService, IDisposable
 
     // === FLUSH ===
 
+    /// <summary>
+    /// Vacía las colas ahora: espera al volcado que esté en curso y después vuelca todo lo que había
+    /// pendiente, no una sola tanda. El temporizador y el umbral de tamaño siguen sin esperar.
+    /// </summary>
     public async Task FlushAsync()
     {
-        await FlushInternalAsync();
+        await FlushInternalAsync(esperarAlQueEstaEnCurso: true);
     }
 
-    private async Task FlushInternalAsync()
+    private async Task FlushInternalAsync(bool esperarAlQueEstaEnCurso = false)
     {
-        if (!await _flushLock.WaitAsync(0))
+        if (esperarAlQueEstaEnCurso)
+            await _flushLock.WaitAsync();
+        else if (!await _flushLock.WaitAsync(0))
             return; // Another flush in progress
 
         try
@@ -194,35 +202,54 @@ public class MongoAuditService : IAuditService, IDisposable
         }
     }
 
+    // Cada volcado lleva TODO lo que había en la cola al empezar, en tandas de BatchSize. Antes llevaba
+    // una sola tanda: el alta de una cooperativa encola miles de eventos de sus semillas (el interceptor
+    // audita cada fila) y a una tanda de 100 cada 5 s la cola tardaba minutos en vaciarse; lo que se
+    // auditaba detrás quedaba invisible ese rato (feature 012, T186: lo destaparon las e2e). Lo que llega
+    // durante el volcado espera al siguiente, así un flujo continuo no lo alarga sin fin.
     private async Task FlushAuditQueueAsync()
     {
-        var batch = DequeueBatch(_auditQueue, _settings.BatchSize);
-        if (batch.Count == 0) return;
-
-        // Group by tenant for per-tenant collections
-        foreach (var group in batch.GroupBy(e => e.TenantId))
+        var pendientes = _auditQueue.Count;
+        var volcados = 0;
+        while (volcados < pendientes)
         {
-            var collection = GetAuditCollection(group.Key);
-            // El mismo documento que escribe AppendOnlyAuditWriter, no la clase
-            // serializada: una sola forma en la coleccion de aqui en adelante.
-            await collection.InsertManyAsync(group.Select(AuditDocumentSchema.ToDocument).ToList());
+            var batch = DequeueBatch(_auditQueue, Math.Min(_settings.BatchSize, pendientes - volcados));
+            if (batch.Count == 0) break;
+
+            // Group by tenant for per-tenant collections
+            foreach (var group in batch.GroupBy(e => e.TenantId))
+            {
+                var collection = GetAuditCollection(group.Key);
+                // El mismo documento que escribe AppendOnlyAuditWriter, no la clase
+                // serializada: una sola forma en la coleccion de aqui en adelante.
+                await collection.InsertManyAsync(group.Select(AuditDocumentSchema.ToDocument).ToList());
+            }
+
+            volcados += batch.Count;
         }
 
-        _logger.LogDebug("Flushed {Count} audit log entries", batch.Count);
+        if (volcados > 0) _logger.LogDebug("Flushed {Count} audit log entries", volcados);
     }
 
     private async Task FlushAccessQueueAsync()
     {
-        var batch = DequeueBatch(_accessQueue, _settings.BatchSize);
-        if (batch.Count == 0) return;
-
-        foreach (var group in batch.GroupBy(e => e.TenantId))
+        var pendientes = _accessQueue.Count;
+        var volcados = 0;
+        while (volcados < pendientes)
         {
-            var collection = GetAccessCollection(group.Key);
-            await collection.InsertManyAsync(group.ToList());
+            var batch = DequeueBatch(_accessQueue, Math.Min(_settings.BatchSize, pendientes - volcados));
+            if (batch.Count == 0) break;
+
+            foreach (var group in batch.GroupBy(e => e.TenantId))
+            {
+                var collection = GetAccessCollection(group.Key);
+                await collection.InsertManyAsync(group.ToList());
+            }
+
+            volcados += batch.Count;
         }
 
-        _logger.LogDebug("Flushed {Count} access log entries", batch.Count);
+        if (volcados > 0) _logger.LogDebug("Flushed {Count} access log entries", volcados);
     }
 
     private async Task WriteFallbackAsync()

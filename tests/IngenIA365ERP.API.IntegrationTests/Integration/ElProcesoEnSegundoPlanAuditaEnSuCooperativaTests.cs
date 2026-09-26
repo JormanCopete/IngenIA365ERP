@@ -54,7 +54,10 @@ public class ElProcesoEnSegundoPlanAuditaEnSuCooperativaTests(CentralIdentityApi
         do
         {
             await auditoria.FlushAsync();
-            var evento = await coleccion.Find(ConTexto(texto)).FirstOrDefaultAsync();
+            // El del comando (AuditBehavior) trae metadata con canal y origen; el del interceptor, con
+            // la misma fila en newValuesJson, no: se pide el primero.
+            var evento = await coleccion.Find(Builders<BsonDocument>.Filter.And(
+                ConTexto(texto), Builders<BsonDocument>.Filter.Exists("metadata"))).FirstOrDefaultAsync();
             if (evento is not null) return evento;
             await Task.Delay(500);
         } while (DateTime.UtcNow < limite);
@@ -91,7 +94,9 @@ public class ElProcesoEnSegundoPlanAuditaEnSuCooperativaTests(CentralIdentityApi
         var evento = await EsperarEventoAsync(Auditoria(a.TenantPublicId.ToString("N")), nombre);
         evento.Should().NotBeNull("el evento del comando va a la base de auditoría de la cooperativa A");
         evento!["userName"].AsString.Should().Be(Actor.NombreDelProceso);
-        (evento.Contains("ipAddress") && !evento["ipAddress"].IsBsonNull).Should().BeFalse("el proceso no tiene IP");
+        // El documento de auditoría guarda los campos ausentes como texto vacío (AuditDocumentSchema).
+        (evento.Contains("ipAddress") && !evento["ipAddress"].IsBsonNull && evento["ipAddress"].AsString.Length > 0)
+            .Should().BeFalse("el proceso no tiene IP");
         var metadata = evento.Contains("metadata") && evento["metadata"].IsBsonDocument ? evento["metadata"].AsBsonDocument : new BsonDocument();
         metadata.Values.Select(v => v.ToString()).Should().Contain(v => string.Equals(v, "proceso", StringComparison.OrdinalIgnoreCase)
             || string.Equals(v, "Process", StringComparison.OrdinalIgnoreCase), "el canal del proceso es «proceso» (T36)");

@@ -343,6 +343,9 @@ public class ContabilidadNiifTests(CentralIdentityApiFixture fx)
         // (a) abrir una opción del ERP queda en la auditoría con módulo Navigation
         var acceso = await EnviarAsync(http, admin, HttpMethod.Post, "/api/audit/access", new { route = "/contabilidad/libro-auxiliar", title = "Libro auxiliar" });
         acceso.StatusCode.Should().Be(HttpStatusCode.Accepted, $"«{await acceso.Content.ReadAsStringAsync()}»");
+        // Desde la feature 012 (T37) Navigation es un módulo encadenado: el evento queda en COR_AuditOutbox y
+        // llega a Mongo por el reenviador, que la fixture tiene apagado; se corre una pasada a mano.
+        await fx.ReenviarAuditoriaAsync(ctx.TenantPublicId);
         var navegacion = await EventosDeAuditoriaAsync(http, admin, "Navigation", "RegisterOptionAccess",
             e => (e.GetProperty("newValuesJson").GetString() ?? string.Empty).Contains("libro-auxiliar"));
         navegacion.Should().NotBeEmpty("el acceso aparece en /api/audit/logs?module=Navigation en menos de 30 s");

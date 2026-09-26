@@ -57,8 +57,13 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         .WithImage("mongo:7")
         .Build();
 
+    // Una ranura de Redis por cooperativa (TenantCacheSlotAllocator): con las 16 bases por defecto
+    // caben 15, y la colección «Inventario e2e» (feature 012) crea una cooperativa aislada por caso;
+    // pasada la decimoquinta, el aprovisionamiento fallaba con Cache.TenantSlotsExhausted y la
+    // cooperativa no llegaba a Ready. 256 bases sobran para todas las colecciones de un host.
     private readonly RedisContainer _redis = new RedisBuilder()
         .WithImage("redis:7-alpine")
+        .WithCommand("--databases", "256")
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
