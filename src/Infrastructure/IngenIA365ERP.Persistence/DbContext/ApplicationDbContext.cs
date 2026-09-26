@@ -477,6 +477,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         // mapeo de concurrencia (feature 004: ROWVERSION vs xmin).
         modelBuilder.ApplyBaseEntityConventions(Database.ProviderName);
 
+        // Feature 012: el documento genérico espera su par InventarioComercialNucleo (T440), que borra esta línea.
+        IngenIA365ERP.Persistence.Configurations.Inventory.NucleoComercialSinMigracion.ExcluirDeLasMigraciones(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
     }
 
