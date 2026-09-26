@@ -1132,6 +1132,11 @@ Reglas (FR-040, FR-041):
 | `Inventory.Count.NotFound` | 404 | | |
 | `Inventory.Count.Overlaps` · `.EmptyScope` · `.ScopeNotAvailable` · `.NotOpen` · `.CounterNotAssigned` · `.RecountRequired` · `.AdjustmentInProgress` | 422 | ver reglas | `{ countPublicId, products[] }` · `{ lines[] }` |
 | `Inventory.Count.ProductNotInScope` · `Inventory.Barcode.NotFound` | — | lectura rechazada, en `rejected[]` | `{ index }` |
+| `Inventory.Count.AlreadyOpen` **(nuevo)** | 422 | abrir o editar la definición de un conteo que ya tiene foto | `{ snapshotAt }` |
+| `Inventory.Count.RoundNotOpen` **(nuevo)** | 422 / en `rejected[]` | ronda 2 sin líneas con reconteo pendiente (toda la tanda) o de una línea que no lo pide (esa lectura) | `{ round, currentRound }` |
+
+Implementación (US11, 2026-09-26): `PUT /{id}` recibe el mismo cuerpo que `POST /`; la vista `count-differences` suma los
+filtros propios `count` y `onlyWithDifference`.
 
 ## 13. Puesta en marcha y períodos
 

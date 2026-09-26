@@ -284,6 +284,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
@@ -413,6 +415,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasMany(x => x.Captures).WithOne(c => c.SnapshotLine).HasForeignKey(c => c.SnapshotLineId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
         {
             b.Ignore("RowVersion");

@@ -71,6 +71,12 @@ public class TextosDeInventarioTests
     public void Cada_resolucion_de_diferencia_tiene_su_texto() => Cubre<TransferDiscrepancyResolution>("ResolucionesDeDiferencia");
 
     [Fact]
+    public void Cada_tipo_de_conteo_tiene_su_texto() => Cubre<CountKind>("TiposDeConteo");
+
+    [Fact]
+    public void Cada_alcance_de_conteo_tiene_su_texto() => Cubre<CountScope>("AlcancesDeConteo");
+
+    [Fact]
     public void Las_constantes_nombran_el_valor_del_dominio()
     {
         Assert.Contains($"DiferenciaFaltante = {(int)TransferDiscrepancyKind.Shortage};", Fuente, StringComparison.Ordinal);

@@ -3814,6 +3814,19 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 |---|---|---|---|
 | T325 | La cantidad del saldo inicial de cada bodega (plantilla 14, FR-089), ¿es la del **conteo físico más o menos los movimientos que la bodega tuvo en SOLIDO entre el conteo y la fecha de corte**, o la bodega **deja de operar en SOLIDO desde el conteo hasta su activación** (bodega congelada) y la cantidad es la del conteo sin más? | Conteo ± movimientos de SOLIDO hasta el corte: la bodega sigue vendiendo en SOLIDO hasta la víspera de su activación y el archivo trae la cantidad ya corregida. La importación no distingue los dos casos (recibe la cantidad final); la regla la aplica quien arma el archivo. Registrada el 2026-09-26 en la implementación de US4, sin respuesta del dueño todavía: **rige la propuesta**. | No (la carga funciona con cualquiera de las dos; cambia el procedimiento de conteo de la guía de COOFLOPAL) |
 
+### US11 · Tolerancia de reconteo y fecha del ajuste (T406, pendiente)
+
+| # | Pregunta | Propuesta por defecto | Bloquea |
+|---|---|---|---|
+| T406 | Para COOFLOPAL: ¿desde qué diferencia se exige reconteo —`Conteo.ToleranciaReconteoPorcentaje` y `Conteo.ToleranciaReconteoUnidades`, general o por bodega— y en qué fecha va el ajuste de un conteo aprobado —`Conteo.FechaDelAjuste`: la de la **foto** o la de la **aprobación**—? | Tolerancia 0 y 0 (toda diferencia se recuenta) y `Foto`. Registrada el 2026-09-26 en la implementación de US11, sin respuesta del dueño todavía: **rige la propuesta**. Los ajustes fechados en la foto sin depender de `Costeo.RetroactivosPermitidos` (D9) se preguntan en la fase de Polish, no aquí. | No (son parámetros con vigencia: se cambian sin desplegar) |
+
+**Cómo se lee la tolerancia (decisión de la implementación, 2026-09-26).** Una diferencia se **tolera** si cabe en
+cualquiera de las dos: hasta `ToleranciaReconteoUnidades` en valor absoluto, **o** hasta `ToleranciaReconteoPorcentaje` % del
+teórico de la línea. Con las dos en cero toda diferencia distinta de cero exige reconteo. Así «tolerancia de 1 unidad» funciona
+sola, sin que el porcentaje en cero la anule. Una línea de la foto que nadie contó cuenta 0 y también exige reconteo; la ronda 2
+sólo admite las líneas que la ronda 1 —ya capturada— dejó fuera de tolerancia, y después de ella vale lo recontado aunque siga
+fuera. Lo fija `ComparacionDeConteo` (casos `Domain.Tests/Inventory/Counts/Casos`).
+
 ## Riesgos
 
 - **Ruta crítica de la salida.** COOFLOPAL necesita I1 → I2 → I3 → I4, y I4 depende sólo de un contrato

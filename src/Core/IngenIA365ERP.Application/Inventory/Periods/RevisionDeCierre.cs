@@ -15,8 +15,8 @@ namespace IngenIA365ERP.Application.Inventory.Periods;
 /// vista previa (<c>GetPeriodCloseCheckQuery</c>) y el cierre (<c>CloseInventoryPeriodCommand</c>) digan lo mismo. (nuevo)
 /// <list type="bullet">
 /// <item><b>Bloquea</b>: otro mes por cerrar antes (los meses cierran en orden, para toda la cooperativa), un mes que no
-/// terminó en hora de Colombia y los conteos abiertos con foto en el mes —cableado pero vacío hasta que US11 cree los
-/// conteos—.</item>
+/// terminó en hora de Colombia y los conteos abiertos con foto en el mes (US11, T401: <c>PhysicalCount</c> en borrador con
+/// <c>CountSnapshotAt</c>; ni cerrados ni descartados).</item>
 /// <item><b>Avisa</b>: borradores y documentos en aprobación con fecha en el mes (los conteos no cuentan como borrador:
 /// son del bloqueo), despachos de traslado sin recepción con fecha en o antes del fin del mes, los recibidos hasta el fin
 /// del mes con faltantes o sobrantes sin resolver (<c>INV_TransferDiscrepancies</c> con <c>ResolvedAt</c> nulo, US10, T377) y
@@ -49,9 +49,20 @@ public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService 
         return Result.Success(new PeriodCloseCheckDto(year, month, !bloqueos.Any, bloqueos, avisos, remisiones, remisiones.Sum(r => r.Value)));
     }
 
-    /// <summary>Los conteos abiertos con foto en el mes. Los conteos físicos son de US11: hasta entonces, ninguno.</summary>
-    private static Task<IReadOnlyList<InventoryErrors.ConteoAbierto>> ConteosAbiertosAsync(DateOnly inicio, DateOnly fin, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<InventoryErrors.ConteoAbierto>>([]);
+    /// <summary>
+    /// Los conteos abiertos con foto en el mes (US11, T401; FR-047): <c>PhysicalCount</c> en borrador con foto (<c>CountSnapshotAt</c>) y la
+    /// fecha de la foto dentro del mes. Uno cerrado o descartado ya no bloquea.
+    /// </summary>
+    private async Task<IReadOnlyList<InventoryErrors.ConteoAbierto>> ConteosAbiertosAsync(DateOnly inicio, DateOnly fin, CancellationToken ct) =>
+        await db.InventoryDocuments.AsNoTracking()
+            .Where(d => d.Class == DocumentClass.PhysicalCount && d.Status == DocumentStatus.Draft && d.CountSnapshotAt != null
+                && d.OperationDate >= inicio && d.OperationDate <= fin)
+            .Join(db.Warehouses.AsNoTracking().IgnoreQueryFilters(), d => d.WarehouseId, w => (int?)w.Id,
+                (d, w) => new { d.Id, d.PublicId, w.Code, d.OperationDate })
+            .OrderBy(x => x.OperationDate).ThenBy(x => x.Id)
+            // Un conteo abierto no tiene número todavía: se numera al cerrar.
+            .Select(x => new InventoryErrors.ConteoAbierto(x.PublicId, null, x.Code, x.OperationDate))
+            .ToListAsync(ct);
 
     private async Task<CloseWarningsDto> AvisosAsync(DateOnly inicio, DateOnly fin, CancellationToken ct)
     {

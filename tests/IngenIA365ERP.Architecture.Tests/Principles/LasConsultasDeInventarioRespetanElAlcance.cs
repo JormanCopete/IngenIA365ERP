@@ -56,6 +56,13 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "ListTransfersQueryHandler",
         "GetTransferQueryHandler",
         "ListTransferDiscrepanciesQueryHandler",
+        // Fase 10, US11 (T399, T400, T396): la lista, el detalle y las capturas de los conteos, la vista previa de su ajuste y la vista
+        // count-differences.
+        "ListPhysicalCountsQueryHandler",
+        "GetPhysicalCountQueryHandler",
+        "ListCountCapturesQueryHandler",
+        "GetCountAdjustmentPreviewQueryHandler",
+        "CountDifferencesReportQueryHandler",
     ];
 
     [Fact]

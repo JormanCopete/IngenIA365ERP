@@ -48,10 +48,12 @@ public static class SqlDelCerrojo
         var setupExclusivo = pedido.Setup == ModoDeBloqueoDelSetup.Exclusivo;
         sentencias.Add(new(TablaSetup, q.Bloquear(TablaSetup, null, setupExclusivo), []));
 
-        // 2. INV_Warehouses, compartido.
+        // 2. INV_Warehouses, compartido (exclusivo sólo al abrir un conteo físico, US11).
         var bodegas = Ordenados(pedido.Bodegas);
         if (bodegas.Count > 0)
-            sentencias.Add(new(TablaBodegas, q.Bloquear(TablaBodegas, bodegas, exclusivo: false), []));
+            sentencias.Add(new(TablaBodegas, pedido.BodegasEnExclusivo
+                ? q.BloquearContraCompartidos(TablaBodegas, bodegas)
+                : q.Bloquear(TablaBodegas, bodegas, exclusivo: false), []));
 
         // 3. Documentos de origen, exclusivos.
         var origenes = Ordenados(pedido.DocumentosDeOrigen);
@@ -121,6 +123,19 @@ public static class SqlDelCerrojo
             return Pg
                 ? $"SELECT {C("Id")} FROM {T(tabla)}{filtro} ORDER BY {C("Id")} {(exclusivo ? "FOR UPDATE" : "FOR SHARE")};"
                 : $"SELECT {C("Id")} FROM {T(tabla)} WITH ({(exclusivo ? "UPDLOCK, ROWLOCK, HOLDLOCK" : "ROWLOCK, HOLDLOCK")}){filtro} ORDER BY {C("Id")};";
+        }
+
+        /// <summary>
+        /// US11 (T392): un bloqueo que excluye también a quienes tienen la fila <b>compartida</b>. En PostgreSQL <c>FOR UPDATE</c>
+        /// ya choca con <c>FOR SHARE</c>; en SQL Server <c>UPDLOCK</c> es compatible con el candado compartido de
+        /// <c>HOLDLOCK</c>, así que va <c>XLOCK</c>.
+        /// </summary>
+        public string BloquearContraCompartidos(string tabla, IReadOnlyList<int> ids)
+        {
+            var filtro = $" WHERE {C("Id")} IN ({string.Join(", ", ids.Select(i => Literal(i)))})";
+            return Pg
+                ? $"SELECT {C("Id")} FROM {T(tabla)}{filtro} ORDER BY {C("Id")} FOR UPDATE;"
+                : $"SELECT {C("Id")} FROM {T(tabla)} WITH (XLOCK, ROWLOCK, HOLDLOCK){filtro} ORDER BY {C("Id")};";
         }
 
         /// <summary>Bloqueo exclusivo de las filas cuyas claves están en la lista, por <c>Id</c>.</summary>

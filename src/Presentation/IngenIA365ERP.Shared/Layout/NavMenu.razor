@@ -120,6 +120,10 @@
             <PermissionGate Required="Inventory.Transfers.View">
                 <NavLink href="/inventario/traslados" class="nav-subitem">Traslados</NavLink>
             </PermissionGate>
+            @* US11 (T405): conteos físicos, captura con lector y ajuste aprobado. *@
+            <PermissionGate Required="Inventory.Counts.View">
+                <NavLink href="/inventario/conteos" class="nav-subitem">Conteos</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Integrity.Verify">
                 <NavLink href="/inventario/integridad" class="nav-subitem">Integridad del kardex</NavLink>
             </PermissionGate>

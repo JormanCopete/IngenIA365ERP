@@ -32,6 +32,8 @@ public class LosHechosInmutablesNoSeModifican
         // US2 (T245): el hecho del kardex y el historial del grupo contable de un producto (US1, T201).
         "KardexEntry",
         "ProductAccountingGroupChange",
+        // US11 (T389): las capturas de un conteo físico sólo se agregan (una corrección es otra captura negativa).
+        "CountCapture",
     ];
 
     /// <summary>

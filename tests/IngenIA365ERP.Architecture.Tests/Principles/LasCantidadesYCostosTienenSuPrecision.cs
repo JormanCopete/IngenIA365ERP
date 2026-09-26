@@ -87,6 +87,13 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "UnitCost", "CostoUnitario"),
         (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "ResolvedQuantityBase", "Cantidad"),
         (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "ResolutionQuantityBase", "Cantidad"),
+        // Conteos, fase 10 (US11, T391; data-model §8.1, §8.2): la foto y las capturas.
+        (Inv + "Documents/CountSnapshotLineConfiguration.cs", "TheoreticalQuantity", "Cantidad"),
+        (Inv + "Documents/CountSnapshotLineConfiguration.cs", "SnapshotUnitCost", "CostoUnitario"),
+        (Inv + "Documents/CountSnapshotLineConfiguration.cs", "MovementsAfterSnapshot", "Cantidad"),
+        (Inv + "Documents/CountSnapshotLineConfiguration.cs", "CountedQuantity", "Cantidad"),
+        (Inv + "Documents/CountSnapshotLineConfiguration.cs", "Difference", "Cantidad"),
+        (Inv + "Documents/CountCaptureConfiguration.cs", "Quantity", "Cantidad"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

@@ -168,6 +168,38 @@ public static class TextosDeInventario
         ["Resolved"] = "Resuelta",
     };
 
+    /// <summary><c>CountKind</c> (1..2). US11 (T404).</summary>
+    public static IReadOnlyDictionary<int, string> TiposDeConteo { get; } = new Dictionary<int, string>
+    {
+        [1] = "Total",
+        [2] = "Cíclico",
+    };
+
+    /// <summary><c>CountScope</c> (0..4); la clase ABC llega en I6. US11 (T404).</summary>
+    public static IReadOnlyDictionary<int, string> AlcancesDeConteo { get; } = new Dictionary<int, string>
+    {
+        [0] = "Toda la bodega",
+        [1] = "Categorías",
+        [2] = "Ubicaciones",
+        [3] = "Selección de productos",
+        [4] = "Clase ABC",
+    };
+
+    /// <summary>Los estados derivados de un conteo (texto de la API, §12). US11 (T404).</summary>
+    public static IReadOnlyDictionary<string, string> EstadosDeConteo { get; } = new Dictionary<string, string>
+    {
+        ["Draft"] = "Borrador",
+        ["Open"] = "Abierto",
+        ["Closed"] = "Cerrado",
+        ["AdjustmentPending"] = "Ajuste en aprobación",
+        ["Adjusted"] = "Ajustado",
+        ["Discarded"] = "Descartado",
+        ["Voided"] = "Anulado",
+    };
+
+    /// <summary><c>CountScope</c> de I1 que se definen en pantalla (sin la clase ABC).</summary>
+    public static readonly IReadOnlyList<int> AlcancesDeConteoDeI1 = [0, 1, 2, 3];
+
     /// <summary><c>TransferDiscrepancyKind.Shortage</c>: sus salidas son devolver, dar de baja o recibir tarde.</summary>
     public const int DiferenciaFaltante = 1;
 

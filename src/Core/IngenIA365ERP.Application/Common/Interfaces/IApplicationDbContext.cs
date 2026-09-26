@@ -242,6 +242,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
     // Feature 012 (US10, T366): faltantes y sobrantes de los traslados.
     DbSet<Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies { get; }
+    // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
+    DbSet<Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines { get; }
+    DbSet<Domain.Entities.Inventory.Documents.CountCapture> CountCaptures { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

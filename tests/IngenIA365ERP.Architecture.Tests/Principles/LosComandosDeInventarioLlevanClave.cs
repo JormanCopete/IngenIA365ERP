@@ -46,6 +46,13 @@ public class LosComandosDeInventarioLlevanClave
         "DispatchTransferCommand",
         "ReceiveTransferCommand",
         "ResolveTransferDiscrepancyCommand",
+        // Fase 10, US11 (T405): definir, abrir, capturar y cerrar un conteo, y generar su ajuste.
+        "CreatePhysicalCountCommand",
+        "UpdatePhysicalCountCommand",
+        "OpenPhysicalCountCommand",
+        "CapturePhysicalCountCommand",
+        "ClosePhysicalCountCommand",
+        "GenerateCountAdjustmentCommand",
     ];
 
     /// <summary>Carpetas de <c>src/Core/IngenIA365ERP.Application</c> cuyos comandos con ruta llevan clave. Una que no existe todavía cuenta como vacía.</summary>

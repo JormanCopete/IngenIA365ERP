@@ -63,10 +63,23 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
             : null;
         var sentido = ClasesDeDocumento.De(documento.Class).Effect == InventoryEffect.Entry ? KardexEntryKind.Entry : KardexEntryKind.Exit;
 
+        // US11 (T396): el ajuste de un conteo nombra el conteo que lo originó (informativo, no es dependencia; mensajes.md).
+        var conteo = documento.Id == 0
+            ? null
+            : await db.DocumentLinks.AsNoTracking().Where(l => l.TargetDocumentId == documento.Id && l.Kind == DocumentLinkKind.CountAdjustmentOf)
+                .Join(db.InventoryDocuments.AsNoTracking(), l => l.SourceDocumentId, d => d.Id, (l, d) => new { d.PublicId, d.Class, d.Prefix, d.Number })
+                .FirstOrDefaultAsync(ct);
+
         return new AjusteInventarioAprobadoV1
         {
             Operation = OperacionDeAjuste(documento.Class, tipo.IsTaxableWithdrawal),
             CauseCode = causa,
+            SourceDocument = conteo is null ? null : new DocumentRefV1
+            {
+                PublicId = conteo.PublicId,
+                DocumentClass = conteo.Class,
+                Number = Documents.VistaDeDocumentos.NumeroVisible(conteo.Prefix, conteo.Number) ?? string.Empty,
+            },
             Lines = await LineasDeCostoAsync(documento, filas, sentido, ct),
         };
     }

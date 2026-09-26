@@ -58,7 +58,8 @@ public sealed class ConfirmacionDeDocumento(
     ILectorDeParametros parametros,
     VistaDeDocumentos vista,
     IEnumerable<IPasoFiscalDeConfirmacion> pasosFiscales,
-    IEnumerable<IPasoDeValidacionPrevia> validacionesPrevias)
+    IEnumerable<IPasoDeValidacionPrevia> validacionesPrevias,
+    Counts.BloqueoPorConteo? bloqueoPorConteo = null)
 {
     public async Task<Result<ConfirmationResultDto>> ConfirmarAsync(PedidoDeConfirmacion pedido, CancellationToken ct)
     {
@@ -96,8 +97,12 @@ public sealed class ConfirmacionDeDocumento(
         var hoy = reloj.HoyLocal;
         var bodega = documento.WarehouseId is int b ? (await maestros.BodegasPorIdAsync([b], ct)).FirstOrDefault() : null;
         var corte = await maestros.CorteAsync(ct);
-        var comunes = ReglasDelDocumento.Evaluar(documento, tipo, bodega, corte, hoy);
+        var comunes = ReglasDelDocumento.Evaluar(documento, tipo, bodega, corte, hoy, original?.Class);
         if (comunes.Count > 0) return Falla(comunes[0]);
+
+        // US11 (T393): un producto de un conteo abierto que bloquea movimientos no se mueve en esa bodega.
+        if (bloqueoPorConteo is not null && await bloqueoPorConteo.EvaluarAsync(documento, original?.Class, ct) is { } bloqueado)
+            return Falla(bloqueado);
 
         var reglas = await efecto.ValidarAsync(contexto, ct);
         if (reglas.IsFailure) return Falla(reglas.Error);

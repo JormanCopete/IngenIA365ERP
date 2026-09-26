@@ -1,0 +1,54 @@
+{
+  "nombre": "Con las dos tolerancias en cero toda diferencia exige reconteo",
+  "descripcion": "El defecto (0 y 0): A teórico 3 contado 4 pide reconteo; B contado igual al teórico, no.",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 0
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "A",
+      "teorico": 3
+    },
+    {
+      "linea": "B",
+      "teorico": 2.5
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "A",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 4
+    },
+    {
+      "linea": "B",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 2.5
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "A",
+      "teorico": 3,
+      "movimientos": null,
+      "contado": 4,
+      "diferencia": 1,
+      "ronda": 1,
+      "reconteo": true
+    },
+    {
+      "linea": "B",
+      "teorico": 2.5,
+      "movimientos": null,
+      "contado": 2.5,
+      "diferencia": 0,
+      "ronda": 1,
+      "reconteo": false
+    }
+  ]
+}

@@ -43,7 +43,9 @@ public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
 
         foreach (var clase in ClasesDeI1)
         {
-            var delaClase = tipos.Where(t => t.GetProperty("class").GetInt32() == Numero(clase)).ToList();
+            // US11 (T397): los ajustes de conteo (CONP, CONN) son un segundo tipo de las clases de ajuste.
+            var delaClase = tipos.Where(t => t.GetProperty("class").GetInt32() == Numero(clase)
+                && t.GetProperty("code").GetString() is not ("CONP" or "CONN")).ToList();
             delaClase.Should().ContainSingle($"la semilla deja un tipo de {clase}");
             var tipo = delaClase[0];
             tipo.GetProperty("isSeeded").GetBoolean().Should().BeTrue();

@@ -1115,7 +1115,8 @@ JSON embebidos versionados (T40), no semillas.
   (con `MotivoRequest`, `ConfirmarRequest`, `AnularRequest`), `DocumentsEndpoints`, `DocumentTypesEndpoints`
   (`CrearTipoRequest`, `EditarTipoRequest`, `SecuenciaRequest`, `MotivoRequest`). Slug de catálogo
   `tipos-de-documento`. Semilla `InventoryDocumentTypesSeeder` (Order 80) con los códigos REC, FCP, NTP, DVP, AJP, AJN,
-  CIN, BAJ, SIN, TRD, TRR, MUB, CON, AJC, ANU; no siembra hasta que la base tenga `InventarioComercialNucleo`.
+  CIN, BAJ, SIN, TRD, TRR, MUB, CON, AJC, ANU —y, desde US11, CONP y CONN, los ajustes de conteo con su política—; no siembra
+  hasta que la base tenga `InventarioComercialNucleo`.
 - Existencias y kardex (fase 5, US2, T249–T267; todos **(nuevo)** salvo los ya nombrados): Domain
   `Entities/Inventory/Transactions/KardexEntry` (hecho `AuditableEntityLong`, propiedades `init`, navegaciones
   `ReversesEntry`/`AffectsEntry`) y `Entities/Inventory/Projections/{StockBalance, StockDetail, CostState}`, las cuatro con
@@ -1260,6 +1261,34 @@ JSON embebidos versionados (T40), no semillas.
   DestinoDeTrasladoDto, SucursalDeDestinoDto), `TextosDeInventario.{TiposDeDiferencia, ResolucionesDeDiferencia, EstadosDeTraslado,
   EstadosDeDiferencia, DiferenciaFaltante, ResolucionBajaDesdeTransito, ResolucionAjusteDeSobrante}` y las páginas
   `Pages/Inventario/{Traslados (/inventario/traslados), Traslado (/inventario/traslados/nuevo, /inventario/traslados/{id:guid})}.razor`
+- Conteos físicos (fase 10, US11, T382–T405; todos **(nuevo)** salvo los de data-model y api.md): Domain
+  `Entities/Inventory/Documents/{CountSnapshotLine (MarcarRonda, Cerrar), CountCapture (IHechoInmutable)}` y el motor
+  `Inventory/Counts/ComparacionDeConteo` (`ToleranciaDeReconteo`, `LineaDeFoto<T>`, `CapturaDeConteo<T>`,
+  `MovimientoPosteriorALaFoto<T>`, `PedidoDeComparacion<T>`, `ComparacionDeLinea<T>`, `PrimeraRonda`, `RondaDeReconteo`,
+  `FueraDeTolerancia`). Persistence `Configurations/Inventory/Documents/{CountSnapshotLineConfiguration
+  (UK_INV_CountSnapshotLines_Location, _Location_Lot, IX_INV_CountSnapshotLines_Product_Document), CountCaptureConfiguration
+  (IX_INV_CountCaptures_Document_Round_Line)}` en `NucleoComercialSinMigracion`; `DbSet` `CountSnapshotLines`, `CountCaptures`;
+  `PedidoDeCerrojo.BodegasEnExclusivo` y `SqlDelCerrojo` `Dialecto.BloquearContraCompartidos` (`XLOCK` en SQL Server); la semilla
+  `InventoryDocumentTypesSeeder.{AjustesDeConteo (CONP, CONN), PermisoDeAprobacionDeConteo, MotivoDeLaPoliticaDeConteo}`.
+  Application `Inventory/Counts/{ErroresDeConteos (LineaPorRecontar, CampoCriterios), CountDtos (EstadosDeConteo,
+  ReglasDeFechaDelAjuste, PhysicalCountRequest, CountSummaryDto, CountCriteriaDto, CountLineDto, CountAdjustmentRefDto,
+  PhysicalCountDto, OpenPhysicalCountResultDto, CountReadRequest, RejectedReadDto, CapturedLineDto, CaptureResultDto,
+  CountCaptureDto, ClosePhysicalCountResultDto, CountAdjustmentPreviewLineDto, CountAdjustmentPreviewDto, GeneratedAdjustmentDto,
+  CountAdjustmentResultDto), VistaDeConteos (CriterioDelConteo, ParametrosDelConteo), BloqueoPorConteo, DetalleDeConteo,
+  PhysicalCountDraftCommands (CreatePhysicalCountCommand, UpdatePhysicalCountCommand, ValidadorDeDefinicionDeConteo,
+  DefinicionDeConteo), OpenPhysicalCountCommand, CapturePhysicalCountCommand, ClosePhysicalCountCommand, CountAdjustmentCommands
+  (ReglaDelAjusteDeConteo con CausaDiferenciaDeConteo = "DIFCONTEO", GetCountAdjustmentPreviewQuery,
+  GenerateCountAdjustmentCommand, FechaDelAjusteDeConteo), CountQueries (ListPhysicalCountsQuery, GetPhysicalCountQuery,
+  ListCountCapturesQuery)}`, `Documents/Efectos/EfectoConteoFisico`, el gancho `Documents/IAntesDeConfirmarPorAprobacion` (lo llama
+  `FuenteDeAprobacionDeDocumento` antes de reentrar), `Reports/CountDifferencesReportQuery`; parámetros opcionales nuevos
+  `ReglasDelDocumento.Evaluar(claseDelOriginal)`, `ConfirmacionDeDocumento(bloqueoPorConteo)` y
+  `SaveInventoryDraftCommandHandler(bloqueoPorConteo)`; `AjusteInventarioAprobadoV1.SourceDocument` = el conteo. API
+  `Endpoints/Inventory/CountsEndpoints` (+ `CapturarRequest`, `AjusteRequest`) y la vista `count-differences`. Shared
+  `InventarioClient.Conteos` (`ClaseConteoFisico`, `ListarPersonasParaContarAsync`), `InventarioDtos.Conteos`,
+  `TextosDeInventario.{TiposDeConteo, AlcancesDeConteo, EstadosDeConteo, AlcancesDeConteoDeI1}` y las páginas
+  `Pages/Inventario/{Conteos (/inventario/conteos), Conteo (/inventario/conteos/{id:guid})}.razor`. Pruebas
+  `Domain.Tests/Inventory/Counts/{ComparacionDeConteoTests, Casos/*.json}` y `Application.Tests/Inventory/Counts/{ConteosDePrueba,
+  AbrirConteoTests, BloqueoPorConteoTests, CapturarConteoTests, CerrarYAjustarConteoTests, DescartarYAnularConteoTests}`.
   con su enlace «Traslados» en el grupo **Inventario**. Pruebas `Domain.Tests/Inventory/Transfers/TransferDiscrepancyTests`,
   `Application.Tests/Inventory/Transfers/{TrasladosDePrueba, DespachoDeTrasladoTests, RecepcionDeTrasladoTests,
   ResolverDiferenciaDeTrasladoTests, AnulacionYUbicacionesDeTrasladoTests, AlcanceDeTrasladosTests}`.
@@ -1499,7 +1528,8 @@ data-model §9.2), `Inventory.SupplierNote.{InvoiceFromOtherSupplier, InvoiceNot
 nota va contra una factura confirmada del mismo proveedor, línea por línea); traslados (US10) → `Inventory.Transfer.TransitWarehouseMissing` (nuevo, T367: la sucursal del origen no tiene bodega de tránsito
 activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, o fuera del alcance) y
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
-entradas —`AllowsPositive`—; `data { causeCode, resolution }`); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
+`Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

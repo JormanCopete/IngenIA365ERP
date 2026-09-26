@@ -70,6 +70,18 @@ public class CerrojoDeInventarioSqlTests
     }
 
     [Fact]
+    public void Abrir_un_conteo_toma_las_bodegas_en_exclusivo_en_los_dos_motores()
+    {
+        var pedido = new PedidoDeCerrojo { Bodegas = [7, 3], BodegasEnExclusivo = true };
+
+        SqlDelCerrojo.Sentencias(DatabaseProvider.PostgreSql, pedido, "Ana", Ahora)[1].Sql
+            .Should().Be("SELECT \"Id\" FROM \"dbo\".\"INV_Warehouses\" WHERE \"Id\" IN (3, 7) ORDER BY \"Id\" FOR UPDATE;");
+        SqlDelCerrojo.Sentencias(DatabaseProvider.SqlServer, pedido, "Ana", Ahora)[1].Sql
+            .Should().Be("SELECT [Id] FROM [dbo].[INV_Warehouses] WITH (XLOCK, ROWLOCK, HOLDLOCK) WHERE [Id] IN (3, 7) ORDER BY [Id];",
+                "UPDLOCK es compatible con el compartido de las confirmaciones: no las esperaría");
+    }
+
+    [Fact]
     public void SqlServer_bloquea_con_HOLDLOCK_y_UPDLOCK_ordenando_por_Id()
     {
         var s = SqlDelCerrojo.Sentencias(DatabaseProvider.SqlServer, Pedido, "Ana", Ahora);

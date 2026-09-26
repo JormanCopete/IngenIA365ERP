@@ -102,6 +102,15 @@ public class InventoryReportsEndpoints : ICarterModule
                 "Por factura del proveedor: CUFE, emisión, vencimiento, forma de pago y el estado, la fecha y la fuente del 030 y del 032.",
                 "eventos-radian", ["from", "to", "person"], ["onlyPending"]),
             (f, q) => new RadianEventsReportQuery(f, bool.TryParse(q["onlyPending"].ToString(), out var pendientes) && pendientes));
+
+        // US11 (T402): las diferencias de los conteos cerrados (valores con Inventory.Costs.Read, dentro de la consulta).
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("count-differences", "Diferencias de conteo",
+                "Por línea de cada conteo cerrado: teórico, contado, reconteo, diferencia en cantidad y valor, y el ajuste que la llevó a la existencia.",
+                "diferencias-de-conteo", ["from", "to", "warehouse"], ["count", "onlyWithDifference"]),
+            (f, q) => new CountDifferencesReportQuery(f,
+                Guid.TryParse(q["count"].ToString(), out var conteo) ? conteo : null,
+                bool.TryParse(q["onlyWithDifference"].ToString(), out var conDiferencia) && conDiferencia));
     }
 }
 

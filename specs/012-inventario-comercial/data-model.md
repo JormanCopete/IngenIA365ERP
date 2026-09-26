@@ -1225,6 +1225,13 @@ Draft, abierto o no ── descartar con motivo ──▶ Discarded (sin número
   con el negativo prohibido; si lo quedara, el ajuste se rechaza nombrando la salida
   (`Inventory.Stock.Insufficient`, `data.available`).
 - El cierre de período no se completa con conteos abiertos con foto en el mes (FR-047).
+- **Implementación (US11, 2026-09-26)**. Lo que el conteo sella y no tiene columna propia va en `CountScopeJson`
+  (`CriterioDelConteo`, Ids internos): los criterios, los **contadores declarados**, si **bloquea movimientos**
+  (`Conteo.BloquearMovimientos` de la bodega a la fecha de la foto) y **quién abrió**. La fecha de la foto es
+  `OperationDate` (hoy al abrir). Abrir toma la fila de la bodega en exclusivo contra el compartido de las confirmaciones
+  (`PedidoDeCerrojo.BodegasEnExclusivo`: `FOR UPDATE` / `XLOCK`). La foto copia las existencias distintas de cero; un conteo
+  por ubicación o total admite en la captura cualquier producto (teórico 0), uno por categorías o selección sólo el de su
+  criterio. Los tipos de ajuste de conteo sembrados son `CONP` (sobrante) y `CONN` (faltante).
 
 ### 8.1 `INV_CountSnapshotLines` — `CountSnapshotLine`
 

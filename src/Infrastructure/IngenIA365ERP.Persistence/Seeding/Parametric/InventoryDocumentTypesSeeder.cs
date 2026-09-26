@@ -17,7 +17,11 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <c>OpeningBalance</c> lleva además la política de un nivel, umbral 0 y permiso <c>Inventory.OpeningBalance.Approve</c>
 /// en <c>COR_ApprovalPolicies</c>: <b>ésta es la única siembra de esa política</b> (US4 sólo agrega la regla
 /// <c>Approvals.Policy.RequiredForClass</c>). El de <c>TransferReceipt</c> lleva la política <c>Subject = TransferDiscrepancy</c>
-/// de un nivel, umbral 0 y <c>Inventory.Transfers.Approve</c> (US10, T373). Idempotente por código: lo que la cooperativa ya tiene no se toca.
+/// de un nivel, umbral 0 y <c>Inventory.Transfers.Approve</c> (US10, T373). US11 (T397): además de un tipo por clase, los dos tipos de
+/// <b>ajuste de conteo</b> (<c>CONP</c> positivo, <c>CONN</c> negativo) con su consecutivo y su política <c>DocumentConfirmation</c> de un
+/// nivel, umbral 0 y <c>Inventory.Counts.Approve</c> —así los reconocen <c>GenerateCountAdjustmentCommand</c> y la regla
+/// <c>Approvals.Policy.RequiredForClass</c>—; el de conteo (<c>CON</c>) ya va con su consecutivo. Idempotente por código: lo que la
+/// cooperativa ya tiene no se toca.
 ///
 /// <para>
 /// Las tablas <c>INV_DocumentTypes</c>/<c>INV_DocumentSequences</c> llegan con el par <c>InventarioComercialNucleo</c>
@@ -43,6 +47,19 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
 
     public const string MotivoDeLaPoliticaDeDiferencias =
         "Política por defecto de la semilla (feature 012, US10): resolver un faltante o sobrante de traslado siempre se aprueba.";
+
+    /// <summary>US11 (T397): el permiso del nivel de la política de los tipos de ajuste de conteo.</summary>
+    public const string PermisoDeAprobacionDeConteo = "Inventory.Counts.Approve";
+
+    public const string MotivoDeLaPoliticaDeConteo =
+        "Política por defecto de la semilla (feature 012, US11): el ajuste de un conteo siempre lo aprueba alguien ajeno al conteo.";
+
+    /// <summary>US11 (T397): los tipos de ajuste de conteo, uno por clase de ajuste.</summary>
+    public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> AjustesDeConteo = new Dictionary<DocumentClass, (string, string)>
+    {
+        [DocumentClass.PositiveAdjustment] = ("CONP", "Ajuste de conteo (sobrante)"),
+        [DocumentClass.NegativeAdjustment] = ("CONN", "Ajuste de conteo (faltante)"),
+    };
 
     /// <summary>Código y nombre del tipo sembrado de cada clase de I1.</summary>
     public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> Sembrados = new Dictionary<DocumentClass, (string, string)>
@@ -129,6 +146,38 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
             if (clase.Class == DocumentClass.TransferReceipt) recepcionDeTraslado = tipo;
         }
 
+        // US11 (T397): los tipos de ajuste de conteo, con su consecutivo; su política va abajo.
+        var ajustesDeConteo = new List<InventoryDocumentType>();
+        foreach (var (clase, (codigo, nombre)) in AjustesDeConteo)
+        {
+            if (existentes.Contains(codigo))
+            {
+                if (await db.InventoryDocumentTypes.FirstOrDefaultAsync(t => t.Code == codigo, ct) is { } existente) ajustesDeConteo.Add(existente);
+                continue;
+            }
+            var tipo = new InventoryDocumentType
+            {
+                Code = codigo,
+                Name = nombre,
+                Class = clase,
+                AllWarehouses = true,
+                IsSeeded = true,
+                IsActive = true,
+                CreatedBy = SeedContext.ParametricCreatedBy,
+            };
+            tipo.Sequences.Add(new DocumentSequence
+            {
+                DocumentType = tipo,
+                Prefix = string.Empty,
+                NextValue = 1,
+                ValidFrom = desde,
+                CreatedBy = SeedContext.ParametricCreatedBy,
+            });
+            db.InventoryDocumentTypes.Add(tipo);
+            ajustesDeConteo.Add(tipo);
+            insertadas++;
+        }
+
         if (saldoInicial is not null
             && await PoliticaAsync(db, ApprovalSubjects.DocumentConfirmation, saldoInicial, PermisoDeAprobacionDelSaldoInicial, MotivoDeLaPolitica, desde, ct))
         {
@@ -139,6 +188,12 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
             && await PoliticaAsync(db, ApprovalSubjects.TransferDiscrepancy, recepcionDeTraslado, PermisoDeAprobacionDeDiferencias, MotivoDeLaPoliticaDeDiferencias, desde, ct))
         {
             insertadas++;
+        }
+
+        foreach (var tipo in ajustesDeConteo)
+        {
+            if (await PoliticaAsync(db, ApprovalSubjects.DocumentConfirmation, tipo, PermisoDeAprobacionDeConteo, MotivoDeLaPoliticaDeConteo, desde, ct))
+                insertadas++;
         }
 
         if (insertadas > 0) await db.SaveChangesAsync(ct);

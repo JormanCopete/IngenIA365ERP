@@ -31,6 +31,12 @@ public sealed class FuenteDeAprobacionDeDocumento(
 
     public async Task<Result<EstadoDeFuenteDto>> AlAprobarAsync(ApprovalRequest solicitud, CancellationToken ct)
     {
+        // US11 (T396): lo que se ajusta antes de confirmar (la fecha del ajuste de un conteo).
+        foreach (var antes in servicios.GetServices<IAntesDeConfirmarPorAprobacion>())
+        {
+            var preparado = await antes.PrepararAsync(solicitud.SourcePublicId, ct);
+            if (preparado.IsFailure) return Result.Failure<EstadoDeFuenteDto>(preparado.Error);
+        }
         var confirmacion = servicios.GetRequiredService<ConfirmacionDeDocumento>();
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(solicitud.SourcePublicId, null, PorAprobacion: true), ct);
         if (confirmada.IsFailure) return Result.Failure<EstadoDeFuenteDto>(confirmada.Error);

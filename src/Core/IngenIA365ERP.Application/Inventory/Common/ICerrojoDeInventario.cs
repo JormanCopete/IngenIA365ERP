@@ -54,6 +54,12 @@ public sealed record PedidoDeCerrojo
 
     public IReadOnlyCollection<int> Bodegas { get; init; } = [];
 
+    /// <summary>
+    /// US11 (T392): las <see cref="Bodegas"/> en <b>exclusivo</b>. Sólo lo pide abrir un conteo físico: espera a que terminen las
+    /// confirmaciones en vuelo sobre la bodega (que la toman compartida) y ninguna nueva entra mientras copia la foto. (nuevo)
+    /// </summary>
+    public bool BodegasEnExclusivo { get; init; }
+
     /// <summary><c>INV_Documents</c> de los que nace el documento (data-model §5.5).</summary>
     public IReadOnlyCollection<int> DocumentosDeOrigen { get; init; } = [];
 

@@ -37,3 +37,14 @@ public interface IConfirmacionEncadenada
 {
     Task<Result> AlConfirmarPorAprobacionAsync(Guid documentoPublicId, CancellationToken ct);
 }
+
+/// <summary>
+/// Lo que se prepara en un documento <b>antes</b> de que su última aprobación lo confirme, en la misma transacción del aprobador
+/// (feature 012, US11, T396): la fecha del ajuste de un conteo con <c>Conteo.FechaDelAjuste = Aprobacion</c> es la de la aprobación, y
+/// si el mes de su fecha cerró mientras esperaba, el primer día abierto (FR-041). La llama <c>FuenteDeAprobacionDeDocumento</c> antes de
+/// reentrar al flujo canónico; la huella de lo aprobado ya se comprobó. (nuevo)
+/// </summary>
+public interface IAntesDeConfirmarPorAprobacion
+{
+    Task<Result> PrepararAsync(Guid documentoPublicId, CancellationToken ct);
+}

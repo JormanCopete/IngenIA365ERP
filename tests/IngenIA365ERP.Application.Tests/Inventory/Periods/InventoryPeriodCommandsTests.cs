@@ -14,7 +14,7 @@ namespace IngenIA365ERP.Application.Tests.Inventory.Periods;
 /// <summary>
 /// Feature 012, T276 (FR-047; contracts/api.md §13.4; data-model §6.1–§6.3): cerrar y reabrir un mes de inventario. Sólo el
 /// siguiente al último cerrado (<c>Inventory.Period.NotNext</c> con <c>nextToClose</c>) y un mes terminado en hora de Colombia
-/// (<c>.NotEnded</c>); los conteos abiertos todavía no existen (US11) y <c>blockers.openCounts</c> sale vacío; borradores y
+/// (<c>.NotEnded</c>); un conteo abierto con foto en el mes bloquea (<c>.OpenCounts</c>, US11, T401) y uno cerrado o descartado no; borradores y
 /// mensajes avisan (<c>.WarningsNotAcknowledged</c>) y con <c>acknowledgeWarnings</c> se cierra guardando los avisos; el cierre
 /// fija <c>LastClosedDate</c>, <c>CloseVersion</c> y el valorizado por producto × bodega con el grupo a la fecha, sin filas en
 /// cero y con Σ por ámbito = <c>CostState.Value</c>, y emite <c>PeriodoInventarioCerrado</c> (<c>Close:{versión}</c>). Reabrir
@@ -65,7 +65,7 @@ public class InventoryPeriodCommandsTests
 
         var revision = await p.RevisarAsync(2026, 7);
         revision.Value.CanClose.Should().BeTrue();
-        revision.Value.Blockers.OpenCounts.Should().BeEmpty("los conteos llegan con US11");
+        revision.Value.Blockers.OpenCounts.Should().BeEmpty("no hay conteos abiertos en julio");
         revision.Value.Warnings.Drafts.Should().Be(1);
         revision.Value.Warnings.Messages.Pending.Should().Be(1, "el ajuste confirmado dejó su mensaje pendiente para Contabilidad");
 
@@ -263,5 +263,55 @@ public class InventoryPeriodCommandsTests
 
         revision.Value.Warnings.UnresolvedTransfers.Should().BeEmpty();
         revision.Value.Warnings.Any.Should().BeFalse();
+    }
+
+    // ------------------------------------------------------------------------------------- US11 (T401): conteos abiertos --
+
+    /// <summary>Un conteo de PRIN con foto el 10 de julio, en el estado pedido.</summary>
+    private static async Task<Domain.Entities.Inventory.Documents.InventoryDocument> ConteoConFotoAsync(PeriodosDePrueba p, DocumentStatus estado)
+    {
+        var db = p.K.C.Db;
+        var tipo = new Domain.Entities.Inventory.Documents.InventoryDocumentType { Code = "CON", Name = "Conteo", Class = DocumentClass.PhysicalCount, IsActive = true };
+        db.InventoryDocumentTypes.Add(tipo);
+        var conteo = new Domain.Entities.Inventory.Documents.InventoryDocument
+        {
+            Class = DocumentClass.PhysicalCount, DocumentType = tipo, OperationDate = Julio10, WarehouseId = p.K.Principal.Id, BranchId = p.K.Sucursal.Id,
+            CountKind = CountKind.Total, CountScope = CountScope.All, CountSnapshotAt = new DateTime(2026, 7, 10, 15, 0, 0, DateTimeKind.Utc), CountRound = 1,
+        };
+        if (estado == DocumentStatus.Confirmed) conteo.Confirmar(Kardex.KardexDePrueba.Usuario, DateTime.UtcNow);
+        if (estado == DocumentStatus.Discarded) conteo.Descartar(Kardex.KardexDePrueba.Usuario, DateTime.UtcNow, "se reprograma");
+        db.InventoryDocuments.Add(conteo);
+        await db.SaveChangesAsync();
+        return conteo;
+    }
+
+    [Fact]
+    public async Task Un_conteo_abierto_con_foto_en_el_mes_bloquea_el_cierre_y_lo_nombra()
+    {
+        var p = await PeriodosDePrueba.CrearAsync();
+        var conteo = await ConteoConFotoAsync(p, DocumentStatus.Draft);
+
+        var revision = await p.RevisarAsync(2026, 7);
+        revision.Value.CanClose.Should().BeFalse();
+        revision.Value.Blockers.OpenCounts.Should().ContainSingle().Which.Should().Be(new InventoryErrors.ConteoAbierto(conteo.PublicId, null, "PRIN", Julio10));
+
+        var r = await p.CerrarAsync(2026, 7);
+        r.Error.Code.Should().Be("Inventory.Period.OpenCounts");
+        Datos(r.Error).GetProperty("counts").EnumerateArray().Single().GetProperty("countPublicId").GetGuid().Should().Be(conteo.PublicId);
+        (await p.K.C.Db.InventorySetups.SingleAsync()).LastClosedDate.Should().BeNull();
+
+        (await p.RevisarAsync(2026, 8)).Value.Blockers.OpenCounts.Should().BeEmpty("la foto es de julio");
+    }
+
+    [Theory]
+    [InlineData(DocumentStatus.Confirmed)]
+    [InlineData(DocumentStatus.Discarded)]
+    public async Task Un_conteo_cerrado_o_descartado_no_bloquea(DocumentStatus estado)
+    {
+        var p = await PeriodosDePrueba.CrearAsync();
+        await ConteoConFotoAsync(p, estado);
+
+        (await p.RevisarAsync(2026, 7)).Value.Blockers.OpenCounts.Should().BeEmpty();
+        (await p.CerrarAsync(2026, 7)).IsSuccess.Should().BeTrue();
     }
 }

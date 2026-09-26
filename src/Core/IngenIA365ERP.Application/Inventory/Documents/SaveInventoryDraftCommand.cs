@@ -87,7 +87,8 @@ public sealed class SaveInventoryDraftCommandHandler(
     IDateTimeService reloj,
     EfectosDeClase efectos,
     VistaDeDocumentos vista,
-    IEnumerable<IBorradorDeGrupo>? borradoresDeGrupo = null)
+    IEnumerable<IBorradorDeGrupo>? borradoresDeGrupo = null,
+    Counts.BloqueoPorConteo? bloqueoPorConteo = null)
     : IRequestHandler<SaveInventoryDraftCommand, Result<InventoryDocumentDto>>
 {
     private readonly IReadOnlyList<IBorradorDeGrupo> _deGrupo = borradoresDeGrupo?.ToList() ?? [];
@@ -330,6 +331,8 @@ public sealed class SaveInventoryDraftCommandHandler(
         var avisos = ReglasDelDocumento.Evaluar(documento, tipo, bodega, corte, hoy).ToList();
         avisos.AddRange(delGrupo.Avisos);
         avisos.AddRange(await efecto.Value.AvisosDelBorradorAsync(new ContextoDeEfecto(documento, tipo, clase), ct));
+        // US11 (T393): lo que un conteo abierto bloquea, con el código que daría la confirmación.
+        if (bloqueoPorConteo is not null && await bloqueoPorConteo.EvaluarAsync(documento, null, ct) is { } bloqueado) avisos.Add(bloqueado);
 
         try
         {

@@ -57,6 +57,9 @@ public static class NucleoComercialSinMigracion
         "INV_SupplierInvoiceEvents",
         // Fase 9 (US10, T366): faltantes y sobrantes de los traslados.
         "INV_TransferDiscrepancies",
+        // Fase 10 (US11, T391): la foto y las capturas de los conteos físicos.
+        "INV_CountSnapshotLines",
+        "INV_CountCaptures",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

@@ -29,6 +29,8 @@
     <None Include="Taxes\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012 (T268-T271): casos dorados del motor de costeo, calculados a mano (SC-007). -->
     <None Include="Inventory\Costing\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012 (T382): casos de la comparación de un conteo físico, calculados a mano. -->
+    <None Include="Inventory\Counts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

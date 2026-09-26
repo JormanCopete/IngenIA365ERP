@@ -370,6 +370,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
     // Feature 012 (T366, US10): faltantes y sobrantes de los traslados.
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();

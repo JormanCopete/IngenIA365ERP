@@ -27,19 +27,24 @@ public static class ReglasDelDocumento
     /// <param name="bodega">La bodega de origen, si el documento tiene.</param>
     /// <param name="corte">El corte del módulo (<c>INV_Setup</c>).</param>
     /// <param name="hoy">La fecha local de Colombia.</param>
+    /// <param name="claseDelOriginal">En una anulación, la clase del anulado (US11: la de un conteo no lleva líneas).</param>
     public static IReadOnlyList<Error> Evaluar(
         InventoryDocument documento,
         InventoryDocumentType tipo,
         BodegaDelDocumento? bodega,
         CorteDeInventario corte,
-        DateOnly hoy)
+        DateOnly hoy,
+        DocumentClass? claseDelOriginal = null)
     {
         var errores = new List<Error>();
         var clase = ClasesDeDocumento.De(documento.Class);
         var esAnulacion = documento.Class == DocumentClass.Voiding;
         var vivas = documento.Lines.Where(l => !l.IsDeleted).ToList();
 
-        if (vivas.Count == 0) errores.Add(InventoryErrors.Empty());
+        // US11 (T395, T398): el conteo físico no lleva líneas de documento —su foto y sus capturas son satélites— y su anulación
+        // tampoco (copia las del original).
+        var sinLineas = documento.Class == DocumentClass.PhysicalCount || (esAnulacion && claseDelOriginal == DocumentClass.PhysicalCount);
+        if (vivas.Count == 0 && !sinLineas) errores.Add(InventoryErrors.Empty());
         if (vivas.Count > InventoryDocument.MaxLineas) errores.Add(InventoryErrors.TooManyLines());
 
         // Campos que exige el tipo (la anulación sólo exige su motivo: lo demás lo copia del original).

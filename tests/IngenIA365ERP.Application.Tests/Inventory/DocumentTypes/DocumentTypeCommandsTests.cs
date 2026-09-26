@@ -307,7 +307,9 @@ public class DocumentTypeCommandsTests
 
         var tipos = await _db.InventoryDocumentTypes.Include(t => t.Sequences).ToListAsync();
         var operables = Domain.Inventory.Documents.ClasesDeDocumento.Todas.Where(c => c.Operable()).Select(c => c.Class).ToList();
-        tipos.Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase de I1, incluida la anulación");
+        // US11 (T397): además, los dos tipos de ajuste de conteo (CONP, CONN) con su política propia.
+        var deConteo = InventoryDocumentTypesSeeder.AjustesDeConteo.Values.Select(v => v.Codigo).ToHashSet();
+        tipos.Where(t => !deConteo.Contains(t.Code)).Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase de I1, incluida la anulación");
         tipos.Should().OnlyContain(t => t.IsSeeded && t.IsActive);
         tipos.Should().OnlyContain(t => t.Sequences.Count == 1 && t.Sequences.Single().Prefix == string.Empty
             && t.Sequences.Single().ValidFrom == new DateOnly(2026, 9, 1) && t.Sequences.Single().NextValue == 1);
@@ -315,12 +317,14 @@ public class DocumentTypeCommandsTests
 
         var saldo = tipos.Single(t => t.Class == DocumentClass.OpeningBalance);
         // US10 (T373) siembra además la política de diferencias de traslado en el tipo de la recepción de traslado.
-        var politica = await _db.ApprovalPolicies.Include(p => p.Levels).SingleAsync(p => p.Subject == ApprovalSubjects.DocumentConfirmation);
+        var politica = await _db.ApprovalPolicies.Include(p => p.Levels)
+            .SingleAsync(p => p.Subject == ApprovalSubjects.DocumentConfirmation && p.DocumentTypePublicId == saldo.PublicId);
         politica.Should().BeEquivalentTo(new { Subject = ApprovalSubjects.DocumentConfirmation, DocumentTypePublicId = (Guid?)saldo.PublicId, Version = 1 },
             o => o.ExcludingMissingMembers());
         politica.Levels.Should().ContainSingle().Which.Should().BeEquivalentTo(
             new { Order = (byte)1, Threshold = 0m, PermissionCode = "Inventory.OpeningBalance.Approve" }, o => o.ExcludingMissingMembers());
-        insertadas.Should().Be(operables.Count + 2, "los tipos, la política del saldo inicial y la de diferencias de traslado (US10)");
+        insertadas.Should().Be(operables.Count + 2 + 4,
+            "los tipos, la política del saldo inicial, la de diferencias de traslado (US10) y los dos tipos de ajuste de conteo con su política (US11)");
 
         (await InventoryDocumentTypesSeeder.AplicarAsync(_db, Hoy, default)).Should().Be(0, "idempotente por código");
     }

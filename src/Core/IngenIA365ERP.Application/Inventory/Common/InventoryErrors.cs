@@ -232,7 +232,8 @@ public static class InventoryErrors
 
     public static Error CountProductsLocked(Guid countPublicId, string? displayNumber, IReadOnlyList<string> products) => new ErrorConDatos(
         "Inventory.Count.ProductsLocked",
-        $"El conteo {displayNumber} está abierto y bloquea movimientos de {string.Join(", ", products)}.",
+        // Un conteo abierto todavía no tiene número (se numera al cerrar, US11): el mensaje no lo exige.
+        $"Un conteo físico abierto{(displayNumber is null ? string.Empty : " " + displayNumber)} en la bodega bloquea los movimientos de {string.Join(", ", products)} hasta que se cierre o se descarte.",
         new { countPublicId, displayNumber, products });
 
     // ----------------------------------------------------------------------------- existencia --

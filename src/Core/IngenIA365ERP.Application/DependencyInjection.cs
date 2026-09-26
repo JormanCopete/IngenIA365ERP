@@ -197,6 +197,16 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Transfers.VistaDeTraslados>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Transfers.FuenteDeAprobacionDeDiferencia>();
         services.AddScoped<Inventory.Purchasing.RevisionDeEventosRadian>();
+        // Feature 012 (US11, T392-T399): conteos físicos. La estrategia del conteo (sin efecto ni mensajes), la vista, la guarda del
+        // bloqueo (la llaman la confirmación y el borrador), la definición y el detalle, la regla de fecha y costo del ajuste y la fecha
+        // que pone la última aprobación.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoConteoFisico>();
+        services.AddScoped<Inventory.Counts.VistaDeConteos>();
+        services.AddScoped<Inventory.Counts.BloqueoPorConteo>();
+        services.AddScoped<Inventory.Counts.DefinicionDeConteo>();
+        services.AddScoped<Inventory.Counts.DetalleDeConteo>();
+        services.AddScoped<Inventory.Counts.ReglaDelAjusteDeConteo>();
+        services.AddScoped<Inventory.Documents.IAntesDeConfirmarPorAprobacion, Inventory.Counts.FechaDelAjusteDeConteo>();
         // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
         // reintentable anidado vaciaria el ChangeTracker de afuera).
         services.AddScoped<Inventory.Documents.SaveInventoryDraftCommandHandler>();
