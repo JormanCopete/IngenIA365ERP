@@ -24,6 +24,12 @@ namespace IngenIA365ERP.Application.Inventory.Kardex;
 /// <param name="Origen">La fila del kardex de origen (la que se revierte o cuyo costo se sigue).</param>
 /// <param name="EsAnulacion">Revierte <paramref name="Origen"/> (<c>ReversesEntryId</c>).</param>
 /// <param name="LocationId">La ubicación; nula = la de la línea o, sin ella, la por defecto de la bodega.</param>
+/// <param name="AlCostoDe">
+/// US10 (T367, T368; nuevo): una entrada que viaja al costo con que salió <b>otro movimiento de esta misma llamada</b> (la entrada
+/// al tránsito del despacho, la entrada a la ubicación de destino de un movimiento entre ubicaciones). El registro la valora
+/// <see cref="ValoracionDelMovimiento.AlCostoDeOrigen"/> con el costo unitario de la salida ya calculada; si las dos quedan en el
+/// mismo ámbito de costo, el movimiento es neutro y el último costo del ámbito no cambia. Va después de su salida en la lista.
+/// </param>
 public sealed record MovimientoDeKardex(
     InventoryDocumentLine Linea,
     int WarehouseId,
@@ -32,7 +38,8 @@ public sealed record MovimientoDeKardex(
     decimal? CostoUnitario = null,
     KardexEntry? Origen = null,
     bool EsAnulacion = false,
-    int? LocationId = null);
+    int? LocationId = null,
+    MovimientoDeKardex? AlCostoDe = null);
 
 /// <summary>
 /// Los parámetros con que el registro valora a la fecha de operación: <c>Costeo.Metodo</c>, <c>Costeo.Ambito</c>,
@@ -215,14 +222,28 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
 
             var estado = estados.GetValueOrDefault((producto, ambito)) ?? EstadoDeCosto.Vacio;
             var origen = m.Origen is null ? null : new ReferenciaDeKardex(m.Origen.Id == 0 ? null : m.Origen.Id, null);
+            var (valoracion, costoQueTrae) = (m.Valoracion, m.CostoUnitario);
+            var mismoAmbitoQueSuSalida = false;
+            if (m.AlCostoDe is { } salida)
+            {
+                // US10: la entrada sigue el costo de la salida de esta misma llamada (tránsito, cambio de ubicación).
+                if (faltantes.Any(f => ReferenceEquals(f.Mov, salida))) continue;
+                var previa = plan.FirstOrDefault(x => ReferenceEquals(x.Mov, salida));
+                if (previa.Mov is null)
+                    throw new InvalidOperationException("Un movimiento AlCostoDe va después de su salida, en la misma llamada.");
+                (valoracion, costoQueTrae) = (ValoracionDelMovimiento.AlCostoDeOrigen, CostoUnitarioDe(previa.Costo));
+                mismoAmbitoQueSuSalida = previa.Ambito == ambito;
+            }
             var costo = MotorDeCosteo.Aplicar(estado,
-                new MovimientoDeCosto(m.QuantityBase, m.Valoracion, m.CostoUnitario, origen, m.EsAnulacion),
+                new MovimientoDeCosto(m.QuantityBase, valoracion, costoQueTrae, origen, m.EsAnulacion),
                 new ParametrosDeCosteo(p.Metodo, p.Montos, negativo));
             if (!costo.Admitido)
             {
                 faltantes.Add((m, ubicacion, costo.Rechazo!.Disponible, false));
                 continue;
             }
+            // Un cambio de lugar dentro del mismo ámbito no es una compra: el último costo del ámbito se conserva.
+            if (mismoAmbitoQueSuSalida) costo = costo with { Estado = costo.Estado with { LastUnitCost = estado.LastUnitCost } };
 
             estados[(producto, ambito)] = costo.Estado;
             fisicos[(producto, m.WarehouseId)] = (fisico + m.QuantityBase, reservado);
@@ -584,14 +605,18 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                     k.Kind == KardexEntryKind.Exit ? ValoracionDelMovimiento.DevolucionDeEntrada : ValoracionDelMovimiento.AlCostoDeOrigen,
                     k.UnitCost, ReferenciaDeKardex.A(revertida), EsAnulacion: true);
             else if (k.Kind == KardexEntryKind.Exit)
-                movimiento = clase == DocumentClass.SupplierReturn
-                    ? new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.DevolucionDeEntrada, k.UnitCost)
-                    : new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoVigente);
+                movimiento = clase switch
+                {
+                    DocumentClass.SupplierReturn => new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.DevolucionDeEntrada, k.UnitCost),
+                    // US10: la salida del tránsito va al costo de la línea de despacho, no al promedio.
+                    DocumentClass.TransferReceipt => new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, k.UnitCost),
+                    _ => new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoVigente),
+                };
             else if (principales.FirstOrDefault(s => s.Kind == KardexEntryKind.Exit && s.DocumentId == k.DocumentId && s.DocumentLineId == k.DocumentLineId && s.Id < k.Id) is { } salida)
                 movimiento = new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, k.UnitCost, ReferenciaDeKardex.A(salida.Id));
             else
                 movimiento = new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoIndicado, k.UnitCost);
-            var sale = k.Kind == KardexEntryKind.Exit && clase is not (DocumentClass.TransferDispatch or DocumentClass.LocationMove);
+            var sale = k.Kind == KardexEntryKind.Exit && clase is not (DocumentClass.TransferDispatch or DocumentClass.TransferReceipt or DocumentClass.LocationMove);
             return new MovimientoRegistrado(k.Id, k.DocumentId, k.OperationDate, movimiento, valor[k.Id], k.UnitCost, sale);
         }).ToList();
 
@@ -604,6 +629,15 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
     }
 
     // ------------------------------------------------------------------------------------------ apoyo --
+
+    /// <summary>El costo unitario con que salió un movimiento ya calculado (el de su línea principal, o el promedio de sus partes).</summary>
+    private static decimal CostoUnitarioDe(ResultadoDeCosteo costo)
+    {
+        var principales = costo.Lineas.Where(l => l.Kind != KardexEntryKind.CostAdjustment).ToList();
+        if (principales.Count == 1) return principales[0].UnitCost;
+        var cantidad = Math.Abs(principales.Sum(l => l.QuantityBase));
+        return cantidad == 0m ? 0m : Redondeo.CostoUnitario(Math.Abs(principales.Sum(l => l.TotalCost)) / cantidad);
+    }
 
     /// <summary>Los parámetros del registro a la fecha de operación.</summary>
     public async Task<Result<ParametrosDelKardex>> LeerParametrosAsync(DateOnly fecha, IReadOnlyCollection<int> bodegas, CancellationToken ct)

@@ -1154,6 +1154,8 @@ sucursal de **origen**.
 | `Kind` | int (`TransferDiscrepancyKind`) | no | `Shortage`, `Surplus` |
 | `QuantityBase` | `Cantidad` | no | > 0 |
 | `UnitCost` | `CostoUnitario` | sí | faltante: el de la línea de despacho; sobrante: el vigente al resolver |
+| `ResolvedQuantityBase` | `Cantidad` | no | **(nuevo, US10 T365)** lo ya resuelto por aprobaciones parciales; `DEFAULT 0`; pendiente = `QuantityBase − ResolvedQuantityBase` |
+| `ResolutionQuantityBase` | `Cantidad` | sí | **(nuevo, US10 T365)** la cantidad de la resolución pedida (la del documento que la resuelve) |
 | `Resolution` | int (`TransferDiscrepancyResolution`) | sí | pedida |
 | `ResolutionRequestedAt` · `ResolutionRequestedByUserId` · `ResolutionReason` | datetime · int FK · nvarchar(500) | sí | |
 | `AdjustmentCauseId` | int FK | sí | obligatoria en `WriteOffFromTransit` y `SurplusAdjustment` |

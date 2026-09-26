@@ -188,6 +188,14 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
         services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
         services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
+        // Feature 012 (US10, T367-T374): traslados en dos pasos y movimiento entre ubicaciones. Las tres estrategias, el cierre de las
+        // diferencias (confirma o descarta el documento que las resuelve) y su fuente de aprobación (SourceType TransferDiscrepancy).
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDespachoDeTraslado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeTraslado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoMovimientoEntreUbicaciones>();
+        services.AddScoped<Inventory.Transfers.CierreDeDiferencias>();
+        services.AddScoped<Inventory.Transfers.VistaDeTraslados>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Transfers.FuenteDeAprobacionDeDiferencia>();
         services.AddScoped<Inventory.Purchasing.RevisionDeEventosRadian>();
         // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
         // reintentable anidado vaciaria el ChangeTracker de afuera).

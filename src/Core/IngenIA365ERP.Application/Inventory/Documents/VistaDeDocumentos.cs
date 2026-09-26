@@ -29,6 +29,11 @@ public sealed class VistaDeDocumentos(
     public const string AccionDescartar = "Discard";
     public const string AccionConfirmar = "Confirm";
     public const string AccionAnular = "Void";
+    public const string AccionDespachar = "Dispatch";
+    public const string AccionRecibir = "Receive";
+
+    /// <summary>El permiso de recibir un traslado y resolver sus diferencias (US10).</summary>
+    public const string PermisoDeRecibir = "Inventory.Transfers.Receive";
 
     private readonly Dictionary<string, bool> _permisos = new(StringComparer.Ordinal);
 
@@ -95,21 +100,37 @@ public sealed class VistaDeDocumentos(
     /// Las acciones que el servidor permite (§9.2): en borrador, editar y descartar con <c>Create</c> y confirmar con
     /// <c>Confirm</c> del grupo; confirmado, anular con <c>Void</c> salvo una anulación, un documento ya anulado o un fiscal
     /// emitido (se corrige con su nota). Fuera del alcance operable, ninguna.
+    /// <para>
+    /// Traslados (US10): el borrador se <c>Dispatch</c> (no <c>Confirm</c>); el despacho en tránsito se <c>Receive</c> con
+    /// <c>Inventory.Transfers.Receive</c> y el destino en el alcance —aunque el origen no lo esté—; sólo se anula un despacho sin
+    /// recepción ni documentos vigentes que salgan de su tránsito, y una recepción nunca (se corrige con un traslado contrario).
+    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<string>> AccionesAsync(InventoryDocument documento, DocumentClassGroup grupo, CancellationToken ct)
     {
-        if (!await OperaAsync(documento, ct)) return [];
-        var p = PermisosDeGrupo.De(grupo);
         var acciones = new List<string>();
+        var esDespachoEnTransito = documento.Class == DocumentClass.TransferDispatch && documento.Status == DocumentStatus.Confirmed
+            && !await TieneDependientesAsync(documento, ct);
+        if (esDespachoEnTransito && documento.DestinationWarehouseId is int destino && await TieneAsync(PermisoDeRecibir, ct)
+            && (await alcanceDeLaPeticion.ObtenerAsync(ct)).IncluyeBodega(destino))
+        {
+            acciones.Add(AccionRecibir);
+        }
+
+        if (!await OperaAsync(documento, ct)) return acciones;
+        var p = PermisosDeGrupo.De(grupo);
         switch (documento.Status)
         {
             case DocumentStatus.Draft:
                 if (await TieneAsync(p.Create, ct)) { acciones.Add(AccionEditar); acciones.Add(AccionDescartar); }
-                if (await TieneAsync(p.Confirm, ct) && ClasesDeDocumento.De(documento.Class).ManualCreation) acciones.Add(AccionConfirmar);
+                if (await TieneAsync(p.Confirm, ct) && ClasesDeDocumento.De(documento.Class).ManualCreation)
+                    acciones.Add(grupo == DocumentClassGroup.Transfers ? AccionDespachar : AccionConfirmar);
                 break;
             case DocumentStatus.Confirmed:
                 var clase = ClasesDeDocumento.De(documento.Class);
                 if (documento.Class != DocumentClass.Voiding && documento.VoidedByDocumentId is null
+                    && documento.Class != DocumentClass.TransferReceipt
+                    && (documento.Class != DocumentClass.TransferDispatch || esDespachoEnTransito)
                     && clase.FiscalDirection != FiscalDirection.Emitted && await TieneAsync(p.Void, ct))
                 {
                     acciones.Add(AccionAnular);
@@ -118,6 +139,13 @@ public sealed class VistaDeDocumentos(
         }
         return acciones;
     }
+
+    /// <summary>¿Hay documentos vigentes que nacen de éste (una recepción, una baja desde su tránsito…)?</summary>
+    private Task<bool> TieneDependientesAsync(InventoryDocument documento, CancellationToken ct) =>
+        db.DocumentLinks.AsNoTracking()
+            .Where(l => l.SourceDocumentId == documento.Id && l.Kind != DocumentLinkKind.Voids)
+            .Join(db.InventoryDocuments.AsNoTracking(), l => l.TargetDocumentId, d => d.Id, (l, d) => d.Status)
+            .AnyAsync(s => s == DocumentStatus.PendingApproval || s == DocumentStatus.Confirmed, ct);
 
     public static string? NumeroVisible(string prefijo, long? numero) => numero is null ? null : $"{prefijo}{numero}";
 

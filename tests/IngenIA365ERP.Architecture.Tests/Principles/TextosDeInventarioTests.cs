@@ -65,8 +65,17 @@ public class TextosDeInventarioTests
     public void Cada_estado_de_activacion_tiene_su_texto() => Cubre<WarehouseActivationStatus>("ActivacionesDeBodega");
 
     [Fact]
+    public void Cada_tipo_de_diferencia_de_traslado_tiene_su_texto() => Cubre<TransferDiscrepancyKind>("TiposDeDiferencia");
+
+    [Fact]
+    public void Cada_resolucion_de_diferencia_tiene_su_texto() => Cubre<TransferDiscrepancyResolution>("ResolucionesDeDiferencia");
+
+    [Fact]
     public void Las_constantes_nombran_el_valor_del_dominio()
     {
+        Assert.Contains($"DiferenciaFaltante = {(int)TransferDiscrepancyKind.Shortage};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"ResolucionBajaDesdeTransito = {(int)TransferDiscrepancyResolution.WriteOffFromTransit};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"ResolucionAjusteDeSobrante = {(int)TransferDiscrepancyResolution.SurplusAdjustment};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"TratamientoGravado = {(int)IngenIA365ERP.Domain.Enums.Core.VatSaleTreatment.Taxed};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"EstadoBloqueado = {(int)ProductStatus.Blocked};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ClasesDeProductoDeI1 = [{(int)ProductKind.Inventoriable}, {(int)ProductKind.Service}];", Fuente, StringComparison.Ordinal);

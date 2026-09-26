@@ -16,7 +16,8 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// anulación), cada uno con su consecutivo de prefijo vacío desde el primer día del mes y <c>IsSeeded = true</c>. El de
 /// <c>OpeningBalance</c> lleva además la política de un nivel, umbral 0 y permiso <c>Inventory.OpeningBalance.Approve</c>
 /// en <c>COR_ApprovalPolicies</c>: <b>ésta es la única siembra de esa política</b> (US4 sólo agrega la regla
-/// <c>Approvals.Policy.RequiredForClass</c>). Idempotente por código: lo que la cooperativa ya tiene no se toca.
+/// <c>Approvals.Policy.RequiredForClass</c>). El de <c>TransferReceipt</c> lleva la política <c>Subject = TransferDiscrepancy</c>
+/// de un nivel, umbral 0 y <c>Inventory.Transfers.Approve</c> (US10, T373). Idempotente por código: lo que la cooperativa ya tiene no se toca.
 ///
 /// <para>
 /// Las tablas <c>INV_DocumentTypes</c>/<c>INV_DocumentSequences</c> llegan con el par <c>InventarioComercialNucleo</c>
@@ -36,6 +37,12 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
     public const string PermisoDeAprobacionDelSaldoInicial = "Inventory.OpeningBalance.Approve";
 
     public const string MotivoDeLaPolitica = "Política por defecto de la semilla (feature 012): el saldo inicial siempre se aprueba.";
+
+    /// <summary>US10 (T373): el permiso del nivel de la política de diferencias de traslado sembrada.</summary>
+    public const string PermisoDeAprobacionDeDiferencias = "Inventory.Transfers.Approve";
+
+    public const string MotivoDeLaPoliticaDeDiferencias =
+        "Política por defecto de la semilla (feature 012, US10): resolver un faltante o sobrante de traslado siempre se aprueba.";
 
     /// <summary>Código y nombre del tipo sembrado de cada clase de I1.</summary>
     public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> Sembrados = new Dictionary<DocumentClass, (string, string)>
@@ -80,6 +87,7 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
 
         var insertadas = 0;
         InventoryDocumentType? saldoInicial = null;
+        InventoryDocumentType? recepcionDeTraslado = null;
         foreach (var clase in ClasesDeDocumento.Todas.Where(c => c.Operable()))
         {
             if (!Sembrados.TryGetValue(clase.Class, out var sembrado)) continue;
@@ -87,6 +95,8 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
             {
                 if (clase.Class == DocumentClass.OpeningBalance)
                     saldoInicial = await db.InventoryDocumentTypes.FirstOrDefaultAsync(t => t.Code == sembrado.Codigo, ct);
+                if (clase.Class == DocumentClass.TransferReceipt)
+                    recepcionDeTraslado = await db.InventoryDocumentTypes.FirstOrDefaultAsync(t => t.Code == sembrado.Codigo, ct);
                 continue;
             }
 
@@ -116,31 +126,44 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
             db.InventoryDocumentTypes.Add(tipo);
             insertadas++;
             if (clase.Class == DocumentClass.OpeningBalance) saldoInicial = tipo;
+            if (clase.Class == DocumentClass.TransferReceipt) recepcionDeTraslado = tipo;
         }
 
-        if (saldoInicial is not null)
+        if (saldoInicial is not null
+            && await PoliticaAsync(db, ApprovalSubjects.DocumentConfirmation, saldoInicial, PermisoDeAprobacionDelSaldoInicial, MotivoDeLaPolitica, desde, ct))
         {
-            var clave = ApprovalPolicy.ClaveDe(ApprovalPolicy.ModuloInventario, ApprovalSubjects.DocumentConfirmation, saldoInicial.PublicId);
-            if (!await db.ApprovalPolicies.IgnoreQueryFilters().AnyAsync(p => p.PolicyKey == clave, ct))
-            {
-                db.ApprovalPolicies.Add(new ApprovalPolicy
-                {
-                    Module = ApprovalPolicy.ModuloInventario,
-                    Subject = ApprovalSubjects.DocumentConfirmation,
-                    DocumentTypePublicId = saldoInicial.PublicId,
-                    PolicyKey = clave,
-                    Version = 1,
-                    ValidFrom = desde,
-                    Reason = MotivoDeLaPolitica,
-                    CreatedBy = SeedContext.ParametricCreatedBy,
-                    Levels = [new ApprovalPolicyLevel { Order = 1, Threshold = 0m, PermissionCode = PermisoDeAprobacionDelSaldoInicial, CreatedBy = SeedContext.ParametricCreatedBy }],
-                });
-                insertadas++;
-            }
+            insertadas++;
+        }
+        // US10 (T373): resolver una diferencia de traslado se aprueba con la política del tipo de la recepción de traslado.
+        if (recepcionDeTraslado is not null
+            && await PoliticaAsync(db, ApprovalSubjects.TransferDiscrepancy, recepcionDeTraslado, PermisoDeAprobacionDeDiferencias, MotivoDeLaPoliticaDeDiferencias, desde, ct))
+        {
+            insertadas++;
         }
 
         if (insertadas > 0) await db.SaveChangesAsync(ct);
         return insertadas;
+    }
+
+    /// <summary>Una política de un nivel, umbral 0, para el sujeto y el tipo, si la serie no existe. Devuelve si la agregó.</summary>
+    private static async Task<bool> PoliticaAsync(IApplicationDbContext db, string sujeto, InventoryDocumentType tipo, string permiso, string motivo,
+        DateOnly desde, CancellationToken ct)
+    {
+        var clave = ApprovalPolicy.ClaveDe(ApprovalPolicy.ModuloInventario, sujeto, tipo.PublicId);
+        if (await db.ApprovalPolicies.IgnoreQueryFilters().AnyAsync(p => p.PolicyKey == clave, ct)) return false;
+        db.ApprovalPolicies.Add(new ApprovalPolicy
+        {
+            Module = ApprovalPolicy.ModuloInventario,
+            Subject = sujeto,
+            DocumentTypePublicId = tipo.PublicId,
+            PolicyKey = clave,
+            Version = 1,
+            ValidFrom = desde,
+            Reason = motivo,
+            CreatedBy = SeedContext.ParametricCreatedBy,
+            Levels = [new ApprovalPolicyLevel { Order = 1, Threshold = 0m, PermissionCode = permiso, CreatedBy = SeedContext.ParametricCreatedBy }],
+        });
+        return true;
     }
 
     /// <summary>Hoy en Colombia (−05:00 fijo, como <c>IDateTimeService.HoyLocal</c>).</summary>

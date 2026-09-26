@@ -51,6 +51,11 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "ListPurchaseReceiptsQueryHandler",
         "ListSupplierInvoicesQueryHandler",
         "RadianEventsReportQueryHandler",
+        // Fase 9, US10 (T374): la lista y el detalle de traslados (origen o destino) y sus diferencias. Los destinos permitidos
+        // (ListTransferDestinationsQueryHandler) no filtran a propósito: son todas las operativas activas (api.md §17.2).
+        "ListTransfersQueryHandler",
+        "GetTransferQueryHandler",
+        "ListTransferDiscrepanciesQueryHandler",
     ];
 
     [Fact]

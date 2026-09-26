@@ -1231,6 +1231,38 @@ JSON embebidos versionados (T40), no semillas.
   `Application.Tests/Inventory/Purchasing/{ComprasDePrueba (+ AlertasDePrueba), RecepcionDeCompraTests, FacturaDeProveedorTests,
   NotaDeProveedorTests, DevolucionAProveedorTests, CompraDirectaCommandTests, EventosRadianTests, LectorDeFacturaUblTests}` y sus
   `Muestras/*.xml`.
+- Traslados en dos pasos (fase 9, US10, T359–T381; todos **(nuevo)** salvo los de data-model y api.md): Domain
+  `Entities/Inventory/Documents/TransferDiscrepancy` (`EstadoPendiente/EnAprobacion/Resuelta`, `ResolucionesAdmitidas`, `ExigeCausa`,
+  `Admite`, `Pendiente()`, `PedirResolucion`, `VolverAPendiente`, `Resolver`; columnas nuevas `ResolvedQuantityBase` —lo ya resuelto
+  por aprobaciones parciales— y `ResolutionQuantityBase` —la cantidad pedida—). Persistence
+  `Configurations/Inventory/Documents/TransferDiscrepancyConfiguration` (`UK_INV_TransferDiscrepancies_Receipt_DispatchLine_Kind`,
+  `IX_INV_TransferDiscrepancies_ResolvedAt`, `IX_INV_TransferDiscrepancies_DispatchDocumentId`) en `NucleoComercialSinMigracion`;
+  `DbSet` `TransferDiscrepancies`; la semilla `InventoryDocumentTypesSeeder.{PermisoDeAprobacionDeDiferencias,
+  MotivoDeLaPoliticaDeDiferencias}`. Application: `MovimientoDeKardex.AlCostoDe` (una entrada al costo de la salida de la misma
+  llamada: tránsito y cambio de ubicación; en el mismo ámbito no mueve el último costo); `Documents/Efectos/{EfectoDespachoDeTraslado,
+  EfectoRecepcionDeTraslado, EfectoMovimientoEntreUbicaciones, ReglasDeTraslado (ReversionNeutraAsync: la anulación de un cambio de
+  lugar sin VoidDifference)}`; en `EfectoDeAjuste` los ganchos `MovimientosAsync` y `AdmiteTransitoAsync` (sólo `EfectoDeBaja` admite
+  el tránsito, cuando resuelve un faltante `WriteOffFromTransit`, y sale al costo del despacho); `VistaDeDocumentos.{AccionDespachar
+  = "Dispatch", AccionRecibir = "Receive", PermisoDeRecibir}`; `EmisionDeInventario.{TrasladoDespachadoAsync,
+  TrasladoRecibidoAsync}`; `Inventory/Transfers/{ErroresDeTraslados (CampoDestino = "destinationWarehouse", CampoUbicacionDeDestino =
+  "toLocation"), TransferDtos (EstadosDeTraslado, TransferSummaryDto, TransferLineDto, TransferDto, TransferRefDto,
+  ResolvingDocumentDto, TransferDiscrepancyDto, DiferenciaCreadaDto, ReceiveTransferResultDto, ResolveTransferDiscrepancyResultDto,
+  TransferDestinationDto), DispatchTransferCommand, ReceiveTransferCommand (+ LineaRecibidaRequest), ResolveTransferDiscrepancyCommand,
+  CierreDeDiferencias, FuenteDeAprobacionDeDiferencia (SourceType TransferDiscrepancy), TransferQueries (VistaDeTraslados,
+  ListTransfersQuery, GetTransferQuery, ListTransferDiscrepanciesQuery)}`; `Inventory/Warehouses/ListTransferDestinationsQuery`
+  (`Proposito = "TransferDestination"`). Vínculo: la baja desde el tránsito consume la línea de despacho con `ReceiptOf` (lo que sale
+  del tránsito deja de contar «en tránsito»; la clase del destino dice qué fue); la devolución al origen, con `ReturnOf`. API
+  `Endpoints/Inventory/TransfersEndpoints` (+ `RecibirTrasladoRequest`, `ResolverDiferenciaRequest`; ruta auxiliar
+  `GET /transfers/destinations` con `Transfers.Create`, la misma consulta que `GET /warehouses?purpose=TransferDestination`). Shared
+  `InventarioClient.Traslados` (`ClaseDespachoDeTraslado`), `InventarioDtos.Traslados` (FiltroDeTraslados, ResumenDeTrasladoDto,
+  LineaDeTrasladoDto, TrasladoDeLaDiferenciaDto, DocumentoQueResuelveDto, DiferenciaDeTrasladoDto, TrasladoDto, LineaRecibidaRequest,
+  RecibirTrasladoRequest, DiferenciaCreadaDto, ResultadoDeRecepcionDto, ResolverDiferenciaRequest, ResultadoDeResolucionDto,
+  DestinoDeTrasladoDto, SucursalDeDestinoDto), `TextosDeInventario.{TiposDeDiferencia, ResolucionesDeDiferencia, EstadosDeTraslado,
+  EstadosDeDiferencia, DiferenciaFaltante, ResolucionBajaDesdeTransito, ResolucionAjusteDeSobrante}` y las páginas
+  `Pages/Inventario/{Traslados (/inventario/traslados), Traslado (/inventario/traslados/nuevo, /inventario/traslados/{id:guid})}.razor`
+  con su enlace «Traslados» en el grupo **Inventario**. Pruebas `Domain.Tests/Inventory/Transfers/TransferDiscrepancyTests`,
+  `Application.Tests/Inventory/Transfers/{TrasladosDePrueba, DespachoDeTrasladoTests, RecepcionDeTrasladoTests,
+  ResolverDiferenciaDeTrasladoTests, AnulacionYUbicacionesDeTrasladoTests, AlcanceDeTrasladosTests}`.
 - Puesta en marcha (fase 7, US4, T297–T324; todos **(nuevo)** salvo los de data-model y api.md): Domain
   `Entities/Inventory/GoLive/{WarehouseActivation (LargoDelMotivo), LegacyFigure (+ AccountingGroupId, columna nueva)}` y en
   `Warehouse` los métodos `FijarFechaDeCorte(DateOnly, bool conSaldoConfirmado = false)`, `Activar(DateOnly, int, DateTimeOffset)`
@@ -1464,7 +1496,10 @@ grupo del archivo no es el del producto a la fecha), `Inventory.Activation.{Open
 AccountingUnavailable, AlreadyActive, Difference, AcceptDifferenceNotAllowed (data.permissionCode)}`; compras (US9) → `Inventory.Purchase.GoodsWithoutReceipt` (nuevo, T341: una línea de mercancía de la factura sin línea de
 recepción; sin recepción sólo van servicios), `Inventory.SupplierInvoice.IssueDateInvalid` (nuevo, T339: emisión posterior a hoy,
 data-model §9.2), `Inventory.SupplierNote.{InvoiceFromOtherSupplier, InvoiceNotConfirmed, InvoiceLineRequired}` (nuevos, T342: la
-nota va contra una factura confirmada del mismo proveedor, línea por línea); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+nota va contra una factura confirmada del mismo proveedor, línea por línea); traslados (US10) → `Inventory.Transfer.TransitWarehouseMissing` (nuevo, T367: la sucursal del origen no tiene bodega de tránsito
+activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, o fuera del alcance) y
+`Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
+entradas —`AllowsPositive`—; `data { causeCode, resolution }`); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

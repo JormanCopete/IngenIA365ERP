@@ -82,6 +82,11 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Periods/PeriodClosingBalanceConfiguration.cs", "Quantity", "Cantidad"),
         (Inv + "Periods/PeriodClosingBalanceConfiguration.cs", "Value", "Monto"),
         (Inv + "Projections/CostStateConfiguration.cs", "LastUnitCost", "CostoUnitario"),
+        // Traslados, fase 9 (US10, T366; data-model §7.1): faltantes y sobrantes.
+        (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "QuantityBase", "Cantidad"),
+        (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "UnitCost", "CostoUnitario"),
+        (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "ResolvedQuantityBase", "Cantidad"),
+        (Inv + "Documents/TransferDiscrepancyConfiguration.cs", "ResolutionQuantityBase", "Cantidad"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

@@ -65,9 +65,13 @@ public class WarehousesEndpoints : ICarterModule
     {
         var g = app.MapGroup("/api/inventory/warehouses").WithTags("Inventory Warehouses").RequireAuthorization();
 
+        // US10 (T375): ?purpose=TransferDestination devuelve los destinos de un traslado (todas las operativas activas, fuera del
+        // alcance, sólo con Transfers.Create). Quien no ve bodegas los pide por GET /api/inventory/transfers/destinations.
         g.MapGet("/", async (Guid? branchPublicId, Guid? typePublicId, WarehouseActivationStatus? activationStatus, bool? includeTransit,
-                    bool? includeInactive, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ListWarehousesQuery(branchPublicId, typePublicId, activationStatus, includeTransit ?? false, includeInactive ?? false), ct))
+                    bool? includeInactive, string? purpose, ISender sender, CancellationToken ct) =>
+                string.Equals(purpose, ListTransferDestinationsQuery.Proposito, StringComparison.Ordinal)
+                    ? (object)await sender.Send(new ListTransferDestinationsQuery(), ct)
+                    : await sender.Send(new ListWarehousesQuery(branchPublicId, typePublicId, activationStatus, includeTransit ?? false, includeInactive ?? false), ct))
             .WithName("Inventory_Warehouses_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetWarehouseQuery(id), ct))

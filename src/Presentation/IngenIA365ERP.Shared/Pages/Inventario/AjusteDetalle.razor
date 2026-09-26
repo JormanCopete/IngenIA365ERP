@@ -113,6 +113,7 @@
                 <thead>
                     <tr>
                         <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th>Ubicación</th>
+                        @if (EsMovimiento) { <th>Hacia la ubicación</th> }
                         @if (MuestraCosto) { <th class="numero">Costo unitario</th> }
                         @if (_doc?.Lines.Any(l => l.TotalCost is not null) == true) { <th class="numero">Costo total</th> }
                         @if (Editable) { <th></th> }
@@ -148,6 +149,19 @@
                                 }
                                 else { @(guardada?.Location?.Code ?? "Por defecto") }
                             </td>
+                            @if (EsMovimiento)
+                            {
+                                <td>
+                                    @if (Editable)
+                                    {
+                                        <select class="e-input" value="@(l.Hacia?.ToString() ?? "")" @onchange="@(e => l.Hacia = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)" @onblur="@(() => GuardarAlSalirAsync())">
+                                            <option value="">Elija…</option>
+                                            @foreach (var u in _ubicaciones) { <option value="@u.PublicId">@u.Code</option> }
+                                        </select>
+                                    }
+                                    else { @guardada?.ToLocation?.Code }
+                                </td>
+                            }
                             @if (MuestraCosto)
                             {
                                 <td class="numero">
@@ -223,6 +237,7 @@
         public decimal Cantidad { get; set; } = 1m;
         public decimal? Costo { get; set; }
         public Guid? Ubicacion { get; set; }
+        public Guid? Hacia { get; set; }
     }
 
     private sealed class Formulario
@@ -260,6 +275,7 @@
     private bool Puede(string accion) => _doc?.AllowedActions.Contains(accion) == true;
     private int? Clase => _doc?.Class ?? _tipos.FirstOrDefault(t => t.PublicId == _f.Tipo)?.Class;
     private bool ExigeCausa => Clase is InventarioClient.ClasesDeAjuste.Negativo or InventarioClient.ClasesDeAjuste.Baja;
+    private bool EsMovimiento => Clase == InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones;
     private bool MuestraCosto => Clase == InventarioClient.ClasesDeAjuste.Positivo || _doc?.Lines.Any(l => l.UnitCost is not null) == true;
 
     private IEnumerable<CausaDeAjusteDto> CausasDeLaClase => _causas.Where(c => c.IsActive
@@ -276,7 +292,10 @@
             var causas = Inventario.ListarCausasAsync();
             var centros = Http.TryGetListAsync<ItemDeCatalogo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
             await Task.WhenAll(tipos, bodegas, causas, centros);
-            _tipos = tipos.Result.IsSuccess ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && t.Class is >= 10 and <= 13)] : [];
+            // US10 (T368): el movimiento entre ubicaciones (clase 18) va por esta misma ruta.
+            _tipos = tipos.Result.IsSuccess
+                ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && (t.Class is >= 10 and <= 13 || t.Class == InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones))]
+                : [];
             _bodegas = bodegas.Result.IsSuccess ? [.. (bodegas.Result.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
             _causas = causas.Result.IsSuccess ? [.. causas.Result.Value ?? []] : [];
             _centros = centros.Result;
@@ -317,7 +336,7 @@
             {
                 LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
                 UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Costo = doc.Status == 0 ? l.UnitCost : null,
-                Ubicacion = l.Location?.PublicId,
+                Ubicacion = l.Location?.PublicId, Hacia = l.ToLocation?.PublicId,
             }).ToList(),
         };
     }
@@ -376,7 +395,8 @@
             string.IsNullOrWhiteSpace(_f.Motivo) ? null : _f.Motivo, _f.Causa, string.IsNullOrWhiteSpace(_f.Notas) ? null : _f.Notas, null, null,
             _doc?.RowVersion,
             _f.Lineas.Select(l => new LineaDeBorradorRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad,
-                UnitCost: Clase == InventarioClient.ClasesDeAjuste.Positivo ? l.Costo : null, LocationPublicId: l.Ubicacion)).ToList());
+                UnitCost: Clase == InventarioClient.ClasesDeAjuste.Positivo ? l.Costo : null, LocationPublicId: l.Ubicacion,
+                ToLocationPublicId: EsMovimiento ? l.Hacia : null)).ToList());
         var r = await Inventario.GuardarAjusteAsync(_doc?.PublicId, request, _claveGuardar);
         if (!r.IsSuccess || r.Value is null)
         {

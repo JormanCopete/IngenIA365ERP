@@ -55,6 +55,8 @@ public static class NucleoComercialSinMigracion
         // Fase 8 (US9, T337): el documento del proveedor y sus eventos RADIAN.
         "INV_SupplierInvoiceDetails",
         "INV_SupplierInvoiceEvents",
+        // Fase 9 (US10, T366): faltantes y sobrantes de los traslados.
+        "INV_TransferDiscrepancies",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

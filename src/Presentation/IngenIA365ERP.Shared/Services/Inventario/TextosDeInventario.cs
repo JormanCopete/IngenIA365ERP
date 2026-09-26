@@ -133,6 +133,48 @@ public static class TextosDeInventario
         [1] = "Activa",
     };
 
+    /// <summary><c>TransferDiscrepancyKind</c> (1..2). US10 (T379).</summary>
+    public static IReadOnlyDictionary<int, string> TiposDeDiferencia { get; } = new Dictionary<int, string>
+    {
+        [1] = "Faltante",
+        [2] = "Sobrante",
+    };
+
+    /// <summary><c>TransferDiscrepancyResolution</c> (1..4). US10 (T379).</summary>
+    public static IReadOnlyDictionary<int, string> ResolucionesDeDiferencia { get; } = new Dictionary<int, string>
+    {
+        [1] = "Devolver al origen",
+        [2] = "Baja desde el tránsito",
+        [3] = "Recepción tardía",
+        [4] = "Ajuste positivo del sobrante",
+    };
+
+    /// <summary>Los estados derivados de un traslado (texto de la API, §11). US10 (T379).</summary>
+    public static IReadOnlyDictionary<string, string> EstadosDeTraslado { get; } = new Dictionary<string, string>
+    {
+        ["Draft"] = "Borrador",
+        ["PendingApproval"] = "En aprobación",
+        ["InTransit"] = "En tránsito",
+        ["Received"] = "Recibido",
+        ["ReceivedWithDiscrepancies"] = "Recibido con diferencias",
+        ["Voided"] = "Anulado",
+    };
+
+    /// <summary>Los estados de una diferencia de traslado (texto de la API, §11). US10 (T379).</summary>
+    public static IReadOnlyDictionary<string, string> EstadosDeDiferencia { get; } = new Dictionary<string, string>
+    {
+        ["Pending"] = "Pendiente",
+        ["InApproval"] = "En aprobación",
+        ["Resolved"] = "Resuelta",
+    };
+
+    /// <summary><c>TransferDiscrepancyKind.Shortage</c>: sus salidas son devolver, dar de baja o recibir tarde.</summary>
+    public const int DiferenciaFaltante = 1;
+
+    /// <summary><c>TransferDiscrepancyResolution.WriteOffFromTransit</c> y <c>.SurplusAdjustment</c>: exigen causa.</summary>
+    public const int ResolucionBajaDesdeTransito = 2;
+    public const int ResolucionAjusteDeSobrante = 4;
+
     /// <summary>Las clases de producto que se crean en I1 (<c>Inventoriable</c>, <c>Service</c>).</summary>
     public static readonly IReadOnlyList<int> ClasesDeProductoDeI1 = [1, 2];
 

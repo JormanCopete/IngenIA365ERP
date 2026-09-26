@@ -76,7 +76,7 @@ public abstract class EfectoDeAjuste(
             if (errores.Count > 0) return Result.Failure(errores[0]);
             var deLaClase = await ReglasDeLaClaseAsync(contexto, ct);
             if (deLaClase.Count > 0) return Result.Failure(deLaClase[0]);
-            movimientos = Movimientos(documento);
+            movimientos = await MovimientosAsync(contexto, ct);
         }
 
         if (movimientos.Count == 0) return Result.Success();
@@ -96,7 +96,7 @@ public abstract class EfectoDeAjuste(
 
     public override async Task<Result> AplicarAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
-        var registrado = await registro.RegistrarAsync(contexto.Documento, Movimientos(contexto.Documento), ct);
+        var registrado = await registro.RegistrarAsync(contexto.Documento, await MovimientosAsync(contexto, ct), ct);
         if (registrado.IsFailure) return Result.Failure(registrado.Error);
         _registrados[contexto.Documento.PublicId] = registrado.Value;
         return Result.Success();
@@ -129,6 +129,19 @@ public abstract class EfectoDeAjuste(
 
     // ------------------------------------------------------------------------------------------------ apoyo --
 
+    /// <summary>
+    /// Los movimientos del documento: uno por línea viva (<see cref="Movimientos"/>). La baja desde el tránsito de una diferencia de
+    /// traslado (US10) los valora al costo del despacho.
+    /// </summary>
+    protected virtual Task<IReadOnlyList<MovimientoDeKardex>> MovimientosAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult(Movimientos(contexto.Documento));
+
+    /// <summary>
+    /// ¿Admite el tránsito como bodega? Ningún ajuste lo admite, salvo la baja que resuelve un faltante de traslado
+    /// (<see cref="EfectoDeBaja"/>, US10).
+    /// </summary>
+    protected virtual Task<bool> AdmiteTransitoAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(false);
+
     /// <summary>Un movimiento por línea viva, en orden, en la bodega del documento y en unidad base.</summary>
     protected IReadOnlyList<MovimientoDeKardex> Movimientos(InventoryDocument documento)
     {
@@ -148,7 +161,8 @@ public abstract class EfectoDeAjuste(
         var errores = new List<Error>();
         var documento = contexto.Documento;
         if (documento.WarehouseId is int bodegaId
-            && (await maestros.BodegasPorIdAsync([bodegaId], ct)).FirstOrDefault() is { EsTransito: true } transito)
+            && (await maestros.BodegasPorIdAsync([bodegaId], ct)).FirstOrDefault() is { EsTransito: true } transito
+            && !await AdmiteTransitoAsync(contexto, ct))
         {
             errores.Add(InventoryErrors.TransitNotAllowed(transito.Code));
         }

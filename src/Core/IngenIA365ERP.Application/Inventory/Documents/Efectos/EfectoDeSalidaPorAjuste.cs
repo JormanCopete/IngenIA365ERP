@@ -81,7 +81,15 @@ public sealed class EfectoDeConsumoInterno(
     }
 }
 
-/// <summary><c>WriteOff</c>: baja por daño, vencimiento, hurto o destrucción, con causa obligatoria y soportes (acta, denuncia). (nuevo)</summary>
+/// <summary>
+/// <c>WriteOff</c>: baja por daño, vencimiento, hurto o destrucción, con causa obligatoria y soportes (acta, denuncia). (nuevo)
+/// <para>
+/// US10 (T371): la <b>baja desde el tránsito</b> que resuelve un faltante de traslado (<c>WriteOffFromTransit</c>) es la única salida
+/// que admite la bodega de tránsito, y sale al costo de la línea de despacho (el de la diferencia), no al promedio: así el tránsito
+/// queda en cero exacto y el valor del traslado no se mueve. La reconoce por la diferencia que la tiene como documento que la
+/// resuelve.
+/// </para>
+/// </summary>
 public sealed class EfectoDeBaja(
     RegistroDeKardex registro, ReversionDeKardex reversion, EmisionDeInventario emision, IMaestrosDelDocumento maestros,
     IPermissionChecker permisos, IApplicationDbContext db)
@@ -90,4 +98,26 @@ public sealed class EfectoDeBaja(
     public override DocumentClass Clase => DocumentClass.WriteOff;
 
     protected override bool ExigeCausa => true;
+
+    protected override async Task<bool> AdmiteTransitoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        await FaltanteQueResuelveAsync(contexto.Documento, ct) is not null;
+
+    protected override async Task<IReadOnlyList<MovimientoDeKardex>> MovimientosAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        var faltante = await FaltanteQueResuelveAsync(contexto.Documento, ct);
+        if (faltante is null || contexto.Documento.WarehouseId is not int transito) return Movimientos(contexto.Documento);
+        return contexto.Documento.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m).OrderBy(l => l.LineNumber)
+            .Select(l => new MovimientoDeKardex(l, transito, -l.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, faltante.UnitCost ?? 0m,
+                LocationId: l.LocationId))
+            .ToList();
+    }
+
+    /// <summary>El faltante de traslado que esta baja resuelve (en aprobación), o nulo.</summary>
+    private async Task<Domain.Entities.Inventory.Documents.TransferDiscrepancy?> FaltanteQueResuelveAsync(InventoryDocument documento, CancellationToken ct) =>
+        documento.Id == 0
+            ? null
+            : await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(Db.TransferDiscrepancies,
+                d => d.ResolutionDocumentId == documento.Id && d.Resolution == TransferDiscrepancyResolution.WriteOffFromTransit && d.ResolvedAt == null, ct);
+
+    private IApplicationDbContext Db { get; } = db;
 }

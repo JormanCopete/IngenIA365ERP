@@ -42,6 +42,10 @@ public class LosComandosDeInventarioLlevanClave
         // Fase 8, US9 (T358): la compra directa y el registro de un evento RADIAN hecho por fuera.
         "ConfirmDirectPurchaseCommand",
         "RegisterExternalRadianEventCommand",
+        // Fase 9, US10 (T381): despachar, recibir y resolver una diferencia de traslado.
+        "DispatchTransferCommand",
+        "ReceiveTransferCommand",
+        "ResolveTransferDiscrepancyCommand",
     ];
 
     /// <summary>Carpetas de <c>src/Core/IngenIA365ERP.Application</c> cuyos comandos con ruta llevan clave. Una que no existe todavía cuenta como vacía.</summary>

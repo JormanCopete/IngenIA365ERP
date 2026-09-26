@@ -196,4 +196,72 @@ public class InventoryPeriodCommandsTests
         julio.ClosingVersion.Should().Be(2);
         julio.ReopenReason.Should().Be("Ajuste de costo tardío");
     }
+
+    // ------------------------------------------------------------------------ US10 (T377): diferencias de traslado --
+
+    /// <summary>Un despacho y su recepción de julio, confirmados, con una diferencia de <paramref name="cantidad"/>.</summary>
+    private static async Task<(Domain.Entities.Inventory.Documents.InventoryDocument Despacho, Domain.Entities.Inventory.Documents.TransferDiscrepancy Diferencia)>
+        TrasladoConDiferenciaAsync(PeriodosDePrueba p, decimal cantidad)
+    {
+        var db = p.K.C.Db;
+        var tipo = p.K.Tipo("AJP").Id;
+        var despacho = new Domain.Entities.Inventory.Documents.InventoryDocument
+        {
+            Class = DocumentClass.TransferDispatch, DocumentTypeId = tipo, OperationDate = Julio10, WarehouseId = p.K.Principal.Id,
+            DestinationWarehouseId = p.K.Segunda.Id, TransitWarehouseId = p.K.Transito.Id, BranchId = p.K.Sucursal.Id, Prefix = "TRD", Number = 1,
+        };
+        var recepcion = new Domain.Entities.Inventory.Documents.InventoryDocument
+        {
+            Class = DocumentClass.TransferReceipt, DocumentTypeId = tipo, OperationDate = Julio12, WarehouseId = p.K.Principal.Id,
+            DestinationWarehouseId = p.K.Segunda.Id, TransitWarehouseId = p.K.Transito.Id, BranchId = p.K.Sucursal.Id, Prefix = "TRR", Number = 1,
+        };
+        var linea = new Domain.Entities.Inventory.Documents.InventoryDocumentLine { Document = despacho, LineNumber = 1, ProductId = p.K.ProductoId(p.K.P1), QuantityBase = 10m, Quantity = 10m };
+        despacho.Lines.Add(linea);
+        despacho.Confirmar(Kardex.KardexDePrueba.Usuario, DateTime.UtcNow);
+        recepcion.Confirmar(Kardex.KardexDePrueba.Usuario, DateTime.UtcNow);
+        db.InventoryDocuments.AddRange(despacho, recepcion);
+        db.DocumentLinks.Add(new Domain.Entities.Inventory.Documents.DocumentLink { SourceDocument = despacho, TargetDocument = recepcion, Kind = DocumentLinkKind.ReceiptOf });
+        await db.SaveChangesAsync();
+        var diferencia = new Domain.Entities.Inventory.Documents.TransferDiscrepancy
+        {
+            DispatchDocumentId = despacho.Id, ReceiptDocumentId = recepcion.Id, DispatchLineId = linea.Id, ProductId = linea.ProductId,
+            Kind = TransferDiscrepancyKind.Shortage, QuantityBase = cantidad, UnitCost = 1000m,
+        };
+        db.TransferDiscrepancies.Add(diferencia);
+        await db.SaveChangesAsync();
+        return (despacho, diferencia);
+    }
+
+    [Fact]
+    public async Task Una_diferencia_de_traslado_sin_resolver_avisa_y_con_reconocerla_se_cierra()
+    {
+        var p = await PeriodosDePrueba.CrearAsync();
+        var (despacho, _) = await TrasladoConDiferenciaAsync(p, 1m);
+
+        var revision = await p.RevisarAsync(2026, 7);
+        var aviso = revision.Value.Warnings.UnresolvedTransfers.Should().ContainSingle().Subject;
+        (aviso.DispatchPublicId, aviso.DisplayNumber, aviso.PendingBase).Should().Be((despacho.PublicId, "TRD1", 1m));
+
+        var primero = await p.CerrarAsync(2026, 7, reconocer: false);
+        primero.Error.Code.Should().Be("Inventory.Period.WarningsNotAcknowledged");
+
+        var cerrado = await p.CerrarAsync(2026, 7, reconocer: true);
+        cerrado.IsSuccess.Should().BeTrue(cerrado.IsFailure ? $"{cerrado.Error.Code}: {cerrado.Error.Message}" : string.Empty);
+        (await p.K.C.Db.InventoryPeriods.SingleAsync()).CloseWarningsJson.Should().Contain(despacho.PublicId.ToString());
+    }
+
+    [Fact]
+    public async Task Una_diferencia_de_traslado_resuelta_no_avisa()
+    {
+        var p = await PeriodosDePrueba.CrearAsync();
+        var (_, diferencia) = await TrasladoConDiferenciaAsync(p, 1m);
+        diferencia.PedirResolucion(TransferDiscrepancyResolution.LateReceipt, 1m, 9, DateTime.UtcNow, "llegó", null, 999);
+        diferencia.Resolver(1m, DateTime.UtcNow);
+        await p.K.C.Db.SaveChangesAsync();
+
+        var revision = await p.RevisarAsync(2026, 7);
+
+        revision.Value.Warnings.UnresolvedTransfers.Should().BeEmpty();
+        revision.Value.Warnings.Any.Should().BeFalse();
+    }
 }

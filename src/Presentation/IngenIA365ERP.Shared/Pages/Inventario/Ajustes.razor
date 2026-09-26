@@ -89,11 +89,11 @@
     private const int TamanoDePagina = 20;
     private const int GrupoDeAjustes = 2;
 
-    /// <summary>Las clases de ajuste de I1 y la anulación (el ensamble llega en I6 y el movimiento entre ubicaciones con US10).</summary>
+    /// <summary>Las clases de ajuste de I1, el movimiento entre ubicaciones (US10) y la anulación (el ensamble llega en I6).</summary>
     private static readonly int[] ClasesDeAjuste =
     [
         InventarioClient.ClasesDeAjuste.Positivo, InventarioClient.ClasesDeAjuste.Negativo, InventarioClient.ClasesDeAjuste.ConsumoInterno,
-        InventarioClient.ClasesDeAjuste.Baja, 34,
+        InventarioClient.ClasesDeAjuste.Baja, InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones, 34,
     ];
 
     private readonly EstadoDeCarga _carga = new();

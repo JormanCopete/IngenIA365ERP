@@ -314,12 +314,13 @@ public class DocumentTypeCommandsTests
         tipos.Should().Contain(t => t.Class == DocumentClass.Voiding);
 
         var saldo = tipos.Single(t => t.Class == DocumentClass.OpeningBalance);
-        var politica = await _db.ApprovalPolicies.Include(p => p.Levels).SingleAsync();
+        // US10 (T373) siembra además la política de diferencias de traslado en el tipo de la recepción de traslado.
+        var politica = await _db.ApprovalPolicies.Include(p => p.Levels).SingleAsync(p => p.Subject == ApprovalSubjects.DocumentConfirmation);
         politica.Should().BeEquivalentTo(new { Subject = ApprovalSubjects.DocumentConfirmation, DocumentTypePublicId = (Guid?)saldo.PublicId, Version = 1 },
             o => o.ExcludingMissingMembers());
         politica.Levels.Should().ContainSingle().Which.Should().BeEquivalentTo(
             new { Order = (byte)1, Threshold = 0m, PermissionCode = "Inventory.OpeningBalance.Approve" }, o => o.ExcludingMissingMembers());
-        insertadas.Should().Be(operables.Count + 1);
+        insertadas.Should().Be(operables.Count + 2, "los tipos, la política del saldo inicial y la de diferencias de traslado (US10)");
 
         (await InventoryDocumentTypesSeeder.AplicarAsync(_db, Hoy, default)).Should().Be(0, "idempotente por código");
     }

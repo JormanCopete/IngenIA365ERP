@@ -18,8 +18,9 @@ namespace IngenIA365ERP.Application.Inventory.Periods;
 /// terminó en hora de Colombia y los conteos abiertos con foto en el mes —cableado pero vacío hasta que US11 cree los
 /// conteos—.</item>
 /// <item><b>Avisa</b>: borradores y documentos en aprobación con fecha en el mes (los conteos no cuentan como borrador:
-/// son del bloqueo), despachos de traslado sin recepción con fecha en o antes del fin del mes —el detalle de diferencias
-/// sin resolver lo suma US10— y entregas de mensajes de Inventario pendientes, en lote o rechazadas con fecha en el mes.</item>
+/// son del bloqueo), despachos de traslado sin recepción con fecha en o antes del fin del mes, los recibidos hasta el fin
+/// del mes con faltantes o sobrantes sin resolver (<c>INV_TransferDiscrepancies</c> con <c>ResolvedAt</c> nulo, US10, T377) y
+/// entregas de mensajes de Inventario pendientes, en lote o rechazadas con fecha en el mes.</item>
 /// <item><b>Remisiones sin facturar</b>: vacías hasta I6; el campo y su aceptación quedan cableados.</item>
 /// </list>
 /// </summary>
@@ -69,8 +70,23 @@ public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService 
             .Where(d => d.Class == DocumentClass.TransferDispatch && d.Status == DocumentStatus.Confirmed && d.OperationDate <= fin)
             .Where(d => !recibidos.Any(l => l.SourceDocumentId == d.Id || l.TargetDocumentId == d.Id))
             .OrderBy(d => d.OperationDate).ThenBy(d => d.Id)
-            .Select(d => new { d.PublicId, d.Prefix, d.Number, Pendiente = d.Lines.Where(l => !l.IsDeleted).Sum(l => l.QuantityBase) })
+            .Select(d => new { d.Id, d.PublicId, d.Prefix, d.Number, Pendiente = d.Lines.Where(l => !l.IsDeleted).Sum(l => l.QuantityBase) })
             .ToListAsync(ct);
+
+        // US10 (T377): los traslados recibidos en o antes del fin del mes con faltantes o sobrantes sin resolver.
+        var conDiferencias = (await db.TransferDiscrepancies.AsNoTracking()
+                .Where(x => x.ResolvedAt == null)
+                .Join(db.InventoryDocuments.AsNoTracking(), x => x.ReceiptDocumentId, r => r.Id, (x, r) => new { x, r.OperationDate })
+                .Where(y => y.OperationDate <= fin)
+                .Join(db.InventoryDocuments.AsNoTracking(), y => y.x.DispatchDocumentId, d => d.Id,
+                    (y, d) => new { d.Id, d.PublicId, d.Prefix, d.Number, d.OperationDate, y.x.QuantityBase, y.x.ResolvedQuantityBase })
+                .ToListAsync(ct))
+            .GroupBy(y => new { y.Id, y.PublicId, y.Prefix, y.Number, y.OperationDate })
+            .Where(g => despachos.All(d => d.Id != g.Key.Id))
+            .OrderBy(g => g.Key.OperationDate).ThenBy(g => g.Key.Id)
+            .Select(g => new { g.Key.Id, g.Key.PublicId, g.Key.Prefix, g.Key.Number, Pendiente = g.Sum(y => y.QuantityBase - y.ResolvedQuantityBase) })
+            .ToList();
+        despachos = [.. despachos, .. conDiferencias];
 
         var entregas = await db.IntegrationMessageDeliveries.AsNoTracking()
             .Where(e => e.Status == DeliveryStatus.Pending || e.Status == DeliveryStatus.InBatch || e.Status == DeliveryStatus.Rejected)

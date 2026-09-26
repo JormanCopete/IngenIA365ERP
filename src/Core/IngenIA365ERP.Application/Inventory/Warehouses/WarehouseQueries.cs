@@ -108,3 +108,39 @@ public sealed class ListLocationsQueryHandler(IApplicationDbContext db, IAlcance
             .ToListAsync(ct));
     }
 }
+
+/// <summary>
+/// Las bodegas a las que se puede trasladar (feature 012, US10, T375; contracts/api.md §11, §17.2,
+/// <c>GET /warehouses?purpose=TransferDestination</c> y <c>GET /transfers/destinations</c>): para quien tiene
+/// <c>Inventory.Transfers.Create</c>, <b>todas</b> las operativas y activas de la cooperativa, fuera de su alcance
+/// (<see cref="IAlcanceDeInventario"/> no se aplica a propósito: el despacho no mueve la existencia del destino), con sólo
+/// <c>{ publicId, code, name, branch }</c> —ni existencias ni valores—. Sin el permiso, el mismo 404 que lo inexistente. (nuevo)
+/// </summary>
+public sealed record ListTransferDestinationsQuery : IRequest<Result<IReadOnlyList<Transfers.TransferDestinationDto>>>
+{
+    /// <summary>El único propósito admitido en <c>?purpose=</c>.</summary>
+    public const string Proposito = "TransferDestination";
+
+    public const string PermisoRequerido = "Inventory.Transfers.Create";
+}
+
+public sealed class ListTransferDestinationsQueryValidator : AbstractValidator<ListTransferDestinationsQuery>;
+
+public sealed class ListTransferDestinationsQueryHandler(IApplicationDbContext db, Payroll.Services.IPermissionChecker permisos)
+    : IRequestHandler<ListTransferDestinationsQuery, Result<IReadOnlyList<Transfers.TransferDestinationDto>>>
+{
+    public async Task<Result<IReadOnlyList<Transfers.TransferDestinationDto>>> Handle(ListTransferDestinationsQuery request, CancellationToken ct)
+    {
+        if (!await permisos.HasPermissionAsync(ListTransferDestinationsQuery.PermisoRequerido, ct))
+            return Result.Failure<IReadOnlyList<Transfers.TransferDestinationDto>>(WarehouseErrors.WarehouseNotFound());
+
+        var bodegas = await db.Warehouses.AsNoTracking()
+            .Where(w => w.Behavior == WarehouseBehavior.Operational && w.IsActive && w.ActivationStatus == WarehouseActivationStatus.Active)
+            .Join(db.Branches.AsNoTracking(), w => w.BranchId, b => b.Id, (w, b) => new { w.PublicId, w.Code, w.Name, Sucursal = new BranchRefDto(b.PublicId, b.LegacyCode, b.Name) })
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<Transfers.TransferDestinationDto>>(bodegas
+            .OrderBy(b => b.Sucursal.Name, StringComparer.CurrentCulture).ThenBy(b => b.Code, StringComparer.Ordinal)
+            .Select(b => new Transfers.TransferDestinationDto(b.PublicId, b.Code, b.Name, b.Sucursal))
+            .ToList());
+    }
+}

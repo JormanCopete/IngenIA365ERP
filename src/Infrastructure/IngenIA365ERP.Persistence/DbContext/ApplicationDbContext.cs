@@ -368,6 +368,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
+    // Feature 012 (T366, US10): faltantes y sobrantes de los traslados.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();

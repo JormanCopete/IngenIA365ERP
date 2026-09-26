@@ -238,6 +238,73 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
         };
     }
 
+    // ----------------------------------------------------------------------------------- traslados (US10) --
+
+    /// <summary>
+    /// <c>TrasladoDespachado</c> v1 de un despacho (US10, T367; mensajes.md §6.6): de la bodega de origen (<c>Operational</c>) a la de
+    /// tránsito de su sucursal (<c>Transit</c>), una línea por grupo contable, con la cantidad y el valor que entraron al tránsito.
+    /// </summary>
+    public async Task<TrasladoDespachadoV1> TrasladoDespachadoAsync(InventoryDocument documento, IReadOnlyList<KardexEntry> kardex, CancellationToken ct)
+    {
+        var transito = documento.TransitWarehouseId!.Value;
+        var codigos = await db.Warehouses.AsNoTracking()
+            .Where(w => w.Id == transito || w.Id == documento.DestinationWarehouseId)
+            .ToDictionaryAsync(w => w.Id, w => w.Code, ct);
+        return new TrasladoDespachadoV1
+        {
+            TransitWarehouseCode = codigos.GetValueOrDefault(transito) ?? string.Empty,
+            DestinationWarehouseCode = documento.DestinationWarehouseId is int d ? codigos.GetValueOrDefault(d) ?? string.Empty : string.Empty,
+            Lines = await LineasDeTrasladoAsync(documento, kardex, documento.WarehouseId!.Value, transito, ct),
+        };
+    }
+
+    /// <summary>
+    /// <c>TrasladoRecibido</c> v1 de una recepción de traslado (US10, T367; mensajes.md §6.7): del tránsito (<c>Transit</c>) a la bodega
+    /// que recibe (<c>Operational</c>: el destino, o el origen si es la devolución de un faltante), sólo lo recibido, derivado de su
+    /// despacho.
+    /// </summary>
+    public async Task<TrasladoRecibidoV1> TrasladoRecibidoAsync(InventoryDocument documento, InventoryDocument despacho, IReadOnlyList<KardexEntry> kardex, CancellationToken ct)
+    {
+        var transito = despacho.TransitWarehouseId!.Value;
+        var hacia = kardex.Where(k => k.Kind == KardexEntryKind.Entry && k.WarehouseId != transito).Select(k => k.WarehouseId).FirstOrDefault();
+        return new TrasladoRecibidoV1
+        {
+            DerivedFrom = [Referencia(despacho)],
+            Lines = hacia == 0 ? [] : await LineasDeTrasladoAsync(documento, kardex, transito, hacia, ct),
+        };
+    }
+
+    /// <summary>Las <c>TransferCostLineV1</c> de <paramref name="desde"/> a <paramref name="hacia"/>: lo que entró a <paramref name="hacia"/>, por grupo contable.</summary>
+    private async Task<IReadOnlyList<TransferCostLineV1>> LineasDeTrasladoAsync(
+        InventoryDocument documento, IReadOnlyList<KardexEntry> kardex, int desde, int hacia, CancellationToken ct)
+    {
+        var entradas = kardex.Where(k => k.WarehouseId == hacia && k.Kind != KardexEntryKind.Exit).ToList();
+        if (entradas.Count == 0) return [];
+        var (grupos, bodegas) = await DimensionesAsync(entradas.Select(f => f.ProductId), [desde, hacia], documento.OperationDate, ct);
+        var sucursales = await db.Warehouses.AsNoTracking().Where(w => w.Id == desde || w.Id == hacia)
+            .Join(db.Branches.AsNoTracking(), w => w.BranchId, b => b.Id, (w, b) => new { w.Id, b.PublicId })
+            .ToDictionaryAsync(x => x.Id, x => x.PublicId, ct);
+        var numeroDeLinea = documento.Lines.ToDictionary(l => l.Id, l => l.LineNumber);
+
+        return entradas
+            .GroupBy(f => grupos.GetValueOrDefault(f.ProductId) ?? string.Empty)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new TransferCostLineV1
+            {
+                AccountingGroupCode = g.Key,
+                FromWarehouseCode = bodegas[desde].Code,
+                FromWarehouseBehavior = bodegas[desde].Behavior,
+                FromBranchPublicId = sucursales.GetValueOrDefault(desde),
+                ToWarehouseCode = bodegas[hacia].Code,
+                ToWarehouseBehavior = bodegas[hacia].Behavior,
+                ToBranchPublicId = sucursales.GetValueOrDefault(hacia),
+                QuantityBase = g.Where(f => f.Kind == KardexEntryKind.Entry).Sum(f => f.QuantityBase),
+                Cost = g.Sum(f => f.TotalCost),
+                DocumentLines = g.Select(f => numeroDeLinea.GetValueOrDefault(f.DocumentLineId)).Where(n => n > 0).Distinct().Order().ToList(),
+            })
+            .ToList();
+    }
+
     // ---------------------------------------------------------------------------------------- anulación --
 
     /// <summary>

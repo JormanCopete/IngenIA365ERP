@@ -116,6 +116,10 @@
             <PermissionGate Required="Inventory.Adjustments.View">
                 <NavLink href="/inventario/ajustes" class="nav-subitem">Ajustes</NavLink>
             </PermissionGate>
+            @* US10 (T381): traslados en dos pasos y sus diferencias. *@
+            <PermissionGate Required="Inventory.Transfers.View">
+                <NavLink href="/inventario/traslados" class="nav-subitem">Traslados</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Integrity.Verify">
                 <NavLink href="/inventario/integridad" class="nav-subitem">Integridad del kardex</NavLink>
             </PermissionGate>

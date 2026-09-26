@@ -116,6 +116,9 @@ public sealed class SaveInventoryDraftCommandHandler(
         var clase = ClasesDeDocumento.De(tipo.Class);
         if (clase.Group != request.ExpectedGroup || !clase.ManualCreation)
             return Falla(InventoryErrors.TypeNotForRoute(tipo.Class, clase.Group ?? request.ExpectedGroup));
+        // US10 (T370): por la ruta de traslados sólo se arma el despacho; la recepción la crea y confirma ReceiveTransferCommand.
+        if (request.ExpectedGroup == DocumentClassGroup.Transfers && tipo.Class != DocumentClass.TransferDispatch)
+            return Falla(InventoryErrors.TypeNotForRoute(tipo.Class, DocumentClassGroup.Transfers));
         if (!tipo.IsActive && (documento is null || documento.DocumentTypeId != tipo.Id)) return Falla(InventoryErrors.DocumentTypeInactive(tipo.Code));
         var efecto = efectos.Para(tipo.Class);
         if (efecto.IsFailure) return Falla(efecto.Error);
@@ -150,7 +153,10 @@ public sealed class SaveInventoryDraftCommandHandler(
         }
         if (borrador.DestinationWarehousePublicId is { } d)
         {
-            if (!bodegas.TryGetValue(d, out destino) || !alcance.IncluyeBodega(destino.Id)) return Falla(ErroresDeAlcance.BodegaInexistente());
+            // US10 (api.md §11, §17.2): el destino de un traslado puede ser cualquier bodega de la cooperativa; el despacho no mueve su
+            // existencia (la recepción sí exige el destino en el alcance).
+            var destinoLibre = request.ExpectedGroup == DocumentClassGroup.Transfers;
+            if (!bodegas.TryGetValue(d, out destino) || (!destinoLibre && !alcance.IncluyeBodega(destino.Id))) return Falla(ErroresDeAlcance.BodegaInexistente());
         }
 
         int? centroId = null;

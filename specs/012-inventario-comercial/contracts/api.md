@@ -1013,6 +1013,7 @@ Reglas y errores propios:
 | `POST /{id}/dispatch` | Transfers.Dispatch | `{ rowVersion }` → `ConfirmationResultDto` (`DispatchTransferCommand`) |
 | `POST /{id}/receive` | Transfers.Receive | `{ operationDate?, documentTypePublicId?, lines: [{ dispatchLinePublicId, receivedQuantity, unitPublicId?, toLocationPublicId?, surplusQuantity? }], notes? }` → 201 `{ receiptPublicId, displayNumber, operationDate, shortages: [{ discrepancyPublicId, product, quantityBase }], surpluses: [{ discrepancyPublicId, product, quantityBase }] }` (`ReceiveTransferCommand`) |
 | `GET /discrepancies?status=&warehousePublicId=&page=&pageSize=` | Transfers.View | `PagedResult<TransferDiscrepancyDto { publicId, kind: Shortage \| Surplus, transfer { dispatchPublicId, displayNumber }, product, quantityBase, value?, state, resolution?, resolvingDocument? { publicId, displayNumber, status }, createdAt }>`; `state` texto: `Pending`, `InApproval`, `Resolved` |
+| `GET /destinations` | Transfers.Create | **(nuevo, US10 T375)** `[{ publicId, code, name, branch }]`: la misma consulta que `GET /warehouses?purpose=TransferDestination`, para quien no tiene `Warehouses.View` |
 | `POST /discrepancies/{id}/resolve` | Transfers.Receive | `{ resolution, quantity?, adjustmentCausePublicId?, operationDate?, toLocationPublicId?, reason }` → 201 `{ discrepancyPublicId, resolution, documentPublicId, documentClass, status: PendingApproval, approvalRequestPublicId }` (`ResolveTransferDiscrepancyCommand`) |
 | `POST /{id}/void` | Transfers.Void | `{ reason }` → 201 `VoidResultDto`: sólo un despacho **no recibido** |
 
@@ -1055,7 +1056,10 @@ parcial).
 
 Errores: `Inventory.TransferDiscrepancy.NotPending` (ya en aprobación o resuelta),
 `.ResolutionNotAllowed` (`data: { kind, allowed[] }`), `.QuantityExceeds` (`data: { pendingBase }`),
-`Inventory.Document.FieldRequired` (causa).
+`Inventory.Document.FieldRequired` (causa), `.CauseNotAllowed` **(nuevo, T371)** (`data: { causeCode, resolution }`: la baja exige una
+causa con `AllowsTransitWriteOff` y el sobrante una con `AllowsPositive`), `.NotFound` **(nuevo)** (404). Una aprobación parcial
+resuelve sólo su cantidad y lo demás vuelve a pendiente (`TransferDiscrepancyDto.pendingBase`, nuevo). Sin la bodega de tránsito
+de la sucursal del origen, el despacho responde 422 `Inventory.Transfer.TransitWarehouseMissing` **(nuevo, T367)**.
 
 **Anulación**: un despacho no recibido se anula y la mercancía vuelve del tránsito al origen
 (`DocumentoAnulado`). Con recepción: 422 `Inventory.Document.HasDependents`; lo recibido sólo se corrige
