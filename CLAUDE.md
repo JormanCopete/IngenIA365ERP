@@ -597,18 +597,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-21 (cierre de N2 de la feature 010, en su rama), remedida. **Son cifras que
+Instantánea del 2026-09-26 (cierre de la entrega I1 de la feature 012, en su rama `012-inventario-comercial`), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 772 (2026-09-23; feature 011: E1 −1 por la subida multipart retirada y +2 del almacén local —sólo con `Provider = Local` fuera de Production—; E3 +6: pedir, renovar y confirmar una subida, y los enlaces de adjuntos, PILA y dispersión) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.778 el 2026-09-23, cierre de la feature 011 en DEV y QA (223 Domain, 1.318 Application, 134 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 261 el 2026-09-23 con Docker: 260 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y el host «Adjuntos sobre S3», `ApiConAlmacenS3Fixture`, con `Provider = S3` contra MinIO) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 201 con `@page` (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 12 clases `*Report` (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 3.215 el 2026-09-26, cierre de I1 de la 012 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop

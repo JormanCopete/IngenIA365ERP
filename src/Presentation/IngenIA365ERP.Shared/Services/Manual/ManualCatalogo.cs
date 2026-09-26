@@ -37,6 +37,8 @@ public static class ManualCatalogo
         public const string Contabilidad = "Contabilidad";
         public const string Cartera = "Cartera Financiera";
         public const string Inventario = "Inventario";
+        public const string Compras = "Compras";
+        public const string Ventas = "Ventas";
         public const string Nomina = "Nómina";
         public const string Cdt = "CDT";
         public const string Debito = "Tarjeta Débito";
@@ -53,7 +55,7 @@ public static class ManualCatalogo
     [
         Modulos.Inicio, Modulos.Cuenta, Modulos.Administracion, Modulos.Saas,
         Modulos.Asociados, Modulos.Maestros, Modulos.Contabilidad, Modulos.Cartera,
-        Modulos.Cdt, Modulos.Inventario, Modulos.Nomina, Modulos.Tesoreria,
+        Modulos.Cdt, Modulos.Inventario, Modulos.Compras, Modulos.Ventas, Modulos.Nomina, Modulos.Tesoreria,
         Modulos.Debito, Modulos.Cumplimiento, Modulos.Reportes, Modulos.Notificaciones,
     ];
 
@@ -760,7 +762,7 @@ public static class ManualCatalogo
 
         // --------------------------------------------------------------- Inventario --
         // Feature 012, US12 (T437): el rol vendedor pasó a Ventas; seguridad, aprobaciones, parámetros y alertas.
-        t.Add(Maestro("/ventas/vendedores", "Vendedores", Modulos.Inventario, "un vendedor",
+        t.Add(Maestro("/ventas/vendedores", "Vendedores", Modulos.Ventas, "un vendedor",
             "La persona se busca en el maestro (o se crea en su diálogo); dar el rol a quien lo tuvo lo restaura con el mismo identificador y retirarlo pide motivo. Plantilla 9 para cargar en bloque.",
             "vendedores", "comision", "restaurar", "plantilla 9"));
         t.Add(Proceso("inventario-parametros", "Parámetros de inventario", Modulos.Inventario, "/inventario/parametros",
@@ -809,6 +811,265 @@ public static class ManualCatalogo
             ],
             ["alertas", "quiebre", "reorden", "atender", "destinatarios", "notificaciones"],
             ["Permiso Inventory.Alerts.View; atender, Inventory.Alerts.Attend; tipos, Inventory.Alerts.Manage."], [], [], TipoDeTema.Proceso));
+
+        // Feature 012, I1 (T983): un tema por opción del menú de decisiones-transversales §2.11. Los catálogos simples
+        // comparten CatalogoDeInventario (Nuevo, Editar, Inactivar/Reactivar con motivo, Plantilla) y por eso su guía.
+        t.Add(CatalogoDeInventario("/inventario/categorias", "Categorías", Modulos.Inventario, "una categoría",
+            "Árbol de hasta 5 niveles con su ruta legible («ALIMENTOS › GRANOS»). Cambiar el padre mueve la rama entera; una categoría no queda debajo de sí misma. Con subcategorías o productos activos no se inactiva. Plantilla 5.",
+            "categorias", "arbol", "subcategoria", "plantilla 5"));
+        t.Add(CatalogoDeInventario("/inventario/marcas", "Marcas", Modulos.Inventario, "una marca",
+            "La marca entra a la búsqueda de sus productos. Se puede inactivar aunque tenga productos activos: ellos la conservan. Plantilla 4.",
+            "marcas", "plantilla 4"));
+        t.Add(CatalogoDeInventario("/inventario/unidades", "Unidades de medida", Modulos.Inventario, "una unidad",
+            "Cada unidad lleva sus decimales y el código UN/ECE que exige la factura electrónica. Los decimales sólo bajan si ninguna cantidad registrada usa más; una unidad de un producto activo no se inactiva; las sembradas se corrigen pero no se borran. Plantilla 3.",
+            "unidades", "medida", "decimales", "un/ece", "plantilla 3"));
+        t.Add(CatalogoDeInventario("/inventario/grupos-contables", "Grupos contables", Modulos.Inventario, "un grupo contable",
+            "Inventario no conoce cuentas: envía el grupo y la matriz de Contabilidad lo traduce. Por eso el código no cambia nunca. Un grupo con productos inventariables activos no se inactiva. Plantilla 2.",
+            "grupos contables", "matriz", "cuentas", "plantilla 2"));
+        t.Add(CatalogoDeInventario("/inventario/causas-de-ajuste", "Causas de ajuste", Modulos.Inventario, "una causa de ajuste",
+            "Las causas de los ajustes y bajas. El código lo usa la matriz contable y no cambia; las que usa el sistema («diferencia de conteo», «reclamación al transportador») no se inactivan.",
+            "causas", "ajuste", "baja", "motivo"));
+        t.Add(CatalogoDeInventario("/ventas/canales", "Canales de venta", Modulos.Ventas, "un canal de venta",
+            "Los canales que usan los tipos de documento, los puntos de venta y las listas de precios. Uno en uso por alguno de ellos vigente no se inactiva.",
+            "canales", "venta", "punto de venta", "lista de precios"));
+
+        t.Add(Proceso("inventario-productos", "Productos", Modulos.Inventario, "/inventario/productos",
+            "El catálogo de productos: se busca con el lector o por filtros, se crea, se corrige en su detalle y cambia de estado con motivo. En esta entrega un producto es inventariable o servicio; combos, kits, variantes y el control de lote, serie o vencimiento llegan después.",
+            [
+                P("Inventario → Productos", "Filtrá o leé el código de barras para ir directo al detalle.", "/inventario/productos", "Abrir Productos"),
+                P("Nuevo producto", "Código (hasta 20, en mayúsculas, único), nombre, clase (inventariable o servicio), unidad base, grupo contable obligatorio, concepto de retención e IVA."),
+                P("Detalle", "Pestañas Datos («Se compra» y «Se vende» dicen dónde se ofrece), Unidades (el factor dice cuántas unidades base tiene cada empaque: caja × 12 = 12), Códigos de barras (el de un empaque elige esa unidad al leerlo), Impuestos, Imágenes y Grupo contable. Con movimientos, la unidad base, el factor de una unidad usada y el grupo no cambian por Datos."),
+                P("Cambiar de grupo contable", "Pestaña Grupo contable, «Cambiar grupo»: fecha efectiva y motivo; lo confirmado antes conserva su grupo. Pide el permiso Inventory.Catalog.ReclassifyAccountingGroup."),
+                P("Estado o borrar", "«Estado» pasa a activo, inactivo (no se ofrece en documentos nuevos) o bloqueado (ningún movimiento salvo el conteo y la recepción de lo que ya viajaba), con motivo. «Borrar» sólo sirve para un producto que nunca estuvo en un documento."),
+                P("Plantilla 6", "«Plantilla» descarga, revisa y aplica todo el catálogo por archivo: se revisa primero y se aplica todo o nada."),
+            ],
+            ["productos", "codigo de barras", "lector", "unidad base", "empaque", "iva", "bloquear", "inactivar", "plantilla 6"],
+            ["Permiso Inventory.Catalog.View; para crear y corregir, Inventory.Catalog.Manage.", "Unidades, categorías, marcas y grupos contables cargados."],
+            ["inventario-grupos-contables", "inventario-unidades", "inventario-plantillas"], ["/inventario/productos/{Id}"], TipoDeTema.Maestro));
+
+        t.Add(Proceso("inventario-bodegas", "Bodegas", Modulos.Inventario, "/inventario/bodegas",
+            "Las bodegas del alcance agrupadas por sucursal. Toda bodega nace sin activar —sólo admite su saldo inicial— con su ubicación general; la primera bodega operativa de una sucursal trae su bodega de tránsito, que no se crea a mano.",
+            [
+                P("Inventario → Bodegas", "«Ver inactivas» trae también las retiradas. Una bodega nueva sólo la ve quien tiene alcance total hasta que se la asignen.", "/inventario/bodegas", "Abrir Bodegas"),
+                P("Nueva bodega", "Código, nombre y sucursal. Si la sucursal no tiene municipio, la pantalla avisa por la ReteICA."),
+                P("Detalle", "Pestañas Datos, Ubicaciones (una por defecto; ninguna con existencia se inactiva), Mínimos y máximos (por producto: 0 ≤ mínimo ≤ punto de reorden ≤ máximo) y Saldo inicial y activación."),
+                P("Activar", "Desde «Saldo inicial y activación»: compara el saldo inicial con Contabilidad y con las cifras de SOLIDO. En producción la activación espera la integración contable (Inventory.Activation.AccountingUnavailable)."),
+                P("Plantilla 7", "Carga bodegas y ubicaciones por archivo."),
+            ],
+            ["bodegas", "ubicaciones", "transito", "activar", "minimos", "maximos", "reorden", "plantilla 7"],
+            ["Permiso Inventory.Warehouses.View; para crear y corregir, Inventory.Warehouses.Manage; para activar, Inventory.Warehouses.Activate.", "Sucursales creadas."],
+            ["inventario-saldo-inicial", "inventario-alcances", "sucursales"], ["/inventario/bodegas/{Id}"], TipoDeTema.Maestro));
+
+        t.Add(Proceso("inventario-tipos-de-documento", "Tipos de documento de inventario", Modulos.Inventario, "/inventario/tipos-de-documento",
+            "Los tipos de documento por grupo y clase. La clase es fija del sistema y decide el efecto; cada tipo elige su clase al crearse y parametriza su consecutivo, los campos que exige, las bodegas y el canal. La semilla deja uno por clase al iniciar el módulo.",
+            [
+                P("Inventario → Tipos de documento", null, "/inventario/tipos-de-documento", "Abrir Tipos de documento"),
+                P("Nuevo tipo", "Clase, código, nombre, consecutivo y los campos que exige (tercero, centro de costo, referencia externa, motivo, fecha futura…). La clase y el código no se cambian después."),
+                P("Ver", "El historial de consecutivos, el modo de paso a contabilidad y la política de aprobación vigentes, estos dos de sólo lectura: se cambian en Parámetros y en Políticas de aprobación."),
+                P("Cambiar prefijo o número", "Es un consecutivo nuevo con motivo que cierra el anterior la víspera de la fecha elegida; el número no puede quedar en o bajo uno ya emitido con ese prefijo. Las clases que numera la DIAN no tienen consecutivo propio."),
+                P("Inactivar", "Con motivo. No se inactiva con borradores o documentos en aprobación, ni el último activo de una clase que el sistema genera solo."),
+            ],
+            ["tipos de documento", "clase", "consecutivo", "prefijo", "numeracion", "plantilla 8"],
+            ["Permiso Inventory.DocumentTypes.View; para cambiar, Inventory.DocumentTypes.Manage."],
+            ["inventario-parametros", "inventario-politicas-de-aprobacion"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("inventario-existencias", "Existencias", Modulos.Inventario, "/inventario/existencias",
+            "Cuánto hay de un producto y dónde, en tres pasos: leerlo, ver sus bodegas y ubicaciones con lo que va en tránsito, y abrir su kardex. La existencia es la suma del kardex, no un saldo guardado.",
+            [
+                P("Inventario → Existencias", "Leé o escribí el producto, o filtrá la lista por bodega, «Sólo con existencia» o «En o bajo el punto de reorden».", "/inventario/existencias", "Abrir Existencias"),
+                P("Leer las columnas", "Física, reservada, disponible y en tránsito hacia la bodega; mínimo, punto de reorden y posición cuando la bodega tiene política. Promedio y valor sólo aparecen con Inventory.Costs.Read."),
+                P("Detalle", "El código del producto abre sus bodegas y ubicaciones y el enlace a su kardex."),
+            ],
+            ["existencias", "stock", "disponible", "transito", "reservado", "reorden"],
+            ["Permiso Inventory.Stock.View. Sólo se ven las bodegas del alcance."],
+            ["inventario-kardex", "inventario-integridad"], [], TipoDeTema.Consulta));
+
+        t.Add(Proceso("inventario-kardex", "Kardex", Modulos.Inventario, "/inventario/kardex",
+            "Los movimientos de un producto en orden: la primera fila es el saldo al día anterior a «desde» y cada línea lleva su documento, entrada, salida y saldo.",
+            [
+                P("Inventario → Kardex", "Leé o escribí el producto, elegí la bodega y el rango (hasta 5 años) y «Consultar». «Mostrar ajustes de costo» agrega esas líneas.", "/inventario/kardex", "Abrir Kardex"),
+                P("Leer", "Costo y valor llegan vacíos sin Inventory.Costs.Read, y la nota lo dice. El número del documento abre su pantalla."),
+                P("Exportar", "Excel o PDF con Inventory.Reports.Export."),
+            ],
+            ["kardex", "movimientos", "saldo", "entradas", "salidas", "costo promedio"],
+            ["Permiso Inventory.Reports.View."],
+            ["inventario-existencias", "inventario-informes"], [], TipoDeTema.Consulta));
+
+        t.Add(Proceso("inventario-ajustes", "Ajustes de inventario", Modulos.Inventario, "/inventario/ajustes",
+            "Ajustes positivos y negativos, consumos internos y bajas, con su causa y sus soportes. Lo confirmado no se edita ni se borra: se anula, y la anulación es un documento contrario.",
+            [
+                P("Inventario → Ajustes", "Filtros por clase, estado, bodega, fecha y número.", "/inventario/ajustes", "Abrir Ajustes"),
+                P("Nuevo ajuste", "Tipo, bodega, fecha, causa, centro de costo, motivo y líneas (el lector llena producto y empaque). El costo sólo se digita en un ajuste positivo y con Inventory.Adjustments.SetUnitCost.", "/inventario/ajustes/nuevo", "Nuevo ajuste"),
+                P("Guardar y revisar", "El borrador se guarda con avisos, que se marcan en la línea que nombran. Ctrl+S guarda; Ctrl+Enter confirma."),
+                P("Soportes", "Actas de destrucción, denuncias y demás se suben mientras el ajuste está en borrador o en aprobación."),
+                P("Confirmar", "Si la política o el monto lo piden, queda en aprobación, congelado y sin número, hasta la última aprobación. Las acciones posibles las dice el servidor."),
+                P("Descartar o anular", "Descartar un borrador y anular uno confirmado piden motivo."),
+            ],
+            ["ajustes", "baja", "consumo interno", "causa", "anular", "soportes", "aprobacion"],
+            ["Permiso Inventory.Adjustments.View; para crear, Inventory.Adjustments.Create.", "Causas de ajuste creadas y la bodega activa."],
+            ["inventario-causas-de-ajuste", "inventario-aprobaciones", "inventario-kardex"], ["/inventario/ajustes/nuevo", "/inventario/ajustes/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-traslados", "Traslados entre bodegas", Modulos.Inventario, "/inventario/traslados",
+            "El traslado en dos pasos: el origen despacha y la mercancía queda en tránsito; el destino recibe lo que llegó. Faltantes y sobrantes quedan como diferencias que otra persona aprueba.",
+            [
+                P("Inventario → Traslados", "Pestaña Traslados (los de las bodegas cuyo origen o destino ve) y pestaña de diferencias.", "/inventario/traslados", "Abrir Traslados"),
+                P("Nuevo traslado", "Tipo, origen de su alcance, destino entre todas las bodegas operativas y activas, fecha, motivo y líneas.", "/inventario/traslados/nuevo", "Nuevo traslado"),
+                P("Despachar", "Si la política lo pide queda en aprobación; lo despacha la última aprobación."),
+                P("Recibir", "Cantidad que llegó por línea, ubicación de llegada y sobrante declarado. Lo que no llega queda como faltante en tránsito."),
+                P("Resolver una diferencia", "«Resolver»: salida según el tipo, cantidad, causa y motivo; queda en aprobación de otra persona."),
+                P("Anular", "Un despacho no recibido se anula con motivo: la mercancía vuelve del tránsito al origen."),
+            ],
+            ["traslados", "despacho", "recibir", "transito", "faltante", "sobrante", "diferencias"],
+            ["Permiso Inventory.Transfers.View; para crear, Inventory.Transfers.Create.", "Las dos bodegas activas."],
+            ["inventario-existencias", "inventario-aprobaciones"], ["/inventario/traslados/nuevo", "/inventario/traslados/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-conteos", "Conteos físicos", Modulos.Inventario, "/inventario/conteos",
+            "El conteo de toda una bodega o cíclico (por categorías, ubicaciones o productos), ciego o no, con su foto, la captura con lector y el ajuste que aprueba alguien que no abrió ni contó.",
+            [
+                P("Inventario → Conteos", "Los conteos del alcance con su estado; el valor de la diferencia con Inventory.Costs.Read.", "/inventario/conteos", "Abrir Conteos"),
+                P("Nuevo conteo", "Bodega, alcance, si es ciego y los contadores; «Crear el conteo»."),
+                P("Abrir (tomar la foto)", "Congela el teórico a esa hora. Con conteos abiertos con foto el mes no se cierra."),
+                P("Capturar", "Código y Enter: cada lectura suma y se envía por tandas; una cantidad negativa corrige. En un conteo ciego quien sólo captura no ve el teórico."),
+                P("Cerrar el conteo", "Compara, exige el reconteo de las líneas marcadas y numera."),
+                P("Generar ajuste", "Muestra la fecha del ajuste (la de la foto o la de la aprobación, según el parámetro) y lo crea en aprobación."),
+            ],
+            ["conteo", "inventario fisico", "ciclico", "ciego", "lector", "foto", "reconteo", "diferencias"],
+            ["Permiso Inventory.Counts.View; para crear y abrir, Inventory.Counts.Open."],
+            ["inventario-ajustes", "inventario-aprobaciones", "inventario-periodos"], ["/inventario/conteos/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-integridad", "Integridad del kardex", Modulos.Inventario, "/inventario/integridad",
+            "Comprueba que existencias y costo sean la suma exacta del kardex y, si no, lo reconstruye sin tocar un solo hecho. La misma verificación corre cada noche.",
+            [
+                P("Inventario → Integridad del kardex", "Elegí bodegas y productos; sin elegir, se verifica todo lo del alcance.", "/inventario/integridad", "Abrir Integridad"),
+                P("Verificar", "Cada diferencia con lo esperado, lo real y la diferencia. Con diferencias se levanta la alerta de integridad."),
+                P("Reconstruir", "Recalcula las proyecciones desde el kardex, con motivo y el permiso Inventory.Integrity.Rebuild. Sin filtros puede tardar minutos."),
+            ],
+            ["integridad", "verificar", "reconstruir", "proyecciones", "kardex"],
+            ["Permiso Inventory.Integrity.Verify."],
+            ["inventario-kardex", "inventario-alertas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-periodos", "Períodos de inventario", Modulos.Inventario, "/inventario/periodos",
+            "Los meses de inventario desde la puesta en marcha. Se cierran en orden; al cerrar queda fijado el valorizado por grupo contable y bodega. El valorizado a cualquier fecha se consulta en la misma pantalla.",
+            [
+                P("Inventario → Períodos", "Los meses aparecen desde el corte del primer saldo inicial.", "/inventario/periodos", "Abrir Períodos"),
+                P("Revisar cierre", "Bloquea un mes que no terminó o con conteos abiertos con foto; avisan los borradores, lo que está en aprobación, los traslados sin recibir y los mensajes pendientes."),
+                P("Cerrar el mes", "Con avisos, marcá «Reconozco los avisos y cierro de todos modos». Pide Inventory.Periods.Close."),
+                P("Reabrir", "Sólo el último mes cerrado, con motivo y el permiso especial Inventory.Periods.Reopen."),
+                P("Valorizado a una fecha", "Fecha, «Incluir tránsito» y «Consultar»; Excel para exportarlo. Los valores, con Inventory.Costs.Read."),
+            ],
+            ["periodos", "cierre", "mes", "reabrir", "valorizado", "corte"],
+            ["Permiso Inventory.Periods.View."],
+            ["inventario-conteos", "inventario-informes"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-saldo-inicial", "Saldo inicial de inventario", Modulos.Inventario, "/inventario/saldo-inicial",
+            "El saldo inicial bodega por bodega con la plantilla 14: se revisa sin guardar nada, se aplica todo o nada y queda en borradores por bodega fechados en su corte, que se confirman con aprobación de otra persona.",
+            [
+                P("Inventario → Saldo inicial", null, "/inventario/saldo-inicial", "Abrir Saldo inicial"),
+                P("Importar la plantilla", "«Revisar» da los errores por fila y columna y el resumen por bodega (líneas, cantidad y valor por grupo contable); «Aplicar» crea los borradores, partidos en tramos de 4.000 líneas."),
+                P("Confirmar", "Al elegir un documento, las acciones son las que manda el servidor: confirmar (normalmente queda en aprobación), descartar o anular con motivo mientras la bodega no opera."),
+                P("Activar la bodega", "Desde el detalle de la bodega, pestaña «Saldo inicial y activación».", "/inventario/bodegas", "Abrir Bodegas"),
+            ],
+            ["saldo inicial", "apertura", "plantilla 14", "puesta en marcha", "corte", "activar"],
+            ["Permiso Inventory.OpeningBalance.Load.", "Productos y bodegas cargados; conteo físico de la bodega antes de la carga."],
+            ["inventario-bodegas", "inventario-cifras-solido", "inventario-plantillas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-cifras-solido", "Cifras de SOLIDO", Modulos.Inventario, "/inventario/cifras-solido",
+            "Las existencias y valores de SOLIDO a una fecha, sólo para comparar: nunca mueven el inventario. Cada importación es un lote; importar otra vez una fecha y bodega deja el anterior como historia.",
+            [
+                P("Inventario → Cifras de SOLIDO", null, "/inventario/cifras-solido", "Abrir Cifras de SOLIDO"),
+                P("Importar la plantilla 15", "Se revisa y se aplica todo o nada. Un código que no está en el catálogo nuevo no es error: queda sin resolver, con su grupo contable."),
+                P("Leer", "Por fecha, bodega y grupo contable, y los códigos sin producto en el catálogo. Los sin resolver suman al valorizado de su grupo pero no al comparativo por producto."),
+                P("Comparar", "Los comparativos por producto y bodega están en el centro de informes de Inventario.", "/inventario/informes", "Abrir Informes"),
+            ],
+            ["solido", "comparativo", "cifras", "plantilla 15", "marcha paralela"],
+            ["Permiso Inventory.LegacyFigures.Import."],
+            ["inventario-saldo-inicial", "inventario-informes"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-informes", "Informes de inventario", Modulos.Inventario, "/inventario/informes",
+            "El centro de informes del módulo. El selector trae las vistas que publica cada parte (kardex, existencias, valorizado, documentos, reorden y quiebres, comparativos con SOLIDO, entre otras) y aparecen aquí sin tocar la pantalla.",
+            [
+                P("Inventario → Informes", "Elegí la vista; se editan el rango o el corte, la bodega y los filtros propios de la vista.", "/inventario/informes", "Abrir Informes"),
+                P("Consultar y profundizar", "La fila de un documento abre el documento; la de un producto o una bodega, su kardex."),
+                P("Exportar", "Excel, Word o PDF con Inventory.Reports.Export; las vistas con datos de clientes piden además Inventory.Reports.ExportPersonalData."),
+            ],
+            ["informes", "reportes", "valorizado", "documentos", "reorden", "quiebres", "exportar"],
+            ["Permiso Inventory.Reports.View."],
+            ["inventario-kardex", "centro-de-reportes"], [], TipoDeTema.Reporte));
+
+        t.Add(Proceso("inventario-plantillas", "Plantillas de parametrización", Modulos.Inventario, "/inventario/plantillas",
+            "Las dieciséis plantillas de la puesta en marcha en su orden de carga: cada una sólo cita lo que cargaron las anteriores. Las que todavía no se importan dicen desde qué entrega.",
+            [
+                P("Inventario → Plantillas", "Cada fila dice lo que usted puede hacer con ella (descargar, importar).", "/inventario/plantillas", "Abrir Plantillas"),
+                P("Descargar", "«Plantilla vacía» o «Plantilla con los datos actuales». Los encabezados van en la fila 1."),
+                P("Revisar", "Errores por hoja, fila y columna, sin guardar nada. «Revisión en Excel» devuelve el mismo libro con el resultado de cada fila."),
+                P("Aplicar", "Todo o nada: con un error no se guarda ninguna fila. Un código que ya existe se actualiza con las mismas reglas que la edición; la plantilla nunca borra."),
+            ],
+            ["plantillas", "importar", "excel", "carga masiva", "parametrizacion", "puesta en marcha"],
+            ["Permiso Inventory.Catalog.View; importar cada plantilla pide el permiso de su catálogo."],
+            ["inventario-productos", "inventario-saldo-inicial"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------------------ Compras --
+        t.Add(Proceso("compras-compra-directa", "Compra directa", Modulos.Compras, "/compras/compra-directa",
+            "La compra en tres pasos —abrir, leer los productos y confirmar— que crea y confirma la recepción y la factura del proveedor en una sola operación. Un doble clic no compra dos veces.",
+            [
+                P("Compras → Compra directa", null, "/compras/compra-directa", "Abrir Compra directa"),
+                P("Abrir la compra", "Proveedor, bodega y la factura del proveedor: prefijo, número, CUFE, emisión, vencimiento y forma de pago."),
+                P("Leer los productos", "Con el lector; el empaque leído es la unidad."),
+                P("Confirmar la compra", "Impuestos y retenciones los calcula el servidor con el catálogo vigente a la fecha. El resultado muestra los dos números o, si la política o el monto lo piden, la recepción en aprobación con la factura en borrador enlazada."),
+            ],
+            ["compra", "proveedor", "recepcion", "factura", "lector", "impuestos", "retenciones"],
+            ["Permiso Inventory.Purchases.Confirm.", "Proveedor registrado (o se crea con la autorización de datos) y la bodega activa."],
+            ["compras-recepciones", "compras-facturas-proveedor", "inventario-aprobaciones"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-recepciones", "Recepciones de compra", Modulos.Compras, "/compras/recepciones",
+            "La entrada de mercancía del proveedor a una bodega, con lo que falta facturar y lo devuelto por documento.",
+            [
+                P("Compras → Recepciones", "Filtros por proveedor, estado, bodega, fechas y número.", "/compras/recepciones", "Abrir Recepciones"),
+                P("Nueva recepción", "Tipo, bodega que recibe, fecha, proveedor, remisión o guía, municipio de la operación (se propone el de la sucursal) y líneas leídas con el lector. Cada guardado trae la vista previa de impuestos.", "/compras/recepciones/nueva", "Nueva recepción"),
+                P("Confirmar", "Si la política lo pide queda en aprobación, congelada y sin número."),
+                P("Después", "La recepción confirmada muestra por línea lo que falta facturar y lo devuelto, y sus facturas y devoluciones."),
+                P("Anular", "Con motivo: crea el documento contrario al costo con que entró. Con factura o devolución vigente no se anula; anúlelas primero."),
+            ],
+            ["recepcion", "entrada", "compra", "remision", "proveedor", "pendiente por facturar"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
+            ["compras-facturas-proveedor", "compras-devoluciones", "compras-compra-directa"], ["/compras/recepciones/nueva", "/compras/recepciones/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-facturas-proveedor", "Facturas de proveedor", Modulos.Compras, "/compras/facturas-proveedor",
+            "La factura del proveedor contra lo que falta facturar de sus recepciones y los servicios sin recepción, con impuestos, retenciones y el seguimiento de los eventos RADIAN.",
+            [
+                P("Compras → Facturas de proveedor", "Filtros por proveedor, estado, forma de pago, eventos pendientes, fechas y número.", "/compras/facturas-proveedor", "Abrir Facturas"),
+                P("Nueva factura", "Proveedor, número y CUFE; se puede prellenar desde el XML del proveedor (se lee y se descarta, no se guarda). Si el NIT del XML no existe, se crea el proveedor con la autorización de datos.", "/compras/facturas-proveedor/nueva", "Nueva factura"),
+                P("Facturar lo pendiente de la recepción", "Trae las líneas no facturadas. Impuestos y retenciones con su explicación; las diferencias de costo con la recepción, con Inventory.Costs.Read."),
+                P("Confirmar", "Queda la foto de impuestos y retenciones."),
+                P("Eventos RADIAN", "Acuse (030) y recibo del bien (032). Uno emitido fuera del ERP se registra con dónde y cuándo (Inventory.Purchases.RegisterRadianEvent)."),
+                P("Anular el registro", "Con motivo; con notas vigentes no se anula y los eventos RADIAN no cambian."),
+            ],
+            ["factura de proveedor", "cufe", "xml", "radian", "acuse", "retenciones", "iva"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
+            ["compras-recepciones", "compras-notas-proveedor"], ["/compras/facturas-proveedor/nueva", "/compras/facturas-proveedor/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-notas-proveedor", "Notas de proveedor", Modulos.Compras, "/compras/notas-proveedor",
+            "Las notas crédito y débito del proveedor contra una factura confirmada suya, por valor o por cantidad, línea por línea.",
+            [
+                P("Compras → Notas de proveedor", null, "/compras/notas-proveedor", "Abrir Notas"),
+                P("Nueva nota", "Factura, clase, líneas y si cambia el costo de lo recibido. «Guardar y calcular impuestos» trae los impuestos y retenciones de la foto de la factura en proporción."),
+                P("Confirmar la nota", "La nota crédito no pasa de lo que queda de la factura."),
+                P("Anular", "Con Inventory.Purchases.Void."),
+            ],
+            ["nota credito", "nota debito", "proveedor", "descuento", "devolucion en valor"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
+            ["compras-facturas-proveedor"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-devoluciones", "Devoluciones a proveedor", Modulos.Compras, "/compras/devoluciones",
+            "La devolución se arma desde las líneas de una recepción confirmada con lo devolvible (recibido menos lo ya devuelto) y sale al costo con que entró.",
+            [
+                P("Compras → Devoluciones", null, "/compras/devoluciones", "Abrir Devoluciones"),
+                P("Nueva devolución", "Elegí la recepción; las cantidades van en la unidad de la recepción. «Guardar» deja el borrador con sus avisos."),
+                P("Confirmar la devolución", "La diferencia entre el costo de entrada y el promedio la registra el sistema como ajuste de costo."),
+            ],
+            ["devolucion", "proveedor", "recepcion", "costo"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
+            ["compras-recepciones"], [], TipoDeTema.Proceso));
 
         // -------------------------------------------------------------------- Nómina --
         t.Add(Proceso("empleados", "Empleados", Modulos.Nomina, "/nomina/empleados",
@@ -1203,6 +1464,24 @@ public static class ManualCatalogo
             ["Tener una cooperativa activa en la sesión.", "Permiso del módulo; sin él la opción no aparece en el menú o la pantalla responde «sin permiso»."],
             ["parametros-del-sistema"], [], TipoDeTema.Maestro);
     }
+
+    /// <summary>
+    /// La guía de los catálogos simples de Inventario y Ventas (feature 012), que comparten <c>CatalogoDeInventario</c>: no
+    /// tienen papelera sino «Inactivar» con motivo, y cargan por la plantilla del catálogo.
+    /// </summary>
+    private static TemaDeManual CatalogoDeInventario(string ruta, string titulo, string modulo, string singular, string nota, params string[] claves) =>
+        new(SlugDeRuta(ruta), titulo, modulo, ruta,
+            $"Catálogo de {titulo.ToLowerInvariant()}: se consulta, se crea, se corrige y se inactiva {singular}. " + nota,
+            [
+                P("Abrir la pantalla", $"En el menú lateral, dentro de «{modulo}», elegí «{titulo}». «Ver inactivos» trae también los retirados.", ruta, "Abrir " + titulo),
+                P($"Crear {singular}", "«Nuevo». El código es la nomenclatura de la cooperativa: en mayúsculas, sin espacios y único; la pantalla avisa si ya existe antes de guardar."),
+                P("Corregir", "«Editar» en la fila. El código no se cambia después de creado."),
+                P("Inactivar o reactivar", "Pide motivo. Lo inactivo deja de ofrecerse en documentos nuevos y el historial lo conserva; nada se borra."),
+                P("Cargar por archivo", "«Plantilla»: se revisa por fila y columna y se aplica todo o nada. Un código que ya existe se actualiza con las mismas reglas que la edición; la plantilla nunca borra."),
+            ],
+            [.. claves, "catalogo", "crear", "editar", "inactivar", titulo.ToLowerInvariant()],
+            ["Tener una cooperativa activa en la sesión.", "Permiso Inventory.Catalog.View; para crear, corregir e inactivar, Inventory.Catalog.Manage."],
+            ["inventario-plantillas"], [], TipoDeTema.Maestro);
 
     private static TemaDeManual Reporte(string ruta, string titulo, string modulo, string resumen, string parametros, params string[] claves) =>
         new(SlugDeRuta(ruta), titulo, modulo, ruta, resumen,
