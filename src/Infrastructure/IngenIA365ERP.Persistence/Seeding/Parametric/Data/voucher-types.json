@@ -14,6 +14,13 @@
   { "code": "FV", "name": "Factura de venta", "usage": "Module", "module": "INV" },
   { "code": "EI", "name": "Entrada de inventario", "usage": "Module", "module": "INV" },
   { "code": "SI", "name": "Salida de inventario", "usage": "Module", "module": "INV" },
+  // Feature 012, entrega I2 (T484; contracts/contabilidad.md §9, T28): los otros cinco tipos de Inventario. El mapeo por
+  // operación lo deja inventory-voucher-mappings.json. Pendientes de validar por la contadora (A8).
+  { "code": "NV", "name": "Notas de venta", "usage": "Module", "module": "INV" },
+  { "code": "CP", "name": "Compras", "usage": "Module", "module": "INV" },
+  { "code": "TR", "name": "Traslados", "usage": "Module", "module": "INV" },
+  { "code": "AC", "name": "Ajustes de costo", "usage": "Module", "module": "INV" },
+  { "code": "CJ", "name": "Caja POS", "usage": "Module", "module": "INV" },
   { "code": "CH", "name": "Cheque de tesorería", "usage": "Module", "module": "TES" },
   { "code": "FP", "name": "Factura por pagar", "usage": "Module", "module": "TES" },
   { "code": "CB", "name": "Cuenta por cobrar de tesorería", "usage": "Module", "module": "TES" },

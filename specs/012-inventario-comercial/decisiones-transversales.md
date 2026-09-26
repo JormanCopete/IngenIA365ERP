@@ -1372,6 +1372,16 @@ PendingInventoryMessagesQuery}`, adaptador `ContabilidadParaInventario`. Cambios
 `PostingRequest.RegistradoPor` (`UsuarioDeOrigen?`), `ClosePeriodCommand.AcknowledgeInventoryPending`,
 sobrecarga de `MovimientosContables.PrepararAsync` con alcance explícito, `EnlacesDeOrigen`
 (`InventoryDocument`, `InventoryPostingBatch`), `AccountReferenceFinder`, `ListInvalidParameterizationsQuery`.
+**(nuevos, T476–T486)** en el dominio y la persistencia de I2: `InventoryPostingRule` se construye con sus
+dimensiones y expone `ClaveDe(…)` y `PesoDe(…)` (la misma clave y el mismo peso que calcula el constructor, para quien
+busca por dimensiones), `VigenteEn(fecha)` y `CerrarVigencia(hasta)`, y las constantes `PesoBodegaOPunto`/`PesoCentro`/
+`PesoSucursal`/`PesoGrupo`; `InventoryVoucherMapping.ClaveDe(operación, tipo)`; `InventoryPosting.SinComprobanteInformativo`
+(`Informational`) y `.SinComprobanteValorCero` (`ZeroValue`); `IntegrationBatch.EstaCerrado` y el record
+`Domain/Integration/TotalesDeLote` (lo que `Completar`/`CompletarConRechazos` guardan); `IntegrationBatchCounter.TomarSiguiente()`;
+los nombres de índice como constantes `IntegrationBatchConfiguration.UnicoDeLaFranja`/`.UnicoDeLaSesionDeCaja` e
+`InventoryPostingConfiguration.IndiceUnicoDelMensaje`; `VoucherTypesSeeder.AplicarAsync(db, logger, ct)` (aviso
+`[Semilla.TipoDeComprobanteEnUso]`) e `InventoryVoucherMappingsSeeder.AplicarAsync(db, logger, ct)` (avisos
+`[Semilla.MapeoDeInventarioSinTipo]`, `[Semilla.MapeoDeInventarioSinCruce]`).
 
 **Facturación electrónica**: `Application/ElectronicInvoicing/Channels/{ICanalDeEmisionElectronica,
 ICanalesDeEmision, ICredencialesDeCanal, ResultadoDeCanal, CapacidadesDelCanal}`,

@@ -197,6 +197,9 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DivipolaSeeder>();
         // Feature 012 (T168): catalogo tributario inicial, pendiente de validar por la contadora (Order 81).
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TaxCatalogSeeder>();
+        // Feature 012, entrega I2 (T485): el tipo de comprobante y el cruce por defecto de cada operación de Inventario (Order 84).
+        // No hace nada hasta que la base tenga IntegracionContableDeInventario (T486), que crea su tabla.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryVoucherMappingsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.
