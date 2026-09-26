@@ -2418,6 +2418,13 @@ documento electrónico). Reimpresiones y representación gráfica usan la copia 
 
 ## 4. Preguntas al dueño (consolidadas)
 
+**Respondidas por el dueño el 2026-09-26 (T987)**: D8, D9 y C10 quedan **confirmadas** tal como las
+propone la tabla y como las implementa I1:
+- D8: el saldo inicial de una bodega sin activar se admite como excepción, sin
+  `Costeo.RetroactivosPermitidos`.
+- D9: los ajustes de un conteo aprobado se fechan en la foto sin depender de ese parámetro.
+- C10: los permisos que dependen del cuerpo responden 422 con código propio, no 404.
+
 Las 79 preguntas de los siete temas quedan en 75 sin duplicados (se fundieron zona horaria, identidad
 del actor, validaciones de la contadora y marcas tributarias, que aparecían dos veces); se suman tres
 que salen de los riesgos y de esta armonización (A10, D7, H4), y tres de la revisión de coherencia

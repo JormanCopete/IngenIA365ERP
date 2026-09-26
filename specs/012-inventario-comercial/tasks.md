@@ -2800,8 +2800,18 @@ los cálculos a mano y respetan costos, alcance y datos personales (US17-1 a US1
   - El diagnóstico por base y la aprobación se obtienen en fase 3 (base de inventario), en la tarea del dueño que sigue a T029 y antes de T037; aquí sólo queda la promoción.
   - Si en una base faltan la aprobación o el segundo revisor de T030, la guarda de `RetiroDelInventarioHeredado` detiene la migración en esa base (fila `COR_SystemSettings.SettingKey = 'INV.RetiroHeredado.Aprobado'`).
 - [ ] T986 Verificar en los tres clústeres que el usuario de Mongo de la API tiene sólo inserción sobre las bases `IngenIA365ERP_Audit_{cooperativa}` y que la clave `AuditSignature` de producción no es `dev-v1`; si lo es, rotar a una versión nueva de la clave de anclas antes de desplegar I1 (pregunta A2; T36–T38; quickstart §10.1) (dueño)
+  - Revisado el 2026-09-26 en DEV, QA y PDN, y **no se cumple**:
+    - Mongo corre sin autenticación: el `StatefulSet` `erp-mongo` arranca sólo con `--replSet rs0 --bind_ip_all`, y la API se conecta sin usuario (`mongodb://erp-mongo:27017/?replicaSet=rs0`). No existe un usuario «sólo inserción».
+    - Ningún ambiente configura `AuditSignature`, ni en el ConfigMap ni en variables. La API usa los valores por defecto del código, cuyos secretos están en el repositorio:
+      - los PDF de auditoría de producción se firman hoy con `dev-v1` (defecto previo a la 012);
+      - las anclas usarían `dev-anclas-v1`.
+  - Antes de promover I1 a producción:
+    - configurar por ambiente un Secret con las claves propias (versiones nuevas para PDF y anclas, que el dueño genera sin que se lean);
+    - habilitar la autenticación de Mongo con un usuario de la API limitado a insertar y leer en las bases de auditoría.
+  - En DEV y QA no bloquea el ensayo. (dueño)
   - Falta la autorización del dueño para tocar los Secrets de producción; el clasificador bloquea cambios de configuración de producción en GitOps sin ella.
-- [ ] T987 Confirmar la excepción de puesta en marcha (D8) y los ajustes de conteo fechados en la foto sin depender de `Costeo.RetroactivosPermitidos` (D9), y la respuesta 422 con código propio para los permisos que dependen del cuerpo (C10), anotando la respuesta en specs/012-inventario-comercial/decisiones-transversales.md §4 (quickstart §11 fila 11) (dueño)
+- [X] T987 Confirmar la excepción de puesta en marcha (D8) y los ajustes de conteo fechados en la foto sin depender de `Costeo.RetroactivosPermitidos` (D9), y la respuesta 422 con código propio para los permisos que dependen del cuerpo (C10), anotando la respuesta en specs/012-inventario-comercial/decisiones-transversales.md §4 (quickstart §11 fila 11) (dueño)
+  - Confirmadas por el dueño el 2026-09-26 (D8, D9 y C10, como están implementadas); anotado en decisiones-transversales §4.
   - Tarea consolidada: las fases 7 y 10 (US4 y US11) y la fase 11 (US12) no repiten estas preguntas; sólo citan esta tarea y construyen sobre la propuesta.
   - Si no responde rige la propuesta, pero la segunda bodega de la salida (§10.6) no se activa sin una respuesta explícita a D8.
 - [X] T988 [P] Escribir docs/manual/inventario-documentos-y-kardex.md (nuevo): cómo se agrega una clase o un tipo de documento sobre `INV_Documents` y el ciclo común (§9 de contracts/api.md), por qué el kardex sólo lo escribe el registro (`NadieEscribeElKardexFueraDelRegistro`), el `CerrojoDeInventario` en orden fijo con la numeración al final (T15, `SoloElNumeradorNumera`), `PrecisionDeInventario` (T19), la idempotencia con `Idempotency-Key` (T13) y la anulación como hecho nuevo (`LoDeInventarioNoSeReversa`)
