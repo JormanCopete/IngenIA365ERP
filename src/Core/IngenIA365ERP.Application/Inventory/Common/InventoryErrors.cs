@@ -118,6 +118,89 @@ public static class InventoryErrors
         $"El período {year}-{month:00} está cerrado (el último cierre es del {lastClosedDate:yyyy-MM-dd}): use una fecha posterior.",
         new { year, month, lastClosedDate });
 
+    /// <summary>Un mes como lo nombran los errores de períodos: <c>{ year, month }</c>.</summary>
+    public sealed record MesDeInventario(int Year, int Month)
+    {
+        public static MesDeInventario De(DateOnly fecha) => new(fecha.Year, fecha.Month);
+
+        public override string ToString() => $"{Year}-{Month:00}";
+    }
+
+    /// <summary>US3, T289 (nuevo): sin <c>INV_Setup</c> no hay meses que cerrar (el módulo arranca con la primera fecha de corte, US4).</summary>
+    public static Error PeriodNotStarted() => new("Inventory.Period.NotStarted",
+        "El inventario todavía no arrancó: registre la fecha de corte y el saldo inicial de la primera bodega antes de cerrar un mes.");
+
+    /// <summary>§13.4: sólo el mes siguiente al último cerrado.</summary>
+    public static Error PeriodNotNext(int year, int month, MesDeInventario nextToClose) => new ErrorConDatos("Inventory.Period.NotNext",
+        $"Los meses se cierran en orden: el siguiente por cerrar es {nextToClose}, no {year}-{month:00}.",
+        new { year, month, nextToClose });
+
+    /// <summary>§13.4: sólo un mes que ya terminó en hora de Colombia.</summary>
+    public static Error PeriodNotEnded(int year, int month, DateOnly lastDay) => new ErrorConDatos("Inventory.Period.NotEnded",
+        $"El mes {year}-{month:00} todavía no termina (su último día es el {lastDay:yyyy-MM-dd}).",
+        new { year, month, lastDay });
+
+    /// <summary>Un conteo abierto con foto en el mes (lo llena US11).</summary>
+    public sealed record ConteoAbierto(Guid CountPublicId, string? DisplayNumber, string Warehouse, DateOnly SnapshotDate);
+
+    /// <summary>§13.4, US3-4: los conteos abiertos con foto en el mes bloquean el cierre.</summary>
+    public static Error PeriodOpenCounts(int year, int month, IReadOnlyList<ConteoAbierto> counts) => new ErrorConDatos("Inventory.Period.OpenCounts",
+        $"El mes {year}-{month:00} tiene {counts.Count} conteo(s) abierto(s) con foto: ciérrelos o descártelos antes de cerrar.",
+        new { year, month, counts });
+
+    /// <summary>§13.4: el primer intento con avisos responde con ellos; con <c>acknowledgeWarnings</c> cierra.</summary>
+    public static Error PeriodWarningsNotAcknowledged(int year, int month, object warnings) => new ErrorConDatos("Inventory.Period.WarningsNotAcknowledged",
+        $"El mes {year}-{month:00} tiene avisos (borradores, documentos en aprobación, traslados o mensajes pendientes). Revíselos y confirme que cierra de todos modos.",
+        new { year, month, warnings });
+
+    /// <summary>§13.4 (I6): remisiones sin facturar sin aceptar.</summary>
+    public static Error PeriodUnbilledShipmentsNotAccepted(int year, int month, object unbilledShipments) => new ErrorConDatos(
+        "Inventory.Period.UnbilledShipmentsNotAccepted",
+        $"El mes {year}-{month:00} tiene remisiones sin facturar: acéptelas con motivo para cerrar.",
+        new { year, month, unbilledShipments });
+
+    /// <summary>§13.4 (I6): aceptar remisiones sin facturar exige <c>Inventory.Periods.AcceptUnbilledShipments</c>.</summary>
+    public static Error PeriodAcceptUnbilledNotAllowed(string permissionCode) => new ErrorConDatos("Inventory.Period.AcceptUnbilledNotAllowed",
+        $"Aceptar remisiones sin facturar exige el permiso {permissionCode}.", new { permissionCode });
+
+    /// <summary>§13.4, US3-5: sólo se reabre el último cerrado.</summary>
+    public static Error PeriodNotLastClosed(int year, int month, MesDeInventario lastClosed) => new ErrorConDatos("Inventory.Period.NotLastClosed",
+        $"Sólo se reabre el último mes cerrado ({lastClosed}), no {year}-{month:00}.",
+        new { year, month, lastClosed });
+
+    public static Error PeriodNotClosed(int year, int month) => new ErrorConDatos("Inventory.Period.NotClosed",
+        $"El mes {year}-{month:00} no está cerrado.", new { year, month });
+
+    // ------------------------------------------------------------------------------- costeo (US3) --
+
+    /// <summary>
+    /// FR-045, T285 (nuevo): un documento que deja un movimiento con fecha anterior a otro ya registrado del mismo producto y
+    /// ámbito, fuera de las dos clases que I1 admite (saldo inicial de bodega no activa y ajuste de conteo). Nombra el
+    /// movimiento posterior. <c>Costeo.RetroactivosPermitidos</c> no lo habilita hasta I5.
+    /// </summary>
+    public static Error RetroactiveNotAllowed(int lineNumber, string productCode, Guid laterDocumentPublicId, string? laterDocumentNumber, DateOnly laterOperationDate) =>
+        new ErrorConDatos("Inventory.Costing.RetroactiveNotAllowed",
+            $"Línea {lineNumber}: {productCode} ya tiene un movimiento posterior ({laterDocumentNumber ?? "sin número"}, del {laterOperationDate:yyyy-MM-dd}). " +
+            "Un documento con fecha anterior cambiaría el costo ya registrado: use una fecha igual o posterior.",
+            new { lineNumber, productCode, laterMovement = new { documentPublicId = laterDocumentPublicId, displayNumber = laterDocumentNumber, operationDate = laterOperationDate } });
+
+    // ------------------------------------------------------------------------ modo de paso (US3) --
+
+    /// <summary>Un tipo de documento como lo nombran los errores del modo de paso.</summary>
+    public sealed record TipoNombrado(Guid PublicId, string Code, string Name, string? Class = null);
+
+    /// <summary>§7, FR-075: un tipo encadenado no admite un modo propio; va por la cadena.</summary>
+    public static Error PostingModeChainMismatch(PostingChain chain, IReadOnlyList<TipoNombrado> documentTypes) => new ErrorConDatos(
+        "Inventory.PostingMode.ChainMismatch",
+        $"El tipo pertenece a la cadena {chain}: el modo de paso se registra para toda la cadena ({string.Join(", ", documentTypes.Select(t => t.Code))}).",
+        new { chain = chain.ToString(), documentTypes });
+
+    /// <summary>§7, FR-075: dejar sin paso un tipo fiscal exige confirmarlo.</summary>
+    public static Error PostingModeFiscalRequiresConfirmation(IReadOnlyList<TipoNombrado> fiscalDocumentTypes) => new ErrorConDatos(
+        "Inventory.PostingMode.FiscalRequiresConfirmation",
+        $"Dejar sin paso a contabilidad documentos fiscales ({string.Join(", ", fiscalDocumentTypes.Select(t => t.Code))}) exige confirmarlo.",
+        new { fiscalDocumentTypes });
+
     public static Error WarehouseNotActive(Guid warehousePublicId, string warehouseCode) => new ErrorConDatos("Inventory.Warehouse.NotActive",
         $"La bodega {warehouseCode} todavía no está activa: sólo admite el saldo inicial y su anulación.",
         new { warehousePublicId, warehouseCode, allowedClasses = new[] { nameof(DocumentClass.OpeningBalance), nameof(DocumentClass.Voiding) } });

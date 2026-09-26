@@ -119,6 +119,10 @@
             <PermissionGate Required="Inventory.Integrity.Verify">
                 <NavLink href="/inventario/integridad" class="nav-subitem">Integridad del kardex</NavLink>
             </PermissionGate>
+            @* US3 (T295): cierre y reapertura de meses y valorizado a una fecha. *@
+            <PermissionGate Required="Inventory.Periods.View">
+                <NavLink href="/inventario/periodos" class="nav-subitem">Períodos</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Reports.View">
                 <NavLink href="/inventario/informes" class="nav-subitem">Informes</NavLink>
             </PermissionGate>

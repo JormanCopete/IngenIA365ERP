@@ -52,10 +52,23 @@ public sealed record PreparacionDelRegistro(PedidoDeCerrojo Cerrojo, decimal Val
 /// <summary>Un movimiento ya escrito: sus filas del kardex (principal y ajustes) y la explicación del costo. (nuevo)</summary>
 public sealed record MovimientoEscrito(MovimientoDeKardex Movimiento, int LocationId, IReadOnlyList<KardexEntry> Lineas, ExplicacionDeCosto Explicacion);
 
+/// <summary>Una línea <c>Retroactive</c> escrita, con la porción que corrige (en existencia o vendida). (nuevo)</summary>
+public sealed record LineaRetroactivaEscrita(KardexEntry Fila, PorcionDelAjuste Porcion);
+
+/// <summary>
+/// Los ajustes <c>Retroactive</c> que el retroactivo mínimo dejó sobre UN documento afectado (T285): con ellos se arma un
+/// <c>AjusteDeCostoReconocido</c> por documento (<c>EmisionDeInventario.AjustesRetroactivosAsync</c>). (nuevo)
+/// </summary>
+public sealed record AjusteRetroactivoRegistrado(int AffectedDocumentId, decimal EnExistencia, decimal Vendida, IReadOnlyList<LineaRetroactivaEscrita> Lineas);
+
 /// <summary>Lo que dejó el registro de un documento. (nuevo)</summary>
 public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 {
+    /// <summary>Las líneas de los movimientos del documento (no incluye los ajustes retroactivos sobre otros documentos).</summary>
     public IEnumerable<KardexEntry> Lineas => Movimientos.SelectMany(m => m.Lineas);
+
+    /// <summary>Los ajustes <c>Retroactive</c> sobre movimientos posteriores, uno por documento afectado (T285).</summary>
+    public IReadOnlyList<AjusteRetroactivoRegistrado> AjustesRetroactivos { get; init; } = [];
 }
 
 /// <summary>
@@ -76,8 +89,18 @@ public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 /// <para>
 /// Las filas de proyección las crea el cerrojo (<c>INSERT … ON CONFLICT</c>) antes de bloquearlas; si una falta (un anfitrión
 /// sin cerrojo real, las pruebas), la crea aquí. Las salidas en negativo pendientes no se reconstruyen del kardex: la
-/// regularización usa <c>Value / Quantity</c> del ámbito sin <c>AffectsEntryId</c> (research R10, decisión de US3), y el
-/// retroactivo (US3, T285) todavía no se aplica aquí.
+/// regularización usa <c>Value / Quantity</c> del ámbito sin <c>AffectsEntryId</c> (research R10, decisión de US3).
+/// </para>
+/// <para>
+/// <b>Retroactivo</b> (US3, T285; FR-045, T18): un documento que deja un movimiento con fecha anterior a otro ya registrado
+/// del mismo producto y ámbito se rechaza con <c>Inventory.Costing.RetroactiveNotAllowed</c> nombrando el posterior —siempre
+/// hasta I5, sin mirar <c>Costeo.RetroactivosPermitidos</c>—, salvo las dos clases exentas de I1 (<see cref="EsExentoAsync"/>):
+/// el saldo inicial de una bodega <c>NotActivated</c> (y su anulación) y los ajustes de un conteo (<c>CountAdjustmentOf</c>).
+/// Para ellas el ámbito se recalcula con <see cref="Retroactivo.Insertar"/> desde el estado a la fecha del documento y la
+/// historia posterior (índice <c>(ProductId, CostScopeWarehouseId, OperationDate, Id)</c>): las líneas <c>Retroactive</c> van
+/// bajo este documento, fechadas en la salida afectada y en su bodega, y vuelven en <see cref="RegistroHecho.AjustesRetroactivos"/>
+/// agrupadas por documento afectado; un saldo intermedio bajo cero con el negativo prohibido es
+/// <c>Inventory.Stock.Insufficient</c>.
 /// </para>
 /// </summary>
 public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametros parametros, IDateTimeService reloj)
@@ -140,6 +163,12 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         var detalles = (await db.StockDetails.Where(s => productos.Contains(s.ProductId) && bodegas.Contains(s.WarehouseId) && s.LotId == null).ToListAsync(ct))
             .ToDictionary(s => (s.ProductId, s.WarehouseId, s.LocationId));
 
+        // --------------------------------------------------------------------- retroactivo (US3, T285) --
+        var retro = await AmbitosRetroactivosAsync(documento, movimientos, p, ct);
+        if (retro.IsFailure) return Result.Failure<RegistroHecho>(retro.Error);
+        var ambitosRetroactivos = retro.Value;
+        var retroactivos = new List<(MovimientoDeKardex Mov, int Ubicacion, int Ambito)>();
+
         // ------------------------------------------------------------------ primera pasada: en memoria --
         var estados = costos.ToDictionary(c => c.Key, c => new EstadoDeCosto(c.Value.Quantity, c.Value.Value, c.Value.AverageCost, c.Value.LastUnitCost));
         var fisicos = existencias.ToDictionary(e => e.Key, e => (Fisico: e.Value.Physical, Reservado: e.Value.Reserved));
@@ -166,6 +195,15 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 }
             }
 
+            if (ambitosRetroactivos.Contains((producto, ambito)))
+            {
+                // El ámbito se recalcula entero con el retroactivo, después de esta pasada.
+                fisicos[(producto, m.WarehouseId)] = (fisico + m.QuantityBase, reservado);
+                porUbicacion[(producto, m.WarehouseId, ubicacion)] = enUbicacion + m.QuantityBase;
+                retroactivos.Add((m, ubicacion, ambito));
+                continue;
+            }
+
             var estado = estados.GetValueOrDefault((producto, ambito)) ?? EstadoDeCosto.Vacio;
             var origen = m.Origen is null ? null : new ReferenciaDeKardex(m.Origen.Id == 0 ? null : m.Origen.Id, null);
             var costo = MotorDeCosteo.Aplicar(estado,
@@ -181,6 +219,23 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
             fisicos[(producto, m.WarehouseId)] = (fisico + m.QuantityBase, reservado);
             porUbicacion[(producto, m.WarehouseId, ubicacion)] = enUbicacion + m.QuantityBase;
             plan.Add((m, ubicacion, ambito, costo));
+        }
+
+        var recalculados = new List<(MovimientoDeKardex Primero, int Ambito, ResultadoRetroactivo Resultado, IReadOnlyDictionary<long, KardexEntry> Afectadas)>();
+        foreach (var grupo in retroactivos.GroupBy(r => (r.Mov.Linea.ProductId, r.Ambito)))
+        {
+            var deLaClave = grupo.ToList();
+            var (pedido, afectadas) = await PedidoRetroactivoAsync(documento, grupo.Key.ProductId, grupo.Key.Ambito, deLaClave.Select(r => r.Mov).ToList(),
+                new ParametrosDeCosteo(p.Metodo, p.Montos, deLaClave.All(r => p.NegativoPermitido(r.Mov.WarehouseId))), ct);
+            var resultado = Retroactivo.Insertar(pedido);
+            if (!resultado.Admitido)
+            {
+                faltantes.Add((deLaClave[0].Mov, deLaClave[0].Ubicacion, resultado.Rechazo!.Disponible, false));
+                continue;
+            }
+            estados[grupo.Key] = resultado.EstadoFinal;
+            for (var i = 0; i < deLaClave.Count; i++) plan.Add((deLaClave[i].Mov, deLaClave[i].Ubicacion, grupo.Key.Ambito, resultado.Nuevos[i]));
+            recalculados.Add((deLaClave[0].Mov, grupo.Key.Ambito, resultado, afectadas));
         }
 
         if (faltantes.Count > 0)
@@ -230,6 +285,41 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 if (!fechas.TryGetValue(clave, out var ultima) || fila.OperationDate > ultima) fechas[clave] = fila.OperationDate;
             }
             escritos.Add(new MovimientoEscrito(m, ubicacion, filas, costo.Explicacion));
+        }
+
+        // Los ajustes Retroactive: bajo este documento, en la bodega y la fecha de la salida afectada, uno por documento afectado.
+        var ajustesRetroactivos = new List<AjusteRetroactivoRegistrado>();
+        foreach (var (primero, ambito, resultado, afectadas) in recalculados)
+        {
+            foreach (var porDocumento in resultado.PorDocumento)
+            {
+                var filas = new List<LineaRetroactivaEscrita>(porDocumento.Lineas.Count);
+                foreach (var propuesta in porDocumento.Lineas)
+                {
+                    var afectada = afectadas[propuesta.AffectsEntry!.EntryId!.Value];
+                    var fila = new KardexEntry
+                    {
+                        DocumentId = documento.Id,
+                        DocumentLineId = primero.Linea.Id,
+                        ProductId = primero.Linea.ProductId,
+                        WarehouseId = afectada.WarehouseId,
+                        LocationId = afectada.LocationId,
+                        OperationDate = propuesta.OperationDate ?? afectada.OperationDate,
+                        RegisteredAt = ahora,
+                        Kind = KardexEntryKind.CostAdjustment,
+                        Reason = KardexReason.Retroactive,
+                        QuantityBase = 0m,
+                        UnitCost = propuesta.UnitCost,
+                        TotalCost = propuesta.TotalCost,
+                        CostScopeWarehouseId = ambito,
+                        CostMethod = p.Metodo,
+                        AffectsEntryId = afectada.Id,
+                    };
+                    db.KardexEntries.Add(fila);
+                    filas.Add(new LineaRetroactivaEscrita(fila, propuesta.Porcion ?? PorcionDelAjuste.EnExistencia));
+                }
+                ajustesRetroactivos.Add(new AjusteRetroactivoRegistrado((int)porDocumento.DocumentId, porDocumento.EnExistencia, porDocumento.Vendida, filas));
+            }
         }
 
         // Proyecciones: el estado final de cada ámbito, la existencia de cada bodega y ubicación tocada.
@@ -286,7 +376,130 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         }
         documento.CostTotal = documento.Lines.Where(l => !l.IsDeleted).Sum(l => l.TotalCost ?? 0m);
 
-        return Result.Success(new RegistroHecho(escritos));
+        return Result.Success(new RegistroHecho(escritos) { AjustesRetroactivos = ajustesRetroactivos });
+    }
+
+    // ------------------------------------------------------------------------------------ retroactivo --
+
+    /// <summary>
+    /// Los ámbitos (producto, ámbito de costo) donde el documento dejaría un movimiento anterior a otro ya registrado. Si hay
+    /// alguno y la clase no está exenta, <c>Inventory.Costing.RetroactiveNotAllowed</c> nombrando el primer movimiento posterior.
+    /// </summary>
+    private async Task<Result<HashSet<(int ProductId, int Ambito)>>> AmbitosRetroactivosAsync(
+        InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos, ParametrosDelKardex p, CancellationToken ct)
+    {
+        var claves = movimientos.Select(m => (m.Linea.ProductId, Ambito: p.AmbitoDe(m.WarehouseId))).ToHashSet();
+        var productos = claves.Select(c => c.ProductId).Distinct().ToList();
+        var fecha = documento.OperationDate;
+        var posteriores = (await db.KardexEntries.AsNoTracking()
+                .Where(k => productos.Contains(k.ProductId) && k.OperationDate > fecha)
+                .GroupBy(k => new { k.ProductId, k.CostScopeWarehouseId })
+                .Select(g => new { g.Key.ProductId, g.Key.CostScopeWarehouseId, Fecha = g.Min(k => k.OperationDate) })
+                .ToListAsync(ct))
+            .Where(x => claves.Contains((x.ProductId, x.CostScopeWarehouseId)))
+            .ToList();
+        if (posteriores.Count == 0) return Result.Success(new HashSet<(int, int)>());
+
+        if (await EsExentoAsync(documento, ct))
+            return Result.Success(posteriores.Select(x => (x.ProductId, x.CostScopeWarehouseId)).ToHashSet());
+
+        var primero = movimientos.First(m => posteriores.Any(x => x.ProductId == m.Linea.ProductId && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
+        var ambito = p.AmbitoDe(primero.WarehouseId);
+        var fechaPosterior = posteriores.First(x => x.ProductId == primero.Linea.ProductId && x.CostScopeWarehouseId == ambito).Fecha;
+        var posterior = await db.KardexEntries.AsNoTracking()
+            .Where(k => k.ProductId == primero.Linea.ProductId && k.CostScopeWarehouseId == ambito && k.OperationDate == fechaPosterior)
+            .OrderBy(k => k.Id)
+            .Join(db.InventoryDocuments, k => k.DocumentId, d => d.Id, (k, d) => new { d.PublicId, d.Prefix, d.Number })
+            .FirstAsync(ct);
+        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == primero.Linea.ProductId).Select(x => x.Code).FirstAsync(ct);
+        return Result.Failure<HashSet<(int, int)>>(InventoryErrors.RetroactiveNotAllowed(primero.Linea.LineNumber, codigo, posterior.PublicId,
+            Documents.VistaDeDocumentos.NumeroVisible(posterior.Prefix, posterior.Number), fechaPosterior));
+    }
+
+    /// <summary>
+    /// Las dos clases que I1 admite con fecha anterior sin mirar <c>Costeo.RetroactivosPermitidos</c> (FR-045; preguntas D8 y
+    /// D9, propuesta por defecto): el saldo inicial de una bodega <c>NotActivated</c> y su anulación, y los ajustes que genera un
+    /// conteo aprobado (enlazados <c>CountAdjustmentOf</c>).
+    /// </summary>
+    public async Task<bool> EsExentoAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var saldoInicial = documento;
+        if (documento.Class == DocumentClass.Voiding && documento.VoidsDocumentId is int anulado)
+            saldoInicial = await db.InventoryDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == anulado, ct) ?? documento;
+        if (saldoInicial.Class == DocumentClass.OpeningBalance && saldoInicial.WarehouseId is int bodega
+            && await db.Warehouses.AsNoTracking().AnyAsync(w => w.Id == bodega && w.ActivationStatus == WarehouseActivationStatus.NotActivated, ct))
+            return true;
+
+        if (documento.Class is not (DocumentClass.PositiveAdjustment or DocumentClass.NegativeAdjustment)) return false;
+        return db.DocumentLinks.Local.Any(l => l.Kind == DocumentLinkKind.CountAdjustmentOf && (l.SourceDocumentId == documento.Id || l.TargetDocumentId == documento.Id || l.SourceDocument == documento || l.TargetDocument == documento))
+            || (documento.Id != 0 && await db.DocumentLinks.AsNoTracking().AnyAsync(l => l.Kind == DocumentLinkKind.CountAdjustmentOf
+                && (l.SourceDocumentId == documento.Id || l.TargetDocumentId == documento.Id), ct));
+    }
+
+    /// <summary>
+    /// El pedido del retroactivo para un ámbito: el estado a la fecha del documento (Σ del kardex en o antes de esa fecha, con
+    /// el último costo de entrada) y la historia posterior, un <see cref="MovimientoRegistrado"/> por línea de entrada o salida
+    /// con el valor de sus ajustes (los del mismo movimiento, y los retroactivos que ya lo afectaron). Cómo se valoró cada uno se
+    /// reconstruye del kardex: la reversión de una salida o la entrada al tránsito siguen el costo de su origen, la reversión de
+    /// una entrada sale al costo con que entró, toda otra salida sale al promedio y toda otra entrada entra a su costo registrado.
+    /// </summary>
+    private async Task<(PedidoRetroactivo Pedido, IReadOnlyDictionary<long, KardexEntry> Afectadas)> PedidoRetroactivoAsync(
+        InventoryDocument documento, int producto, int ambito, IReadOnlyList<MovimientoDeKardex> nuevos, ParametrosDeCosteo parametrosDeCosteo, CancellationToken ct)
+    {
+        var fecha = documento.OperationDate;
+        var delAmbito = db.KardexEntries.AsNoTracking().Where(k => k.ProductId == producto && k.CostScopeWarehouseId == ambito);
+
+        var antes = await delAmbito.Where(k => k.OperationDate <= fecha)
+            .GroupBy(k => 1)
+            .Select(g => new { Cantidad = g.Sum(k => k.QuantityBase), Valor = g.Sum(k => k.TotalCost) })
+            .FirstOrDefaultAsync(ct);
+        var ultimoCosto = await delAmbito.Where(k => k.OperationDate <= fecha && k.Kind == KardexEntryKind.Entry)
+            .OrderByDescending(k => k.OperationDate).ThenByDescending(k => k.Id).Select(k => (decimal?)k.UnitCost).FirstOrDefaultAsync(ct) ?? 0m;
+        var inicial = EstadoDeCosto.Con(antes?.Cantidad ?? 0m, antes?.Valor ?? 0m, ultimoCosto);
+
+        var posteriores = await delAmbito.Where(k => k.OperationDate > fecha).OrderBy(k => k.OperationDate).ThenBy(k => k.Id).ToListAsync(ct);
+        var documentos = posteriores.Select(k => k.DocumentId).Distinct().ToList();
+        var clases = await db.InventoryDocuments.AsNoTracking().IgnoreQueryFilters().Where(d => documentos.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => d.Class, ct);
+
+        var principales = posteriores.Where(k => k.Kind != KardexEntryKind.CostAdjustment).ToList();
+        var valor = principales.ToDictionary(k => k.Id, k => k.TotalCost);
+        foreach (var ajuste in posteriores.Where(k => k.Kind == KardexEntryKind.CostAdjustment))
+        {
+            var duenio = ajuste.Reason == KardexReason.Retroactive && ajuste.AffectsEntryId is long afectada && valor.ContainsKey(afectada)
+                ? afectada
+                : principales.Where(k => k.DocumentId == ajuste.DocumentId && k.DocumentLineId == ajuste.DocumentLineId && k.Id < ajuste.Id)
+                    .Select(k => (long?)k.Id).LastOrDefault()
+                  ?? (ajuste.AffectsEntryId is long a && valor.ContainsKey(a) ? a : null);
+            if (duenio is long d) valor[d] += ajuste.TotalCost;
+        }
+
+        var historia = principales.Select(k =>
+        {
+            var clase = clases.GetValueOrDefault(k.DocumentId);
+            MovimientoDeCosto movimiento;
+            if (k.ReversesEntryId is long revertida)
+                movimiento = new MovimientoDeCosto(k.QuantityBase,
+                    k.Kind == KardexEntryKind.Exit ? ValoracionDelMovimiento.DevolucionDeEntrada : ValoracionDelMovimiento.AlCostoDeOrigen,
+                    k.UnitCost, ReferenciaDeKardex.A(revertida), EsAnulacion: true);
+            else if (k.Kind == KardexEntryKind.Exit)
+                movimiento = clase == DocumentClass.SupplierReturn
+                    ? new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.DevolucionDeEntrada, k.UnitCost)
+                    : new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoVigente);
+            else if (principales.FirstOrDefault(s => s.Kind == KardexEntryKind.Exit && s.DocumentId == k.DocumentId && s.DocumentLineId == k.DocumentLineId && s.Id < k.Id) is { } salida)
+                movimiento = new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, k.UnitCost, ReferenciaDeKardex.A(salida.Id));
+            else
+                movimiento = new MovimientoDeCosto(k.QuantityBase, ValoracionDelMovimiento.AlCostoIndicado, k.UnitCost);
+            var sale = k.Kind == KardexEntryKind.Exit && clase is not (DocumentClass.TransferDispatch or DocumentClass.LocationMove);
+            return new MovimientoRegistrado(k.Id, k.DocumentId, k.OperationDate, movimiento, valor[k.Id], k.UnitCost, sale);
+        }).ToList();
+
+        var pedido = new PedidoRetroactivo(inicial, historia,
+            nuevos.Select(m => new MovimientoRetroactivo(fecha, documento.Id,
+                new MovimientoDeCosto(m.QuantityBase, m.Valoracion, m.CostoUnitario,
+                    m.Origen is null ? null : new ReferenciaDeKardex(m.Origen.Id == 0 ? null : m.Origen.Id, null), m.EsAnulacion))).ToList(),
+            parametrosDeCosteo);
+        return (pedido, principales.ToDictionary(k => k.Id));
     }
 
     // ------------------------------------------------------------------------------------------ apoyo --

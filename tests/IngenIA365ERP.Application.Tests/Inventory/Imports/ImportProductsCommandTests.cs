@@ -1,13 +1,19 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Imports;
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Application.Inventory.Periods;
 using IngenIA365ERP.Application.Inventory.Catalog.Products;
 using IngenIA365ERP.Application.Inventory.Imports;
 using IngenIA365ERP.Application.Tests.Inventory.Catalog;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
+using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,10 +79,21 @@ public class ImportProductsCommandTests
             if (!_hojas.ContainsKey(hoja)) Hoja(hoja, enc, []);
         var servicios = new ServiceCollection().AddSingleton(Substitute.For<IAuditService>()).BuildServiceProvider();
         var ejecutor = new EjecutorDeImportacion(c.Db, _lector, _permisos, servicios);
-        var r = await new ImportProductsCommandHandler(c.Db, ejecutor, c.Reloj)
+        var r = await new ImportProductsCommandHandler(c.Db, ejecutor, c.Reloj, Reclasificacion(c))
             .Handle(new ImportProductsCommand(modo, new ArchivoDeImportacion("productos.xlsx", [1, 2, 3]), motivo), default);
         c.Olvidar();
         return r;
+    }
+
+    /// <summary>La reclasificación real (US3) con el cerrojo y el actor sustituidos.</summary>
+    private static ReclasificacionDeGrupo Reclasificacion(CatalogoDePrueba c)
+    {
+        var actor = Substitute.For<IActorActual>();
+        actor.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(new Actor(ActorKind.Person, 7, Guid.NewGuid(), Guid.NewGuid(),
+            "catalogo@coop.co", "catalogo@coop.co", ExecutionChannel.Web, "POST /api/inventory/products/import", "10.0.0.1", null));
+        var lector = new LectorDeParametros(c.Db);
+        return new ReclasificacionDeGrupo(c.Db, Substitute.For<ICerrojoDeInventario>(), new ValorizadoALaFecha(c.Db, lector),
+            new EmisorDeMensajes(c.Db, actor, c.Reloj), lector, c.Reloj);
     }
 
     private static string Errores(ImportResultDto r) => string.Join(" | ", r.Errors.Select(e => $"{e.Sheet} {e.Row} {e.Column} {e.Code}: {e.Message}"));
@@ -272,7 +289,18 @@ public class ImportProductsCommandTests
         _permisos.ListAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyCollection<string>>(["Inventory.Catalog.Import", P.PermisoDeReclasificar]));
         var conPermiso = await ImportarAsync(c, ModoDeImportacion.Review);
-        conPermiso.Value.RequiresReason.Should().BeTrue();
-        conPermiso.Value.Errors.Should().ContainSingle(e => e.Column == P.GrupoContable && e.Code == ImportErrors.CellNotYetAvailable);
+        conPermiso.Value.RequiresReason.Should().BeTrue("sin motivo en la fila, el de la importación");
+        conPermiso.Value.Errors.Should().BeEmpty(Errores(conPermiso.Value));
+        conPermiso.Value.Changes.Should().ContainSingle(x => x.Fields.Any(f => f.Column == P.GrupoContable && f.Before == "ABARR" && f.After == "AGRO"));
+        (await c.Db.ProductAccountingGroupChanges.CountAsync()).Should().Be(0, "revisar no reclasifica");
+
+        // US3 (T288): la aplicación reclasifica con la misma regla que el comando, con fecha efectiva hoy.
+        var aplicada = await ImportarAsync(c, ModoDeImportacion.Apply, "Cambio de línea comercial");
+        aplicada.IsSuccess.Should().BeTrue(aplicada.IsFailure ? aplicada.Error.Message : string.Empty);
+        var cambio = await c.Db.ProductAccountingGroupChanges.SingleAsync();
+        cambio.EffectiveDate.Should().Be(CatalogoDePrueba.Hoy);
+        cambio.Reason.Should().Be("Cambio de línea comercial");
+        cambio.Quantity.Should().Be(0m, "sin kardex no hay existencia que reclasificar");
+        (await c.Db.Products.SingleAsync(x => x.Code == "P1")).AccountingGroupId.Should().Be(cambio.ToAccountingGroupId);
     }
 }

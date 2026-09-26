@@ -24,8 +24,10 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// (<c>ConClaveDeOperacion</c>). Los catálogos se inactivan y reactivan con motivo; sólo un producto sin historia admite
 /// <c>DELETE</c>. Las plantillas 2 a 6 (<c>template.xlsx</c>, <c>import</c>) van por <see cref="RutasDePlantilla.MapPlantilla"/>
 /// junto a su catálogo: descarga con <c>Catalog.View</c>, con datos además <c>Catalog.Export</c>, importar con
-/// <c>Catalog.Import</c>. La lista de plantillas es de <c>TemplatesEndpoints</c>; el cambio de grupo contable de un producto
-/// (<c>/products/{id}/accounting-group</c>) lo agrega US3. Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
+/// <c>Catalog.Import</c>. La lista de plantillas es de <c>TemplatesEndpoints</c>. El cambio de grupo contable de un producto
+/// (<c>/products/{id}/accounting-group</c>, US3 T292): historial con <c>Catalog.View</c> y cambio con
+/// <c>Inventory.Catalog.ReclassifyAccountingGroup</c>, motivo e <c>Idempotency-Key</c>. Cada ruta sólo reenvía al
+/// <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class CatalogEndpoints : ICarterModule
 {
@@ -33,6 +35,7 @@ public class CatalogEndpoints : ICarterModule
     public const string Administrar = "Inventory.Catalog.Manage";
     public const string Importar = "Inventory.Catalog.Import";
     public const string Exportar = "Inventory.Catalog.Export";
+    public const string Reclasificar = "Inventory.Catalog.ReclassifyAccountingGroup";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -223,6 +226,21 @@ public class CatalogEndpoints : ICarterModule
                 await sender.Send(new DeleteProductCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Inventory_Products_Delete").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
 
+        // §3.6.4 Cambio de grupo contable (US3, T292).
+        g.MapGet("/{id:guid}/accounting-group", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetProductAccountingGroupHistoryQuery(id), ct))
+            .WithName("Inventory_Products_AccountingGroup_History").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
+        g.MapPost("/{id:guid}/accounting-group", async (Guid id, CambioDeGrupoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var r = await sender.Send(new ChangeProductAccountingGroupCommand(id, body.AccountingGroupPublicId, body.EffectiveDate, body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct);
+                return r.IsSuccess ? (object)Results.Created($"/api/inventory/products/{id}/accounting-group", r.Value) : r;
+            })
+            .WithName("Inventory_Products_AccountingGroup_Change").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Reclasificar);
+
         // §3.6.1 Unidades alternas.
         g.MapGet("/{id:guid}/units", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new ListProductUnitsQuery(id), ct))
             .WithName("Inventory_Products_Units_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
@@ -384,6 +402,9 @@ public class CatalogEndpoints : ICarterModule
         decimal? Weight, decimal? Volume, bool? TracksLot, bool? TracksSerial, bool? TracksExpiry, bool? IsPurchasable, bool? IsSellable);
 
     public sealed record EstadoDeProductoRequest(ProductStatus Status, string? Reason);
+
+    /// <summary>El cuerpo del cambio de grupo contable (§3.6.4): la fecha efectiva vacía es hoy.</summary>
+    public sealed record CambioDeGrupoRequest(Guid AccountingGroupPublicId, DateOnly? EffectiveDate, string? Reason);
 
     public sealed record UnidadAlternaRequest(Guid UnitPublicId, decimal Factor, ProductUnitUsage Usage, bool? IsDefaultPurchase, bool? IsDefaultSale);
 

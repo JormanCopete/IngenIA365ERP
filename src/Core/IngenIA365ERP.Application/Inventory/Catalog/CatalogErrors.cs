@@ -94,6 +94,15 @@ public static class CatalogErrors
     public static Error ProductStatusUnchanged(ProductStatus status) => new ErrorConDatos("Inventory.Product.StatusUnchanged",
         $"El producto ya está en estado {status}.", new { status = status.ToString() });
 
+    /// <summary>§3.6.4 (US3, T288): el grupo pedido es el mismo que tiene.</summary>
+    public static Error ProductAccountingGroupUnchanged(string accountingGroupCode) => new ErrorConDatos("Inventory.Product.AccountingGroupUnchanged",
+        $"El producto ya está en el grupo contable {accountingGroupCode}.", new { accountingGroupCode });
+
+    /// <summary>§3.6.4 (US3, T288): la fecha efectiva no puede dejar movimientos ya registrados en el grupo equivocado.</summary>
+    public static Error ProductMovementsAfterEffectiveDate(DateOnly lastMovementDate) => new ErrorConDatos("Inventory.Product.MovementsAfterEffectiveDate",
+        $"El producto tiene movimientos hasta el {lastMovementDate:yyyy-MM-dd}: la fecha efectiva del cambio de grupo debe ser ese día o después.",
+        new { lastMovementDate });
+
     public static Error ProductNotInventoriable(string productCode) => new ErrorConDatos("Inventory.Product.NotInventoriable",
         $"El producto {productCode} no maneja existencias.", new { productCode });
 

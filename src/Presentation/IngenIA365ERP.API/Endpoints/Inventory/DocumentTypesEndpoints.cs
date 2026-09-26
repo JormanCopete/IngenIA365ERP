@@ -104,7 +104,11 @@ public class DocumentTypesEndpoints : ICarterModule
         group.MapPlantilla("Inventory.DocumentTypes.View", "Inventory.DocumentTypes.Manage", PlantillaDeTiposDeDocumento.Clave, "Inventory_DocumentTypes",
             importar: (modo, archivo, motivo, clave) => new ImportDocumentTypesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetDocumentTypesTemplateDataQuery(),
-            permisoDeExportacion: "Inventory.Catalog.Export");
+            permisoDeExportacion: "Inventory.Catalog.Export",
+            // US3 (T286): los tipos fiscales que se dejan sin paso se confirman repitiendo sus códigos (plantillas.md §8).
+            camposDelFormulario: (comando, formulario) => comando is ImportDocumentTypesCommand tipos
+                ? tipos with { ConfirmFiscalWithoutPosting = formulario["confirmFiscalWithoutPosting"].ToString() is { Length: > 0 } c ? c : null }
+                : comando);
     }
 
     /// <summary>El alta (§8).</summary>

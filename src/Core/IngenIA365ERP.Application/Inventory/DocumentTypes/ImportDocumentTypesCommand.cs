@@ -7,12 +7,18 @@ using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Application.Inventory.Documents;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Inventory.Documents;
+using IngenIA365ERP.Domain.Inventory.Parameters;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using P = IngenIA365ERP.Application.Inventory.DocumentTypes.PlantillaDeTiposDeDocumento;
@@ -33,20 +39,30 @@ namespace IngenIA365ERP.Application.Inventory.DocumentTypes;
 /// política de confirmación con una versión nueva desde <c>vigenteDesde</c> (<see cref="PoliticasDeAprobacion.NuevaVersion"/>,
 /// la misma de <c>SaveApprovalPolicyCommand</c>); iguales a la última versión, «sin cambio». Un tipo sin filas conserva su
 /// política, así que la plantilla nunca deja un tipo sin aprobación (<c>Approvals.Policy.RequiredForClass</c> no se puede
-/// violar desde aquí). <c>Approvals.Policy.ValidFromInClosedPeriod</c> llega con las reglas de Inventario de
-/// <see cref="IReglasDePoliticaDeAprobacion"/> (T286), que deben correr también aquí.
+/// violar desde aquí). Cada versión pasa además por las reglas de Inventario de <see cref="IReglasDePoliticaDeAprobacion"/>
+/// (US3, T286): <c>Approvals.Policy.ValidFromInClosedPeriod</c>.
 /// </para>
 /// <para>
-/// Lo que responde <c>Import.Cell.NotYetAvailable</c> hasta que exista lo que cita: bodegas por código y canal (US1:
-/// hasta entonces <c>*</c> o vacío), y las cinco columnas del modo de paso (las vigencias <c>Contabilidad.*</c> por tipo
-/// necesitan las reglas de cadena y de tipo fiscal sin paso de <c>IReglasDeParametros</c>, T286; hasta entonces el tipo
-/// hereda el modo general). Los permisos por columna de §0.7 los exige el ejecutor desde ya. (nuevo)
+/// Las cinco columnas del modo de paso (US3, T286; plantillas.md §8, FR-075) escriben vigencias de <c>Contabilidad.ModoDePaso</c>,
+/// <c>.Granularidad</c>, <c>.DisparadorDeLote</c> y <c>.HoraDeLote</c> con ámbito tipo de documento desde <c>vigenciaDelModo</c> (vacía =
+/// hoy), sin cruces (<c>Parameters.Overlaps</c>) ni en un período cerrado (<c>Parameters.ValidFromInClosedPeriod</c>); lo igual a la
+/// vigencia propia del tipo es «sin cambio». Sobre lo que quedaría (archivo + lo existente): todos los tipos activos de una
+/// cadena tienen el mismo <c>modoDePaso</c> a la misma fecha (<c>Inventory.PostingMode.ChainMismatch</c> nombrando la cadena y sus
+/// tipos); dejar <c>NoPasa</c> un tipo fiscal exige <c>Inventory.DocumentTypes.DisableFiscalPosting</c> y, en la aplicación, repetir
+/// sus códigos en <c>confirmFiscalWithoutPosting</c> —la revisión los devuelve en <c>extra.fiscalTypesWithoutPosting</c>— (si no,
+/// <c>Inventory.PostingMode.FiscalRequiresConfirmation</c>). En el saldo inicial y en las clases sin mensajes contables el modo se
+/// ignora con el aviso <c>Import.Cell.Ignored</c>. Las vigencias se escriben después del primer guardado (los tipos nuevos ya
+/// tienen Id). Bodegas por código y canal siguen respondiendo <c>Import.Cell.NotYetAvailable</c> (hasta entonces <c>*</c> o
+/// vacío). Los permisos por columna de §0.7 los exige el ejecutor. (nuevo)
 /// </para>
 /// </summary>
 public sealed record ImportDocumentTypesCommand(ModoDeImportacion? Mode, ArchivoDeImportacion File, string Reason = "")
     : IRequest<Result<ImportResultDto>>, IComandoDeImportacion, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>Los códigos de los tipos fiscales que la aplicación deja sin paso, separados por coma (plantillas.md §8).</summary>
+    public string? ConfirmFiscalWithoutPosting { get; init; }
 }
 
 public sealed class ImportDocumentTypesCommandValidator : AbstractValidator<ImportDocumentTypesCommand>
@@ -58,18 +74,58 @@ public sealed class ImportDocumentTypesCommandValidator : AbstractValidator<Impo
     }
 }
 
-public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, EjecutorDeImportacion ejecutor, IDateTimeService reloj)
+public sealed class ImportDocumentTypesCommandHandler(
+    IApplicationDbContext db,
+    EjecutorDeImportacion ejecutor,
+    IDateTimeService reloj,
+    ILectorDeParametros? parametros = null,
+    IReglasDePoliticaDeAprobacion? reglasDePolitica = null)
     : IRequestHandler<ImportDocumentTypesCommand, Result<ImportResultDto>>
 {
     /// <summary>El largo de <c>COR_ApprovalPolicies.Reason</c>.</summary>
     private const int LargoDelMotivoDePolitica = 300;
 
-    public Task<Result<ImportResultDto>> Handle(ImportDocumentTypesCommand request, CancellationToken ct) =>
-        ejecutor.EjecutarAsync(P.Definicion, request, ProcesarAsync, ct);
+    /// <summary>La clave de <c>extra</c> con los códigos de los tipos fiscales que quedarían sin paso.</summary>
+    public const string ExtraFiscalesSinPaso = "fiscalTypesWithoutPosting";
+
+    /// <summary>El aviso de una celda que la clase ignora (nuevo, T286).</summary>
+    public const string AvisoIgnorada = "Import.Cell.Ignored";
+
+    /// <summary>Las claves que escriben las columnas del modo de paso, con su columna.</summary>
+    private static readonly (string Columna, string Clave)[] ClavesDelModo =
+    [
+        (P.ModoDePaso, ParametrosDeInventario.ContabilidadModoDePaso),
+        (P.Granularidad, ParametrosDeInventario.ContabilidadGranularidad),
+        (P.DisparadorDeLote, ParametrosDeInventario.ContabilidadDisparadorDeLote),
+        (P.HoraDeLote, ParametrosDeInventario.ContabilidadHoraDeLote),
+    ];
+
+    /// <summary>Un valor del modo de paso pedido para un tipo (el Id se lee al escribir: los tipos nuevos lo reciben al guardar).</summary>
+    private sealed record ModoPedido(FilaDeImportacion Fila, InventoryDocumentType Tipo, string Columna, string Clave, string Valor, DateOnly Desde);
+
+    private readonly List<ModoPedido> _modos = [];
+
+    /// <summary>Los tipos que crea este archivo (todavía no están en la base, aunque el contexto ya les haya dado Id).</summary>
+    private readonly HashSet<InventoryDocumentType> _nuevos = new(ReferenceEqualityComparer.Instance);
+    private string? _confirmados;
+
+    public Task<Result<ImportResultDto>> Handle(ImportDocumentTypesCommand request, CancellationToken ct)
+    {
+        _confirmados = request.ConfirmFiscalWithoutPosting;
+        return ejecutor.EjecutarAsync(P.Definicion, request, ProcesarAsync, ct, EscribirModosAsync);
+    }
 
     private async Task ProcesarAsync(ContextoDeImportacion ctx, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
+        _modos.Clear();
+        _nuevos.Clear();
+        // Las vigencias propias de cada tipo de las cuatro claves del modo de paso (para «sin cambio» y la regla de cadena).
+        var propias = parametros is null
+            ? []
+            : (await parametros.VigenciasAsync(ParametrosDeInventario.Modulo, null, ct))
+                .Where(v => v.ScopeKind == ParameterScopeKind.DocumentType && ClavesDelModo.Any(c => c.Clave == v.Key))
+                .ToList();
         // Todo en bloque, con seguimiento: la plantilla modifica en el contexto y el ejecutor guarda o deshace.
         var tipos = await db.InventoryDocumentTypes.Include(t => t.Warehouses).Include(t => t.Sequences).ToListAsync(ct);
         var porCodigo = tipos.ToDictionary(t => t.Code, StringComparer.OrdinalIgnoreCase);
@@ -89,7 +145,7 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
             .ToList();
 
         var inactivaciones = new List<(FilaDeImportacion Fila, InventoryDocumentType Tipo)>();
-        Tipos(ctx, tipos, porCodigo, emitidos, inactivaciones, hoy);
+        Tipos(ctx, tipos, porCodigo, emitidos, inactivaciones, hoy, propias);
 
         // Con todas las filas aplicadas: inactivar no deja sin tipo activo una clase que el sistema genera solo.
         foreach (var (fila, tipo) in inactivaciones)
@@ -101,6 +157,7 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
             if (inactivacion.IsFailure) Error(fila, P.Activo, inactivacion.Error);
         }
 
+        await ModosDePasoAsync(ctx, tipos, propias, ct);
         await NivelesAsync(ctx, porCodigo, ct);
     }
 
@@ -112,7 +169,8 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
         Dictionary<string, InventoryDocumentType> porCodigo,
         IReadOnlyDictionary<(int, string), long?> emitidos,
         List<(FilaDeImportacion, InventoryDocumentType)> inactivaciones,
-        DateOnly hoy)
+        DateOnly hoy,
+        IReadOnlyList<VigenciaDeParametro> propias)
     {
         var hoja = ctx.Hoja(P.HojaTipos);
         foreach (var fila in hoja.Filas)
@@ -144,9 +202,20 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
             if (canal is not null)
                 fila.Error(P.Canal, ImportErrors.CellNotYetAvailable,
                     "El canal se elige por código cuando existan los canales de venta: por ahora deje la celda vacía.");
-            foreach (var columna in P.ColumnasDelModoDePaso.Where(c => !fila.EstaVacia(c)))
-                fila.Error(columna, ImportErrors.CellNotYetAvailable,
-                    $"«{columna}» todavía no se carga por plantilla: déjela vacía y el tipo hereda el modo de paso general.");
+            var vigenciaDelModo = fila.Fecha(P.VigenciaDelModo) ?? hoy;
+            var valoresDelModo = new List<(string Columna, string Clave, string Valor)>();
+            foreach (var (columna, clave) in ClavesDelModo)
+            {
+                var crudo = fila.Crudo(columna);
+                if (crudo is null) continue;
+                var definicion = CatalogoDeParametros.Buscar(ParametrosDeInventario.Modulo, clave)!;
+                var valor = definicion.Interpretar(crudo, CatalogoDeParametros.EntregaVigente);
+                if (!valor.Admitido)
+                    fila.Error(columna, ImportErrors.CellFormat,
+                        $"«{crudo}» no es admitido en «{columna}». Admite: {string.Join(", ", definicion.Admitidos(CatalogoDeParametros.EntregaVigente))}.");
+                else
+                    valoresDelModo.Add((columna, clave, valor.Texto!));
+            }
 
             if (!hoja.LlaveUnica(fila, codigo, P.Codigo) || fila.TieneErrores || codigo is null || nombre is null || clase is null) continue;
 
@@ -183,7 +252,10 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
                 db.InventoryDocumentTypes.Add(tipo);
                 tipos.Add(tipo);
                 porCodigo[codigo] = tipo;
-                ctx.Registrar(fila, codigo, AccionDeImportacion.Create, [new(P.Nombre, null, nombre), new(P.Clase, null, clase.Value.ToString())]);
+                _nuevos.Add(tipo);
+                var alta = new List<CampoCambiadoDto> { new(P.Nombre, null, nombre), new(P.Clase, null, clase.Value.ToString()) };
+                alta.AddRange(ModoDelTipo(ctx, fila, tipo, valoresDelModo, vigenciaDelModo, propias));
+                ctx.Registrar(fila, codigo, AccionDeImportacion.Create, alta);
                 continue;
             }
 
@@ -257,7 +329,120 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
             tipo.VatNonDeductible = ivaNoDescontable;
             tipo.AllowsFutureDate = fechaFutura;
             tipo.IsActive = activo;
+            campos.AddRange(ModoDelTipo(ctx, fila, tipo, valoresDelModo, vigenciaDelModo, propias));
             ctx.Registrar(fila, codigo, campos.Count == 0 ? AccionDeImportacion.Unchanged : AccionDeImportacion.Update, campos);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------- modo de paso --
+
+    /// <summary>
+    /// Lo que una fila pide del modo de paso para su tipo: los valores distintos de la vigencia propia a esa fecha se anotan para
+    /// escribir y vuelven como campos cambiados (piden motivo); en el saldo inicial y en las clases sin mensajes contables, el
+    /// aviso <see cref="AvisoIgnorada"/>.
+    /// </summary>
+    private IEnumerable<CampoCambiadoDto> ModoDelTipo(ContextoDeImportacion ctx, FilaDeImportacion fila, InventoryDocumentType tipo,
+        IReadOnlyList<(string Columna, string Clave, string Valor)> valores, DateOnly desde, IReadOnlyList<VigenciaDeParametro> propias)
+    {
+        if (valores.Count == 0) yield break;
+        var clase = ClasesDeDocumento.De(tipo.Class);
+        if (tipo.Class == DocumentClass.OpeningBalance || !ConfirmacionDeDocumento.EmiteNegocioAContabilidad(clase))
+        {
+            foreach (var v in valores)
+                fila.Aviso(v.Columna, AvisoIgnorada, $"La clase {tipo.Class} no pasa a contabilidad por comprobante: «{v.Columna}» se ignora.");
+            yield break;
+        }
+
+        foreach (var (columna, clave, valor) in valores)
+        {
+            var vigente = _nuevos.Contains(tipo)
+                ? null
+                : propias.Where(v => v.ScopeId == tipo.Id && v.Key == clave && v.VigenteEn(desde)).OrderByDescending(v => v.ValidFrom).FirstOrDefault();
+            if (vigente is not null && string.Equals(vigente.Value, valor, StringComparison.Ordinal)) continue;
+            _modos.Add(new ModoPedido(fila, tipo, columna, clave, valor, desde));
+            ctx.PedirMotivo();
+            yield return new CampoCambiadoDto(columna, vigente?.Value, valor);
+        }
+    }
+
+    /// <summary>
+    /// Las reglas del archivo completo sobre el modo de paso (plantillas.md §8): período cerrado y cruces, cadenas y tipos
+    /// fiscales sin paso. No escribe: las vigencias van después del primer guardado (<see cref="EscribirModosAsync"/>).
+    /// </summary>
+    private async Task ModosDePasoAsync(ContextoDeImportacion ctx, List<InventoryDocumentType> tipos, IReadOnlyList<VigenciaDeParametro> propias, CancellationToken ct)
+    {
+        var ultimoCierre = await db.InventorySetups.AsNoTracking().OrderBy(x => x.Id).Select(x => x.LastClosedDate).FirstOrDefaultAsync(ct);
+        foreach (var m in _modos.Where(m => ultimoCierre is { } c && m.Desde <= c).ToList())
+        {
+            Error(m.Fila, P.VigenciaDelModo, ErroresDeParametros.EnPeriodoCerrado(ultimoCierre!.Value));
+            _modos.Remove(m);
+        }
+        foreach (var m in _modos.Where(m => !_nuevos.Contains(m.Tipo)).ToList())
+        {
+            var definicion = CatalogoDeParametros.Buscar(ParametrosDeInventario.Modulo, m.Clave)!;
+            if (await AddParameterVersionCommandHandler.CruceAsync(db, definicion, ParameterScopeKind.DocumentType, m.Tipo.Id, m.Desde, ct) is { } cruce)
+            {
+                Error(m.Fila, P.VigenciaDelModo, ErroresDeParametros.SeCruza(cruce));
+                _modos.Remove(m);
+            }
+        }
+
+        // Cadenas: sobre lo que quedaría, todos los tipos activos de una cadena con el mismo modo a la misma fecha.
+        var modosDePaso = _modos.Where(m => m.Clave == ParametrosDeInventario.ContabilidadModoDePaso).ToList();
+        foreach (var porCadena in modosDePaso.GroupBy(m => ClasesDeDocumento.De(m.Tipo.Class).Chain).Where(g => g.Key != PostingChain.None))
+        {
+            var cadena = porCadena.Key;
+            var activos = tipos.Where(t => !t.IsDeleted && t.IsActive && ClasesDeDocumento.De(t.Class).Chain == cadena).OrderBy(t => t.Code).ToList();
+            var pedidos = porCadena.ToList();
+            var coherente = pedidos.Select(m => (m.Valor, m.Desde)).Distinct().Count() == 1;
+            if (coherente)
+            {
+                var (valor, desde) = (pedidos[0].Valor, pedidos[0].Desde);
+                coherente = activos.All(t => pedidos.Any(m => ReferenceEquals(m.Tipo, t))
+                    || propias.Any(v => v.ScopeId == t.Id && v.Key == ParametrosDeInventario.ContabilidadModoDePaso && v.VigenteEn(desde) && v.Value == valor));
+            }
+            if (coherente) continue;
+            var nombrados = activos.Select(t => new InventoryErrors.TipoNombrado(t.PublicId, t.Code, t.Name, t.Class.ToString())).ToList();
+            foreach (var m in pedidos)
+            {
+                Error(m.Fila, P.ModoDePaso, InventoryErrors.PostingModeChainMismatch(cadena, nombrados));
+                _modos.Remove(m);
+            }
+        }
+
+        // Tipos fiscales sin paso: permiso y confirmación explícita.
+        var fiscales = _modos.Where(m => m.Clave == ParametrosDeInventario.ContabilidadModoDePaso && m.Valor == "NoPasa" && ClasesDeDocumento.De(m.Tipo.Class).IsFiscal).ToList();
+        if (fiscales.Count == 0) return;
+        if (!ctx.TienePermiso(P.PermisoDeFiscalSinPaso))
+        {
+            foreach (var m in fiscales)
+            {
+                m.Fila.Error(P.ModoDePaso, ImportErrors.CellPermissionRequired,
+                    $"Dejar sin paso a contabilidad el tipo fiscal {m.Tipo.Code} exige el permiso {P.PermisoDeFiscalSinPaso}.");
+                _modos.Remove(m);
+            }
+            return;
+        }
+        var codigos = fiscales.Select(m => m.Tipo.Code).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToList();
+        ctx.Extra[ExtraFiscalesSinPaso] = codigos;
+        if (ctx.Modo != ModoDeImportacion.Apply) return;
+        var confirmados = (_confirmados ?? string.Empty).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (codigos.All(confirmados.Contains)) return;
+        var nombradosFiscales = fiscales.Select(m => m.Tipo).Distinct()
+            .Select(t => new InventoryErrors.TipoNombrado(t.PublicId, t.Code, t.Name, t.Class.ToString())).ToList();
+        foreach (var m in fiscales) Error(m.Fila, P.ModoDePaso, InventoryErrors.PostingModeFiscalRequiresConfirmation(nombradosFiscales));
+    }
+
+    /// <summary>Tras el primer guardado (los tipos nuevos ya tienen Id): una vigencia por tipo y clave, con el motivo de la importación.</summary>
+    private async Task EscribirModosAsync(ContextoDeImportacion ctx, CancellationToken ct)
+    {
+        foreach (var m in _modos)
+        {
+            var definicion = CatalogoDeParametros.Buscar(ParametrosDeInventario.Modulo, m.Clave)!;
+            var r = await AddParameterVersionCommandHandler.AgregarVigenciasAsync(db, definicion, ParameterScopeKind.DocumentType, [m.Tipo.Id],
+                m.Valor, m.Desde, ctx.Motivo ?? string.Empty, null, ct);
+            if (r.IsFailure) Error(m.Fila, P.VigenciaDelModo, r.Error);
         }
     }
 
@@ -328,6 +513,18 @@ public sealed class ImportDocumentTypesCommandHandler(IApplicationDbContext db, 
                 continue;
             }
 
+            if (reglasDePolitica is not null)
+            {
+                // Las reglas de Inventario (T286): un tipo nuevo todavía no está en la base, así que sólo se le mira el período.
+                var evaluada = await reglasDePolitica.EvaluarAsync(
+                    new AltaDePoliticaDeAprobacion(ApprovalSubjects.DocumentConfirmation, _nuevos.Contains(tipo) ? null : tipo.PublicId, desde, niveles.Count), ct);
+                if (evaluada.IsFailure)
+                {
+                    Error(filas[0].Fila, P.VigenteDesde, evaluada.Error);
+                    continue;
+                }
+            }
+
             var nueva = PoliticasDeAprobacion.NuevaVersion(deLaClave, ApprovalSubjects.DocumentConfirmation, tipo.PublicId, desde, motivo, niveles);
             if (nueva.IsFailure)
             {
@@ -392,12 +589,23 @@ public sealed class GetDocumentTypesTemplateDataQueryValidator : AbstractValidat
     public GetDocumentTypesTemplateDataQueryValidator() => RuleFor(x => x).NotNull();
 }
 
-public sealed class GetDocumentTypesTemplateDataQueryHandler(IApplicationDbContext db, IDateTimeService reloj)
+public sealed class GetDocumentTypesTemplateDataQueryHandler(IApplicationDbContext db, IDateTimeService reloj, ILectorDeParametros? parametros = null)
     : IRequestHandler<GetDocumentTypesTemplateDataQuery, Result<DatosDePlantilla>>
 {
     public async Task<Result<DatosDePlantilla>> Handle(GetDocumentTypesTemplateDataQuery request, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
+        // El modo de paso propio de cada tipo vigente hoy (US3, T286): el mismo libro se revisa «sin cambio».
+        var propias = parametros is null
+            ? []
+            : (await parametros.VigenciasAsync(ParametrosDeInventario.Modulo, null, ct))
+                .Where(v => v.ScopeKind == ParameterScopeKind.DocumentType && v.VigenteEn(hoy))
+                .ToList();
+        string? Propio(int tipo, string clave) => propias.FirstOrDefault(v => v.ScopeId == tipo && v.Key == clave)?.Value;
+        DateOnly? DesdeDelModo(int tipo) => propias.Where(v => v.ScopeId == tipo
+                && (v.Key == ParametrosDeInventario.ContabilidadModoDePaso || v.Key == ParametrosDeInventario.ContabilidadGranularidad
+                    || v.Key == ParametrosDeInventario.ContabilidadDisparadorDeLote || v.Key == ParametrosDeInventario.ContabilidadHoraDeLote))
+            .Select(v => (DateOnly?)v.ValidFrom).Max();
         var tipos = await db.InventoryDocumentTypes.AsNoTracking().Include(t => t.Sequences).OrderBy(t => t.Code).ToListAsync(ct);
         var porPublicId = tipos.ToDictionary(t => t.PublicId);
         var politicas = await db.ApprovalPolicies.AsNoTracking().Include(p => p.Levels)
@@ -417,7 +625,9 @@ public sealed class GetDocumentTypesTemplateDataQueryHandler(IApplicationDbConte
                 t.RequiresCounterparty, t.RequiresCostCenter, t.RequiresReason, t.RequiresExternalReference,
                 t.AllWarehouses ? "*" : null, null,
                 t.IsTaxableWithdrawal, t.VatNonDeductible, t.AllowsFutureDate,
-                null, null, null, null, null,
+                Propio(t.Id, ParametrosDeInventario.ContabilidadModoDePaso), Propio(t.Id, ParametrosDeInventario.ContabilidadGranularidad),
+                Propio(t.Id, ParametrosDeInventario.ContabilidadDisparadorDeLote), Propio(t.Id, ParametrosDeInventario.ContabilidadHoraDeLote),
+                DesdeDelModo(t.Id),
                 t.IsActive,
             ];
         }).ToList();

@@ -4,6 +4,8 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.DocumentTypes;
 using IngenIA365ERP.Application.Inventory.Imports;
 using IngenIA365ERP.Application.Tests.Common;
@@ -12,6 +14,8 @@ using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Inventory.Parameters;
 using IngenIA365ERP.Domain.Inventory.Documents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,7 +40,7 @@ public class ImportDocumentTypesCommandTests : IDisposable
     [
         P.Codigo, P.Nombre, P.Clase, P.Prefijo, P.SiguienteNumero, P.VigenciaDelPrefijo, P.ExigeTercero, P.ExigeCentroDeCosto,
         P.ExigeMotivo, P.ExigeReferenciaExterna, P.Bodegas, P.Canal, P.RetiroGravado, P.IvaNoDescontable, P.PermiteFechaFutura,
-        P.ModoDePaso, P.Activo,
+        P.ModoDePaso, P.Activo, P.VigenciaDelModo,
     ];
 
     private static readonly string[] EncabezadosNiveles = [P.TipoDeDocumento, P.Nivel, P.Umbral, P.Permiso, P.VigenteDesde];
@@ -75,15 +79,19 @@ public class ImportDocumentTypesCommandTests : IDisposable
 
     private static string?[] Tipo(string codigo, string clase, string? prefijo = null, string? siguiente = null, string? desde = null,
         string nombre = "Tipo", string? motivo = "sí", string? bodegas = null, string? canal = null, string? retiro = null,
-        string? modo = null, string? activo = null) =>
-        [codigo, nombre, clase, prefijo, siguiente, desde, "no", "no", motivo, "no", bodegas, canal, retiro, null, null, modo, activo];
+        string? modo = null, string? activo = null, string? vigenciaDelModo = null) =>
+        [codigo, nombre, clase, prefijo, siguiente, desde, "no", "no", motivo, "no", bodegas, canal, retiro, null, null, modo, activo, vigenciaDelModo];
 
-    private async Task<Result<ImportResultDto>> ImportarAsync(ModoDeImportacion modo, string motivo = "")
+    private async Task<Result<ImportResultDto>> ImportarAsync(ModoDeImportacion modo, string motivo = "", string? confirmarFiscales = null)
     {
         var servicios = new ServiceCollection().AddSingleton(Substitute.For<IAuditService>()).BuildServiceProvider();
         var ejecutor = new EjecutorDeImportacion(_db, _lector, _permisos, servicios);
-        var r = await new ImportDocumentTypesCommandHandler(_db, ejecutor, _reloj)
-            .Handle(new ImportDocumentTypesCommand(modo, new ArchivoDeImportacion("tipos.xlsx", [1, 2, 3]), motivo), default);
+        var reglas = new ReglasDePlataformaDeInventario(_db, Substitute.For<IAlcanceDeInventario>());
+        var r = await new ImportDocumentTypesCommandHandler(_db, ejecutor, _reloj, new LectorDeParametros(_db), reglas)
+            .Handle(new ImportDocumentTypesCommand(modo, new ArchivoDeImportacion("tipos.xlsx", [1, 2, 3]), motivo)
+            {
+                ConfirmFiscalWithoutPosting = confirmarFiscales,
+            }, default);
         _db.ChangeTracker.Clear();
         return r;
     }
@@ -306,7 +314,7 @@ public class ImportDocumentTypesCommandTests : IDisposable
     // ----------------------------------------------------------------------- lo que todavía no se puede citar --
 
     [Fact]
-    public async Task Bodegas_por_codigo_canal_y_modo_de_paso_responden_que_todavia_no_estan_disponibles()
+    public async Task Bodegas_por_codigo_y_canal_responden_que_todavia_no_estan_disponibles()
     {
         Tipos(Tipo("AJX", "PositiveAdjustment", bodegas: "PRIN", canal: "MOSTRADOR", modo: "EnLinea"));
 
@@ -316,11 +324,110 @@ public class ImportDocumentTypesCommandTests : IDisposable
         {
             (P.Bodegas, ImportErrors.CellNotYetAvailable),
             (P.Canal, ImportErrors.CellNotYetAvailable),
-            (P.ModoDePaso, ImportErrors.CellNotYetAvailable),
-        });
+        }, "el modo de paso ya se carga por plantilla (US3, T286)");
 
         Tipos(Tipo("AJX", "PositiveAdjustment", bodegas: "*"));
         (await ImportarAsync(ModoDeImportacion.Review)).Value.Valid.Should().BeTrue("* = todas las operativas");
+    }
+
+    // --------------------------------------------------------------------------- modo de paso (US3, T286) --
+
+    [Fact]
+    public async Task El_modo_de_paso_escribe_una_vigencia_por_tipo_y_volver_a_subirlo_no_cambia_nada()
+    {
+        TipoExistente(DocumentClass.NegativeAdjustment, "AJN");
+        Tipos(Tipo("AJX", "PositiveAdjustment", modo: "PorLotes", vigenciaDelModo: "2026-10-01"),
+              Tipo("AJN", "NegativeAdjustment", modo: "EnLinea", vigenciaDelModo: "2026-10-01"));
+
+        var revision = await ImportarAsync(ModoDeImportacion.Review);
+        revision.Value.Valid.Should().BeTrue(string.Join(" | ", revision.Value.Errors.Select(e => e.Message)));
+        revision.Value.RequiresReason.Should().BeTrue("cambiar el modo de paso pide motivo");
+        (await _db.ParameterVersions.CountAsync()).Should().Be(0, "revisar no guarda");
+
+        var aplicada = await ImportarAsync(ModoDeImportacion.Apply, "Contabilidad pasa por lotes");
+        aplicada.IsSuccess.Should().BeTrue(aplicada.IsFailure ? aplicada.Error.Message : string.Empty);
+        var versiones = await _db.ParameterVersions.ToListAsync();
+        var tipos = await _db.InventoryDocumentTypes.ToDictionaryAsync(t => t.Id, t => t.Code);
+        versiones.Select(v => (tipos[v.ScopeId], v.Key, v.Value, v.ValidFrom, v.ScopeKind)).Should().BeEquivalentTo(new[]
+        {
+            ("AJX", ParametrosDeInventario.ContabilidadModoDePaso, "PorLotes", new DateOnly(2026, 10, 1), ParameterScopeKind.DocumentType),
+            ("AJN", ParametrosDeInventario.ContabilidadModoDePaso, "EnLinea", new DateOnly(2026, 10, 1), ParameterScopeKind.DocumentType),
+        });
+        versiones.Should().OnlyContain(v => v.Reason == "Contabilidad pasa por lotes");
+
+        var otraVez = await ImportarAsync(ModoDeImportacion.Review);
+        otraVez.Value.Valid.Should().BeTrue();
+        otraVez.Value.RequiresReason.Should().BeFalse("igual a la vigencia propia: sin cambio");
+    }
+
+    [Fact]
+    public async Task Una_cadena_con_modos_distintos_o_incompleta_es_ChainMismatch_y_completa_se_acepta()
+    {
+        TipoExistente(DocumentClass.PurchaseReceipt, "REC");
+        TipoExistente(DocumentClass.SupplierInvoice, "FCP");
+        TipoExistente(DocumentClass.SupplierReturn, "DVP");
+
+        Tipos(Tipo("REC", "PurchaseReceipt", modo: "PorLotes", vigenciaDelModo: "2026-10-01"));
+        var incompleta = await ImportarAsync(ModoDeImportacion.Review);
+        var error = UnicoError(incompleta);
+        (error.Column, error.Code).Should().Be((P.ModoDePaso, "Inventory.PostingMode.ChainMismatch"));
+        error.Message.Should().Contain("FCP").And.Contain("DVP");
+
+        Tipos(Tipo("REC", "PurchaseReceipt", modo: "PorLotes", vigenciaDelModo: "2026-10-01"),
+              Tipo("FCP", "SupplierInvoice", modo: "EnLinea", vigenciaDelModo: "2026-10-01"),
+              Tipo("DVP", "SupplierReturn", modo: "PorLotes", vigenciaDelModo: "2026-10-01"));
+        var distinta = await ImportarAsync(ModoDeImportacion.Review);
+        distinta.Value.Errors.Should().HaveCount(3).And.OnlyContain(e => e.Code == "Inventory.PostingMode.ChainMismatch");
+
+        Tipos(Tipo("REC", "PurchaseReceipt", modo: "PorLotes", vigenciaDelModo: "2026-10-01"),
+              Tipo("FCP", "SupplierInvoice", modo: "PorLotes", vigenciaDelModo: "2026-10-01"),
+              Tipo("DVP", "SupplierReturn", modo: "PorLotes", vigenciaDelModo: "2026-10-01"));
+        (await ImportarAsync(ModoDeImportacion.Review)).Value.Valid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Dejar_sin_paso_un_tipo_fiscal_exige_repetir_su_codigo_al_aplicar()
+    {
+        TipoExistente(DocumentClass.PurchaseReceipt, "REC");
+        TipoExistente(DocumentClass.SupplierInvoice, "FCP");
+        TipoExistente(DocumentClass.SupplierReturn, "DVP");
+        Tipos(Tipo("REC", "PurchaseReceipt", modo: "NoPasa", vigenciaDelModo: "2026-10-01"),
+              Tipo("FCP", "SupplierInvoice", modo: "NoPasa", vigenciaDelModo: "2026-10-01"),
+              Tipo("DVP", "SupplierReturn", modo: "NoPasa", vigenciaDelModo: "2026-10-01"));
+
+        var revision = await ImportarAsync(ModoDeImportacion.Review);
+        revision.Value.Valid.Should().BeTrue();
+        ((IEnumerable<string>)revision.Value.Extra[ImportDocumentTypesCommandHandler.ExtraFiscalesSinPaso]!).Should().Equal("FCP");
+
+        var sinConfirmar = await ImportarAsync(ModoDeImportacion.Apply, "Cooperativa no contabiliza compras");
+        sinConfirmar.Error.Code.Should().Be(ImportErrors.InvalidCode);
+        (await _db.ParameterVersions.CountAsync()).Should().Be(0);
+
+        var confirmada = await ImportarAsync(ModoDeImportacion.Apply, "Cooperativa no contabiliza compras", confirmarFiscales: "fcp");
+        confirmada.IsSuccess.Should().BeTrue(confirmada.IsFailure ? confirmada.Error.Message : string.Empty);
+        (await _db.ParameterVersions.CountAsync()).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task El_modo_del_saldo_inicial_se_ignora_con_aviso_y_una_vigencia_en_periodo_cerrado_se_rechaza()
+    {
+        _db.InventorySetups.Add(new IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup
+        {
+            StartDate = new DateOnly(2026, 7, 1), LastClosedDate = new DateOnly(2026, 8, 31),
+        });
+        _db.SaveChanges();
+        Tipos(Tipo("SIX", "OpeningBalance", modo: "PorLotes"),
+              Tipo("AJX", "PositiveAdjustment", modo: "PorLotes", vigenciaDelModo: "2026-08-15"));
+        Niveles(["AJX", "1", "0", "Inventory.Approvals.Supervisor", "2026-08-20"]);
+
+        var r = await ImportarAsync(ModoDeImportacion.Review);
+
+        r.Value.Warnings.Should().Contain(a => a.Code == ImportDocumentTypesCommandHandler.AvisoIgnorada && a.Column == P.ModoDePaso);
+        r.Value.Errors.Select(e => (e.Sheet, e.Column, e.Code)).Should().BeEquivalentTo(new[]
+        {
+            (P.HojaTipos, P.VigenciaDelModo, "Parameters.ValidFromInClosedPeriod"),
+            (P.HojaNiveles, P.VigenteDesde, "Approvals.Policy.ValidFromInClosedPeriod"),
+        });
     }
 
     // ------------------------------------------------------------------------------------------------ permisos --

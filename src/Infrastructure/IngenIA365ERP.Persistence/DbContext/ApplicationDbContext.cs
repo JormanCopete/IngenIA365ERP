@@ -359,6 +359,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado al cerrar.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();

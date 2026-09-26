@@ -108,7 +108,9 @@ public abstract class EfectoDeAjuste(
             ? hecho.Lineas.ToList()
             : await KardexDelDocumentoAsync(contexto.Documento, ct);
         if (filas.Count == 0) return [];
-        return [await emision.AjusteAprobadoAsync(contexto.Documento, contexto.Tipo, filas, ct)];
+        // El ajuste de un conteo fechado en la foto puede ser retroactivo (US3, T285): sus AjusteDeCostoReconocido van con él.
+        IReadOnlyList<object> retroactivos = hecho is null ? [] : await emision.AjustesRetroactivosAsync(hecho, ct);
+        return [await emision.AjusteAprobadoAsync(contexto.Documento, contexto.Tipo, filas, ct), .. retroactivos];
     }
 
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)

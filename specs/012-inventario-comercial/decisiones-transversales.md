@@ -1150,6 +1150,41 @@ JSON embebidos versionados (T40), no semillas.
   AdjustmentsEndpoints}` y las vistas `kardex` (propios `location`, `includeCostAdjustments`) y `stock` (`onlyWithStock`).
   Shared `InventarioClient.{Existencias, Ajustes}` (`ClasesDeAjuste`, `DuenoDeSoportesDeAjuste`), `InventarioDtos.Existencias`
   y las páginas `Existencias`, `Kardex`, `Ajustes`, `AjusteDetalle` (también `/inventario/ajustes/nuevo`) e `Integridad`.
+- Costo y períodos (fase 6, US3, T273–T295; todos **(nuevo)** salvo los de data-model): Domain
+  `Entities/Inventory/Periods/{InventorySetup, InventoryPeriod (con `Inicio`/`Fin` sin columna), PeriodClosingBalance (navegación
+  `Period`, `[SinDiffDeAuditoria]`)}`; Persistence `Configurations/Inventory/Periods/{InventorySetupConfiguration,
+  InventoryPeriodConfiguration (UK_INV_Periods_Year_Month filtrado), PeriodClosingBalanceConfiguration
+  (UK_INV_PeriodClosingBalances_Period_Version_Product_Warehouse, IX_INV_PeriodClosingBalances_Period_Superseded)}`, las tres en
+  `NucleoComercialSinMigracion`; `DbSet` `InventorySetups`, `InventoryPeriods`, `PeriodClosingBalances`. Application
+  `Inventory/Periods/{ValorizadoALaFecha (+ FilaDeValorizado; único cálculo del valorizado a una fecha: último cierre vigente
+  más kardex posterior), RevisionDeCierre (`SiguientePorCerrar`, `RevisarAsync`), CloseInventoryPeriodCommand (+
+  GetPeriodCloseCheckQuery), ReopenInventoryPeriodCommand (+ ListInventoryPeriodsQuery), PeriodDtos}` con los DTO
+  `InventoryPeriodsDto`, `InventoryPeriodDto`, `UnbilledShipmentsAcceptedDto`, `PeriodCloseCheckDto`, `CloseBlockersDto`,
+  `CloseWarningsDto`, `UnresolvedTransferDto`, `PendingMessagesDto`, `UnbilledShipmentDto`, `ClosePeriodResultDto`,
+  `PeriodValuationDto`, `CodigoYNombreDto`, `BodegaDelValorizadoDto`, `ReopenPeriodResultDto`;
+  `Inventory/Catalog/GrupoContableALaFecha` (`De`, `DeAsync`, `CodigosAsync`; lo usan el valorizado, el cierre y
+  `EmisionDeInventario`); `Inventory/Catalog/Products/ChangeProductAccountingGroupCommand` con `ReclasificacionDeGrupo`
+  (`ValidarAsync`, `AplicarAsync`, `BodegasAsync`; la comparten el comando y la plantilla de productos), `ReclasificacionHecha`,
+  `GetProductAccountingGroupHistoryQuery` y los DTO `GrupoDelCambioDto`, `BodegaDelCambioDto`,
+  `AccountingGroupChangeResultDto`, `AccountingGroupChangeDto`; `Inventory/Common/OperacionesDeInventario`
+  (`SucursalPrincipalAsync`: la primera sucursal de `COR_Branches`, porque Inventario no lee la configuración contable;
+  `ModoGeneralAsync`: el valor general del modo de paso para una operación sin tipo); `Inventory/Reports/ValuationReportQuery`
+  (vista `valuation`, propio `includeTransit`); en el kardex, `LineaRetroactivaEscrita`, `AjusteRetroactivoRegistrado`,
+  `RegistroHecho.AjustesRetroactivos`, `RegistroDeKardex.EsExentoAsync` y `EmisionDeInventario.AjustesRetroactivosAsync`;
+  `InventoryErrors.{MesDeInventario, ConteoAbierto, TipoNombrado}` y las fábricas `Period*`, `RetroactiveNotAllowed`,
+  `PostingMode*`; `CatalogErrors.{ProductAccountingGroupUnchanged, ProductMovementsAfterEffectiveDate}`;
+  `ErroresDeParametros.{RequiereInicioDePeriodo, EnPeriodoCerrado}`; `ErroresDeAprobaciones.{PoliticaEnPeriodoCerrado,
+  PoliticaRequerida}`. `ReglasDePlataformaDeInventario` implementa ahora `IResolutorDeAmbitoDeParametro` (bodega y tipo de
+  documento), `IReglasDeParametros` e `IReglasDePoliticaDeAprobacion` (una instancia por petición para las tres;
+  `PermisoDeFiscalSinPaso`, `PermisoDeConteo`: un tipo de ajuste cuya política vigente tiene un nivel con
+  `Inventory.Counts.Approve` es «de ajuste de conteo» y no admite política vacía). Plantilla 8: `ImportDocumentTypesCommand
+  .ConfirmFiscalWithoutPosting`, `ImportDocumentTypesCommandHandler.{ExtraFiscalesSinPaso = "fiscalTypesWithoutPosting",
+  AvisoIgnorada}`. API `Endpoints/Inventory/PeriodsEndpoints` (`CerrarRequest`, `ReabrirRequest`), `CatalogEndpoints
+  .{Reclasificar, CambioDeGrupoRequest}`, `RutasDePlantilla.MapPlantilla(camposDelFormulario)` y la vista `valuation`.
+  Shared `InventarioClient.Periodos`, `InventarioDtos.Periodos` y la página `Periodos` (`/inventario/periodos`, con su enlace
+  en el menú); pestaña «Grupo contable» de `ProductoDetalle`. Pruebas `Application.Tests/Inventory/{Costing/RetroactivoMinimoTests,
+  Common/ReglasDePlataformaDeInventarioTests, Catalog/ChangeProductAccountingGroupCommandTests,
+  Periods/{PeriodosDePrueba, InventoryPeriodCommandsTests}, Reports/ValuationReportQueryTests}`.
 - Comandos: `SaveInventoryDraftCommand`, `ConfirmInventoryDocumentCommand(DocumentPublicId,
   ExpectedGroup)`, `VoidInventoryDocumentCommand`, `DiscardInventoryDraftCommand`,
   `DispatchTransferCommand`, `ReceiveTransferCommand`, `ResolveTransferDiscrepancyCommand`,
@@ -1341,6 +1376,13 @@ cálculo ni el impuesto base de un impuesto existente), `Core.TaxRate.Municipali
 tarifa no está en `COR_Cities.DaneCode`; en la plantilla, `Import.Cell.NotFound` en la columna del municipio); personas →
 `Person.DataAuthorization.PolicyUnknown` (nuevo: la versión de política no es de la cooperativa) y
 `Person.DataAuthorization.PolicyRequired` (nuevo: hay política vigente y la autorización no dice cuál se mostró);
+costeo → `Inventory.Costing.RetroactiveNotAllowed` (nuevo, T285: un documento que deja un movimiento con fecha anterior a otro
+ya registrado del mismo producto y ámbito, fuera del saldo inicial de bodega no activa y del ajuste de conteo; `data {
+lineNumber, productCode, laterMovement { documentPublicId, displayNumber, operationDate } }`); períodos →
+`Inventory.Period.NotStarted` (nuevo, T289: cerrar sin `INV_Setup`), `.NotNext` (`data.nextToClose { year, month }`),
+`.NotEnded`, `.OpenCounts`, `.WarningsNotAcknowledged` (`data.warnings`), `.UnbilledShipmentsNotAccepted`,
+`.AcceptUnbilledNotAllowed`, `.NotLastClosed` (`data.lastClosed`), `.NotClosed`; plantillas → `Import.Cell.Ignored` (nuevo,
+T286: aviso de una celda que la clase ignora, como el modo de paso del saldo inicial);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
 más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
 data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).

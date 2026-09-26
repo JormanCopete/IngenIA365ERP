@@ -26,8 +26,10 @@ namespace IngenIA365ERP.Application.Inventory.Imports;
 /// contra el conjunto final de impuestos. La plantilla nunca borra: lo que no viene queda como está.
 /// <para>
 /// Cambiar el grupo contable de un producto <b>con movimientos</b> exige <c>Inventory.Catalog.ReclassifyAccountingGroup</c>
-/// (<c>Import.Cell.PermissionRequired</c>) y el motivo (<c>requiresReason</c>), y lo hace <c>ChangeProductAccountingGroupCommand</c>
-/// de US3: hasta entonces la fila responde <c>Import.Cell.NotYetAvailable</c>. Sin movimientos, es una edición más. Un código
+/// (<c>Import.Cell.PermissionRequired</c>) y un motivo —el de la fila (<c>motivoCambioDeGrupo</c>) o, sin él, el de la importación
+/// (<c>requiresReason</c>)—, y lo hace la misma regla que <c>ChangeProductAccountingGroupCommand</c> (<see cref="ReclasificacionDeGrupo"/>,
+/// US3 T288), con fecha efectiva hoy: la revisión sólo la valida; la aplicación bloquea, reclasifica y emite
+/// <c>GrupoContableReclasificado</c> si hay existencia, en la misma transacción. Sin movimientos, es una edición más. Un código
 /// numérico de 8, 12, 13 o 14 dígitos con el dígito de control EAN/UPC errado deja el aviso <c>Import.Barcode.CheckDigit</c>. (nuevo)
 /// </para>
 /// </summary>
@@ -46,7 +48,8 @@ public sealed class ImportProductsCommandValidator : AbstractValidator<ImportPro
     }
 }
 
-public sealed class ImportProductsCommandHandler(IApplicationDbContext db, EjecutorDeImportacion ejecutor, IDateTimeService reloj)
+public sealed class ImportProductsCommandHandler(
+    IApplicationDbContext db, EjecutorDeImportacion ejecutor, IDateTimeService reloj, ReclasificacionDeGrupo? reclasificacion = null)
     : IRequestHandler<ImportProductsCommand, Result<ImportResultDto>>
 {
     /// <summary>El aviso de un código de barras con el dígito de control EAN/UPC errado (no bloquea: hay códigos internos).</summary>
@@ -63,6 +66,9 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
         public FilaDeImportacion? FilaDeProducto { get; set; }
         public bool ConError { get; set; }
         public TaxRate? TarifaIva { get; set; }
+        /// <summary>El grupo al que se reclasifica un producto con movimientos (US3): lo aplica <see cref="ReclasificacionDeGrupo"/>.</summary>
+        public AccountingGroup? Reclasificar { get; set; }
+        public string? MotivoDeReclasificacion { get; set; }
         public List<(FilaDeImportacion Fila, ImpuestoResuelto Impuesto)> Adicionales { get; } = [];
     }
 
@@ -71,6 +77,7 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
         CatalogoCitado<Brand> Marcas,
         CatalogoCitado<UnitOfMeasure> Unidades,
         CatalogoCitado<AccountingGroup> Grupos,
+        IReadOnlyDictionary<int, AccountingGroup> GruposPorId,
         CatalogoCitado<WithholdingConcept> Conceptos,
         CatalogoCitado<TaxRate> TarifasIva,
         CatalogoCitado<TaxRate> Tarifas,
@@ -118,6 +125,7 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
         Codigos(hCodigos, tocados, duenos.ToDictionary(d => d.Key, d => (d.Value.Id, d.Value.PublicId, d.Value.Code, d.Value.Name)));
         Impuestos(hImpuestos, catalogos, tocados);
         ImpuestosFinales(hProductos, catalogos, tocados);
+        await ReclasificacionesAsync(ctx, tocados, ct);
 
         // El texto de búsqueda de todo lo tocado, con su marca y sus códigos vivos (incluidos los nuevos).
         foreach (var t in tocados.Values.Where(t => !t.ConError))
@@ -131,6 +139,7 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
     {
         // Con seguimiento: el producto nuevo las cita por navegación y no deben entrar como altas.
         var definiciones = await db.TaxDefinitions.ToDictionaryAsync(d => d.Id, ct);
+        var grupos = await db.AccountingGroups.ToListAsync(ct);
         var tarifas = await db.TaxRates.ToListAsync(ct);
         // Una tarifa por código y definición: la vigencia más reciente (el producto guarda el código, T22).
         var vigentes = tarifas.GroupBy(r => (r.TaxDefinitionId, r.Code)).Select(g => g.OrderByDescending(r => r.ValidFrom).First()).ToList();
@@ -139,7 +148,8 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
             CatalogoCitado<ProductCategory>.Desde(await db.ProductCategories.ToListAsync(ct), c => c, c => c.Code),
             CatalogoCitado<Brand>.Desde(await db.Brands.ToListAsync(ct), b => b, b => b.Code),
             CatalogoCitado<UnitOfMeasure>.Desde(await db.UnitsOfMeasure.ToListAsync(ct), u => u, u => u.Code),
-            CatalogoCitado<AccountingGroup>.Desde(await db.AccountingGroups.ToListAsync(ct), g => g, g => g.Code),
+            CatalogoCitado<AccountingGroup>.Desde(grupos, g => g, g => g.Code),
+            grupos.ToDictionary(g => g.Id),
             CatalogoCitado<WithholdingConcept>.Desde(await db.WithholdingConcepts.ToListAsync(ct), c => c, c => c.Code),
             CatalogoCitado<TaxRate>.Desde(vigentes.Where(r => definiciones.GetValueOrDefault(r.TaxDefinitionId)?.Kind == TaxKind.Iva), r => r, r => r.Code),
             CatalogoCitado<TaxRate>.Desde(vigentes, r => r, r => r.Code),
@@ -170,7 +180,7 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
             var referencia = fila.Texto(P.Referencia);
             var peso = fila.Cantidad(P.Peso);
             var volumen = fila.Cantidad(P.Volumen);
-            fila.Texto(P.MotivoCambioDeGrupo);
+            var motivoDeGrupo = fila.Texto(P.MotivoCambioDeGrupo);
 
             // Lo que llega con I6 (§6): clases de producto y seguimiento por lote, serie o vencimiento.
             if (tipo is { } k && !ReglasDeProducto.ClasesDisponibles.Contains(k)) fila.TodaviaNoDisponible(P.Tipo, "I6");
@@ -195,27 +205,30 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
             var producto = tocado.Producto;
             var antes = tocado.EsNuevo ? null : Foto(producto, c);
 
-            // Grupo de un producto con movimientos: la reclasificación de US3 (con permiso y motivo), nunca una edición.
+            // Grupo de un producto con movimientos: la reclasificación de US3 (con permiso y motivo), nunca una edición. Las demás
+            // reglas del producto corren con el grupo que tiene; la reclasificación va después (ReclasificacionesAsync).
             var tieneMovimientos = !tocado.EsNuevo && conMovimientos.Contains(producto.Id);
-            if (tieneMovimientos && producto.AccountingGroupId != grupo?.Id && producto.BaseUnitId == unidadBase.Id)
+            var grupoDeLasReglas = grupo;
+            if (tieneMovimientos && grupo is not null && producto.AccountingGroupId is int actual && actual != grupo.Id
+                && producto.BaseUnitId == unidadBase.Id)
             {
-                tocado.ConError = true;
                 if (!ctx.TienePermiso(P.PermisoDeReclasificar))
                 {
+                    tocado.ConError = true;
                     fila.Error(P.GrupoContable, ImportErrors.CellPermissionRequired,
                         $"El producto {codigo} tiene movimientos: cambiar su grupo contable exige el permiso {P.PermisoDeReclasificar}.");
                     continue;
                 }
-                ctx.PedirMotivo();
-                fila.Error(P.GrupoContable, ImportErrors.CellNotYetAvailable,
-                    $"El producto {codigo} tiene movimientos: su grupo contable cambia por la reclasificación de grupo (Inventario → Productos → Grupo contable), que se habilita con la entrega de costos (US3).");
-                continue;
+                if (motivoDeGrupo is null) ctx.PedirMotivo();
+                tocado.Reclasificar = grupo;
+                tocado.MotivoDeReclasificacion = motivoDeGrupo;
+                grupoDeLasReglas = c.GruposPorId.GetValueOrDefault(actual);
             }
 
             var datos = new DatosDeProducto(nombre, producto.ShortName, producto.Description, tipo.Value, categoria.PublicId, marca?.PublicId,
-                unidadBase.PublicId, grupo?.PublicId, tratamiento.Value, concepto?.PublicId, referencia, peso, volumen, lote, serie, vencimiento,
+                unidadBase.PublicId, grupoDeLasReglas?.PublicId, tratamiento.Value, concepto?.PublicId, referencia, peso, volumen, lote, serie, vencimiento,
                 producto.IsPurchasable, producto.IsSellable);
-            var reglas = ReglasDeProducto.Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupo, concepto), tieneMovimientos);
+            var reglas = ReglasDeProducto.Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupoDeLasReglas, concepto), tieneMovimientos);
             if (reglas.IsFailure)
             {
                 FilasDeCatalogo.Error(fila, ColumnaDe(reglas.Error), reglas.Error);
@@ -239,10 +252,40 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
                 continue;
             }
 
-            var despues = Foto(producto, c) with { TarifaIva = tarifaIva?.Code };
+            var despues = Foto(producto, c) with { TarifaIva = tarifaIva?.Code, Grupo = tocado.Reclasificar?.Code ?? producto.AccountingGroup?.Code };
             var campos = new List<CampoCambiadoDto>();
             foreach (var (columna, a, d) in antes!.Diferencias(despues)) campos.Add(new(columna, a, d));
             ctx.Registrar(fila, codigo, FilasDeCatalogo.Accion(campos), campos);
+        }
+    }
+
+    /// <summary>
+    /// Las reclasificaciones de grupo de los productos con movimientos (US3, T288): en la revisión, las reglas de la fecha y del
+    /// grupo; en la aplicación, la reclasificación completa (cerrojo, fila del historial, grupo del producto y mensaje), con fecha
+    /// efectiva hoy y el motivo de la fila o, sin él, el de la importación.
+    /// </summary>
+    private async Task ReclasificacionesAsync(ContextoDeImportacion ctx, Dictionary<string, Tocado> tocados, CancellationToken ct)
+    {
+        foreach (var t in tocados.Values.Where(t => t.Reclasificar is not null && !t.ConError && t.FilaDeProducto is not null))
+        {
+            var fila = t.FilaDeProducto!;
+            if (reclasificacion is null)
+            {
+                fila.Error(P.GrupoContable, ImportErrors.CellNotYetAvailable,
+                    $"El producto {t.Producto.Code} tiene movimientos: su grupo contable cambia por la reclasificación de grupo (Inventario → Productos → Grupo contable).");
+                continue;
+            }
+
+            var resultado = ctx.Modo == ModoDeImportacion.Review
+                ? await reclasificacion.ValidarAsync(t.Producto, t.Reclasificar!, null, ct)
+                : (await reclasificacion.AplicarAsync(t.Producto, t.Reclasificar!, null, t.MotivoDeReclasificacion ?? ctx.Motivo ?? string.Empty, ct)) is { IsFailure: true } fallida
+                    ? Result.Failure<DateOnly>(fallida.Error)
+                    : Result.Success(reloj.HoyLocal);
+            if (resultado.IsFailure)
+            {
+                t.ConError = true;
+                FilasDeCatalogo.Error(fila, resultado.Error.Code == "Inventory.Product.MovementsAfterEffectiveDate" ? P.GrupoContable : ColumnaDe(resultado.Error), resultado.Error);
+            }
         }
     }
 
@@ -276,7 +319,8 @@ public sealed class ImportProductsCommandHandler(IApplicationDbContext db, Ejecu
     /// <summary>La columna donde va el error de una regla del producto.</summary>
     private static string ColumnaDe(Error error) => error.Code switch
     {
-        "Inventory.Product.AccountingGroupRequired" or "Inventory.Product.UseReclassifyAccountingGroup" or "Inventory.AccountingGroup.Inactive" => P.GrupoContable,
+        "Inventory.Product.AccountingGroupRequired" or "Inventory.Product.UseReclassifyAccountingGroup" or "Inventory.AccountingGroup.Inactive"
+            or "Inventory.Product.AccountingGroupUnchanged" or "Inventory.Period.Closed" => P.GrupoContable,
         "Inventory.Product.WithholdingConceptRequired" => P.ConceptoRetencion,
         "Inventory.Product.BaseUnitLocked" => P.UnidadBase,
         "Inventory.Product.KindNotAvailable" => P.Tipo,

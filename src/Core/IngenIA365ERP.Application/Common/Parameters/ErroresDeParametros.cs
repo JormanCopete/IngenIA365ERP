@@ -15,6 +15,20 @@ public static class ErroresDeParametros
     public const string CodigoAmbitoNoAdmitido = "Parameters.ScopeNotAllowed";
     public const string CodigoSeCruza = "Parameters.Overlaps";
     public const string CodigoPermisoRequerido = "Parameters.PermissionRequired";
+    public const string CodigoRequiereInicioDePeriodo = "Parameters.RequiresPeriodStart";
+    public const string CodigoEnPeriodoCerrado = "Parameters.ValidFromInClosedPeriod";
+
+    /// <summary>§7 (US3, T286): <c>Costeo.Metodo</c> y <c>Costeo.Ambito</c> sólo desde el primer día de un período abierto sin movimientos posteriores.</summary>
+    public static Error RequiereInicioDePeriodo(string clave, DateOnly? earliestAllowed) => new ErrorConDatos(CodigoRequiereInicioDePeriodo,
+        earliestAllowed is { } desde
+            ? $"«{clave}» sólo cambia desde el primer día de un período abierto sin movimientos posteriores: la primera fecha posible es el {desde:yyyy-MM-dd}."
+            : $"«{clave}» sólo cambia desde el primer día de un período abierto sin movimientos posteriores.",
+        new { earliestAllowed });
+
+    /// <summary>§7 (US3, T286): <c>validFrom</c> dentro de un período de inventario cerrado.</summary>
+    public static Error EnPeriodoCerrado(DateOnly lastClosedDate) => new ErrorConDatos(CodigoEnPeriodoCerrado,
+        $"La vigencia no puede empezar en un período de inventario cerrado (el último cierre es del {lastClosedDate:yyyy-MM-dd}): use una fecha posterior.",
+        new { lastClosedDate });
 
     public static Error ClaveInexistente(string? modulo, string? clave) => new(CodigoClaveInexistente,
         $"No existe el parámetro «{modulo}/{clave}».");

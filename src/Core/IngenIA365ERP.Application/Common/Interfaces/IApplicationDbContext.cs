@@ -230,6 +230,10 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Projections.StockBalance> StockBalances { get; }
     DbSet<Domain.Entities.Inventory.Projections.StockDetail> StockDetails { get; }
     DbSet<Domain.Entities.Inventory.Projections.CostState> CostStates { get; }
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado al cerrar.
+    DbSet<Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups { get; }
+    DbSet<Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods { get; }
+    DbSet<Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

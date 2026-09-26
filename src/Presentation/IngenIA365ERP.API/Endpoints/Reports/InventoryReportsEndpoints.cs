@@ -74,6 +74,13 @@ public class InventoryReportsEndpoints : ICarterModule
             new VistaDeInformeDeInventario("stock", "Existencias", "Físico, reservado, disponible y en tránsito por bodega, con mínimos y máximos.",
                 "existencias", ["warehouse", "category", "product"], ["onlyWithStock"]),
             (f, q) => new StockReportQuery(f, bool.TryParse(q["onlyWithStock"].ToString(), out var conExistencia) && conExistencia));
+
+        // US3 (T293): el valorizado a una fecha por grupo contable, bodega y producto. Exige además Inventory.Costs.Read.
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("valuation", "Valorizado", "Cantidad, costo promedio y valor por grupo contable, bodega y producto a una fecha.",
+                "valorizado", ["asOf", "warehouse", "accountingGroup", "category", "product"], ["includeTransit"],
+                RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
+            (f, q) => new ValuationReportQuery(f, bool.TryParse(q["includeTransit"].ToString(), out var conTransito) && conTransito));
     }
 }
 

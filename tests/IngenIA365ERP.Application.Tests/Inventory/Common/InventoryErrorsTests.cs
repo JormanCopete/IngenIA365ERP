@@ -43,6 +43,19 @@ public class InventoryErrorsTests
         yield return InventoryErrors.SequenceOverlaps();
         yield return InventoryErrors.SequenceMissing("AJP", hoy);
         yield return InventoryErrors.PeriodClosed(2026, 8, new DateOnly(2026, 8, 31));
+        // US3 (T289, T290, T285, T286): períodos, retroactivo y modo de paso.
+        yield return InventoryErrors.PeriodNotStarted();
+        yield return InventoryErrors.PeriodNotNext(2026, 9, new InventoryErrors.MesDeInventario(2026, 8));
+        yield return InventoryErrors.PeriodNotEnded(2026, 9, new DateOnly(2026, 9, 30));
+        yield return InventoryErrors.PeriodOpenCounts(2026, 8, [new(guid, "CF-1", "B01", new DateOnly(2026, 8, 20))]);
+        yield return InventoryErrors.PeriodWarningsNotAcknowledged(2026, 8, new { drafts = 1 });
+        yield return InventoryErrors.PeriodUnbilledShipmentsNotAccepted(2026, 8, Array.Empty<object>());
+        yield return InventoryErrors.PeriodAcceptUnbilledNotAllowed("Inventory.Periods.AcceptUnbilledShipments");
+        yield return InventoryErrors.PeriodNotLastClosed(2026, 7, new InventoryErrors.MesDeInventario(2026, 8));
+        yield return InventoryErrors.PeriodNotClosed(2026, 9);
+        yield return InventoryErrors.RetroactiveNotAllowed(1, "P1", guid, "AJN-4", hoy);
+        yield return InventoryErrors.PostingModeChainMismatch(PostingChain.Purchases, [new(guid, "FCP", "Factura", "SupplierInvoice")]);
+        yield return InventoryErrors.PostingModeFiscalRequiresConfirmation([new(guid, "FCP", "Factura", "SupplierInvoice")]);
         yield return InventoryErrors.WarehouseNotActive(guid, "B01");
         yield return InventoryErrors.WarehouseInactive(guid, "B01");
         yield return InventoryErrors.ProductNotInventoriable(1, "P1");
@@ -76,7 +89,11 @@ public class InventoryErrorsTests
             "Inventory.DocumentType.FlagNotApplicable", "Inventory.DocumentType.TransitNotAllowed",
             "Inventory.DocumentType.NumberedByResolution", "Inventory.DocumentType.HasOpenDocuments",
             "Inventory.DocumentType.RequiredBySystem", "Inventory.Sequence.NumberAlreadyIssued", "Inventory.Sequence.Overlaps",
-            "Inventory.Numbering.SequenceMissing", "Inventory.Period.Closed", "Inventory.Warehouse.NotActive",
+            "Inventory.Numbering.SequenceMissing", "Inventory.Period.Closed",
+            "Inventory.Period.NotStarted", "Inventory.Period.NotNext", "Inventory.Period.NotEnded", "Inventory.Period.OpenCounts",
+            "Inventory.Period.WarningsNotAcknowledged", "Inventory.Period.UnbilledShipmentsNotAccepted", "Inventory.Period.AcceptUnbilledNotAllowed",
+            "Inventory.Period.NotLastClosed", "Inventory.Period.NotClosed", "Inventory.Costing.RetroactiveNotAllowed",
+            "Inventory.PostingMode.ChainMismatch", "Inventory.PostingMode.FiscalRequiresConfirmation", "Inventory.Warehouse.NotActive",
             "Inventory.Warehouse.Inactive", "Inventory.Product.NotInventoriable", "Inventory.Product.Inactive",
             "Inventory.Product.Blocked", "Inventory.Unit.NotForProduct", "Inventory.Unit.DecimalsNotAllowed",
             "Inventory.Location.NotInWarehouse", "Inventory.Count.ProductsLocked", "Inventory.Stock.Insufficient",

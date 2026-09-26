@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Inventory.Catalog;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
@@ -23,8 +24,8 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// Signo (§3): positivo es el efecto natural del mensaje. Una línea <c>Exit</c> de un ajuste negativo lleva cantidad y costo
 /// positivos; el costo de una bodega es Σ <c>TotalCost</c> del kardex del documento en esa bodega (ajustes de costo del mismo
 /// documento incluidos: un residuo de redondeo o una regularización), así el inventario de Contabilidad mueve lo mismo que el
-/// kardex. El grupo contable es el vigente del producto; <c>GrupoContableALaFecha</c> (US3, T287) lo reemplazará por el de la
-/// fecha de operación.
+/// kardex. El grupo contable es el del producto a la fecha de operación (<see cref="GrupoContableALaFecha"/>, US3, T287), no el
+/// de hoy: una reclasificación posterior no cambia lo que dice el mensaje de un documento anterior.
 /// </para>
 /// </summary>
 public sealed class EmisionDeInventario(IApplicationDbContext db)
@@ -74,7 +75,7 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
     public async Task<IReadOnlyList<CostLineV1>> LineasDeCostoAsync(InventoryDocument documento, IReadOnlyList<KardexEntry> filas, KardexEntryKind sentido, CancellationToken ct)
     {
         if (filas.Count == 0) return [];
-        var (grupos, bodegas) = await DimensionesAsync(filas.Select(f => f.ProductId), filas.Select(f => f.WarehouseId), ct);
+        var (grupos, bodegas) = await DimensionesAsync(filas.Select(f => f.ProductId), filas.Select(f => f.WarehouseId), documento.OperationDate, ct);
         var numeroDeLinea = documento.Lines.ToDictionary(l => l.Id, l => l.LineNumber);
         var signo = sentido == KardexEntryKind.Exit ? -1m : 1m;
 
@@ -149,7 +150,7 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
     public async Task<AjusteDeCostoReconocidoV1> AjusteDeCostoAsync(
         InventoryDocument afectado, KardexReason motivo, DateOnly fecha, IReadOnlyList<KardexEntry> lineas, CancellationToken ct)
     {
-        var (grupos, bodegas) = await DimensionesAsync(lineas.Select(f => f.ProductId), lineas.Select(f => f.WarehouseId), ct);
+        var (grupos, bodegas) = await DimensionesAsync(lineas.Select(f => f.ProductId), lineas.Select(f => f.WarehouseId), fecha, ct);
         return new AjusteDeCostoReconocidoV1
         {
             Reason = motivo,
@@ -168,6 +169,56 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
                 })
                 .ToList(),
         };
+    }
+
+    // ------------------------------------------------------------------------------- retroactivo (US3) --
+
+    /// <summary>
+    /// Un <c>AjusteDeCostoReconocido</c> por documento afectado por el retroactivo mínimo (US3, T285; §6.10; FR-045): la diferencia
+    /// <c>Retroactive</c> por grupo contable y bodega, partida en <c>inventoryAmount</c> (lo que sigue en existencia) y
+    /// <c>soldAmount</c> (lo vendido o consumido), fechado en las líneas del kardex. Sólo los afectados que emitieron a
+    /// Contabilidad: cada parte sigue el destino del mensaje de ése (<c>Confirmation:{afectado:N}</c>), y sin mensaje no hay
+    /// destino que seguir. Lo agrega a sus mensajes la estrategia de la clase que lo causa (saldo inicial, ajuste de conteo).
+    /// </summary>
+    public async Task<IReadOnlyList<AjusteDeCostoReconocidoV1>> AjustesRetroactivosAsync(RegistroHecho hecho, CancellationToken ct)
+    {
+        if (hecho.AjustesRetroactivos.Count == 0) return [];
+        var afectados = hecho.AjustesRetroactivos.Select(a => a.AffectedDocumentId).Distinct().ToList();
+        var documentos = await db.InventoryDocuments.AsNoTracking().Where(d => afectados.Contains(d.Id)).ToDictionaryAsync(d => d.Id, ct);
+        var publicos = documentos.Values.Select(d => d.PublicId).ToList();
+        var conMensaje = (await db.IntegrationMessages.AsNoTracking()
+                .Where(m => publicos.Contains(m.OriginPublicId))
+                .Where(m => db.IntegrationMessageDeliveries.Any(e => e.MessageId == m.Id && e.Destination == IntegrationDestinations.Accounting))
+                .Select(m => m.OriginPublicId).Distinct().ToListAsync(ct))
+            .ToHashSet();
+
+        var contenidos = new List<AjusteDeCostoReconocidoV1>();
+        foreach (var ajuste in hecho.AjustesRetroactivos.OrderBy(a => a.Lineas.Min(l => l.Fila.OperationDate)).ThenBy(a => a.AffectedDocumentId))
+        {
+            if (!documentos.TryGetValue(ajuste.AffectedDocumentId, out var afectado) || !conMensaje.Contains(afectado.PublicId)) continue;
+            var fecha = ajuste.Lineas.Min(l => l.Fila.OperationDate);
+            var filas = ajuste.Lineas.Select(l => l.Fila).ToList();
+            var (grupos, bodegas) = await DimensionesAsync(filas.Select(f => f.ProductId), filas.Select(f => f.WarehouseId), fecha, ct);
+            contenidos.Add(new AjusteDeCostoReconocidoV1
+            {
+                Reason = KardexReason.Retroactive,
+                EffectiveDate = fecha,
+                AffectedDocument = Referencia(afectado),
+                Lines = ajuste.Lineas
+                    .GroupBy(l => (Grupo: grupos.GetValueOrDefault(l.Fila.ProductId) ?? string.Empty, l.Fila.WarehouseId))
+                    .OrderBy(g => g.Key.Grupo, StringComparer.Ordinal).ThenBy(g => bodegas[g.Key.WarehouseId].Code, StringComparer.Ordinal)
+                    .Select(g => new CostDifferenceLineV1
+                    {
+                        AccountingGroupCode = g.Key.Grupo,
+                        WarehouseCode = bodegas[g.Key.WarehouseId].Code,
+                        WarehouseBehavior = bodegas[g.Key.WarehouseId].Behavior,
+                        InventoryAmount = g.Where(l => l.Porcion == Domain.Inventory.Costing.PorcionDelAjuste.EnExistencia).Sum(l => l.Fila.TotalCost),
+                        SoldAmount = g.Where(l => l.Porcion == Domain.Inventory.Costing.PorcionDelAjuste.Vendida).Sum(l => l.Fila.TotalCost),
+                    })
+                    .ToList(),
+            });
+        }
+        return contenidos;
     }
 
     /// <summary>
@@ -210,13 +261,11 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
     };
 
     private async Task<(Dictionary<int, string?> Grupos, Dictionary<int, (string Code, WarehouseBehavior Behavior)> Bodegas)> DimensionesAsync(
-        IEnumerable<int> productos, IEnumerable<int> bodegas, CancellationToken ct)
+        IEnumerable<int> productos, IEnumerable<int> bodegas, DateOnly fecha, CancellationToken ct)
     {
         var productoIds = productos.Distinct().ToList();
         var bodegaIds = bodegas.Distinct().ToList();
-        var grupos = await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id))
-            .Select(p => new { p.Id, Codigo = p.AccountingGroup == null ? null : p.AccountingGroup.Code })
-            .ToDictionaryAsync(p => p.Id, p => p.Codigo, ct);
+        var grupos = new Dictionary<int, string?>(await GrupoContableALaFecha.CodigosAsync(db, productoIds, fecha, ct));
         var deBodegas = await db.Warehouses.AsNoTracking().Where(w => bodegaIds.Contains(w.Id))
             .Select(w => new { w.Id, w.Code, w.Behavior })
             .ToDictionaryAsync(w => w.Id, w => (w.Code, w.Behavior), ct);

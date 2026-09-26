@@ -9,8 +9,8 @@ namespace IngenIA365ERP.Application.Inventory.Documents;
 /// Los maestros del documento genérico sobre las tablas de US1 (feature 012, T209–T211; T17; data-model §5): bodegas,
 /// ubicaciones, productos con su unidad base y sus alternas, causas de ajuste y canales. Reemplaza a
 /// <see cref="MaestrosDelDocumentoSinCatalogo"/> en el contenedor. Nunca filtra por alcance (lo hace quien pregunta). El
-/// corte de <c>INV_Setup</c> es de US3: hasta entonces <see cref="CorteAsync"/> responde «sin corte» y US3 lo completa aquí.
-/// (nuevo)
+/// corte (<see cref="CorteAsync"/>) es la fila única de <c>INV_Setup</c> (US3, T284): sin ella, el módulo no ha arrancado y
+/// no hay restricción. (nuevo)
 /// </summary>
 public sealed class MaestrosDelDocumentoEnBase(IApplicationDbContext db) : IMaestrosDelDocumento
 {
@@ -74,8 +74,14 @@ public sealed class MaestrosDelDocumentoEnBase(IApplicationDbContext db) : IMaes
         ids.Count == 0 ? [] : await db.SalesChannels.AsNoTracking().Where(c => ids.Contains(c.Id))
             .Select(c => new ReferenciaDelCatalogo(c.Id, c.PublicId, c.Code, c.Name)).ToListAsync(ct);
 
-    /// <summary>El corte de <c>INV_Setup</c> lo completa US3; hasta entonces no hay restricción.</summary>
-    public Task<CorteDeInventario> CorteAsync(CancellationToken ct) => Task.FromResult(CorteDeInventario.SinCorte);
+    /// <summary>
+    /// El corte de <c>INV_Setup</c> (US3, T284): el inicio del módulo y el último día del último mes cerrado. Sin la fila (nadie
+    /// ha registrado todavía una fecha de corte, US4), sin restricción.
+    /// </summary>
+    public async Task<CorteDeInventario> CorteAsync(CancellationToken ct) =>
+        await db.InventorySetups.AsNoTracking().OrderBy(s => s.Id)
+            .Select(s => new CorteDeInventario(s.StartDate, s.LastClosedDate)).FirstOrDefaultAsync(ct)
+        ?? CorteDeInventario.SinCorte;
 
     /// <summary>
     /// La bodega tal como la ve el documento: la de tránsito se considera activa cuando lo está alguna bodega de su sucursal

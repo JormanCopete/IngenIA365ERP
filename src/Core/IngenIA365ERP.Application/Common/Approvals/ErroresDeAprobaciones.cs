@@ -56,6 +56,16 @@ public static class ErroresDeAprobaciones
         $"Ya hay una versión de esta política que empieza el {existente:yyyy-MM-dd}. Registrá la nueva desde después de esa fecha.",
         new { existingValidFrom = existente });
 
+    /// <summary>§15.1 (US3, T286): la versión no puede empezar en un período de inventario cerrado.</summary>
+    public static Error PoliticaEnPeriodoCerrado(DateOnly ultimoCierre) => new ErrorConDatos(CodigoPoliticaEnPeriodoCerrado,
+        $"La política no puede empezar en un período de inventario cerrado (el último cierre es del {ultimoCierre:yyyy-MM-dd}): use una fecha posterior.",
+        new { lastClosedDate = ultimoCierre });
+
+    /// <summary>§15.1 (US3, T286): los tipos que siempre se aprueban (saldo inicial, ajuste de conteo) no admiten una política vacía.</summary>
+    public static Error PoliticaRequerida(string clase) => new ErrorConDatos(CodigoPoliticaRequerida,
+        "Este tipo de documento siempre se aprueba: su política necesita al menos un nivel.",
+        new { @class = clase });
+
     public static Error NivelesInvalidos(string motivo) => new ErrorConDatos(CodigoNivelesInvalidos,
         $"Los niveles de la política no son válidos. {motivo}",
         new { reason = motivo });

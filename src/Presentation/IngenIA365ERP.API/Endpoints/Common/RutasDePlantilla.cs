@@ -47,6 +47,10 @@ public static class RutasDePlantilla
     /// <param name="datos">La consulta de lo existente para <c>?withData=true</c>.</param>
     /// <param name="permisoDeExportacion">El de exportar del área (<c>Inventory.Catalog.Export</c>); nulo en Core (§0.6).</param>
     /// <param name="datosPersonales">Si la descarga con datos trae datos personales (vendedores, listas por cliente…).</param>
+    /// <param name="camposDelFormulario">
+    /// Campos del formulario, además del motivo, que el comando necesita (feature 012, T286: <c>confirmFiscalWithoutPosting</c> de la
+    /// plantilla 8): recibe el comando armado por <paramref name="importar"/> y el formulario, y devuelve el comando completo.
+    /// </param>
     public static RouteGroupBuilder MapPlantilla(
         this RouteGroupBuilder grupo,
         string permisoDeDescarga,
@@ -56,7 +60,8 @@ public static class RutasDePlantilla
         Func<ModoDeImportacion?, ArchivoDeImportacion, string?, Guid, IRequest<Result<ImportResultDto>>>? importar = null,
         Func<IRequest<Result<DatosDePlantilla>>>? datos = null,
         string? permisoDeExportacion = null,
-        bool datosPersonales = false)
+        bool datosPersonales = false,
+        Func<IRequest<Result<ImportResultDto>>, IFormCollection, IRequest<Result<ImportResultDto>>>? camposDelFormulario = null)
     {
         var plantilla = CatalogoDePlantillas.Por(clave);
 
@@ -116,8 +121,9 @@ public static class RutasDePlantilla
                 await archivo.CopyToAsync(ms, ct);
                 var subido = new ArchivoDeImportacion(archivo.FileName, ms.ToArray());
 
-                var resultado = await sender.Send(
-                    importar(modo, subido, string.IsNullOrWhiteSpace(motivo) ? null : motivo, http.ClaveDeOperacion()), ct);
+                var comando = importar(modo, subido, string.IsNullOrWhiteSpace(motivo) ? null : motivo, http.ClaveDeOperacion());
+                if (camposDelFormulario is not null) comando = camposDelFormulario(comando, formulario);
+                var resultado = await sender.Send(comando, ct);
 
                 var formato = http.Request.Query["format"].ToString();
                 if (resultado.IsSuccess && resultado.Value.Mode == ModoDeImportacion.Review

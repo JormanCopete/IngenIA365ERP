@@ -78,6 +78,9 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Projections/CostStateConfiguration.cs", "Quantity", "Cantidad"),
         (Inv + "Projections/CostStateConfiguration.cs", "Value", "Monto"),
         (Inv + "Projections/CostStateConfiguration.cs", "AverageCost", "CostoUnitario"),
+        // Períodos, fase 6 (US3, T284; data-model §6.3): el valorizado fijado al cerrar.
+        (Inv + "Periods/PeriodClosingBalanceConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Periods/PeriodClosingBalanceConfiguration.cs", "Value", "Monto"),
         (Inv + "Projections/CostStateConfiguration.cs", "LastUnitCost", "CostoUnitario"),
     ];
 

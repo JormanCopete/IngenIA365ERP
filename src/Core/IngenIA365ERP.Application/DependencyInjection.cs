@@ -115,9 +115,13 @@ public static class DependencyInjection
         // del motor tributario a una fecha). Scoped: memorizan por peticion.
         services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
         services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
-        // Feature 012 (T226, US1): Inventario resuelve el ambito Warehouse (bodega del alcance); US3 (T286) suma el resto.
-        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Inventory.Common.ReglasDePlataformaDeInventario>();
-        services.AddScoped<Common.Parameters.IReglasDeParametros, Common.Parameters.ReglasDeParametrosVacias>();
+        // Feature 012 (T226 US1, T286 US3): Inventario resuelve los ambitos Warehouse y DocumentType y pone las reglas del alta
+        // de parametros (periodo cerrado, inicio de periodo para Costeo.*, modo de paso por cadena y tipo fiscal sin paso) y de
+        // las politicas de aprobacion. Una sola instancia por peticion para las tres interfaces.
+        services.AddScoped<Inventory.Common.ReglasDePlataformaDeInventario>();
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        services.AddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
         services.AddScoped<Common.Integration.EmisorDeMensajes>();
@@ -157,6 +161,11 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
         services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
+        // Feature 012 (US3, T287-T291): el valorizado a una fecha (cierre y vista valuation), la revision del cierre y la
+        // reclasificacion de grupo contable (comando y plantilla de productos).
+        services.AddScoped<Inventory.Periods.ValorizadoALaFecha>();
+        services.AddScoped<Inventory.Periods.RevisionDeCierre>();
+        services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();

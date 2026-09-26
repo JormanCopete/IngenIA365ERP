@@ -45,6 +45,10 @@ public static class NucleoComercialSinMigracion
         "INV_StockBalances",
         "INV_StockDetails",
         "INV_CostStates",
+        // Fase 6 (US3, T284): puesta en marcha, períodos y valorizado fijado al cerrar.
+        "INV_Setup",
+        "INV_Periods",
+        "INV_PeriodClosingBalances",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

@@ -29,7 +29,9 @@ public class AnulacionDeAjusteTests
     public async Task Anular_revierte_cada_hecho_al_costo_del_original_con_su_propia_fecha_y_deja_la_existencia_de_antes()
     {
         var k = await KardexDePrueba.CrearAsync();
-        await k.EntradaAsync(k.P1, 10m, 1000m);
+        // La entrada va antes de la salida: una salida fechada antes de un movimiento ya registrado es retroactiva (US3, T285).
+        var (_, entrada) = await k.AjusteAsync(k.Borrador("AJP", fecha: new DateOnly(2026, 9, 10), lineas: [k.Linea(k.P1, 10m, 1000m)]));
+        entrada.IsSuccess.Should().BeTrue();
         var (salida, _) = await k.AjusteAsync(k.Borrador("AJN", causa: k.Causa(), fecha: new DateOnly(2026, 9, 20), lineas: [k.Linea(k.P1, 4m)]));
 
         var r = await AnularAsync(k, salida);

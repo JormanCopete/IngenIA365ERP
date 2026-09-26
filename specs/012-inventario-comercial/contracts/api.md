@@ -963,6 +963,7 @@ operationDate, costAdjustments?: [{ product, difference }], messages? }`.
 | `Inventory.Unit.NotForProduct` · `.DecimalsNotAllowed` · `Inventory.Location.NotInWarehouse` | 422 | §9.4 | `{ lineNumber, … }` |
 | `Inventory.Count.ProductsLocked` | 422 | conteo abierto | `{ countPublicId, displayNumber, products[] }` |
 | `Inventory.Stock.Insufficient` | 422 | FR-004 | `{ lineNumber, productPublicId, productCode, warehousePublicId, requested, available, lines[], suggestion? }` |
+| `Inventory.Costing.RetroactiveNotAllowed` **(nuevo, T285)** | 422 | FR-045: el documento deja un movimiento con fecha anterior a otro ya registrado del mismo producto y ámbito de costo (salvo el saldo inicial de una bodega `NotActivated` y el ajuste de un conteo; hasta I5, sin mirar `Costeo.RetroactivosPermitidos`) | `{ lineNumber, productCode, laterMovement { documentPublicId, displayNumber, operationDate } }` |
 | `Inventory.Approval.AmountExceedsLimit` | 422 | §1.3 | `{ amount, maxAmount, currency, permissionCode }` |
 | `Inventory.Prevalidation.NotPostable` · `.NoResponse` | 422 | §9.3 | `{ errors[] }` |
 | `Inventory.Numbering.SequenceMissing` | 422 | §9.4 | `{ documentTypeCode, operationDate }` |
@@ -1266,7 +1267,7 @@ fecha de corte y se muestran aparte; la diferencia no se les atribuye.
 Reglas (FR-047, US3-3..5):
 - Para toda la cooperativa y en orden: sólo el mes siguiente al último cerrado (422
   `Inventory.Period.NotNext`, `data: { nextToClose }`) y sólo un mes que ya terminó en hora de Colombia
-  (`Inventory.Period.NotEnded`).
+  (`Inventory.Period.NotEnded`). Sin `INV_Setup` (el módulo no arrancó): 422 `Inventory.Period.NotStarted` **(nuevo, T289)**.
 - **Bloquea**: conteos abiertos con foto en el período (422 `Inventory.Period.OpenCounts`, `data: { counts[]
   }`).
 - **Avisa**: borradores y documentos en aprobación, traslados o diferencias sin resolver, mensajes

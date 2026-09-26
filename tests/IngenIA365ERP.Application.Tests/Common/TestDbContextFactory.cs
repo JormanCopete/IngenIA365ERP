@@ -274,6 +274,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
@@ -395,6 +399,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>(b => { b.Ignore("RowVersion"); b.Ignore(x => x.Inicio); b.Ignore(x => x.Fin); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
         {
             b.Ignore("RowVersion");
