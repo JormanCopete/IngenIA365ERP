@@ -252,6 +252,23 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
     public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
+    // Feature 012 (T209, US1): catalogo y bodegas (tablas en InventarioComercialNucleo, T440).
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
@@ -339,6 +356,31 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         });
         modelBuilder.Entity<DocumentTypeWarehouse>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<DocumentSequence>(b => b.Ignore("RowVersion"));
+        // Feature 012 (T209, US1): catalogo y bodegas, con el filtro de borrado logico de sus configuraciones (los
+        // comandos confian en el: un codigo de barras dado de baja queda libre, una politica retirada no cuenta).
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasOne(c => c.Parent).WithMany().HasForeignKey(c => c.ParentId); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasMany(p => p.Units).WithOne(u => u.Product).HasForeignKey(u => u.ProductId);
+            b.HasMany(p => p.Barcodes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
+            b.HasMany(p => p.Taxes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasMany(w => w.Locations).WithOne(l => l.Warehouse).HasForeignKey(l => l.WarehouseId); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
         {
             b.Ignore("RowVersion");

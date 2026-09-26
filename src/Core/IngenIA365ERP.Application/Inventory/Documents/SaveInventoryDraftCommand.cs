@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Inventory.Documents.Efectos;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
+using IngenIA365ERP.Domain.Inventory.Units;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -171,10 +172,12 @@ public sealed class SaveInventoryDraftCommandHandler(
             var unidad = await maestros.UnidadAsync(producto.Id, linea.UnitPublicId, ct);
             if (unidad is null) return Falla(InventoryErrors.UnitNotForProduct(numero, producto.Code, string.Empty));
 
-            var bruta = linea.Quantity * unidad.Factor;
-            var baseRedondeada = Math.Round(bruta, unidad.DecimalesDeLaBase, MidpointRounding.AwayFromZero);
-            if (SaveInventoryDraftCommandValidator.Decimales(linea.Quantity) > unidad.DecimalesPermitidos || baseRedondeada <= 0)
-                return Falla(InventoryErrors.UnitDecimalsNotAllowed(numero, producto.Code, unidad.Code, unidad.DecimalesPermitidos, baseRedondeada));
+            // FR-017, T205: la conversión a la unidad base la hace el motor puro, igual que el POS y los conteos.
+            var conversion = ConversionDeUnidades.Convertir(new PedidoDeConversion(numero, unidad.Code, linea.Quantity, unidad.Factor,
+                unidad.DecimalesPermitidos, unidad.BaseUnitCode ?? unidad.Code, unidad.DecimalesDeLaBase));
+            if (conversion.Rechazo is { } rechazo)
+                return Falla(InventoryErrors.UnitDecimalsNotAllowed(numero, producto.Code, rechazo.UnitCode, rechazo.AllowedDecimals, rechazo.QuantityBase));
+            var baseRedondeada = conversion.QuantityBase;
 
             int? ubicacionId = null, haciaId = null;
             if (linea.LocationPublicId is { } lu)
@@ -198,7 +201,7 @@ public sealed class SaveInventoryDraftCommandHandler(
             if (descuento > bruto) descuento = bruto;
             decimal? costoTotal = linea.UnitCost is { } costo ? Math.Round(baseRedondeada * costo, 2, MidpointRounding.AwayFromZero) : null;
 
-            calculadas.Add(new LineaCalculada(linea, numero, producto.Id, unidad.Id, unidad.Factor, baseRedondeada, bruta - baseRedondeada,
+            calculadas.Add(new LineaCalculada(linea, numero, producto.Id, unidad.Id, unidad.Factor, baseRedondeada, conversion.RoundingQuantity,
                 precio, bruto, descuento, costoTotal, ubicacionId, haciaId));
         }
 

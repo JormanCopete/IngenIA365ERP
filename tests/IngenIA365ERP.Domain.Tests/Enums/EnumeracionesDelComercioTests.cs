@@ -34,6 +34,7 @@ public class EnumeracionesDelComercioTests
         Fija((ProductStatus.Active, 1), (ProductStatus.Inactive, 2), (ProductStatus.Blocked, 3));
         Fija((WarehouseBehavior.Operational, 1), (WarehouseBehavior.Transit, 2));
         Fija((WarehouseActivationStatus.NotActivated, 0), (WarehouseActivationStatus.Active, 1));
+        Fija((ProductUnitUsage.Purchase, 1), (ProductUnitUsage.Sale, 2), (ProductUnitUsage.Both, 3));
     }
 
     [Fact]

@@ -65,7 +65,7 @@ public sealed class ListAttachmentsByOwnerQueryHandler
         var ahora = _reloj.UtcNow;
         // Todos los de la lista son del mismo dueño: la regla se evalúa una vez.
         var puedeBorrar = await _permissions.HasPermissionAsync(AdjuntosDeModulo.PermisoDeBorrar, ct)
-            && await AdjuntosDeModulo.PuedeBorrarAsync(_db, request.OwnerEntityType, request.OwnerEntityPublicId, ct) is null;
+            && await AdjuntosDeModulo.PuedeBorrarAsync(_db, request.OwnerEntityType, request.OwnerEntityPublicId, ct, _permissions) is null;
 
         var items = await _db.Attachments
             .Where(a => a.TenantId == tenantInternalId

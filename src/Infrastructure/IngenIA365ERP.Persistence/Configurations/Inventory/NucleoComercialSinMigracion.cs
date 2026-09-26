@@ -23,6 +23,23 @@ public static class NucleoComercialSinMigracion
         "INV_DocumentLineLinks",
         "INV_DocumentPartySnapshots",
         "INV_DocumentTaxLines",
+        // Fase 4 (US1, T206-T208): catálogo, bodegas, políticas de reorden y alcance por bodega.
+        "INV_UnitsOfMeasure",
+        "INV_ProductCategories",
+        "INV_Brands",
+        "INV_AccountingGroups",
+        "INV_SalesChannels",
+        "INV_Products",
+        "INV_ProductUnits",
+        "INV_ProductBarcodes",
+        "INV_ProductTaxes",
+        "INV_ProductAccountingGroupChanges",
+        "INV_WarehouseTypes",
+        "INV_Warehouses",
+        "INV_WarehouseLocations",
+        "INV_ReorderPolicies",
+        "INV_AdjustmentCauses",
+        "INV_UserWarehouseScopes",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

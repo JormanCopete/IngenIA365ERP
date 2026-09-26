@@ -58,6 +58,16 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Tax + "TaxRateConfiguration.cs", "AmountPerUnit", "Monto"),
         (Tax + "TaxRateConfiguration.cs", "MinimumBaseUvt", "Cantidad"),
         (Tax + "TaxRateConfiguration.cs", "MinimumBasePesos", "Monto"),
+        // Catálogo y bodegas, fase 4 (US1, T206-T208; data-model §1.6-§1.10, §2.4).
+        (Inv + "Catalog/ProductConfiguration.cs", "Weight", "Cantidad"),
+        (Inv + "Catalog/ProductConfiguration.cs", "Volume", "Cantidad"),
+        (Inv + "Catalog/ProductUnitConfiguration.cs", "Factor", "Factor"),
+        (Inv + "Catalog/ProductTaxConfiguration.cs", "TaxableUnitsPerBaseUnit", "Factor"),
+        (Inv + "Catalog/ProductAccountingGroupChangeConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Catalog/ProductAccountingGroupChangeConfiguration.cs", "Value", "Monto"),
+        (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "MinimumQuantity", "Cantidad"),
+        (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "MaximumQuantity", "Cantidad"),
+        (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "ReorderPoint", "Cantidad"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

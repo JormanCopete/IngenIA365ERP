@@ -115,7 +115,8 @@ public static class DependencyInjection
         // del motor tributario a una fecha). Scoped: memorizan por peticion.
         services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
         services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
-        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoVacio>();
+        // Feature 012 (T226, US1): Inventario resuelve el ambito Warehouse (bodega del alcance); US3 (T286) suma el resto.
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Inventory.Common.ReglasDePlataformaDeInventario>();
         services.AddScoped<Common.Parameters.IReglasDeParametros, Common.Parameters.ReglasDeParametrosVacias>();
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
@@ -140,7 +141,14 @@ public static class DependencyInjection
         // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
         // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).
         services.AddScoped<Inventory.Documents.Efectos.EfectosDeClase>();
-        services.TryAddScoped<Inventory.Documents.IMaestrosDelDocumento, Inventory.Documents.MaestrosDelDocumentoSinCatalogo>();
+        // Feature 012 (US1): los maestros reales sobre las tablas del catalogo y las bodegas (el corte lo suma US3).
+        services.AddScoped<Inventory.Documents.IMaestrosDelDocumento, Inventory.Documents.MaestrosDelDocumentoEnBase>();
+        // Feature 012 (T222-T225, US1): bodegas y catalogo. El alcance por bodega se lee y se escribe por
+        // AsignacionesDeBodegaEnBase (T224; la API registra la vacia con TryAdd despues, asi que gana esta). La existencia
+        // para inactivar y para la busqueda la informa IExistenciasParaElCatalogo: sin kardex hasta que US2 registre la real.
+        services.AddScoped<Inventory.Warehouses.VistaDeBodegas>();
+        services.AddScoped<Common.Interfaces.Security.IAsignacionesDeBodega, Inventory.Security.Scopes.AsignacionesDeBodegaEnBase>();
+        services.TryAddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Common.ExistenciasSinKardex>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();

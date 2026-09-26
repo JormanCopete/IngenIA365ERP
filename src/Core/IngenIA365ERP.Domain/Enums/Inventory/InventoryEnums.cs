@@ -17,6 +17,13 @@ public enum WarehouseBehavior { Operational = 1, Transit = 2 }
 
 public enum WarehouseActivationStatus { NotActivated = 0, Active = 1 }
 
+/// <summary>
+/// Para qué sirve una unidad alterna del producto (contracts/api.md §17.1; nuevo en §2.5, T198): viaja en el cuerpo de
+/// <c>/products/{id}/units</c> y en la plantilla; en la base se guarda como las dos marcas <c>UsedForPurchase</c> y
+/// <c>UsedForSale</c> de <c>INV_ProductUnits</c>.
+/// </summary>
+public enum ProductUnitUsage { Purchase = 1, Sale = 2, Both = 3 }
+
 // --------------------------------------------------------------------------------- documentos --
 
 /// <summary>Las 34 clases de documento. La clase decide efecto, fiscalidad, mensajes y cadena (ClasesDeDocumento).</summary>

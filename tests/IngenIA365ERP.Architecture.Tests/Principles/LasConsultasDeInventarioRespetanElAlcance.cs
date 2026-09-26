@@ -29,6 +29,12 @@ public class LasConsultasDeInventarioRespetanElAlcance
         // Fase 3, ciclo común (T148): la lista y el detalle genéricos de documentos.
         "ListInventoryDocumentsQueryHandler",
         "GetInventoryDocumentQueryHandler",
+        // Fase 4, US1 (T220, T223, T225): bodegas, ubicaciones, políticas de reorden y la búsqueda con disponible por bodega.
+        "ListWarehousesQueryHandler",
+        "GetWarehouseQueryHandler",
+        "ListLocationsQueryHandler",
+        "ListReorderPoliciesQueryHandler",
+        "SearchProductsQueryHandler",
     ];
 
     [Fact]

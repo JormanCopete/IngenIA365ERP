@@ -399,6 +399,8 @@ de `data-model.md`; ninguna columna de enum es `tinyint`). La FK a la unidad de 
 - `ProductStatus` { Active=1, Inactive=2, Blocked=3 }
 - `WarehouseBehavior` { Operational=1, Transit=2 }
 - `WarehouseActivationStatus` { NotActivated=0, Active=1 }
+- `ProductUnitUsage` { Purchase=1, Sale=2, Both=3 } **(nuevo, T198)**: enum del cuerpo de `/products/{id}/units` y de la
+  plantilla (contracts/api.md §17.1); en la base son las marcas `UsedForPurchase`/`UsedForSale` de `INV_ProductUnits`.
 - `DocumentClass` { PurchaseRequest=1, PurchaseOrder=2, PurchaseReceipt=3, SupplierInvoice=4,
   SupplierNote=5, SupportDocument=6, SupportDocumentAdjustmentNote=7, LandedCost=8, SupplierReturn=9,
   PositiveAdjustment=10, NegativeAdjustment=11, InternalConsumption=12, WriteOff=13, Assembly=14,
@@ -1058,6 +1060,25 @@ JSON embebidos versionados (T40), no semillas.
   (catálogo de códigos de §8 y §9.6 de api.md); `FiltroDeAlcance.{DocumentosVisibles, BodegasDeSusOrigenesAsync,
   DocumentoVisible}`. Persistence `Inventory/SqlDelCerrojo` (+ `SentenciaDelCerrojo`, el SQL puro de cada motor que
   ejecuta `CerrojoDeInventario`) y `DbContext/GuardaDeInmutabilidad` (la guarda de T137 que llama `SaveChangesAsync`).
+- Catálogo y bodegas (fase 4, US1, T198–T226; todos **(nuevo)**): Domain `Inventory/Units/ConversionDeUnidades` con los
+  records `PedidoDeConversion`, `ResultadoDeConversion` y `RechazoDeConversion` (el borrador ya convierte con él);
+  `ReorderPolicy.EsCoherente`/`Fijar`. Application `Inventory/Catalog/{CatalogErrors, CatalogDtos, ActivacionDeCatalogo}`,
+  `Catalog/Products/{ReglasDeProducto (+ DatosDeProducto, ImpuestoPedido, ImpuestoResuelto), VistaDeProductos,
+  ValidacionDeProducto, CodigosDeBarras, BusquedaDeProductos}` (`UnidadPedida`, `CodigoPedido`), `Catalog/Categories/VistaDeCategorias`,
+  `Catalog/UnitsOfMeasure/ReglasDeUnidad`; `Inventory/Warehouses/{WarehouseErrors, WarehouseDtos, VistaDeBodegas,
+  BodegasDelAlcance}` con `CreateWarehouseCommandHandler.AplicarReglasAsync` (+ `DatosDeBodega`, `AltaDeBodega`,
+  `BodegaDeTransitoPedida`), la regla única de la bodega y su tránsito que reusa la plantilla 7;
+  `Inventory/Common/IExistenciasParaElCatalogo` (+ `ExistenciaAgregada`) con la implementación vacía `ExistenciasSinKardex`
+  (TryAdd; la reemplaza US2 sobre `INV_StockBalances`/`INV_StockDetails`): existencia de una bodega o ubicación para
+  inactivarla y disponible para la búsqueda; `Inventory/Common/ReglasDePlataformaDeInventario` (resuelve el ámbito
+  `Warehouse`; US3 le suma el resto e `IReglasDeParametros`); `Inventory/Documents/MaestrosDelDocumentoEnBase` (la real de
+  `IMaestrosDelDocumento`; `CorteAsync` lo completa US3) y `UnidadDelDocumento.BaseUnitCode`; `CodigoDeCatalogo.Duplicado`
+  con `existingPublicId`/`existingName`; `AdjuntosDeModulo.ProductoDeInventario` (`InventoryProduct`) y
+  `TiposDeImagenDeProducto`. Persistence `Configurations/Inventory/EntidadDeInventario.ComoEntidadDeInventario`,
+  `Catalog/IndiceDeBusquedaDeProductos` (GIN `gin_trgm_ops` o `INCLUDE`, según el motor; la extensión `pg_trgm` la crea
+  T440), `Seeding/Parametric/SemillasDeInventario` (esperan a `InventarioComercialNucleo`) y
+  `SincronizacionDeCatalogo.SincronizarUnidadesAsync` (versión en `COR_SystemSettings`,
+  `INV.UnidadesSembradas.Version`).
 - Ciclo común y tipos de documento (fase 3, T142–T152; todos **(nuevo)**): en `Application/Inventory/Documents`,
   `Efectos/IEfectoDeClase` (`Clase`, `AvisosDelBorradorAsync`, `ValidarAsync`, `MontoParaAprobar`, `Cerrojo`,
   `AplicarAsync`, `MensajesAsync`, `RevertirAsync`, `MensajesDeAnulacionAsync`) con el record `ContextoDeEfecto(Documento,
@@ -1253,7 +1274,8 @@ tarifa no está en `COR_Cities.DaneCode`; en la plantilla, `Import.Cell.NotFound
 `Person.DataAuthorization.PolicyUnknown` (nuevo: la versión de política no es de la cooperativa) y
 `Person.DataAuthorization.PolicyRequired` (nuevo: hay política vigente y la autorización no dice cuál se mostró);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
-más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
+data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
 
 ### 2.18 Pruebas con nombre fijo
 

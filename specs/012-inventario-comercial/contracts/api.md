@@ -519,6 +519,7 @@ exige además `Inventory.Catalog.Export` y deja el evento `Inventory.Catalog.Exp
 | `Inventory.Category.TooDeep` · `.Cycle` · `.InUse` | 422 | §3.2 | `{ maxLevel }` · — · `{ children, products }` |
 | `Inventory.AccountingGroup.InUse` · `.Inactive` | 422 | §3.4, §3.6.4 | |
 | `Inventory.Product.KindNotAvailable` · `.TrackingNotAvailable` | 422 | clase de producto o control de lote/serie antes de I6 | `{ availableIn }` |
+| `Inventory.Product.WithholdingConceptRequired` **(nuevo, T217)** | 422 | producto sin concepto de retención en compras (obligatorio salvo plantillas y combos, data-model §1.6) | |
 | `Inventory.Product.AccountingGroupRequired` · `.BaseUnitLocked` · `.UseReclassifyAccountingGroup` · `.HasHistory` · `.StatusUnchanged` · `.NotInventoriable` · `.AccountingGroupUnchanged` · `.MovementsAfterEffectiveDate` | 422 | §3.5, §3.6.4 | `{ alternatives[] }` en `HasHistory`; `{ lastMovementDate }` |
 | `Inventory.ProductUnit.IsBaseUnit` · `.Duplicate` · `.FactorLocked` · `.InUse` | 422 | §3.6.1 | |
 | `Inventory.Barcode.Duplicate` | 422 | FR-024 | `{ productPublicId, productCode, productName }` |

@@ -27,7 +27,9 @@ namespace IngenIA365ERP.Application.Attachments.Common;
 /// </para>
 ///
 /// <para>
-/// <b>Destinos de subida habilitados</b>: sólo el comprobante contable. Los tipos de módulo nunca, y
+/// <b>Destinos de subida habilitados</b>: el comprobante contable y las imágenes del producto de inventario
+/// (<see cref="ProductoDeInventario"/>, feature 012, T221: leer con <c>Inventory.Catalog.View</c>, subir y borrar con
+/// <c>Inventory.Catalog.Manage</c>, sólo JPEG, PNG y WebP, el producto tiene que existir). Los tipos de módulo nunca, y
 /// cualquier otro tipo tampoco hasta que tenga su pantalla y su regla (FR-019).
 /// </para>
 /// </summary>
@@ -41,6 +43,16 @@ public static class AdjuntosDeModulo
 
     /// <summary>El permiso genérico de borrar adjuntos; además, la regla del dueño (<see cref="PuedeBorrarAsync"/>).</summary>
     public const string PermisoDeBorrar = "Attachments.Delete";
+
+    /// <summary>El tipo de dueño de las imágenes de un producto de inventario (feature 012, T41, T221; FR-029).</summary>
+    public const string ProductoDeInventario = "InventoryProduct";
+
+    /// <summary>Los únicos tipos de archivo que admite la imagen de un producto.</summary>
+    public static readonly IReadOnlySet<string> TiposDeImagenDeProducto =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png", "image/webp" };
+
+    private const string VerCatalogo = "Inventory.Catalog.View";
+    private const string AdministrarCatalogo = "Inventory.Catalog.Manage";
 
     private const string LeerComprobantes = "Accounting.Vouchers.View";
     private const string EscribirComprobantes = "Accounting.Vouchers.Create";
@@ -64,7 +76,12 @@ public static class AdjuntosDeModulo
     /// </summary>
     public static async Task<bool> PuedeLeerAsync(IPermissionChecker permisos, string? ownerEntityType, CancellationToken ct)
     {
-        var permiso = ownerEntityType == Comprobante ? LeerComprobantes : De(ownerEntityType)?.PermisoDeLectura;
+        var permiso = ownerEntityType switch
+        {
+            Comprobante => LeerComprobantes,
+            ProductoDeInventario => VerCatalogo,
+            _ => De(ownerEntityType)?.PermisoDeLectura,
+        };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
     }
 
@@ -76,11 +93,21 @@ public static class AdjuntosDeModulo
     /// cooperativa, un comprobante de otra simplemente no está.
     /// </summary>
     public static async Task<Error?> PuedeSubirAsync(
-        IApplicationDbContext db, IPermissionChecker permisos, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct)
+        IApplicationDbContext db, IPermissionChecker permisos, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct,
+        string? contentType = null)
     {
         if (De(ownerEntityType) is { } deModulo)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 $"No se pueden subir archivos a {deModulo.Descripcion}: lo genera el programa.");
+        if (ownerEntityType == ProductoDeInventario)
+        {
+            if (contentType is not null && !TiposDeImagenDeProducto.Contains(contentType))
+                return new Error(AttachmentErrorCodes.Validation_MimeTypeNotAllowed, "La imagen del producto va en JPEG, PNG o WebP.");
+            if (!await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
+                || !await db.Products.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Producto no encontrado.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -97,10 +124,15 @@ public static class AdjuntosDeModulo
     /// el comprobante ya no existe —un borrador descartado antes de esta regla—, no hay nada que proteger.
     /// </summary>
     public static async Task<Error?> PuedeBorrarAsync(
-        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct)
+        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct, IPermissionChecker? permisos = null)
     {
         if (De(ownerEntityType) is { Borrable: false } regla)
             return NoBorrable(regla);
+        // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
+        if (ownerEntityType == ProductoDeInventario)
+            return permisos is not null && await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
+                ? null
+                : new Error("Generic.NotFound", "Adjunto no encontrado.");
         if (ownerEntityType != Comprobante)
             return null;
 

@@ -337,6 +337,23 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts => Set<Domain.Entities.Core.Taxes.WithholdingConcept>();
     public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
+    // Feature 012 (T209, US1): catalogo y bodegas (tablas en InventarioComercialNucleo, T440).
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();
@@ -476,6 +493,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         // override por entidad ya esté registrado. El provider activo decide el
         // mapeo de concurrencia (feature 004: ROWVERSION vs xmin).
         modelBuilder.ApplyBaseEntityConventions(Database.ProviderName);
+
+        // Feature 012 (T206, T43): el indice de la busqueda de productos depende del motor.
+        IngenIA365ERP.Persistence.Configurations.Inventory.Catalog.IndiceDeBusquedaDeProductos.Aplicar(modelBuilder, Database.ProviderName);
 
         // Feature 012: el documento genérico espera su par InventarioComercialNucleo (T440), que borra esta línea.
         IngenIA365ERP.Persistence.Configurations.Inventory.NucleoComercialSinMigracion.ExcluirDeLasMigraciones(modelBuilder);

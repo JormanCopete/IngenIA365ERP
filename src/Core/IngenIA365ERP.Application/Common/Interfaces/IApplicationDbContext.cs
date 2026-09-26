@@ -206,6 +206,24 @@ public interface IApplicationDbContext
     DbSet<InventoryDocumentType> InventoryDocumentTypes { get; }
     DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses { get; }
     DbSet<DocumentSequence> DocumentSequences { get; }
+    // Feature 012 (T209, US1): catalogo y bodegas. ProductAccountingGroupChanges es un hecho (solo insercion; lo escribe
+    // ChangeProductAccountingGroupCommand, US3). INV_UserWarehouseScopes se lee y escribe solo por IAsignacionesDeBodega.
+    DbSet<Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Brand> Brands { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Product> Products { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies { get; }
+    DbSet<Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses { get; }
+    DbSet<Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

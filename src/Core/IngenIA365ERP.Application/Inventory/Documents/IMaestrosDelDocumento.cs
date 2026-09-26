@@ -21,7 +21,7 @@ public sealed record ProductoDelDocumento(int Id, Guid PublicId, string Code, st
 /// La unidad de una línea para un producto: la base o una alterna, con su factor a la base, los decimales que admite y
 /// los de la unidad base (FR-017). (nuevo)
 /// </summary>
-public sealed record UnidadDelDocumento(int Id, Guid PublicId, string Code, decimal Factor, int DecimalesPermitidos, int DecimalesDeLaBase);
+public sealed record UnidadDelDocumento(int Id, Guid PublicId, string Code, decimal Factor, int DecimalesPermitidos, int DecimalesDeLaBase, string? BaseUnitCode = null);
 
 /// <summary>Una ubicación de bodega. (nuevo)</summary>
 public sealed record UbicacionDelDocumento(int Id, Guid PublicId, string Code, string Name, int WarehouseId);

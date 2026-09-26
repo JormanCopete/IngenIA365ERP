@@ -65,6 +65,9 @@ public class PrincipioVIII_DualValidation
         // Feature 012 (fase 3): el ciclo común del documento de inventario y los tipos de documento nacen con validador.
         "IngenIA365ERP.Application.Inventory.Documents",
         "IngenIA365ERP.Application.Inventory.DocumentTypes",
+        // Feature 012 (fase 4, US1): catálogo y bodegas nacen con validador en cada request, también las consultas.
+        "IngenIA365ERP.Application.Inventory.Catalog",
+        "IngenIA365ERP.Application.Inventory.Warehouses",
         // Feature 012 (fase 3, T165-T166): el catálogo tributario de Core nace con validador en cada request.
         "IngenIA365ERP.Application.Core.Taxes",
     ];
