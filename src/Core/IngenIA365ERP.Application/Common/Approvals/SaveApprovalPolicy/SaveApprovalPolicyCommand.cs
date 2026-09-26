@@ -76,28 +76,9 @@ public sealed class SaveApprovalPolicyCommandHandler(IApplicationDbContext db, I
         var clave = ApprovalPolicy.ClaveDe(ApprovalPolicy.ModuloInventario, request.Subject, request.DocumentTypePublicId);
         var versiones = await db.ApprovalPolicies.Where(p => p.PolicyKey == clave).ToListAsync(ct);
 
-        var posterior = versiones.Where(v => v.ValidFrom >= request.ValidFrom).OrderBy(v => v.ValidFrom).FirstOrDefault();
-        if (posterior is not null)
-            return Result.Failure<ApprovalPolicyDto>(ErroresDeAprobaciones.PoliticaSeCruza(posterior.ValidFrom));
-
-        var vispera = request.ValidFrom.AddDays(-1);
-        var anterior = versiones.OrderByDescending(v => v.ValidFrom).FirstOrDefault();
-        if (anterior is not null && (anterior.ValidTo is null || anterior.ValidTo > vispera))
-            anterior.ValidTo = vispera;
-
-        var nueva = new ApprovalPolicy
-        {
-            Module = ApprovalPolicy.ModuloInventario,
-            Subject = request.Subject,
-            DocumentTypePublicId = request.DocumentTypePublicId,
-            PolicyKey = clave,
-            Version = versiones.Count == 0 ? 1 : versiones.Max(v => v.Version) + 1,
-            ValidFrom = request.ValidFrom,
-            Reason = request.Reason.Trim(),
-            Levels = niveles.OrderBy(n => n.Order)
-                .Select(n => new ApprovalPolicyLevel { Order = (byte)n.Order, Threshold = n.Threshold, PermissionCode = n.PermissionCode })
-                .ToList(),
-        };
+        var registrada = PoliticasDeAprobacion.NuevaVersion(versiones, request.Subject, request.DocumentTypePublicId, request.ValidFrom, request.Reason, niveles);
+        if (registrada.IsFailure) return Result.Failure<ApprovalPolicyDto>(registrada.Error);
+        var nueva = registrada.Value;
         db.ApprovalPolicies.Add(nueva);
         await db.SaveChangesAsync(ct);
 
@@ -111,6 +92,39 @@ public sealed class SaveApprovalPolicyCommandHandler(IApplicationDbContext db, I
 /// <summary>El DTO de una versión de política (lo comparten el alta y la consulta). (nuevo)</summary>
 internal static class PoliticasDeAprobacion
 {
+    /// <summary>
+    /// La versión nueva de una serie (T084, T153; la comparten <c>SaveApprovalPolicyCommand</c> y la plantilla 8): sin
+    /// cruces con una versión que empiece ese día o después (<c>Approvals.Policy.Overlaps</c>), cierra la anterior la
+    /// víspera y devuelve la nueva, que quien llama agrega al contexto. <paramref name="versiones"/> son todas las de la
+    /// clave. No guarda. (nuevo)
+    /// </summary>
+    public static Result<ApprovalPolicy> NuevaVersion(IReadOnlyList<ApprovalPolicy> versiones, string subject, Guid? documentTypePublicId,
+        DateOnly validFrom, string reason, IReadOnlyList<NivelDeAprobacion> niveles)
+    {
+        var posterior = versiones.Where(v => v.ValidFrom >= validFrom).OrderBy(v => v.ValidFrom).FirstOrDefault();
+        if (posterior is not null)
+            return Result.Failure<ApprovalPolicy>(ErroresDeAprobaciones.PoliticaSeCruza(posterior.ValidFrom));
+
+        var vispera = validFrom.AddDays(-1);
+        var anterior = versiones.OrderByDescending(v => v.ValidFrom).FirstOrDefault();
+        if (anterior is not null && (anterior.ValidTo is null || anterior.ValidTo > vispera))
+            anterior.ValidTo = vispera;
+
+        return Result.Success(new ApprovalPolicy
+        {
+            Module = ApprovalPolicy.ModuloInventario,
+            Subject = subject,
+            DocumentTypePublicId = documentTypePublicId,
+            PolicyKey = ApprovalPolicy.ClaveDe(ApprovalPolicy.ModuloInventario, subject, documentTypePublicId),
+            Version = versiones.Count == 0 ? 1 : versiones.Max(v => v.Version) + 1,
+            ValidFrom = validFrom,
+            Reason = reason.Trim(),
+            Levels = niveles.OrderBy(n => n.Order)
+                .Select(n => new ApprovalPolicyLevel { Order = (byte)n.Order, Threshold = n.Threshold, PermissionCode = n.PermissionCode })
+                .ToList(),
+        });
+    }
+
     public static ApprovalPolicyDto ADto(ApprovalPolicy p, IReadOnlyDictionary<Guid, TipoDeDocumentoDeAprobacionDto> tipos) => new(
         p.PublicId,
         p.Module,

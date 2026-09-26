@@ -32,8 +32,8 @@ public sealed class DeactivateInventoryDocumentTypeCommandValidator : ValidadorC
 public sealed class DeactivateInventoryDocumentTypeCommandHandler(IApplicationDbContext db, VistaDeTiposDeDocumento vista)
     : IRequestHandler<DeactivateInventoryDocumentTypeCommand, Result<DocumentTypeDto>>
 {
-    /// <summary>Clases que el sistema genera solo: siempre tiene que quedar un tipo activo.</summary>
-    public static readonly IReadOnlyList<DocumentClass> ClasesDelSistema = [DocumentClass.Voiding, DocumentClass.CostAdjustment];
+    /// <summary>Clases que el sistema genera solo (<see cref="ReglasDeTipoDeDocumento.ClasesDelSistema"/>).</summary>
+    public static IReadOnlyList<DocumentClass> ClasesDelSistema => ReglasDeTipoDeDocumento.ClasesDelSistema;
 
     public async Task<Result<DocumentTypeDto>> Handle(DeactivateInventoryDocumentTypeCommand request, CancellationToken ct)
     {
@@ -44,18 +44,13 @@ public sealed class DeactivateInventoryDocumentTypeCommandHandler(IApplicationDb
         var abiertos = await db.InventoryDocuments.Where(d => d.DocumentTypeId == tipo.Id
                 && (d.Status == DocumentStatus.Draft || d.Status == DocumentStatus.PendingApproval))
             .GroupBy(d => d.Status).Select(g => new { Estado = g.Key, Cantidad = g.Count() }).ToListAsync(ct);
-        if (abiertos.Count > 0)
-        {
-            return Result.Failure<DocumentTypeDto>(InventoryErrors.HasOpenDocuments(
-                abiertos.Where(a => a.Estado == DocumentStatus.Draft).Sum(a => a.Cantidad),
-                abiertos.Where(a => a.Estado == DocumentStatus.PendingApproval).Sum(a => a.Cantidad)));
-        }
-
-        if (ClasesDelSistema.Contains(tipo.Class)
-            && !await db.InventoryDocumentTypes.AnyAsync(t => t.Class == tipo.Class && t.IsActive && t.Id != tipo.Id, ct))
-        {
-            return Result.Failure<DocumentTypeDto>(InventoryErrors.RequiredBySystem(tipo.Class));
-        }
+        var quedaOtro = !ReglasDeTipoDeDocumento.ClasesDelSistema.Contains(tipo.Class)
+            || await db.InventoryDocumentTypes.AnyAsync(t => t.Class == tipo.Class && t.IsActive && t.Id != tipo.Id, ct);
+        var inactivacion = ReglasDeTipoDeDocumento.Inactivacion(tipo.Class,
+            abiertos.Where(a => a.Estado == DocumentStatus.Draft).Sum(a => a.Cantidad),
+            abiertos.Where(a => a.Estado == DocumentStatus.PendingApproval).Sum(a => a.Cantidad),
+            quedaOtro);
+        if (inactivacion.IsFailure) return Result.Failure<DocumentTypeDto>(inactivacion.Error);
 
         tipo.IsActive = false;
         await db.SaveChangesAsync(ct);

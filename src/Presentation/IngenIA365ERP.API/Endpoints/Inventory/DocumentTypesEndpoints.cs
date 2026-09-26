@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Inventory.DocumentTypes;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -10,7 +11,7 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// Tipos de documento y su numeración (feature 012, T151; contracts/api.md §8): las clases fijas, la lista y el detalle
 /// con <c>Inventory.DocumentTypes.View</c>; alta, edición, cambio de consecutivo, inactivar y reactivar con
 /// <c>Inventory.DocumentTypes.Manage</c> e <c>Idempotency-Key</c>. La plantilla 8 (<c>template.xlsx</c>, <c>import</c>)
-/// llega con la infraestructura común de importación (T153). Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
+/// va sobre <c>RutasDePlantilla.MapPlantilla</c> (T153). Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class DocumentTypesEndpoints : ICarterModule
 {
@@ -96,6 +97,14 @@ public class DocumentTypesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission("Inventory.DocumentTypes.Manage");
+
+        // Plantilla 8 (contracts/plantillas.md §8, T153): descarga con View, importación con Manage (POST con
+        // Idempotency-Key, ConClaveDeOperacion); la descarga con datos exige además Inventory.Catalog.Export (§0.6). Los
+        // permisos por hoja y columna (§0.7) los exige el ejecutor de la importación.
+        group.MapPlantilla("Inventory.DocumentTypes.View", "Inventory.DocumentTypes.Manage", PlantillaDeTiposDeDocumento.Clave, "Inventory_DocumentTypes",
+            importar: (modo, archivo, motivo, clave) => new ImportDocumentTypesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
+            datos: () => new GetDocumentTypesTemplateDataQuery(),
+            permisoDeExportacion: "Inventory.Catalog.Export");
     }
 
     /// <summary>El alta (§8).</summary>

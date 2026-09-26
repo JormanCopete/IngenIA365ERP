@@ -2,6 +2,8 @@ using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
+using IngenIA365ERP.Application.Inventory.Documents.Numeracion;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
 
@@ -14,7 +16,7 @@ public sealed record MarcasDelTipo(bool IsTaxableWithdrawal, bool VatNonDeductib
 /// Las reglas que comparten el alta y la edición de un tipo (feature 012, T150; contracts/api.md §8): las marcas sólo en
 /// su clase (<c>Inventory.DocumentType.FlagNotApplicable</c>), ninguna bodega de tránsito
 /// (<c>Inventory.DocumentType.TransitNotAllowed</c>), bodegas y canal existentes (si no, 404), y el formato del prefijo.
-/// Las reutilizará la importación de la plantilla 8 (T153). (nuevo)
+/// Las reutiliza la importación de la plantilla 8 (T153). (nuevo)
 /// </summary>
 public static class ReglasDeTipoDeDocumento
 {
@@ -60,4 +62,62 @@ public static class ReglasDeTipoDeDocumento
         var hallado = await maestros.CanalDeVentaAsync(publicId, ct);
         return hallado is null ? Result.Failure<int?>(ErroresDelDocumento.CanalInexistente()) : Result.Success<int?>(hallado.Id);
     }
+    /// <summary>
+    /// Cambiar de prefijo o de número sobre las secuencias ya cargadas del tipo (T150, T153; lo comparten
+    /// <c>AddDocumentSequenceCommand</c> y la plantilla 8): el mismo prefijo vigente sólo mueve su siguiente número; otro
+    /// prefijo cierra el vigente la víspera de <paramref name="desde"/> y abre (o reabre) el suyo. Nunca en o por debajo de
+    /// <paramref name="ultimoEmitido"/> con ese prefijo (<c>Inventory.Sequence.NumberAlreadyIssued</c>) y sin cruzar
+    /// vigencias (<c>Inventory.Sequence.Overlaps</c>). No guarda. (nuevo)
+    /// </summary>
+    public static Result CambiarConsecutivo(InventoryDocumentType tipo, string prefijo, long siguiente, DateOnly desde, long? ultimoEmitido)
+    {
+        if (ClasesDeDocumento.De(tipo.Class).NumberedBy == NumberedBy.DianResolution)
+            return Result.Failure(InventoryErrors.NumberedByResolution(tipo.Class));
+        if (ultimoEmitido is long emitido && siguiente <= emitido)
+            return Result.Failure(InventoryErrors.SequenceNumberAlreadyIssued(emitido));
+
+        var secuencias = tipo.Sequences.Where(s => !s.IsDeleted).ToList();
+        var mismaVigente = secuencias.FirstOrDefault(s => s.Prefix == prefijo && s.ValidTo is null);
+        if (mismaVigente is not null)
+        {
+            // El prefijo vigente: sólo cambia su siguiente número (la vigencia sigue igual).
+            Numerador.AjustarSiguiente(mismaVigente, siguiente);
+            return Result.Success();
+        }
+
+        // Una vigencia que empieza en o después de la nueva, o una cerrada que la cubre, se cruza con ella.
+        if (secuencias.Any(s => s.ValidFrom >= desde || (s.ValidTo is { } hasta && hasta >= desde)))
+            return Result.Failure(InventoryErrors.SequenceOverlaps());
+
+        var abierta = secuencias.FirstOrDefault(s => s.ValidTo is null);
+        if (abierta is not null) abierta.ValidTo = desde.AddDays(-1);
+
+        var anterior = secuencias.FirstOrDefault(s => s.Prefix == prefijo);
+        if (anterior is not null)
+        {
+            anterior.ValidFrom = desde;
+            anterior.ValidTo = null;
+            Numerador.AjustarSiguiente(anterior, siguiente);
+        }
+        else
+        {
+            tipo.Sequences.Add(new DocumentSequence { DocumentType = tipo, Prefix = prefijo, NextValue = siguiente, ValidFrom = desde });
+        }
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Si un tipo activo se puede inactivar (T150, T153; lo comparten <c>DeactivateInventoryDocumentTypeCommand</c> y la
+    /// plantilla 8): sin borradores ni documentos en aprobación (<c>Inventory.DocumentType.HasOpenDocuments</c>) y sin
+    /// dejar sin tipo activo una clase que el sistema genera solo (<c>Inventory.DocumentType.RequiredBySystem</c>). (nuevo)
+    /// </summary>
+    public static Result Inactivacion(DocumentClass clase, int borradores, int enAprobacion, bool quedaOtroActivoDeLaClase)
+    {
+        if (borradores + enAprobacion > 0) return Result.Failure(InventoryErrors.HasOpenDocuments(borradores, enAprobacion));
+        if (ClasesDelSistema.Contains(clase) && !quedaOtroActivoDeLaClase) return Result.Failure(InventoryErrors.RequiredBySystem(clase));
+        return Result.Success();
+    }
+
+    /// <summary>Clases que el sistema genera solo: siempre tiene que quedar un tipo activo.</summary>
+    public static readonly IReadOnlyList<DocumentClass> ClasesDelSistema = [DocumentClass.Voiding, DocumentClass.CostAdjustment];
 }

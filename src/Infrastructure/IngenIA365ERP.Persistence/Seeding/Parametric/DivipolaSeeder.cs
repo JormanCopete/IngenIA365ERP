@@ -9,7 +9,10 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <summary>
 /// Feature 012 (T177; T24; decisiones-transversales §2.14, Order 82; data-model §0.2): los códigos DIVIPOLA del DANE en
 /// <c>COR_Cities.DaneCode</c>, desde <c>Data/divipola.json</c> (embebido). A ellos se refieren por código la sucursal
-/// (<c>COR_Branches.MunicipalityDaneCode</c>, que ReteICA de compras propone) y las tarifas municipales.
+/// (<c>COR_Branches.MunicipalityDaneCode</c>, que ReteICA de compras propone) y las tarifas municipales. El archivo trae
+/// los 1.122 municipios, islas y áreas no municipalizadas del DANE, descargados el 2026-09-25 del conjunto abierto
+/// «DIVIPOLA - Códigos municipios» de datos.gov.co (<c>gdxc-w37w</c>); al publicar el DANE uno nuevo sólo cambia el JSON
+/// y su <c>version</c>.
 ///
 /// <para>
 /// <b>Actualiza por nombre y agrega lo que falta</b>, idempotente: una ciudad viva sin código cuyo nombre —o uno de los

@@ -131,6 +131,9 @@ public class MunicipioDeSucursalTests
         var semilla = DivipolaSeeder.Semilla();
 
         semilla.Municipios.Should().NotBeEmpty();
+        semilla.Municipios.Should().HaveCount(1122, "DIVIPOLA completa del DANE (datos.gov.co gdxc-w37w, 2026-09-25)");
+        semilla.Municipios.Should().Contain(m => m.Codigo == "76111" && m.Alias != null && m.Alias.Contains("Buga"), "los alias de la versión parcial se conservan");
+        semilla.Municipios.Should().Contain(m => m.Codigo == "91263" && m.Nombre == "El Encanto", "las áreas no municipalizadas también tienen código");
         semilla.Municipios.Select(m => m.Codigo).Should().OnlyHaveUniqueItems();
         semilla.Municipios.Should().OnlyContain(m => m.Codigo.Length == 5 && m.Codigo.All(char.IsDigit));
         semilla.Municipios.Should().OnlyContain(m => semilla.Departamentos.Any(d => d.Codigo == m.Codigo.Substring(0, 2)));

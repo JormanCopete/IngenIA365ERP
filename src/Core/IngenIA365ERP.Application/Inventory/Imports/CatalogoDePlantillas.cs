@@ -51,7 +51,7 @@ public static class CatalogoDePlantillas
     public const string CategoriasClave = "inventory.product-categories";
     public const string ProductosClave = "inventory.products";
     public const string BodegasClave = "inventory.warehouses";
-    public const string TiposDeDocumentoClave = "inventory.document-types";
+    public const string TiposDeDocumentoClave = Inventory.DocumentTypes.PlantillaDeTiposDeDocumento.Clave;
     public const string VendedoresClave = "inventory.salespeople";
     public const string PuntosDeVentaClave = "inventory.points-of-sale";
     public const string MediosDePagoClave = "core.payment-means";
@@ -90,7 +90,8 @@ public static class CatalogoDePlantillas
             "/api/inventory/warehouses", "ImportWarehousesCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.Warehouses.View", "Inventory.Warehouses.Manage",
             "stockNegativo: Inventory.Parameters.Manage"),
-        new(8, Def(TiposDeDocumentoClave, "Tipos de documento", ModuloDeAuditoria.Inventory, "TiposDeDocumento", "NivelesDeAprobacion"),
+        // T153: la plantilla 8 declara sus columnas en Inventory/DocumentTypes/PlantillaDeTiposDeDocumento.
+        new(8, Inventory.DocumentTypes.PlantillaDeTiposDeDocumento.Definicion,
             "/api/inventory/document-types", "ImportDocumentTypesCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.DocumentTypes.View", "Inventory.DocumentTypes.Manage",
             "Hoja NivelesDeAprobacion: Inventory.ApprovalPolicies.Manage; modo de paso y lotes: Inventory.Parameters.Manage; "
