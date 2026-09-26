@@ -89,6 +89,16 @@ public interface IEfectoDeClase
     /// </summary>
     Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<InventoryDocument>>([]);
+
+    /// <summary>
+    /// Los contenidos que emitiría la confirmación, armados <b>antes</b> del cerrojo para la validación previa contable (feature
+    /// 012, T520; T30; contracts/contabilidad.md §4.1): los mismos contratos que <see cref="MensajesAsync"/> (o
+    /// <see cref="MensajesDeAnulacionAsync"/> en una anulación), con los costos <b>provisionales</b> —el promedio leído sin
+    /// bloqueo—, porque el kardex todavía no está escrito. Sólo la regla de «valor cero» depende del costo. Por defecto, los mismos
+    /// de siempre (sirve a las clases que no leen el kardex para armarlos: la factura, la nota, la anulación). (nuevo)
+    /// </summary>
+    Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
 }
 
 /// <summary>
@@ -127,4 +137,7 @@ public abstract class EfectoDeClaseBase : IEfectoDeClase
 
     public virtual Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<InventoryDocument>>([]);
+
+    public virtual Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
 }

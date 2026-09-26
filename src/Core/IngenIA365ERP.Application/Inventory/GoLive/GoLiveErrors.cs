@@ -47,6 +47,8 @@ public static class GoLiveErrors
     public const string ActivationOpeningBalanceNotConfirmedCode = "Inventory.Activation.OpeningBalanceNotConfirmed";
     public const string ActivationCutoffMismatchCode = "Inventory.Activation.CutoffMismatch";
     public const string ActivationAccountingUnavailableCode = "Inventory.Activation.AccountingUnavailable";
+    public const string ActivationLegacyFiguresMissingCode = "Inventory.Activation.LegacyFiguresMissing";
+    public const string ActivationRulesMissingCode = "Inventory.Activation.RulesMissing";
     public const string ActivationAlreadyActiveCode = "Inventory.Activation.AlreadyActive";
     public const string ActivationDifferenceCode = "Inventory.Activation.Difference";
     public const string ActivationAcceptDifferenceNotAllowedCode = "Inventory.Activation.AcceptDifferenceNotAllowed";
@@ -60,6 +62,24 @@ public static class GoLiveErrors
         ActivationCutoffMismatchCode,
         $"La fecha de corte pedida ({cutoffDate:yyyy-MM-dd}) no es la del saldo inicial de la bodega {warehouseCode} ({openingBalanceDate:yyyy-MM-dd}).",
         new { warehouseCode, cutoffDate, openingBalanceDate });
+
+    /// <summary>
+    /// US7 (T523): bodegas no activas que comparten cuentas con la que se activa y no tienen cifras de SOLIDO a la fecha de corte:
+    /// sin ellas el valorizado del conjunto no se puede comparar con los libros (§13.3, <c>data: { warehouseCodes[] }</c>).
+    /// </summary>
+    public static Error ActivationLegacyFiguresMissing(IReadOnlyList<string> warehouseCodes, DateOnly cutoffDate) => new ErrorConDatos(
+        ActivationLegacyFiguresMissingCode,
+        $"Las bodegas {string.Join(", ", warehouseCodes)} comparten cuentas con la que se activa y no tienen cifras de SOLIDO al {cutoffDate:yyyy-MM-dd}: impórtelas primero.",
+        new { warehouseCodes, cutoffDate });
+
+    /// <summary>
+    /// US7 (T523): grupos contables con valorizado en la bodega sin regla vigente de rol <c>Inventario</c> al corte (§13.3,
+    /// <c>data: { accountingGroups[] }</c>): la bodega no se puede comparar con los libros.
+    /// </summary>
+    public static Error ActivationRulesMissing(string warehouseCode, IReadOnlyList<string> accountingGroups) => new ErrorConDatos(
+        ActivationRulesMissingCode,
+        $"Los grupos {string.Join(", ", accountingGroups)} de la bodega {warehouseCode} no tienen regla contable de inventario vigente: la contadora debe completarla en la matriz.",
+        new { warehouseCode, accountingGroups });
 
     public static Error ActivationAccountingUnavailable() => new(ActivationAccountingUnavailableCode,
         "Contabilidad todavía no responde la comparación de saldos por conjunto de cuentas: la bodega no se puede comparar con los libros.");

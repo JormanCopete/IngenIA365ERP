@@ -38,6 +38,12 @@ public static class ClavesDeLote
     /// <summary>El disparador de la franja diaria (<c>Contabilidad.DisparadorDeLote</c>).</summary>
     public const string HoraDiaria = "HoraDiaria";
 
+    /// <summary>El disparador del cierre de turno (<c>Contabilidad.DisparadorDeLote</c>; el lote lo crea el cierre de la sesión de caja, I3). (nuevo, T522)</summary>
+    public const string CierreDeTurno = "CierreDeTurno";
+
+    /// <summary>El disparador del cierre del período de inventario (<c>Contabilidad.DisparadorDeLote</c>; el lote lo crea <c>CloseInventoryPeriodCommand</c>). (nuevo, T522)</summary>
+    public const string CierreDePeriodo = "CierreDePeriodo";
+
     /// <summary><c>BatchScopeKey</c> del disparador <c>CierreDeTurno</c>: <c>CashSession:{publicId}</c>.</summary>
     public static string SesionDeCaja(Guid cashSessionPublicId) => $"CashSession:{cashSessionPublicId:D}";
 

@@ -180,6 +180,13 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
+        // Feature 012, I2 (T519-T521): el lado de Inventario de la integracion contable. Las dimensiones que Contabilidad le pide
+        // a Inventario (lo unico de Inventario que conoce, T31), como se arman y emiten los mensajes de un documento, y la
+        // validacion previa contable: el paso 5 de la confirmacion y la consulta /prevalidate preguntan por el mismo objeto.
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeInventario, Inventory.Integration.DimensionesDeInventario>();
+        services.AddScoped<Inventory.Integration.MensajesDelDocumento>();
+        services.AddScoped<Inventory.Integration.ValidacionPreviaContable>();
+        services.AddScoped<Inventory.Documents.IPasoDeValidacionPrevia>(sp => sp.GetRequiredService<Inventory.Integration.ValidacionPreviaContable>());
         services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
         // Feature 012, US17 (T953, T954): la evaluación de reposición que comparten el aviso al confirmar, la revisión nocturna y
         // la vista reorder-alerts.
@@ -196,8 +203,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeConsumoInterno>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeBaja>();
-        // Feature 012 (US4, T309, T313): el saldo inicial por bodega y la activación bodega por bodega. Sin
-        // IContabilidadParaInventario (llega con US7, I2) la activación sólo se ensaya fuera de producción.
+        // Feature 012 (US4, T309, T313; US7, T523): el saldo inicial por bodega y la activación bodega por bodega, con el cuadre
+        // por conjuntos de cuentas que responde IContabilidadParaInventario.
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoSaldoInicial>();
         services.AddScoped<Inventory.GoLive.ComparacionDeActivacion>();
         // Feature 012 (US9, T338-T349): compras. El borrador del grupo Purchases (documento del proveedor, vinculos, impuestos

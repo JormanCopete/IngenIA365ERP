@@ -111,7 +111,10 @@ public sealed record SaldoDeActivacionDto(bool Confirmed, decimal Value, IReadOn
 /// <summary><c>Status</c>: el <c>DocumentStatus</c> (0 borrador, 1 en aprobación, 2 confirmado).</summary>
 public sealed record DocumentoDeActivacionDto(Guid PublicId, string? DisplayNumber, int Status, decimal Value);
 
-public sealed record ConjuntoDeActivacionDto(IReadOnlyList<CodigoYNombreDeActivacionDto> AccountingGroups, decimal LedgerBalance, decimal Valuation, decimal Difference);
+public sealed record ConjuntoDeActivacionDto(IReadOnlyList<CodigoYNombreDeActivacionDto> AccountingGroups, decimal LedgerBalance, ValorizadoDeActivacionDto Valuation, decimal Difference);
+
+/// <summary>El valorizado de un conjunto (api.md §13.3; T523): la pantalla muestra el total; el desglose lo trae el JSON.</summary>
+public sealed record ValorizadoDeActivacionDto(decimal ThisWarehouse, decimal Total);
 
 public sealed record CodigoYNombreDeActivacionDto(string Code, string Name);
 

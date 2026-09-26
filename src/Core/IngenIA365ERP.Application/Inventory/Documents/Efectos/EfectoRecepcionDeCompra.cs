@@ -108,6 +108,20 @@ public sealed class EfectoRecepcionDeCompra(
         return filas.Count == 0 ? [] : [await emision.CompraRecibidaAsync(contexto.Documento, filas, ct)];
     }
 
+    /// <summary>
+    /// T520: la <c>CompraRecibida</c> del borrador para la validación previa: la entrada al costo de la línea (el digitado o, si no,
+    /// el neto de la línea por unidad base); el costo de entrada definitivo, con los impuestos que suman al costo, lo calcula el
+    /// efecto dentro del cerrojo.
+    /// </summary>
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
+        if (contexto.Documento.WarehouseId is not int bodega) return [];
+        var filas = await registro.FilasProvisionalesAsync(contexto.Documento, bodega, KardexEntryKind.Entry,
+            l => l.UnitCost ?? (l.QuantityBase > 0m ? l.NetAmount / l.QuantityBase : null), ct);
+        return filas.Count == 0 ? [] : [await emision.CompraRecibidaAsync(contexto.Documento, filas, ct)];
+    }
+
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var revertido = await reversion.RevertirAsync(contexto.Documento, contexto.Original!, ct);

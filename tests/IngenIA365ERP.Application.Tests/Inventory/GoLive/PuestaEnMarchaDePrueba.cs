@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -122,7 +123,10 @@ public sealed class PuestaEnMarchaDePrueba
 
     public ConfirmacionDeDocumento Confirmacion() => new(
         Db, K.Maestros(), K.Actor, K.C.Reloj, Efectos(), (IMotorDeAprobaciones?)MotorReal ?? K.Motor, K.Cerrojo, new Numerador(Db, K.Cerrojo),
-        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], []);
+        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], ValidacionesPrevias);
+
+    /// <summary>La validación previa contable de la confirmación (US7, T468); vacía = sin validación, como en I1.</summary>
+    public IEnumerable<IPasoDeValidacionPrevia> ValidacionesPrevias { get; set; } = [];
 
     public SaveInventoryDraftCommandHandler Guardar() => new(Db, K.Maestros(), K.Alcance, K.Actor, K.C.Reloj, Efectos(), K.Vista());
 
@@ -188,10 +192,15 @@ public sealed class PuestaEnMarchaDePrueba
         return r;
     }
 
-    public ActivateWarehouseCommandHandler Activar() =>
-        new(Db, new ComparacionDeActivacion(Db, K.Alcance, K.C.Reloj), K.Actor, K.Permisos, K.C.Reloj, Options.Create(Opciones));
+    /// <summary>La consulta de saldos de Contabilidad (US7, T470); nula = sin puerto registrado, como en I1.</summary>
+    public IContabilidadParaInventario? Contabilidad { get; set; }
 
-    public GetWarehouseActivationPreviewQueryHandler VistaPrevia() => new(new ComparacionDeActivacion(Db, K.Alcance, K.C.Reloj));
+    private ComparacionDeActivacion Comparacion() => new(Db, K.Alcance, K.C.Reloj, Contabilidad, K.Lector());
+
+    public ActivateWarehouseCommandHandler Activar() =>
+        new(Db, Comparacion(), K.Actor, K.Permisos, K.C.Reloj, Options.Create(Opciones));
+
+    public GetWarehouseActivationPreviewQueryHandler VistaPrevia() => new(Comparacion());
 
     /// <summary>
     /// Productos en bloque (<c>Q00001</c>…), inventariables, en unidad base <c>UND</c> y del grupo de abarrotes, para los archivos

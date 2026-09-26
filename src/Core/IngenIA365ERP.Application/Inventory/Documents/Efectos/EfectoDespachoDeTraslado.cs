@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Application.Inventory.Transfers;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Entities.Inventory.Transactions;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Costing;
 using Microsoft.EntityFrameworkCore;
@@ -113,6 +114,19 @@ public sealed class EfectoDespachoDeTraslado(
             : await db.KardexEntries.AsNoTracking().Where(k => k.DocumentId == contexto.Documento.Id).ToListAsync(ct);
         if (filas.Count == 0) return [];
         return [await emision.TrasladoDespachadoAsync(contexto.Documento, filas, ct)];
+    }
+
+    /// <summary>
+    /// T520: el <c>TrasladoDespachado</c> del borrador para la validación previa: lo que entraría al tránsito, al promedio vigente del
+    /// origen.
+    /// </summary>
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
+        var documento = contexto.Documento;
+        if (documento.WarehouseId is not int origen || documento.TransitWarehouseId is not int transito) return [];
+        var filas = await registro.FilasProvisionalesAsync(documento, origen, KardexEntryKind.Entry, null, ct, bodegaDeLasFilas: transito);
+        return filas.Count == 0 ? [] : [await emision.TrasladoDespachadoAsync(documento, filas, ct)];
     }
 
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)

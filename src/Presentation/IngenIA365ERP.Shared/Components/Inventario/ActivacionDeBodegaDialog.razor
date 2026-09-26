@@ -61,7 +61,7 @@
                                             <tr>
                                                 <td>@string.Join(", ", s.AccountingGroups.Select(g => g.Code))</td>
                                                 <td class="numero">@s.LedgerBalance.ToString("N2")</td>
-                                                <td class="numero">@s.Valuation.ToString("N2")</td>
+                                                <td class="numero">@s.Valuation.Total.ToString("N2")</td>
                                                 <td class="numero">@s.Difference.ToString("N2")</td>
                                             </tr>
                                         }
