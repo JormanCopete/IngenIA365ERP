@@ -1044,6 +1044,16 @@ JSON embebidos versionados (T40), no semillas.
   `Inventory/Purchasing/CruceDeCompra`, `Sales/Pricing/ResolutorDeListaDePrecios`,
   `Sales/Cash/{CalculadoraDeEsperado, EvaluadorDeArqueo}`, `Sales/Payments/{ValidadorDePagos,
   DisponibilidadDeMedio}`, `Sales/Promotions/MotorDePromociones` (I6), `Common/Text/NormalizadorDeBusqueda`.
+- Motores de costeo (fase 6, US3, T280–T282; todos **(nuevo)**): en `Domain/Inventory/Costing/ModeloDeCosteo` las piezas que
+  no se guardan —`ValoracionDelMovimiento` { AlCostoVigente=1, AlCostoIndicado=2, AlCostoDeOrigen=3, DevolucionDeEntrada=4 },
+  `PorcionDelAjuste` { EnExistencia=1, Vendida=2 }, `EstadoDeCosto` (+ `SalidaEnNegativo`), `MovimientoDeCosto`,
+  `ParametrosDeCosteo`, `LineaDeKardexPropuesta`, `ReferenciaDeKardex`, `RechazoDeCosteo`, `ResultadoDeCosteo`—;
+  `MotorDeCosteo.Aplicar` y `.CodigoExistenciaInsuficiente`; `Redondeo` con `RedondeoDeMontos` { Centavo=1, Peso=2 },
+  `ResiduoDeRedondeo` { MayorValor=1, UltimaLinea=2 }, `Repartir` y `ValorPorBodega`; `ExplicacionDeCosto` + `PasoDeCosto`;
+  `CostoDeEntrada` con `PedidoDeCostoDeCompra`, `ImpuestoDeCompra` y `CostoDeEntradaCalculado`; `Retroactivo.Insertar` con
+  `PedidoRetroactivo`, `MovimientoRegistrado`, `MovimientoRetroactivo`, `ResultadoRetroactivo` y
+  `AjusteRetroactivoPorDocumento`. Pruebas: `Domain.Tests/Inventory/Costing/{CasoDoradoDeCosteo, CasosDoradosDeCosteoTests,
+  PropiedadesDelKardexTests, MotorDeCosteoTests}`.
 - Application: `Inventory/Common/ICerrojoDeInventario` (impl. `Persistence/Inventory/CerrojoDeInventario`),
   `Inventory/Common/FiltroDeAlcance`, `Inventory/Kardex/{RegistroDeKardex, VerificacionDeIntegridad}`,
   `Inventory/Documents/Numeracion/Numerador`, `Inventory/Documents/Efectos/*` (una estrategia por clase),

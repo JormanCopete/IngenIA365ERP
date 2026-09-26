@@ -1,0 +1,35 @@
+{
+  // US3-1: la devolución de la venta entra a $1.150 aunque el promedio haya cambiado después.
+  "nombre": "Devolución de cliente al costo con que salió",
+  "descripcion": "Promedio 1.150 (caso 01). Venta de 5 a 1.150 = 5.750 → 15 por 17.250. Compra de 5 a 1.450 = 7.250 → 20 por 24.500, promedio 1.225. La devolución de los 5 vendidos entra a 1.150 (el costo de la línea de venta), no a 1.225: 5.750 → 25 por 30.250, promedio 1.210.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -5,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -5, "costoUnitario": 1150, "costoTotal": -5750 } ],
+        "estado": { "cantidad": 15, "valor": 17250, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "E3", "documento": "EC-3", "fecha": "2026-09-04", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 5, "costoUnitario": 1450,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 5, "costoUnitario": 1450, "costoTotal": 7250 } ],
+        "estado": { "cantidad": 20, "valor": 24500, "promedio": 1225, "ultimoCosto": 1450 }
+      }
+    },
+    {
+      "id": "D1", "documento": "NC-1", "fecha": "2026-09-05", "clase": "CreditNote", "bodega": "PRINCIPAL", "cantidad": 5,
+      "valoracion": "AlCostoDeOrigen", "origen": "V1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 5, "costoUnitario": 1150, "costoTotal": 5750, "revierte": "-" } ],
+        "estado": { "cantidad": 25, "valor": 30250, "promedio": 1210, "ultimoCosto": 1150 },
+        "explicacion": [ "Entra al costo de la línea de origen." ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 25, "valor": 30250, "promedio": 1210 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 25 } ]
+}

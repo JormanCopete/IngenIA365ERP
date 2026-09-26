@@ -1,0 +1,48 @@
+{
+  // FR-045, FR-089, pregunta D8 (T18): el saldo inicial de una segunda bodega NotActivated, fechado en su corte, entra
+  // después de ventas ya registradas en la primera (ámbito cooperativa); las salidas posteriores se recalculan con líneas
+  // CostAdjustment Retroactive, separadas en existencia y vendido, y sale un AjusteDeCostoReconocido por documento.
+  "nombre": "Segunda bodega activada después de ventas en la primera",
+  "descripcion": "Ámbito cooperativa. A abre el 01/09 con 10 × 1.000. Vende 4 el 05/09 (4.000) y 2 el 10/09 (2.000), y el 11/09 despacha 1 al tránsito (sale a 1.000 y entra al tránsito a 1.000): 4 por 4.000. B se activa después con saldo inicial del 03/09 (su corte): 10 × 1.300 = 13.000. Insertado en su fecha: 20 por 23.000 (1.150) el 03/09. La venta del 05/09 debió costar 4 × 1.150 = 4.600: ajuste −600 (vendida). La del 10/09, 2 × 1.150 = 2.300: ajuste −300 (vendida). El despacho del 11/09, 1.150: ajuste −150 en la salida de A y +150 en la entrada al tránsito (en existencia; neto 0 en el documento). Estado: 14 por 16.100 (1.150). Luego B vende 4 el 20/09 a 1.150 = 4.600 → 10 por 11.500.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "SIA", "documento": "SI-A", "fecha": "2026-09-01", "clase": "OpeningBalance", "bodega": "A", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "V1", "documento": "FV-1", "fecha": "2026-09-05", "clase": "SalesInvoice", "bodega": "A", "cantidad": -4 },
+    { "id": "V2", "documento": "FV-2", "fecha": "2026-09-10", "clase": "SalesInvoice", "bodega": "A", "cantidad": -2 },
+    { "id": "T1", "documento": "TR-1", "fecha": "2026-09-11", "clase": "TransferDispatch", "bodega": "A", "cantidad": -1 },
+    {
+      "id": "T1E", "documento": "TR-1", "fecha": "2026-09-11", "clase": "TransferDispatch", "bodega": "TRANSITO", "cantidad": 1,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": { "estado": { "cantidad": 4, "valor": 4000, "promedio": 1000 } }
+    },
+    {
+      "id": "SIB", "documento": "SI-B", "fecha": "2026-09-03", "clase": "OpeningBalance", "bodega": "B", "cantidad": 10, "costoUnitario": 1300,
+      "retroactivo": true,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1300, "costoTotal": 13000 } ],
+        "ajustes": [
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -600, "afecta": "V1", "fecha": "2026-09-05", "porcion": "Vendida" },
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -300, "afecta": "V2", "fecha": "2026-09-10", "porcion": "Vendida" },
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -150, "afecta": "T1", "fecha": "2026-09-11", "porcion": "EnExistencia" },
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": 150, "afecta": "T1E", "fecha": "2026-09-11", "porcion": "EnExistencia" }
+        ],
+        "ajustesPorDocumento": [
+          { "documento": "FV-1", "enExistencia": 0, "vendida": -600 },
+          { "documento": "FV-2", "enExistencia": 0, "vendida": -300 },
+          { "documento": "TR-1", "enExistencia": 0, "vendida": 0 }
+        ],
+        "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150, "ultimoCosto": 1150 },
+        "explicacion": [ "Retroactivo mínimo de I1" ]
+      }
+    },
+    {
+      "id": "V3", "documento": "FV-3", "fecha": "2026-09-20", "clase": "SalesInvoice", "bodega": "B", "cantidad": -4,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1150, "costoTotal": -4600 } ],
+        "estado": { "cantidad": 10, "valor": 11500, "promedio": 1150 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 10, "valor": 11500, "promedio": 1150 } ],
+  "existencias": [ { "bodega": "A", "cantidad": 3 }, { "bodega": "TRANSITO", "cantidad": 1 }, { "bodega": "B", "cantidad": 6 } ]
+}
