@@ -232,9 +232,12 @@ y sus exportaciones (`AuditLog.View/Export`).
 
 `PUT /api/payroll/health-providers/{id}` (y ARL, pensiones, cesantías, cajas) y
 `PUT /api/core/banks/{id}` aceptan `personPublicId` (FR-088). `PUT /api/treasury/concepts/{id}`
-acepta `debitAccountPublicId`, `creditAccountPublicId`. Las parametrizaciones de Cartera,
-Inventario y CDT validan la cuenta al guardar (422 `Accounting.Account.NotEligible` con
+acepta `debitAccountPublicId`, `creditAccountPublicId`. Las parametrizaciones de Cartera
+y CDT validan la cuenta al guardar (422 `Accounting.Account.NotEligible` con
 `data: { accountCode, module, rule }`).
+*Enmienda 012 (D-01)*: decía «Cartera, Inventario y CDT»; Inventario sale de esta lista porque ya
+no tiene cuentas por producto ni por IVA: la matriz `ACC_InventoryPostingRules` valida la cuenta en su
+propio comando (`specs/012-inventario-comercial/contracts/api.md` §26).
 
 ## 16. Errores de concurrencia
 

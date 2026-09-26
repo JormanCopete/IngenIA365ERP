@@ -147,4 +147,17 @@ public class ScheduleIntegrationBatchesCommandTests
         typeof(IRequestHandler<ScheduleIntegrationBatchesCommand, Result<LotesProgramadosDto>>)
             .IsAssignableFrom(typeof(ScheduleIntegrationBatchesCommandHandler)).Should().BeTrue();
     }
+
+    /// <summary>
+    /// Dos pasadas a la vez (T473, hallado en las e2e): las dos toman el mismo número del contador —o crean las dos la fila única
+    /// del contador— y la segunda choca contra <c>UK_COR_IntegrationBatches_Number</c> antes que contra la franja. Es la carrera de
+    /// un consecutivo: el comando se reintenta entero y la relectura ve que la franja ya tiene su lote.
+    /// </summary>
+    [Fact]
+    public void La_carrera_del_numero_de_lote_se_reintenta_como_la_de_un_consecutivo()
+    {
+        typeof(IngenIA365ERP.Application.Common.Behaviors.IReintentableAnteConcurrencia).IsAssignableFrom(typeof(ScheduleIntegrationBatchesCommand)).Should().BeTrue();
+        IngenIA365ERP.Application.Common.Behaviors.ReintentoPorConcurrenciaBehavior<ScheduleIntegrationBatchesCommand, Result<LotesProgramadosDto>>.IndicesDeConsecutivo
+            .Should().Contain("UK_COR_IntegrationBatches_Number");
+    }
 }

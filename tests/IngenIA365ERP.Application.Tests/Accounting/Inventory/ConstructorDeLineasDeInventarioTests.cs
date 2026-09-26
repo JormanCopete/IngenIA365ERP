@@ -156,4 +156,20 @@ public class ConstructorDeLineasDeInventarioTests
     private static string Linea(string cuenta, decimal d, decimal c, string? tercero, string? cruce, decimal? @base, string sucursal, bool centro, IReadOnlyList<int> lineas) =>
         string.Join(" | ", cuenta, d.ToString("0.00", CultureInfo.InvariantCulture), c.ToString("0.00", CultureInfo.InvariantCulture), tercero ?? "-",
             cruce ?? "-", @base?.ToString("0.00", CultureInfo.InvariantCulture) ?? "-", sucursal, centro ? "centro" : "-", string.Join(',', lineas));
+
+    /// <summary>
+    /// La anulación armada en memoria (la validación previa, antes de guardar) trae cada contenido anulado como <c>JsonNode</c>
+    /// —<c>EmisionDeInventario.Invertido</c>—, no como el <c>JsonElement</c> que deja leerlo de la base. Los dos se leen igual:
+    /// hasta las e2e de I2 la validación previa de toda anulación respondía «no existe el tipo de comprobante del mensaje
+    /// DocumentoAnulado» y no se podía anular nada que pasara a Contabilidad.
+    /// </summary>
+    [Fact]
+    public void El_contenido_anulado_en_memoria_se_lee_como_el_leido_de_la_base()
+    {
+        var nodo = JsonNode.Parse("""{"operation":"AjustePositivo","lines":[]}""");
+
+        Application.Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario.OperacionDelContenido(nodo).Should().Be("AjustePositivo");
+        ConstructorDeLineasDeInventario.ContenidoTipado(AjusteInventarioAprobadoV1.Type, 1, nodo)
+            .Should().BeOfType<AjusteInventarioAprobadoV1>().Which.Operation.Should().Be("AjustePositivo");
+    }
 }

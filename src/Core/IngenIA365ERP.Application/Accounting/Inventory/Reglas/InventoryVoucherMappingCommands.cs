@@ -224,6 +224,7 @@ public sealed class TiposDeComprobanteDeInventario(IApplicationDbContext db)
         MovimientoDeCajaRegistradoV1 x => x.Operation,
         DiferenciaDeArqueoAprobadaV1 x => x.Operation,
         JsonElement { ValueKind: JsonValueKind.Object } e when e.TryGetProperty("operation", out var op) && op.ValueKind == JsonValueKind.String => op.GetString(),
+        System.Text.Json.Nodes.JsonObject o when o["operation"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var s) => s,
         _ => null,
     };
 

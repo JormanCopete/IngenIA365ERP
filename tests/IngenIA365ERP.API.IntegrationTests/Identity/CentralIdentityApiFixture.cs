@@ -164,6 +164,22 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+
+                // Feature 012, I2 (T471, T472): el reloj de la suite (desfase cero = el real) y los dobles de la
+                // integración contable, que sólo muerden en la cooperativa que una prueba marca.
+                services.AddSingleton<IngenIA365ERP.API.Services.DateTimeService>();
+                services.RemoveAll<IngenIA365ERP.Application.Common.Interfaces.IDateTimeService>();
+                services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IDateTimeService>(sp =>
+                    new Integration.RelojDeLaSuite(sp.GetRequiredService<IngenIA365ERP.API.Services.DateTimeService>()));
+                services.AddSingleton(Dobles);
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.ContabilidadParaInventario>();
+                services.RemoveAll<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario>();
+                services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario, Integration.ContabilidadParaInventarioConDoble>();
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+                var destinos = services.Where(d => d.ServiceType == typeof(IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes)
+                    && d.ImplementationType == typeof(IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad)).ToList();
+                foreach (var d in destinos) services.Remove(d);
+                services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, Integration.DestinoContabilidadConDoble>();
             });
 
             ConfigurarHost(builder);
@@ -181,6 +197,12 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
+
+    /// <summary>Los dobles de la integración contable (T472), inertes salvo en la cooperativa que una prueba marca.</summary>
+    public Integration.DoblesDeIntegracion Dobles { get; } = new();
+
+    /// <summary>El conductor del despachador de mensajes (T471): pasadas a mano, comandos como el proceso y el reloj.</summary>
+    public Integration.ConductorDelDespachador Despachador => new(this);
 
     /// <summary>
     /// Una pasada del <see cref="IngenIA365ERP.Audit.Services.AuditOutboxForwarder"/> sobre la cooperativa

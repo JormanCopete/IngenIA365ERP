@@ -27,6 +27,8 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// (<c>AhoraLocal</c>) y sin lote para <c>(ScheduleKey, ScheduledFor)</c>, crea el lote <c>Scheduled</c> con su número, su
 /// granularidad, su corte (el último mensaje de la clave) y sus entregas, todo en una transacción. Si otra réplica lo creó
 /// primero, el índice único <c>UK_COR_IntegrationBatches_Schedule</c> choca y se traduce a «ya existe», no a error.
+/// Si choca antes el número del lote (las dos tomaron el mismo del contador), el comando se reintenta entero
+/// (<c>IReintentableAnteConcurrencia</c>) y la relectura ve la franja ya creada (T473).
 /// </para>
 ///
 /// <para>
@@ -35,7 +37,7 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// por <c>RaiseAlertCommand</c>.
 /// </para>
 /// </summary>
-public sealed record ScheduleIntegrationBatchesCommand(int LateToleranceMinutes) : IRequest<Result<LotesProgramadosDto>>;
+public sealed record ScheduleIntegrationBatchesCommand(int LateToleranceMinutes) : IRequest<Result<LotesProgramadosDto>>, Behaviors.IReintentableAnteConcurrencia;
 
 /// <summary>Lo que dejó la pasada: los lotes creados y los atrasados. (nuevo)</summary>
 public sealed record LotesProgramadosDto(IReadOnlyList<LoteProgramadoDto> Created, IReadOnlyList<LoteProgramadoDto> Late);

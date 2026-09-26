@@ -229,6 +229,8 @@ public static class ConstructorDeLineasDeInventario
     public static object? ContenidoTipado(string tipo, int version, object? contenido)
     {
         if (contenido is null) return null;
+        // Armada en memoria (la validación previa) la anulación trae JsonNode; leída de la base, JsonElement. Se leen igual.
+        if (contenido is System.Text.Json.Nodes.JsonNode nodo) contenido = JsonSerializer.SerializeToElement(nodo);
         if (contenido is not JsonElement json) return contenido;
         var registro = CatalogoDeMensajesV1.Todos.FirstOrDefault(t => t.Type == tipo && t.Version == version);
         return registro is null ? null : json.Deserialize(registro.Record, OpcionesDeMensajes.Opciones);

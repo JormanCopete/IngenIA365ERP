@@ -83,4 +83,23 @@ public class InventoryAccountBalancesQueryTests
 
         (await ConsultarAsync(new DateOnly(2026, 3, 31))).Should().BeEmpty();
     }
+
+    /// <summary>
+    /// Sin contabilidad iniciada no hay libros con qué comparar: la consulta falla con <c>Accounting.NotInitialized</c> (aunque no
+    /// haya reglas), y la activación y la conciliación lo tratan como «Contabilidad no responde» —fuera de producción se activa
+    /// aceptando la diferencia, como en I1— en vez de exigir reglas que una cooperativa sin contabilidad no puede tener
+    /// (hallado por las e2e de I1 al publicar la validación previa, T471+).
+    /// </summary>
+    [Fact]
+    public async Task Sin_contabilidad_iniciada_responde_que_no_esta_iniciada()
+    {
+        E.D.Db.InventoryPostingRules.RemoveRange(E.D.Db.InventoryPostingRules);
+        E.D.Db.AccountingSetups.RemoveRange(E.D.Db.AccountingSetups);
+        E.D.Db.SaveChanges();
+
+        var r = await new InventoryAccountBalancesQueryHandler(E.D.Db, E.D.Clock).Handle(new InventoryAccountBalancesQuery(new DateOnly(2026, 3, 31)), default);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be(AccountingErrors.NotInitialized.Code);
+    }
 }

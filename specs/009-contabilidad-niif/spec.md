@@ -21,6 +21,8 @@ desde una cuenta o auxiliar profundicen hasta documentos y terceros de forma aud
 dinámicos múltiples. (8) Auditoría de todos los procesos, incluyendo todos los registros y el
 ingreso a todas las opciones. (9) Todo lo demás que exija la norma colombiana e internacional.
 
+> *Enmienda 012 (D-01, 2026-09-26)*: Inventario comercial **no** llega en línea: llega por mensajes asíncronos con validación previa antes de confirmar (`specs/012-inventario-comercial/contracts/contabilidad.md`; decisión D-01 de la 012).
+
 ## Contexto
 
 El módulo de contabilidad actual es la transcripción del de SOLIDO (37 tablas `cnt_`), y al
@@ -126,7 +128,7 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
 - Tipos de comprobante, períodos contables, cierre mensual, cierre y reapertura del ejercicio.
 - Ventana de digitación de comprobantes manuales, borradores y lista de comprobantes.
 - Contrato único de contabilización para los módulos, con Nómina primero (es el único módulo en
-  producción) y después Cartera, Inventario, Tesorería y CDT/Ahorros, que hoy escriben directo.
+  producción) y después Cartera, Tesorería y CDT/Ahorros, que hoy escriben directo; Inventario, por mensajes con la matriz de reglas de la 012.
 - Vínculo de las entidades de los catálogos institucionales (EPS, ARL, fondos de pensiones y
   cesantías, cajas de compensación, bancos) con una persona del maestro, para que sean terceros
   contables.
@@ -137,6 +139,7 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
   activos fijos y diferidos con depreciación y amortización automáticas.
 - Permisos por capacidad para todo el módulo y auditoría de cada acción, de cada exportación y del
   ingreso a cada opción (este último mecanismo es general para todo el ERP).
+  *Enmienda 012 (D-01, 2026-09-26)*: antes decía «después Cartera, Inventario, Tesorería y CDT/Ahorros»; Inventario sale de esa lista y pasa por mensajes (`specs/012-inventario-comercial`, US7).
 
 ### Fuera de esta feature
 
@@ -324,6 +327,8 @@ digitación; si rechaza, la operación del módulo falla completa; si acepta, el
 contabilizado de inmediato con su origen, y en Contabilidad sólo se consulta. Corregirlo es
 reversarlo **desde el módulo**.
 
+> *Enmienda 012 (D-01, 2026-09-26)*: salvo Inventario, que pregunta antes de confirmar (validación previa) y, si Contabilidad rechaza después, deja el mensaje en su bandeja (012 FR-074); lo nacido de Inventario no se reversa: se corrige con un comprobante nuevo (012 FR-079).
+
 **Why this priority**: es el punto 2 y 3 de la solicitud, y hoy es donde se rompe la integridad
 (cinco módulos, quince caminos, ninguna regla común). Nómina va primero porque es el único módulo
 en producción.
@@ -349,11 +354,13 @@ genera la reversión referenciada.
    comprobante de reversión referenciado al original y el saldo neto de esas cuentas queda en cero.
 5. **Given** un período contable cerrado, **When** un módulo intenta contabilizar con fecha en ese
    período, **Then** el rechazo llega al usuario del módulo con el período señalado.
+   *Enmienda 012 (D-01, 2026-09-26)*: no aplica a Inventario: su rechazo por período cerrado llega a la bandeja de mensajes y se recupera reabriendo el período y reprocesando con la fecha original (012 US7-6).
 6. **Given** el código del ERP, **Then** no existe ningún camino que escriba movimientos contables
    fuera del contrato único (lo comprueba una prueba automática).
-7. **Given** Cartera, Inventario, Tesorería y CDT, **When** ejecutan cada operación que hoy
+7. **Given** Cartera, Tesorería y CDT, **When** ejecutan cada operación que hoy
    contabiliza, **Then** producen su comprobante por el contrato, con su tipo de comprobante y con
    el tercero de la operación (asociado, cliente, proveedor, banco) en cada línea que lo exija.
+   *Enmienda 012 (D-01, 2026-09-26)*: antes decía «Cartera, Inventario, Tesorería y CDT»; Inventario sale de este escenario y lo cubre la 012 US7 (por mensajes, `Accounting/ContabilizacionPorMensajesTests`).
 8. **Given** una cuenta de aportes parametrizada para Nómina que exige tercero, **When** una EPS
    del catálogo no tiene persona vinculada, **Then** la parametrización lo rechaza nombrando la EPS;
    **When** la EPS queda vinculada y se aprueba la nómina, **Then** las líneas de aportes llevan a
@@ -807,10 +814,12 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 - **FR-015**: Los buscadores de cuentas MUST buscar por código o nombre y ofrecer sólo cuentas de
   movimiento activas habilitadas para el contexto (módulo) en que se usan.
 - **FR-016**: Las pantallas de parametrización de los módulos (cuentas por concepto de nómina,
-  cuentas de producto e IVA, cuentas de cartera, ahorros y CDT, tesorería, activos) MUST validar la
+  la matriz de reglas de Inventario (012 FR-073), cuentas de cartera, ahorros y CDT, tesorería, activos) MUST validar la
   cuenta al guardar según FR-009 y FR-014, y MUST mostrar las reglas de la cuenta elegida.
+  *Enmienda 012 (D-01, 2026-09-26)*: antes decía «cuentas de producto e IVA»; Inventario ya no tiene pantalla de cuentas de producto: su parametrización es la matriz de reglas de Inventario (012 FR-073), que valida la cuenta en su propio comando.
 - **FR-017**: El sistema MUST ofrecer una consulta de parametrizaciones inválidas (cuentas de
   agrupación, inactivas o no habilitadas para el módulo) para las bases ya sembradas.
+  *Enmienda 012 (D-01, 2026-09-26)*: incluidas las reglas de la matriz de Inventario (`ACC_InventoryPostingRules`; la consulta de completitud de la 012, FR-082).
 - **FR-018**: La ficha de cada cuenta MUST mostrar su historial de cambios (quién, cuándo, antes y
   después).
 
@@ -828,6 +837,7 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 - **FR-022**: El cierre mensual MUST exigir que no queden borradores del período; la reapertura
   MUST exigir permiso propio y motivo, quedar auditada y marcar como desactualizadas las
   conciliaciones bancarias cerradas de ese mes.
+  *Enmienda 012 (D-01, 2026-09-26)*: y MUST avisar, con reconocimiento auditado (`AcknowledgeInventoryPending`), de los mensajes de Inventario pendientes, en lote o rechazados con fecha en el período (`Accounting.Period.InventoryPending`; 012 D-01).
 - **FR-023**: El cierre del ejercicio MUST exigir los doce meses cerrados y el ejercicio anterior
   cerrado, y MUST generar el comprobante de cierre (ingresos, gastos y costos contra la cuenta de
   resultado del ejercicio) con un tipo de comprobante reservado; la reapertura del ejercicio MUST
@@ -858,6 +868,7 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   reversión: un comprobante nuevo con las líneas invertidas, motivo obligatorio, referencia en
   ambos sentidos y fecha en un período abierto; MUST NOT poderse reversar dos veces ni reversar una
   reversión.
+  *Enmienda 012 (D-01, 2026-09-26)*: excepción: lo nacido de Inventario se corrige con un comprobante nuevo de su propio mensaje (anulación, nota o ajuste), con fecha propia, enlazado al original, que nunca se marca reversado; `PrepareReversalAsync` lo rechaza con `Accounting.Document.InventoryCorrectsWithNewVoucher` (012 FR-079, C7).
 - **FR-031**: La digitación MUST poder operarse por teclado de principio a fin, con acciones para
   repetir tercero, centro y sucursal de la línea anterior, duplicar línea y llevar la diferencia a
   la última línea.
@@ -877,22 +888,28 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 - **FR-036**: Los módulos MUST contabilizar a través de un único contrato que recibe el comprobante
   completo y aplica FR-014, FR-020 y FR-021; el comprobante y la operación del módulo MUST quedar
   registrados juntos o no quedar ninguno.
+  *Enmienda 012 (D-01, 2026-09-26)*: Inventario no usa el contrato sincrónico: la atomicidad es documento + mensaje en Inventario y comprobante + recibo del mensaje (`ACC_InventoryPostings`) en Contabilidad (012 FR-071, FR-074); el camino al libro sigue siendo este contrato (`AccountingPoster`).
 - **FR-037**: Todo comprobante MUST guardar su origen (módulo, tipo de documento origen e
   identificador) y, cuando el origen es un módulo, MUST verse en Contabilidad de sólo lectura con
   enlace al documento de origen y sin acciones de edición ni anulación.
+  *Enmienda 012 (D-01, 2026-09-26)*: el origen de un comprobante resumido de Inventario es el lote (`InventoryPostingBatch`), que lista sus documentos.
 - **FR-038**: La corrección de un comprobante de origen módulo MUST hacerse sólo desde ese módulo,
   mediante el mismo contrato de reversión (FR-030).
+  *Enmienda 012 (D-01, 2026-09-26)*: en Inventario, por el comprobante nuevo de su anulación, nota o ajuste (ver FR-030), no por reversión.
 - **FR-039**: Nómina, Cartera, Inventario, Tesorería, CDT/Ahorros y los procesos propios de
   Contabilidad que generan comprobantes (cierre, activos, conciliación) MUST contabilizar por el
   contrato; MUST NOT quedar ningún camino que escriba movimientos fuera de él (comprobado por una
   prueba automática).
+  *Enmienda 012 (D-01, 2026-09-26)*: Inventario contabiliza por el contrato a través de su consumidor de mensajes (`PostInventoryMessagesCommand`), no desde sus comandos.
 - **FR-040**: Cada módulo MUST tener sus tipos de comprobante reservados, MUST enviar como tercero
   de cada línea la persona de la operación (empleado, asociado, cliente, proveedor, banco) cuando la
   cuenta lo exige, y MUST enviar en toda línea la sucursal de la operación (la del empleado, del
   asociado, de la factura) o, si no la conoce, la principal; cuando la contraparte es una entidad
   de catálogo, el tercero es la persona vinculada a esa entidad (FR-088).
+  *Enmienda 012 (D-01, 2026-09-26)*: los tipos reservados de Inventario son `FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC` y `CJ`, mapeables por operación y tipo de documento (`ACC_InventoryVoucherMappings`); el tercero y la sucursal son los del mensaje.
 - **FR-041**: El mensaje de rechazo hacia el módulo MUST nombrar la línea, el concepto o producto y
   la regla incumplida.
+  *Enmienda 012 (D-01, 2026-09-26)*: hacia Inventario, en la validación previa (antes de confirmar, 422 `Inventory.Prevalidation.NotPostable`) o en la bandeja (después), con la línea del documento, la cuenta, la regla y quién corrige.
 
 **Consultas e informes**
 
@@ -990,8 +1007,9 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   anulado.
 - **FR-069**: Los certificados MUST poder imprimirse y enviarse por correo al tercero, con registro
   del envío.
-- **FR-070**: Las líneas de impuesto que envían los módulos (retención en Nómina, IVA en Inventario)
+- **FR-070**: Las líneas de impuesto que envían los módulos (retención en Nómina; los impuestos de Inventario, ver la enmienda)
   MUST cumplir FR-065.
+  *Enmienda 012 (D-01, 2026-09-26)*: antes decía «IVA en Inventario»; los impuestos de Inventario van por la matriz y con el control de tarifa de la 012 (C8, FR-082).
 
 **Información exógena (medios magnéticos DIAN)**
 
@@ -1128,6 +1146,7 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   operación; en las pruebas automáticas no queda ni una corrida aprobada sin comprobante ni un
   comprobante sin corrida (cero huérfanos en ambos sentidos), y lo mismo para cada operación de
   Cartera, Inventario, Tesorería, CDT y Activos.
+  *Enmienda 012 (D-01, 2026-09-26)*: para Inventario: cero documentos confirmados sin mensaje y cero comprobantes de origen INV sin recibo de mensaje; lo pendiente, rechazado o que no pasa se ve en la bandeja (012 SC-002, SC-021).
 - **SC-005**: Desde el balance de prueba se llega a la línea de un comprobante concreto en 4 clics
   o menos, y toda vista intermedia se exporta a Excel, PDF y Word con totales idénticos.
 - **SC-006**: El balance de prueba cuadra (débitos = créditos) el 100 % de las veces y cada saldo

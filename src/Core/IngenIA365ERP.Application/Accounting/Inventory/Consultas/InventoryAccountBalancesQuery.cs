@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -41,7 +42,11 @@ public sealed class InventoryAccountBalancesQueryHandler(IApplicationDbContext d
     public async Task<Result<IReadOnlyList<ConjuntoDeCuentasDto>>> Handle(InventoryAccountBalancesQuery request, CancellationToken ct)
     {
         var corte = request.Corte;
-        var reglas = (await db.InventoryPostingRules.AsNoTracking()
+        // Sin contabilidad iniciada no hay libros con qué comparar: quien pregunta (activación, conciliación) lo trata como «no
+        // responde», no como «faltan reglas» (hallado por las e2e de I1 en I2, T471+).
+        if (!await db.AccountingSetups.AsNoTracking().AnyAsync(s => !s.IsDeleted, ct))
+            return Result.Failure<IReadOnlyList<ConjuntoDeCuentasDto>>(AccountingErrors.NotInitialized);
+        var reglas =(await db.InventoryPostingRules.AsNoTracking()
                 .Where(r => !r.IsDeleted && (r.Role == R.Inventario || r.Role == R.Transito) && r.AccountingGroupCode != null
                             && r.ValidFrom <= corte && (r.ValidTo == null || r.ValidTo >= corte))
                 .ToListAsync(ct))

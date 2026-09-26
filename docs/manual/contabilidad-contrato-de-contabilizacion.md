@@ -99,6 +99,13 @@ suyo**: desde Contabilidad, un `NM` responde `Accounting.Document.ModuleOwned` c
 `data.origin`, y la pantalla ofrece «Ver en Nómina». Si la fecha cae en un mes cerrado, la
 reversión se fecha en el primer período abierto y lo dice en la descripción.
 
+**Excepción: Inventario** (feature 012, D-01). Lo nacido de Inventario **no se reversa**:
+`PrepareReversalAsync` rechaza, antes de cualquier otra comprobación, un original de origen `INV`
+o una petición de origen `INV` con `Accounting.Document.InventoryCorrectsWithNewVoucher`. Cada
+anulación, nota o ajuste de Inventario llega como un **comprobante nuevo** de su propio mensaje,
+con su fecha, enlazado al original, y el original nunca se marca `Reversed` (ver §8). Lo vigila
+`LoDeInventarioNoSeReversa`.
+
 ## 6. Qué NO hacer
 
 - No hacer `db.AccountingDocuments.Add(...)` ni `new JournalEntry` fuera de `Accounting/Posting`.
@@ -124,3 +131,91 @@ reversión se fecha en el primer período abierto y lo dice en la descripción.
 | Digitación manual | `Application/Accounting/Documents/` |
 | Pruebas del contrato | `tests/…Application.Tests/Accounting/Posting/AccountingPosterTests.cs` |
 | Pruebas de arquitectura | `tests/…Architecture.Tests/Principles/NingunModuloEscribeMovimientosFueraDelContrato.cs`, `PrincipioXI_ContableImmutable.cs` |
+| Inventario por mensajes (§8) | `Application/Accounting/Inventory/` (`Reglas`, `Contabilizacion`, `Lotes`, `Consultas`), `Application/Common/Integration/`, `API/Integration/DespachadorDeMensajes.cs`; e2e `tests/…API.IntegrationTests/Accounting/ContabilizacionPorMensajesTests.cs` |
+
+## 8. Inventario: por mensajes
+
+> Feature 012 (inventario comercial), entrega I2. Contrato formal:
+> [specs/012-inventario-comercial/contracts/contabilidad.md](../../specs/012-inventario-comercial/contracts/contabilidad.md).
+> Es una enmienda de la 009 (D-01): el molde del §2 **no** aplica a Inventario.
+
+Inventario **no escribe asientos ni conoce cuentas**. Al confirmar un documento guarda, en la
+misma transacción, el documento y sus **mensajes** (`COR_IntegrationMessages`, por
+`EmisorDeMensajes`). Contabilidad los recibe después con su consumidor,
+`PostInventoryMessagesCommand` (o `PostInventorySummaryGroupCommand` para un resumido), que arma
+las líneas con la matriz y las pasa por el **mismo** `AccountingPoster.PrepareAsync`; comprobante
+y recibo (`ACC_InventoryPostings`, único por mensaje) se guardan juntos. Así hay dos unidades
+atómicas —documento + mensaje en Inventario, comprobante + recibo en Contabilidad— y sigue
+habiendo un solo camino al libro. Un mensaje entregado dos veces no hace un segundo comprobante:
+la segunda vez responde «ya procesado». Los mensajes los mueve `DespachadorDeMensajes`, un
+trabajo de fondo por cooperativa que escribe sólo enviando comandos.
+
+**La matriz** (`ACC_InventoryPostingRules`, pantalla `/contabilidad/inventario/matriz`, permisos
+`Accounting.InventoryRules.View/Manage`): cada regla dice, para una operación y un rol de cuenta
+(inventario, costo, ingreso, impuesto, contrapartida…), qué cuenta usar, y puede afinarse por
+grupo contable, bodega, sucursal, causa, tipo de documento o punto de venta. Gana la regla más
+específica vigente a la fecha del documento (`ResolutorDeReglas`); cambiar una regla es crear una
+versión con vigencia, no editarla. Al guardar se valida la cuenta con las mismas reglas de la 009
+(de movimiento, activa, habilitada para Inventario). Se carga en bloque con la **plantilla 16**
+(`GET /api/accounting/inventory/rules/template.xlsx`, `POST …/rules/import`, todo o nada con fila
+y columna del error). El tipo de comprobante por operación y tipo de documento se elige en
+`/contabilidad/inventario/tipos-de-comprobante` (`FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ`).
+`/contabilidad/inventario/completitud` dice qué combinaciones en uso no tienen regla y qué cuenta
+de impuesto no tiene tarifa vigente: se revisa **antes** de activar el paso de un tipo.
+
+**Validación previa y quién corrige.** Antes de confirmar, Inventario pregunta a Contabilidad si
+el documento es contabilizable (`IContabilidadParaInventario.EvaluarAsync`, que usa
+`AccountingPoster.ValidarVariosAsync`: el mismo análisis sin numerar ni guardar). Si no lo es, la
+confirmación responde 422 `Inventory.Prevalidation.NotPostable` **sin número ni mensajes**, y
+cada error dice la línea del documento, la cuenta, la regla incumplida y **quién corrige** (el
+módulo, la página y el permiso: una regla que falta la corrige Contabilidad en la matriz; un
+tercero que falta, Inventario en el documento). Si Contabilidad no responde a tiempo
+(`Contabilidad.ValidacionPreviaSegundos`), manda la política `Contabilidad.PoliticaSinRespuesta`:
+bloquear o confirmar con el mensaje pendiente (aviso `Inventory.Prevalidation.NoResponse`). Una
+cooperativa sin contabilidad iniciada no confirma nada que deba pasar en línea
+(`Accounting.NotInitialized`): mientras no la inicie, el tipo va en «no pasa».
+
+**Modos de paso** (`Contabilidad.ModoDePaso` por tipo de documento, con vigencia; se **sella** en
+cada documento al confirmarlo y cambiarlo después no mueve lo ya confirmado):
+
+- **En línea** (`EnLinea`): el despachador lo procesa en su siguiente pasada; un comprobante por
+  documento.
+- **Por lotes** (`PorLotes`): espera a un lote, que se dispara a la `Contabilidad.HoraDeLote`
+  (hora de Colombia), al cerrar el período de inventario o a mano (`/contabilidad/inventario/lotes`,
+  permiso `Accounting.InventoryBatches.Run`, con vista previa). `Contabilidad.Granularidad` elige
+  un comprobante por documento o **resumido**: uno por fecha, tipo de comprobante y sucursal, que
+  suma sin netear y conserva el detalle de tercero, documento cruce y base; su origen es el lote,
+  que lista sus documentos. Un lote que no corre a su hora levanta la alerta
+  `Integracion.LoteNoCorrio`.
+- **No pasa** (`NoPasa`): el mensaje queda `NotApplicable`; se puede mandar después con
+  `POST /api/inventory/messages/send-not-applicable` (permiso `Inventory.Messages.SendNotApplicable`),
+  con sus anulaciones en orden.
+
+**Anulaciones, notas y ajustes: comprobantes nuevos.** Anular un documento de Inventario es otro
+documento con su fecha; su mensaje produce un comprobante nuevo enlazado al original (y al
+resumido, si el original fue parte de uno), que queda intacto. Lo mismo las notas del proveedor y
+los ajustes de costo. Nunca `PrepareReversalAsync` (§5).
+
+**Bandeja y reproceso.** Lo que Contabilidad rechaza después de confirmado (una regla cambiada, un
+período cerrado) no deshace el documento: queda `Rejected` en la **bandeja de mensajes**
+(`/inventario/bandeja-de-mensajes`, `Inventory.Messages.View`) con el motivo y quién corrige.
+Corregido, se reprocesa (`POST /api/inventory/messages/reprocess`, `Inventory.Messages.Reprocess`)
+con la **fecha original** del documento. Un mensaje que falla por algo transitorio se reintenta
+con espera creciente y, si no sale, alerta `Integracion.MensajeSinEntregar`.
+
+**Aviso de cierre.** Cerrar un mes contable con mensajes de Inventario pendientes, en lote o
+rechazados con fecha en ese mes responde `Accounting.Period.InventoryPending` con la lista;
+cerrarlo igual exige reconocerlo (`AcknowledgeInventoryPending`), y queda auditado. Lo que quede
+se recupera reabriendo el mes según la 009 y reprocesando.
+
+**Conciliación** (`/inventario/conciliacion`): compara el valorizado de Inventario con los saldos
+de las cuentas de la matriz (`SaldosDeCuentasMapeadasAsync`), por conjunto de cuentas, incluido el
+saldo inicial; los pendientes, rechazados y lo que no pasa se muestran como partidas aparte. Con
+todo procesado, la diferencia es cero. La misma comparación decide la **activación** de una bodega
+(`/inventario/activacion`): una diferencia sólo se acepta con
+`Inventory.Warehouses.AcceptActivationDifference` y motivo.
+
+Lo que **no** hay que hacer desde Inventario: leer o escribir tablas `ACC_`, instanciar
+`AccountingPoster` o pedir una reversión. Lo vigilan `InventarioNoConoceContabilidadNiCartera`,
+`LoDeInventarioNoSeReversa` y `LosComandosDeConsumoNoTienenRuta` (los consumidores no tienen ruta
+HTTP: sólo los envía el despachador).

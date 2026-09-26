@@ -42,13 +42,14 @@ public sealed class EscenarioDeInventario
     private static readonly object Cerrojo = new();
 
     /// <summary>El escenario de ese nombre (uno por fixture: las pruebas que piden el mismo nombre lo comparten).</summary>
-    public static Task<EscenarioDeInventario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activar = true, DateOnly? corte = null)
+    public static Task<EscenarioDeInventario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activar = true, DateOnly? corte = null,
+        int? primerEjercicioContable = null)
     {
         lock (Cerrojo)
         {
             if (!Preparados.TryGetValue((fx, nombre), out var tarea))
             {
-                tarea = PrepararDeVerdadAsync(fx, nombre, activar, corte);
+                tarea = PrepararDeVerdadAsync(fx, nombre, activar, corte, primerEjercicioContable);
                 Preparados[(fx, nombre)] = tarea;
             }
             return tarea;
@@ -65,11 +66,18 @@ public sealed class EscenarioDeInventario
         }
     }
 
-    private static async Task<EscenarioDeInventario> PrepararDeVerdadAsync(CentralIdentityApiFixture fx, string nombre, bool activar, DateOnly? corte)
+    private static async Task<EscenarioDeInventario> PrepararDeVerdadAsync(CentralIdentityApiFixture fx, string nombre, bool activar, DateOnly? corte,
+        int? primerEjercicioContable)
     {
-        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, nombre);
+        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, nombre, primerEjercicioContable);
         using var http = fx.CreateClient();
         var t = coop.TokenAdmin;
+
+        // Desde I2 (T520) la confirmación pregunta a Contabilidad si el documento es contabilizable, y una cooperativa sin
+        // contabilidad iniciada responde Accounting.NotInitialized como NotPostable. Los escenarios de I1 no inician la
+        // contabilidad: sus tipos van en «no pasa» desde antes de todo movimiento, como haría una cooperativa que todavía no
+        // lleva su contabilidad en el ERP (contracts/contabilidad.md §4.3).
+        if (primerEjercicioContable is null) await SinPasoAContabilidadAsync(http, t);
 
         // Sucursal S2 (la Principal ya existe, sin código).
         var s2 = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/core/branches", new { code = "S2", name = "Sucursal Dos", shortName = "SDOS" });
@@ -146,6 +154,19 @@ public sealed class EscenarioDeInventario
         {
             Coop = coop, S1 = principal, S2 = idS2, Corte = fechaDeCorte, Bodegas = bodegas, Productos = productos, Tipos = tipos, Causas = causas,
         };
+    }
+
+    /// <summary>
+    /// <c>Contabilidad.ModoDePaso = NoPasa</c> general, vigente desde el 1 de enero de hace dos años (antes de todo movimiento): la
+    /// cooperativa no pasa nada a Contabilidad. Los tipos fiscales piden la confirmación explícita.
+    /// </summary>
+    public static async Task SinPasoAContabilidadAsync(HttpClient http, string token)
+    {
+        await InventarioE2E.ExitoAsync(http, token, HttpMethod.Post, "/api/inventory/parameters/INV/Contabilidad.ModoDePaso/versions", new
+        {
+            scopeKind = "None", value = "NoPasa", validFrom = new DateOnly(InventarioE2E.HoyEnColombia.Year - 2, 1, 1).ToString("yyyy-MM-dd"),
+            reason = "Escenario sin contabilidad iniciada", confirmFiscalWithoutPosting = true,
+        });
     }
 
     /// <summary>Activa una bodega fuera de producción: sin comparación contable (I1), con la diferencia aceptada y motivo.</summary>
