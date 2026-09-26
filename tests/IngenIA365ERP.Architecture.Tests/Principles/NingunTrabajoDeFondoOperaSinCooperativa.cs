@@ -26,6 +26,8 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
     private static readonly string[] TrabajosDeFondo =
     [
         Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "ProgramadorDeTareas.cs"),
+        // Feature 012, I2 (T527, T448): el despachador de mensajes.
+        Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "DespachadorDeMensajes.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Audit", "Services", "AuditOutboxForwarder.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Storage", "Services", "NotificationEmailDispatcher.cs"),
     ];
@@ -158,6 +160,34 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         Assert.True(enProgram > 0, "API/Program.cs no registra ningún AddHostedService: ¿cambió la forma de registrarlos?");
         Assert.True(infractores.Count == 0,
             "Los trabajos de fondo se registran sólo en API/Program.cs (T10, T47):\n  " + string.Join("\n  ", infractores));
+    }
+
+    [Fact]
+    public void Ningun_trabajo_de_fondo_de_la_API_guarda_por_su_cuenta()
+    {
+        // T448 (I2; Principios III y X, decisiones-transversales §2.18): en la API ningún BackgroundService llama a
+        // SaveChanges ni a SaveChangesAsync, sin excepciones: escribe sólo enviando comandos por ISender dentro de
+        // IEjecutorEnCooperativa (en el despachador, ScheduleIntegrationBatchesCommand, StartIntegrationBatchCommand,
+        // CloseIntegrationBatchCommand, RaiseAlertCommand, RegisterDeliveryResultCommand y los de consumo), para que toda
+        // escritura pase por ValidationBehavior y AuditBehavior.
+        var root = RepoPath.FindRepoRoot();
+        var api = Path.Combine(root, "src", "Presentation", "IngenIA365ERP.API");
+        var guarda = new Regex(@"\bSaveChanges(Async)?\b", RegexOptions.Compiled);
+        var infractores = new List<string>();
+        var trabajos = 0;
+
+        foreach (var archivo in RepoPath.ProductionCSharpFiles().Where(f => f.StartsWith(api, StringComparison.OrdinalIgnoreCase)))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            if (!HeredaDeBackgroundService.IsMatch(texto)) continue;
+            trabajos++;
+            if (guarda.IsMatch(texto))
+                infractores.Add($"{Path.GetRelativePath(root, archivo)}: llama a SaveChanges; envíe un comando por ISender");
+        }
+
+        Assert.True(trabajos >= 2, "La API debería tener al menos ProgramadorDeTareas y DespachadorDeMensajes como BackgroundService.");
+        Assert.True(infractores.Count == 0,
+            "Trabajos de fondo de la API que guardan por su cuenta (T448):\n  " + string.Join("\n  ", infractores));
     }
 
     [Fact]

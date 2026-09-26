@@ -130,6 +130,10 @@ public class WarehousesEndpoints : ICarterModule
 
         // US4 (T317, api.md §13.3): la vista previa y la activación de una bodega, con Inventory.Warehouses.Activate (404 sin él).
         // Antes de I2 no hay comparación contable: fuera de producción sólo aceptando la diferencia (PuestaEnMarchaOptions).
+        // I2 (T530; api.md §13.3, FR-090): la vista previa y la activación comparan el valorizado con los saldos contables de cada
+        // conjunto por IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync. Aceptar una diferencia exige además
+        // Inventory.Warehouses.AcceptActivationDifference: sin él, 422 Inventory.Activation.AcceptDifferenceNotAllowed con
+        // permissionCode (la excepción de cuerpo de decisiones-transversales §2.9, no el 404 de la puerta), que responde el handler.
         g.MapGet("/{id:guid}/activation", async (Guid id, DateOnly? cutoffDate, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetWarehouseActivationPreviewQuery(id, cutoffDate), ct))
             .WithName("Inventory_Warehouses_Activation_Preview").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Activar);

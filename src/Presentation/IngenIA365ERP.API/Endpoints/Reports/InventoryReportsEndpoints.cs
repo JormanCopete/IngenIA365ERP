@@ -55,7 +55,11 @@ public class InventoryReportsEndpoints : ICarterModule
             .WithName("Reportes_Inventario_Vistas")
             .RequirePermission("Inventory.Reports.View");
 
-        MapVistas(group);
+        // La tolerancia técnica de un lote programado (Integration:Dispatcher:LateToleranceMinutes, T526) para la vista
+        // accounting-batches; sin la sección, la de la consulta.
+        var tolerancia = app.ServiceProvider.GetService<Microsoft.Extensions.Options.IOptions<IngenIA365ERP.API.Integration.IntegrationOptions>>()
+            ?.Value.Dispatcher.LateToleranceMinutes ?? AccountingBatchesReportQueryHandler.ToleranciaPorDefecto;
+        MapVistas(group, tolerancia);
     }
 
     /// <summary>
@@ -63,7 +67,7 @@ public class InventoryReportsEndpoints : ICarterModule
     /// línea por vista: <c>group.MapVistaDeInventario(new VistaDeInformeDeInventario(…), (f, q) =&gt; new …Query(f, …));</c>.
     /// La base arranca sin ninguna.
     /// </summary>
-    private static void MapVistas(RouteGroupBuilder group)
+    private static void MapVistas(RouteGroupBuilder group, int toleranciaDeLotes)
     {
         // US2 (T263): el kardex de un producto y la existencia por bodega.
         group.MapVistaDeInventario(
@@ -121,6 +125,21 @@ public class InventoryReportsEndpoints : ICarterModule
                 Enum.TryParse<DocumentClass>(q["class"].ToString(), ignoreCase: true, out var clase) && Enum.IsDefined(clase) ? clase : null,
                 Enum.TryParse<DocumentStatus>(q["status"].ToString(), ignoreCase: true, out var estado) && Enum.IsDefined(estado) ? estado : null));
         group.MapVistaDeInventario(ReorderAlertsReportQueryHandler.Vista, (f, _) => new ReorderAlertsReportQuery(f));
+
+        // US7 (I2, T531): los mensajes a otros módulos, los lotes de contabilización y la conciliación con Contabilidad (ésta exige
+        // además Inventory.Reconciliation.View, que la vista declara). status, trigger y el destino entran por nombre o número.
+        group.MapVistaDeInventario(MessagesReportQueryHandler.Vista,
+            (f, q) => new MessagesReportQuery(f,
+                Enum.TryParse<IngenIA365ERP.Domain.Enums.Integration.DeliveryStatus>(q["status"].ToString(), ignoreCase: true, out var estado) && Enum.IsDefined(estado) ? estado : null,
+                string.IsNullOrWhiteSpace(q["destination"].ToString()) ? null : q["destination"].ToString(),
+                string.IsNullOrWhiteSpace(q["type"].ToString()) ? null : q["type"].ToString(),
+                Guid.TryParse(q["batch"].ToString(), out var lote) ? lote : null));
+        group.MapVistaDeInventario(AccountingBatchesReportQueryHandler.Vista,
+            (f, q) => new AccountingBatchesReportQuery(f,
+                Enum.TryParse<IngenIA365ERP.Domain.Enums.Integration.BatchStatus>(q["status"].ToString(), ignoreCase: true, out var estado) && Enum.IsDefined(estado) ? estado : null,
+                Enum.TryParse<IngenIA365ERP.Domain.Enums.Integration.BatchTrigger>(q["trigger"].ToString(), ignoreCase: true, out var disparador) && Enum.IsDefined(disparador) ? disparador : null,
+                toleranciaDeLotes));
+        group.MapVistaDeInventario(ConciliacionReportQueryHandler.Vista, (f, _) => new ConciliacionReportQuery(f));
     }
 }
 

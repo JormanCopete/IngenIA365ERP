@@ -34,6 +34,14 @@ public interface IDestinoDeMensajes
     /// <c>AgrupadorDeResumidos</c>). No lee ni escribe nada: recibe lo que el despachador ya leyó.
     /// </summary>
     IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas);
+
+    /// <summary>
+    /// Los débitos y créditos de lo que el destino registró para un lote (feature 012, T527), que el despachador pasa a
+    /// <c>CloseIntegrationBatchCommand</c> al cerrarlo: la plataforma no lee los libros del destino. Sólo lee. Por defecto
+    /// cero (un destino sin comprobantes, como Cartera). (nuevo)
+    /// </summary>
+    Task<TotalesDeLoteEnDestino> TotalesDelLoteAsync(Guid batchPublicId, CancellationToken ct) =>
+        Task.FromResult(TotalesDeLoteEnDestino.Cero);
 }
 
 /// <summary>
@@ -57,6 +65,12 @@ public sealed record UnidadDeConsumo(
 public sealed record TrabajoDeConsumo(string? ClaveDeGrupo, IReadOnlyList<UnidadDeConsumo> Unidades)
 {
     public static TrabajoDeConsumo DeUnaUnidad(UnidadDeConsumo unidad) => new(null, [unidad]);
+}
+
+/// <summary>Débitos y créditos de lo que un destino registró para un lote (T527). (nuevo)</summary>
+public sealed record TotalesDeLoteEnDestino(decimal Debit, decimal Credit)
+{
+    public static readonly TotalesDeLoteEnDestino Cero = new(0m, 0m);
 }
 
 /// <summary>El resultado de una unidad de un trabajo. (nuevo)</summary>

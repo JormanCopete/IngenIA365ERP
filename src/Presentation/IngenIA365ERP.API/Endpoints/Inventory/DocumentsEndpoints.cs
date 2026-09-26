@@ -36,5 +36,13 @@ public class DocumentsEndpoints : ICarterModule
             .WithName("Inventory_Documents_Get")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Inventory.Documents.View");
+
+        // Feature 012, I2 (T529; api.md §25.1): la validación previa del documento tal como está. Es una consulta: sin clave de
+        // operación, no guarda nada ni toma el cerrojo. El cuerpo ({ payments? }) lo usan las ventas de I3; hoy se ignora.
+        group.MapPost("/{id:guid}/prevalidate", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Inventory.Integration.PrevalidateInventoryDocumentQuery(id), ct))
+            .WithName("Inventory_Documents_Prevalidate")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Inventory.Documents.View");
     }
 }

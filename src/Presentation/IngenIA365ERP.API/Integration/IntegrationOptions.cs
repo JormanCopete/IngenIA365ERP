@@ -36,6 +36,8 @@ public sealed class IntegrationOptions
         Positivo(Dispatcher.BudgetSeconds, "Dispatcher:BudgetSeconds");
         Positivo(Dispatcher.LeaseTtlSeconds, "Dispatcher:LeaseTtlSeconds");
         Positivo(Dispatcher.BatchSize, "Dispatcher:BatchSize");
+        if (Dispatcher.LateToleranceMinutes < 0)
+            problemas.Add($"{SectionName}:Dispatcher:LateToleranceMinutes no puede ser negativa (vale {Dispatcher.LateToleranceMinutes}).");
         if (Dispatcher.LeaseTtlSeconds > 0 && Dispatcher.BudgetSeconds > 0 && Dispatcher.LeaseTtlSeconds < Dispatcher.BudgetSeconds)
         {
             problemas.Add(
@@ -65,6 +67,13 @@ public sealed class IntegrationOptions
         public int BudgetSeconds { get; set; } = 60;
         public int LeaseTtlSeconds { get; set; } = 120;
         public int BatchSize { get; set; } = 100;
+
+        /// <summary>
+        /// Tolerancia técnica, en minutos, tras la franja de un lote programado (<c>Contabilidad.HoraDeLote</c>) pasada la cual
+        /// un lote que no corrió levanta <c>Integracion.LoteNoCorrio</c> (T526, FR-080). La usan el despachador
+        /// (<c>ScheduleIntegrationBatchesCommand</c>) y las consultas que marcan un lote «tarde».
+        /// </summary>
+        public int LateToleranceMinutes { get; set; } = 30;
     }
 
     /// <summary>

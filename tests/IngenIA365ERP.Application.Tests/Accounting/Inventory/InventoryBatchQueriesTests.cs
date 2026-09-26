@@ -95,4 +95,31 @@ public class InventoryBatchQueriesTests
         recibo.Actor.Name.Should().Be("Proceso de integración");
         (await new ListInventoryPostingsQueryHandler(E.D.Db).Handle(new ListInventoryPostingsQuery(Message: Guid.NewGuid()), default)).Value.Items.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Los_totales_del_lote_suman_sus_comprobantes_una_vez()
+    {
+        // T527: el despachador cierra el lote con los débitos y créditos de los comprobantes que dejó, que la plataforma no lee.
+        var lote = E.Lote(5);
+        var primera = EscenarioContable.Compra(1000m, numero: "REC-1");
+        var segunda = EscenarioContable.Compra(250m, numero: "REC-2");
+        E.Emitir(primera, DeliveryStatus.InBatch, lote);
+        E.Emitir(segunda, DeliveryStatus.InBatch, lote);
+        await ProcesarAsync(primera, lote.PublicId);
+        await ProcesarAsync(segunda, lote.PublicId);
+
+        var r = await new TotalesDeLoteDeInventarioQueryHandler(E.D.Db).Handle(new TotalesDeLoteDeInventarioQuery(lote.PublicId), default);
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Debit.Should().Be(1250m);
+        r.Value.Credit.Should().Be(1250m);
+    }
+
+    [Fact]
+    public async Task Un_lote_sin_comprobantes_totaliza_cero()
+    {
+        var r = await new TotalesDeLoteDeInventarioQueryHandler(E.D.Db).Handle(new TotalesDeLoteDeInventarioQuery(Guid.NewGuid()), default);
+
+        r.Value.Should().Be(TotalesDeLoteEnDestino.Cero);
+    }
 }

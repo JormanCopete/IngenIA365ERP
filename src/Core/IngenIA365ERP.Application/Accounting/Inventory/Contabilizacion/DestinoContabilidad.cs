@@ -58,6 +58,12 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
         }
     }
 
+    public async Task<TotalesDeLoteEnDestino> TotalesDelLoteAsync(Guid batchPublicId, CancellationToken ct)
+    {
+        var r = await sender.Send(new TotalesDeLoteDeInventarioQuery(batchPublicId), ct);
+        return r.IsSuccess ? r.Value : TotalesDeLoteEnDestino.Cero;
+    }
+
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas) =>
         AgrupadorDeResumidos.Planear(entregas, Destino);
 }

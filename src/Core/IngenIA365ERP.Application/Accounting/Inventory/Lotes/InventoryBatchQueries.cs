@@ -199,3 +199,39 @@ public sealed class GetInventoryBatchQueryHandler(IApplicationDbContext db, IDat
         return Result.Success(new IntegrationBatchDetailDto(dto, documentos, vouchers, rechazos));
     }
 }
+
+/// <summary>
+/// Los débitos y créditos de los comprobantes que dejó un lote (feature 012, T527; api.md §26.4 <c>totals.debit/credit</c>): la
+/// suma de <c>ACC_Documents.TotalDebit/TotalCredit</c> de los comprobantes distintos que nombran sus recibos
+/// (<c>ACC_InventoryPostings.BatchPublicId</c>). La pide el despachador, por <c>IDestinoDeMensajes.TotalesDelLoteAsync</c>, para
+/// cerrar el lote con <c>CloseIntegrationBatchCommand</c>. Sin ruta. (nuevo)
+/// </summary>
+public sealed record TotalesDeLoteDeInventarioQuery(Guid BatchPublicId) : IRequest<Result<Common.Integration.TotalesDeLoteEnDestino>>;
+
+public sealed class TotalesDeLoteDeInventarioQueryValidator : AbstractValidator<TotalesDeLoteDeInventarioQuery>
+{
+    public TotalesDeLoteDeInventarioQueryValidator()
+    {
+        RuleFor(x => x.BatchPublicId).NotEqual(Guid.Empty);
+    }
+}
+
+public sealed class TotalesDeLoteDeInventarioQueryHandler(IApplicationDbContext db)
+    : IRequestHandler<TotalesDeLoteDeInventarioQuery, Result<Common.Integration.TotalesDeLoteEnDestino>>
+{
+    public async Task<Result<Common.Integration.TotalesDeLoteEnDestino>> Handle(TotalesDeLoteDeInventarioQuery request, CancellationToken ct)
+    {
+        var comprobantes = await db.InventoryPostings.AsNoTracking()
+            .Where(p => p.BatchPublicId == request.BatchPublicId && p.AccountingDocumentId != null)
+            .Select(p => p.AccountingDocumentId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+        if (comprobantes.Count == 0) return Result.Success(Common.Integration.TotalesDeLoteEnDestino.Cero);
+
+        var totales = await db.AccountingDocuments.AsNoTracking()
+            .Where(d => comprobantes.Contains(d.Id))
+            .Select(d => new { d.TotalDebit, d.TotalCredit })
+            .ToListAsync(ct);
+        return Result.Success(new Common.Integration.TotalesDeLoteEnDestino(totales.Sum(t => t.TotalDebit), totales.Sum(t => t.TotalCredit)));
+    }
+}
