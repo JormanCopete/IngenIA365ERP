@@ -31,6 +31,8 @@
     <None Include="Inventory\Costing\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012 (T382): casos de la comparación de un conteo físico, calculados a mano. -->
     <None Include="Inventory\Counts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012 (T942): casos de la reposición (posición, reorden, sugerido y quiebre), calculados a mano. -->
+    <None Include="Inventory\Replenishment\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

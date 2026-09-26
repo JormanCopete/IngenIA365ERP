@@ -21,6 +21,7 @@ public sealed class IntegrationOptions
     public JobOptions AuditForwarder { get; set; } = new();
     public ScheduledJobOptions ScheduledTasks { get; set; } = new() { IntervalSeconds = 60 };
     public ScheduledJobOptions EmailDispatcher { get; set; } = new() { IntervalSeconds = 15 };
+    public ReorderReviewOptions ReorderReview { get; set; } = new();
 
     /// <summary>Lo que está mal, con la clave completa; vacío si todo está bien.</summary>
     public IReadOnlyList<string> Problemas()
@@ -51,6 +52,8 @@ public sealed class IntegrationOptions
 
         Positivo(ScheduledTasks.IntervalSeconds, "ScheduledTasks:IntervalSeconds");
         Positivo(EmailDispatcher.IntervalSeconds, "EmailDispatcher:IntervalSeconds");
+        if (ReorderReview.StartHour is < 0 or > 23)
+            problemas.Add($"{SectionName}:ReorderReview:StartHour tiene que ser una hora local de 0 a 23 (vale {ReorderReview.StartHour}).");
         return problemas;
     }
 
@@ -74,6 +77,15 @@ public sealed class IntegrationOptions
         public int MaxDelayMinutes { get; set; } = 15;
         public int AlertAfterAttempts { get; set; } = 3;
         public int AlertAfterMinutes { get; set; } = 15;
+    }
+
+    /// <summary>
+    /// La revisión de reorden y quiebre (feature 012, US17, T954; tarea <c>inventario.reorden</c>): la hora local desde la que
+    /// corre una vez al día. Se apaga con <see cref="ScheduledTasks"/>, como toda tarea del programador.
+    /// </summary>
+    public sealed class ReorderReviewOptions
+    {
+        public int StartHour { get; set; } = 5;
     }
 
     /// <summary>Un trabajo que sólo se enciende o se apaga.</summary>

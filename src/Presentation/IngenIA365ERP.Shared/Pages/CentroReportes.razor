@@ -163,5 +163,31 @@
 
     @* Inventario: «Inventario Valorizado» y «Factura de Venta» eran del modulo heredado, que
        retiro la feature 012 (RetiroDelInventarioHeredado). Los informes del inventario nuevo
-       vuelven con su centro de reportes (US12). *@
+       viven en /inventario/informes?vista= (su registro de vistas); aqui van las tarjetas de las
+       vistas basicas de US17 (T958). *@
+    <PermissionGate Required="Inventory.Reports.View">
+        <div class="report-section">
+            <h4 class="report-section-title">
+                <span class="e-icons e-table"></span>Inventario
+            </h4>
+            <div class="report-cards">
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                    <div class="report-card-body">
+                        <h5>Documentos de inventario</h5>
+                        <p>Cada documento con su clase, estado, bodegas, contraparte, total, modo de paso y estado del mensaje; se abre desde la fila.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=documents")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-warning"></span></div>
+                    <div class="report-card-body">
+                        <h5>Reorden y quiebres</h5>
+                        <p>Productos con la posición en o bajo su punto de reorden, o con el disponible bajo su mínimo, con el sugerido; la fila lleva al kardex.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=reorder-alerts")'>Abrir</SfButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </PermissionGate>
 </div>

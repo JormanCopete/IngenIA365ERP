@@ -410,4 +410,6 @@ public sealed record VistaDeInformeDto
     public bool PersonalData { get; init; }
     public string? PersonalDataWhen { get; init; }
     public string? RequiredPermission { get; init; }
+    /// <summary>La columna con datos de personas (US17: Contraparte en <c>documents</c>); exportar con valores ahí lo decide el servidor.</summary>
+    public string? PersonalDataColumn { get; init; }
 }

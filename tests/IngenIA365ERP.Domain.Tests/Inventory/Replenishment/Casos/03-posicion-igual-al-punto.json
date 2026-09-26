@@ -1,0 +1,6 @@
+{
+  "nombre": "Posición igual al punto (10 + 5 = 15): «igual o menor» pide reorden; sugerido 35; 10 no es menor que 10, sin quiebre",
+  "disponible": 10, "enTransito": 5, "porRecibir": 0,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 15, "requiereReorden": true, "sugerido": 35, "quiebre": false }
+}

@@ -1,0 +1,6 @@
+{
+  "nombre": "Con stock negativo permitido el disponible puede ser −2: posición 3, sugerido 47 y quiebre",
+  "disponible": -2, "enTransito": 5, "porRecibir": 0,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 3, "requiereReorden": true, "sugerido": 47, "quiebre": true }
+}

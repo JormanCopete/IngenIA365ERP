@@ -220,6 +220,9 @@ try
     // Feature 012 (T347, US9): la revision diaria de los eventos RADIAN de las facturas del proveedor a credito.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Inventory.Purchasing.TareaDeEventosRadian>();
+    // Feature 012 (T954, US17): la revision diaria de reorden y quiebre, desde Integration:ReorderReview:StartHour.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Replenishment.TareaDeRevisionDeReorden(new TimeOnly(Math.Clamp(integracion.ReorderReview.StartHour, 0, 23), 0)));
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

@@ -18,7 +18,9 @@
    I2…) y aparecen aquí sin tocar esta pantalla. Filtros comunes: el rango y el corte se editan; bodega, producto y los
    filtros propios llegan por el enlace (?vista=kardex&product=…) y viajan tal cual. Las columnas ocultas (_documento,
    _producto…) no se pintan ni se exportan. Exportar exige Inventory.Reports.Export y, en las vistas con datos de
-   clientes, además Inventory.Reports.ExportPersonalData. Enlace en el menú desde US2 (T267), con las vistas kardex y stock. *@
+   clientes, además Inventory.Reports.ExportPersonalData. Enlace en el menú desde US2 (T267), con las vistas kardex y stock.
+   US17 (T958): selector de bodega para las vistas que filtran por ella y de clase y estado para «documents»; profundizar por la
+   fila —_documento abre el documento según su clase (DestinoDeDocumentoDeInventario), _producto/_bodega el kardex—. *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -60,6 +62,33 @@
                 {
                     <label class="campo">Con corte al <input type="date" class="e-input" value="@Fecha(_filtros.AsOf)" @onchange="@(e => _filtros.AsOf = LeerFecha(e.Value))" /></label>
                 }
+                @if (Usa("warehouse") && _bodegas.Count > 0)
+                {
+                    <label class="campo">Bodega
+                        <select class="e-input" value="@Otro("warehouse")" @onchange="@(e => PonerOtro("warehouse", e.Value?.ToString()))">
+                            <option value="">Todas las del alcance</option>
+                            @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("class"))
+                {
+                    <label class="campo">Clase
+                        <select class="e-input" value="@Otro("class")" @onchange="@(e => PonerOtro("class", e.Value?.ToString()))">
+                            <option value="">Todas</option>
+                            @foreach (var (valor, texto) in TextosDeInventario.Clases) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("status"))
+                {
+                    <label class="campo">Estado
+                        <select class="e-input" value="@Otro("status")" @onchange="@(e => PonerOtro("status", e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                }
                 <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null)" OnClick="@AplicarAsync">Consultar</SfButton>
             </div>
             @if (_filtros.Otros.Count > 0)
@@ -76,7 +105,8 @@
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (_vistas.Count > 0)
         {
-            <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Elija el informe y los filtros y pulse «Consultar»." />
+            <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Elija el informe y los filtros y pulse «Consultar»."
+                            FilasClicables="@Profundiza" EsClicable="@(f => Destino(f) is not null)" FilaElegida="@ProfundizarAsync" />
         }
     </IndicadorDeCarga>
 </div>
@@ -85,6 +115,7 @@
 @code {
     private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
     private List<VistaDeInformeDto> _vistas = [];
+    private List<BodegaDto> _bodegas = [];
     private VistaDeInformeDto? _vista;
     private FiltrosDeInformeDeInventarioModelo _filtros = new();
     private FiltrosDeInformeDeInventarioModelo _aplicados = new();
@@ -112,6 +143,11 @@
                 return;
             }
             _vistas = [.. r.Value ?? []];
+            if (_vistas.Any(v => v.Filters.Contains("warehouse", StringComparer.OrdinalIgnoreCase)))
+            {
+                var bodegas = await Inventario.ListarBodegasAsync();
+                _bodegas = bodegas.IsSuccess ? [.. bodegas.Value ?? []] : [];
+            }
         }
 
         _vista = _vistas.FirstOrDefault(v => v.Key == Vista) ?? _vistas.FirstOrDefault();
@@ -139,6 +175,49 @@
     }
 
     private bool Usa(string filtro) => _vista is not null && _vista.Filters.Contains(filtro, StringComparer.OrdinalIgnoreCase);
+
+    private bool UsaPropio(string filtro) => _vista?.OwnFilters is { } propios && propios.Contains(filtro, StringComparer.OrdinalIgnoreCase);
+
+    private string Otro(string nombre) => _filtros.Otros.TryGetValue(nombre, out var v) ? v : string.Empty;
+
+    private void PonerOtro(string nombre, string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor)) _filtros.Otros.Remove(nombre);
+        else _filtros.Otros[nombre] = valor;
+    }
+
+    /// <summary>La tabla trae con qué profundizar: el documento o el producto.</summary>
+    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_documento" or "_producto");
+
+    /// <summary>
+    /// A dónde lleva la fila: el documento (se resuelve su clase al elegirla) o, sin documento, el kardex del producto y la bodega.
+    /// </summary>
+    private string? Destino(FilaReporteDto fila)
+    {
+        if (_tabla is null) return null;
+        if (TablaDeReporte.Oculto(_tabla, fila, "_documento") is { } documento) return documento;
+        return DestinoDeDocumentoDeInventario.Kardex(TablaDeReporte.Oculto(_tabla, fila, "_producto"), TablaDeReporte.Oculto(_tabla, fila, "_bodega"));
+    }
+
+    private async Task ProfundizarAsync(FilaReporteDto fila)
+    {
+        if (_tabla is null) return;
+        if (TablaDeReporte.Oculto(_tabla, fila, "_documento") is { } texto && Guid.TryParse(texto, out var id))
+        {
+            using var carga = _carga.Iniciar();
+            var r = await Inventario.ObtenerDocumentoAsync(id);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el documento."); return; }
+            var ruta = DestinoDeDocumentoDeInventario.Documento(r.Value.Class, id);
+            if (ruta is null)
+            {
+                await Notification.InfoAsync($"{TextosDeInventario.Clase(r.Value.Class)} {r.Value.DisplayNumber}: este documento no tiene pantalla de detalle; ábralo desde su módulo.");
+                return;
+            }
+            Navigation.NavigateTo(ruta);
+            return;
+        }
+        if (Destino(fila) is { } kardex) Navigation.NavigateTo(kardex);
+    }
 
     private async Task AplicarAsync()
     {

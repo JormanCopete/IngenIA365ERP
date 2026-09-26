@@ -140,9 +140,12 @@ public sealed class KardexDePrueba
         ]);
     }
 
+    /// <summary>El aviso de reposición que la confirmación llama después del kardex (US17, T953); nulo = sin aviso.</summary>
+    public AvisoDeReposicionAlConfirmar? AvisoDeReposicion { get; set; }
+
     public ConfirmacionDeDocumento Confirmacion(EfectosDeClase? efectos = null) => new(
         C.Db, Maestros(), Actor, C.Reloj, efectos ?? Efectos(), Motor, Cerrojo, new Numerador(C.Db, Cerrojo),
-        new EmisorDeMensajes(C.Db, Actor, C.Reloj), Lector(), Vista(), [], []);
+        new EmisorDeMensajes(C.Db, Actor, C.Reloj), Lector(), Vista(), [], [], avisoDeReposicion: AvisoDeReposicion);
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
         new(C.Db, Maestros(), Alcance, Actor, C.Reloj, efectos ?? Efectos(), Vista());

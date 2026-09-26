@@ -41,7 +41,8 @@ public sealed record PedidoDeConfirmacion(Guid DocumentPublicId, DocumentClassGr
 /// número y sin tocar cerrojo ni numerador;</item>
 /// <item>guardia fiscal y validación previa, si hay implementación registrada (antes de I2/I4 se omiten);</item>
 /// <item>cerrojo en orden canónico, efecto de la clase (o su reversión en una anulación), numeración, sellado del modo
-/// de paso, confirmación, mensajes, copia fiscal de la contraparte y <b>un</b> <c>SaveChanges</c>.</item>
+/// de paso, confirmación, mensajes, copia fiscal de la contraparte y <b>un</b> <c>SaveChanges</c>;</item>
+/// <item>el aviso de reposición de las salidas (US17, <see cref="Replenishment.AvisoDeReposicionAlConfirmar"/>), que no bloquea.</item>
 /// </list>
 /// No abre transacción: la pone quien lo llama (<c>TransaccionExplicita</c>, o la de <c>IdempotencyBehavior</c>). (nuevo)
 /// </summary>
@@ -59,7 +60,8 @@ public sealed class ConfirmacionDeDocumento(
     VistaDeDocumentos vista,
     IEnumerable<IPasoFiscalDeConfirmacion> pasosFiscales,
     IEnumerable<IPasoDeValidacionPrevia> validacionesPrevias,
-    Counts.BloqueoPorConteo? bloqueoPorConteo = null)
+    Counts.BloqueoPorConteo? bloqueoPorConteo = null,
+    Replenishment.AvisoDeReposicionAlConfirmar? avisoDeReposicion = null)
 {
     public async Task<Result<ConfirmationResultDto>> ConfirmarAsync(PedidoDeConfirmacion pedido, CancellationToken ct)
     {
@@ -208,12 +210,16 @@ public sealed class ConfirmacionDeDocumento(
 
         await db.SaveChangesAsync(ct);
 
+        // US17 (T953): con el kardex ya escrito, las salidas que dejaron la posición en o bajo el punto de reorden avisan en
+        // warnings[] y levantan Inventario.Reorden / Inventario.Quiebre en esta misma transacción. Nunca bloquea.
+        IReadOnlyList<AvisoDto> avisos = avisoDeReposicion is null ? [] : await avisoDeReposicion.AvisarAsync(documento, ct);
+
         var mensajes = await vista.TieneAsync(PermisosDeGrupo.VerMensajes, ct)
             ? (await vista.MensajesAsync(documento.PublicId, ct)).Select(x => new MensajeEmitidoDto(x.MessagePublicId, x.Type, x.Destination, x.DeliveryStatus)).ToList()
             : null;
         return Result.Success(new ConfirmationResultDto(
             documento.PublicId, documento.Status, documento.Number, VistaDeDocumentos.NumeroVisible(documento.Prefix, documento.Number),
-            documento.OperationDate, documento.ConfirmedAt, documento.PostingMode, null, validacion, mensajes, []));
+            documento.OperationDate, documento.ConfirmedAt, documento.PostingMode, null, validacion, mensajes, avisos));
     }
 
     /// <summary>

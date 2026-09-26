@@ -161,6 +161,11 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
         services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
+        // Feature 012, US17 (T953, T954): la evaluación de reposición que comparten el aviso al confirmar, la revisión nocturna y
+        // la vista reorder-alerts.
+        services.AddScoped<Inventory.Replenishment.EvaluacionDeReposicion>();
+        services.AddScoped<Inventory.Replenishment.AvisoDeReposicionAlConfirmar>();
+        services.AddScoped<Inventory.Replenishment.RevisionDeReorden>();
         // Feature 012 (US3, T287-T291): el valorizado a una fecha (cierre y vista valuation), la revision del cierre y la
         // reclasificacion de grupo contable (comando y plantilla de productos).
         services.AddScoped<Inventory.Periods.ValorizadoALaFecha>();

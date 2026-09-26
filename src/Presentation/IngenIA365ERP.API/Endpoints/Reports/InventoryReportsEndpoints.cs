@@ -4,6 +4,8 @@ using IngenIA365ERP.API.Reports;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Inventory.Reports;
+using IngenIA365ERP.Application.Inventory.Reports.Vistas;
+using IngenIA365ERP.Domain.Enums.Inventory;
 using MediatR;
 using Microsoft.AspNetCore.Routing;
 
@@ -111,6 +113,14 @@ public class InventoryReportsEndpoints : ICarterModule
             (f, q) => new CountDifferencesReportQuery(f,
                 Guid.TryParse(q["count"].ToString(), out var conteo) ? conteo : null,
                 bool.TryParse(q["onlyWithDifference"].ToString(), out var conDiferencia) && conDiferencia));
+
+        // US17 (T957): los documentos de inventario (exportarlos con contraparte exige además ExportPersonalData) y la vista de
+        // reorden y quiebres. class y status entran por nombre o por número.
+        group.MapVistaDeInventario(DocumentsReportQueryHandler.Vista,
+            (f, q) => new DocumentsReportQuery(f,
+                Enum.TryParse<DocumentClass>(q["class"].ToString(), ignoreCase: true, out var clase) && Enum.IsDefined(clase) ? clase : null,
+                Enum.TryParse<DocumentStatus>(q["status"].ToString(), ignoreCase: true, out var estado) && Enum.IsDefined(estado) ? estado : null));
+        group.MapVistaDeInventario(ReorderAlertsReportQueryHandler.Vista, (f, _) => new ReorderAlertsReportQuery(f));
     }
 }
 
@@ -130,6 +140,8 @@ public static class InventoryReportsRoutes
     /// <item><c>.RequirePermissionWhenExporting("Inventory.Reports.Export")</c>, más
     /// <c>Inventory.Reports.ExportPersonalData</c> en las vistas (PD) —siempre o con el filtro que las vuelve personales—;
     /// sin ellos, el mismo 404 que lo inexistente;</item>
+    /// <item>con <see cref="VistaDeInformeDeInventario.PersonalDataColumn"/>, <c>Inventory.Reports.ExportPersonalData</c> al exportar
+    /// una tabla que trae valor en esa columna (se decide después de consultar);</item>
     /// <item>el rango de los filtros comunes (hasta cinco años, no al revés) antes de consultar;</item>
     /// <item>la auditoría <c>Inventory.Report.Exported</c> por <see cref="InventoryAuditEmitter"/> en cada exportación a
     /// archivo que sale bien, con las filas de la tabla: la emite esta ruta, y las consultas no la repiten;</item>
@@ -162,6 +174,11 @@ public static class InventoryReportsRoutes
                     return PermissionAuthorizationFilter.NotFoundEnvelope(http);
 
                 var resultado = await sender.Send(consulta(filtros, http.Request.Query), ct);
+                // Datos personales según lo que trajo la tabla (documents con contraparte, T957): sin el permiso, el mismo 404 y
+                // sin auditar, porque no salió nada.
+                if (exporta && resultado.IsSuccess && vista.TablaTraeDatosPersonales(resultado.Value)
+                    && !await PermissionAuthorizationFilter.TieneAsync(http, PermisoDeDatosPersonales))
+                    return PermissionAuthorizationFilter.NotFoundEnvelope(http);
                 if (exporta && resultado.IsSuccess)
                     await auditoria.EmitirExportacionAsync(vista.Key, filtros.ParaAuditoria(), EntregaDeInformes.Normalizar(filtros.Format),
                         resultado.Value.Filas.Count, ct);

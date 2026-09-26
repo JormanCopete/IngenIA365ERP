@@ -1466,6 +1466,28 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   ComportamientosDeBodega, ActivacionesDeBodega}`. Pruebas: `ImportProductsCommandTests`, `ImportCatalogosTests`, las e2e
   `CatalogoYBodegasTests` y `Ventas/BusquedaDeProductos50kTests` (con `FactDeRendimientoAttribute`: sin
   `RUN_PERF_TESTS=1` se reporta omitida, nunca aprobada).
+- Reorden y vistas básicas (fase 21, US17 parte I1, T942–T958; todos **(nuevo)**): Domain
+  `Inventory/Replenishment/CalculoDeReposicion` (`Calcular(EntradaDeReposicion)` → `ResultadoDeReposicion { Posicion,
+  RequiereReorden, Sugerido, Quiebre, Alerta }`, `DecimalesDeCantidad = 4`; posición ≤ punto pide reorden, sugerido = máximo −
+  posición sólo entonces, quiebre = disponible **<** mínimo). Application `Inventory/Replenishment/EvaluacionDeReposicion`
+  (+ `FilaDeReposicion`; la única que pone la posición de `PosicionDeReposicion` y el cálculo a una política; la comparten el
+  aviso, la revisión y la vista), `AlertasDeReposicion` (`ClaveDeLaAlerta` = `{TypeCode}:{productoPublicId}:{bodegaPublicId}`,
+  `De(fila)` → `Inventario.Reorden` y/o `Inventario.Quiebre` con `ScopeWarehousePublicId`), `AvisoDeReposicionAlConfirmar`
+  (`CodigoDelAviso = Inventory.Stock.BelowReorderPoint`; lo llama `ConfirmacionDeDocumento` —parámetro opcional
+  `avisoDeReposicion`— después del único `SaveChanges`, sobre las salidas del kardex del documento, y levanta por `IAlertas` en la
+  misma transacción; nunca bloquea), `RevisionDeReorden` (+ `ResultadoDeRevisionDeReorden`, `Tanda = 500`; políticas de bodegas
+  operativas, activadas y activas; levanta por `RaiseAlertCommand`) y la tarea `TareaDeRevisionDeReorden`
+  (`inventario.reorden`, una vez al día desde `Integration:ReorderReview:StartHour`, por defecto 5; registrada en `Program.cs`;
+  `IntegrationOptions.ReorderReviewOptions`); `Inventory/Reports/Vistas/{DocumentsReportQuery, ReorderAlertsReportQuery}` con
+  su `Vista` estática (lo que la ruta publica) y `VistaDeInformeDeInventario.PersonalDataColumn` +
+  `TablaTraeDatosPersonales(tabla)`: exportar `documents` exige `Inventory.Reports.ExportPersonalData` **cuando alguna fila trae
+  contraparte**, lo decide `MapVistaDeInventario` después de consultar (mismo 404, sin auditar). Shared
+  `Services/Inventario/DestinoDeDocumentoDeInventario` (`Documento(clase, id)`, `Kardex(producto, bodega)`: la profundización
+  de `/inventario/informes`) y `VistaDeInformeDto.PersonalDataColumn`. Pruebas: `Domain.Tests/Inventory/Replenishment/
+  {CalculoDeReposicionTests, Casos/*.json}`, `Application.Tests/Inventory/Replenishment/{ReposicionDePrueba,
+  AvisoDeReposicionAlConfirmarTests, RevisionDeReordenTests}`, `Application.Tests/Inventory/Reports/VistasBasicasTests` y
+  `Shared.Tests/Inventario/DestinoDeDocumentoDeInventarioTests`; las e2e `ReordenYQuiebreTests` e `InformesDeInventarioTests` se
+  escriben y corren en el cierre de I1.
 
 ### 2.17 Códigos de error principales (familias)
 

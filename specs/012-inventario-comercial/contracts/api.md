@@ -592,6 +592,12 @@ hasta I5) (FR-035). Las alertas `Inventario.Reorden` (posición ≤ punto) e `In
 (disponible < mínimo) las levanta la confirmación de una salida y la tarea nocturna, una pendiente por
 producto y bodega (`DedupKey`).
 
+(US17, T953/T954) La condición es `{TypeCode}:{productoPublicId}:{bodegaPublicId}` y la alerta lleva la bodega como alcance
+(`ScopeWarehousePublicId`). El aviso al confirmar sale sólo de las **salidas** del kardex del documento (una entrada no avisa) y
+sólo si la posición quedó igual o menor que el punto; el quiebre sin reorden (posible con lo por recibir de I5) levanta la alerta
+sin aviso. La tarea es `inventario.reorden`, una vez al día desde `Integration:ReorderReview:StartHour` (5 por defecto), sobre las
+bodegas operativas, activadas y activas.
+
 ### 4.5 Errores de bodegas
 
 | Código | HTTP | Cuándo | `data` |
@@ -3237,6 +3243,14 @@ De esta sección: `Accounting.InventoryRule.DimensionRequired`, `.DimensionNotAl
 
 «Posición» = disponible + en tránsito + por recibir. El sugerido es máximo − posición cuando la
 posición es menor o igual al punto de reorden. «Quiebre» es disponible por debajo del mínimo (US17).
+
+`documents` (US17, T955/T957): «(PD) si trae contraparte» = alguna fila con valor en la columna Contraparte (la copia fiscal;
+en un borrador, la persona). Lo decide la ruta **después** de consultar (`VistaDeInformeDeInventario.PersonalDataColumn`,
+`personalDataColumn` en el registro de vistas): sin `Inventory.Reports.ExportPersonalData`, el mismo 404 y sin auditar. `class`
+y `status` van por nombre o por número; sólo salen documentos de los grupos cuyo `View` tiene quien pregunta, como en §9.2. El
+Total es el del documento; en los valorados al costo (sin precio: ajustes, traslados, saldo inicial) es el costo total y sólo
+sale con `Inventory.Costs.Read` (la nota lo dice). Un rango de más de cinco años responde `Inventory.Report.RangeTooLong`, el
+código común de §27 (T946 decía `Validation.Invalid`; manda el código de la base, T182).
 
 `shrinkage-cap` es opcional, para el régimen ordinario de renta. Su porcentaje sale del parámetro
 `Informes.TopeFaltantesPorcentaje` (fracción, por defecto 0, con vigencia y `LegalSource`; data-model

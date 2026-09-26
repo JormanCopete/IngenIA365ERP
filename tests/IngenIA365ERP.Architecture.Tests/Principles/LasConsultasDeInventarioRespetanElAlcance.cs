@@ -63,6 +63,9 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "ListCountCapturesQueryHandler",
         "GetCountAdjustmentPreviewQueryHandler",
         "CountDifferencesReportQueryHandler",
+        // Fase 21, US17 parte I1 (T955, T956): las vistas documents (origen o destino) y reorder-alerts (por bodega).
+        "DocumentsReportQueryHandler",
+        "ReorderAlertsReportQueryHandler",
     ];
 
     [Fact]
