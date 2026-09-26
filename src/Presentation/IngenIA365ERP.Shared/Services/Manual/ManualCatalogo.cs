@@ -380,8 +380,10 @@ public static class ManualCatalogo
                 P("Ver el detalle", "Al abrir una fila se ven los valores antes y después del cambio, la IP y el punto de entrada."),
                 P("Exportar", "«Exportar CSV» para hojas de cálculo. «Exportar PDF firmado» genera un documento con firma verificable: cualquier byte cambiado después hace que la verificación diga «no válido»."),
                 P("Qué no aparece aquí", "Los ingresos, el segundo factor y las invitaciones ocurren antes de elegir cooperativa y se guardan en el rastro global, que consulta el administrador maestro."),
+                P("Canal, actor, motivo y rechazos", "Las columnas dicen por dónde entró la operación (web, app, punto de venta o proceso), si la hizo una persona o un proceso automático, el motivo declarado y, en un rechazo, su código de error. «Sólo módulos encadenados» deja inventario, aprobaciones, alertas, parámetros y navegación; «sólo rechazos», lo que el sistema negó."),
+                P("Pestaña Integridad", "Con el permiso AuditLog.VerifyIntegrity: elegí el rango y «Verificar». Recalcula la cadena de sellos y dice, por posición, si un evento fue alterado, eliminado, intercalado, si un ancla no corresponde o si venció su plazo de diez años. La verificación misma queda en la auditoría."),
             ],
-            ["auditoria", "quien hizo", "trazabilidad", "historial", "cambios", "exportar", "pdf firmado", "csv", "sarlaft", "evidencia"],
+            ["auditoria", "integridad", "cadena", "rechazos", "canal", "quien hizo", "trazabilidad", "historial", "cambios", "exportar", "pdf firmado", "csv", "sarlaft", "evidencia"],
             ["Permiso de auditoría (roles Administrador de Cooperativa o Auditor)."], ["usuarios", "roles-y-permisos"], [], TipoDeTema.Consulta));
 
         t.Add(Proceso("politica-segundo-factor", "Política de segundo factor de la cooperativa", Modulos.Administracion, "/admin/tenant/{TenantPublicId}/mfa-policy",
@@ -757,7 +759,56 @@ public static class ManualCatalogo
         t.Add(Maestro("/cdt/tasas-plazo", "Tasas por plazo CDT", Modulos.Cdt, "una tasa por plazo", "Tasa según rango de días y monto; con vigencias.", "cdt", "tasas", "plazo", "vigencia"));
 
         // --------------------------------------------------------------- Inventario --
-        t.Add(Maestro("/inventario/vendedores", "Vendedores", Modulos.Inventario, "un vendedor", null, "vendedores", "comision"));
+        // Feature 012, US12 (T437): el rol vendedor pasó a Ventas; seguridad, aprobaciones, parámetros y alertas.
+        t.Add(Maestro("/ventas/vendedores", "Vendedores", Modulos.Inventario, "un vendedor",
+            "La persona se busca en el maestro (o se crea en su diálogo); dar el rol a quien lo tuvo lo restaura con el mismo identificador y retirarlo pide motivo. Plantilla 9 para cargar en bloque.",
+            "vendedores", "comision", "restaurar", "plantilla 9"));
+        t.Add(Proceso("inventario-parametros", "Parámetros de inventario", Modulos.Inventario, "/inventario/parametros",
+            "Los parámetros del módulo con su valor vigente, las excepciones por bodega o tipo de documento y lo programado. Un cambio es una vigencia nueva desde una fecha, con motivo: los documentos de hoy siguen con el valor de hoy y el historial conserva todos.",
+            [
+                P("Inventario → Parámetros", "Cada clave dice su valor vigente, si sale de una vigencia o del defecto y qué hay programado.", "/inventario/parametros", "Abrir Parámetros"),
+                P("Historial", "Todas las vigencias de la clave, con autor, fecha y motivo."),
+                P("Nueva vigencia", "Valor, ámbito, fecha desde y motivo (Inventory.Parameters.Manage). El costeo exige empezar un período y su permiso; dejar sin paso a contabilidad un tipo fiscal pide confirmarlo con la lista de tipos."),
+            ],
+            ["parametros", "vigencia", "stock negativo", "modo de paso", "costeo", "historial"],
+            ["Permiso Inventory.Parameters.View; para registrar, Inventory.Parameters.Manage."], ["inventario-politicas-de-aprobacion"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("inventario-aprobaciones", "Aprobaciones de inventario", Modulos.Inventario, "/inventario/aprobaciones",
+            "La bandeja de lo que la persona puede aprobar ahora y el seguimiento de lo de su alcance. Quien crea no aprueba y quien aprobó un nivel no aprueba otro; al aprobar el último nivel el documento se confirma y se numera.",
+            [
+                P("Inventario → Aprobaciones", "«Por decidir» trae lo pendiente para usted; «Seguimiento», todo lo de su alcance.", "/inventario/aprobaciones", "Abrir Aprobaciones"),
+                P("Ver", "Los niveles, quién decidió cada uno y, si no puede decidir, por qué."),
+                P("Aprobar o rechazar", "Rechazar pide motivo y devuelve el documento a borrador. Si el documento cambió después de abrirlo, hay que volver a mirarlo."),
+                P("Retirar", "Quien pidió la aprobación la puede retirar con motivo desde «Seguimiento»."),
+            ],
+            ["aprobaciones", "aprobar", "rechazar", "niveles", "segregacion", "bandeja"],
+            ["Permiso Inventory.Approvals.View y el permiso del nivel."], ["inventario-politicas-de-aprobacion"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("inventario-politicas-de-aprobacion", "Políticas de aprobación y montos máximos", Modulos.Inventario, "/inventario/politicas-de-aprobacion",
+            "Qué documentos piden aprobación, en cuántos niveles y de quién, y hasta qué monto puede confirmar cada rol sin aprobación.",
+            [
+                P("Inventario → Políticas de aprobación", "Pestaña Políticas: por sujeto y tipo de documento, versiones con sus niveles.", "/inventario/politicas-de-aprobacion", "Abrir Políticas"),
+                P("Nueva versión", "Niveles en orden con su umbral y el permiso de quien aprueba, fecha desde y motivo."),
+                P("Montos máximos", "Por rol y permiso (compras, ajustes, notas de venta, crédito). Vacío es sin límite. Si un documento supera el monto de quien confirma, exige al menos el nivel 1; sin política, se rechaza."),
+            ],
+            ["politicas", "niveles", "umbral", "monto maximo", "limite", "rol"],
+            ["Permiso Inventory.ApprovalPolicies.View; para cambiar, Inventory.ApprovalPolicies.Manage."], ["inventario-aprobaciones"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("inventario-alcances", "Alcance comercial por bodega", Modulos.Inventario, "/inventario/alcances",
+            "Qué bodegas ve y opera cada usuario. Fuera de su alcance una bodega no existe para él: listas, detalle, kardex y altas responden igual que a lo inexistente.",
+            [
+                P("Inventario → Alcance comercial", "Elegí el usuario (también desde Seguridad › Usuarios, «Alcance comercial»).", "/inventario/alcances", "Abrir Alcances"),
+                P("Asignar", "Marcá las bodegas, operativas o de tránsito, y a lo sumo una por defecto; «Guardar alcance»."),
+                P("Alcance total", "Quien tiene el permiso Inventory.Scope.AllWarehouses ve todas sin asignación."),
+            ],
+            ["alcance", "bodegas", "usuario", "seguridad", "por defecto"],
+            ["Permiso Inventory.Scopes.Manage."], ["usuarios"], [], TipoDeTema.Proceso));
+        t.Add(Proceso("inventario-alertas", "Alertas de inventario", Modulos.Inventario, "/inventario/alertas",
+            "Las alertas que le llegan a la persona —quiebre, reorden, integridad, aprobaciones pendientes— y a quién le llega cada tipo.",
+            [
+                P("Inventario → Alertas", "Bandeja por estado, tipo, severidad y fecha. «Sin destinatario» es una alerta que se envió al administrador porque nadie activo tenía el permiso.", "/inventario/alertas", "Abrir Alertas"),
+                P("Atender", "Con una nota de lo que se hizo; queda para todos quién y cuándo."),
+                P("Tipos", "Permisos destinatarios, canales (la aplicación siempre, el correo opcional), umbrales y vigencias; una vigencia nueva pide motivo."),
+            ],
+            ["alertas", "quiebre", "reorden", "atender", "destinatarios", "notificaciones"],
+            ["Permiso Inventory.Alerts.View; atender, Inventory.Alerts.Attend; tipos, Inventory.Alerts.Manage."], [], [], TipoDeTema.Proceso));
 
         // -------------------------------------------------------------------- Nómina --
         t.Add(Proceso("empleados", "Empleados", Modulos.Nomina, "/nomina/empleados",

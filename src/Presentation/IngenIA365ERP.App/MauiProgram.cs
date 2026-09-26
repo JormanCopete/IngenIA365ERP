@@ -74,6 +74,8 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
             // Feature 012 (T183): cliente de Inventario; misma salvedad que el anterior (CentralAuthClient, verificacion de MAUI).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioClient>();
+            // Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();

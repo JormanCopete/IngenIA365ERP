@@ -1,0 +1,29 @@
+{
+  "nombre": "US12-2: ajuste de 3.000.000 con política de dos niveles (umbral 0 y 1.000.000)",
+  "derivacion": "La política del ajuste pide nivel 1 desde 0 (Inventory.Adjustments.Approve) y nivel 2 desde 1.000.000 (Inventory.Approvals.Management). 3.000.000 alcanza los dos: 1 y 2 en orden. 999.999,99 no llega al umbral del nivel 2: sólo el 1. 1.000.000 exacto alcanza el 2 (el umbral se alcanza con ≥). En el nivel 2, el creador (10) queda excluido por Creator, quien pidió la aprobación (11) por Requester y quien aprobó el nivel 1 (13) por PreviousLevel; el jefe (14) decide.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [
+    {
+      "validFrom": "2026-01-01",
+      "niveles": [
+        { "order": 1, "threshold": 0, "permission": "Inventory.Adjustments.Approve" },
+        { "order": 2, "threshold": 1000000, "permission": "Inventory.Approvals.Management" }
+      ]
+    }
+  ],
+  "evaluaciones": [
+    { "monto": 3000000, "esperado": { "resultado": "ConNiveles", "niveles": [1, 2], "permisos": ["Inventory.Adjustments.Approve", "Inventory.Approvals.Management"] } },
+    { "monto": 999999.99, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Adjustments.Approve"] } },
+    { "monto": 1000000, "esperado": { "resultado": "ConNiveles", "niveles": [1, 2] } }
+  ],
+  "segregacion": {
+    "creador": 10, "solicitante": 11, "participantes": [], "aprobadoresPrevios": [13],
+    "decisiones": [
+      { "decisor": 10, "esperado": "Creator" },
+      { "decisor": 11, "esperado": "Requester" },
+      { "decisor": 13, "esperado": "PreviousLevel" },
+      { "decisor": 14, "esperado": null }
+    ]
+  }
+}

@@ -139,6 +139,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
         // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
         services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
+        // Feature 012, T424–T426: la única operación que da, restaura y retira el rol vendedor.
+        services.AddScoped<Inventory.Salespeople.RolDeVendedor>();
         // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las

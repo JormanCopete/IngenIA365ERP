@@ -1,120 +1,64 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Paging;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Salespeople.Queries;
 
 /// <summary>
-/// DTO de Vendedor. Datos personales (nombre, documento, contacto)
-/// vienen de COR_People via JOIN. INV_Salespeople solo guarda
-/// SalespersonType y AppliesCommission.
+/// Un vendedor (feature 012, T425; contracts/api.md §31): el rol y la persona que lo tiene. Los datos personales vienen de
+/// <c>COR_People</c>; <c>INV_Salespeople</c> sólo guarda el tipo y si aplica comisión. <see cref="IsActive"/> es falso en un
+/// rol retirado (baja lógica). (nuevo)
 /// </summary>
-public record SalespersonDto
-{
-    public Guid PublicId { get; init; }
-    public Guid PersonPublicId { get; init; }
-    public string IdNumber { get; init; } = string.Empty;
-    public string Name { get; init; } = string.Empty;
-    public string? LastName { get; init; }
-    public string? Address { get; init; }
-    public string? Phone { get; init; }
-    public string? Mobile { get; init; }
-    public string? CityName { get; init; }
-    public int? SalespersonType { get; init; }
-    public bool AppliesCommission { get; init; }
-}
+public sealed record SalespersonDto(
+    Guid SalespersonPublicId,
+    SalespersonPersonDto Person,
+    int? SalespersonType,
+    bool AppliesCommission,
+    bool IsActive);
 
-public record ListSalespeopleQuery : IRequest<Result<PagedList<SalespersonDto>>>
-{
-    public PaginationParams Pagination { get; init; } = new();
-    public string? SearchTerm { get; init; }
-}
+public sealed record SalespersonPersonDto(Guid PersonPublicId, string Name, string IdNumber);
 
-public class ListSalespeopleQueryHandler(IApplicationDbContext context)
-    : IRequestHandler<ListSalespeopleQuery, Result<PagedList<SalespersonDto>>>
+/// <summary>
+/// La lista paginada de vendedores (§31, <c>GET /api/inventory/salespeople?search=&amp;includeRetired=&amp;page=&amp;pageSize=</c>,
+/// <c>Inventory.Salespeople.View</c>). <see cref="Search"/> busca en nombre, apellido y documento; sin
+/// <see cref="IncludeRetired"/> sólo los vivos. No filtra por alcance: un vendedor es una persona, sin bodega ni punto
+/// (FR-031; <c>LasConsultasDeInventarioRespetanElAlcance</c>).
+/// </summary>
+public sealed record ListSalespeopleQuery(string? Search = null, bool IncludeRetired = false, int Page = 1, int PageSize = 20)
+    : IRequest<Result<PagedResult<SalespersonDto>>>;
+
+public sealed class ListSalespeopleQueryHandler(IApplicationDbContext db) : IRequestHandler<ListSalespeopleQuery, Result<PagedResult<SalespersonDto>>>
 {
-    public async Task<Result<PagedList<SalespersonDto>>> Handle(
-        ListSalespeopleQuery request, CancellationToken ct)
+    public async Task<Result<PagedResult<SalespersonDto>>> Handle(ListSalespeopleQuery request, CancellationToken ct)
     {
-        var query = from s in context.Salespeople.AsNoTracking().Where(s => !s.IsDeleted)
-                    join p in context.People.AsNoTracking() on s.PersonId equals p.Id
-                    where !p.IsDeleted
-                    select new { s, p };
+        var incluirRetirados = request.IncludeRetired;
+        var consulta = from s in db.Salespeople.IgnoreQueryFilters().AsNoTracking()
+                       where incluirRetirados || !s.IsDeleted
+                       join p in db.People.IgnoreQueryFilters().AsNoTracking() on s.PersonId equals p.Id
+                       select new { s, p };
 
-        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var term = request.SearchTerm.Trim();
-            query = query.Where(x =>
-                x.p.FirstName.Contains(term) ||
-                x.p.LastName.Contains(term) ||
-                x.p.TaxId.Contains(term));
+            var termino = request.Search.Trim();
+            consulta = consulta.Where(x => x.p.FirstName.Contains(termino) || x.p.LastName.Contains(termino) || x.p.TaxId.Contains(termino));
         }
 
-        query = request.Pagination.SortBy?.ToLower() switch
-        {
-            "name" => request.Pagination.IsDescending
-                ? query.OrderByDescending(x => x.p.FirstName)
-                : query.OrderBy(x => x.p.FirstName),
-            _ => query.OrderBy(x => x.p.LastName).ThenBy(x => x.p.FirstName)
-        };
-
-        var totalCount = await query.CountAsync(ct);
-
-        var items = await query
-            .Skip((request.Pagination.PageNumber - 1) * request.Pagination.PageSize)
-            .Take(request.Pagination.PageSize)
-            .Select(x => new SalespersonDto
-            {
-                PublicId = x.s.PublicId,
-                PersonPublicId = x.p.PublicId,
-                IdNumber = x.p.TaxId,
-                Name = x.p.FirstName,
-                LastName = x.p.LastName,
-                Address = x.p.Address,
-                Phone = x.p.Phone1,
-                Mobile = x.p.Mobile,
-                CityName = x.p.City != null ? x.p.City.Name : null,
-                SalespersonType = x.s.SalespersonType,
-                AppliesCommission = x.s.AppliesCommission
-            })
+        var pagina = new PageRequest(request.Page, request.PageSize);
+        var total = await consulta.LongCountAsync(ct);
+        var items = await consulta
+            .OrderBy(x => x.s.IsDeleted).ThenBy(x => x.p.LastName).ThenBy(x => x.p.FirstName).ThenBy(x => x.s.Id)
+            .Skip((pagina.SafePage - 1) * pagina.SafePageSize)
+            .Take(pagina.SafePageSize)
+            .Select(x => new SalespersonDto(
+                x.s.PublicId,
+                new SalespersonPersonDto(x.p.PublicId, (x.p.FirstName + " " + x.p.LastName).Trim(), x.p.TaxId),
+                x.s.SalespersonType,
+                x.s.AppliesCommission,
+                !x.s.IsDeleted))
             .ToListAsync(ct);
 
-        return Result.Success(new PagedList<SalespersonDto>(
-            items, totalCount, request.Pagination.PageNumber, request.Pagination.PageSize));
-    }
-}
-
-public record GetSalespersonByIdQuery(Guid PublicId) : IRequest<Result<SalespersonDto>>;
-
-public class GetSalespersonByIdQueryHandler(IApplicationDbContext context)
-    : IRequestHandler<GetSalespersonByIdQuery, Result<SalespersonDto>>
-{
-    public async Task<Result<SalespersonDto>> Handle(
-        GetSalespersonByIdQuery request, CancellationToken ct)
-    {
-        var dto = await (
-            from s in context.Salespeople.AsNoTracking().Where(s => !s.IsDeleted && s.PublicId == request.PublicId)
-            join p in context.People.AsNoTracking() on s.PersonId equals p.Id
-            where !p.IsDeleted
-            select new SalespersonDto
-            {
-                PublicId = s.PublicId,
-                PersonPublicId = p.PublicId,
-                IdNumber = p.TaxId,
-                Name = p.FirstName,
-                LastName = p.LastName,
-                Address = p.Address,
-                Phone = p.Phone1,
-                Mobile = p.Mobile,
-                CityName = p.City != null ? p.City.Name : null,
-                SalespersonType = s.SalespersonType,
-                AppliesCommission = s.AppliesCommission
-            })
-            .FirstOrDefaultAsync(ct);
-
-        return dto is null
-            ? Result.Failure<SalespersonDto>(new Error("Salesperson.NotFound", "Vendedor no encontrado."))
-            : Result.Success(dto);
+        return Result.Success(new PagedResult<SalespersonDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
 }

@@ -1,0 +1,297 @@
+@page "/inventario/alertas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Alertas - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T434 (FR-022, SC-022; contracts/api.md §16.1, §16.2): la bandeja muestra sólo las alertas que alcanzan a la
+   persona —su permiso es destinatario del tipo y la bodega está en su alcance, o se la notificaron— y atenderla deja quién,
+   cuándo y la nota para todos. Una alerta «sin destinatario» se enrutó al administrador porque nadie activo tenía el permiso.
+   La pestaña Tipos dice a quién le llega cada una y deja registrar otra vigencia (la aplicación siempre va; el correo es
+   opcional). *@
+<PermissionGate Required="Inventory.Alerts.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Alertas</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Bandeja</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@CambiarATiposAsync">Tipos</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_estado"><option value="Pending">Pendientes</option><option value="Attended">Atendidas</option><option value="">Todas</option></select>
+            </label>
+            <label class="campo">Tipo
+                <select class="e-input" @bind="_tipo">
+                    <option value="">Todos</option>
+                    @foreach (var t in _tipos) { <option value="@t.TypeCode">@t.TypeCode</option> }
+                </select>
+            </label>
+            <label class="campo">Severidad
+                <select class="e-input" @bind="_severidad"><option value="">Todas</option><option value="Info">Información</option><option value="Warning">Advertencia</option><option value="Critical">Crítica</option></select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <p class="texto-apoyo">@_total alerta(s).</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Levantada</th><th>Tipo</th><th>Severidad</th><th>Asunto</th><th>Estado</th><th class="numero">Veces</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _alertas)
+                        {
+                            var alerta = a;
+                            <tr>
+                                <td>@alerta.RaisedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@alerta.TypeCode @if (alerta.WithoutRecipient) { <span class="aviso aviso-alerta">sin destinatario</span> }</td>
+                                <td>@TextosDeSeguridad.Severidad(alerta.Severity)</td>
+                                <td>
+                                    <strong>@alerta.Subject</strong><br />@alerta.Body
+                                    @if (alerta.Entity?.Route is { } ruta) { <br /><a href="@ruta">@(alerta.Entity.Label ?? "Ver")</a> }
+                                </td>
+                                <td>
+                                    @TextosDeSeguridad.EstadoDeAlerta(alerta.Status)
+                                    @if (alerta.AttendedAt is { } cuando) { <br /><span class="texto-tenue">@alerta.AttendedBy, @cuando.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @alerta.AttendNote</span> }
+                                </td>
+                                <td class="numero">@alerta.OccurrenceCount</td>
+                                <td>
+                                    @if (alerta.Status == "Pending")
+                                    {
+                                        <PermissionGate Required="Inventory.Alerts.Attend">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAtencion(alerta))">Atender…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <IndicadorDeCarga Cargando="@_cargaTipos.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Tipo</th><th>Descripción</th><th>Destinatarios</th><th>Canales</th><th>Umbrales</th><th>Vigencia</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var t in _tipos)
+                        {
+                            var tipo = t;
+                            <tr>
+                                <td>@tipo.TypeCode<br /><span class="texto-tenue">@TextosDeSeguridad.Severidad(tipo.Severity) · desde @tipo.AvailableFrom</span></td>
+                                <td>@tipo.Description</td>
+                                <td>
+                                    @string.Join(", ", tipo.RecipientPermissions)
+                                    <br /><span class="texto-tenue">@tipo.ActiveRecipients usuario(s) activo(s)</span>
+                                    @if (tipo.WithoutRecipient) { <br /><span class="aviso aviso-alerta">Sin destinatario: le llega al administrador.</span> }
+                                </td>
+                                <td>@string.Join(", ", tipo.Channels.Select(c => c == "InApp" ? "Aplicación" : c == "Email" ? "Correo" : c))</td>
+                                <td>@(tipo.Thresholds is { Count: > 0 } u ? string.Join(", ", u.Select(p => $"{p.Key}={p.Value}")) : "—")</td>
+                                <td>@tipo.ValidFrom.ToString("dd/MM/yyyy") – @(tipo.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")@(tipo.IsEnabled ? "" : " (deshabilitado)")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => VerHistorialAsync(tipo.TypeCode))">Historial</SfButton>
+                                    <PermissionGate Required="Inventory.Alerts.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirVersion(tipo))">Nueva vigencia</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </IndicadorDeCarga>
+        @if (_historialDe is not null)
+        {
+            <div class="info-card">
+                <h4>Vigencias de @_historialDe</h4>
+                <IndicadorDeCarga Cargando="@_cargaHistorial.Activa">
+                    <ul>
+                        @foreach (var v in _historial)
+                        {
+                            <li>@v.ValidFrom.ToString("dd/MM/yyyy") – @(v.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente"): @string.Join(", ", v.RecipientPermissions)@(v.Reason is null ? "" : $" — {v.Reason}")</li>
+                        }
+                    </ul>
+                </IndicadorDeCarga>
+            </div>
+        }
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarAtencion" Header="Atender la alerta" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">@(_aAtender?.Subject)</p>
+                <label class="campo campo-ancho">Nota * (qué se hizo) <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_nota))" OnClick="@AtenderAsync">Atender</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAtencion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva vigencia del tipo" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">@(_editado?.TypeCode) — @(_editado?.Description)</p>
+                <label class="campo campo-ancho">Permisos destinatarios * (separados por coma) <input class="e-input" @bind="_permisos" /></label>
+                <SfCheckBox @bind-Checked="_correo" TChecked="bool" Label="También por correo (la aplicación siempre va)" />
+                <label class="campo campo-ancho">Umbrales (clave=valor, separados por coma) <input class="e-input" @bind="_umbrales" /></label>
+                <SfCheckBox @bind-Checked="_habilitado" TChecked="bool" Label="Habilitado" />
+                <label class="campo">Desde * <input type="date" class="e-input" value="@_desdeVersion.ToString("yyyy-MM-dd")" @onchange="@(e => _desdeVersion = LeerFecha(e.Value) ?? _desdeVersion)" /></label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarVersionAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaTipos = new(), _cargaHistorial = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private int _pestana;
+    private bool _tiposCargados, _mostrarAtencion, _mostrarVersion, _correo, _habilitado = true;
+    private List<AlertaDto> _alertas = [];
+    private List<TipoDeAlertaDto> _tipos = [];
+    private List<TipoDeAlertaDto> _historial = [];
+    private long _total;
+    private string _estado = "Pending";
+    private string? _tipo, _severidad, _nota, _error, _permisos, _umbrales, _motivo, _historialDe;
+    private DateOnly? _desde, _hasta;
+    private DateOnly _desdeVersion = DateOnly.FromDateTime(DateTime.Today);
+    private AlertaDto? _aAtender;
+    private TipoDeAlertaDto? _editado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CargarTiposAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.AlertasAsync(new FiltrosDeAlertas(
+            string.IsNullOrEmpty(_estado) ? null : _estado, _tipo, _severidad, _desde, _hasta, 1, 100));
+        if (!r.IsSuccess) { _alertas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la bandeja de alertas."); return; }
+        _alertas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private async Task CambiarATiposAsync()
+    {
+        _pestana = 1;
+        if (!_tiposCargados) await CargarTiposAsync();
+    }
+
+    private async Task CargarTiposAsync()
+    {
+        using var carga = _cargaTipos.Iniciar();
+        var r = await Inventario.TiposDeAlertaAsync();
+        if (!r.IsSuccess) { _tipos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los tipos de alerta."); return; }
+        _tipos = [.. r.Value ?? []];
+        _tiposCargados = true;
+    }
+
+    private async Task VerHistorialAsync(string tipo)
+    {
+        _historialDe = tipo;
+        using var carga = _cargaHistorial.Iniciar();
+        var r = await Inventario.HistorialDeTipoDeAlertaAsync(tipo);
+        if (!r.IsSuccess) { _historial = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el historial."); return; }
+        _historial = [.. r.Value ?? []];
+    }
+
+    private void AbrirAtencion(AlertaDto alerta)
+    {
+        _aAtender = alerta;
+        _nota = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAtencion = true;
+    }
+
+    private async Task AtenderAsync()
+    {
+        if (_aAtender is not { } a || string.IsNullOrWhiteSpace(_nota)) return;
+        using var carga = _guardado.Iniciar();
+        var r = await Inventario.AtenderAlertaAsync(a.PublicId, _nota.Trim(), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Alerts.Alert.AlreadyAttended" ? $"Ya la atendió {r.Dato<string>("attendedBy")}." : r.ErrorMessage ?? "No se pudo atender la alerta.";
+            return;
+        }
+        _mostrarAtencion = false;
+        await Notification.SuccessAsync("Alerta atendida.");
+        await CargarAsync();
+    }
+
+    private void AbrirVersion(TipoDeAlertaDto tipo)
+    {
+        _editado = tipo;
+        _permisos = string.Join(", ", tipo.RecipientPermissions);
+        _correo = tipo.Channels.Contains("Email");
+        _umbrales = tipo.Thresholds is { Count: > 0 } u ? string.Join(", ", u.Select(p => $"{p.Key}={p.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}")) : null;
+        _habilitado = tipo.IsEnabled;
+        _motivo = _error = null;
+        _desdeVersion = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+        _clave = new ClaveDeOperacion();
+        _mostrarVersion = true;
+    }
+
+    private async Task GuardarVersionAsync()
+    {
+        if (_editado is not { } tipo || string.IsNullOrWhiteSpace(_motivo)) return;
+        Dictionary<string, decimal>? umbrales = null;
+        if (!string.IsNullOrWhiteSpace(_umbrales))
+        {
+            umbrales = [];
+            foreach (var par in _umbrales.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var partes = par.Split('=', 2, StringSplitOptions.TrimEntries);
+                if (partes.Length != 2 || !decimal.TryParse(partes[1], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var valor))
+                {
+                    _error = $"El umbral «{par}» no es clave=valor.";
+                    return;
+                }
+                umbrales[partes[0]] = valor;
+            }
+        }
+        var permisos = (_permisos ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Inventario.NuevaVersionDeTipoDeAlertaAsync(tipo.TypeCode,
+            new VersionDeTipoDeAlertaRequest(permisos, _correo ? [1, 2] : [1], umbrales, _desdeVersion, _motivo.Trim(), _habilitado), _clave);
+        if (!r.IsSuccess)
+        {
+            var permiso = r.Dato<string>("permissionCode");
+            _error = permiso is null ? r.ErrorMessage ?? "No se pudo registrar la vigencia." : $"{r.ErrorMessage} ({permiso})";
+            return;
+        }
+        _mostrarVersion = false;
+        await Notification.SuccessAsync($"Vigencia de {tipo.TypeCode} registrada.");
+        await CargarTiposAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

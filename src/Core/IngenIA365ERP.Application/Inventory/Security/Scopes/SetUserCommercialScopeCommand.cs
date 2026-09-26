@@ -69,6 +69,12 @@ public sealed class SetUserCommercialScopeCommandHandler(
         if (await vista.UsuarioAsync(request.UserPublicId, ct) is not { } usuario)
             return Result.Failure<UserCommercialScopeDto>(Error.NotFound);
 
+        // Antes de I3 no hay tabla de puntos de venta (SinAsignacionesDePuntoDeVenta): pedir puntos es un cuerpo
+        // inválido, no un 404 (T408, §16.3 «pointsOfSale desde I3»). Una lista vacía no pide nada.
+        if (request.PointsOfSale is { Count: > 0 } && puntos is SinAsignacionesDePuntoDeVenta)
+            return Result.Failure<UserCommercialScopeDto>("Validation.Invalid",
+                "Los puntos de venta se asignan cuando esté disponible el punto de venta (entrega I3).");
+
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
 
         var deBodegas = await ReemplazarAsync(

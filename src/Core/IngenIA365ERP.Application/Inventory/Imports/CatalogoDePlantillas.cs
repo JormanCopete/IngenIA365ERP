@@ -96,7 +96,8 @@ public static class CatalogoDePlantillas
             "Inventory.DocumentTypes.View", "Inventory.DocumentTypes.Manage",
             "Hoja NivelesDeAprobacion: Inventory.ApprovalPolicies.Manage; modo de paso y lotes: Inventory.Parameters.Manage; "
             + "tipo fiscal sin paso: Inventory.DocumentTypes.DisableFiscalPosting"),
-        new(9, Def(VendedoresClave, "Vendedores", ModuloDeAuditoria.Inventory, Datos),
+        // T426: la plantilla 9 declara sus columnas en Inventory/Salespeople/Import/PlantillaDeVendedores.
+        new(9, Inventory.Salespeople.Import.PlantillaDeVendedores.Definicion,
             "/api/inventory/salespeople", "ImportSalespeopleCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.Salespeople.View", "Inventory.Salespeople.Manage"),
         new(10, PlantillasQueSeImportanConI3.PuntosDeVenta,

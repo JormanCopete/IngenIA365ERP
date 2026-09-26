@@ -23,6 +23,11 @@ public class LaSegregacionNoUsaUserIdDelToken
     [
         Path.Combine("Core", "IngenIA365ERP.Application", "Common", "Approvals"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Approvals"),
+        // Fase 11, US12 (T415): los que identifican a una persona —alta, retiro e importación de vendedores
+        // (CreateSalespersonCommand, DeleteSalespersonCommand, ImportSalespeopleCommand)— y la revisión diaria de reorden
+        // (RevisionDeReorden, que corre como actor proceso).
+        Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Salespeople"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Replenishment"),
     ];
 
     private static readonly Regex UserIdOCorreo = new(@"\.(UserId|Email)\b", RegexOptions.Compiled);

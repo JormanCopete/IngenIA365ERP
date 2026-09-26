@@ -1488,6 +1488,37 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   AvisoDeReposicionAlConfirmarTests, RevisionDeReordenTests}`, `Application.Tests/Inventory/Reports/VistasBasicasTests` y
   `Shared.Tests/Inventario/DestinoDeDocumentoDeInventarioTests`; las e2e `ReordenYQuiebreTests` e `InformesDeInventarioTests` se
   escriben y corren en el cierre de I1.
+- Seguridad, aprobaciones, parámetros y auditoría usables (fase 11, US12, T407–T438 sin el cierre; todos **(nuevo)** salvo
+  lo marcado): Application `Inventory/Salespeople/RolDeVendedor` (la **única** operación que da, restaura y retira el rol
+  vendedor: `PersonaVivaAsync`, `FilaDeAsync` —viva o retirada—, `Asignar(persona, fila, tipo, comision)` →
+  `AsignacionDeVendedor { Fila, Restaurada }`, `RetirarAsync(fila, persona)`; escribe la fila y `Person.IsSalesperson`, no guarda;
+  la usan `CreateSalespersonCommand`, `DeleteSalespersonCommand` e `ImportSalespeopleCommand`) con `ErroresDeVendedores`
+  (`Inventory.Salesperson.AlreadyActive` con `data.personPublicId`; `Core.Person.NotFound`, también para la persona eliminada
+  citada en la plantilla); `CreateSalespersonResultDto { SalespersonPublicId, Restored }`; `SalespersonDto { SalespersonPublicId,
+  Person: SalespersonPersonDto { PersonPublicId, Name, IdNumber }, SalespersonType, AppliesCommission, IsActive }` y
+  `ListSalespeopleQuery(Search, IncludeRetired, Page, PageSize)` → `PagedResult` (sin alcance: un vendedor es una persona,
+  FR-031; `LasConsultasDeInventarioRespetanElAlcance` lo dice); `Inventory/Salespeople/Import/{PlantillaDeVendedores,
+  ImportSalespeopleCommand, GetSalespeopleTemplateDataQuery}` (plantilla 9, columnas de plantillas.md §9; la descarga con datos
+  exige `Inventory.Reports.ExportPersonalData`). `GetSalespersonByIdQuery` y las rutas `GET /{id}` y `DELETE /{id}` se retiraron
+  sin alias. Auditoría (T423, amplía lo existente): `AuditQueryParameters.Modules` y `.Outcome` (`Rejected`/`Accepted`),
+  `AuditLogEntry.Metadata` y `.ChainSeq` (leídos por `AuditDocumentSchema` de `metadata` y `chain.seq`),
+  `QueryAuditLogQuery.Modules`/`.Outcome` (`?modules=`, `?result=` en `GET /api/audit/logs`) y `AuditLogEntryDto` con `Channel`,
+  `ActorKind`, `Origin`, `Reason`, `Result`, `ErrorCode`, `OperationKey` y `ChainSeq`. `SetUserCommercialScopeCommand` rechaza
+  `pointsOfSale` con elementos con `Validation.Invalid` mientras el puerto sea `SinAsignacionesDePuntoDeVenta` (antes de I3).
+  Shared `Services/Inventario/{InventarioClient.Seguridad, InventarioDtos.Seguridad}` (con `TextosDeSeguridad`: exclusión,
+  estados, severidad, ámbito, hallazgos de integridad y sujetos en español; `InventarioClient.PermisosLimitables` y `RolesAsync`
+  para la pantalla de montos), `Services/Auditoria/IntegridadDeAuditoriaClient` (+ `VerificacionDeAuditoriaDto`,
+  `HallazgoDeAuditoriaDto`), `Components/Inventario/AlcanceComercialDeUsuario` y las pantallas `/inventario/{parametros,
+  aprobaciones, politicas-de-aprobacion, alcances, alertas}`, `/ventas/vendedores` (reemplaza `/inventario/vendedores`, borrada) y
+  la pestaña «Integridad» de `/admin/auditoria`. La «pestaña Alcance comercial» de usuarios es el botón «Alcance comercial» de
+  `/security/users` (la ruta `/admin/usuarios` sólo redirige) que abre `/inventario/alcances?usuario=`. Pruebas:
+  `Domain.Tests/Approvals/Casos/{us12-2-dos-niveles, us12-6-monto-sobre-el-limite}.json`,
+  `Application.Tests/Inventory/Security/SetUserScopeCommandHandlerTests`, `Application.Tests/Common/Alerts/{AlertQueriesTests,
+  AlertTypeQueriesTests}`, `Application.Tests/Audit/VerifyAuditIntegrityQueryHandlerTests`,
+  `Application.Tests/Inventory/Salespeople/SalespeopleCommandsTests` y `Shared.Tests/Inventario/InventarioClientSeguridadTests`;
+  las e2e de US12 (`UsuariosDelEnsayo`, `AprobacionMultinivelTests`, `AlcancePorBodegaTests`, `IntegridadDeAuditoriaTests`
+  ampliada, `ParametrosConVigenciaTests`, `VendedoresTests`) se escriben y corren en el cierre de I1, y el índice filtrado
+  `UK_INV_Salespeople_PersonId` (T427) entra con el par `InventarioComercialNucleo`.
 
 ### 2.17 Códigos de error principales (familias)
 

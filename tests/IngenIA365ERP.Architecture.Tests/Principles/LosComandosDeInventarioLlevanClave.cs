@@ -72,12 +72,8 @@ public class LosComandosDeInventarioLlevanClave
     /// vendedores (se conservaron del módulo heredado, T036) los rehace US12 con <c>IOperacionIdempotente</c>
     /// (T424, T425), y en esa tarea salen de aquí. Si alguno ya lleva la clave, la prueba pide sacarlo.
     /// </summary>
-    private static readonly Dictionary<string, string> PendientesDeReescritura = new(StringComparer.Ordinal)
-    {
-        ["CreateSalespersonCommand"] = "T424 (US12)",
-        ["UpdateSalespersonCommand"] = "T425 (US12)",
-        ["DeleteSalespersonCommand"] = "T425 (US12)",
-    };
+    /// <remarks>Vacía desde la fase 11 (US12, T424–T426): los tres de vendedores ya llevan la clave.</remarks>
+    private static readonly Dictionary<string, string> PendientesDeReescritura = new(StringComparer.Ordinal);
 
     private static readonly Regex DeclaracionDeComando = new(
         @"\b(record|class)\s+(?<nombre>\w+Command)\b(?<resto>[^{;]*)", RegexOptions.Compiled);

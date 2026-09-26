@@ -228,6 +228,38 @@ public class AuditDocumentSchemaTests
     }
 
     [Fact]
+    public void LeeLaMetadataYLaPosicionEnLaCadena()
+    {
+        // Feature 012 (T423): canal, actor, motivo, código de error y clave van en la metadata; la posición, en chain.seq.
+        var doc = new BsonDocument
+        {
+            { "action", "Rejected" }, { "entityType", "DecideApprovalCommand" }, { "module", "Approvals" }, { "occurredAt", Instante },
+            { "metadata", new BsonDocument { { "Channel", "web" }, { "ActorKind", "Person" }, { "ErrorCode", "Approvals.SelfApprovalForbidden" } } },
+            { "chain", new BsonDocument { { "stream", "x:10y" }, { "seq", 42L }, { "prevHash", "0" } } },
+        };
+
+        var e = AuditDocumentSchema.ToEntry(doc);
+
+        e.Metadata.Should().Contain("Channel", "web").And.Contain("ErrorCode", "Approvals.SelfApprovalForbidden");
+        e.ChainSeq.Should().Be(42);
+        AuditDocumentSchema.ToEntry(new BsonDocument { { "action", "x" } }).ChainSeq.Should().BeNull();
+    }
+
+    [Fact]
+    public void ElFiltroPorModulosYResultado_PideLosModulosYLosRechazos()
+    {
+        var json = Render(AuditDocumentSchema.Filtro(new AuditQueryParameters
+        {
+            Modules = ["Inventory", "Approvals"],
+            Outcome = "Rejected",
+        })).ToJson();
+
+        json.Should().Contain("\"module\" : { \"$in\" : [\"Inventory\", \"Approvals\"] }");
+        json.Should().Contain("\"Module\" : { \"$in\"");
+        json.Should().Contain("\"action\" : \"Rejected\"");
+    }
+
+    [Fact]
     public void SinCondiciones_ElFiltroEsVacio()
     {
         Render(AuditDocumentSchema.Filtro(new AuditQueryParameters()))

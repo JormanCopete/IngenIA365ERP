@@ -144,7 +144,22 @@
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/inventario/plantillas" class="nav-subitem">Plantillas</NavLink>
             </PermissionGate>
-            <NavLink href="/inventario/vendedores" class="nav-subitem">Vendedores</NavLink>
+            @* US12 (T437): parámetros con vigencia, aprobaciones, políticas y montos, alcance por bodega y alertas. *@
+            <PermissionGate Required="Inventory.Parameters.View">
+                <NavLink href="/inventario/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Approvals.View">
+                <NavLink href="/inventario/aprobaciones" class="nav-subitem">Aprobaciones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.ApprovalPolicies.View">
+                <NavLink href="/inventario/politicas-de-aprobacion" class="nav-subitem">Políticas de aprobación</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Scopes.Manage">
+                <NavLink href="/inventario/alcances" class="nav-subitem">Alcance comercial</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Alerts.View">
+                <NavLink href="/inventario/alertas" class="nav-subitem">Alertas</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* US9 (T357): compras de I1. Sólo enlaces con su página publicada (TodoEnlaceDelMenuTieneSuPagina). *@
@@ -163,6 +178,10 @@
         <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/ventas/canales" class="nav-subitem">Canales de venta</NavLink>
+            </PermissionGate>
+            @* US12 (T436, T437): el rol vendedor se administra en Ventas (antes /inventario/vendedores). *@
+            <PermissionGate Required="Inventory.Salespeople.View">
+                <NavLink href="/ventas/vendedores" class="nav-subitem">Vendedores</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

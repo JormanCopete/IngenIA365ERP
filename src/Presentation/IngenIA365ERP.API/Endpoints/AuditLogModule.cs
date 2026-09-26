@@ -83,7 +83,12 @@ public sealed class AuditLogModule : ICarterModule
             Action: q.Action,
             From: q.From,
             To: q.To,
-            Paging: new PageRequest(q.Page ?? 1, q.PageSize ?? 50)), ct);
+            Paging: new PageRequest(q.Page ?? 1, q.PageSize ?? 50))
+        {
+            // Feature 012 (T423): ?modules=Inventory,Approvals&result=Rejected.
+            Modules = string.IsNullOrWhiteSpace(q.Modules) ? null : q.Modules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            Outcome = q.Result,
+        }, ct);
 
     private static async Task<IResult> ExportCsvAsync(
         [AsParameters] AuditExportParams q,
@@ -140,7 +145,9 @@ public sealed record AuditQueryParams(
     DateTime? From,
     DateTime? To,
     int? Page = null,
-    int? PageSize = null);
+    int? PageSize = null,
+    string? Modules = null,
+    string? Result = null);
 
 public sealed record AuditExportParams(
     string? UserId,

@@ -1,0 +1,253 @@
+@page "/inventario/parametros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Parámetros de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T430 (FR-012, US12-3; contracts/api.md §7): cada clave del catálogo con su valor vigente, de dónde sale (una
+   vigencia o el defecto), sus excepciones por ámbito y lo programado. Nada se edita en su sitio: un cambio es una vigencia
+   nueva desde una fecha, con motivo, y la anterior queda en el historial. El modo de paso a contabilidad se registra por
+   cadena; dejar sin paso un tipo fiscal pide confirmarlo con la lista de tipos. *@
+<PermissionGate Required="Inventory.Parameters.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Parámetros de inventario</h3>
+        <div class="toolbar">
+            <label class="campo">Módulo
+                <select class="e-input" value="@(_modulo ?? "")" @onchange="@(async e => { _modulo = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString(); await CargarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var m in _modulos) { <option value="@m">@m</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Clave</th><th>Descripción</th><th>Valor vigente</th><th>Origen</th><th>Excepciones</th><th>Programado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _parametros)
+                    {
+                        var parametro = p;
+                        <tr class="@(_elegido?.Key == parametro.Key && _elegido?.Module == parametro.Module ? "resaltada" : "")">
+                            <td>@parametro.Module · @parametro.Key</td>
+                            <td>@parametro.Description<br /><span class="texto-tenue">desde @parametro.AvailableFrom</span></td>
+                            <td>@parametro.Current.Value</td>
+                            <td>@(parametro.Current.Source == "Version" ? $"Vigencia desde {parametro.Current.ValidFrom:dd/MM/yyyy}" : "Valor por defecto")</td>
+                            <td>@foreach (var o in parametro.Overrides) { <div>@TextosDeSeguridad.Ambito(o.ScopeKind) @(o.Scope?.Code): @o.Value</div> }</td>
+                            <td>@foreach (var s in parametro.Scheduled) { <div>@s.ValidFrom.ToString("dd/MM/yyyy"): @s.Value (@TextosDeSeguridad.Ambito(s.ScopeKind))</div> }</td>
+                            <td>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => VerHistorialAsync(parametro))">Historial</SfButton>
+                                <PermissionGate Required="Inventory.Parameters.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_elegido is { } elegido)
+    {
+        <div class="info-card">
+            <h4>Historial de @elegido.Module · @elegido.Key</h4>
+            <IndicadorDeCarga Cargando="@_historial.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Ámbito</th><th>Valor</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Fuente legal</th><th>Autor</th><th>Registrado</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _vigencias)
+                            {
+                                <tr>
+                                    <td>@TextosDeSeguridad.Ambito(v.ScopeKind) @(v.Scope is { } a ? $"{a.Code} · {a.Name}" : "")</td>
+                                    <td>@v.Value</td>
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                    <td>@(v.ValidTo?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td>@v.Reason</td>
+                                    <td>@v.LegalSource</td>
+                                    <td>@v.CreatedBy</td>
+                                    <td>@v.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_vigencias.Count == 0) { <p class="texto-tenue">Sin vigencias registradas: rige el valor por defecto.</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva vigencia" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                @if (_editado is { } p)
+                {
+                    <p class="texto-apoyo">@p.Module · @p.Key — @p.Description</p>
+                    @if (p.RequiredPermission is { } permiso)
+                    {
+                        <p class="texto-tenue">Exige además el permiso @permiso.</p>
+                    }
+                    <label class="campo campo-ancho">Valor *
+                        @if (p.AllowedValues is { Count: > 0 } valores)
+                        {
+                            <select class="e-input" @bind="_valor">
+                                <option value="">Elija…</option>
+                                @foreach (var v in valores) { <option value="@v">@v</option> }
+                            </select>
+                        }
+                        else if (p.Type == "Bool")
+                        {
+                            <select class="e-input" @bind="_valor"><option value="true">Sí</option><option value="false">No</option></select>
+                        }
+                        else
+                        {
+                            <input class="e-input" @bind="_valor" />
+                        }
+                    </label>
+                    @if (p.AllowedScopes.Count > 1)
+                    {
+                        <label class="campo">Ámbito
+                            <select class="e-input" @bind="_ambito">
+                                @foreach (var a in p.AllowedScopes) { <option value="@a">@TextosDeSeguridad.Ambito(a)</option> }
+                            </select>
+                        </label>
+                        @if (_ambito != 0)
+                        {
+                            <label class="campo">Identificador del ámbito * <input class="e-input" @bind="_ambitoId" placeholder="PublicId de la bodega o del tipo" /></label>
+                        }
+                    }
+                    @if (p.Key == "Contabilidad.ModoDePaso")
+                    {
+                        <label class="campo">Cadena (vacía = sólo el tipo) <input class="e-input" @bind="_cadena" placeholder="Sales, Purchases, Transfers…" /></label>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    @if (p.RequiresLegalSource)
+                    {
+                        <label class="campo campo-ancho">Fuente legal * <input class="e-input" @bind="_fuente" maxlength="200" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+
+                    @if (_tiposFiscales is { Count: > 0 } fiscales)
+                    {
+                        <div class="aviso aviso-alerta">
+                            <p>Dejar sin paso a contabilidad estos tipos fiscales exige confirmarlo:</p>
+                            <ul>@foreach (var t in fiscales) { <li>@t.Code · @t.Name</li> }</ul>
+                            <SfCheckBox @bind-Checked="_confirmarFiscal" TChecked="bool" Label="Confirmo que estos documentos fiscales no pasan a contabilidad" />
+                        </div>
+                    }
+                    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || string.IsNullOrWhiteSpace(_valor))" OnClick="@GuardarAsync">Registrar</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _historial = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<ParametroDto> _parametros = [];
+    private List<string> _modulos = [];
+    private string? _modulo;
+    private ParametroDto? _elegido, _editado;
+    private List<VigenciaDeParametroDto> _vigencias = [];
+    private bool _mostrarNueva, _confirmarFiscal;
+    private string? _valor, _motivo, _fuente, _cadena, _ambitoId, _error;
+    private int _ambito;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<TipoFiscalDto>? _tiposFiscales;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        _modulos = _parametros.Select(p => p.Module).Distinct().OrderBy(m => m).ToList();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ParametrosAsync(_modulo);
+        if (!r.IsSuccess) { _parametros = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los parámetros."); return; }
+        _parametros = [.. r.Value ?? []];
+    }
+
+    private async Task VerHistorialAsync(ParametroDto p)
+    {
+        _elegido = p;
+        using var carga = _historial.Iniciar();
+        var r = await Inventario.HistorialDeParametroAsync(p.Module, p.Key);
+        if (!r.IsSuccess) { _vigencias = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el historial."); return; }
+        _vigencias = [.. r.Value ?? []];
+    }
+
+    private void AbrirNueva(ParametroDto p)
+    {
+        _editado = p;
+        _valor = p.Type == "Bool" ? p.Current.Value : null;
+        _motivo = _fuente = _cadena = _ambitoId = _error = null;
+        _ambito = 0;
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _tiposFiscales = null;
+        _confirmarFiscal = false;
+        _clave = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editado is not { } p || string.IsNullOrWhiteSpace(_valor) || string.IsNullOrWhiteSpace(_motivo)) return;
+        Guid? ambito = null;
+        if (_ambito != 0)
+        {
+            if (!Guid.TryParse(_ambitoId, out var id)) { _error = "Indique el identificador del ámbito."; return; }
+            ambito = id;
+        }
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Inventario.NuevaVigenciaAsync(p.Module, p.Key, new NuevaVigenciaDeParametroRequest(
+            _ambito, ambito, string.IsNullOrWhiteSpace(_cadena) ? null : _cadena.Trim(), _valor.Trim(), _desde, _motivo.Trim(),
+            string.IsNullOrWhiteSpace(_fuente) ? null : _fuente.Trim(), _tiposFiscales is { Count: > 0 } ? _confirmarFiscal : null), _clave);
+        if (!r.IsSuccess)
+        {
+            switch (r.ErrorCode)
+            {
+                case "Inventory.PostingMode.FiscalRequiresConfirmation":
+                    _tiposFiscales = r.Dato<List<TipoFiscalDto>>("fiscalDocumentTypes") ?? [];
+                    _error = r.ErrorMessage;
+                    break;
+                case "Parameters.PermissionRequired":
+                    _error = $"Le falta el permiso {r.Dato<string>("permissionCode")} para cambiar este parámetro.";
+                    break;
+                case "Parameters.ValueNotAllowed":
+                    var admitidos = r.Dato<List<string>>("allowed");
+                    _error = admitidos is { Count: > 0 } ? $"{r.ErrorMessage} Admite: {string.Join(", ", admitidos)}." : r.ErrorMessage;
+                    break;
+                default:
+                    _error = r.ErrorMessage ?? "No se pudo registrar la vigencia.";
+                    break;
+            }
+            return;
+        }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync($"Vigencia de {p.Key} registrada desde el {_desde:dd/MM/yyyy}.");
+        await CargarAsync();
+        if (_elegido?.Key == p.Key) await VerHistorialAsync(p);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

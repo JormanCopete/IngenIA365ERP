@@ -73,6 +73,18 @@ public record AuditQueryParameters
     public DateTime? To { get; init; }
     public int PageNumber { get; init; } = 1;
     public int PageSize { get; init; } = 50;
+
+    /// <summary>
+    /// Feature 012 (T423, FR-007): varios módulos a la vez (los encadenados: <c>Inventory</c>, <c>Approvals</c>,
+    /// <c>Navigation</c>…). Se combina con <see cref="Module"/> por intersección; vacío o nulo no filtra.
+    /// </summary>
+    public IReadOnlyList<string>? Modules { get; init; }
+
+    /// <summary>
+    /// Feature 012 (T423): <c>Rejected</c> sólo los rechazos (<c>AuditEventTypes.CommandRejected</c>);
+    /// <c>Accepted</c> todo lo demás; nulo, todo.
+    /// </summary>
+    public string? Outcome { get; init; }
 }
 
 // === Result records ===
@@ -92,7 +104,9 @@ public record AuditLogEntry(
     string? IpAddress,
     string? Endpoint,
     long DurationMs,
-    DateTime Timestamp);
+    DateTime Timestamp,
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    long? ChainSeq = null);
 
 public record AccessLogEntry(
     string Id,

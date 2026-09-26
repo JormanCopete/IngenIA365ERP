@@ -94,6 +94,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
 // Feature 012 (T183): cliente tipado de Inventario (documentos, tipos, plantillas, informes; cada historia suma su parcial).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioClient>();
+// Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();

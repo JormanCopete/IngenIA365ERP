@@ -14,6 +14,12 @@ namespace IngenIA365ERP.Application.Audit.Common;
 /// porque no es entero auto-incremental). Se devuelve como string para que
 /// el front pueda usarlo como key en grids/exports.
 /// </para>
+/// <para>
+/// Feature 012 (T423, FR-007): lo que la cadena agrega a cada evento —canal (<c>web</c>, <c>app</c>, <c>pos</c>,
+/// <c>process</c>), <c>ActorKind</c> (persona o proceso), origen, motivo, resultado (<c>Rejected</c> con su
+/// <c>ErrorCode</c>), clave de idempotencia y posición <c>seq</c> en la cadena de sellos—, leído de la metadata del
+/// documento. Nulos en los eventos que no lo llevan.
+/// </para>
 /// </summary>
 public sealed record AuditLogEntryDto(
     string Id,
@@ -32,4 +38,12 @@ public sealed record AuditLogEntryDto(
     DateTime Timestamp,
     string? OldValuesJson,
     string? NewValuesJson,
-    IReadOnlyList<string>? ChangedFields);
+    IReadOnlyList<string>? ChangedFields,
+    string? Channel = null,
+    string? ActorKind = null,
+    string? Origin = null,
+    string? Reason = null,
+    string Result = "Accepted",
+    string? ErrorCode = null,
+    string? OperationKey = null,
+    long? ChainSeq = null);

@@ -208,6 +208,14 @@ public class LosEndpointsProtegidosExigenPermiso
         Assert.Contains(".RequirePermissionWhenExporting(PermisoDeExportar)", tramos[1], StringComparison.Ordinal);
         Assert.Contains("EmitirExportacionAsync", tramos[1], StringComparison.Ordinal);
         Assert.Contains("PermisoDeDatosPersonales", tramos[1], StringComparison.Ordinal);
+
+        // T416 (US12; SC-014, FR-087, §2.18): los dos permisos son los del catálogo, al pie de la letra. Cada vista pasa
+        // por esa única ruta, así que cada una lleva RequirePermission(View) y RequirePermissionWhenExporting(Export).
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("PermisoDeVer = \"Inventory.Reports.View\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeExportar = \"Inventory.Reports.Export\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain(".RequirePermissionWhenExporting(\"", fuente.Replace(".RequirePermissionWhenExporting(PermisoDeExportar)", string.Empty),
+            StringComparison.Ordinal);
     }
 
     [Fact]

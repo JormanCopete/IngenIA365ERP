@@ -26,9 +26,9 @@ public class EvaluadorDePoliticaTests
         Directory.EnumerateFiles(DirectorioDeCasos, "*.json").OrderBy(f => f).Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
-    public void Estan_los_once_casos()
+    public void Estan_los_trece_casos()
     {
-        Directory.EnumerateFiles(DirectorioDeCasos, "*.json").Should().HaveCount(11);
+        Directory.EnumerateFiles(DirectorioDeCasos, "*.json").Should().HaveCount(13);
     }
 
     [Theory]
