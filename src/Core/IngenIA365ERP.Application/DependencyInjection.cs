@@ -136,6 +136,12 @@ public static class DependencyInjection
         services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
         services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
         services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
+        // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
+        // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
+        // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.
+        services.AddScoped<Accounting.Inventory.Contabilizacion.ConsumoDeInventario>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
         services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
         // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su

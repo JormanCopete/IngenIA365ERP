@@ -1,0 +1,153 @@
+{
+  "descripcion": "NotaDebitoEmitida (como la venta): dos renglones de IVA de la misma tarifa quedan en dos líneas, cada una con su base; el ingreso sí se suma.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "DebitNote",
+      "documentTypeCode": "NDV",
+      "number": "ND-3",
+      "publicId": "00000025-0000-4000-8000-000000000025",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000024-0000-4000-8000-000000000024",
+      "documentClass": "PosEquivalentDocument",
+      "number": "PV01-1532"
+    },
+    "chainRootPublicId": "00000026-0000-4000-8000-000000000026",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000028-0000-4000-8000-000000000028",
+      "type": "NotaDebitoEmitida",
+      "payload": {
+        "operation": "NotaDebito",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "grossAmount": 20000.0,
+            "discountAmount": 0.0,
+            "netAmount": 20000.0,
+            "documentLines": [
+              1,
+              2
+            ]
+          }
+        ],
+        "taxes": [
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19",
+            "rate": 0.19,
+            "treatment": "Generated",
+            "taxableBase": 10000.0,
+            "amount": 1900.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19",
+            "rate": 0.19,
+            "treatment": "Generated",
+            "taxableBase": 10000.0,
+            "amount": 1900.0,
+            "documentLines": [
+              2
+            ]
+          }
+        ],
+        "payments": [
+          {
+            "paymentPublicId": "00000027-0000-4000-8000-000000000027",
+            "lineNumber": 1,
+            "paymentMeansCode": "CREDASOC",
+            "paymentMeansClass": "AssociateCredit",
+            "direction": "Received",
+            "amount": 23800.0,
+            "thirdPartyPersonPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+          }
+        ],
+        "totals": {
+          "subtotal": 20000.0,
+          "discountTotal": 0.0,
+          "taxTotal": 3800.0,
+          "withholdingTotal": 0.0,
+          "total": 23800.0,
+          "amountDue": 23800.0
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "NV",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "13050502",
+        "debito": 23800.0,
+        "credito": 0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": "ND ND-3",
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "41350501",
+        "debito": 0,
+        "credito": 20000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ]
+      },
+      {
+        "cuenta": "24080502",
+        "debito": 0,
+        "credito": 1900.0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "24080502",
+        "debito": 0,
+        "credito": 1900.0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          2
+        ]
+      }
+    ]
+  }
+}

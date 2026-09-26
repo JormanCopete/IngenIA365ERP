@@ -1,0 +1,111 @@
+{
+  "descripcion": "DiferenciaDeArqueoAprobada: el faltante ShortageToExpense va a GastoDeArqueo contra el medio; el sobrante (Surplus) al medio contra Sobrante.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CashCountDifference",
+      "documentTypeCode": "ARQ",
+      "number": "AD-22",
+      "publicId": "00000083-0000-4000-8000-000000000083",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000084-0000-4000-8000-000000000084",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000086-0000-4000-8000-000000000086",
+      "type": "DiferenciaDeArqueoAprobada",
+      "payload": {
+        "operation": "DiferenciaDeArqueo",
+        "pointOfSaleCode": "PTO01",
+        "cashRegisterCode": "CAJA03",
+        "cashSessionPublicId": "00000085-0000-4000-8000-000000000085",
+        "cashier": {
+          "personPublicId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+          "name": "Cajero de ensayo"
+        },
+        "lines": [
+          {
+            "paymentMeansCode": "EFECTIVO",
+            "paymentMeansClass": "Cash",
+            "countMethod": "PhysicalCount",
+            "expected": 1000000.0,
+            "counted": 992000.0,
+            "difference": -8000.0,
+            "toleranceAmount": 0.0,
+            "withinTolerance": false,
+            "treatment": "ShortageToExpense",
+            "reason": "Prueba"
+          },
+          {
+            "paymentMeansCode": "TRANSF",
+            "paymentMeansClass": "Cash",
+            "countMethod": "PhysicalCount",
+            "expected": 1000000.0,
+            "counted": 1000500.0,
+            "difference": 500.0,
+            "toleranceAmount": 0.0,
+            "withinTolerance": false,
+            "treatment": "Surplus",
+            "reason": "Prueba"
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CJ",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "53959501",
+        "debito": 8000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "11050501",
+        "debito": 0,
+        "credito": 8000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "11200501",
+        "debito": 500.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "42950501",
+        "debito": 0,
+        "credito": 500.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

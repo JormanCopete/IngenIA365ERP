@@ -1,0 +1,119 @@
+{
+  "descripcion": "DocumentoAnulado de una recepción del 10 de marzo: el espejo usa la regla vigente en la fecha del original (14350505, cerrada el 11) aunque ya exista otra (14350506 desde el 12), invierte los lados porque los importes vienen negativos, lleva el tipo del original (EI) y la fecha de la anulación.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "Voiding",
+      "documentTypeCode": "ANU",
+      "number": "AN-1",
+      "publicId": "00000092-0000-4000-8000-000000000092",
+      "operationDate": "2026-03-15"
+    },
+    "related": {
+      "publicId": "00000091-0000-4000-8000-000000000091",
+      "documentClass": "PurchaseReceipt",
+      "number": "REC-20"
+    },
+    "chainRootPublicId": "00000093-0000-4000-8000-000000000093",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000095-0000-4000-8000-000000000095",
+      "type": "DocumentoAnulado",
+      "payload": {
+        "reason": "Recepción duplicada",
+        "voidedDocument": {
+          "publicId": "00000091-0000-4000-8000-000000000091",
+          "documentClass": "PurchaseReceipt",
+          "number": "REC-20"
+        },
+        "voidedDocumentTypeCode": "CO",
+        "voidedContents": [
+          {
+            "messageId": "00000094-0000-4000-8000-000000000094",
+            "type": "CompraRecibida",
+            "version": 1,
+            "operationDate": "2026-03-10",
+            "content": {
+              "operation": "Compra",
+              "lines": [
+                {
+                  "accountingGroupCode": "LACTEOS",
+                  "warehouseCode": "B01",
+                  "warehouseBehavior": "Operational",
+                  "branchPublicId": null,
+                  "movement": "Entry",
+                  "quantityBase": 1,
+                  "cost": -1000.0,
+                  "documentLines": [
+                    1
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "matrizExtra": [
+    {
+      "op": "Compra",
+      "rol": "Inventario",
+      "cuenta": "14350505",
+      "grupo": "LACTEOS",
+      "hasta": "2026-03-11"
+    },
+    {
+      "op": "Compra",
+      "rol": "Inventario",
+      "cuenta": "14350506",
+      "grupo": "LACTEOS",
+      "desde": "2026-03-12"
+    }
+  ],
+  "esperado": {
+    "tipo": "EI",
+    "fecha": "2026-03-15",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350505",
+        "debito": 0,
+        "credito": 1000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "22050501",
+        "debito": 1000.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

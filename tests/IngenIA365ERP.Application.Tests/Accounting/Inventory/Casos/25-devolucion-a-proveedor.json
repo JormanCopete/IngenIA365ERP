@@ -1,0 +1,86 @@
+{
+  "descripcion": "DevolucionRegistrada · DevolucionAProveedor: la mercancía por facturar al débito (con el proveedor) contra el inventario.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "SupplierReturn",
+      "documentTypeCode": "DPR",
+      "number": "DP-1",
+      "publicId": "00000097-0000-4000-8000-000000000097",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000096-0000-4000-8000-000000000096",
+      "documentClass": "PurchaseReceipt",
+      "number": "REC-10"
+    },
+    "chainRootPublicId": "00000098-0000-4000-8000-000000000098",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000099-0000-4000-8000-000000000099",
+      "type": "DevolucionRegistrada",
+      "payload": {
+        "operation": "DevolucionAProveedor",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 600.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "SI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "22050501",
+        "debito": 600.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 600.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

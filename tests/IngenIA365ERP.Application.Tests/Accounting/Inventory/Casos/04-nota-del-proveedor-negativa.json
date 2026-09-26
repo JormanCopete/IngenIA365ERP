@@ -1,0 +1,151 @@
+{
+  "descripcion": "FacturaProveedorRegistrada de una nota crédito del proveedor: los importes negativos invierten cada lado; la cuenta por pagar salda la factura y cruza contra ella (related).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "SupplierNote",
+      "documentTypeCode": "NP",
+      "number": "NP-2",
+      "publicId": "00000015-0000-4000-8000-000000000015",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000014-0000-4000-8000-000000000014",
+      "documentClass": "SupplierInvoice",
+      "number": "FP-7"
+    },
+    "chainRootPublicId": "00000016-0000-4000-8000-000000000016",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000017-0000-4000-8000-000000000017",
+      "type": "FacturaProveedorRegistrada",
+      "payload": {
+        "operation": "FacturaProveedor",
+        "supplierDocument": {
+          "kind": "CreditNote",
+          "prefix": "NC",
+          "number": "55",
+          "issueDate": "2026-03-14",
+          "paymentForm": "Credit",
+          "isElectronic": true
+        },
+        "derivedFrom": [],
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "lineKind": "Goods",
+            "grossAmount": -10000.0,
+            "discountAmount": 0.0,
+            "netAmount": -10000.0,
+            "taxAddedToCost": 0.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ],
+        "taxes": [
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19D",
+            "rate": 0.19,
+            "treatment": "Deductible",
+            "taxableBase": -10000.0,
+            "amount": -1900.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "taxCode": "RTF",
+            "taxKind": "ReteFuente",
+            "taxRateCode": "RF25",
+            "rate": 0.025,
+            "treatment": "WithholdingApplied",
+            "taxableBase": -10000.0,
+            "amount": -250.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ],
+        "totals": {
+          "subtotal": -10000.0,
+          "discountTotal": 0.0,
+          "taxTotal": -1900.0,
+          "withholdingTotal": -250.0,
+          "total": -11900.0,
+          "amountPayable": -11650.0
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CP",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "22050501",
+        "debito": 0,
+        "credito": 10000.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "24080503",
+        "debito": 0,
+        "credito": 1900.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "23654001",
+        "debito": 250.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "22050502",
+        "debito": 11650.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": "FC FP-7",
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

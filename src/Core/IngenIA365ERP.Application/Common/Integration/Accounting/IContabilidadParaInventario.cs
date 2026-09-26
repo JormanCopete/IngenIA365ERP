@@ -76,7 +76,15 @@ public sealed record CompletitudDeLaMatrizDto(
     IReadOnlyList<ReglaNoElegibleDto> IneligibleRules,
     IReadOnlyList<TarifaDistintaDto> TaxRateMismatches,
     IReadOnlyList<OperacionSinMapeoDto> UnmappedOperations,
-    ResumenDeCompletitudDto Summary);
+    ResumenDeCompletitudDto Summary,
+    IReadOnlyList<AvisoDeCompletitudDto>? Warnings = null);
+
+/// <summary>
+/// Un aviso de la completitud (contracts/contabilidad.md §7.1, «avisos»): no impide nada y no suma al resumen. <see cref="Kind"/>
+/// es <c>UnitTaxAccountRequiresBase</c> (impuesto por unidad con una cuenta que exige base) o
+/// <c>GoodsNotInvoicedRequiresCrossDocument</c> (mercancía por facturar con una cuenta que exige cruce). (nuevo, T516)
+/// </summary>
+public sealed record AvisoDeCompletitudDto(string Kind, string Message, string? Account, Guid? RulePublicId);
 
 public sealed record ReglaFaltanteDto(
     string Operation,

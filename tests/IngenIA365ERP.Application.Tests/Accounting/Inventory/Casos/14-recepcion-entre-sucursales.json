@@ -1,0 +1,96 @@
+{
+  "descripcion": "TrasladoRecibido entre sucursales: cada línea en la sucursal de su bodega; la B02 toma la regla por bodega.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "TransferReceipt",
+      "documentTypeCode": "TRR",
+      "number": "TR-1R",
+      "publicId": "00000051-0000-4000-8000-000000000051",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000052-0000-4000-8000-000000000052",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B02",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000054-0000-4000-8000-000000000054",
+      "type": "TrasladoRecibido",
+      "payload": {
+        "operation": "RecepcionTraslado",
+        "derivedFrom": [
+          {
+            "publicId": "00000053-0000-4000-8000-000000000053",
+            "documentClass": "TransferDispatch",
+            "number": "TR-1"
+          }
+        ],
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "fromWarehouseCode": "TR01",
+            "fromWarehouseBehavior": "Transit",
+            "fromBranchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "toWarehouseCode": "B02",
+            "toWarehouseBehavior": "Operational",
+            "toBranchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+            "quantityBase": 1,
+            "cost": 800.0,
+            "documentLines": [
+              1,
+              2
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "TR",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350503",
+        "debito": 800.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ],
+        "sucursal": "norte"
+      },
+      {
+        "cuenta": "14350590",
+        "debito": 0,
+        "credito": 800.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ],
+        "sucursal": "principal"
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "descripcion": "AjusteInventarioAprobado · ConsumoInterno: la contrapartida maneja centro de costo y lo toma del sobre; el inventario no.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "InternalConsumption",
+      "documentTypeCode": "CIN",
+      "number": "CI-1",
+      "publicId": "00000038-0000-4000-8000-000000000038",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000039-0000-4000-8000-000000000039",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": "d9f3a4b5-2c6d-4e7f-8a81-3c4d5e6f7a82",
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000040-0000-4000-8000-000000000040",
+      "type": "AjusteInventarioAprobado",
+      "payload": {
+        "operation": "ConsumoInterno",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 450.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "SI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "51300501",
+        "debito": 450.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ],
+        "centro": true
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 450.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}
