@@ -148,7 +148,20 @@ public static class DependencyInjection
         // para inactivar y para la busqueda la informa IExistenciasParaElCatalogo: sin kardex hasta que US2 registre la real.
         services.AddScoped<Inventory.Warehouses.VistaDeBodegas>();
         services.AddScoped<Common.Interfaces.Security.IAsignacionesDeBodega, Inventory.Security.Scopes.AsignacionesDeBodegaEnBase>();
-        services.TryAddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Common.ExistenciasSinKardex>();
+        // Feature 012 (US2, T251-T258): el kardex. RegistroDeKardex es el unico escritor del kardex y sus proyecciones (con la
+        // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
+        // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.
+        services.AddScoped<Inventory.Kardex.RegistroDeKardex>();
+        services.AddScoped<Inventory.Kardex.ReversionDeKardex>();
+        services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
+        services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
+        services.AddScoped<Inventory.Integration.EmisionDeInventario>();
+        services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
+        services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeConsumoInterno>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeBaja>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();

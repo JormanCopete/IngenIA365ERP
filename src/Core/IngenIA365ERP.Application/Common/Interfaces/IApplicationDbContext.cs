@@ -224,6 +224,12 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies { get; }
     DbSet<Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses { get; }
     DbSet<Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes { get; }
+    // Feature 012 (T250, US2): el kardex y sus proyecciones. Los escriben solo RegistroDeKardex y
+    // RebuildInventoryProjectionsCommand (NadieEscribeElKardexFueraDelRegistro).
+    DbSet<Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries { get; }
+    DbSet<Domain.Entities.Inventory.Projections.StockBalance> StockBalances { get; }
+    DbSet<Domain.Entities.Inventory.Projections.StockDetail> StockDetails { get; }
+    DbSet<Domain.Entities.Inventory.Projections.CostState> CostStates { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

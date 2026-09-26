@@ -154,8 +154,31 @@ public sealed class VoidInventoryDocumentCommandHandler(
         if (confirmada.IsFailure) return Falla(confirmada.Error);
 
         var r = confirmada.Value;
-        return Result.Success(new VoidResultDto(anulacion.PublicId, r.DisplayNumber, r.Status, anulacion.OperationDate, null,
+        return Result.Success(new VoidResultDto(anulacion.PublicId, r.DisplayNumber, r.Status, anulacion.OperationDate,
+            r.Status == DocumentStatus.Confirmed ? await AjustesDeCostoAsync(anulacion.Id, ct) : null,
             r.Messages?.ToList()));
+    }
+
+    /// <summary>
+    /// <c>costAdjustments</c> (§9.5, US2 T252): la diferencia de costo que dejó la reversión por producto (líneas
+    /// <c>VoidDifference</c> del kardex de la anulación). Es un valor: sólo con <c>Inventory.Costs.Read</c>.
+    /// </summary>
+    private async Task<IReadOnlyList<AjusteDeCostoDeAnulacionDto>?> AjustesDeCostoAsync(int anulacionId, CancellationToken ct)
+    {
+        if (!await vista.TieneAsync(PermisosDeGrupo.LeerCostos, ct)) return null;
+        var diferencias = await db.KardexEntries.AsNoTracking()
+            .Where(k => k.DocumentId == anulacionId && k.Kind == KardexEntryKind.CostAdjustment && k.Reason == KardexReason.VoidDifference)
+            .GroupBy(k => k.ProductId)
+            .Select(g => new { ProductId = g.Key, Diferencia = g.Sum(k => k.TotalCost) })
+            .ToListAsync(ct);
+        if (diferencias.Count == 0) return [];
+        var ids = diferencias.Select(d => d.ProductId).ToList();
+        var productos = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => new ReferenciaDto(p.PublicId, p.Code, p.Name), ct);
+        return diferencias.Where(d => productos.ContainsKey(d.ProductId))
+            .Select(d => new AjusteDeCostoDeAnulacionDto(productos[d.ProductId], d.Diferencia))
+            .OrderBy(d => d.Product.Code, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static Result<VoidResultDto> Falla(Error error) => Result.Failure<VoidResultDto>(error);

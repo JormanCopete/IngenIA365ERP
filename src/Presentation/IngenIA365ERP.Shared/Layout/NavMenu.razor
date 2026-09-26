@@ -106,6 +106,22 @@
             <PermissionGate Required="Inventory.DocumentTypes.View">
                 <NavLink href="/inventario/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
             </PermissionGate>
+            @* US2 (T267): existencias, kardex, ajustes, integridad y el centro de informes (ya tiene vistas: kardex, existencias). *@
+            <PermissionGate Required="Inventory.Stock.View">
+                <NavLink href="/inventario/existencias" class="nav-subitem">Existencias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Adjustments.View">
+                <NavLink href="/inventario/ajustes" class="nav-subitem">Ajustes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Integrity.Verify">
+                <NavLink href="/inventario/integridad" class="nav-subitem">Integridad del kardex</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/inventario/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/inventario/plantillas" class="nav-subitem">Plantillas</NavLink>
             </PermissionGate>

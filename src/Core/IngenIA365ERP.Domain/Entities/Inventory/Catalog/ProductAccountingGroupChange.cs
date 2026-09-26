@@ -11,22 +11,22 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 /// </summary>
 public class ProductAccountingGroupChange : AuditableEntity, IHechoInmutable
 {
-    public int ProductId { get; set; }
+    public int ProductId { get; init; }
 
-    public Product? Product { get; set; }
+    public Product? Product { get; init; }
 
-    public int FromAccountingGroupId { get; set; }
+    public int FromAccountingGroupId { get; init; }
 
-    public int ToAccountingGroupId { get; set; }
+    public int ToAccountingGroupId { get; init; }
 
-    public DateOnly EffectiveDate { get; set; }
+    public DateOnly EffectiveDate { get; init; }
 
-    public decimal Quantity { get; set; }
+    public decimal Quantity { get; init; }
 
-    public decimal Value { get; set; }
+    public decimal Value { get; init; }
 
     /// <summary><c>[{ warehouseId, warehouseCode, quantity, value }]</c>, el desglose que viaja en el mensaje.</summary>
-    public string DetailJson { get; set; } = "[]";
+    public string DetailJson { get; init; } = "[]";
 
-    public string Reason { get; set; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
 }

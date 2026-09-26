@@ -68,6 +68,17 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "MinimumQuantity", "Cantidad"),
         (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "MaximumQuantity", "Cantidad"),
         (Inv + "Warehousing/ReorderPolicyConfiguration.cs", "ReorderPoint", "Cantidad"),
+        // Kardex y proyecciones, fase 5 (US2, T250; data-model §3.1-§3.4).
+        (Inv + "Transactions/KardexEntryConfiguration.cs", "QuantityBase", "Cantidad"),
+        (Inv + "Transactions/KardexEntryConfiguration.cs", "UnitCost", "CostoUnitario"),
+        (Inv + "Transactions/KardexEntryConfiguration.cs", "TotalCost", "Monto"),
+        (Inv + "Projections/StockBalanceConfiguration.cs", "Physical", "Cantidad"),
+        (Inv + "Projections/StockBalanceConfiguration.cs", "Reserved", "Cantidad"),
+        (Inv + "Projections/StockDetailConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Projections/CostStateConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Projections/CostStateConfiguration.cs", "Value", "Monto"),
+        (Inv + "Projections/CostStateConfiguration.cs", "AverageCost", "CostoUnitario"),
+        (Inv + "Projections/CostStateConfiguration.cs", "LastUnitCost", "CostoUnitario"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

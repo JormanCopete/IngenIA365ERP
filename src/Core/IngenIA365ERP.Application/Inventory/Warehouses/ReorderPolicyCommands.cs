@@ -102,10 +102,9 @@ public sealed class DeleteReorderPolicyCommandHandler(IApplicationDbContext db, 
 
 /// <summary>
 /// Las políticas de reorden del alcance (T225; §4.4, <c>GET /reorder-policies</c>), paginadas, por bodega y producto.
-/// <c>position</c> y <c>available</c> sólo con <c>Inventory.Stock.View</c>: el disponible lo informa
-/// <see cref="IExistenciasParaElCatalogo"/> y la posición (disponible + en tránsito hacia la bodega + por recibir) la conecta
-/// <c>PosicionDeReposicion</c> al terminar US2 (T257): hasta entonces sale nula y <see cref="BelowReorderPoint"/> no encuentra
-/// ninguna por debajo. Filtra por <see cref="IAlcanceDeInventario"/>. (nuevo)
+/// <c>position</c> y <c>available</c> sólo con <c>Inventory.Stock.View</c>: los lee <c>PosicionDeReposicion</c> (US2, T257), el
+/// único lector de la posición (disponible + en tránsito hacia la bodega + por recibir), y <see cref="BelowReorderPoint"/> deja
+/// las que están en o bajo su punto de reorden. Filtra por <see cref="IAlcanceDeInventario"/>. (nuevo)
 /// </summary>
 public sealed record ListReorderPoliciesQuery(
     Guid? WarehousePublicId = null, Guid? ProductPublicId = null, bool? BelowReorderPoint = null, PageRequest? Pagina = null)
@@ -114,7 +113,7 @@ public sealed record ListReorderPoliciesQuery(
 public sealed class ListReorderPoliciesQueryValidator : AbstractValidator<ListReorderPoliciesQuery>;
 
 public sealed class ListReorderPoliciesQueryHandler(
-    IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IPermissionChecker permisos, IExistenciasParaElCatalogo existencias)
+    IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IPermissionChecker permisos, Replenishment.PosicionDeReposicion posiciones)
     : IRequestHandler<ListReorderPoliciesQuery, Result<PagedResult<ReorderPolicyDto>>>
 {
     public async Task<Result<PagedResult<ReorderPolicyDto>>> Handle(ListReorderPoliciesQuery request, CancellationToken ct)
@@ -129,19 +128,15 @@ public sealed class ListReorderPoliciesQueryHandler(
             .OrderBy(r => r.Warehouse!.Code).ThenBy(r => r.Product!.Code).ToListAsync(ct);
 
         var conExistencias = await permisos.HasPermissionAsync(Catalog.Products.SearchProductsQueryHandler.VerExistencias, ct);
-        var disponibles = new Dictionary<(int, int), decimal>();
-        if (conExistencias)
-            foreach (var bodega in filas.GroupBy(f => f.WarehouseId))
-                foreach (var (producto, cantidad) in await existencias.DisponibleAsync(bodega.Select(f => f.ProductId).ToList(), bodega.Key, ct))
-                    disponibles[(producto, bodega.Key)] = cantidad;
+        var posicion = conExistencias
+            ? await posiciones.LeerAsync(filas.Select(f => (f.ProductId, f.WarehouseId)).ToList(), ct)
+            : new Dictionary<(int ProductId, int WarehouseId), Replenishment.Posicion>();
 
-        // La posición llega con PosicionDeReposicion (US2, T257); mientras tanto no se conoce.
-        decimal? Posicion(ReorderPolicy r) => null;
         var vistas = filas
             .Select(r => new ReorderPolicyDto(r.PublicId, new CatalogRefDto(r.Product!.PublicId, r.Product.Code, r.Product.Name),
                 new WarehouseRefDto(r.Warehouse!.PublicId, r.Warehouse.Code, r.Warehouse.Name), r.MinimumQuantity, r.MaximumQuantity, r.ReorderPoint,
-                conExistencias ? Posicion(r) : null,
-                conExistencias && disponibles.TryGetValue((r.ProductId, r.WarehouseId), out var d) ? d : null))
+                conExistencias ? (posicion.GetValueOrDefault((r.ProductId, r.WarehouseId)) ?? Replenishment.Posicion.Cero).Valor : null,
+                conExistencias ? (posicion.GetValueOrDefault((r.ProductId, r.WarehouseId)) ?? Replenishment.Posicion.Cero).Disponible : null))
             .Where(v => request.BelowReorderPoint != true || v.Position is { } p && p <= v.ReorderPoint)
             .ToList();
 

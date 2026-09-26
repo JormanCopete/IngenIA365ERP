@@ -135,8 +135,11 @@ public class LosEndpointsProtegidosExigenPermiso
         var texto = File.ReadAllText(ruta);
         var tramos = Tramos(texto);
         // Feature 012, T238: un archivo que en esta entrega sólo publica la descarga de su plantilla lo hace por
-        // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido).
-        Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal),
+        // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido). Feature 012, T262:
+        // lo mismo un grupo de documentos que publica sólo el ciclo común por CicloDeDocumentoRutas.MapCicloDeDocumento
+        // (ajustes), que pone el permiso de cada ruta adentro (CicloDeDocumentoRutas.cs también entra al recorrido).
+        Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
+                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos

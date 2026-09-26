@@ -181,6 +181,26 @@ public static class InventoryErrors
             });
     }
 
+    // ----------------------------------------------------------------------------- ajustes (US2) --
+
+    /// <summary>Campo de <c>data.field</c> de la causa de ajuste obligatoria (<c>NegativeAdjustment</c>, <c>WriteOff</c>).</summary>
+    public const string CampoCausa = "adjustmentCause";
+
+    /// <summary>
+    /// 422, no 404: un permiso que depende del cuerpo (decisiones-transversales §2.9). El costo digitado de un ajuste positivo
+    /// exige <c>Inventory.Adjustments.SetUnitCost</c>.
+    /// </summary>
+    public static Error AdjustmentUnitCostNotAllowed(int lineNumber, string permissionCode) => new ErrorConDatos(
+        "Inventory.Adjustment.UnitCostNotAllowed",
+        $"Línea {lineNumber}: indicar el costo unitario exige el permiso {permissionCode}. Deje el costo vacío para usar el costo vigente.",
+        new { lineNumber, permissionCode });
+
+    public static Error AdjustmentUnitCostOnlyOnEntries(int lineNumber) => new ErrorConDatos("Inventory.Adjustment.UnitCostOnlyOnEntries",
+        $"Línea {lineNumber}: el costo unitario sólo se indica en una entrada; una salida sale al costo vigente.", new { lineNumber });
+
+    public static Error AdjustmentTaxableWithdrawalNotAvailable() => new("Inventory.Adjustment.TaxableWithdrawalNotAvailable",
+        "El retiro gravado necesita la lista de precios general, que llega con la entrega I3. Use un tipo de consumo interno no gravado.");
+
     // ------------------------------------------------------------ aprobación, validación, moneda --
 
     public static Error AmountExceedsLimit(decimal amount, decimal maxAmount, string currency, string permissionCode) => new ErrorConDatos(

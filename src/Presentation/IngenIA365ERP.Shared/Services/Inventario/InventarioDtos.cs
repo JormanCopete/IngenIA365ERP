@@ -299,8 +299,9 @@ public sealed record ResultadoDeConfirmacionDto
     public IReadOnlyList<AvisoDeInventarioDto> Warnings { get; init; } = [];
 }
 
-/// <summary><c>VoidResultDto</c> (§9.5).</summary>
-public sealed record ResultadoDeAnulacionDto(Guid VoidingDocumentPublicId, string? DisplayNumber, int Status, DateOnly OperationDate);
+/// <summary><c>VoidResultDto</c> (§9.5). <see cref="CostAdjustments"/>: la diferencia de costo por producto (US2), sólo con <c>Inventory.Costs.Read</c>.</summary>
+public sealed record ResultadoDeAnulacionDto(Guid VoidingDocumentPublicId, string? DisplayNumber, int Status, DateOnly OperationDate,
+    IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null);
 
 /// <summary>El cuerpo de anular (§9.5): motivo y, si el tipo lo admite, otra fecha que hoy.</summary>
 public sealed record AnulacionRequest(string Reason, DateOnly? OperationDate);

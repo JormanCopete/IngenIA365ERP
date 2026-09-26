@@ -29,6 +29,9 @@ public class LosHechosInmutablesNoSeModifican
         // Base de inventario, fase 3 (T133): la copia fiscal de la contraparte y la foto tributaria.
         "DocumentPartySnapshot",
         "DocumentTaxLine",
+        // US2 (T245): el hecho del kardex y el historial del grupo contable de un producto (US1, T201).
+        "KardexEntry",
+        "ProductAccountingGroupChange",
     ];
 
     /// <summary>

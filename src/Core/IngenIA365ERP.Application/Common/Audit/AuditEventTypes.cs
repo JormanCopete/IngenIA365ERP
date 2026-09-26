@@ -154,6 +154,9 @@ public static class AuditEventTypes
     // datos (?withData=true: catalogo, filas). Los emite InventoryAuditEmitter, encadenados.
     public const string InventoryReportExported = "Inventory.Report.Exported";
     public const string InventoryCatalogExported = "Inventory.Catalog.Exported";
+    // La verificacion de integridad del kardex (US2, T258): una consulta que deja su resultado (filtros, filas
+    // revisadas, incidentes y la alerta). La reconstruccion la audita el AuditBehavior (es un comando).
+    public const string InventoryIntegrityVerified = "Inventory.Integrity.Verified";
 
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el

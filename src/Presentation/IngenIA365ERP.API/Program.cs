@@ -211,6 +211,9 @@ try
         .Get<IngenIA365ERP.API.Integration.IntegrationOptions>() ?? new IngenIA365ERP.API.Integration.IntegrationOptions();
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Execution.IArrendamientos, IngenIA365ERP.Persistence.Services.ArrendamientosEnBase>();
 
+    // Feature 012 (T259, US2): la verificacion nocturna del kardex (inventario.integridad) en cada cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Inventory.Kardex.VerificacionNocturnaDeIntegridad>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

@@ -272,23 +272,41 @@ public sealed class ConfirmacionDeDocumento(
             VistaDeDocumentos.NumeroVisible(documento.Prefix, documento.Number) ?? string.Empty,
             documento.OperationDate, sucursal, centro, bodega?.Code, persona);
 
-        SolicitudDeEmision solicitud;
-        if (original is null)
+        // Cada parte de AjusteDeCostoReconocido es su propia unidad (contracts/mensajes.md §9, §10.1): su clave es
+        // Confirmation:{afectado:N}, su relacionado es el documento afectado y sigue el destino del mensaje de ése (US2, T252).
+        var ajustesDeCosto = contenidos.OfType<AjusteDeCostoReconocidoV1>().ToList();
+        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1).ToList();
+
+        if (delEvento.Count > 0)
         {
-            solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, contenidos, await ModoDeEntregaAsync(documento, tipo, hoy, ct),
-                ValidacionPrevia: validacion);
+            SolicitudDeEmision solicitud;
+            if (original is null)
+            {
+                solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, delEvento, await ModoDeEntregaAsync(documento, tipo, hoy, ct),
+                    ValidacionPrevia: validacion);
+            }
+            else
+            {
+                var informativo = !EmiteNegocioAContabilidad(ClasesDeDocumento.De(original.Class));
+                solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, delEvento,
+                    new ModoDeEntrega.Heredado(original.PublicId),
+                    Relacionado: new DocumentoRelacionado(original.PublicId, original.Class.ToString(),
+                        VistaDeDocumentos.NumeroVisible(original.Prefix, original.Number) ?? string.Empty),
+                    ValidacionPrevia: validacion,
+                    KindDelOriginal: informativo ? IntegrationMessageKind.Informational : IntegrationMessageKind.Business);
+            }
+            await emisor.EmitirAsync(solicitud, ct);
         }
-        else
+
+        foreach (var ajuste in ajustesDeCosto)
         {
-            var informativo = !EmiteNegocioAContabilidad(ClasesDeDocumento.De(original.Class));
-            solicitud = new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, contenidos,
-                new ModoDeEntrega.Heredado(original.PublicId),
-                Relacionado: new DocumentoRelacionado(original.PublicId, original.Class.ToString(),
-                    VistaDeDocumentos.NumeroVisible(original.Prefix, original.Number) ?? string.Empty),
-                ValidacionPrevia: validacion,
-                KindDelOriginal: informativo ? IntegrationMessageKind.Informational : IntegrationMessageKind.Business);
+            var afectado = ajuste.AffectedDocument;
+            await emisor.EmitirAsync(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(afectado.PublicId), [ajuste],
+                new ModoDeEntrega.Heredado(afectado.PublicId),
+                CadenasDeLasQueDepende: [afectado.PublicId],
+                Relacionado: new DocumentoRelacionado(afectado.PublicId, afectado.DocumentClass.ToString(), afectado.Number),
+                ValidacionPrevia: validacion), ct);
         }
-        await emisor.EmitirAsync(solicitud, ct);
     }
 
     /// <summary>El modo sellado como entrega: por lotes, con su horario (<see cref="ClavesDeLote.Horario"/>).</summary>

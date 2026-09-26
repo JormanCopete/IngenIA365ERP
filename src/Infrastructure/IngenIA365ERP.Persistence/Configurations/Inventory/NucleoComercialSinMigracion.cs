@@ -40,6 +40,11 @@ public static class NucleoComercialSinMigracion
         "INV_ReorderPolicies",
         "INV_AdjustmentCauses",
         "INV_UserWarehouseScopes",
+        // Fase 5 (US2, T250): kardex y sus tres proyecciones.
+        "INV_KardexEntries",
+        "INV_StockBalances",
+        "INV_StockDetails",
+        "INV_CostStates",
     };
 
     /// <summary>Marca las tablas de <see cref="Tablas"/> como excluidas de las migraciones.</summary>

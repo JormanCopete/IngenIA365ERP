@@ -354,6 +354,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
+    // Feature 012 (T250, US2): kardex y proyecciones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();

@@ -1116,6 +1116,40 @@ JSON embebidos versionados (T40), no semillas.
   (`CrearTipoRequest`, `EditarTipoRequest`, `SecuenciaRequest`, `MotivoRequest`). Slug de catálogo
   `tipos-de-documento`. Semilla `InventoryDocumentTypesSeeder` (Order 80) con los códigos REC, FCP, NTP, DVP, AJP, AJN,
   CIN, BAJ, SIN, TRD, TRR, MUB, CON, AJC, ANU; no siembra hasta que la base tenga `InventarioComercialNucleo`.
+- Existencias y kardex (fase 5, US2, T249–T267; todos **(nuevo)** salvo los ya nombrados): Domain
+  `Entities/Inventory/Transactions/KardexEntry` (hecho `AuditableEntityLong`, propiedades `init`, navegaciones
+  `ReversesEntry`/`AffectsEntry`) y `Entities/Inventory/Projections/{StockBalance, StockDetail, CostState}`, las cuatro con
+  `[SinDiffDeAuditoria]`; `ProductAccountingGroupChange` pasa a `init` (es hecho). Persistence
+  `Configurations/Inventory/Transactions/KardexEntryConfiguration` (índices `IX_INV_KardexEntries_Product_Scope_Date`,
+  `_Product_Warehouse_Date`, `_OperationDate`, `_DocumentId`, `_AffectsEntryId` filtrado) y
+  `Configurations/Inventory/Projections/{StockBalanceConfiguration (UK_INV_StockBalances_Product_Warehouse),
+  StockDetailConfiguration (UK_INV_StockDetails_Location con [LotId] IS NULL, UK_INV_StockDetails_Location_Lot con IS NOT NULL),
+  CostStateConfiguration (UK_INV_CostStates_Product_Scope)}`, las cuatro tablas en `NucleoComercialSinMigracion`.
+  Application `Inventory/Kardex/RegistroDeKardex` (`PrepararAsync` → `PreparacionDelRegistro(Cerrojo, ValorEstimado)`,
+  `RegistrarAsync(documento, movimientos, ct, sugerencia?)` → `RegistroHecho` de `MovimientoEscrito`,
+  `LeerParametrosAsync` → `ParametrosDelKardex(Metodo, Ambito, Montos, NegativoPorBodega)`; el movimiento es
+  `MovimientoDeKardex(Linea, WarehouseId, QuantityBase, Valoracion, CostoUnitario?, Origen?, EsAnulacion, LocationId?)`),
+  `Kardex/ReversionDeKardex` (`MovimientosAsync`, `RevertirAsync` → `ReversionHecha` con `DiferenciaDeCostoDeAnulacion`;
+  sugerencias `NegativeAdjustment`/`SupplierReturn`), `Kardex/VerificacionDeIntegridad` (`AlcanceDeVerificacion`,
+  `IncidenteDeKardex`, `ResultadoDeVerificacion`), `Kardex/FiltrosDeIntegridad`, `Kardex/VerifyInventoryIntegrityQuery`
+  (`ClaveDelAlcance`: `Inventario.IncidenteDeIntegridad:todo` o la huella del alcance), `Kardex/RebuildInventoryProjectionsCommand`,
+  `Kardex/VerificacionNocturnaDeIntegridad` (la `ITareaProgramada` `inventario.integridad`, desde las 02:00 locales, una vez por
+  día; singleton registrado en `API/Program.cs`), `Kardex/StockQueries` (`GetStockQuery`, `GetProductStockQuery`,
+  `ValorDeExistencias` —el valor por bodega al promedio del ámbito— y `ExistenciasEnKardex`, la real de
+  `IExistenciasParaElCatalogo`), `Kardex/KardexDtos` (`StockRowDto`, `ProductStockDto` y sus partes, `IntegrityReportDto`,
+  `IntegrityIncidentDto`, `RebuildResultDto`, `TiposDeIncidente`), `Replenishment/PosicionDeReposicion` (`LeerAsync` →
+  `Posicion(Disponible, EnTransito, PorRecibir)`, `EnTransitoAsync` → `DespachoEnTransito`),
+  `Documents/Efectos/{EfectoDeAjuste (base), EfectoDeAjustePositivo (PermisoDeCosto), EfectoDeSalidaPorAjuste (base) con
+  EfectoDeAjusteNegativo, EfectoDeConsumoInterno, EfectoDeBaja}`, `Integration/EmisionDeInventario` (`AjusteAprobadoAsync`,
+  `LineasDeCostoAsync`, `AnulacionAsync`, `AjusteDeCostoAsync`, `Invertido`, `Referencia`, `OperacionDeAjuste`,
+  `ImportesYCantidades`), `Reports/{KardexReportQuery, StockReportQuery}`; `InventoryErrors.{AdjustmentUnitCostNotAllowed,
+  AdjustmentUnitCostOnlyOnEntries, AdjustmentTaxableWithdrawalNotAvailable, CampoCausa = "adjustmentCause"}`;
+  `AdjuntosDeModulo.SoporteDeAjuste` (`InventoryAdjustmentSupport`); `AuditEventTypes.InventoryIntegrityVerified`. El ciclo
+  común emite cada `AjusteDeCostoReconocidoV1` como su propia unidad (`Confirmation:{afectado:N}`, heredado del afectado) y la
+  anulación informa `costAdjustments`. API `Endpoints/Inventory/{StockEndpoints (VerificarRequest, ReconstruirRequest),
+  AdjustmentsEndpoints}` y las vistas `kardex` (propios `location`, `includeCostAdjustments`) y `stock` (`onlyWithStock`).
+  Shared `InventarioClient.{Existencias, Ajustes}` (`ClasesDeAjuste`, `DuenoDeSoportesDeAjuste`), `InventarioDtos.Existencias`
+  y las páginas `Existencias`, `Kardex`, `Ajustes`, `AjusteDetalle` (también `/inventario/ajustes/nuevo`) e `Integridad`.
 - Comandos: `SaveInventoryDraftCommand`, `ConfirmInventoryDocumentCommand(DocumentPublicId,
   ExpectedGroup)`, `VoidInventoryDocumentCommand`, `DiscardInventoryDraftCommand`,
   `DispatchTransferCommand`, `ReceiveTransferCommand`, `ResolveTransferDiscrepancyCommand`,

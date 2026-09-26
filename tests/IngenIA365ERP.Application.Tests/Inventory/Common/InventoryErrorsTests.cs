@@ -53,6 +53,9 @@ public class InventoryErrorsTests
         yield return InventoryErrors.LocationNotInWarehouse(1, "P1");
         yield return InventoryErrors.CountProductsLocked(guid, "CF-3", ["P1"]);
         yield return InventoryErrors.StockInsufficient([new(1, guid, "P1", guid, null, 5, 2)]);
+        yield return InventoryErrors.AdjustmentUnitCostNotAllowed(1, "Inventory.Adjustments.SetUnitCost");
+        yield return InventoryErrors.AdjustmentUnitCostOnlyOnEntries(1);
+        yield return InventoryErrors.AdjustmentTaxableWithdrawalNotAvailable();
         yield return InventoryErrors.AmountExceedsLimit(1000, 500, "COP", "Inventory.Adjustments.Confirm");
         yield return InventoryErrors.PrevalidationNotPostable([new(1, "143505", "RequiresThirdParty", "Falta el tercero", null)]);
         yield return InventoryErrors.PrevalidationNoResponse();
@@ -77,6 +80,8 @@ public class InventoryErrorsTests
             "Inventory.Warehouse.Inactive", "Inventory.Product.NotInventoriable", "Inventory.Product.Inactive",
             "Inventory.Product.Blocked", "Inventory.Unit.NotForProduct", "Inventory.Unit.DecimalsNotAllowed",
             "Inventory.Location.NotInWarehouse", "Inventory.Count.ProductsLocked", "Inventory.Stock.Insufficient",
+            "Inventory.Adjustment.UnitCostNotAllowed", "Inventory.Adjustment.UnitCostOnlyOnEntries",
+            "Inventory.Adjustment.TaxableWithdrawalNotAvailable",
             "Inventory.Approval.AmountExceedsLimit", "Inventory.Prevalidation.NotPostable", "Inventory.Prevalidation.NoResponse",
             "Inventory.Currency.NotSupported",
         ]);

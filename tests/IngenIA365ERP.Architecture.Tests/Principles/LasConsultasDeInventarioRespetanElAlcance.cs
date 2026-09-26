@@ -35,6 +35,12 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "ListLocationsQueryHandler",
         "ListReorderPoliciesQueryHandler",
         "SearchProductsQueryHandler",
+        // Fase 5, US2 (T256, T258, T260): existencias, integridad y las vistas kardex y stock.
+        "GetStockQueryHandler",
+        "GetProductStockQueryHandler",
+        "VerifyInventoryIntegrityQueryHandler",
+        "KardexReportQueryHandler",
+        "StockReportQueryHandler",
     ];
 
     [Fact]

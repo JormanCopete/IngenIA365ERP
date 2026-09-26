@@ -22,7 +22,6 @@ public class ReorderPolicyCommandsTests
 {
     private readonly IAlcanceDeInventario _alcance = Substitute.For<IAlcanceDeInventario>();
     private readonly IPermissionChecker _permisos = Substitute.For<IPermissionChecker>();
-    private readonly IExistenciasParaElCatalogo _existencias = Substitute.For<IExistenciasParaElCatalogo>();
 
     public ReorderPolicyCommandsTests()
     {
@@ -51,7 +50,7 @@ public class ReorderPolicyCommandsTests
 
     private SetReorderPolicyCommandHandler Fijar(Escenario e) => new(e.C.Db, _alcance);
 
-    private ListReorderPoliciesQueryHandler Listar(Escenario e) => new(e.C.Db, _alcance, _permisos, _existencias);
+    private ListReorderPoliciesQueryHandler Listar(Escenario e) => new(e.C.Db, _alcance, _permisos, new Application.Inventory.Replenishment.PosicionDeReposicion(e.C.Db));
 
     [Fact]
     public async Task Fijar_crea_la_fila_y_volver_a_fijar_la_cambia_sin_duplicar()
@@ -119,8 +118,7 @@ public class ReorderPolicyCommandsTests
         var e = await EscenarioAsync();
         await Fijar(e).Handle(new SetReorderPolicyCommand(e.P2, e.Pv1.PublicId, 10m, 50m, 15m), default);
         var p2 = e.C.Producto(e.P2).Id;
-        _existencias.DisponibleAsync(Arg.Any<IReadOnlyCollection<int>>(), e.Pv1.Id, Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<int, decimal> { [p2] = 12m });
+        Existencia(e, p2, e.Pv1.Id, 12m);
 
         var con = await Listar(e).Handle(new ListReorderPoliciesQuery(e.Pv1.PublicId), default);
         _permisos.HasPermissionAsync("Inventory.Stock.View", Arg.Any<CancellationToken>()).Returns(false);
@@ -133,10 +131,9 @@ public class ReorderPolicyCommandsTests
     }
 
     [Fact]
-    public async Task Sin_posicion_calculada_ninguna_queda_bajo_el_punto_de_reorden()
+    public async Task Sin_existencia_la_posicion_es_cero_y_queda_bajo_el_punto_de_reorden()
     {
-        // La posición (disponible + en tránsito + por recibir) la conecta PosicionDeReposicion (US2, T257): hasta entonces no
-        // se conoce y el filtro no afirma que una política esté por debajo.
+        // US2 (T257): la posición la lee PosicionDeReposicion; sin fila en INV_StockBalances es cero.
         var e = await EscenarioAsync();
         await Fijar(e).Handle(new SetReorderPolicyCommand(e.P2, e.Pv1.PublicId, 10m, 50m, 15m), default);
 
@@ -144,8 +141,31 @@ public class ReorderPolicyCommandsTests
         var bajo = await Listar(e).Handle(new ListReorderPoliciesQuery(BelowReorderPoint: true), default);
 
         todas.Value.TotalCount.Should().Be(1);
-        todas.Value.Items.Single().Position.Should().BeNull();
-        bajo.Value.Items.Should().BeEmpty();
+        todas.Value.Items.Single().Position.Should().Be(0m);
+        bajo.Value.Items.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Bajo_el_punto_de_reorden_deja_solo_las_que_tienen_posicion_en_o_bajo_el_punto()
+    {
+        // US2 (T257): el caso positivo que US1 dejó pendiente. Posición = disponible + en tránsito + por recibir (0 hasta I5).
+        var e = await EscenarioAsync();
+        await Fijar(e).Handle(new SetReorderPolicyCommand(e.P2, e.Pv1.PublicId, 10m, 50m, 15m), default);
+        var p3 = await e.C.ProductoAsync(e.C.Alta("P3", "Lenteja"));
+        await Fijar(e).Handle(new SetReorderPolicyCommand(p3.PublicId, e.Pv1.PublicId, 10m, 50m, 15m), default);
+        Existencia(e, e.C.Producto(e.P2).Id, e.Pv1.Id, 15m);
+        Existencia(e, e.C.Producto(p3.PublicId).Id, e.Pv1.Id, 16m);
+
+        var bajo = await Listar(e).Handle(new ListReorderPoliciesQuery(BelowReorderPoint: true), default);
+
+        bajo.Value.Items.Should().ContainSingle().Which.Product.Code.Should().Be("P2");
+        bajo.Value.Items.Single().Position.Should().Be(15m, "en el punto de reorden cuenta como bajo");
+    }
+
+    private static void Existencia(Escenario e, int producto, int bodega, decimal fisico)
+    {
+        e.C.Db.StockBalances.Add(new Domain.Entities.Inventory.Projections.StockBalance { ProductId = producto, WarehouseId = bodega, Physical = fisico });
+        e.C.Db.SaveChanges();
     }
 
     [Fact]

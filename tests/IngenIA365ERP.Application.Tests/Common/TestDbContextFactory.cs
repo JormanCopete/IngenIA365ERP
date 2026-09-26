@@ -269,6 +269,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
+    // Feature 012 (T250, US2): kardex y proyecciones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
@@ -381,6 +386,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(k => k.ReversesEntry).WithMany().HasForeignKey(k => k.ReversesEntryId);
+            b.HasOne(k => k.AffectsEntry).WithMany().HasForeignKey(k => k.AffectsEntryId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
         {
             b.Ignore("RowVersion");

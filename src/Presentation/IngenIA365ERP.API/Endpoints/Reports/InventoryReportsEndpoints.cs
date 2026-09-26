@@ -63,7 +63,17 @@ public class InventoryReportsEndpoints : ICarterModule
     /// </summary>
     private static void MapVistas(RouteGroupBuilder group)
     {
-        _ = group;
+        // US2 (T263): el kardex de un producto y la existencia por bodega.
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("kardex", "Kardex", "Movimientos de un producto con saldo en cantidad y valor y costo promedio.",
+                "kardex", ["from", "to", "product", "warehouse"], ["location", "includeCostAdjustments"]),
+            (f, q) => new KardexReportQuery(f,
+                Guid.TryParse(q["location"].ToString(), out var ubicacion) ? ubicacion : null,
+                !bool.TryParse(q["includeCostAdjustments"].ToString(), out var ajustes) || ajustes));
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("stock", "Existencias", "Físico, reservado, disponible y en tránsito por bodega, con mínimos y máximos.",
+                "existencias", ["warehouse", "category", "product"], ["onlyWithStock"]),
+            (f, q) => new StockReportQuery(f, bool.TryParse(q["onlyWithStock"].ToString(), out var conExistencia) && conExistencia));
     }
 }
 
