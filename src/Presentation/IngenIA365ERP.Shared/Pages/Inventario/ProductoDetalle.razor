@@ -1,0 +1,450 @@
+@page "/inventario/productos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject ImpuestosClient Impuestos
+@inject INotificationService Notification
+
+<PageTitle>Producto - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T234 (FR-023 a FR-029; contracts/api.md §3.5, §3.6): el detalle de un producto en pestañas —datos, unidades
+   alternas, códigos de barras, impuestos e imágenes— y el historial del grupo contable con su cambio (US3, T295: fecha
+   efectiva y motivo, bajo Inventory.Catalog.ReclassifyAccountingGroup; el valor, con Inventory.Costs.Read). Con movimientos,
+   la unidad base y el grupo no cambian por la pestaña de datos (los rechaza el servidor con
+   Inventory.Product.BaseUnitLocked / .UseReclassifyAccountingGroup); el factor de una unidad con movimientos tampoco. Las
+   imágenes son adjuntos del dueño InventoryProduct por las rutas de la feature 011 (el archivo va del navegador al almacén). *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_p is null ? "Producto" : $"{_p.Code} · {_p.Name}")</h3>
+        <div class="toolbar">
+            <a class="boton boton-secundario" href="/inventario/productos">Volver a productos</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_p is { } p)
+        {
+            <p class="texto-tenue">
+                @TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, p.Kind) ·
+                @TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, p.Status) ·
+                @p.Category.Path@(p.HasMovements ? " · con movimientos: la unidad base y el grupo contable ya no cambian por aquí" : "")
+            </p>
+            <SfTab>
+                <TabItems>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Datos" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <div class="form-grid">
+                                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="200" /></label>
+                                    <label class="campo">Nombre corto <input class="e-input" @bind="_f.ShortName" maxlength="40" /></label>
+                                    <label class="campo">Referencia <input class="e-input" @bind="_f.Reference" maxlength="60" /></label>
+                                    <label class="campo">Categoría
+                                        <select class="e-input" @bind="_f.CategoryPublicId">
+                                            @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo">Marca
+                                        <select class="e-input" @bind="_f.BrandPublicId">
+                                            <option value="">Sin marca</option>
+                                            @foreach (var m in _marcas) { <option value="@m.PublicId">@m.Code · @m.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo">Unidad base
+                                        <select class="e-input" @bind="_f.BaseUnitPublicId" disabled="@p.HasMovements">
+                                            @foreach (var u in _unidades) { <option value="@u.PublicId">@u.Code · @u.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo">Grupo contable
+                                        <select class="e-input" @bind="_f.AccountingGroupPublicId" disabled="@p.HasMovements">
+                                            @foreach (var g in _grupos) { <option value="@g.PublicId">@g.Code · @g.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo">Peso (kg) <input class="e-input" type="number" step="0.0001" @bind="_f.Weight" /></label>
+                                    <label class="campo">Volumen (l) <input class="e-input" type="number" step="0.0001" @bind="_f.Volume" /></label>
+                                    <label class="campo"><SfCheckBox @bind-Checked="_f.IsPurchasable" Label="Se compra" /></label>
+                                    <label class="campo"><SfCheckBox @bind-Checked="_f.IsSellable" Label="Se vende" /></label>
+                                </div>
+                                <PermissionGate Required="Inventory.Catalog.Manage">
+                                    <div class="toolbar">
+                                        <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarDatosAsync">Guardar datos</SfButton>
+                                    </div>
+                                </PermissionGate>
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Unidades" /></ChildContent>
+                        <ContentTemplate>
+                            <p class="texto-apoyo">La unidad base es @p.BaseUnit.Code (@p.BaseUnit.AllowedDecimals decimales). El factor dice cuántas unidades base tiene cada unidad alterna (caja × 12 = 12).</p>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Unidad</th><th class="numero">Factor</th><th>Uso</th><th>Por defecto</th><th></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var u in p.Units)
+                                            {
+                                                var unidad = u;
+                                                <tr>
+                                                    <td>@unidad.Unit.Code · @unidad.Unit.Name</td>
+                                                    <td class="numero">@unidad.Factor.ToString("0.######")</td>
+                                                    <td>@TextosDeInventario.Texto(TextosDeInventario.UsosDeUnidad, unidad.Usage)</td>
+                                                    <td>@(unidad.IsDefaultPurchase ? "compra " : "")@(unidad.IsDefaultSale ? "venta" : "")</td>
+                                                    <td>
+                                                        <PermissionGate Required="Inventory.Catalog.Manage">
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarUnidadAsync(unidad))">Retirar</SfButton>
+                                                        </PermissionGate>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <PermissionGate Required="Inventory.Catalog.Manage">
+                                    <div class="form-grid">
+                                        <label class="campo">Unidad
+                                            <select class="e-input" @bind="_unidadNueva">
+                                                <option value="">Elija…</option>
+                                                @foreach (var u in _unidades.Where(u => u.PublicId != p.BaseUnit.PublicId)) { <option value="@u.PublicId">@u.Code · @u.Name</option> }
+                                            </select>
+                                        </label>
+                                        <label class="campo">Factor <input class="e-input" type="number" step="0.000001" @bind="_factorNuevo" /></label>
+                                        <label class="campo">Uso
+                                            <select class="e-input" @bind="_usoNuevo">
+                                                @foreach (var (n, t) in TextosDeInventario.UsosDeUnidad) { <option value="@n">@t</option> }
+                                            </select>
+                                        </label>
+                                        <div class="toolbar"><SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@AgregarUnidadAsync">Agregar unidad</SfButton></div>
+                                    </div>
+                                </PermissionGate>
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Códigos de barras" /></ChildContent>
+                        <ContentTemplate>
+                            <p class="texto-apoyo">Un código es único entre los vivos de la cooperativa. Si es el de un empaque, al leerlo queda elegida esa unidad.</p>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Código</th><th>Unidad</th><th></th><th></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var b in p.Barcodes)
+                                            {
+                                                var codigo = b;
+                                                <tr>
+                                                    <td>@codigo.Barcode</td>
+                                                    <td>@codigo.UnitCode</td>
+                                                    <td>@(codigo.IsPrimary ? "principal" : "")</td>
+                                                    <td>
+                                                        <PermissionGate Required="Inventory.Catalog.Manage">
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarCodigoAsync(codigo))">Retirar</SfButton>
+                                                        </PermissionGate>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <PermissionGate Required="Inventory.Catalog.Manage">
+                                    <div class="form-grid">
+                                        <label class="campo">Código <input class="e-input" @bind="_codigoNuevo" maxlength="48" /></label>
+                                        <label class="campo">Empaque
+                                            <select class="e-input" @bind="_empaqueNuevo">
+                                                <option value="">La unidad base (@p.BaseUnit.Code)</option>
+                                                @foreach (var u in p.Units) { <option value="@u.ProductUnitPublicId">@u.Unit.Code × @u.Factor.ToString("0.######")</option> }
+                                            </select>
+                                        </label>
+                                        <div class="toolbar"><SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@AgregarCodigoAsync">Agregar código</SfButton></div>
+                                    </div>
+                                </PermissionGate>
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Impuestos" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <p>IVA en la venta: <b>@TextosDeInventario.Texto(TextosDeInventario.TratamientosDeIva, p.VatSaleTreatment)</b> · concepto de retención: <b>@(p.WithholdingConcept?.Name ?? "—")</b></p>
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Impuesto</th><th>Tarifa vigente</th><th class="numero">Unidades gravables</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var t in p.Taxes)
+                                            {
+                                                <tr>
+                                                    <td>@t.TaxDefinition.Code · @t.TaxDefinition.Name</td>
+                                                    <td>@(t.TaxRate is { } r ? $"{r.Code} {(r.Rate is { } f ? (f * 100).ToString("0.####") + " %" : r.AmountPerUnit?.ToString("N2") + " por unidad")}" : "—")</td>
+                                                    <td class="numero">@t.TaxableUnitsPerBaseUnit</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <PermissionGate Required="Inventory.Catalog.Manage">
+                                    <div class="form-grid">
+                                        <label class="campo">IVA en la venta
+                                            <select class="e-input" @bind="_ivaNuevo">
+                                                @foreach (var (n, t) in TextosDeInventario.TratamientosDeIva) { <option value="@n">@t</option> }
+                                            </select>
+                                        </label>
+                                        @if (_ivaNuevo == TextosDeInventario.TratamientoGravado)
+                                        {
+                                            <label class="campo">Tarifa de IVA
+                                                <select class="e-input" @bind="_tarifaIvaNueva">
+                                                    <option value="">Elija…</option>
+                                                    @foreach (var t in _tarifasIva) { <option value="@t.TaxRatePublicId">@t.Code · @t.Name</option> }
+                                                </select>
+                                            </label>
+                                        }
+                                        <label class="campo">Concepto de retención
+                                            <select class="e-input" @bind="_conceptoNuevo">
+                                                @foreach (var c in _conceptos) { <option value="@c.WithholdingConceptPublicId">@c.Code · @c.Name</option> }
+                                            </select>
+                                        </label>
+                                        <p class="texto-tenue campo-ancho">El cambio rige para lo que se confirme después; lo confirmado conserva su foto. Los impuestos adicionales (INC, bolsas) se cargan con la plantilla 6.</p>
+                                        <div class="toolbar"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@GuardarImpuestosAsync">Guardar impuestos</SfButton></div>
+                                    </div>
+                                </PermissionGate>
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Imágenes" /></ChildContent>
+                        <ContentTemplate>
+                            <p class="texto-apoyo">Sólo imágenes JPEG, PNG o WebP.</p>
+                            <PermissionGate Required="Inventory.Catalog.Manage">
+                                <SubirSoporte OwnerEntityType="@DuenoDeImagenes" OwnerEntityPublicId="@p.PublicId" OnSubido="@RefrescarImagenesAsync" />
+                            </PermissionGate>
+                            <AttachmentList @ref="_imagenes" OwnerEntityType="@DuenoDeImagenes" OwnerEntityPublicId="@p.PublicId" />
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Grupo contable" /></ChildContent>
+                        <ContentTemplate>
+                            <p>Grupo vigente: <b>@(p.AccountingGroup is { } g ? $"{g.Code} · {g.Name}" : "—")</b></p>
+                            <PermissionGate Required="Inventory.Catalog.ReclassifyAccountingGroup">
+                                <div class="info-card">
+                                    <p class="texto-apoyo">
+                                        El cambio rige desde la fecha efectiva para los movimientos siguientes: no puede ser anterior al último movimiento
+                                        del producto ni caer en un período cerrado. Si hay existencia, Contabilidad recibe la reclasificación por bodega.
+                                    </p>
+                                    <div class="toolbar">
+                                        <label class="campo">Grupo nuevo
+                                            <select class="e-input" value="@(_grupoNuevo?.ToString() ?? "")" @onchange="@(e => _grupoNuevo = Guid.TryParse(e.Value?.ToString(), out var x) ? x : null)">
+                                                <option value="">—</option>
+                                                @foreach (var gr in _grupos.Where(x => x.IsActive && x.PublicId != p.AccountingGroup?.PublicId)) { <option value="@gr.PublicId">@gr.Code · @gr.Name</option> }
+                                            </select>
+                                        </label>
+                                        <label class="campo">Fecha efectiva <input type="date" class="e-input" value="@(_fechaEfectiva?.ToString("yyyy-MM-dd") ?? "")" @onchange="@(e => _fechaEfectiva = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null)" /></label>
+                                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoDeGrupo" maxlength="500" /></label>
+                                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _grupoNuevo is null || string.IsNullOrWhiteSpace(_motivoDeGrupo))" OnClick="@CambiarGrupoAsync">Cambiar grupo</SfButton>
+                                    </div>
+                                </div>
+                            </PermissionGate>
+                            <IndicadorDeCarga Cargando="@_historial.Activa">
+                                @if (_cambios.Count == 0)
+                                {
+                                    <p class="texto-tenue">El producto no ha cambiado de grupo contable.</p>
+                                }
+                                else
+                                {
+                                    <div class="tabla-desplazable">
+                                        <table class="data-grid">
+                                            <thead><tr><th>Desde</th><th>De</th><th>A</th><th class="numero">Cantidad</th><th class="numero">Valor</th><th>Motivo</th><th>Registró</th></tr></thead>
+                                            <tbody>
+                                                @foreach (var c in _cambios)
+                                                {
+                                                    <tr>
+                                                        <td>@c.EffectiveDate.ToString("dd/MM/yyyy")</td><td>@c.From.Code</td><td>@c.To.Code</td>
+                                                        <td class="numero">@c.Quantity.ToString("N4")</td><td class="numero">@(c.Value?.ToString("N2") ?? "—")</td>
+                                                        <td>@c.Reason</td><td>@c.ChangedBy · @c.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+                </TabItems>
+            </SfTab>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>El dueño de las imágenes del producto en <c>AdjuntosDeModulo</c> (T221).</summary>
+    private const string DuenoDeImagenes = "InventoryProduct";
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _historial = new();
+    private List<CambioDeGrupoDto> _cambios = [];
+    private Guid? _grupoNuevo;
+    private DateOnly? _fechaEfectiva;
+    private string? _motivoDeGrupo;
+    private ProductoDto? _p;
+    private FormDatos _f = new();
+    private List<CategoriaDto> _categorias = [];
+    private List<MarcaDto> _marcas = [];
+    private List<UnidadDeMedidaDto> _unidades = [];
+    private List<GrupoContableDto> _grupos = [];
+    private List<ConceptoDeRetencionDto> _conceptos = [];
+    private List<TarifaTributariaDto> _tarifasIva = [];
+    private Guid _impuestoIva;
+    private AttachmentList? _imagenes;
+    private Guid? _unidadNueva, _empaqueNuevo, _tarifaIvaNueva, _conceptoNuevo;
+    private decimal _factorNuevo = 1m;
+    private int _usoNuevo = 3, _ivaNuevo = 3;
+    private string? _codigoNuevo;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var categorias = await Inventario.ListarCategoriasAsync();
+        var marcas = await Inventario.ListarMarcasAsync();
+        var unidades = await Inventario.ListarUnidadesAsync();
+        var grupos = await Inventario.ListarGruposContablesAsync();
+        var conceptos = await Impuestos.ListarConceptosAsync(activos: true);
+        var impuestos = await Impuestos.ListarImpuestosAsync(activos: true);
+        _categorias = [.. categorias.Value ?? []];
+        _marcas = [.. marcas.Value ?? []];
+        _unidades = [.. unidades.Value ?? []];
+        _grupos = [.. grupos.Value ?? []];
+        _conceptos = [.. conceptos.Value ?? []];
+        if ((impuestos.Value ?? []).FirstOrDefault(i => i.Kind == 1) is { } iva)
+        {
+            _impuestoIva = iva.TaxPublicId;
+            _tarifasIva = [.. (await Impuestos.ListarTarifasAsync(iva.TaxPublicId)).Value ?? []];
+        }
+        await RecargarAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        var r = await Inventario.ObtenerProductoAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _p = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el producto.");
+            return;
+        }
+        _p = r.Value;
+        _f = new FormDatos
+        {
+            Name = _p.Name, ShortName = _p.ShortName, Reference = _p.Reference, CategoryPublicId = _p.Category.PublicId, BrandPublicId = _p.Brand?.PublicId,
+            BaseUnitPublicId = _p.BaseUnit.PublicId, AccountingGroupPublicId = _p.AccountingGroup?.PublicId, Weight = _p.Weight, Volume = _p.Volume,
+            IsPurchasable = _p.IsPurchasable, IsSellable = _p.IsSellable,
+        };
+        _ivaNuevo = _p.VatSaleTreatment;
+        _conceptoNuevo = _p.WithholdingConcept?.PublicId;
+        _tarifaIvaNueva = _tarifasIva.FirstOrDefault(t => _p.Taxes.Any(x => x.TaxRate?.Code == t.Code))?.TaxRatePublicId;
+        await CargarHistorialAsync();
+    }
+
+    private async Task CargarHistorialAsync()
+    {
+        using var carga = _historial.Iniciar();
+        var r = await Inventario.HistorialDeGrupoAsync(Id);
+        _cambios = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private async Task CambiarGrupoAsync()
+    {
+        if (_p is null || _grupoNuevo is not { } grupo || string.IsNullOrWhiteSpace(_motivoDeGrupo)) return;
+        if (await ResultadoAsync(Inventario.CambiarGrupoContableAsync(_p.PublicId, new CambiarGrupoContableRequest(grupo, _fechaEfectiva, _motivoDeGrupo), _clave),
+                "Grupo contable cambiado."))
+        {
+            _grupoNuevo = null;
+            _fechaEfectiva = null;
+            _motivoDeGrupo = null;
+        }
+    }
+
+    private async Task<bool> ResultadoAsync<T>(Task<ResultadoDeInventario<T>> envio, string exito)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await envio;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar."); return false; }
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync(exito);
+        await RecargarAsync();
+        return true;
+    }
+
+    private Task GuardarDatosAsync()
+    {
+        if (_p is null) return Task.CompletedTask;
+        return ResultadoAsync(Inventario.EditarProductoAsync(_p.PublicId, new EditarProductoRequest(
+            _f.Name.Trim(), _f.ShortName, null, _f.CategoryPublicId, _f.BrandPublicId, _f.BaseUnitPublicId, _f.AccountingGroupPublicId,
+            _p.VatSaleTreatment, _p.WithholdingConcept?.PublicId, _f.Reference, _f.Weight, _f.Volume, false, false, false,
+            _f.IsPurchasable, _f.IsSellable), _clave), "Datos guardados.");
+    }
+
+    private async Task AgregarUnidadAsync()
+    {
+        if (_p is null || _unidadNueva is null) { await Notification.WarningAsync("Elija la unidad."); return; }
+        if (await ResultadoAsync(Inventario.AgregarUnidadAlternaAsync(_p.PublicId, new UnidadAlternaRequest(_unidadNueva.Value, _factorNuevo, _usoNuevo), _clave), "Unidad agregada."))
+            _unidadNueva = null;
+    }
+
+    private Task RetirarUnidadAsync(UnidadAlternaDto unidad) =>
+        _p is null ? Task.CompletedTask
+            : ResultadoAsync(Inventario.RetirarUnidadAlternaAsync(_p.PublicId, unidad.ProductUnitPublicId, new ClaveDeOperacion()), "Unidad retirada.");
+
+    private async Task AgregarCodigoAsync()
+    {
+        if (_p is null || string.IsNullOrWhiteSpace(_codigoNuevo)) { await Notification.WarningAsync("Escriba el código."); return; }
+        if (await ResultadoAsync(Inventario.AgregarCodigoDeBarrasAsync(_p.PublicId, new CodigoDeBarrasRequest(_codigoNuevo.Trim(), _empaqueNuevo), _clave), "Código agregado."))
+            _codigoNuevo = null;
+    }
+
+    private Task RetirarCodigoAsync(CodigoDeBarrasDto codigo) =>
+        _p is null ? Task.CompletedTask
+            : ResultadoAsync(Inventario.RetirarCodigoDeBarrasAsync(_p.PublicId, codigo.BarcodePublicId, new ClaveDeOperacion()), "Código retirado: queda libre para otro producto.");
+
+    private async Task GuardarImpuestosAsync()
+    {
+        if (_p is null) return;
+        if (_ivaNuevo == TextosDeInventario.TratamientoGravado && _tarifaIvaNueva is null) { await Notification.WarningAsync("Un producto gravado lleva su tarifa de IVA."); return; }
+        // Se conservan los impuestos que no son IVA (Kind 1); el IVA es el de la tarifa elegida.
+        var otros = _p.Taxes.Where(t => t.TaxDefinition.Kind != 1)
+            .Select(t => new ImpuestoRequest(t.TaxDefinition.PublicId, t.TaxRate?.PublicId, t.TaxableUnitsPerBaseUnit));
+        var iva = _ivaNuevo == TextosDeInventario.TratamientoGravado && _tarifaIvaNueva is { } tarifa
+            ? new[] { new ImpuestoRequest(_impuestoIva, tarifa, null) }
+            : [];
+        await ResultadoAsync(Inventario.FijarImpuestosDelProductoAsync(_p.PublicId,
+            new ImpuestosDelProductoRequest(_ivaNuevo, _conceptoNuevo, [.. otros, .. iva]), _clave), "Impuestos guardados.");
+    }
+
+    private async Task RefrescarImagenesAsync()
+    {
+        if (_imagenes is not null) await _imagenes.RefreshAsync();
+    }
+
+    private sealed class FormDatos
+    {
+        public string Name { get; set; } = "";
+        public string? ShortName { get; set; }
+        public string? Reference { get; set; }
+        public Guid CategoryPublicId { get; set; }
+        public Guid? BrandPublicId { get; set; }
+        public Guid BaseUnitPublicId { get; set; }
+        public Guid? AccountingGroupPublicId { get; set; }
+        public decimal? Weight { get; set; }
+        public decimal? Volume { get; set; }
+        public bool IsPurchasable { get; set; } = true;
+        public bool IsSellable { get; set; } = true;
+    }
+}

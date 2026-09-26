@@ -47,7 +47,18 @@ public sealed record TablaLeida(IReadOnlyList<string> Encabezados, IReadOnlyList
 /// </summary>
 public interface ITabularFileReader
 {
+    /// <summary>La primera hoja del libro (o el texto separado entero).</summary>
     Task<Result<TablaLeida>> LeerAsync(byte[] contenido, string nombreArchivo, int filasDeEncabezado = 1, CancellationToken ct = default);
+
+    /// <summary>
+    /// Una hoja por su nombre, comparado como los encabezados (<see cref="TablaLeida.Normalizar"/>); sin nombre, la
+    /// primera, como <see cref="LeerAsync"/>. Si no está, <c>Archivo.HojaFaltante</c>. Un texto separado es una sola hoja
+    /// llamada <see cref="ArchivosTabulares.HojaDeTexto"/> (feature 012, T155; contracts/plantillas.md §0.3).
+    /// </summary>
+    Task<Result<TablaLeida>> LeerHojaAsync(byte[] contenido, string nombreArchivo, string? hoja, int filasDeEncabezado = 1, CancellationToken ct = default);
+
+    /// <summary>Los nombres de las hojas del libro en su orden; <c>["Datos"]</c> para un texto separado (T155).</summary>
+    Task<Result<IReadOnlyList<string>>> ListarHojasAsync(byte[] contenido, string nombreArchivo, CancellationToken ct = default);
 }
 
 public static class ArchivosTabulares
@@ -59,4 +70,17 @@ public static class ArchivosTabulares
 
     public static Error SinEncabezado(string columna) =>
         new("Archivo.ColumnaFaltante", $"El archivo no trae la columna «{columna}».");
+
+    /// <summary>Una columna obligatoria que falta en una hoja con nombre (feature 012, T155).</summary>
+    public static Error SinEncabezado(string hoja, string columna) =>
+        new("Archivo.ColumnaFaltante", $"La hoja «{hoja}» no trae la columna «{columna}».");
+
+    public const string HojaFaltanteCode = "Archivo.HojaFaltante";
+
+    /// <summary>El nombre de la única hoja de un texto separado (<c>.csv</c>): las plantillas de una sección se llaman así.</summary>
+    public const string HojaDeTexto = "Datos";
+
+    /// <summary>Falta una hoja del libro (feature 012, T155; contracts/plantillas.md §0.3). (nuevo)</summary>
+    public static Error HojaFaltante(string hoja) =>
+        new(HojaFaltanteCode, $"El libro no trae la hoja «{hoja}». Descargue la plantilla y conserve los nombres de sus hojas.");
 }

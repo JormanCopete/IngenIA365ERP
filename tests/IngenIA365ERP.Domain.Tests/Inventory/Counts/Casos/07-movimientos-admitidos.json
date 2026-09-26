@@ -1,0 +1,44 @@
+{
+  "nombre": "Con movimientos admitidos el teórico es la foto más lo movido después",
+  "descripcion": "A foto 10; después de la foto salen 3 y entra 1: teórico 8, contado 8, sin diferencia. Sin sumar movimientos sería -2.",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 0
+  },
+  "sumaMovimientos": true,
+  "foto": [
+    {
+      "linea": "A",
+      "teorico": 10
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "A",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 8
+    }
+  ],
+  "movimientos": [
+    {
+      "linea": "A",
+      "cantidad": -3
+    },
+    {
+      "linea": "A",
+      "cantidad": 1
+    }
+  ],
+  "esperado": [
+    {
+      "linea": "A",
+      "teorico": 8,
+      "movimientos": -2,
+      "contado": 8,
+      "diferencia": 0,
+      "ronda": 1,
+      "reconteo": false
+    }
+  ]
+}

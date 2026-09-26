@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Core.People.Contracts;
 using MediatR;
 
@@ -11,4 +12,11 @@ namespace IngenIA365ERP.Application.Core.People.Commands.CreatePerson;
 /// Hereda de <see cref="PersonInput"/> para que el JSON siga siendo plano: las pantallas y
 /// los e2e que mandan <c>isEmployee</c> siguen funcionando, sólo que ese campo ya no llega.
 /// </summary>
-public record CreatePersonCommand : PersonInput, IRequest<Result<Guid>>;
+public record CreatePersonCommand : PersonInput, IRequest<Result<Guid>>
+{
+    /// <summary>
+    /// Feature 012 (T46, T175): la autorización de tratamiento de datos capturada al crear (<c>authorization</c> en el
+    /// JSON). Opcional: sin ella el alta es la de siempre. Se escribe junto con la persona.
+    /// </summary>
+    public AutorizacionAlCrear? Authorization { get; init; }
+}

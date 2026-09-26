@@ -1,0 +1,6 @@
+{
+  "nombre": "Antes de I5 lo por recibir es 0: la posición es disponible + tránsito (3,5 + 1,25 = 4,75) y el sugerido conserva los decimales (20 − 4,75)",
+  "disponible": 3.5, "enTransito": 1.25, "porRecibir": 0,
+  "minimo": 5, "maximo": 20, "puntoDeReorden": 8,
+  "esperado": { "posicion": 4.75, "requiereReorden": true, "sugerido": 15.25, "quiebre": true }
+}

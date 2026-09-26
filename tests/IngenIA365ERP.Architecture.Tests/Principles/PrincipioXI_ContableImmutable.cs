@@ -19,7 +19,11 @@ public class PrincipioXI_ContableImmutable
     [
         "Entities/Accounting/Transactions",
         "Entities/Lending/Transactions",
-        "Entities/Payroll/Transactions"
+        "Entities/Payroll/Transactions",
+        // Feature 012 (T019; decisiones-transversales §2.18, T7, T33): los mensajes de integración y sus
+        // entregas, y las solicitudes y decisiones de aprobación, son hechos: no se borran.
+        "Entities/Integration/Transactions",
+        "Entities/Approvals/Transactions"
     ];
 
     private static readonly Regex RemoveCall = new(

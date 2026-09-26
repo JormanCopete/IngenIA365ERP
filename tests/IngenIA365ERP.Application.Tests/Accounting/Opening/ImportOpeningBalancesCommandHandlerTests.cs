@@ -85,7 +85,7 @@ public class ImportOpeningBalancesCommandHandlerTests
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Accounting.Opening.Invalid");
         var errores = ((ErrorConDatos)r.Error).Data.Should().BeAssignableTo<object>().Subject;
-        var lista = (IReadOnlyList<Application.Accounting.Setup.ErrorDeFila>)errores.GetType().GetProperty("errors")!.GetValue(errores)!;
+        var lista = (IReadOnlyList<Application.Common.Imports.ErrorDeFila>)errores.GetType().GetProperty("errors")!.GetValue(errores)!;
         lista.Select(x => (x.Row, x.Column, x.Code)).Should().BeEquivalentTo(
         [
             (2, "cuenta", "Accounting.Line.AccountNotMovement"),

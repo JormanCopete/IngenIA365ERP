@@ -20,7 +20,11 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LasPantallasDicenQueEstanCargando
 {
     /// <summary>Carpetas bajo <c>Shared/Pages</c> ya migradas al patrón. Se amplía módulo a módulo.</summary>
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad"];
+    /// Feature 012 (T118, decisiones-transversales §2.11): «Inventario» entra con sus primeras pantallas (informes y tipos
+    /// de documento); «Ventas» entra con Canales (US1, T239); «Compras» y «Pos» los agrega la historia que crea la primera
+    /// pantalla de cada carpeta.
+    /// US9 (T358): «Compras» entra con sus pantallas de I1 (recepciones, compra directa, facturas, notas y devoluciones).
+    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras"];
 
     private static IEnumerable<string> PantallasMigradas()
     {

@@ -1,0 +1,47 @@
+{
+  // Feature 012, T097, caso 11: dos tarifas de ReteFuente del mismo concepto, misma prioridad y una condición cada una.
+  // A) Proveedor persona jurídica y declarante: cumplen las dos → el documento no se confirma
+  //    (Core.TaxRate.Ambiguous, que nombra RFDEC y RFJUR).
+  // B) Proveedor persona natural declarante: sólo cumple RFDEC → 2.000.000 × 3 % = 60.000.
+  "nombre": "Empate entre dos tarifas",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 23, "impuesto": 2, "codigo": "RFJUR", "tarifa": 0.025, "concepto": 1, "aplicaA": "Both", "prioridad": 0, "desde": "2026-01-01",
+      "condiciones": { "sujetoTipoPersona": "02" } },
+    { "id": 24, "impuesto": 2, "codigo": "RFDEC", "tarifa": 0.03, "concepto": 1, "aplicaA": "Both", "prioridad": 0, "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Cumplen las dos: empate",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [],
+        "rechazos": [ "Core.TaxRate.Ambiguous" ],
+        "rechazoNombra": [ "RFDEC", "RFJUR" ]
+      }
+    },
+    {
+      "nombre": "Cumple una sola",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "01", "responsableIva": false, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RFDEC", "tratamiento": "WithholdingApplied", "base": 2000000, "valor": 60000, "explicacion": [ "sujeto declarante: sí" ] }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "nombre": "Segregación: un participante declarado por el documento no decide",
+  "derivacion": "El documento declara participantes 12 y 15 (quien abrió y quien capturó el conteo). Los dos quedan excluidos con reason Participant; 14 puede decidir.",
+  "segregacion": {
+    "creador": 10, "solicitante": 11, "participantes": [12, 15], "aprobadoresPrevios": [13],
+    "decisiones": [
+      { "decisor": 12, "esperado": "Participant" },
+      { "decisor": 15, "esperado": "Participant" },
+      { "decisor": 14, "esperado": null }
+    ]
+  }
+}

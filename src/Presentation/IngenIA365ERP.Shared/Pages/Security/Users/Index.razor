@@ -19,6 +19,7 @@
         <button @onclick="LoadAsync">Refrescar</button>
     </div>
 
+    <IndicadorDeCarga Cargando="@_loading">
     @if (_loading) { <p>Cargando…</p> }
     else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
     else if (_items.Count == 0) { <p>Sin resultados.</p> }
@@ -49,6 +50,10 @@
                             <div class="acciones">
                                 <button @onclick="() => Edit(u.PublicId)">Editar</button>
                                 <button @onclick="() => Roles(u.PublicId)">Roles</button>
+                                @* Feature 012, T433: la pestaña «Alcance comercial» (bodegas que ve y opera) vive en /inventario/alcances. *@
+                                <PermissionGate Required="Inventory.Scopes.Manage">
+                                    <button @onclick="() => Alcance(u.PublicId)">Alcance comercial</button>
+                                </PermissionGate>
                                 @if (u.IsLocked == true)
                                 {
                                     <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
@@ -64,6 +69,7 @@
             </tbody>
         </table>
     }
+    </IndicadorDeCarga>
 </div>
 
 @code {
@@ -120,6 +126,7 @@
     }
     private void Edit(Guid id) => Nav.NavigateTo($"/security/users/{id}");
     private void Roles(Guid id) => Nav.NavigateTo($"/security/users/{id}/roles");
+    private void Alcance(Guid id) => Nav.NavigateTo($"/inventario/alcances?usuario={id}");
 
     private async Task UnlockAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/unlock");
     private async Task DisableAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/disable");

@@ -123,3 +123,51 @@ jobs:
       - name: Tear down dev stack
         if: always()
         run: docker compose -f docker/dev.yml down -v
+
+  # Feature 012 (T984; SC-001, SC-009, SC-020): las pruebas de volumen del inventario, en los dos motores. No usan el
+  # stack de arriba: son pruebas de integración que levantan sus propios contenedores (Testcontainers; el runner de
+  # ubuntu trae Docker) y sin RUN_PERF_TESTS=1 se reportan omitidas con su motivo (FactDeRendimiento), nunca como
+  # aprobadas. ConcurrenciaDeExistenciasTests hace las 1.000 repeticiones de 50 salidas simultáneas sobre existencia 10
+  # y deja en la salida el tiempo total y el p95; BusquedaDeProductos50kTests siembra 50.000 productos por la plantilla
+  # 6 y exige p95 < 1 s. LotesProgramadosTests (5.000 documentos, SC-020) llega con I2: el filtro ya la nombra y, hasta
+  # que exista, no encuentra nada que correr.
+  volumen-inventario:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        motor: [PostgreSql, SqlServer]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build integration tests
+        run: dotnet build tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj -c Release
+
+      - name: Pruebas de volumen de la 012 (${{ matrix.motor }})
+        env:
+          RUN_PERF_TESTS: "1"
+          DB_PROVIDER: ${{ matrix.motor }}
+        run: |
+          # El shell por defecto de Actions corre con pipefail: el tee no tapa una prueba en rojo.
+          dotnet test tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj \
+            -c Release --no-build \
+            --filter "FullyQualifiedName~ConcurrenciaDeExistenciasTests.Mil_repeticiones|FullyQualifiedName~BusquedaDeProductos50kTests|FullyQualifiedName~LotesProgramadosTests" \
+            --logger "trx;LogFileName=volumen-${{ matrix.motor }}.trx" \
+            --logger "console;verbosity=detailed" 2>&1 | tee volumen.log
+          grep -E "SC-001 \[" volumen.log || true
+
+      - name: Archive results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volumen-inventario-${{ matrix.motor }}-${{ github.run_id }}
+          path: |
+            tests/IngenIA365ERP.API.IntegrationTests/**/TestResults/**/*.trx
+            volumen.log
+          retention-days: 30

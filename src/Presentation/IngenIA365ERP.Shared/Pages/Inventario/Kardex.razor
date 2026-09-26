@@ -1,290 +1,180 @@
 @page "/inventario/kardex"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@using System.Net.Http.Json
-@inject HttpClient Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@inject InventarioClient Inventario
 @inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
 
 <PageTitle>Kardex - IngenIA365ERP</PageTitle>
 
+@* Feature 012, T265 (FR-019, FR-033; contracts/api.md §6.1, §27): el kardex de UN producto por la vista «kardex» del centro de
+   informes (no hay ruta de kardex bajo /api/inventory). Producto obligatorio, bodega, rango (hasta 5 años) y si muestra las
+   líneas de ajuste de costo. La primera fila es el saldo al día anterior a «desde»; el orden es el del kardex (fecha de
+   operación y registro). Las columnas de costo y valor llegan vacías sin Inventory.Costs.Read, y la nota lo dice. El
+   documento de cada línea abre su pantalla por la columna oculta _documento. Exportar exige Inventory.Reports.Export. *@
+<PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Kardex de Inventario</h3>
+        <h3>Kardex</h3>
+        <div class="toolbar">
+            @if (_tabla is not null && _producto is not null)
+            {
+                <PermissionGate Required="Inventory.Reports.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+                </PermissionGate>
+            }
+            <a class="e-btn e-outline" href="/inventario/existencias">Existencias</a>
+        </div>
     </div>
 
-    <!-- Product search -->
-    <div class="toolbar">
-        <div style="flex:1;min-width:280px;">
-            <label>Producto</label>
-            <div class="acciones">
-                <SfTextBox @bind-Value="_productSearch" Placeholder="Buscar por codigo o nombre de producto" />
-                <SfButton CssClass="e-primary" IconCss="e-icons e-search" OnClick="SearchProduct">Buscar</SfButton>
-            </div>
-        </div>
-        @if (_selectedProduct is not null)
+    <div class="info-card">
+        <SelectorDeProducto Etiqueta="Producto *" Bodega="@_bodega" Elegido="@ElegirAsync" />
+        @if (_producto is { } p)
         {
-            <div>
-                <label>Bodega</label>
-                <SfDropDownList TValue="string" TItem="DropOption" @bind-Value="_filterWarehouse"
-                                DataSource="_warehouseOptions" Placeholder="Todas" CssClass="e-small">
-                    <DropDownListFieldSettings Text="Name" Value="Value" />
-                </SfDropDownList>
-            </div>
-            <div>
-                <label>Desde</label>
-                <SfDatePicker TValue="DateTime?" @bind-Value="_dateFrom" Format="dd/MM/yyyy" CssClass="e-small" />
-            </div>
-            <div>
-                <label>Hasta</label>
-                <SfDatePicker TValue="DateTime?" @bind-Value="_dateTo" Format="dd/MM/yyyy" CssClass="e-small" />
-            </div>
-            <SfButton CssClass="e-primary e-small" OnClick="LoadMovements">Filtrar</SfButton>
+            <p class="texto-apoyo">Producto: <b>@p.Code · @p.Name</b> (unidad base @p.BaseUnitCode)</p>
         }
+        <div class="toolbar">
+            <label class="campo">Bodega
+                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Todas las del alcance</option>
+                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = LeerFecha(e.Value) ?? _hasta)" /></label>
+            <SfCheckBox @bind-Checked="_conAjustes" TChecked="bool" Label="Mostrar ajustes de costo" />
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _producto is null)" OnClick="@ConsultarAsync">Consultar</SfButton>
+        </div>
     </div>
 
-    <!-- Product selector results -->
-    <SfDialog @bind-Visible="_showProductResults" Header="Seleccionar Producto" Width="650px" IsModal="true" ShowCloseIcon="true">
-        <DialogTemplates>
-            <Content>
-                <div style="padding:var(--pad-md);">
-                    <SfGrid TValue="ProductItem" DataSource="_productResults" AllowPaging="true" Height="300">
-                        <GridPageSettings PageSize="10" />
-                        <GridEvents RowSelected="OnProductChosen" TValue="ProductItem" />
-                        <GridColumns>
-                            <GridColumn Field="ProductCode" HeaderText="Codigo" Width="100" />
-                            <GridColumn Field="Name" HeaderText="Nombre" Width="280" />
-                            <GridColumn Field="UnitOfMeasure" HeaderText="Medida" Width="80" />
-                            <GridColumn Field="CurrentStock" HeaderText="Stock Total" Width="100" Format="N2" TextAlign="TextAlign.Right" />
-                        </GridColumns>
-                    </SfGrid>
-                </div>
-            </Content>
-        </DialogTemplates>
-    </SfDialog>
-
-    @if (_selectedProduct is not null)
-    {
-        <!-- Product info + stock summary -->
-        <div class="panel-producto">
-            <div>
-                <span class="label">Producto seleccionado</span>
-                <strong class="titulo">@_selectedProduct.ProductCode - @_selectedProduct.Name</strong>
-                <span class="texto-tenue medida">(@_selectedProduct.UnitOfMeasure)</span>
-            </div>
-            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" OnClick="ClearProduct">Cambiar producto</SfButton>
-        </div>
-
-        <!-- Stock per warehouse KPI cards -->
-        @if (_stockSummary.Count > 0)
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_tabla is null)
         {
-            <div class="kpi-grid">
-                @foreach (var ws in _stockSummary)
-                {
-                    <div class="kpi-card">
-                        <span class="kpi-label">@ws.WarehouseName</span>
-                        <strong class="kpi-value" style="color:@(ws.Stock >= 0 ? "var(--exito)" : "var(--peligro)");">@ws.Stock.ToString("N2")</strong>
-                        <span class="kpi-label">Costo prom: @ws.AverageCost.ToString("N2")</span>
-                    </div>
-                }
-                <div class="kpi-card tarjeta-total">
-                    <span class="kpi-label">Stock Total</span>
-                    <strong class="kpi-value">@_stockSummary.Sum(s => s.Stock).ToString("N2")</strong>
-                    <span class="kpi-label">Todas las bodegas</span>
-                </div>
-            </div>
+            <p class="texto-tenue">Lea o escriba el producto, elija la bodega y el rango, y pulse «Consultar».</p>
         }
-
-        <!-- Movements grid -->
-        <div class="page-header">
-            <h4>Movimientos</h4>
-            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-export-excel" OnClick="ExportToExcel">Exportar a Excel</SfButton>
-        </div>
-
-        <SfGrid @ref="_movementsGrid" TValue="KardexMovement" DataSource="@_movements"
-                AllowPaging="true" AllowSorting="true" AllowExcelExport="true">
-            <GridPageSettings PageSize="25" />
-            <GridColumns>
-                <GridColumn Field="Date" HeaderText="Fecha" Width="110" Format="dd/MM/yyyy" />
-                <GridColumn Field="DocumentType" HeaderText="Tipo Doc" Width="90" TextAlign="TextAlign.Center" />
-                <GridColumn Field="DocumentNumber" HeaderText="Numero" Width="100" TextAlign="TextAlign.Right" />
-                <GridColumn Field="WarehouseName" HeaderText="Bodega" Width="140" />
-                <GridColumn Field="EntryQty" HeaderText="Entrada" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="ExitQty" HeaderText="Salida" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="Balance" HeaderText="Saldo" Width="110" Format="N2" TextAlign="TextAlign.Right" />
-                <GridColumn Field="UnitCost" HeaderText="Costo Unit" Width="120" Format="N2" TextAlign="TextAlign.Right" />
-            </GridColumns>
-        </SfGrid>
-
-        @if (_movements.Count == 0 && !_loading)
+        else
         {
-            <div class="estado-vacio">
-                <span class="e-icons e-description icono"></span>
-                No se encontraron movimientos para los filtros seleccionados.
+            <p class="texto-apoyo">@_tabla.Subtitulo</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            @foreach (var (c, _) in Visibles) { <th class="@(c.EsNumerica ? "numero" : "")">@c.Nombre</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fila in _tabla.Filas)
+                        {
+                            <tr class="@(fila.Resaltada ? "resaltada" : "")">
+                                @foreach (var (c, i) in Visibles)
+                                {
+                                    var texto = TablaReporteDto.Texto(fila.Valores[i], c.Tipo);
+                                    <td class="@(c.EsNumerica ? "numero" : "")">
+                                        @if (c.Nombre == "Documento" && Oculto(fila, "_documento") is { } documento && EsAjuste(texto))
+                                        {
+                                            <a href="@($"/inventario/ajustes/{documento}")">@texto</a>
+                                        }
+                                        else
+                                        {
+                                            @texto
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
+            @foreach (var nota in _tabla.Notas) { <p class="texto-tenue">@nota</p> }
         }
-    }
-    else
-    {
-        <div class="estado-vacio">
-            <span class="e-icons e-search icono"></span>
-            <p>Busque y seleccione un producto para ver su kardex.</p>
-        </div>
-    }
+    </IndicadorDeCarga>
 </div>
+</PermissionGate>
 
 @code {
-    private string _productSearch = "";
-    private bool _showProductResults;
-    private List<ProductItem> _productResults = [];
-    private ProductItem? _selectedProduct;
+    private readonly EstadoDeCarga _carga = new();
+    private List<BodegaDto> _bodegas = [];
+    private ProductoEncontradoDto? _producto;
+    private Guid? _bodega;
+    private DateOnly _desde = new(DateTime.Today.Year, DateTime.Today.Month, 1), _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private bool _conAjustes = true, _iniciado;
+    private TablaReporteDto? _tabla;
 
-    private string _filterWarehouse = "";
-    private DateTime? _dateFrom;
-    private DateTime? _dateTo;
-    private bool _loading;
+    /// <summary>Llega desde Existencias con el producto (y la bodega): se consulta sola.</summary>
+    [SupplyParameterFromQuery(Name = "product")] public Guid? Producto { get; set; }
+    [SupplyParameterFromQuery(Name = "warehouse")] public Guid? Bodega { get; set; }
 
-    private List<DropOption> _warehouseOptions = [new("", "Todas")];
-    private List<StockSummaryItem> _stockSummary = [];
-    private List<KardexMovement> _movements = [];
-    private SfGrid<KardexMovement>? _movementsGrid;
+    /// <summary>Las columnas que se pintan (sin las ocultas «_»), con su índice en la fila.</summary>
+    private IEnumerable<(ColumnaReporteDto Columna, int Indice)> Visibles =>
+        _tabla is null ? [] : _tabla.Columnas.Select((c, i) => (c, i)).Where(x => !x.c.EsOculta);
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        await LoadWarehouses();
-    }
-
-    private async Task LoadWarehouses()
-    {
-        try
+        if (_iniciado) return;
+        _iniciado = true;
+        var bodegas = await Inventario.ListarBodegasAsync(incluirTransito: true);
+        _bodegas = bodegas.IsSuccess ? [.. bodegas.Value ?? []] : [];
+        _bodega = Bodega;
+        if (Producto is { } id)
         {
-            var items = await Http.GetListAsync<CatalogItem>("/api/inventory/warehouses?pageSize=200");
-            _warehouseOptions = [new("", "Todas"), .. (items ?? []).Select(w => new DropOption(w.Code, $"{w.Code} - {w.Name}"))];
-        }
-        catch { /* keep default */ }
-    }
-
-    private async Task SearchProduct()
-    {
-        if (string.IsNullOrWhiteSpace(_productSearch)) return;
-        try
-        {
-            _productResults = await Http.GetListAsync<ProductItem>(
-                $"/api/inventory/products?search={_productSearch}&pageSize=50") ?? [];
-
-            if (_productResults.Count == 1)
+            var existencia = await Inventario.ExistenciaDelProductoAsync(id);
+            if (existencia.IsSuccess && existencia.Value is { } e)
             {
-                await SelectProduct(_productResults[0]);
-            }
-            else if (_productResults.Count > 1)
-            {
-                _showProductResults = true;
-            }
-            else
-            {
-                await Notification.ErrorAsync("No se encontraron productos");
+                _producto = new ProductoEncontradoDto(e.Product.PublicId, e.Product.Code, e.Product.Name, null, null, e.Product.BaseUnitCode,
+                    e.Product.Status, null, null, null);
+                await ConsultarAsync();
             }
         }
-        catch { await Notification.ErrorAsync("Error al buscar productos"); }
     }
 
-    private async Task OnProductChosen(RowSelectEventArgs<ProductItem> args)
+    private Task ElegirAsync(ProductoElegido elegido)
     {
-        if (args.Data is not null)
+        _producto = elegido.Producto;
+        _tabla = null;
+        return ConsultarAsync();
+    }
+
+    private async Task ConsultarAsync()
+    {
+        if (_producto is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.KardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes);
+        if (!r.IsSuccess)
         {
-            _showProductResults = false;
-            await SelectProduct(args.Data);
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el kardex.");
+            return;
         }
+        _tabla = r.Value;
     }
 
-    private async Task SelectProduct(ProductItem product)
+    private async Task DescargarAsync(string formato)
     {
-        _selectedProduct = product;
-        _productSearch = $"{product.ProductCode} - {product.Name}";
-        await Task.WhenAll(LoadStockSummary(), LoadMovements());
+        if (_producto is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.DescargarKardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes, formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el kardex."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 
-    private void ClearProduct()
+    /// <summary>El valor de una columna oculta de la fila (el PublicId del documento).</summary>
+    private string? Oculto(FilaReporteDto fila, string clave)
     {
-        _selectedProduct = null;
-        _productSearch = "";
-        _stockSummary = [];
-        _movements = [];
+        var indice = _tabla!.Columnas.ToList().FindIndex(c => c.Clave == clave);
+        if (indice < 0 || indice >= fila.Valores.Count) return null;
+        var valor = fila.Valores[indice];
+        return valor.ValueKind == System.Text.Json.JsonValueKind.String ? valor.GetString() : null;
     }
 
-    private async Task LoadStockSummary()
-    {
-        if (_selectedProduct is null) return;
-        try
-        {
-            _stockSummary = await Http.GetListAsync<StockSummaryItem>(
-                $"/api/inventory/stock/{_selectedProduct.PublicId}/summary") ?? [];
-        }
-        catch { _stockSummary = []; }
-    }
+    /// <summary>Por ahora sólo los ajustes (y sus anulaciones) tienen pantalla de documento; las demás clases la suman con su historia.</summary>
+    private static bool EsAjuste(string documento) =>
+        documento.StartsWith("PositiveAdjustment", StringComparison.Ordinal) || documento.StartsWith("NegativeAdjustment", StringComparison.Ordinal)
+        || documento.StartsWith("InternalConsumption", StringComparison.Ordinal) || documento.StartsWith("WriteOff", StringComparison.Ordinal)
+        || documento.StartsWith("Voiding", StringComparison.Ordinal);
 
-    private async Task LoadMovements()
-    {
-        if (_selectedProduct is null) return;
-        _loading = true;
-        try
-        {
-            var url = $"/api/inventory/stock/{_selectedProduct.PublicId}/movements?pageSize=500";
-            if (!string.IsNullOrEmpty(_filterWarehouse)) url += $"&warehouse={_filterWarehouse}";
-            if (_dateFrom.HasValue) url += $"&dateFrom={DateOnly.FromDateTime(_dateFrom.Value):yyyy-MM-dd}";
-            if (_dateTo.HasValue) url += $"&dateTo={DateOnly.FromDateTime(_dateTo.Value):yyyy-MM-dd}";
-
-            _movements = await Http.GetListAsync<KardexMovement>(url) ?? [];
-        }
-        catch { _movements = []; }
-        finally { _loading = false; }
-    }
-
-    private async Task ExportToExcel()
-    {
-        if (_movementsGrid is not null)
-        {
-            var props = new Syncfusion.Blazor.Grids.ExcelExportProperties
-            {
-                FileName = $"Kardex_{_selectedProduct?.ProductCode}_{DateTime.Now:yyyyMMdd}.xlsx"
-            };
-            await _movementsGrid.ExportToExcelAsync(props);
-        }
-    }
-
-    // Models
-    private class ProductItem
-    {
-        public Guid PublicId { get; set; }
-        public string ProductCode { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string UnitOfMeasure { get; set; } = "";
-        public decimal CurrentStock { get; set; }
-    }
-
-    private class StockSummaryItem
-    {
-        public string WarehouseCode { get; set; } = "";
-        public string WarehouseName { get; set; } = "";
-        public decimal Stock { get; set; }
-        public decimal AverageCost { get; set; }
-    }
-
-    private class KardexMovement
-    {
-        public DateOnly Date { get; set; }
-        public string DocumentType { get; set; } = "";
-        public long DocumentNumber { get; set; }
-        public string WarehouseName { get; set; } = "";
-        public decimal EntryQty { get; set; }
-        public decimal ExitQty { get; set; }
-        public decimal Balance { get; set; }
-        public decimal UnitCost { get; set; }
-    }
-
-    private class CatalogItem
-    {
-        public string Code { get; set; } = "";
-        public string Name { get; set; } = "";
-    }
-
-    private record DropOption(string Value, string Name);
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
 }

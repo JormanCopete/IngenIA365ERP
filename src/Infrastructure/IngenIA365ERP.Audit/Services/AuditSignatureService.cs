@@ -40,6 +40,23 @@ public sealed class AuditSignatureService : IAuditSignatureService
         return Convert.ToBase64String(hmac);
     }
 
+    /// <summary>Clave de los PDF de desarrollo: nunca firma anclas (pregunta A2).</summary>
+    private const string VersionDeDesarrolloDeExportacion = "dev-v1";
+
+    public string? AnchorKeyVersion =>
+        _settings.AnchorKeyVersion is { Length: > 0 } version
+        && version != VersionDeDesarrolloDeExportacion
+        && _keyMaterialByVersion.ContainsKey(version)
+            ? version
+            : null;
+
+    public string ComputeHmacBase64(byte[] payload, string keyVersion)
+    {
+        if (!_keyMaterialByVersion.TryGetValue(keyVersion, out var key))
+            throw new InvalidOperationException($"AuditSignature: no hay clave para la versión '{keyVersion}'.");
+        return Convert.ToBase64String(HMACSHA256.HashData(key, payload));
+    }
+
     public bool VerifyHmacBase64(byte[] payload, string hmacBase64, string keyVersion)
     {
         if (!_keyMaterialByVersion.TryGetValue(keyVersion, out var key))

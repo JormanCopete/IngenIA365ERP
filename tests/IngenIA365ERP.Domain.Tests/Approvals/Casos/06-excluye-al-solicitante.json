@@ -1,0 +1,8 @@
+{
+  "nombre": "Segregación: quien pidió la aprobación no decide",
+  "derivacion": "Creador 10, solicitante 11 (otra persona: el cajero que envió el documento de otro), participante 12, 13 aprobó el nivel 1. El decisor 11 queda excluido con reason Requester; 14 puede decidir. Si creador y solicitante son la misma persona, manda Creator.",
+  "segregacion": {
+    "creador": 10, "solicitante": 11, "participantes": [12], "aprobadoresPrevios": [13],
+    "decisiones": [ { "decisor": 11, "esperado": "Requester" }, { "decisor": 14, "esperado": null } ]
+  }
+}

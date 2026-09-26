@@ -40,6 +40,8 @@ builder.Services.AddSingleton<ITenantService, TenantService>();
 // cabecera ya puesta con un token que no está por vencer.
 builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Security.RenovadorDeSesion>();
 builder.Services.AddTransient<RenovacionDeSesionHandler>();
+// Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
+builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.Web));
 builder.Services.AddTransient<AuthBearerHandler>();
 builder.Services.AddTransient<TenantDelegatingHandler>();
 
@@ -53,6 +55,7 @@ builder.Services.AddTransient<TenantDelegatingHandler>();
 var apiBaseUrl = AppMode.UseMock ? builder.HostEnvironment.BaseAddress : AppMode.ApiBaseUrl;
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<RenovacionDeSesionHandler>()
+    .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
     .AddHttpMessageHandler<AuthBearerHandler>()
     .AddHttpMessageHandler<TenantDelegatingHandler>();
 builder.Services.AddScoped(sp =>
@@ -99,6 +102,13 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.NominaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos>();
 // Feature 008 — cliente tipado del maestro de personas (Personas, Empleados y Asociados).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
+// Feature 012 (T170): catalogo tributario de Core (impuestos, tarifas, conceptos de retencion).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
+// Feature 012 (T183): cliente tipado de Inventario (documentos, tipos, plantillas, informes; cada historia suma su parcial).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioClient>();
+// Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).

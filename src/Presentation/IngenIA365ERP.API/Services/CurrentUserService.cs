@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 
 namespace IngenIA365ERP.API.Services;
@@ -41,9 +42,15 @@ public class CurrentUserService : ICurrentUserService
     /// defecto lo renombra al URI largo de <see cref="ClaimTypes.Email"/>, asi que
     /// se miran los dos nombres.
     /// </para>
+    ///
+    /// <para>
+    /// Sin petición (feature 012, T5) es el nombre del actor del <see cref="ContextoAmbiental"/>
+    /// —«Proceso de integración», o la persona que ordenó el lote—, no «system».
+    /// </para>
     /// </summary>
-    public string? UserName =>
-        User?.FindFirst(ClaimTypes.Email)?.Value
+    public string? UserName => _httpContextAccessor.HttpContext is null
+        ? ContextoAmbiental.Actor?.Name
+        : User?.FindFirst(ClaimTypes.Email)?.Value
         ?? User?.FindFirst("email")?.Value
         ?? User?.FindFirst("name")?.Value
         ?? User?.Identity?.Name;
@@ -69,6 +76,12 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
+            // Sin petición, el Id interno de la cooperativa del trabajo de fondo (feature 012, T5).
+            if (_httpContextAccessor.HttpContext is null)
+            {
+                return ContextoAmbiental.Cooperativa?.Id.ToString();
+            }
+
             var items = _httpContextAccessor.HttpContext?.Items;
             if (items is not null &&
                 items.TryGetValue("TenantId", out var resuelto) &&

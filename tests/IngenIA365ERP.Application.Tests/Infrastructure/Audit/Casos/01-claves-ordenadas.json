@@ -1,0 +1,24 @@
+{
+  "descripcion": "Las claves van en orden ordinal (mayúsculas antes que minúsculas), también las anidadas; sin espacios; la versión v en la raíz; texto no ASCII tal cual.",
+  "eventos": [
+    {
+      "campos": {
+        "zeta": "último",
+        "alfa": "primero",
+        "metadata": {
+          "b": "2",
+          "a": "1"
+        },
+        "Beta": 2,
+        "lista": [
+          "x",
+          "y"
+        ],
+        "nulo": null,
+        "activo": true
+      },
+      "canonico": "{\"Beta\":2,\"activo\":true,\"alfa\":\"primero\",\"lista\":[\"x\",\"y\"],\"metadata\":{\"a\":\"1\",\"b\":\"2\"},\"nulo\":null,\"v\":1,\"zeta\":\"último\"}",
+      "hash": "2f9ac0022426c4df7ae5368d94bcfcb6a1f96ad1c3ea3836f3d435717c5e8190"
+    }
+  ]
+}

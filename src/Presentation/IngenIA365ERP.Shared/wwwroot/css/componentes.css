@@ -594,6 +594,18 @@ input[type="checkbox"], input[type="radio"] {
 .aviso-alerta  { background: var(--alerta-fondo);  color: var(--alerta-texto);  border-color: var(--alerta); }
 .aviso-info    { background: var(--info-fondo);    color: var(--info-texto);    border-color: var(--info); }
 
+/* Feature 012 (T175): el aviso de privacidad vigente que se le muestra al titular al crear una persona. */
+.texto-politica {
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-0);
+    font-size: var(--texto-sm);
+    white-space: pre-wrap;
+}
+
 .reload {
     background: none;
     border: 0;

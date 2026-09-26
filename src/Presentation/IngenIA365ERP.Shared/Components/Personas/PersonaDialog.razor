@@ -8,6 +8,8 @@
     Empleados y Asociados lo abren desde «Editar datos de la persona» (FR-005).
     Con documento duplicado ofrece abrir esa persona; con documento de una eliminada ofrece
     restaurarla a quien tenga el permiso de eliminar (FR-007, FR-016).
+    Feature 012 (T175): con CapturarAutorizacion, al crear muestra la política de tratamiento de datos
+    vigente y registra la decisión del titular junto con la persona (o el aviso «sin política vigente»).
 *@
 
 <SfDialog @bind-Visible="Visible" Header="@Titulo" Width="900px" IsModal="true" ShowCloseIcon="true">
@@ -23,6 +25,33 @@
                                        OnRegistrarRol="@RegistrarRolAsync" />
                     <button type="submit" class="oculto"></button>
                 </EditForm>
+
+                @if (MostrarAutorizacion)
+                {
+                    <div class="panel-pestana">
+                        <h4>Autorización de tratamiento de datos</h4>
+                        @if (_politica is { } politica)
+                        {
+                            <p class="hint">Léale o muéstrele al titular el aviso de privacidad vigente (versión @politica.Version) y registre su decisión.</p>
+                            <div class="texto-politica">@politica.Text</div>
+                            <div class="rejilla-campos">
+                                <div>
+                                    <SfRadioButton TChecked="string" Label="El titular autoriza" Name="autorizacion-datos" Value="Accepted" @bind-Checked="_decision" />
+                                </div>
+                                <div>
+                                    <SfRadioButton TChecked="string" Label="El titular no autoriza" Name="autorizacion-datos" Value="Declined" @bind-Checked="_decision" />
+                                </div>
+                            </div>
+                        }
+                        else if (_politicaCargada)
+                        {
+                            <div class="aviso aviso-alerta">
+                                La cooperativa no tiene publicada una política de tratamiento de datos: la persona se crea
+                                sin autorización y queda la constancia «sin política vigente».
+                            </div>
+                        }
+                    </div>
+                }
 
                 @if (_colision is not null)
                 {
@@ -69,6 +98,15 @@
     /// <summary>Roles derivados que Personas puede ofrecer registrar según los permisos del usuario.</summary>
     [Parameter] public IReadOnlyCollection<string> RolesRegistrables { get; set; } = [];
 
+    /// <summary>
+    /// Feature 012 (T175): al crear, muestra el aviso de privacidad vigente y registra la decisión del titular
+    /// (POS, Compras). Al editar no aplica: la autorización de una persona existente se registra en Habeas Data.
+    /// </summary>
+    [Parameter] public bool CapturarAutorizacion { get; set; }
+
+    /// <summary>Canal que queda en el consentimiento (<c>Pos</c>, <c>Compras</c>…); sin él, «InPerson».</summary>
+    [Parameter] public string? CanalDeAutorizacion { get; set; }
+
     /// <summary>Se guardó (creación o edición); el argumento es el PublicId de la persona.</summary>
     [Parameter] public EventCallback<Guid> OnGuardado { get; set; }
 
@@ -80,6 +118,11 @@
     private IReadOnlyList<OpcionDeCiudad> _ciudades = [];
     private bool _saving, _ciudadesCargadas;
     private Colision? _colision;
+    private PoliticaDeDatosVigenteDto? _politica;
+    private bool _politicaCargada;
+    private string? _decision;
+
+    private bool MostrarAutorizacion => CapturarAutorizacion && _modelo.PublicId is null;
 
     private string Titulo => _modelo.PublicId is null
         ? "Nueva persona"
@@ -96,6 +139,7 @@
         {
             _modelo = PersonaFormularioModelo.Nuevo(DocumentoInicial);
             AplicarRolSimpleInicial();
+            if (CapturarAutorizacion) await CargarPoliticaAsync();
         }
         StateHasChanged();
     }
@@ -129,6 +173,29 @@
         }
     }
 
+    private async Task CargarPoliticaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _politica = null;
+        _politicaCargada = false;
+        _decision = null;
+        var r = await Personas.PoliticaDeDatosVigenteAsync();
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync($"No se pudo leer la política de tratamiento de datos: {r.ErrorMessage}");
+            return;
+        }
+        _politica = r.Value;
+        _politicaCargada = true;
+    }
+
+    /// <summary>Lo que viaja como <c>authorization</c> en el alta; nulo si no se captura.</summary>
+    private AutorizacionAlCrearDto? Autorizacion() => !MostrarAutorizacion || !_politicaCargada
+        ? null
+        : _politica is { } p
+            ? new AutorizacionAlCrearDto(_decision!, p.PolicyVersionPublicId, CanalDeAutorizacion)
+            : new AutorizacionAlCrearDto("Accepted", null, CanalDeAutorizacion);
+
     private async Task CargarPersonaAsync(Guid id)
     {
         using var carga = _carga.Iniciar();
@@ -151,6 +218,11 @@
             await Notification.WarningAsync(avisos[0]);
             return;
         }
+        if (MostrarAutorizacion && _politica is not null && _decision is null)
+        {
+            await Notification.WarningAsync("Registre si el titular autoriza o no el tratamiento de sus datos.");
+            return;
+        }
 
         _saving = true;
         _colision = null;
@@ -168,7 +240,7 @@
             }
             else
             {
-                var r = await Personas.CrearAsync(entrada);
+                var r = await Personas.CrearAsync(entrada with { Authorization = Autorizacion() });
                 if (!r.IsSuccess) { await FalloAsync(r.ErrorCode, r.ErrorMessage); return; }
                 publicId = r.Value;
                 await Notification.SuccessAsync("Persona creada correctamente.");

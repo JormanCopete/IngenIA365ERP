@@ -169,6 +169,29 @@ public class Person : AuditableEntity
     [MaxLength(2)]
     public string? ThirdPartyType { get; set; }
 
+    // === PERFIL TRIBUTARIO (feature 012, T24; T172) ===
+    // Las seis marcas nuevas, con las que el motor tributario decide por el régimen de las partes (FR-013) y la DIAN
+    // deriva responsabilidades y tributo (CatalogoDian). Se reutilizan IsLargeContributor, WithholdingExempt,
+    // IcaWithholdingExempt y CiiuCode. Se escriben SOLO por PersonInput/PersonaDialog (feature 008, un solo sitio).
+
+    /// <summary>Responsable de IVA (antes «régimen común»).</summary>
+    public bool IsVatResponsible { get; set; }
+
+    /// <summary>Autorretenedor de renta: a quien le compra no le practica retención en la fuente.</summary>
+    public bool IsSelfWithholder { get; set; }
+
+    /// <summary>Agente retenedor de IVA (practica ReteIVA).</summary>
+    public bool IsVatWithholdingAgent { get; set; }
+
+    /// <summary>Del régimen simple de tributación (no se le retiene renta).</summary>
+    public bool IsSimpleTaxRegime { get; set; }
+
+    /// <summary>Declarante de renta (cambia la tarifa de algunas retenciones a personas naturales).</summary>
+    public bool IsIncomeTaxFiler { get; set; }
+
+    /// <summary>Obligado a facturar. En falso, comprarle exige documento soporte (Res. 167/2021).</summary>
+    public bool IsObligatedToInvoice { get; set; }
+
     // Withholding auxiliar
     public bool WithholdingAux { get; set; }
     public decimal? WithholdingAuxAmount { get; set; }

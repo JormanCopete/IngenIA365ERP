@@ -148,10 +148,40 @@ public static class AuditEventTypes
     public const string AccountingReportExported = "Accounting.Report.Exported";
     public const string AccountingCertificateSent = "Accounting.Certificate.Sent";
 
+    // -------------------- Inventario (feature 012, T44, T181) --------------------
+    // Eventos explicitos que no salen de un comando: la exportacion de una vista de
+    // /api/reports/inventory (vista, filtros, formato, filas) y la descarga de un catalogo con
+    // datos (?withData=true: catalogo, filas). Los emite InventoryAuditEmitter, encadenados.
+    public const string InventoryReportExported = "Inventory.Report.Exported";
+    public const string InventoryCatalogExported = "Inventory.Catalog.Exported";
+    // La verificacion de integridad del kardex (US2, T258): una consulta que deja su resultado (filtros, filas
+    // revisadas, incidentes y la alerta). La reconstruccion la audita el AuditBehavior (es un comando).
+    public const string InventoryIntegrityVerified = "Inventory.Integrity.Verified";
+
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.
     public const string NavigationOpened = "Navigation.Opened";
+
+    // -------------------- Idempotencia (feature 012, T13) --------------------
+    // Una operacion repetida con la misma Idempotency-Key devolvio el resultado guardado sin ejecutar
+    // otra vez; lo emite IdempotencyBehavior con la clave y el primer uso en la metadata.
+    public const string OperationReplayed = "Operation.Replayed";
+
+    // -------------------- Auditoria de comandos (feature 012, T36) --------------------
+    // Un comando que termino en Result.IsFailure: queda con este Action y el Error.Code en la metadata
+    // (clave ErrorCode). Una excepcion sigue siendo «Failed».
+    public const string CommandRejected = "Rejected";
+    public const string CommandFailed = "Failed";
+
+    // -------------------- Integridad de la auditoria (feature 012, T38) --------------------
+    // POST /api/audit/integrity/verify: la verificacion misma, con su resultado en la metadata.
+    public const string AuditLogIntegrityVerified = "AuditLog.IntegrityVerified";
+
+    // -------------------- Autorizacion de datos al crear (feature 012, T46; T175) --------------------
+    // Alta de una persona con AutorizacionAlCrear cuando la cooperativa no tiene politica publicada: el alta
+    // procede y queda la constancia «sin politica vigente» (la alerta Personas.SinPoliticaDeDatos es de I3, T616).
+    public const string PersonDataAuthorizationNoCurrentPolicy = "Person.DataAuthorization.NoCurrentPolicy";
 
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";

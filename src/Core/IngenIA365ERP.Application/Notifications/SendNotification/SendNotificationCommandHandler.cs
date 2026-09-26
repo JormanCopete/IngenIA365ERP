@@ -61,6 +61,7 @@ public sealed class SendNotificationCommandHandler
             Body = payload.Body,
             ChannelsMask = (int)payload.Channels,
             EmailStatus = hasEmail ? "Pending" : "Disabled",
+            AlertPublicId = payload.AlertPublicId,
             CreatedBy = actor,
             UpdatedBy = actor
         };

@@ -1,0 +1,220 @@
+@page "/compras/compra-directa"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Compra directa - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T354 (FR-011, FR-019, FR-020, FR-044, FR-050; contracts/api.md §14.3): la compra en tres pasos —abrir (proveedor,
+   bodega, la factura del proveedor: prefijo, número, CUFE, emisión, vencimiento y forma de pago), leer productos con el lector y
+   confirmar— que crea y confirma la recepción y la factura en una transacción (POST /purchases/direct). El resultado muestra los dos
+   números, los impuestos y retenciones que calculó el servidor, la aprobación pendiente si la política o el monto la piden, y los
+   avisos. La clave de la operación se conserva en el reintento: un doble clic no compra dos veces. *@
+<PermissionGate Required="Inventory.Purchases.Confirm" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Compra directa</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/compras/recepciones">Recepciones</a>
+            <a class="e-btn e-outline" href="/compras/facturas-proveedor">Facturas de proveedor</a>
+        </div>
+    </div>
+    <p class="texto-tenue">Paso @_paso de 3 · @(_paso switch { 1 => "Abrir la compra", 2 => "Leer los productos", _ => "Resultado" })</p>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Comprando…" : "Cargando…")">
+        @if (_paso == 1)
+        {
+            <div class="form-grid">
+                <label class="campo campo-ancho">Proveedor * <SelectorDeProveedor @bind-Seleccionado="_proveedor" /></label>
+                <label class="campo">Bodega que recibe *
+                    <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Elija…</option>
+                        @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Tipo de recepción *
+                    <select class="e-input" value="@(_tipoRecepcion?.ToString() ?? "")" @onchange="@(e => _tipoRecepcion = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        @foreach (var t in _tipos.Where(t => t.Class == ClasesDeCompra.Recepcion)) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Tipo de factura *
+                    <select class="e-input" value="@(_tipoFactura?.ToString() ?? "")" @onchange="@(e => _tipoFactura = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        @foreach (var t in _tipos.Where(t => t.Class == ClasesDeCompra.Factura)) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Fecha <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+                <label class="campo">Prefijo de la factura <input class="e-input" @bind="_prefijo" maxlength="10" /></label>
+                <label class="campo">Número de la factura * <input class="e-input" @bind="_numero" maxlength="20" /></label>
+                <label class="campo campo-ancho">CUFE <input class="e-input" @bind="_cufe" maxlength="96" /></label>
+                <label class="campo">Emisión * <input type="date" class="e-input" value="@(_emision?.ToString("yyyy-MM-dd"))" @onchange="@(e => _emision = LeerFecha(e.Value))" /></label>
+                <label class="campo">Forma de pago
+                    <select class="e-input" @bind="_formaDePago"><option value="Cash">Contado</option><option value="Credit">Crédito</option></select>
+                </label>
+                @if (_formaDePago == "Credit")
+                {
+                    <label class="campo">Vencimiento * <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => _vence = LeerFecha(e.Value))" /></label>
+                }
+                <label class="campo"><input type="checkbox" @bind="_electronica" /> Factura electrónica (exige CUFE)</label>
+                <label class="campo">Remisión o guía <input class="e-input" @bind="_remision" maxlength="60" /></label>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(!PuedeAbrir)" OnClick="@(() => _paso = 2)">Leer los productos</SfButton>
+            </div>
+        }
+        else if (_paso == 2)
+        {
+            <div class="info-card">
+                <SelectorDeProducto Etiqueta="Producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+            </div>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th class="numero">Descuento</th><th class="numero">Subtotal</th><th></th></tr></thead>
+                    <tbody>
+                        @for (var i = 0; i < _lineas.Count; i++)
+                        {
+                            var indice = i;
+                            var l = _lineas[i];
+                            <tr>
+                                <td>@(indice + 1)</td>
+                                <td>@l.Producto</td>
+                                <td>@l.Unidad</td>
+                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /></td>
+                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Precio" /></td>
+                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Descuento" /></td>
+                                <td class="numero">@((l.Cantidad * l.Precio - l.Descuento).ToString("N2"))</td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="texto-tenue">Los impuestos y las retenciones los calcula el servidor con el catálogo vigente a la fecha, el concepto de cada producto y el régimen de las dos partes; se ven en el resultado.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" OnClick="@(() => _paso = 1)">Volver</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra</SfButton>
+            </div>
+        }
+        else if (_resultado is { } r)
+        {
+            @if (r.Status == 1)
+            {
+                <p class="aviso aviso-info">La recepción quedó en aprobación (@(r.Approval?.Reason == "AmountLimit" ? "el total supera su monto máximo" : "la política del tipo lo pide")). La factura quedó en borrador enlazada y se confirma con la última aprobación.</p>
+            }
+            else
+            {
+                <p class="aviso aviso-ok">Compra confirmada.</p>
+            }
+            <div class="info-card">
+                <p>Recepción <a href="@($"/compras/recepciones/{r.Receipt.PublicId}")">@(r.Receipt.DisplayNumber ?? "(en aprobación)")</a> ·
+                   factura <a href="@($"/compras/facturas-proveedor/{r.SupplierInvoice.PublicId}")">@(r.SupplierInvoice.DisplayNumber ?? "(borrador)")</a>
+                   del proveedor @r.SupplierInvoice.SupplierNumber</p>
+            </div>
+            @if (r.Warnings.Count > 0)
+            {
+                <div class="aviso aviso-alerta"><ul>@foreach (var a in r.Warnings) { <li>@a.Message</li> }</ul></div>
+            }
+            <ImpuestosDeCompra Renglones="@r.TaxLines" Totales="@r.Totals" />
+            <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@NuevaCompra">Otra compra</SfButton></div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private sealed class LineaForm
+    {
+        public Guid ProductPublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public Guid UnitPublicId { get; set; }
+        public string Unidad { get; set; } = "";
+        public decimal Cantidad { get; set; } = 1m;
+        public decimal Precio { get; set; }
+        public decimal Descuento { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<LineaForm> _lineas = [];
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private Guid? _bodega, _tipoRecepcion, _tipoFactura;
+    private DateOnly? _fecha, _emision, _vence;
+    private string? _prefijo, _numero, _cufe, _remision;
+    private string _formaDePago = "Cash";
+    private bool _electronica;
+    private int _paso = 1;
+    private ResultadoDeCompraDirectaDto? _resultado;
+
+    private bool PuedeAbrir => _proveedor is not null && _bodega is not null && _tipoRecepcion is not null && _tipoFactura is not null
+                               && !string.IsNullOrWhiteSpace(_numero) && _emision is not null && (_formaDePago == "Cash" || _vence is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var tipos = await Inventario.ListarTiposAsync(grupo: 1);
+        _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive)] : [];
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
+        NuevaCompra();
+    }
+
+    private void NuevaCompra()
+    {
+        _clave = new ClaveDeOperacion();
+        _paso = 1;
+        _resultado = null;
+        _lineas = [];
+        _numero = _prefijo = _cufe = _remision = null;
+        _fecha = _emision = DateOnly.FromDateTime(DateTime.Today);
+        _vence = null;
+        _formaDePago = "Cash";
+        _electronica = false;
+        _bodega ??= _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
+        _tipoRecepcion ??= _tipos.FirstOrDefault(t => t.Class == ClasesDeCompra.Recepcion)?.PublicId;
+        _tipoFactura ??= _tipos.FirstOrDefault(t => t.Class == ClasesDeCompra.Factura)?.PublicId;
+    }
+
+    private async Task AgregarLineaAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return; }
+        var p = producto.Value;
+        var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        var unidad = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId;
+        if (_lineas.FirstOrDefault(l => l.ProductPublicId == p.PublicId && l.UnitPublicId == unidad) is { } existente)
+        {
+            existente.Cantidad += 1m; // el lector suma sobre la línea ya leída
+            return;
+        }
+        _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = unidad, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code });
+    }
+
+    private async Task ComprarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var recepcion = new BorradorDeCompraRequest(_tipoRecepcion!.Value, _fecha, _bodega, _proveedor!.PublicId,
+            string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, null, null,
+            _lineas.Select(l => new LineaDeCompraRequest(null, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null)).ToList());
+        var factura = new FacturaDeCompraDirectaRequest(_tipoFactura!.Value, new DocumentoDelProveedorRequest(
+            string.IsNullOrWhiteSpace(_prefijo) ? null : _prefijo.Trim(), _numero!.Trim(), string.IsNullOrWhiteSpace(_cufe) ? null : _cufe.Trim(),
+            _emision!.Value, _formaDePago == "Credit" ? _vence : null, _formaDePago, _electronica));
+        var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la compra.");
+            return;
+        }
+        _resultado = r.Value;
+        _paso = 3;
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

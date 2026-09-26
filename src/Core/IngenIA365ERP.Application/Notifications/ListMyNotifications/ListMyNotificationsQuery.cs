@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Notifications.Common;
 using IngenIA365ERP.Application.Notifications.Contracts;
@@ -8,10 +9,12 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Notifications.ListMyNotifications;
 
 /// <summary>
-/// Inbox del usuario actual. El handler resuelve <c>UserPublicId</c> del
-/// <see cref="ICurrentUserService"/> — los clientes NUNCA pueden listar
-/// notificaciones de otros usuarios. Filtros opcionales: incluir archivadas,
-/// solo no leídas.
+/// Inbox del usuario actual. El handler resuelve <c>UserPublicId</c> por
+/// <see cref="IActorActual"/> (feature 012, T39, T095): la persona de <c>SEC_Users</c> de la
+/// cooperativa activa, por la identidad central del token. Hasta entonces lo tomaba de
+/// <c>ICurrentUserService.UserId</c>, que es nulo para un usuario de identidad central, y la
+/// bandeja respondía <c>Auth.Unauthorized</c> a todos. Los clientes NUNCA pueden listar
+/// notificaciones de otros usuarios. Filtros opcionales: incluir archivadas, solo no leídas.
 /// </summary>
 public sealed record ListMyNotificationsQuery(
     bool IncludeArchived = false,
@@ -22,19 +25,19 @@ public sealed class ListMyNotificationsQueryHandler
     : IRequestHandler<ListMyNotificationsQuery, Result<NotificationInboxDto>>
 {
     private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly IActorActual _actor;
 
     public ListMyNotificationsQueryHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser)
+        IApplicationDbContext db, IActorActual actor)
     {
         _db = db;
-        _currentUser = currentUser;
+        _actor = actor;
     }
 
     public async Task<Result<NotificationInboxDto>> Handle(
         ListMyNotificationsQuery request, CancellationToken ct)
     {
-        var recipient = await ResolveCurrentUserPublicIdAsync(ct);
+        var recipient = (await _actor.ObtenerAsync(ct)).UserPublicId;
         if (recipient is null)
         {
             return Result.Failure<NotificationInboxDto>(
@@ -65,19 +68,11 @@ public sealed class ListMyNotificationsQueryHandler
                 n.EmailStatus,
                 n.CreatedAt,
                 n.ReadAt,
-                n.ArchivedAt))
+                n.ArchivedAt,
+                n.AlertPublicId))
             .ToListAsync(ct);
 
         return Result.Success(new NotificationInboxDto(items, unreadCount, totalCount));
-    }
-
-    private async Task<Guid?> ResolveCurrentUserPublicIdAsync(CancellationToken ct)
-    {
-        if (_currentUser.UserId is not { } userId) return null;
-        return await _db.Users
-            .Where(u => u.Id == userId)
-            .Select(u => (Guid?)u.PublicId)
-            .FirstOrDefaultAsync(ct);
     }
 
     private static NotificationType ParseType(string raw) =>

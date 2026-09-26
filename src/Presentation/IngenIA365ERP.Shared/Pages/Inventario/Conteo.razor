@@ -1,0 +1,349 @@
+@page "/inventario/conteos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Security
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Conteo físico - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T404 (FR-040, FR-041, US11-1 a US11-4; contracts/api.md §12): el conteo con su alcance, su foto y sus contadores.
+   «Abrir» congela la foto (sin número). El panel de captura trabaja con el lector en modo teclado: cada lectura (el código y Enter)
+   se acumula y se envía por tandas —cada lectura suma; una cantidad negativa corrige; las rechazadas quedan a la vista con su
+   motivo—; la ronda 2 sólo acepta las líneas marcadas para reconteo. «Cerrar» compara, exige el reconteo y numera. Después, la
+   vista previa del ajuste (fecha según Conteo.FechaDelAjuste, valor al promedio de esa fecha) y «Generar ajuste», que nace en
+   aprobación de alguien que no abrió ni contó. Descartar (abierto o borrador) y anular (cerrado) piden motivo. En un conteo ciego
+   quien sólo captura no ve el teórico: lo decide el servidor (ShowsTheoretical). *@
+<PermissionGate Required="Inventory.Counts.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/inventario/conteos">Volver a la lista</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_carga.Activa || _guardado.Activa)" OnClick="@(() => CargarAsync())">Actualizar</SfButton>
+            @if (_conteo is { State: "Draft" } && _puedeAbrir)
+            {
+                <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@AbrirAsync">Abrir (tomar la foto)</SfButton>
+            }
+            @if (_conteo is { State: "Open" } && _puedeCerrar)
+            {
+                <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@CerrarAsync">Cerrar el conteo</SfButton>
+            }
+            @if (_conteo is { State: "Draft" or "Open" } && _puedeAbrir)
+            {
+                <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Descartar))">Descartar</SfButton>
+            }
+            @if (_conteo is { State: "Closed" or "Adjusted" } && _puedeCerrar && _conteo.Adjustments.All(a => a.Status is 3 or 4))
+            {
+                <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_conteo is { } c)
+        {
+            <div class="info-card">
+                <p>
+                    <b>@EstadoDeConteo(c.State)</b> · @c.DocumentType.Code · Bodega @c.Warehouse.Code · @TextosDeInventario.Texto(TextosDeInventario.TiposDeConteo, c.Kind)
+                    (@TextosDeInventario.Texto(TextosDeInventario.AlcancesDeConteo, c.Scope))@(c.Blind ? " · ciego" : "")
+                </p>
+                @if (c.Criteria.Categories.Count > 0) { <p>Categorías: @string.Join(", ", c.Criteria.Categories.Select(x => x.Code))</p> }
+                @if (c.Criteria.Locations.Count > 0) { <p>Ubicaciones: @string.Join(", ", c.Criteria.Locations.Select(x => x.Code))</p> }
+                @if (c.Criteria.Products.Count > 0) { <p>Productos: @string.Join(", ", c.Criteria.Products.Select(x => x.Code))</p> }
+                @if (c.SnapshotAt is { } foto)
+                {
+                    <p>Foto del @c.SnapshotDate?.ToString("dd/MM/yyyy") (@foto.ToLocalTime().ToString("HH:mm")) por @c.OpenedBy?.Name ·
+                        @(c.BlocksMovements ? "los productos del conteo no admiten movimientos mientras esté abierto" : "los movimientos posteriores a la foto se suman al teórico")</p>
+                }
+                <p>Contadores: @(c.Counters.Count == 0 ? "cualquiera con permiso de capturar" : string.Join(", ", c.Counters.Select(x => x.Name)))</p>
+                @if (!string.IsNullOrWhiteSpace(c.Notes)) { <p>Notas: @c.Notes</p> }
+            </div>
+
+            @if (c.State == "Open" && _puedeCapturar)
+            {
+                <div class="info-card">
+                    <b>Captura</b> — ronda
+                    <select class="e-input" value="@_ronda" @onchange="@(e => _ronda = int.TryParse(e.Value?.ToString(), out var r) ? r : 1)">
+                        <option value="1">1 (conteo)</option>
+                        @if (c.Lines.Any(l => l.NeedsRecount) || c.Round >= 2) { <option value="2">2 (reconteo de las marcadas)</option> }
+                    </select>
+                    <div class="form-grid">
+                        <label class="campo">Ubicación
+                            <select class="e-input" value="@(_ubicacion?.ToString() ?? "")" @onchange="@(e => _ubicacion = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                <option value="">La del producto</option>
+                                @foreach (var u in _ubicaciones) { <option value="@u.PublicId">@u.Code · @u.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Cantidad por lectura <input class="e-input numero" type="number" step="any" value="@(_cantidad?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="1"
+                            @onchange="@(e => _cantidad = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : null)" /></label>
+                        <label class="campo campo-ancho">Código (lector: lea y Enter) <input class="e-input" @bind="_codigo" @bind:event="oninput" @onkeydown="@TeclaAsync" placeholder="Código de barras" /></label>
+                    </div>
+                    <p class="texto-apoyo">@_pendientes.Count lectura(s) sin enviar. Se envían solas cada @TamanoDeTanda lecturas; una cantidad negativa corrige una lectura equivocada.</p>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _pendientes.Count == 0)" OnClick="@EnviarAsync">Enviar lecturas</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@(_pendientes.Count == 0)" OnClick="@(() => _pendientes.Clear())">Vaciar</SfButton>
+                    </div>
+                    @if (_rechazadas.Count > 0)
+                    {
+                        <div class="aviso aviso-alerta">
+                            <b>Lecturas rechazadas:</b>
+                            <ul>@foreach (var r in _rechazadas) { <li>@r.Lectura — @r.Motivo</li> }</ul>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_reconteo.Count > 0)
+            {
+                <div class="aviso aviso-alerta">
+                    <b>Falta el reconteo (ronda 2) de:</b>
+                    <ul>@foreach (var r in _reconteo) { <li>@r</li> }</ul>
+                </div>
+            }
+
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Producto</th><th>Ubicación</th>
+                            @if (c.ShowsTheoretical) { <th class="numero">Teórico</th> }
+                            <th class="numero">Ronda 1</th><th class="numero">Ronda 2</th><th class="numero">Contado</th>
+                            @if (c.ShowsTheoretical) { <th class="numero">Diferencia</th> }
+                            @if (_conValor) { <th class="numero">Valor</th> }
+                            <th>Reconteo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in c.Lines)
+                        {
+                            <tr>
+                                <td>@l.Product.Code · @l.Product.Name @(l.AddedDuringCapture ? "(encontrado)" : "")</td>
+                                <td>@l.Location.Code</td>
+                                @if (c.ShowsTheoretical) { <td class="numero">@l.Theoretical?.ToString("N4")</td> }
+                                <td class="numero">@l.CountedRound1?.ToString("N4")</td>
+                                <td class="numero">@l.CountedRound2?.ToString("N4")</td>
+                                <td class="numero">@l.Counted.ToString("N4")</td>
+                                @if (c.ShowsTheoretical) { <td class="numero">@l.Difference?.ToString("N4")</td> }
+                                @if (_conValor) { <td class="numero">@l.DifferenceValue?.ToString("N2")</td> }
+                                <td>@(l.NeedsRecount ? "Pendiente" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (c.State is "Closed" or "AdjustmentPending" or "Adjusted")
+            {
+                <div class="info-card">
+                    <b>Ajuste del conteo</b>
+                    <IndicadorDeCarga Cargando="@_cargaAjuste.Activa">
+                        @if (_ajuste is { } a)
+                        {
+                            <p>Fecha del ajuste: @a.AdjustmentDate.ToString("dd/MM/yyyy") (@(a.DateRule == "Aprobacion" ? "la de la aprobación" : "la de la foto"); si ese mes cerró, el primer día abierto).
+                                @if (a.PositiveValue is not null) { <span> Sobrantes: @a.PositiveValue?.ToString("N2") · faltantes: @a.NegativeValue?.ToString("N2").</span> }</p>
+                            @if (a.Lines.Count == 0) { <p class="texto-tenue">Sin diferencias: no hay nada que ajustar.</p> }
+                        }
+                        @foreach (var d in c.Adjustments)
+                        {
+                            <p>@TextosDeInventario.Clase(d.Class) @(d.DisplayNumber ?? "") · @TextosDeInventario.Estado(d.Status) · @d.OperationDate.ToString("dd/MM/yyyy")
+                                @(d.ApprovalRequestPublicId is not null ? " · lo aprueba alguien que no abrió ni contó" : "")</p>
+                        }
+                        @if (c.State == "Closed" && _puedeCerrar && _ajuste is { Lines.Count: > 0 })
+                        {
+                            <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GenerarAjusteAsync">Generar ajuste (queda en aprobación)</SfButton>
+                        }
+                    </IndicadorDeCarga>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accion == Accion.Anular ? "Anular el conteo" : "Descartar el conteo")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_accion == Accion.Anular
+                    ? "Se crea un documento contrario sin movimientos: el conteo no movió existencia. Si tiene ajustes vigentes, anúlelos primero."
+                    : "El conteo queda descartado sin consumir número y sus productos quedan libres para moverse.")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDeTanda = 20;
+
+    private enum Accion { Descartar, Anular }
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaAjuste = new();
+    private readonly ClaveDeOperacion _claveAbrir = new(), _claveCapturar = new(), _claveCerrar = new(), _claveAjuste = new(), _claveMotivo = new();
+    private readonly List<LecturaDeConteoRequest> _pendientes = [];
+    private readonly List<(string Lectura, string Motivo)> _rechazadas = [];
+    private List<string> _reconteo = [];
+    private List<UbicacionDto> _ubicaciones = [];
+    private ConteoDto? _conteo;
+    private AjustePrevistoDto? _ajuste;
+    private bool _puedeAbrir, _puedeCapturar, _puedeCerrar, _mostrarMotivo, _permisosLeidos;
+    private int _ronda = 1;
+    private Guid? _ubicacion;
+    private decimal? _cantidad;
+    private string _codigo = "";
+    private string? _motivo;
+    private Accion _accion;
+
+    private bool _conValor => _conteo?.Lines.Any(l => l.DifferenceValue is not null) == true;
+
+    private string Titulo => _conteo is null ? "Conteo físico" : $"Conteo físico {_conteo.DisplayNumber ?? (_conteo.SnapshotAt is null ? "(borrador)" : "(abierto, sin número)")}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_permisosLeidos)
+        {
+            _puedeAbrir = await Permisos.TieneAsync("Inventory.Counts.Open");
+            _puedeCapturar = await Permisos.TieneAsync("Inventory.Counts.Capture");
+            _puedeCerrar = await Permisos.TieneAsync("Inventory.Counts.Close");
+            _permisosLeidos = true;
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ObtenerConteoAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _conteo = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el conteo.");
+            return;
+        }
+        _conteo = r.Value;
+        if (_ubicaciones.Count == 0 && _conteo.State == "Open")
+        {
+            var u = await Inventario.ListarUbicacionesAsync(_conteo.Warehouse.PublicId);
+            _ubicaciones = u.IsSuccess ? [.. (u.Value ?? []).Where(x => x.IsActive)] : [];
+        }
+        if (_conteo.State is "Closed" or "AdjustmentPending" or "Adjusted") await CargarAjusteAsync();
+    }
+
+    private async Task CargarAjusteAsync()
+    {
+        using var carga = _cargaAjuste.Iniciar();
+        var r = await Inventario.VerAjusteDeConteoAsync(Id);
+        _ajuste = r.IsSuccess ? r.Value : null;
+    }
+
+    private async Task AbrirAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.AbrirConteoAsync(Id, _conteo?.RowVersion, _claveAbrir);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el conteo.");
+            return;
+        }
+        await Notification.SuccessAsync($"Conteo abierto: foto de {r.Value.Lines} línea(s).");
+        await CargarAsync();
+    }
+
+    private async Task TeclaAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_codigo)) return;
+        _pendientes.Add(new LecturaDeConteoRequest(_codigo.Trim(), null, null, _cantidad, _ubicacion, null, DateTime.UtcNow));
+        _codigo = "";
+        if (_pendientes.Count >= TamanoDeTanda) await EnviarAsync();
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_pendientes.Count == 0) return;
+        using var guardado = _guardado.Iniciar();
+        var tanda = _pendientes.ToList();
+        var r = await Inventario.CapturarConteoAsync(Id, new CapturaDeConteoRequest(_ronda, tanda), _claveCapturar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron registrar las lecturas; siguen pendientes.");
+            return;
+        }
+        _pendientes.Clear();
+        foreach (var rechazada in r.Value.Rejected)
+            _rechazadas.Insert(0, (tanda.ElementAtOrDefault(rechazada.Index)?.Barcode ?? $"lectura {rechazada.Index + 1}", rechazada.Message));
+        await Notification.InfoAsync($"{r.Value.Accepted} lectura(s) registradas{(r.Value.Rejected.Count > 0 ? $", {r.Value.Rejected.Count} rechazada(s)" : "")}.");
+        await CargarAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.CerrarConteoAsync(Id, _conteo?.RowVersion, _claveCerrar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _reconteo = r.ErrorCode == "Inventory.Count.RecountRequired" && r.Data is { } datos && datos.TryGetProperty("lines", out var lineas)
+                ? [.. lineas.EnumerateArray().Select(l => $"{l.GetProperty("productCode").GetString()} en {l.GetProperty("locationCode").GetString()}")]
+                : [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el conteo.");
+            await CargarAsync();
+            return;
+        }
+        _reconteo = [];
+        await Notification.SuccessAsync($"Conteo {r.Value.DisplayNumber} cerrado: {r.Value.WithDifference} línea(s) con diferencia.");
+        await CargarAsync();
+    }
+
+    private async Task GenerarAjusteAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.GenerarAjusteDeConteoAsync(Id, null, _claveAjuste);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el ajuste.");
+            return;
+        }
+        await Notification.InfoAsync(r.Value.Documents.Count == 0
+            ? "Sin diferencias: no hay nada que ajustar."
+            : $"{r.Value.Documents.Count} ajuste(s) en aprobación: los aprueba alguien que no abrió ni contó.");
+        await CargarAsync();
+    }
+
+    private void AbrirMotivo(Accion accion)
+    {
+        _accion = accion;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_accion == Accion.Descartar)
+        {
+            var r = await Inventario.DescartarConteoAsync(Id, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Conteo descartado: sus productos quedan libres.");
+        }
+        else
+        {
+            var r = await Inventario.AnularConteoAsync(Id, _motivo, _claveMotivo);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Conteo anulado con {r.Value.DisplayNumber}.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync();
+    }
+
+    private static string EstadoDeConteo(string estado) => TextosDeInventario.EstadosDeConteo.TryGetValue(estado, out var t) ? t : estado;
+}

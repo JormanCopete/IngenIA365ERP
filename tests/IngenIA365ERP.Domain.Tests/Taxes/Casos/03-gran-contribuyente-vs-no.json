@@ -1,0 +1,48 @@
+{
+  // Feature 012, T097, caso 03: la tarifa de ReteIVA exige que el agente (la cooperativa) sea gran contribuyente.
+  // A) La cooperativa es gran contribuyente: IVA 10.000.000 × 19 % = 1.900.000 (descontable);
+  //    ReteIVA 1.900.000 × 15 % = 285.000 (la base de la operación 10.000.000 supera 27 UVT = 1.414.098).
+  // B) La cooperativa no es gran contribuyente ni agente de retención de IVA: sólo el IVA.
+  "nombre": "ReteIVA: comprador gran contribuyente frente a no gran contribuyente",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 1, "codigo": "IVA", "nombre": "IVA", "clase": "Iva", "forma": "PercentOfBase", "codigoDian": "01" },
+    { "id": 3, "codigo": "RETEIVA", "nombre": "Retención de IVA", "clase": "ReteIva", "forma": "PercentOfTax", "calculadoSobre": 1, "codigoDian": "05" }
+  ],
+  "tarifas": [
+    { "id": 11, "impuesto": 1, "codigo": "IVA19", "tarifa": 0.19, "aplicaA": "Both", "desde": "2017-01-01" },
+    { "id": 31, "impuesto": 3, "codigo": "RIVA15GC", "tarifa": 0.15, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "agenteGranContribuyente": true, "sujetoResponsableIva": true } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "La cooperativa es gran contribuyente",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "granContribuyente": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 10000000, "impuestos": [ { "impuesto": 1, "tarifa": "IVA19" } ] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 10000000, "valor": 1900000, "explicacion": [ "IVA descontable" ] },
+          { "linea": null, "tarifa": "RIVA15GC", "tratamiento": "WithholdingApplied", "base": 1900000, "valor": 285000,
+            "explicacion": [ "agente gran contribuyente: sí", "Base de la operación: 10000000", "Base mínima en pesos: 1414098" ] }
+        ]
+      }
+    },
+    {
+      "nombre": "La cooperativa no es gran contribuyente",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "granContribuyente": false, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 10000000, "impuestos": [ { "impuesto": 1, "tarifa": "IVA19" } ] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 10000000, "valor": 1900000 }
+        ]
+      }
+    }
+  ]
+}

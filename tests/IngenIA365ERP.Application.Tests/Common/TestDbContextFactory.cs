@@ -2,13 +2,20 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
+using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -50,6 +57,28 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    // Feature 012 (T13): claves de idempotencia de IdempotencyBehavior.
+    public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
+    public DbSet<BackgroundLease> BackgroundLeases => Set<BackgroundLease>();
+    // Feature 012 (T37, T38): auditoria de los modulos encadenados.
+    public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
+    public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
+    public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
+    // Feature 012 (T21): parametros con vigencia de LectorDeParametros y AddParameterVersionCommand.
+    public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
+    // Feature 012 (T7, T9): bandeja de salida de EmisorDeMensajes.
+    public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
+    public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
+    public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
+    // Feature 012 (T33, T34): aprobaciones y montos maximos por permiso.
+    public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
+    public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
+    public DbSet<PermissionAmountLimit> PermissionAmountLimits => Set<PermissionAmountLimit>();
+    // Feature 012 (T39): alertas de plataforma.
+    public DbSet<AlertType> AlertTypes => Set<AlertType>();
+    public DbSet<Alert> Alerts => Set<Alert>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -111,8 +140,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
     DbSet<Reference> IApplicationDbContext.References => throw new NotImplementedException();
-    DbSet<Country> IApplicationDbContext.Countries => throw new NotImplementedException();
-    DbSet<Department> IApplicationDbContext.Departments => throw new NotImplementedException();
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<Department> Departments => Set<Department>();
     DbSet<Section> IApplicationDbContext.Sections => throw new NotImplementedException();
     DbSet<Profession> IApplicationDbContext.Professions => throw new NotImplementedException();
     public DbSet<Position> Positions => Set<Position>();
@@ -212,25 +241,55 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<PayrollEntry> IApplicationDbContext.PayrollEntries => throw new NotImplementedException();
     DbSet<Absence> IApplicationDbContext.Absences => throw new NotImplementedException();
     DbSet<TaxCertificate> IApplicationDbContext.TaxCertificates => throw new NotImplementedException();
-    DbSet<Product> IApplicationDbContext.Products => throw new NotImplementedException();
-    DbSet<ProductGroup> IApplicationDbContext.ProductGroups => throw new NotImplementedException();
-    DbSet<PrimaryGroup> IApplicationDbContext.PrimaryGroups => throw new NotImplementedException();
-    DbSet<SecondaryGroup> IApplicationDbContext.SecondaryGroups => throw new NotImplementedException();
-    DbSet<InventoryTransactionType> IApplicationDbContext.InventoryTransactionTypes => throw new NotImplementedException();
-    DbSet<Warehouse> IApplicationDbContext.Warehouses => throw new NotImplementedException();
-    DbSet<Location> IApplicationDbContext.Locations => throw new NotImplementedException();
-    DbSet<SalesPoint> IApplicationDbContext.SalesPoints => throw new NotImplementedException();
-    DbSet<Shift> IApplicationDbContext.Shifts => throw new NotImplementedException();
     public DbSet<Salesperson> Salespeople => Set<Salesperson>();
-    DbSet<DiscountType> IApplicationDbContext.DiscountTypes => throw new NotImplementedException();
-    DbSet<PriceListType> IApplicationDbContext.PriceListTypes => throw new NotImplementedException();
-    DbSet<ProductAccount> IApplicationDbContext.ProductAccounts => throw new NotImplementedException();
-    DbSet<VatAccount> IApplicationDbContext.VatAccounts => throw new NotImplementedException();
-    DbSet<CommissionParameter> IApplicationDbContext.CommissionParameters => throw new NotImplementedException();
-    DbSet<InventoryDocument> IApplicationDbContext.InventoryDocuments => throw new NotImplementedException();
-    DbSet<InventoryTransaction> IApplicationDbContext.InventoryTransactions => throw new NotImplementedException();
-    DbSet<InventoryInvoice> IApplicationDbContext.InventoryInvoices => throw new NotImplementedException();
-    DbSet<PhysicalInventory> IApplicationDbContext.PhysicalInventories => throw new NotImplementedException();
+    // Feature 012 (T136): documento generico de inventario (Numerador, ciclo comun).
+    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
+    public DbSet<InventoryDocumentLine> InventoryDocumentLines => Set<InventoryDocumentLine>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<DocumentLineLink> DocumentLineLinks => Set<DocumentLineLink>();
+    public DbSet<DocumentPartySnapshot> DocumentPartySnapshots => Set<DocumentPartySnapshot>();
+    public DbSet<DocumentTaxLine> DocumentTaxLines => Set<DocumentTaxLine>();
+    public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
+    public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
+    // Feature 012 (T209, US1): catalogo y bodegas (tablas en InventarioComercialNucleo, T440).
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
+    // Feature 012 (T250, US2): kardex y proyecciones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>();
+    // Feature 012 (T307, US4): activación de bodegas y cifras de SOLIDO.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
+    // Feature 012 (T161): catalogo tributario de Core.
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept>();
     DbSet<Certificate> IApplicationDbContext.Certificates => throw new NotImplementedException();
     DbSet<CdtParameter> IApplicationDbContext.CdtParameters => throw new NotImplementedException();
     DbSet<CdtRateByTerm> IApplicationDbContext.CdtRatesByTerm => throw new NotImplementedException();
@@ -247,8 +306,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
-        // Feature 008: City sí entra (PersonFactory valida CityPublicId); lo que cuelga de ella no.
-        modelBuilder.Ignore<Department>();
+        // Feature 008: City sí entra (PersonFactory valida CityPublicId). Feature 012 (T113): también su departamento y
+        // país, que DivipolaSeeder crea cuando faltan.
         modelBuilder.Ignore<Spouse>();
         modelBuilder.Ignore<Subscription>();
         modelBuilder.Ignore<TenantSetting>();
@@ -282,6 +341,95 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<Employee>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Associate>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Salesperson>(b => b.Ignore("RowVersion"));
+        // Feature 012 (T136): documento generico. Las dos referencias de anulacion y los dos extremos de los
+        // vinculos son relaciones distintas; sin declararlas la convencion las empareja.
+        modelBuilder.Entity<InventoryDocument>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.DocumentType).WithMany().HasForeignKey(d => d.DocumentTypeId);
+            b.HasMany(d => d.Lines).WithOne(l => l.Document).HasForeignKey(l => l.DocumentId);
+        });
+        modelBuilder.Entity<InventoryDocumentLine>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentLink>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.SourceDocument).WithMany().HasForeignKey(l => l.SourceDocumentId);
+            b.HasOne(l => l.TargetDocument).WithMany().HasForeignKey(l => l.TargetDocumentId);
+            b.HasMany(l => l.LineLinks).WithOne(x => x.DocumentLink).HasForeignKey(x => x.DocumentLinkId);
+        });
+        modelBuilder.Entity<DocumentLineLink>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.SourceLine).WithMany().HasForeignKey(l => l.SourceLineId);
+            b.HasOne(l => l.TargetLine).WithMany().HasForeignKey(l => l.TargetLineId);
+        });
+        modelBuilder.Entity<DocumentPartySnapshot>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentTaxLine>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<InventoryDocumentType>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasMany(t => t.Warehouses).WithOne(w => w.DocumentType).HasForeignKey(w => w.DocumentTypeId);
+            b.HasMany(t => t.Sequences).WithOne(s => s.DocumentType).HasForeignKey(s => s.DocumentTypeId);
+        });
+        modelBuilder.Entity<DocumentTypeWarehouse>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<DocumentSequence>(b => b.Ignore("RowVersion"));
+        // Feature 012 (T209, US1): catalogo y bodegas, con el filtro de borrado logico de sus configuraciones (los
+        // comandos confian en el: un codigo de barras dado de baja queda libre, una politica retirada no cuenta).
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasOne(c => c.Parent).WithMany().HasForeignKey(c => c.ParentId); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasMany(p => p.Units).WithOne(u => u.Product).HasForeignKey(u => u.ProductId);
+            b.HasMany(p => p.Barcodes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
+            b.HasMany(p => p.Taxes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasMany(w => w.Locations).WithOne(l => l.Warehouse).HasForeignKey(l => l.WarehouseId); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(k => k.ReversesEntry).WithMany().HasForeignKey(k => k.ReversesEntryId);
+            b.HasOne(k => k.AffectsEntry).WithMany().HasForeignKey(k => k.AffectsEntryId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>(b => { b.Ignore("RowVersion"); b.Ignore(x => x.Inicio); b.Ignore(x => x.Fin); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasMany(x => x.Captures).WithOne(c => c.SnapshotLine).HasForeignKey(c => c.SnapshotLineId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.TaxedOnDefinition).WithMany().HasForeignKey(d => d.TaxedOnDefinitionId);
+            b.HasMany(d => d.Rates).WithOne(r => r.TaxDefinition).HasForeignKey(r => r.TaxDefinitionId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollTransaction>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollConcept>(b => b.Ignore("RowVersion"));
         // City.People choca con las dos navegaciones Person→City (City y MailingCity); aquí no hace falta.
@@ -298,6 +446,44 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         });
         modelBuilder.Entity<Branch>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<Bank>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<OperationKey>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ParameterVersion>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ApprovalPolicy>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasMany(p => p.Levels).WithOne(l => l.Policy).HasForeignKey(l => l.PolicyId);
+        });
+        modelBuilder.Entity<ApprovalPolicyLevel>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<ApprovalRequest>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(r => r.Policy).WithMany().HasForeignKey(r => r.PolicyId);
+            b.HasMany(r => r.Decisions).WithOne(d => d.Request).HasForeignKey(d => d.RequestId);
+        });
+        modelBuilder.Entity<ApprovalDecision>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<AlertType>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<Alert>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(a => a.AlertType).WithMany().HasForeignKey(a => a.AlertTypeId);
+        });
+        modelBuilder.Entity<PermissionAmountLimit>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(l => l.Role).WithMany().HasForeignKey(l => l.RoleId);
+        });
+        modelBuilder.Entity<IntegrationMessage>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IntegrationMessageDelivery>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.Message).WithMany().HasForeignKey(d => d.MessageId);
+        });
+        modelBuilder.Entity<IntegrationMessageDependency>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasOne(d => d.Message).WithMany().HasForeignKey(d => d.MessageId);
+            b.HasOne(d => d.DependsOnMessage).WithMany().HasForeignKey(d => d.DependsOnMessageId);
+        });
         modelBuilder.Entity<Position>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CostCenter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<VoucherType>(b => b.Ignore("RowVersion"));

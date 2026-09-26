@@ -1,0 +1,41 @@
+{
+  "nombre": "Una tanda negativa corrige una lectura equivocada",
+  "descripcion": "El contador lee 6 unidades de B, se da cuenta de que una era de otro producto y corrige con -1: cuenta 5.",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 0
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "B",
+      "teorico": 5
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "B",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 6
+    },
+    {
+      "linea": "B",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": -1
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "B",
+      "teorico": 5,
+      "movimientos": null,
+      "contado": 5,
+      "diferencia": 0,
+      "ronda": 1,
+      "reconteo": false
+    }
+  ]
+}

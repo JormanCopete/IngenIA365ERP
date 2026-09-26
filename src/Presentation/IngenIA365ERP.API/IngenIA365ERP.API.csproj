@@ -19,6 +19,8 @@
     <PackageReference Include="Carter" Version="10.0.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <!-- Feature 012 (I4): QR de la representación gráfica de los documentos electrónicos. Misma versión que Identity. -->
+    <PackageReference Include="QRCoder" Version="1.6.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.4.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />

@@ -51,14 +51,22 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             .WithUsername("ingenia")
             .WithPassword("IngenIA365_Test2026!")
             .WithDatabase("ingenia365erp_test")
+            // Una base por cooperativa y un pool por base: con las cooperativas aisladas de «Inventario e2e» (feature 012) las
+            // 100 conexiones por defecto se agotaban («53300: sorry, too many clients already») a mitad de la suite.
+            .WithCommand("-c", "max_connections=1000")
             .Build();
 
     private readonly MongoDbContainer _mongo = new MongoDbBuilder()
         .WithImage("mongo:7")
         .Build();
 
+    // Una ranura de Redis por cooperativa (TenantCacheSlotAllocator): con las 16 bases por defecto
+    // caben 15, y la colección «Inventario e2e» (feature 012) crea una cooperativa aislada por caso;
+    // pasada la decimoquinta, el aprovisionamiento fallaba con Cache.TenantSlotsExhausted y la
+    // cooperativa no llegaba a Ready. 256 bases sobran para todas las colecciones de un host.
     private readonly RedisContainer _redis = new RedisBuilder()
         .WithImage("redis:7-alpine")
+        .WithCommand("--databases", "256")
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
@@ -142,6 +150,17 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("MasterAdmin:Email", MasterEmail);
             builder.UseSetting("MasterAdmin:Password", MasterPassword);
 
+            // Feature 012 (T008; decisiones-transversales T10, T47): los trabajos de fondo nuevos
+            // de la plataforma arrancan APAGADOS en las pruebas. Un despachador, un reenviador o un
+            // programador corriendo por su cuenta harían que una e2e viera efectos a destiempo; las
+            // pruebas conducen cada pasada a mano. Las enlaza
+            // IntegrationOptions (T049) y las consultan el despachador (I2), AuditOutboxForwarder
+            // (T065), ProgramadorDeTareas (T050) y el despachador de correo (T47).
+            builder.UseSetting("Integration:Dispatcher:Enabled", "false");
+            builder.UseSetting("Integration:AuditForwarder:Enabled", "false");
+            builder.UseSetting("Integration:ScheduledTasks:Enabled", "false");
+            builder.UseSetting("Integration:EmailDispatcher:Enabled", "false");
+
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
@@ -162,6 +181,50 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
+
+    /// <summary>
+    /// Una pasada del <see cref="IngenIA365ERP.Audit.Services.AuditOutboxForwarder"/> sobre la cooperativa
+    /// indicada (feature 012, T008, T065): toma su arrendamiento <c>audit.forward</c>, sella lo pendiente de
+    /// <c>COR_AuditOutbox</c> en la cadena, lo lleva a Mongo y ancla. El reenviador está apagado en las
+    /// pruebas (<c>Integration:AuditForwarder:Enabled = false</c>), así que la auditoría de los módulos
+    /// encadenados sólo llega a Mongo cuando una prueba lo pide. Devuelve cuántos eventos llevó.
+    /// </summary>
+    public Task<int> ReenviarAuditoriaAsync(Guid tenantPublicId, CancellationToken ct = default) =>
+        Factory.Services.GetRequiredService<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>()
+            .ReenviarUnaPasadaAsync(tenantPublicId, ct);
+
+    /// <summary>
+    /// Una pasada del <see cref="IngenIA365ERP.API.Integration.ProgramadorDeTareas"/> sobre la cooperativa
+    /// indicada (feature 012, T008, T050): toma su arrendamiento <c>scheduled.tasks</c>, corre las
+    /// <see cref="IngenIA365ERP.Application.Common.Execution.ITareaProgramada"/> a las que les toca y lo suelta.
+    /// El programador está apagado en las pruebas (<c>Integration:ScheduledTasks:Enabled = false</c>), así que
+    /// sólo corre cuando una prueba lo pide.
+    /// </summary>
+    public Task CorrerTareasProgramadasAsync(Guid tenantPublicId, CancellationToken ct = default) =>
+        Factory.Services.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>()
+            .CorrerUnaPasadaAsync(tenantPublicId, ct);
+
+    /// <summary>
+    /// Corre <b>una</b> tarea programada por su nombre en la cooperativa, ahora y sin mirar su horario (<c>DebeCorrer</c>) ni si
+    /// ya corrió hoy: el «disparo manual» de las e2e del comercio (feature 012, T443). <see cref="CorrerTareasProgramadasAsync"/>
+    /// respeta el horario de cada tarea (la revisión de eventos RADIAN corre desde las 6:00 de Colombia), así que una prueba
+    /// que corre de madrugada no la vería correr.
+    /// </summary>
+    public async Task CorrerTareaAsync(Guid tenantPublicId, string nombreDeLaTarea, CancellationToken ct = default)
+    {
+        var tarea = Factory.Services.GetServices<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>()
+            .Single(t => t.Nombre == nombreDeLaTarea);
+        IngenIA365ERP.Application.Common.Interfaces.TenantDirectoryEntry cooperativa;
+        using (var alcance = Factory.Services.CreateScope())
+        {
+            cooperativa = (await alcance.ServiceProvider.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDirectory>()
+                .ListActiveAsync(ct)).Single(c => c.PublicId == tenantPublicId);
+        }
+        var origen = IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(tarea.Nombre);
+        await Factory.Services.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>().EjecutarAsync(
+            cooperativa, IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(origen), origen,
+            (servicios, c) => tarea.EjecutarAsync(servicios, c), ct);
+    }
 
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
     private string? _secretoMaestro;

@@ -83,7 +83,7 @@ public sealed class DeleteAttachmentCommandHandler
             return Result.Failure("Generic.NotFound", "Adjunto no encontrado.");
         }
 
-        if (await AdjuntosDeModulo.PuedeBorrarAsync(_db, attachment.OwnerEntityType, attachment.OwnerEntityPublicId, ct) is { } prohibido)
+        if (await AdjuntosDeModulo.PuedeBorrarAsync(_db, attachment.OwnerEntityType, attachment.OwnerEntityPublicId, ct, _permissions) is { } prohibido)
         {
             return Result.Failure(prohibido);
         }

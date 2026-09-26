@@ -1,0 +1,163 @@
+@page "/inventario/cifras-solido"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Inventario
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Cifras de SOLIDO - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T322 (FR-091, US4-6; contracts/api.md §13.2, contracts/plantillas.md §15): las existencias y valores de SOLIDO a
+   una fecha, sólo para comparar: nunca mueven el inventario. La plantilla 15 se revisa y se aplica todo o nada; un código de
+   producto que no está en el catálogo nuevo no es error (queda sin resolver, con su grupo contable). Cada importación es un lote;
+   importar otra vez una fecha y bodega deja el anterior como historia («reemplazado»). Los comparativos por producto y bodega
+   están en el centro de informes. *@
+<PermissionGate Required="Inventory.LegacyFigures.Import" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cifras de SOLIDO</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/inventario/informes?vista=legacy-comparison-valuation">Comparativo de valorizado</a>
+            <a class="e-btn e-outline" href="/inventario/informes?vista=legacy-comparison-kardex">Comparativo de kardex</a>
+            <a class="e-btn e-outline" href="/inventario/saldo-inicial">Saldo inicial</a>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Importar la plantilla</h4>
+        <ImportarPlantilla RutaBase="@InventarioClient.RutaDeCifrasDeSolido" PermisoDeDescarga="Inventory.Warehouses.View"
+                           PermisoDeImportacion="Inventory.LegacyFigures.Import" ConDatos="false"
+                           Revisado="@VerResumen" Aplicado="@AplicadoAsync" />
+        <IndicadorDeCarga Cargando="@_importacion.Activa">
+            @if (_resumen.Count > 0)
+            {
+                <h4>Por fecha, bodega y grupo contable</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha</th><th>Bodega</th><th>Grupo</th><th class="numero">Filas</th><th class="numero">Cantidad</th><th class="numero">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _resumen)
+                            {
+                                <tr><td>@c.Fecha.ToString("dd/MM/yyyy")</td><td>@c.Bodega</td><td>@c.GrupoContable</td><td class="numero">@c.Filas</td><td class="numero">@c.Cantidad.ToString("N4")</td><td class="numero">@c.Valor.ToString("N2")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Fecha <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(async e => { _fecha = LeerFecha(e.Value); await CargarAsync(); })" /></label>
+        <label class="campo">Bodega <input class="e-input" @bind="_bodega" @bind:after="CargarAsync" maxlength="20" /></label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_lotes.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_lotes.Activa">
+        @if (!_lotes.Activa && _lista.Count == 0)
+        {
+            <p class="texto-tenue">No hay cifras de SOLIDO con estos filtros.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Fecha</th><th>Bodega</th><th class="numero">Filas</th><th class="numero">Sin resolver</th><th class="numero">Cantidad</th><th class="numero">Valor</th><th>Importado</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _lista)
+                        {
+                            <tr>
+                                <td>@l.AsOf.ToString("dd/MM/yyyy")</td>
+                                <td>@l.WarehouseCode</td>
+                                <td class="numero">@l.Rows</td>
+                                <td class="numero">@l.UnresolvedRows</td>
+                                <td class="numero">@l.Quantity.ToString("N4")</td>
+                                <td class="numero">@l.Value.ToString("N2")</td>
+                                <td>@l.ImportedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @l.ImportedBy · @l.SourceFileName</td>
+                                <td>@(l.Superseded ? "Reemplazado" : "Vigente")</td>
+                                <td>
+                                    @if (l.UnresolvedRows > 0)
+                                    {
+                                        <SfButton CssClass="e-flat" Disabled="@_filas.Activa" OnClick="@(() => SinResolverAsync(l))">Sin resolver</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_filas.Activa">
+        @if (_sinResolver is { } lote)
+        {
+            <div class="info-card">
+                <h4>Códigos sin producto en el catálogo · @lote.WarehouseCode · @lote.AsOf.ToString("dd/MM/yyyy")</h4>
+                <p class="texto-apoyo">Suman al valorizado de su grupo contable, pero no aparecen en el comparativo por producto.</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Producto (SOLIDO)</th><th>Grupo</th><th class="numero">Cantidad</th><th class="numero">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in _filasSinResolver)
+                            {
+                                <tr><td>@f.ProductCode</td><td>@f.AccountingGroupCode</td><td class="numero">@f.Quantity?.ToString("N4")</td><td class="numero">@f.Value?.ToString("N2")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _lotes = new(), _filas = new(), _importacion = new();
+    private List<LoteDeCifrasDto> _lista = [];
+    private List<CifraPorFechaBodegaGrupoDto> _resumen = [];
+    private List<FilaDeCifraDto> _filasSinResolver = [];
+    private LoteDeCifrasDto? _sinResolver;
+    private DateOnly? _fecha;
+    private string? _bodega;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _lotes.Iniciar();
+        var r = await Inventario.LotesDeCifrasAsync(_fecha, string.IsNullOrWhiteSpace(_bodega) ? null : _bodega.Trim());
+        if (!r.IsSuccess)
+        {
+            _lista = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cifras de SOLIDO.");
+            return;
+        }
+        _lista = [.. r.Value ?? []];
+    }
+
+    private void VerResumen(ResultadoDeImportacionDto r)
+    {
+        using var carga = _importacion.Iniciar();
+        _resumen = [.. r.ExtraComo<List<CifraPorFechaBodegaGrupoDto>>(InventarioClient.ExtraCifrasPorFechaBodegaGrupo) ?? []];
+    }
+
+    private async Task AplicadoAsync(ResultadoDeImportacionDto r)
+    {
+        VerResumen(r);
+        await CargarAsync();
+    }
+
+    private async Task SinResolverAsync(LoteDeCifrasDto lote)
+    {
+        using var carga = _filas.Iniciar();
+        var r = await Inventario.FilasDeCifrasAsync(lote.BatchPublicId, soloSinResolver: true, tamano: 200);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las filas."); return; }
+        _sinResolver = lote;
+        _filasSinResolver = [.. r.Value!.Items.Where(f => f.WarehouseCode == lote.WarehouseCode && f.AsOf == lote.AsOf)];
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

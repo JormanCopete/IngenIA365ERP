@@ -1,0 +1,65 @@
+{
+  "descripcion": "Hash = SHA-256(PrevHash ‖ JSON canónico): el primero encadena contra 64 ceros y cada uno contra el anterior.",
+  "eventos": [
+    {
+      "campos": {
+        "_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "module": "Parameters",
+        "action": "Create",
+        "occurredAt": {
+          "$fecha": "2026-09-25T13:00:00Z"
+        },
+        "chain": {
+          "stream": "0f8fad5bd9cb469fa16570867728950e:10y",
+          "seq": 1,
+          "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "alg": "SHA-256",
+          "v": 1
+        }
+      },
+      "canonico": "{\"_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"action\":\"Create\",\"chain\":{\"alg\":\"SHA-256\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"stream\":\"0f8fad5bd9cb469fa16570867728950e:10y\",\"v\":1},\"module\":\"Parameters\",\"occurredAt\":\"2026-09-25T13:00:00.000Z\",\"v\":1}",
+      "hash": "3d51ecbc8cb294cf970f2eba3c62e2f8de97960613ab44d5f2c742c8e952f5bc"
+    },
+    {
+      "campos": {
+        "_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3302",
+        "module": "Parameters",
+        "action": "Update",
+        "occurredAt": {
+          "$fecha": "2026-09-25T08:00:01.25-05:00"
+        },
+        "chain": {
+          "stream": "0f8fad5bd9cb469fa16570867728950e:10y",
+          "seq": 2,
+          "prevHash": "3d51ecbc8cb294cf970f2eba3c62e2f8de97960613ab44d5f2c742c8e952f5bc",
+          "alg": "SHA-256",
+          "v": 1
+        }
+      },
+      "canonico": "{\"_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3302\",\"action\":\"Update\",\"chain\":{\"alg\":\"SHA-256\",\"prevHash\":\"3d51ecbc8cb294cf970f2eba3c62e2f8de97960613ab44d5f2c742c8e952f5bc\",\"seq\":2,\"stream\":\"0f8fad5bd9cb469fa16570867728950e:10y\",\"v\":1},\"module\":\"Parameters\",\"occurredAt\":\"2026-09-25T13:00:01.250Z\",\"v\":1}",
+      "hash": "2474fe2d3dfb4e963c8f44dc2a52d152d8cfb21b12643b71dc04bbdd38e26809"
+    },
+    {
+      "campos": {
+        "_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3303",
+        "module": "Parameters",
+        "action": "Rejected",
+        "occurredAt": {
+          "$fecha": "2026-09-25T13:00:02.500Z"
+        },
+        "chain": {
+          "stream": "0f8fad5bd9cb469fa16570867728950e:10y",
+          "seq": 3,
+          "prevHash": "2474fe2d3dfb4e963c8f44dc2a52d152d8cfb21b12643b71dc04bbdd38e26809",
+          "alg": "SHA-256",
+          "v": 1
+        },
+        "metadata": {
+          "ErrorCode": "Parameters.ValueNotAllowed"
+        }
+      },
+      "canonico": "{\"_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3303\",\"action\":\"Rejected\",\"chain\":{\"alg\":\"SHA-256\",\"prevHash\":\"2474fe2d3dfb4e963c8f44dc2a52d152d8cfb21b12643b71dc04bbdd38e26809\",\"seq\":3,\"stream\":\"0f8fad5bd9cb469fa16570867728950e:10y\",\"v\":1},\"metadata\":{\"ErrorCode\":\"Parameters.ValueNotAllowed\"},\"module\":\"Parameters\",\"occurredAt\":\"2026-09-25T13:00:02.500Z\",\"v\":1}",
+      "hash": "403e329971939e1704802c566b766fe66f9c95aa22988695cf8a4dc987f53411"
+    }
+  ]
+}

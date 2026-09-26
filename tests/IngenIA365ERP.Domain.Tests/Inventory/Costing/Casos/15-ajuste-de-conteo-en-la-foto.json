@@ -1,0 +1,37 @@
+{
+  // FR-041, FR-045, pregunta D9: el ajuste de un conteo aprobado entra en la fecha de la foto al promedio de esa fecha;
+  // las salidas posteriores de otra bodega del ámbito cooperativa no cambian de costo. No mira Costeo.RetroactivosPermitidos.
+  "nombre": "Ajuste de conteo en la fecha de la foto",
+  "descripcion": "Ámbito cooperativa. A: 10 × 1.000; B: 10 × 1.300 → 20 por 23.000 (1.150). El 12/09 B vende 5 a 1.150 = 5.750 → 15 por 17.250. El conteo de A con foto del 10/09 se aprueba después: el sobrante de 2 entra fechado el 10/09 al promedio de esa fecha, 1.150 = 2.300, y el faltante de 1 (otro ajuste del mismo conteo) sale el 10/09 a 1.150. Con el promedio ponderado, un movimiento al promedio de su fecha no mueve el promedio: la venta del 12/09 sigue costando 5.750 y no hay ajustes retroactivos. Final: 16 por 18.400 (1.150).",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "A", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "B", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-12", "clase": "SalesInvoice", "bodega": "B", "cantidad": -5,
+      "esperado": { "estado": { "cantidad": 15, "valor": 17250, "promedio": 1150 } }
+    },
+    {
+      "id": "AC1", "documento": "AJ-CONTEO-1", "fecha": "2026-09-10", "clase": "PositiveAdjustment", "bodega": "A", "cantidad": 2,
+      "valoracion": "AlCostoVigente", "retroactivo": true,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 2, "costoUnitario": 1150, "costoTotal": 2300 } ],
+        "ajustes": [],
+        "ajustesPorDocumento": [],
+        "estado": { "cantidad": 17, "valor": 19550, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "AC2", "documento": "AJ-CONTEO-2", "fecha": "2026-09-10", "clase": "NegativeAdjustment", "bodega": "A", "cantidad": -1,
+      "retroactivo": true,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -1, "costoUnitario": 1150, "costoTotal": -1150 } ],
+        "ajustes": [],
+        "ajustesPorDocumento": [],
+        "estado": { "cantidad": 16, "valor": 18400, "promedio": 1150 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 16, "valor": 18400, "promedio": 1150 } ],
+  "existencias": [ { "bodega": "A", "cantidad": 11 }, { "bodega": "B", "cantidad": 5 } ]
+}

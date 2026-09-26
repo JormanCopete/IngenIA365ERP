@@ -31,7 +31,4 @@ public sealed record EntradaDeCatalogoDto(string Code, string Name, byte Level, 
 
 public sealed record ImportacionDeCatalogoDto(string Code, int EntryCount);
 
-/// <summary>Una fila con error en una importación; nada se guarda a medias (FR-005).</summary>
-public sealed record ErrorDeFila(int Row, string Column, string Code, string Message);
-
 public sealed record CuentaNuevaDeCatalogoDto(string Code, string Name, byte Level, string? ParentCode, bool AlreadyInCompany);

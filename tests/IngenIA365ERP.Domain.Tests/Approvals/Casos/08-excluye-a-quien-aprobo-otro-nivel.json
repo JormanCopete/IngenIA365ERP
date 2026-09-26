@@ -1,0 +1,8 @@
+{
+  "nombre": "Segregación: quien ya aprobó otro nivel no decide el siguiente",
+  "derivacion": "13 aprobó el nivel 1; en el nivel 2 queda excluido con reason PreviousLevel aunque tenga el permiso del nivel 2. 14 puede decidir.",
+  "segregacion": {
+    "creador": 10, "solicitante": 11, "participantes": [12], "aprobadoresPrevios": [13],
+    "decisiones": [ { "decisor": 13, "esperado": "PreviousLevel" }, { "decisor": 14, "esperado": null } ]
+  }
+}

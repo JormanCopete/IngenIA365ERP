@@ -1,0 +1,19 @@
+{
+  "nombre": "Monto bajo el primer umbral: se confirma sin aprobación",
+  "derivacion": "Política de dos niveles (100.000 y 1.000.000). 99.999,99 no alcanza el primer umbral y el usuario no tiene monto máximo: ningún nivel. Cero tampoco.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [
+    {
+      "validFrom": "2026-01-01",
+      "niveles": [
+        { "order": 1, "threshold": 100000, "permission": "Inventory.Adjustments.Approve" },
+        { "order": 2, "threshold": 1000000, "permission": "Inventory.Approvals.Supervisor" }
+      ]
+    }
+  ],
+  "evaluaciones": [
+    { "monto": 99999.99, "esperado": { "resultado": "SinAprobacion", "niveles": [] } },
+    { "monto": 0, "esperado": { "resultado": "SinAprobacion", "niveles": [] } }
+  ]
+}

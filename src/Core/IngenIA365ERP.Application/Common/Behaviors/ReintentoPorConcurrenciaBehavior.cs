@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Exceptions;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -38,6 +39,13 @@ public sealed class ReintentoPorConcurrenciaBehavior<TRequest, TResponse>(
 {
     public const int MaxIntentos = 5;
 
+    /// <summary>
+    /// Índices únicos de un consecutivo. EF puede mandar el INSERT del documento antes que el UPDATE del
+    /// contador; entonces la carrera no llega como conflicto de <c>RowVersion</c> sino como choque contra
+    /// el número repetido, y es la misma carrera (feature 012, T186: salía 500 bajo carga).
+    /// </summary>
+    public static readonly IReadOnlyList<string> IndicesDeConsecutivo = ["UK_ACC_Documents_Type_Number"];
+
     private static readonly bool EsReintentable = typeof(IReintentableAnteConcurrencia).IsAssignableFrom(typeof(TRequest));
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
@@ -51,7 +59,7 @@ public sealed class ReintentoPorConcurrenciaBehavior<TRequest, TResponse>(
             {
                 return await next(cancellationToken);
             }
-            catch (ConcurrencyConflictException ex) when (intento < MaxIntentos)
+            catch (Exception ex) when (intento < MaxIntentos && (ex is ConcurrencyConflictException || EsChoqueDeConsecutivo(ex)))
             {
                 logger.LogWarning(ex,
                     "Conflicto de concurrencia en {Request} (intento {Intento} de {Maximo}): se descartan los cambios y se reintenta.",
@@ -60,5 +68,14 @@ public sealed class ReintentoPorConcurrenciaBehavior<TRequest, TResponse>(
                 await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(25, 125) * intento), cancellationToken);
             }
         }
+    }
+
+    private static bool EsChoqueDeConsecutivo(Exception ex)
+    {
+        if (ex is not DbUpdateException) return false;
+        for (var actual = ex; actual is not null; actual = actual.InnerException)
+            if (IndicesDeConsecutivo.Any(i => actual.Message.Contains(i, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        return false;
     }
 }

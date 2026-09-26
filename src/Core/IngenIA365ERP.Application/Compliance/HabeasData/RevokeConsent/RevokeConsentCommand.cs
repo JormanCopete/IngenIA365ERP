@@ -71,6 +71,13 @@ public sealed class RevokeConsentCommandHandler
                 "El titular ya tiene revocado el consentimiento.");
         }
 
+        // Feature 012 (T46): «Declined» —el titular no autorizó al darse de alta— se lee como sin autorización.
+        if (string.Equals(lastAction.Action, AccionesDeConsentimiento.Declined, StringComparison.Ordinal))
+        {
+            return Result.Failure<Guid>(HabeasDataErrorCodes.NoActiveConsent,
+                "El titular no autorizó el tratamiento de datos — no hay nada que revocar.");
+        }
+
         var actor = _currentUser.UserName ?? "SYSTEM";
         var now = _clock.UtcNow;
         var revocation = new HabeasDataConsent

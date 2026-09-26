@@ -1,0 +1,35 @@
+{
+  // US3-1: 10 unidades a $1.000 más 10 a $1.300 dan un promedio de $1.150; una venta de 5 sale a $1.150.
+  "nombre": "Promedio ponderado",
+  "descripcion": "Ámbito cooperativa. Dos compras y una venta. 10 × 1.000 = 10.000; 10 × 1.300 = 13.000; 23.000 / 20 = 1.150. La venta de 5 sale a 5 × 1.150 = 5.750; quedan 15 por 17.250 (promedio 1.150).",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    {
+      "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL",
+      "cantidad": 10, "costoUnitario": 1000,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1000, "costoTotal": 10000 } ],
+        "estado": { "cantidad": 10, "valor": 10000, "promedio": 1000, "ultimoCosto": 1000 }
+      }
+    },
+    {
+      "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL",
+      "cantidad": 10, "costoUnitario": 1300,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1300, "costoTotal": 13000 } ],
+        "estado": { "cantidad": 20, "valor": 23000, "promedio": 1150, "ultimoCosto": 1300 }
+      }
+    },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL",
+      "cantidad": -5,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -5, "costoUnitario": 1150, "costoTotal": -5750 } ],
+        "estado": { "cantidad": 15, "valor": 17250, "promedio": 1150, "ultimoCosto": 1300 },
+        "explicacion": [ "Sale al promedio del ámbito." ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 15, "valor": 17250, "promedio": 1150, "ultimoCosto": 1300 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 15 } ]
+}

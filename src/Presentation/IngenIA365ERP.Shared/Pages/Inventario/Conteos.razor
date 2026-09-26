@@ -1,0 +1,309 @@
+@page "/inventario/conteos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Security
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Conteos físicos - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T404 (FR-040, FR-041, US11; contracts/api.md §12): los conteos de las bodegas del alcance con su estado derivado
+   (borrador, abierto, cerrado, ajuste en aprobación, ajustado, descartado, anulado) y, con Inventory.Costs.Read, el valor de la
+   diferencia. «Nuevo conteo» define el alcance —toda la bodega o cíclico por categorías, ubicaciones o una selección de productos;
+   ciego o no; los contadores— y lleva al conteo, donde se abre con su foto, se captura con el lector y se cierra. *@
+<PermissionGate Required="Inventory.Counts.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conteos físicos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Counts.Open">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirDefinicionAsync">Nuevo conteo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado ?? "")" @onchange="@(e => { _estado = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString(); return BuscarAsync(); })">
+                <option value="">Todos (sin descartados)</option>
+                @foreach (var (valor, texto) in TextosDeInventario.EstadosDeConteo) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        <label class="campo">Bodega
+            <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => { _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; return BuscarAsync(); })">
+                <option value="">Todas</option>
+                @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _conteos.Count == 0)
+        {
+            <p class="texto-tenue">No hay conteos con estos filtros en las bodegas de su alcance.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Número</th><th>Fecha</th><th>Bodega</th><th>Tipo</th><th>Alcance</th><th>Estado</th>
+                            <th class="numero">Líneas</th><th class="numero">Con diferencia</th>
+                            @if (_conValor) { <th class="numero">Diferencia (valor)</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _conteos)
+                        {
+                            <tr>
+                                <td><a href="@($"/inventario/conteos/{c.PublicId}")">@(c.DisplayNumber ?? (c.SnapshotAt is null ? "(borrador)" : "(abierto)"))</a></td>
+                                <td>@c.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@c.Warehouse.Code</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.TiposDeConteo, c.Kind)</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.AlcancesDeConteo, c.Scope)</td>
+                                <td>@EstadoDeConteo(c.State)</td>
+                                <td class="numero">@c.Lines</td>
+                                <td class="numero">@(c.LinesWithDifference?.ToString() ?? "—")</td>
+                                @if (_conValor) { <td class="numero">@c.DifferenceValue?.ToString("N2")</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina · @_total conteo(s)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarDefinicion" Header="Nuevo conteo físico" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaDefinicion.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <div class="form-grid">
+                    <label class="campo">Tipo *
+                        <select class="e-input" value="@(_f.Tipo?.ToString() ?? "")" @onchange="@(e => _f.Tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Bodega *
+                        <select class="e-input" value="@(_f.Bodega?.ToString() ?? "")" @onchange="@(e => CambiarBodegaAsync(Guid.TryParse(e.Value?.ToString(), out var g) ? g : null))">
+                            <option value="">Elija…</option>
+                            @foreach (var b in _bodegas.Where(b => b.IsActive && b.ActivationStatus == 1)) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Alcance *
+                        <select class="e-input" value="@_f.Alcance" @onchange="@(e => _f.Alcance = int.TryParse(e.Value?.ToString(), out var a) ? a : 0)">
+                            @foreach (var a in TextosDeInventario.AlcancesDeConteoDeI1) { <option value="@a">@TextosDeInventario.Texto(TextosDeInventario.AlcancesDeConteo, a)</option> }
+                        </select>
+                    </label>
+                    <label class="campo"><input type="checkbox" @bind="_f.Ciego" /> Conteo ciego (quien sólo captura no ve el teórico)</label>
+                </div>
+
+                @if (_f.Alcance == 1)
+                {
+                    <div class="info-card">
+                        <b>Categorías</b> (con sus subcategorías)
+                        @foreach (var c in _categorias)
+                        {
+                            <label class="campo"><input type="checkbox" checked="@_f.Categorias.Contains(c.PublicId)" @onchange="@(e => Marcar(_f.Categorias, c.PublicId, e.Value))" /> @c.Code · @c.Name</label>
+                        }
+                    </div>
+                }
+                else if (_f.Alcance == 2)
+                {
+                    <div class="info-card">
+                        <b>Ubicaciones</b>
+                        @if (_ubicaciones.Count == 0) { <p class="texto-tenue">Elija primero la bodega.</p> }
+                        @foreach (var u in _ubicaciones)
+                        {
+                            <label class="campo"><input type="checkbox" checked="@_f.Ubicaciones.Contains(u.PublicId)" @onchange="@(e => Marcar(_f.Ubicaciones, u.PublicId, e.Value))" /> @u.Code · @u.Name</label>
+                        }
+                    </div>
+                }
+                else if (_f.Alcance == 3)
+                {
+                    <div class="info-card">
+                        <SelectorDeProducto Etiqueta="Agregar producto a la selección" Bodega="@_f.Bodega" Clases="@Inventariables" Elegido="@AgregarProducto" />
+                        <ul>
+                            @foreach (var p in _f.Productos)
+                            {
+                                <li>@p.Code · @p.Name <SfButton CssClass="e-flat" OnClick="@(() => _f.Productos.Remove(p))">Quitar</SfButton></li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_personas.Count > 0)
+                {
+                    <div class="info-card">
+                        <b>Contadores</b> (vacío = captura cualquiera con permiso de capturar)
+                        @foreach (var p in _personas)
+                        {
+                            <label class="campo"><input type="checkbox" checked="@_f.Contadores.Contains(p.PublicId)" @onchange="@(e => Marcar(_f.Contadores, p.PublicId, e.Value))" /> @p.Username</label>
+                        }
+                    </div>
+                }
+                <label class="campo campo-ancho">Notas <input class="e-input" @bind="_f.Notas" maxlength="1000" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _f.Tipo is null || _f.Bodega is null)" OnClick="@DefinirAsync">Crear el conteo</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDefinicion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    /// <summary>Sólo productos inventariables (<c>ProductKind.Inventoriable</c>) en la selección.</summary>
+    private static readonly IReadOnlyList<int> Inventariables = [1];
+
+    private sealed class Formulario
+    {
+        public Guid? Tipo { get; set; }
+        public Guid? Bodega { get; set; }
+        public int Alcance { get; set; }
+        public bool Ciego { get; set; }
+        public List<Guid> Categorias { get; } = [];
+        public List<Guid> Ubicaciones { get; } = [];
+        public List<ReferenciaDeInventarioDto> Productos { get; } = [];
+        public List<Guid> Contadores { get; } = [];
+        public string? Notas { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDefinicion = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveDefinir = new();
+    private List<ResumenDeConteoDto> _conteos = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<CategoriaDto> _categorias = [];
+    private List<UbicacionDto> _ubicaciones = [];
+    private List<PersonaDeLaCooperativaDto> _personas = [];
+    private Formulario _f = new();
+    private bool _mostrarDefinicion, _definicionCargada;
+    private string? _estado;
+    private Guid? _bodega;
+    private DateOnly? _desde, _hasta;
+    private int _pagina = 1;
+    private long _total;
+
+    private bool _conValor => _conteos.Any(c => c.DifferenceValue is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit)] : [];
+        await CargarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarConteosAsync(new FiltroDeConteos
+        {
+            State = _estado, WarehousePublicId = _bodega, From = _desde, To = _hasta, Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess)
+        {
+            _conteos = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conteos.");
+            return;
+        }
+        _conteos = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private async Task AbrirDefinicionAsync()
+    {
+        _f = new Formulario();
+        _ubicaciones = [];
+        _mostrarDefinicion = true;
+        if (_definicionCargada) return;
+        using var carga = _cargaDefinicion.Iniciar();
+        var tipos = Inventario.ListarTiposAsync(grupo: 4);
+        var categorias = Inventario.ListarCategoriasAsync();
+        await Task.WhenAll(tipos, categorias);
+        _tipos = tipos.Result.IsSuccess ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && t.Class == InventarioClient.ClaseConteoFisico)] : [];
+        _categorias = categorias.Result.IsSuccess ? [.. categorias.Result.Value ?? []] : [];
+        if (await Permisos.TieneAsync("Security.Users.View"))
+        {
+            var personas = await Inventario.ListarPersonasParaContarAsync();
+            _personas = personas.IsSuccess ? [.. (personas.Value?.Items ?? []).Where(p => p.IsActive)] : [];
+        }
+        _definicionCargada = true;
+        if (_tipos.Count == 1) _f.Tipo = _tipos[0].PublicId;
+    }
+
+    private async Task CambiarBodegaAsync(Guid? bodega)
+    {
+        _f.Bodega = bodega;
+        _f.Ubicaciones.Clear();
+        _ubicaciones = [];
+        if (bodega is not { } b) return;
+        using var carga = _cargaDefinicion.Iniciar();
+        var r = await Inventario.ListarUbicacionesAsync(b);
+        _ubicaciones = r.IsSuccess ? [.. (r.Value ?? []).Where(u => u.IsActive)] : [];
+    }
+
+    private static void Marcar(List<Guid> lista, Guid id, object? valor)
+    {
+        if (valor is true) { if (!lista.Contains(id)) lista.Add(id); }
+        else lista.Remove(id);
+    }
+
+    private void AgregarProducto(ProductoElegido elegido)
+    {
+        if (_f.Productos.All(p => p.PublicId != elegido.Producto.PublicId))
+            _f.Productos.Add(new ReferenciaDeInventarioDto(elegido.Producto.PublicId, elegido.Producto.Code, elegido.Producto.Name));
+    }
+
+    private async Task DefinirAsync()
+    {
+        if (_f.Tipo is not { } tipo || _f.Bodega is not { } bodega) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.GuardarConteoAsync(null, new DefinicionDeConteoRequest(tipo, bodega, _f.Alcance == 0 ? 1 : 2, _f.Alcance,
+            _f.Alcance == 1 ? [.. _f.Categorias] : null,
+            _f.Alcance == 2 ? [.. _f.Ubicaciones] : null,
+            _f.Alcance == 3 ? [.. _f.Productos.Select(p => p.PublicId)] : null,
+            null, _f.Ciego, _f.Contadores.Count > 0 ? [.. _f.Contadores] : null, _f.Notas), _claveDefinir);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el conteo.");
+            return;
+        }
+        _mostrarDefinicion = false;
+        Nav.NavigateTo($"/inventario/conteos/{r.Value.PublicId}");
+    }
+
+    private static string EstadoDeConteo(string estado) => TextosDeInventario.EstadosDeConteo.TryGetValue(estado, out var t) ? t : estado;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

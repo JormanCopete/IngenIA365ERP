@@ -1,0 +1,589 @@
+@page "/inventario/traslados/nuevo"
+@page "/inventario/traslados/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Security
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Traslado - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T380 (FR-039, US10-1 a US10-3; contracts/api.md §11): el borrador del despacho —tipo, origen del alcance, destino
+   entre TODAS las bodegas operativas y activas (purpose=TransferDestination), fecha, motivo y líneas con SelectorDeProducto (el
+   lector llena producto y empaque)—; despachar; recibir con la cantidad que llegó de cada línea, la ubicación de llegada y el
+   sobrante declarado; las diferencias con «Resolver» (salida según el tipo, cantidad, causa y motivo) y el estado de su aprobación;
+   y anular con motivo un despacho no recibido. Las acciones son las que el SERVIDOR permite (AllowedActions); la pantalla nunca las
+   deduce. *@
+<PermissionGate Required="Inventory.Transfers.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/inventario/traslados">Volver a la lista</a>
+            @if (Editable)
+            {
+                <PermissionGate Required="Inventory.Transfers.Create">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Guardar</SfButton>
+                </PermissionGate>
+            }
+            @if (Puede("Discard"))
+            {
+                <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Descartar))">Descartar</SfButton>
+            }
+            @if (Puede("Dispatch"))
+            {
+                <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@DespacharAsync">Despachar</SfButton>
+            }
+            @if (Puede("Receive"))
+            {
+                <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@AbrirRecepcion">Recibir</SfButton>
+            }
+            @if (Puede("Void"))
+            {
+                <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_doc is { Status: 1 })
+        {
+            <p class="aviso aviso-info">En aprobación: queda congelado y sin número; lo despacha la última aprobación.</p>
+        }
+        @if (_doc?.VoidedBy is { } anulado)
+        {
+            <p class="aviso aviso-alerta">Anulado por @anulado.DisplayNumber: la mercancía volvió del tránsito al origen.</p>
+        }
+        @if (_doc?.Warnings is { Count: > 0 } avisos)
+        {
+            <div class="aviso aviso-alerta">
+                <b>Lo que hoy impediría despacharlo:</b>
+                <ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul>
+            </div>
+        }
+
+        <div class="form-grid">
+            <label class="campo">Tipo *
+                <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_f.Tipo?.ToString() ?? "")" @onchange="@(e => _f.Tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Elija…</option>
+                    @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Origen *
+                <select class="e-input" disabled="@(!Editable)" value="@(_f.Origen?.ToString() ?? "")" @onchange="@(e => _f.Origen = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Elija…</option>
+                    @foreach (var b in _origenes) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Destino *
+                <select class="e-input" disabled="@(!Editable)" value="@(_f.Destino?.ToString() ?? "")" @onchange="@(e => _f.Destino = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    <option value="">Elija…</option>
+                    @foreach (var b in _destinos) { <option value="@b.PublicId">@b.Code · @b.Name (@b.Branch.Name)</option> }
+                </select>
+            </label>
+            <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_f.Fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Fecha = LeerFecha(e.Value))" /></label>
+            @if (_doc?.TransitWarehouse is { } transito)
+            {
+                <label class="campo">Tránsito <input class="e-input" disabled value="@($"{transito.Code} · {transito.Name}")" /></label>
+            }
+            <label class="campo campo-ancho">Motivo <input class="e-input" disabled="@(!Editable)" @bind="_f.Motivo" maxlength="500" /></label>
+            <label class="campo campo-ancho">Referencia externa <input class="e-input" disabled="@(!Editable)" @bind="_f.Referencia" maxlength="60" /></label>
+        </div>
+
+        @if (Editable)
+        {
+            <div class="info-card">
+                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_f.Origen" Elegido="@AgregarLineaAsync" />
+            </div>
+        }
+
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th>
+                        @if (_traslado is not null)
+                        {
+                            <th class="numero">Despachado</th><th class="numero">Recibido</th><th class="numero">Faltante</th><th class="numero">Sobrante</th><th class="numero">En tránsito</th>
+                        }
+                        @if (Editable) { <th></th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _f.Lineas.Count; i++)
+                    {
+                        var indice = i;
+                        var l = _f.Lineas[i];
+                        var linea = _traslado?.Lines.FirstOrDefault(x => x.DispatchLinePublicId == l.LinePublicId);
+                        <tr>
+                            <td>@(indice + 1)</td>
+                            <td>@l.Producto</td>
+                            <td>@l.Unidad</td>
+                            <td class="numero">
+                                @if (Editable)
+                                {
+                                    <input class="e-input numero" type="number" min="0" step="any" value="@l.Cantidad.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                           @onchange="@(e => l.Cantidad = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var c) ? c : l.Cantidad)" />
+                                }
+                                else { @l.Cantidad.ToString("N4") }
+                            </td>
+                            @if (_traslado is not null)
+                            {
+                                <td class="numero">@linea?.DispatchedBase.ToString("N4")</td>
+                                <td class="numero">@linea?.ReceivedBase.ToString("N4")</td>
+                                <td class="numero">@linea?.ShortageBase.ToString("N4")</td>
+                                <td class="numero">@linea?.SurplusBase.ToString("N4")</td>
+                                <td class="numero">@linea?.PendingBase.ToString("N4")</td>
+                            }
+                            @if (Editable)
+                            {
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _f.Lineas.RemoveAt(indice))" title="Quitar la línea" /></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_doc?.Totals?.CostTotal is { } total && _doc.Status != 0)
+        {
+            <p class="texto-apoyo">Valor al costo despachado: <b>@total.ToString("N2")</b></p>
+        }
+    </IndicadorDeCarga>
+
+    @if (_traslado is { } traslado)
+    {
+        @if (traslado.Receipts.Count > 0)
+        {
+            <h4>Recepciones</h4>
+            <ul>
+                @foreach (var r in traslado.Receipts)
+                {
+                    <li>@TextosDeInventario.Clase(r.Class) @(r.DisplayNumber ?? "(sin número)") · @r.OperationDate.ToString("dd/MM/yyyy") · @TextosDeInventario.Estado(r.Status) · hacia @(r.Links.Any(k => k.Kind == 7) ? r.Warehouse?.Code : r.DestinationWarehouse?.Code)</li>
+                }
+            </ul>
+        }
+
+        <h4>Diferencias</h4>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (traslado.Discrepancies.Count == 0)
+            {
+                <p class="texto-tenue">Sin faltantes ni sobrantes.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr><th>Tipo</th><th>Producto</th><th class="numero">Cantidad</th><th class="numero">Pendiente</th><th>Estado</th><th>Resolución</th><th>Documento</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in traslado.Discrepancies)
+                            {
+                                <tr>
+                                    <td>@TextosDeInventario.Texto(TextosDeInventario.TiposDeDiferencia, d.Kind)</td>
+                                    <td>@d.Product.Code · @d.Product.Name</td>
+                                    <td class="numero">@d.QuantityBase.ToString("N4")</td>
+                                    <td class="numero">@d.PendingBase.ToString("N4")</td>
+                                    <td>@(TextosDeInventario.EstadosDeDiferencia.TryGetValue(d.State, out var e) ? e : d.State)@(d.ApprovalRequestPublicId is not null ? " (solicitud abierta)" : "")</td>
+                                    <td>@(d.Resolution is { } res ? TextosDeInventario.Texto(TextosDeInventario.ResolucionesDeDiferencia, res) : "—")</td>
+                                    <td>@(d.ResolvingDocument is { } doc ? $"{TextosDeInventario.Clase(doc.Class)} {doc.DisplayNumber ?? TextosDeInventario.Estado(doc.Status)}" : "—")</td>
+                                    <td>
+                                        @if (d.State == "Pending" && _puedeResolver)
+                                        {
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirResolucion(d))">Resolver</SfButton>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accion == Accion.Anular ? "Anular el despacho" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">
+                    @(_accion == Accion.Anular
+                        ? "La mercancía vuelve del tránsito al origen al costo del despacho, con la fecha de hoy."
+                        : "El borrador queda descartado con su motivo; no consume número.")
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRecepcion" Header="Recibir el traslado" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Recibiendo…">
+                <p class="texto-apoyo">Lo que no llegue queda como faltante en tránsito; lo que llegue de más se declara como sobrante. Ninguno de los dos se resuelve sin la aprobación de otra persona.</p>
+                <label class="campo">Fecha <input type="date" class="e-input" value="@(_fechaDeRecepcion?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fechaDeRecepcion = LeerFecha(e.Value))" /></label>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Producto</th><th class="numero">Despachado</th><th class="numero">Recibido</th><th class="numero">Sobrante</th><th>Ubicación</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _recepcion)
+                            {
+                                <tr>
+                                    <td>@r.Producto</td>
+                                    <td class="numero">@r.Despachado.ToString("N4")</td>
+                                    <td class="numero"><input class="e-input numero" type="number" min="0" step="any" value="@r.Recibido.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                        @onchange="@(e => r.Recibido = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var c) ? c : r.Recibido)" /></td>
+                                    <td class="numero"><input class="e-input numero" type="number" min="0" step="any" value="@r.Sobrante.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                        @onchange="@(e => r.Sobrante = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var c) ? c : r.Sobrante)" /></td>
+                                    <td>
+                                        <select class="e-input" value="@(r.Ubicacion?.ToString() ?? "")" @onchange="@(e => r.Ubicacion = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                            <option value="">Por defecto</option>
+                                            @foreach (var u in _ubicacionesDelDestino) { <option value="@u.PublicId">@u.Code</option> }
+                                        </select>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notasDeRecepcion" maxlength="1000" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@RecibirAsync">Recibir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRecepcion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarResolucion" Header="Resolver la diferencia" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_diferencia is { } dif)
+                {
+                    <p class="texto-apoyo">
+                        @TextosDeInventario.Texto(TextosDeInventario.TiposDeDiferencia, dif.Kind) de @dif.PendingBase.ToString("N4") @dif.Product.Code.
+                        El documento que la resuelve queda en aprobación: lo decide otra persona (no quien despachó, recibió o propone).
+                    </p>
+                    <label class="campo">Resolución *
+                        <select class="e-input" value="@(_resolucion?.ToString() ?? "")" @onchange="@(e => _resolucion = int.TryParse(e.Value?.ToString(), out var r) ? r : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var r in ResolucionesDe(dif.Kind)) { <option value="@r">@TextosDeInventario.Texto(TextosDeInventario.ResolucionesDeDiferencia, r)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cantidad <input class="e-input numero" type="number" min="0" step="any" value="@(_cantidadAResolver?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="lo pendiente"
+                        @onchange="@(e => _cantidadAResolver = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var c) ? c : null)" /></label>
+                    @if (ExigeCausa)
+                    {
+                        <label class="campo">Causa *
+                            <select class="e-input" value="@(_causa?.ToString() ?? "")" @onchange="@(e => _causa = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                <option value="">Elija…</option>
+                                @foreach (var c in CausasDeLaResolucion) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoDeResolucion" maxlength="500" /></label>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _resolucion is null || string.IsNullOrWhiteSpace(_motivoDeResolucion) || (ExigeCausa && _causa is null))"
+                                  OnClick="@ResolverAsync">Pedir aprobación</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarResolucion = false)">Cancelar</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private enum Accion { Descartar, Anular }
+
+    private sealed class LineaForm
+    {
+        public Guid? LinePublicId { get; set; }
+        public Guid ProductPublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public Guid UnitPublicId { get; set; }
+        public string Unidad { get; set; } = "";
+        public decimal Cantidad { get; set; } = 1m;
+        public Guid? Ubicacion { get; set; }
+    }
+
+    private sealed class Formulario
+    {
+        public Guid? Tipo { get; set; }
+        public Guid? Origen { get; set; }
+        public Guid? Destino { get; set; }
+        public DateOnly? Fecha { get; set; }
+        public string? Motivo { get; set; }
+        public string? Referencia { get; set; }
+        public List<LineaForm> Lineas { get; set; } = [];
+    }
+
+    private sealed class LineaRecibida
+    {
+        public Guid DispatchLinePublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public decimal Despachado { get; set; }
+        public decimal Recibido { get; set; }
+        public decimal Sobrante { get; set; }
+        public Guid? Ubicacion { get; set; }
+    }
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveDespachar = new(), _claveMotivo = new(), _claveRecibir = new(), _claveResolver = new();
+    private DocumentoDeInventarioDto? _doc;
+    private TrasladoDto? _traslado;
+    private Formulario _f = new();
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<BodegaDto> _origenes = [];
+    private List<DestinoDeTrasladoDto> _destinos = [];
+    private List<CausaDeAjusteDto> _causas = [];
+    private List<UbicacionDto> _ubicacionesDelDestino = [];
+    private List<LineaRecibida> _recepcion = [];
+    private DiferenciaDeTrasladoDto? _diferencia;
+    private bool _mostrarMotivo, _mostrarRecepcion, _mostrarResolucion, _cargado, _puedeResolver;
+    private Accion _accion;
+    private string? _motivo, _notasDeRecepcion, _motivoDeResolucion;
+    private DateOnly? _fechaDeRecepcion;
+    private int? _resolucion;
+    private decimal? _cantidadAResolver;
+    private Guid? _causa;
+
+    private string Titulo => _doc is null ? "Nuevo traslado" : $"Traslado {_doc.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Status)}";
+    private bool Editable => _doc is null || Puede("Edit");
+    private bool Puede(string accion) => _doc?.AllowedActions.Contains(accion) == true;
+    private bool ExigeCausa => _resolucion is TextosDeInventario.ResolucionBajaDesdeTransito or TextosDeInventario.ResolucionAjusteDeSobrante;
+
+    private IEnumerable<CausaDeAjusteDto> CausasDeLaResolucion => _causas.Where(c => c.IsActive
+        && (_resolucion == TextosDeInventario.ResolucionBajaDesdeTransito ? c.AllowsTransitWriteOff : c.AllowsPositive));
+
+    private static IEnumerable<int> ResolucionesDe(int tipo) => tipo == TextosDeInventario.DiferenciaFaltante ? [1, 2, 3] : [4];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_cargado && _doc?.PublicId == Id) return;
+        using var carga = _carga.Iniciar();
+        if (!_cargado)
+        {
+            var tipos = Inventario.ListarTiposAsync(grupo: 3);
+            var bodegas = Inventario.ListarBodegasAsync();
+            var causas = Inventario.ListarCausasAsync();
+            await Task.WhenAll(tipos, bodegas, causas);
+            _tipos = tipos.Result.IsSuccess ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && t.Class == InventarioClient.ClaseDespachoDeTraslado)] : [];
+            _origenes = bodegas.Result.IsSuccess ? [.. (bodegas.Result.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
+            _causas = causas.Result.IsSuccess ? [.. causas.Result.Value ?? []] : [];
+            if (await Permisos.TieneAsync("Inventory.Transfers.Create"))
+            {
+                var destinos = await Inventario.ListarDestinosDeTrasladoAsync();
+                _destinos = destinos.IsSuccess ? [.. destinos.Value ?? []] : [];
+            }
+            _puedeResolver = await Permisos.TieneAsync("Inventory.Transfers.Receive");
+            _cargado = true;
+        }
+
+        if (Id is { } id) await CargarAsync(id);
+        else
+        {
+            _doc = null;
+            _traslado = null;
+            _f = new Formulario { Fecha = DateOnly.FromDateTime(DateTime.Today), Tipo = _tipos.FirstOrDefault()?.PublicId, Origen = _origenes.FirstOrDefault(b => b.IsDefault)?.PublicId };
+        }
+    }
+
+    private async Task CargarAsync(Guid id)
+    {
+        var r = await Inventario.ObtenerTrasladoAsync(id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el traslado.");
+            return;
+        }
+        Mostrar(r.Value.Dispatch);
+        _traslado = r.Value;
+        // El destino puede estar fuera del alcance y de la lista de destinos (quien sólo recibe): se agrega para mostrarlo.
+        if (_doc?.DestinationWarehouse is { } destino && _destinos.All(d => d.PublicId != destino.PublicId))
+            _destinos.Add(new DestinoDeTrasladoDto(destino.PublicId, destino.Code, destino.Name, new SucursalDeDestinoDto(Guid.Empty, null, "")));
+        if (_doc?.Warehouse is { } origen && _origenes.All(o => o.PublicId != origen.PublicId))
+            _origenes.Add(new BodegaDto { PublicId = origen.PublicId, Code = origen.Code, Name = origen.Name });
+    }
+
+    private void Mostrar(DocumentoDeInventarioDto doc)
+    {
+        _doc = doc;
+        _f = new Formulario
+        {
+            Tipo = doc.DocumentType.PublicId, Origen = doc.Warehouse?.PublicId, Destino = doc.DestinationWarehouse?.PublicId, Fecha = doc.OperationDate,
+            Motivo = doc.Reason, Referencia = doc.ExternalReference,
+            Lineas = doc.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
+            {
+                LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
+                UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Ubicacion = l.Location?.PublicId,
+            }).ToList(),
+        };
+    }
+
+    private async Task AgregarLineaAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null)
+        {
+            await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto.");
+            return;
+        }
+        var p = producto.Value;
+        var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _f.Lineas.Add(new LineaForm
+        {
+            ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
+            UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+        });
+    }
+
+    /// <summary>Guarda el borrador del despacho (POST la primera vez, PUT después): los avisos vuelven del servidor.</summary>
+    private async Task<bool> GuardarAsync(bool silencioso)
+    {
+        if (_f.Tipo is not { } tipo)
+        {
+            await Notification.WarningAsync("Elija el tipo de despacho.");
+            return false;
+        }
+        using var guardado = _guardado.Iniciar();
+        var request = new BorradorDeInventarioRequest(tipo, _f.Fecha, _f.Origen, _f.Destino, null, null,
+            string.IsNullOrWhiteSpace(_f.Referencia) ? null : _f.Referencia, string.IsNullOrWhiteSpace(_f.Motivo) ? null : _f.Motivo, null, null, null, null,
+            _doc?.RowVersion,
+            _f.Lineas.Select(l => new LineaDeBorradorRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, LocationPublicId: l.Ubicacion)).ToList());
+        var r = await Inventario.GuardarTrasladoAsync(_doc?.PublicId, request, _claveGuardar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el borrador.");
+            return false;
+        }
+        var nuevo = _doc is null;
+        Mostrar(r.Value);
+        if (!silencioso) await Notification.SuccessAsync("Borrador guardado.");
+        if (nuevo) Nav.NavigateTo($"/inventario/traslados/{r.Value.PublicId}", replace: true);
+        return true;
+    }
+
+    private async Task DespacharAsync()
+    {
+        if (_doc is null) return;
+        if (Editable && !await GuardarAsync(true)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.DespacharTrasladoAsync(_doc.PublicId, _doc.RowVersion, _claveDespachar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo despachar el traslado.");
+            return;
+        }
+        if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: lo despacha la última aprobación.");
+        else await Notification.SuccessAsync($"Traslado {r.Value.DisplayNumber} despachado: va en tránsito.");
+        await CargarAsync(_doc.PublicId);
+    }
+
+    private async Task AbrirRecepcion()
+    {
+        if (_traslado is null || _doc?.DestinationWarehouse is not { } destino) return;
+        _recepcion = _traslado.Lines.Select(l => new LineaRecibida
+        {
+            DispatchLinePublicId = l.DispatchLinePublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", Despachado = l.DispatchedBase, Recibido = l.PendingBase,
+        }).ToList();
+        _fechaDeRecepcion = DateOnly.FromDateTime(DateTime.Today);
+        _notasDeRecepcion = null;
+        var ubicaciones = await Inventario.ListarUbicacionesAsync(destino.PublicId);
+        _ubicacionesDelDestino = ubicaciones.IsSuccess ? [.. ubicaciones.Value ?? []] : [];
+        _mostrarRecepcion = true;
+    }
+
+    private async Task RecibirAsync()
+    {
+        if (_doc is null) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new RecibirTrasladoRequest(_fechaDeRecepcion, null,
+            _recepcion.Select(r => new LineaRecibidaRequest(r.DispatchLinePublicId, r.Recibido, null, r.Ubicacion, r.Sobrante > 0m ? r.Sobrante : null)).ToList(),
+            string.IsNullOrWhiteSpace(_notasDeRecepcion) ? null : _notasDeRecepcion);
+        var r = await Inventario.RecibirTrasladoAsync(_doc.PublicId, request, _claveRecibir);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo recibir el traslado.");
+            return;
+        }
+        var diferencias = r.Value.Shortages.Count + r.Value.Surpluses.Count;
+        await Notification.SuccessAsync(diferencias == 0
+            ? $"Recibido con {r.Value.DisplayNumber}."
+            : $"Recibido con {r.Value.DisplayNumber}; quedaron {diferencias} diferencia(s) por resolver.");
+        _mostrarRecepcion = false;
+        await CargarAsync(_doc.PublicId);
+    }
+
+    private void AbrirResolucion(DiferenciaDeTrasladoDto diferencia)
+    {
+        _diferencia = diferencia;
+        _resolucion = diferencia.Kind == TextosDeInventario.DiferenciaFaltante ? null : TextosDeInventario.ResolucionAjusteDeSobrante;
+        _cantidadAResolver = null;
+        _causa = null;
+        _motivoDeResolucion = null;
+        _mostrarResolucion = true;
+    }
+
+    private async Task ResolverAsync()
+    {
+        if (_diferencia is null || _resolucion is not { } resolucion || _doc is null) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.ResolverDiferenciaAsync(_diferencia.PublicId,
+            new ResolverDiferenciaRequest(resolucion, _cantidadAResolver, ExigeCausa ? _causa : null, null, null, _motivoDeResolucion ?? string.Empty), _claveResolver);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la resolución.");
+            return;
+        }
+        await Notification.InfoAsync(r.Value.ApprovalRequestPublicId is null
+            ? "Resuelta: la política vigente no pide aprobación para este monto."
+            : "Quedó en aprobación: la decide otra persona desde la bandeja de aprobaciones.");
+        _mostrarResolucion = false;
+        await CargarAsync(_doc.PublicId);
+    }
+
+    private void AbrirMotivo(Accion accion)
+    {
+        _accion = accion;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_accion == Accion.Descartar)
+        {
+            var r = await Inventario.DescartarTrasladoAsync(_doc.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        else
+        {
+            var r = await Inventario.AnularTrasladoAsync(_doc.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulado con {r.Value.DisplayNumber}: la mercancía volvió al origen.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync(_doc.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

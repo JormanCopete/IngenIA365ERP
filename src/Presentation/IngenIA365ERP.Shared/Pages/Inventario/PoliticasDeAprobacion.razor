@@ -1,0 +1,274 @@
+@page "/inventario/politicas-de-aprobacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Políticas de aprobación - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T432 (FR-009, FR-010, T33, T34; contracts/api.md §15.1, §15.3): las políticas por sujeto y tipo de documento
+   —niveles en orden, cada uno con su umbral y el permiso de quien lo aprueba— y los montos máximos por rol y permiso. Nada se
+   edita en su sitio: una política nueva es otra versión desde una fecha, con motivo; un monto nuevo cierra el anterior. Un
+   monto vacío es «sin límite». Si el documento supera el monto de quien confirma, exige al menos el nivel 1 de su política; sin
+   política, se rechaza (Inventory.Approval.AmountExceedsLimit). *@
+<PermissionGate Required="Inventory.ApprovalPolicies.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Políticas de aprobación</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Políticas</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@CambiarAMontosAsync">Montos máximos</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label><input type="checkbox" checked="@_conHistoria" @onchange="@(async e => { _conHistoria = e.Value is true; await CargarPoliticasAsync(); })" /> Incluir versiones anteriores</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_politicas.Activa" OnClick="@CargarPoliticasAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.ApprovalPolicies.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirPolitica">Nueva versión</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_politicas.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Sujeto</th><th>Tipo de documento</th><th>Versión</th><th>Vigencia</th><th>Niveles</th><th>Motivo</th><th>Autor</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _listaDePoliticas)
+                        {
+                            <tr>
+                                <td>@NombreDeSujeto(p.Subject)</td>
+                                <td>@(p.DocumentType is { } t ? $"{t.Code} · {t.Name}" : "Todos")</td>
+                                <td>@p.Version</td>
+                                <td>@p.ValidFrom.ToString("dd/MM/yyyy") – @(p.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                <td>@foreach (var n in p.Levels.OrderBy(n => n.Order)) { <div>@n.Order: desde @n.Threshold.ToString("N2") · @n.PermissionCode</div> }</td>
+                                <td>@p.Reason</td>
+                                <td>@p.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_listaDePoliticas.Count == 0) { <p class="texto-tenue">Sin políticas: los documentos se confirman sin aprobación salvo que superen un monto máximo.</p> }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_montos.Activa" OnClick="@CargarMontosAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.ApprovalPolicies.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_roles.Count == 0)" OnClick="@AbrirMonto">Fijar monto</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_montos.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Rol</th><th>Permiso</th><th class="numero">Monto máximo</th><th>Vigencia</th><th>Motivo</th><th>Autor</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _listaDeMontos)
+                        {
+                            <tr>
+                                <td>@m.Role.Name</td>
+                                <td>@m.PermissionCode</td>
+                                <td class="numero">@(m.MaxAmount?.ToString("N2") ?? "Sin límite")</td>
+                                <td>@m.ValidFrom.ToString("dd/MM/yyyy") – @(m.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                <td>@m.Reason</td>
+                                <td>@m.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_listaDeMontos.Count == 0) { <p class="texto-tenue">Sin montos máximos: ningún rol tiene límite (C4).</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarPolitica" Header="Nueva versión de política" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo">Sujeto *
+                    <select class="e-input" @bind="_sujeto">
+                        @foreach (var (codigo, nombre) in TextosDeSeguridad.Sujetos) { <option value="@codigo">@nombre</option> }
+                    </select>
+                </label>
+                <label class="campo">Tipo de documento (vacío = todos)
+                    <select class="e-input" @bind="_tipo">
+                        <option value="">Todos</option>
+                        @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                <table class="data-grid">
+                    <thead><tr><th>Nivel</th><th class="numero">Umbral</th><th>Permiso de quien aprueba</th><th></th></tr></thead>
+                    <tbody>
+                        @for (var i = 0; i < _niveles.Count; i++)
+                        {
+                            var indice = i;
+                            <tr>
+                                <td>@(indice + 1)</td>
+                                <td><input type="number" min="0" step="0.01" class="e-input" value="@_niveles[indice].Umbral" @onchange="@(e => _niveles[indice].Umbral = decimal.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var u) ? u : 0)" /></td>
+                                <td><input class="e-input" @bind="_niveles[indice].Permiso" placeholder="Inventory.Approvals.Supervisor" /></td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _niveles.RemoveAt(indice))">Quitar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => _niveles.Add(new NivelEditable()))">Agregar nivel</SfButton>
+                <p class="texto-tenue">Los niveles van en orden y sus umbrales no bajan. Sin niveles, la versión deja de exigir aprobación desde la fecha.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarPoliticaAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPolitica = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMonto" Header="Fijar monto máximo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo">Rol *
+                    <select class="e-input" @bind="_rol">
+                        @foreach (var r in _roles) { <option value="@r.PublicId">@r.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Permiso *
+                    <select class="e-input" @bind="_permiso">
+                        @foreach (var p in InventarioClient.PermisosLimitables) { <option value="@p">@p</option> }
+                    </select>
+                </label>
+                <label class="campo">Monto máximo (vacío = sin límite) <input type="number" min="0" step="0.01" class="e-input" @bind="_monto" /></label>
+                <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || _rol == Guid.Empty)" OnClick="@GuardarMontoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMonto = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class NivelEditable
+    {
+        public decimal Umbral { get; set; }
+        public string? Permiso { get; set; }
+    }
+
+    private readonly EstadoDeCarga _politicas = new(), _montos = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private int _pestana;
+    private bool _conHistoria, _mostrarPolitica, _mostrarMonto, _montosCargados;
+    private List<PoliticaDeAprobacionDto> _listaDePoliticas = [];
+    private List<MontoMaximoDto> _listaDeMontos = [];
+    private List<RolDeCooperativaDto> _roles = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<NivelEditable> _niveles = [];
+    private string _sujeto = "DocumentConfirmation";
+    private string? _tipo, _motivo, _error;
+    private string _permiso = InventarioClient.PermisosLimitables[0];
+    private Guid _rol;
+    private decimal? _monto;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPoliticasAsync();
+        var tipos = await Inventario.ListarTiposAsync();
+        if (tipos.IsSuccess) _tipos = [.. tipos.Value ?? []];
+    }
+
+    private async Task CargarPoliticasAsync()
+    {
+        using var carga = _politicas.Iniciar();
+        var r = await Inventario.PoliticasDeAprobacionAsync(_conHistoria);
+        if (!r.IsSuccess) { _listaDePoliticas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las políticas."); return; }
+        _listaDePoliticas = [.. (r.Value ?? []).OrderBy(p => p.Subject).ThenBy(p => p.DocumentType?.Code).ThenByDescending(p => p.ValidFrom)];
+    }
+
+    private async Task CambiarAMontosAsync()
+    {
+        _pestana = 1;
+        if (_montosCargados) return;
+        _montosCargados = true;
+        await CargarMontosAsync();
+        var roles = await Inventario.RolesAsync();
+        if (roles.IsSuccess) _roles = [.. (roles.Value?.Items ?? []).Where(r => r.IsActive)];
+    }
+
+    private async Task CargarMontosAsync()
+    {
+        using var carga = _montos.Iniciar();
+        var r = await Inventario.MontosMaximosAsync();
+        if (!r.IsSuccess) { _listaDeMontos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los montos máximos."); return; }
+        _listaDeMontos = [.. (r.Value ?? []).OrderBy(m => m.Role.Name).ThenBy(m => m.PermissionCode).ThenByDescending(m => m.ValidFrom)];
+    }
+
+    private void AbrirPolitica()
+    {
+        _sujeto = "DocumentConfirmation";
+        _tipo = _motivo = _error = null;
+        _niveles = [new NivelEditable { Umbral = 0 }];
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrarPolitica = true;
+    }
+
+    private void AbrirMonto()
+    {
+        _rol = _roles.FirstOrDefault()?.PublicId ?? Guid.Empty;
+        _permiso = InventarioClient.PermisosLimitables[0];
+        _monto = null;
+        _motivo = _error = null;
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrarMonto = true;
+    }
+
+    private async Task GuardarPoliticaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var niveles = _niveles.Select((n, i) => new NivelDeAprobacionDto(i + 1, n.Umbral, n.Permiso?.Trim() ?? string.Empty)).ToList();
+        var r = await Inventario.GuardarPoliticaDeAprobacionAsync(new GuardarPoliticaDeAprobacionRequest(
+            _sujeto, Guid.TryParse(_tipo, out var tipo) ? tipo : null, _desde, _motivo.Trim(), niveles), _clave);
+        if (!r.IsSuccess)
+        {
+            var permiso = r.Dato<string>("permissionCode");
+            _error = permiso is null ? r.ErrorMessage ?? "No se pudo guardar la política." : $"{r.ErrorMessage} ({permiso})";
+            return;
+        }
+        _mostrarPolitica = false;
+        await Notification.SuccessAsync($"Política guardada (versión {r.Value!.Version}).");
+        await CargarPoliticasAsync();
+    }
+
+    private async Task GuardarMontoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo) || _rol == Guid.Empty) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Inventario.FijarMontoMaximoAsync(new FijarMontoMaximoRequest(_rol, _permiso, _monto, _desde, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo fijar el monto."; return; }
+        _mostrarMonto = false;
+        await Notification.SuccessAsync("Monto máximo registrado.");
+        await CargarMontosAsync();
+    }
+
+    private static string NombreDeSujeto(string codigo) =>
+        TextosDeSeguridad.Sujetos.FirstOrDefault(s => s.Codigo == codigo).Nombre ?? codigo;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

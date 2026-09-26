@@ -21,6 +21,8 @@ public class BranchConfiguration : IEntityTypeConfiguration<Branch>
         builder.HasIndex(e => e.LegacyCode).IsUnique().HasFilter("[LegacyCode] IS NOT NULL");
         builder.Property(e => e.Name).HasMaxLength(80).IsRequired();
         builder.Property(e => e.ShortName).HasMaxLength(40);
+        // Feature 012 (T176): municipio DIVIPOLA, por código y sin FK a COR_Cities; par PlataformaParaInventario.
+        builder.Property(e => e.MunicipalityDaneCode).HasMaxLength(5);
 
         // Audit
         builder.Property(e => e.CreatedAt);

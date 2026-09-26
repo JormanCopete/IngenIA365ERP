@@ -96,6 +96,24 @@ public sealed class PersonaFormularioModelo
 
     public string? Status { get; set; } = "A";
 
+    // ---- Perfil tributario (feature 012, T174) ----
+    public bool IsVatResponsible { get; set; }
+    public bool IsSelfWithholder { get; set; }
+    public bool IsVatWithholdingAgent { get; set; }
+    public bool IsSimpleTaxRegime { get; set; }
+    public bool IsIncomeTaxFiler { get; set; }
+    public bool IsObligatedToInvoice { get; set; }
+    public bool IsLargeContributor { get; set; }
+    public bool WithholdingExempt { get; set; }
+    public bool IcaWithholdingExempt { get; set; }
+
+    [MaxLength(6)]
+    public string? CiiuCode { get; set; }
+
+    /// <summary>El mismo formato que exige <c>PersonInputValidator</c>: 4 a 6 dígitos.</summary>
+    public static bool CiiuValido(string? ciiu) =>
+        string.IsNullOrWhiteSpace(ciiu) || System.Text.RegularExpressions.Regex.IsMatch(ciiu.Trim(), "^[0-9]{4,6}$");
+
     public string NombreVisible => NombreDePersona.Visible(BusinessName, FirstName, OtherNames, LastName, SecondLastName);
 
     /// <summary>Un modelo nuevo, con los valores por defecto del alta y, si se sabe, el documento ya escrito.</summary>
@@ -138,6 +156,16 @@ public sealed class PersonaFormularioModelo
         EsAsociado = p.IsAssociate,
         EsVendedor = p.IsSalesperson,
         Status = string.IsNullOrWhiteSpace(p.Status) ? "A" : p.Status,
+        IsVatResponsible = p.IsVatResponsible,
+        IsSelfWithholder = p.IsSelfWithholder,
+        IsVatWithholdingAgent = p.IsVatWithholdingAgent,
+        IsSimpleTaxRegime = p.IsSimpleTaxRegime,
+        IsIncomeTaxFiler = p.IsIncomeTaxFiler,
+        IsObligatedToInvoice = p.IsObligatedToInvoice,
+        IsLargeContributor = p.IsLargeContributor,
+        WithholdingExempt = p.WithholdingExempt,
+        IcaWithholdingExempt = p.IcaWithholdingExempt,
+        CiiuCode = p.CiiuCode,
     };
 
     /// <summary>Lo que viaja al servidor (<c>PersonInput</c>): sin las banderas derivadas.</summary>
@@ -170,6 +198,17 @@ public sealed class PersonaFormularioModelo
         IsSupplier = IsSupplier,
         ReceivesInvoice = ReceivesInvoice,
         Status = Vacio(Status),
+        IsVatResponsible = IsVatResponsible,
+        IsSelfWithholder = IsSelfWithholder,
+        IsVatWithholdingAgent = IsVatWithholdingAgent,
+        IsSimpleTaxRegime = IsSimpleTaxRegime,
+        IsIncomeTaxFiler = IsIncomeTaxFiler,
+        IsObligatedToInvoice = IsObligatedToInvoice,
+        IsLargeContributor = IsLargeContributor,
+        WithholdingExempt = WithholdingExempt,
+        IcaWithholdingExempt = IcaWithholdingExempt,
+        // Vacío (no nulo) para que el servidor quite un CIIU borrado: nulo significa «no cambia».
+        CiiuCode = CiiuCode?.Trim() ?? string.Empty,
     };
 
     /// <summary>
@@ -188,6 +227,8 @@ public sealed class PersonaFormularioModelo
             avisos.Add("El correo electrónico no es válido.");
         if (DateOfBirthDt is { } nac && nac.Date >= DateTime.UtcNow.Date)
             avisos.Add("La fecha de nacimiento debe ser anterior a hoy.");
+        if (!CiiuValido(CiiuCode))
+            avisos.Add("El código CIIU son de 4 a 6 dígitos.");
         return avisos;
     }
 

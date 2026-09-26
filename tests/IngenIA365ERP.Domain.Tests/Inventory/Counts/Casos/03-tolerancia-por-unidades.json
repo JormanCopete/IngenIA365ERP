@@ -1,0 +1,54 @@
+{
+  "nombre": "Tolerancia de 1 unidad: una diferencia de 3 exige reconteo y una de 1 no",
+  "descripcion": "Quickstart 3.10: A teórico 10 contado 7 (diferencia -3 > 1); B teórico 10 contado 9 (diferencia -1, dentro).",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 1
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "A",
+      "teorico": 10
+    },
+    {
+      "linea": "B",
+      "teorico": 10
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "A",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 7
+    },
+    {
+      "linea": "B",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 9
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "A",
+      "teorico": 10,
+      "movimientos": null,
+      "contado": 7,
+      "diferencia": -3,
+      "ronda": 1,
+      "reconteo": true
+    },
+    {
+      "linea": "B",
+      "teorico": 10,
+      "movimientos": null,
+      "contado": 9,
+      "diferencia": -1,
+      "ronda": 1,
+      "reconteo": false
+    }
+  ]
+}

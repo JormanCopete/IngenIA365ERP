@@ -23,6 +23,12 @@
     <None Include="Infrastructure\Festivos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 010 (US8): el formato ficticio de ancho fijo de contracts/archivos.md §2.2 que FlatFileWriterTests compara byte a byte. -->
     <None Include="Payroll\Dispersion\Formatos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012 (T011): casos dorados del sello de integridad de la auditoria, calculados fuera de .NET. -->
+    <None Include="Infrastructure\Audit\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012 (T014): los cuatro ejemplos de contracts/mensajes.md §14 en su forma compacta, comparados byte a byte. -->
+    <None Include="Common\Integration\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012, T332: facturas del proveedor de muestra (UBL 2.1, AttachedDocument, nota crédito) para LectorDeFacturaUblTests. -->
+    <None Include="Inventory\Purchasing\Muestras\*.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />

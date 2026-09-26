@@ -68,6 +68,22 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "deportes" => db.Sports.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "actividades-culturales" => db.CulturalActivities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "convenios" => db.Agreements.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Inventario (feature 012, T150): el código del tipo de documento es inmutable y único entre vivos.
+        "tipos-de-documento" => db.InventoryDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Inventario (feature 012, T213; contracts/api.md §17.1): catálogo y bodegas. El código del producto tiene 20.
+        "unidades" => db.UnitsOfMeasure.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "categorias" => db.ProductCategories.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "marcas" => db.Brands.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "grupos-contables" => db.AccountingGroups.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "productos" => db.Products.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "tipos-de-bodega" => db.WarehouseTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "bodegas" => db.Warehouses.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "causas-de-ajuste" => db.AdjustmentCauses.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "canales-de-venta" => db.SalesChannels.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Catálogo tributario de Core (feature 012, T165): el código de la tarifa es el mismo en todas sus vigencias.
+        "impuestos" => db.TaxDefinitions.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "tarifas" => db.TaxRates.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).OrderByDescending(e => e.ValidFrom).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "conceptos-de-retencion" => db.WithholdingConcepts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "ciudades" => db.Cities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };

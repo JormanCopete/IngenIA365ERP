@@ -1,3 +1,5 @@
+using FluentValidation;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -6,36 +8,43 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Inventory.Salespeople.Commands.UpdateSalesperson;
 
 /// <summary>
-/// Actualiza datos del rol vendedor (SalespersonType, AppliesCommission).
-/// Datos personales (nombre, contacto) se editan en /maestros/personas.
+/// Cambia los datos del rol (feature 012, T425; contracts/api.md §31, <c>PUT /api/inventory/salespeople/{id}</c>,
+/// <c>Inventory.Salespeople.Manage</c>, con <c>Idempotency-Key</c>): sólo <c>salespersonType</c> y
+/// <c>appliesCommission</c>. Los datos personales se editan en Personas. Un vendedor inexistente o retirado es 404.
 /// </summary>
-public record UpdateSalespersonCommand : IRequest<Result>
+public sealed record UpdateSalespersonCommand : IRequest<Result>, IOperacionIdempotente, IConMotivo
 {
     public Guid PublicId { get; init; }
+
     public int? SalespersonType { get; init; }
+
     public bool AppliesCommission { get; init; }
+
+    public string Reason { get; init; } = string.Empty;
+
+    public Guid OperationKey { get; init; }
 }
 
-public class UpdateSalespersonCommandHandler(
-    IApplicationDbContext context,
-    IDateTimeService dateTime,
-    ICurrentUserService currentUser)
-    : IRequestHandler<UpdateSalespersonCommand, Result>
+public sealed class UpdateSalespersonCommandValidator : AbstractValidator<UpdateSalespersonCommand>
+{
+    public UpdateSalespersonCommandValidator()
+    {
+        RuleFor(x => x.PublicId).NotEmpty();
+        RuleFor(x => x.SalespersonType).GreaterThanOrEqualTo(0).When(x => x.SalespersonType is not null);
+        RuleFor(x => x.Reason).MaximumLength(ValidadorConMotivo<UpdateSalespersonCommand>.LargoMaximo);
+    }
+}
+
+public sealed class UpdateSalespersonCommandHandler(IApplicationDbContext db) : IRequestHandler<UpdateSalespersonCommand, Result>
 {
     public async Task<Result> Handle(UpdateSalespersonCommand request, CancellationToken ct)
     {
-        var entity = await context.Salespeople
-            .FirstOrDefaultAsync(e => e.PublicId == request.PublicId && !e.IsDeleted, ct);
+        var fila = await db.Salespeople.FirstOrDefaultAsync(s => s.PublicId == request.PublicId && !s.IsDeleted, ct);
+        if (fila is null) return Result.Failure(Error.NotFound);
 
-        if (entity is null)
-            return Result.Failure(new Error("Salesperson.NotFound", "Vendedor no encontrado."));
-
-        entity.SalespersonType = request.SalespersonType;
-        entity.AppliesCommission = request.AppliesCommission;
-        entity.UpdatedAt = dateTime.UtcNow;
-        entity.UpdatedBy = currentUser.UserName;
-
-        await context.SaveChangesAsync(ct);
+        fila.SalespersonType = request.SalespersonType;
+        fila.AppliesCommission = request.AppliesCommission;
+        await db.SaveChangesAsync(ct);
         return Result.Success();
     }
 }

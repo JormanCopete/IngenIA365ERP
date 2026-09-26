@@ -48,12 +48,15 @@ namespace IngenIA365ERP.App
             // Renovación silenciosa: ver la nota en Web.Client/Program.cs.
             builder.Services.AddSingleton<Shared.Services.Security.RenovadorDeSesion>();
             builder.Services.AddTransient<RenovacionDeSesionHandler>();
+            // Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
+            builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.App));
             builder.Services.AddTransient<AuthBearerHandler>();
             builder.Services.AddTransient<TenantDelegatingHandler>();
 
             // Named HttpClient used by all pages/services.
             builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
                 .AddHttpMessageHandler<RenovacionDeSesionHandler>()
+                .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
                 .AddHttpMessageHandler<AuthBearerHandler>()
                 .AddHttpMessageHandler<TenantDelegatingHandler>();
             builder.Services.AddSingleton(sp =>
@@ -66,6 +69,14 @@ namespace IngenIA365ERP.App
                 builder.Services.AddSingleton<IAuthService, AuthService>();
             System.Diagnostics.Debug.WriteLine($"{AppMode.Tag} AuthService listo · ApiBaseUrl={AppMode.ApiBaseUrl}");
 
+            // Feature 012 (T170): cliente del catalogo tributario de Core. Como los demas clientes tipados de Shared,
+            // depende de CentralAuthClient, que la app MAUI todavia no registra (verificacion de MAUI pendiente).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ImpuestosClient>();
+            // Feature 012 (T183): cliente de Inventario; misma salvedad que el anterior (CentralAuthClient, verificacion de MAUI).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioClient>();
+            // Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 

@@ -129,47 +129,14 @@ public static class DependencyInjection
         // Se registra el TIPO CONCRETO porque la anotacion de nulabilidad no la honra.
         services.AddScoped<TenantConnectionResolver>();
 
-        services.AddScoped(sp =>
-        {
-            var resolutor = sp.GetRequiredService<TenantConnectionResolver>();
-            var peticion = sp.GetService<IHttpContextAccessor>()?.HttpContext;
-
-            // Sin peticion HTTP —arranque, trabajos de fondo, la CLI de migraciones—
-            // no hay cooperativa de la que tirar. Va contra la instancia por defecto,
-            // donde viven el arbol de migraciones y la plantilla. Se comprueba el
-            // HttpContext y no la cooperativa porque por esa via son indistinguibles.
-            if (peticion is null)
-            {
-                return new ErpTenantInfo { SchemaName = "dbo", ConnectionString = resolutor.Plantilla };
-            }
-
-            var baseDeDatos = peticion.Items.TryGetValue("TenantDatabase", out var b) ? b as string : null;
-            var propia = peticion.Items.TryGetValue("TenantConnectionOverride", out var c) ? c as string : null;
-
-            // Dentro de una peticion, una cooperativa sin resolver NO puede caer a la
-            // base de plantilla. No hay segunda barrera que lo recoja: ninguna entidad
-            // implementa ITenantEntity y los filtros globales son todos de borrado
-            // logico. Si esto sale mal, nada lo detiene y los datos se mezclan.
-            if (string.IsNullOrWhiteSpace(baseDeDatos) && string.IsNullOrWhiteSpace(propia))
-            {
-                throw new InvalidOperationException(
-                    "Se pidio la base operativa dentro de una peticion sin cooperativa resuelta " +
-                    $"({peticion.Request.Method} {peticion.Request.Path}). Caer a la base de " +
-                    "plantilla mezclaria los datos de todas las cooperativas. Si esta ruta debe " +
-                    "funcionar sin cooperativa, no tiene que usar IApplicationDbContext.");
-            }
-
-            var actual = sp.GetRequiredService<ICurrentTenantService>();
-            return new ErpTenantInfo
-            {
-                SchemaName = "dbo",
-                ConnectionString = resolutor.Resolver(baseDeDatos, propia, actual.TenantName),
-                Name = actual.TenantName,
-                Id = actual.TenantId,
-            };
-        });
+        // La fabrica decide contra que base habla la operativa: la de la peticion, la del
+        // trabajo de fondo (ContextoAmbiental, feature 012) o, sin ninguna de las dos, la
+        // plantilla. Vive en MultiTenancy/CooperativaDelAmbito para poder probarla.
+        services.AddScoped(CooperativaDelAmbito.Crear);
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        // Feature 012 (T15, T138): el cerrojo pesimista de la confirmacion, con el SQL de cada motor sobre el propio contexto.
+        services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
         services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();
@@ -215,6 +182,21 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.FinancialStatementItemsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.VoucherTypesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CrossDocumentTypesSeeder>();
+        // Feature 012 (T39, T094): los tipos de alerta del catalogo cerrado con sus destinatarios por defecto (Order 83).
+        // La tabla COR_AlertTypes llega con PlataformaParaInventario (T186).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AlertTypesSeeder>();
+        // Feature 012 (T152): un tipo de documento por clase operable con su consecutivo, y la política del saldo inicial
+        // (Order 80). No hace nada hasta que la base tenga InventarioComercialNucleo (T440), que crea sus tablas.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryDocumentTypesSeeder>();
+        // Feature 012 (T210, T211): unidades de medida (Order 77, JSON con version), tipos de bodega (78) y causas de ajuste
+        // (79). Esperan, como la de arriba, a que la base tenga InventarioComercialNucleo (T440).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryUnitsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.WarehouseTypesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.AdjustmentCausesSeeder>();
+        // Feature 012 (T177): codigos DIVIPOLA en COR_Cities.DaneCode (Order 82); la columna llega con PlataformaParaInventario (T186).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DivipolaSeeder>();
+        // Feature 012 (T168): catalogo tributario inicial, pendiente de validar por la contadora (Order 81).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TaxCatalogSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

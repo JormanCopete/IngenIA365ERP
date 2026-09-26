@@ -703,6 +703,85 @@ Lo que sigue y a quién le toca:
    de su propia prima/cesantías; el archivo de consignación por fondo ya sale con el motor de N4 cuando el fondo tenga formato; recaudo en
    Cartera probado sólo en Application.Tests hasta que exista desembolso por HTTP.
 
+#### P17 — Feature 012 (inventario comercial): entrega I1 terminada en su rama, **sin desplegar**
+
+**Estado: rama local `012-inventario-comercial`, sin merge a `develop` y sin desplegar en DEV, QA ni
+producción** (corte 2026-09-26). La feature reemplaza el traslado a medias del inventario de SOLIDO por
+un módulo comercial nuevo en seis entregas (I1 núcleo, I2 integración con Contabilidad, I3 ventas y POS,
+I4 documentos electrónicos DIAN, I5 compras completas y costeo avanzado, I6 comercio ampliado) más IC
+(crédito con Cartera). Spec-kit completo desde el 2026-09-24 (spec, plan, research R1–R34, decisiones
+transversales T1–T52, contratos, tareas); decisiones del dueño Q1 A (COOFLOPAL sale el 01/12/2026 con el
+módulo nuevo mínimo y parametriza en plantillas), Q2 B (Inventario no escribe asientos: Contabilidad los
+genera desde mensajes, con modo de paso en línea, por lotes o «no pasa», enmienda de la 009) y Q3 C
+(el canal de facturación electrónica es configurable por cooperativa y con vigencia, proveedor tecnológico primero).
+
+**Entrega I1** (fases 1–11 y la parte básica de la 21): catálogo, bodegas con tránsito, kardex y
+existencias, costo promedio, períodos, saldo inicial y activación bodega por bodega con cifras de SOLIDO,
+compra directa y documentos del proveedor, traslados en dos pasos, conteos, reorden, informes básicos,
+vendedores como rol, y la plataforma (mensajes, ejecución por cooperativa, idempotencia, parámetros con
+vigencia, aprobaciones con montos, alertas, auditoría encadenada). Tres migraciones pares:
+`RetiroDelInventarioHeredado` (**destructiva con guarda**), `PlataformaParaInventario` e
+`InventarioComercialNucleo` (aditivas). Verde en la rama: 0 errores de compilación; sin contenedores
+516 Domain, 2.324 Application, 209 Architecture y 164 Shared; con Docker, la suite de integración entera
+en PostgreSQL y en SQL Server con 398 pasadas y 6 omitidas con motivo en cada motor. Recetas:
+[inventario-documentos-y-kardex.md](../manual/inventario-documentos-y-kardex.md),
+[plataforma-de-integracion.md](../manual/plataforma-de-integracion.md),
+[plantillas-de-importacion.md](../manual/plantillas-de-importacion.md); runbooks
+[inventario-retiro-heredado.md](inventario-retiro-heredado.md),
+[inventario-puesta-en-marcha.md](inventario-puesta-en-marcha.md) y
+[auditoria-cadena-de-sellos.md](auditoria-cadena-de-sellos.md).
+
+Lo que hay que saber antes de llevarla a un ambiente:
+
+- **En I1 nadie entrega los mensajes**: el despachador es de I2. Los documentos confirmados dejan sus
+  mensajes en `COR_IntegrationMessages` en `Pending`/`InBatch`, correctos y en orden, esperando.
+- **En producción ninguna bodega se puede activar con I1 sola**: la comparación contra los libros
+  (FR-090) necesita la consulta de saldos de I2, y sin ella `POST …/activation` responde
+  `Inventory.Activation.AccountingUnavailable`. Se puede cargar y aprobar saldos, importar cifras de
+  SOLIDO y correr los comparativos. Fuera de producción se activa aceptando la diferencia con permiso y
+  motivo.
+- **Retiro heredado**: el diagnóstico del 2026-09-25 (con autorización del dueño para leer PDN) dio 0 filas
+  en las 23 tablas y 0 vendedores en DEV `ingenia365erp`, QA `ingenia365erp` y `coop_prueba`, y producción
+  `cooflopal` e `ingenia365erp`: la guarda pasa sola. Se repite el día de promover.
+- **La cadena de auditoría sólo se verifica a mano** (pantalla o `POST /api/audit/integrity/verify`): la
+  verificación nocturna prevista no existe todavía; la tarea nocturna de I1 es la del kardex.
+
+Lo que sigue y a quién le toca:
+
+1. **Dueño, antes de promover** (T985–T987): segundo revisor de las tres migraciones y `pg_dump -Fc` de
+   cada base con sufijo `-pre-f012` (o `-pre-f012-i1`), repetir el diagnóstico del heredado; comprobar en
+   los tres clústeres que el usuario de Mongo de la API sólo inserta en `IngenIA365ERP_Audit_*` y que la
+   clave de anclas de producción no es la de desarrollo (`AuditSignature:AnchorKeyVersion`; si lo es, rotar
+   antes de desplegar, receta en el runbook de la cadena §8); confirmar D8/D9 (excepción de puesta en
+   marcha y ajustes de conteo en la foto) y C10 (422 con código propio para los permisos que dependen del
+   cuerpo).
+2. **Usuario**: autorizar el merge a `develop`; el pipeline la lleva a DEV y QA. Allí, recorrer
+   `quickstart.md` §2 y §3 sobre la cooperativa de ensayo y la parte de I1 de §9 por rol (T996), y medir
+   SC-001 y SC-017 (T994, T995).
+3. **Producción** (T998) sólo con autorización expresa del dueño, por el Job PreSync del DbMigrator y con
+   verificación contra la base (tablas, permisos sembrados por la API al arrancar, `/health/ready`,
+   quickstart §3.1–§3.3). La salida en vivo real de COOFLOPAL necesita además I2 (activación con cuadre) e
+   I3 (ventas y POS).
+4. **Contadora** (T999, antes de I2): validar los tipos de comprobante del comercio y diligenciar la
+   matriz de reglas contables con el modo de paso de cada tipo.
+
+Pendientes abiertos de la feature, fuera de las entregas:
+
+- **IC — crédito con Cartera** (D-02): las consultas de cupo y la entrega de lo acumulado esperan la spec
+  de Cartera. Mientras tanto rige el **crédito provisional** (I3): la cuenta por cobrar la lleva
+  Contabilidad y los mensajes a Cartera se acumulan.
+- **B1 — `ICurrentUserService.UserId`**: devuelve el entero del token y no `SEC_Users.Id`. La 012 no lo
+  tocó (usa `IActorActual`); corregirlo en toda la plataforma es una tarea aparte que debe traer la prueba
+  del **cuatro ojos de Contabilidad**, que hoy compara `0 == 0` y bloquea a todos, y la auditoría que firma
+  «system».
+- **C2 — copia externa de las anclas**: hoy el ancla de la cadena de auditoría vive en SQL con HMAC;
+  copiarla a un almacén inmutable (S3 con Object Lock) quedó para después.
+- **I3 — almacenamiento frío**: lo que se conserva cinco años (artefactos DIAN, soportes) debe pasar a
+  almacenamiento frío a los 90 días (no es borrado). Decidido «sí», sin implementar; llega con I4.
+- **Pruebas de MAUI hechas a mano** (T997): no hay pruebas de navegador ni de la app en el repositorio. Las
+  pantallas de Inventario y Compras de I1 y la aprobación presencial con llave se verifican a mano en
+  Windows y Android y se anota el resultado.
+
 ### 🟡 Prioridad media
 
 #### P4 — Sellado mensual regulatorio suspendido

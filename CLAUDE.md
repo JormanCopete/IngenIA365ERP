@@ -510,6 +510,85 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `NominaDispersionBancaria` (su scaffold arrastró un cambio de índice de vacaciones ya hecho y se
   limpió antes de salir). Receta: `docs/manual/dispersion-bancaria.md`; runbook §4e.
 
+- **Inventario comercial (feature 012, rama `012-inventario-comercial`, entrega I1, 2026-09-26; rama
+  local, sin merge ni despliegue)**: un módulo comercial nuevo en reemplazo del traslado a medias de
+  SOLIDO, por entregas (I1 núcleo; I2 integración con Contabilidad; I3 ventas y POS; I4 documentos
+  electrónicos DIAN; I5 compras completas y costeo avanzado; I6 comercio ampliado; IC crédito con
+  Cartera, bloqueada por D-02). **I1 construyó**: catálogo (unidades con conversiones, categorías,
+  marcas, grupos contables con vigencia por producto, productos con códigos de barras e impuestos,
+  causas de ajuste, canales), bodegas con ubicaciones y **bodega de tránsito por sucursal**, kardex y
+  existencias, costo promedio ponderado (cooperativa o bodega), períodos con cierre y reapertura,
+  saldo inicial y **activación bodega por bodega** con cifras de SOLIDO y comparativos, compra directa,
+  recepción, factura y notas del proveedor, devolución y eventos RADIAN, traslados en dos pasos con
+  diferencias aprobadas, movimiento entre ubicaciones, conteo físico con foto y ajuste aprobado, reorden
+  y quiebre, nueve vistas en `/api/reports/inventory/{vista}` (`kardex`, `stock`, `valuation`,
+  `legacy-comparison-kardex`, `legacy-comparison-valuation`, `radian-events`, `count-differences`,
+  `documents`, `reorder-alerts`), vendedores como rol (`RolDeVendedor`, `/ventas/vendedores`), y la
+  **plataforma** en `Application/Common` que no sabe de inventario: bandeja de salida de mensajes
+  (`COR_IntegrationMessages`), ejecución por cooperativa (`IEjecutorEnCooperativa`, actor «Proceso de
+  integración», `ProgramadorDeTareas`, arrendamientos `COR_BackgroundLeases`), idempotencia
+  (`Idempotency-Key` → `COR_OperationKeys`), parámetros con vigencia (`COR_ParameterVersions`, un
+  lector y un escritor), aprobaciones multinivel con montos por permiso (`COR_Approval*`,
+  `SEC_PermissionAmountLimits`, aprobador presente con passkey o TOTP), alcance por bodega, alertas
+  (`COR_Alerts` sobre `COR_Notifications`), catálogo tributario de Core, perfil tributario de la
+  persona, DIVIPOLA, dieciséis plantillas de importación con revisión previa y auditoría con entrega
+  garantizada y **cadena de sellos**. Tres migraciones pares: `RetiroDelInventarioHeredado`
+  (**destructiva con guarda**: borra 23 tablas `INV_*` heredadas, conserva `INV_Salespeople`, se niega
+  si alguna tiene filas sin la fila `COR_SystemSettings` `INV.RetiroHeredado.Aprobado`; diagnóstico del
+  2026-09-25: 0 filas en todas las bases de DEV, QA y PDN), `PlataformaParaInventario` (19 tablas de
+  plataforma y columnas en `COR_People`, `COR_Cities`, `COR_Branches`, `COR_Notifications`) e
+  `InventarioComercialNucleo` (39 tablas `INV_`, `pg_trgm` para la búsqueda). Semillas Order 77–83
+  (unidades, tipos de bodega, causas, un tipo de documento por clase con su consecutivo, tributario,
+  DIVIPOLA, tipos de alerta); los permisos `Inventory.*` los siembra la API al arrancar, enteros desde
+  I1. Rutas de pantalla `/inventario/*` (31), `/compras/*` (9), `/ventas/canales`, `/ventas/vendedores`,
+  `/maestros/impuestos`. Reglas que no se negocian:
+  **Inventario no escribe asientos ni conoce cuentas** (Q2 B): no lee ni escribe tablas de
+  Contabilidad ni de Cartera (`InventarioNoConoceContabilidadNiCartera`); lo que cruza, cruza por
+  **mensajes nacidos en la misma transacción** que el documento, por el único escritor
+  `EmisorDeMensajes`, que nunca guarda (T7–T12); el mensaje lo origina la persona, nunca el proceso.
+  En I1 **no hay despachador**: los mensajes quedan `Pending`/`InBatch` hasta I2, y el modo de paso
+  (`EnLinea`, `PorLotes`, `NoPasa`) se sella al confirmar. **Todo lo que mueve inventario es un
+  `INV_Documents`** con su clase (34, fijas en `ClasesDeDocumento`, no son columna) y un tipo de la
+  cooperativa; **un solo flujo de confirmación**, `ConfirmacionDeDocumento` (relectura → aprobación →
+  guardia fiscal y validación previa → cerrojo → efecto de la clase → número → mensajes → un
+  `SaveChanges`), con una estrategia `IEfectoDeClase` por clase. **El kardex es un hecho y las
+  existencias son proyección**: `RegistroDeKardex` es su único escritor (más la reconstrucción, que no
+  toca el kardex; `NadieEscribeElKardexFueraDelRegistro`), rechaza todas las líneas que no caben antes
+  de escribir, y la verificación nocturna `inventario.integridad` compara. **Cerrojo pesimista en orden
+  fijo** (setup → bodegas → orígenes → costo/existencias/detalle → numeración, por `Id`, igual en los
+  dos motores) **y la numeración al final** por `Numerador` (`SoloElNumeradorNumera`; el borrador y lo
+  que queda en aprobación no consumen número) (T15, T16). Lo confirmado **no se edita ni se reversa**:
+  la **anulación es un documento nuevo** (`Voiding`, con su fecha, al costo del original, con
+  `AjusteDeCostoReconocido` si la entrada ya promedió; `LoDeInventarioNoSeReversa`). Retroactivo
+  rechazado en I1 salvo el saldo inicial de una bodega `NotActivated` y los ajustes de conteo
+  (excepción de puesta en marcha, caso dorado 17). Precisión por alias (`PrecisionDeInventario`:
+  cantidad 18,4; costo y factor 18,6; monto 18,2; tarifa 9,6 como fracción;
+  `LasCantidadesYCostosTienenSuPrecision`). Toda escritura con `Idempotency-Key`
+  (`LosComandosDeInventarioLlevanClave`); todo trabajo de fondo por `IEjecutorEnCooperativa`
+  (`NingunTrabajoDeFondoOperaSinCooperativa`); la segregación compara `SEC_Users.Id`, nunca el entero
+  del token (`LaSegregacionNoUsaUserIdDelToken`); sin valores legales en el código
+  (`ElComercioNoTieneValoresLegalesFijos`, `LaUvtSeLeeEnUnSoloSitio`). **En producción ninguna bodega
+  se activa en I1**: sin la consulta de saldos de I2, `POST …/activation` responde
+  `Inventory.Activation.AccountingUnavailable` (fuera de producción se activa aceptando la diferencia
+  con permiso y motivo). Para las entregas que siguen quedan fijadas en el diseño —sus puertos todavía
+  no existen en el código; sí las pruebas de arquitectura que los vigilan—: **la factura por el puerto
+  `ICanalDeEmisionElectronica`** con modelo canónico propio y el proveedor tecnológico sólo en su
+  adaptador (`ElProveedorTecnologicoSoloLoConoceSuAdaptador`, `LasCredencialesDeFacturacionNoTocanLaBase`),
+  **crédito provisional hasta IC** (consultas a Cartera por `IConsultasDeCartera`, sin HTTP), y el
+  número de tarjeta que no se guarda (`LosPagosNoGuardanElNumeroDeTarjeta`). La auditoría de los módulos
+  encadenados (Inventory, ElectronicInvoicing, Integration, Approvals, Alerts, Parameters, Taxes,
+  PaymentMeans, Navigation; **Accounting fuera**, C1) va por `COR_AuditOutbox` en la transacción y la
+  sella y lleva a Mongo `AuditOutboxForwarder`, con anclas HMAC de una clave propia (`AnchorKeyVersion`,
+  nunca `dev-v1`; la de desarrollo tiene su secreto en el repositorio); la verificación es manual
+  (`POST /api/audit/integrity/verify`, pestaña «Integridad» de `/admin/auditoria`): **no hay verificación
+  nocturna de la cadena**. Verde al cierre de I1: e2e «Inventario e2e» en PostgreSQL y SQL Server (398
+  pasan y 6 omitidas con motivo en cada motor). Recetas: `docs/manual/inventario-documentos-y-kardex.md`,
+  `docs/manual/plataforma-de-integracion.md`, `docs/manual/plantillas-de-importacion.md`; runbooks
+  `docs/operaciones/inventario-retiro-heredado.md`, `docs/operaciones/inventario-puesta-en-marcha.md`,
+  `docs/operaciones/auditoria-cadena-de-sellos.md`. Pendiente del dueño antes de promover: segundo
+  revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
+  producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -518,18 +597,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-21 (cierre de N2 de la feature 010, en su rama), remedida. **Son cifras que
+Instantánea del 2026-09-26 (cierre de la entrega I1 de la feature 012, en su rama `012-inventario-comercial`), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 772 (2026-09-23; feature 011: E1 −1 por la subida multipart retirada y +2 del almacén local —sólo con `Provider = Local` fuera de Production—; E3 +6: pedir, renovar y confirmar una subida, y los enlaces de adjuntos, PILA y dispersión) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 182 con `@page` (2026-09-21; E2 contable sumó libro auxiliar, informes, estados financieros, tercero, presupuesto y `/contabilidad/apertura`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 13 clases `*Report` (2026-09-21; `SettlementDocumentReport` para la firma de la definitiva) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 1.778 el 2026-09-23, cierre de la feature 011 en DEV y QA (223 Domain, 1.318 Application, 134 Architecture, 101 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 261 el 2026-09-23 con Docker: 260 pasan, 1 omitida (colecciones «Nomina e2e» y «Contabilidad e2e» en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` —ya no se publica en Docker Hub— y el host «Adjuntos sobre S3», `ApiConAlmacenS3Fixture`, con `Provider = S3` contra MinIO) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 201 con `@page` (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 12 clases `*Report` (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 3.215 el 2026-09-26, cierre de I1 de la 012 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -578,11 +657,12 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/011-adjuntos-s3-prefirmadas/plan.md](specs/011-adjuntos-s3-prefirmadas/plan.md)
+[specs/012-inventario-comercial/plan.md](specs/012-inventario-comercial/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/011-adjuntos-s3-prefirmadas/spec.md)
-- [research.md](specs/011-adjuntos-s3-prefirmadas/research.md)
-- [data-model.md](specs/011-adjuntos-s3-prefirmadas/data-model.md)
-- [quickstart.md](specs/011-adjuntos-s3-prefirmadas/quickstart.md)
-- [contracts/](specs/011-adjuntos-s3-prefirmadas/contracts/)
+- [spec.md](specs/012-inventario-comercial/spec.md)
+- [research.md](specs/012-inventario-comercial/research.md)
+- [data-model.md](specs/012-inventario-comercial/data-model.md)
+- [quickstart.md](specs/012-inventario-comercial/quickstart.md)
+- [decisiones-transversales.md](specs/012-inventario-comercial/decisiones-transversales.md)
+- [contracts/](specs/012-inventario-comercial/contracts/)
 <!-- SPECKIT END -->

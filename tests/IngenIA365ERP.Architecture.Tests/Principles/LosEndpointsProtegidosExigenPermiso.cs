@@ -36,6 +36,15 @@ public class LosEndpointsProtegidosExigenPermiso
         // Feature 009: todo el módulo contable y su centro de informes.
         Path.Combine("Endpoints", "Accounting", "*.cs"),
         Path.Combine("Endpoints", "Reports", "Accounting*.cs"),
+        // Feature 012 (T118, decisiones-transversales §2.18): ampliación canónica por glob; cubre las rutas de todas
+        // las historias del comercio (US1–US17). Las carpetas o archivos que todavía no existen no fallan.
+        Path.Combine("Endpoints", "Inventory", "*.cs"),
+        Path.Combine("Endpoints", "Core", "Taxes*.cs"),
+        Path.Combine("Endpoints", "Core", "PaymentMeans*.cs"),
+        Path.Combine("Endpoints", "ElectronicInvoicing", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Inventory*.cs"),
+        // Feature 012 (T159): las rutas reutilizables de las plantillas (RutasDePlantilla.MapPlantilla).
+        Path.Combine("Endpoints", "Common", "*.cs"),
     ];
 
     /// <summary>
@@ -59,6 +68,22 @@ public class LosEndpointsProtegidosExigenPermiso
         "WorkRiskProvidersEndpoints.cs",
         "WorkRiskRatesEndpoints.cs",
     };
+
+    /// <summary>
+    /// Rutas sueltas de archivos que no entran enteros a <see cref="Patrones"/> porque conviven con rutas
+    /// abiertas a toda sesión: (archivo, fragmento de la ruta, permiso exigido). Feature 012 (T019):
+    /// <c>AuditLogModule.cs</c> también publica <c>POST /api/audit/access</c>, que registra el ingreso a
+    /// una opción y es de cualquier usuario autenticado; la verificación de integridad (contracts/api.md
+    /// §29) sí exige <c>AuditLog.VerifyIntegrity</c>. Las rutas de <c>Endpoints/Inventory</c> entran por glob en
+    /// <see cref="Patrones"/> (fase 3, T118).
+    /// </summary>
+    private static readonly (string Archivo, string Ruta, string Permiso)[] RutasSueltas =
+    [
+        (Path.Combine("Endpoints", "AuditLogModule.cs"), "/api/audit/integrity/verify", "AuditLog.VerifyIntegrity"),
+        // Feature 012 (T128, contracts/api.md §1.5): los perfiles sugeridos son parte de crear un rol.
+        (Path.Combine("Endpoints", "RolesModule.cs"), "/templates", "Security.Roles.Create"),
+        (Path.Combine("Endpoints", "RolesModule.cs"), "/from-template", "Security.Roles.Create"),
+    ];
 
     private static readonly Regex InicioDeRuta = new(@"\.Map(Get|Post|Put|Delete|Patch)\(", RegexOptions.Compiled);
 
@@ -107,8 +132,15 @@ public class LosEndpointsProtegidosExigenPermiso
         var ruta = Path.Combine(Api, relativo);
         Assert.True(File.Exists(ruta), $"No existe {ruta}: si el archivo se movió, actualizá la lista.");
 
-        var tramos = Tramos(File.ReadAllText(ruta));
-        Assert.True(tramos.Count > 0, $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
+        var texto = File.ReadAllText(ruta);
+        var tramos = Tramos(texto);
+        // Feature 012, T238: un archivo que en esta entrega sólo publica la descarga de su plantilla lo hace por
+        // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido). Feature 012, T262:
+        // lo mismo un grupo de documentos que publica sólo el ciclo común por CicloDeDocumentoRutas.MapCicloDeDocumento
+        // (ajustes), que pone el permiso de cada ruta adentro (CicloDeDocumentoRutas.cs también entra al recorrido).
+        Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
+                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal),
+            $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos
             .Where(t => !t.Contains(".RequirePermission(", StringComparison.Ordinal))
@@ -155,6 +187,50 @@ public class LosEndpointsProtegidosExigenPermiso
                 conPersona.Contains($"RequirePermission(\"{caso.Rol}\")", StringComparison.Ordinal)
                 && conPersona.Contains("RequirePermission(\"Core.People.Create\")", StringComparison.Ordinal),
                 $"La ruta with-person de {caso.Nombre} debe exigir {caso.Rol} y Core.People.Create.");
+        }
+    }
+
+    [Fact]
+    public void Las_vistas_de_inventario_exigen_ver_y_exportar()
+    {
+        // Feature 012 (T182; contracts/api.md §27): toda vista de /api/reports/inventory se publica con
+        // MapVistaDeInventario, que pone Inventory.Reports.View y, al exportar, Inventory.Reports.Export. Una ruta
+        // publicada a mano en el archivo del centro de informes se saltaría la auditoría de la exportación y el permiso
+        // de datos personales: además del registro de vistas, sólo esa extensión puede llamar a MapGet.
+        var archivo = Path.Combine(Api, "Endpoints", "Reports", "InventoryReportsEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+
+        var tramos = Tramos(File.ReadAllText(archivo));
+        Assert.True(tramos.Count == 2,
+            $"InventoryReportsEndpoints.cs publica {tramos.Count} rutas con .Map*(: sólo el registro de vistas (GET /) y la de " +
+            "MapVistaDeInventario. Registrá cada vista con group.MapVistaDeInventario(…).");
+        Assert.All(tramos, t => Assert.Contains(".RequirePermission(PermisoDeVer)", t.Replace("\"Inventory.Reports.View\"", "PermisoDeVer"), StringComparison.Ordinal));
+        Assert.Contains(".RequirePermissionWhenExporting(PermisoDeExportar)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("EmitirExportacionAsync", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales", tramos[1], StringComparison.Ordinal);
+
+        // T416 (US12; SC-014, FR-087, §2.18): los dos permisos son los del catálogo, al pie de la letra. Cada vista pasa
+        // por esa única ruta, así que cada una lleva RequirePermission(View) y RequirePermissionWhenExporting(Export).
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("PermisoDeVer = \"Inventory.Reports.View\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeExportar = \"Inventory.Reports.Export\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain(".RequirePermissionWhenExporting(\"", fuente.Replace(".RequirePermissionWhenExporting(PermisoDeExportar)", string.Empty),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Las_rutas_sueltas_exigen_su_permiso()
+    {
+        foreach (var (archivo, ruta, permiso) in RutasSueltas)
+        {
+            var camino = Path.Combine(Api, archivo);
+            Assert.True(File.Exists(camino), $"No existe {camino}: si el archivo se movió, actualizá RutasSueltas.");
+
+            var tramo = Tramos(File.ReadAllText(camino))
+                .FirstOrDefault(t => t.Contains($"\"{ruta}\"", StringComparison.Ordinal));
+            Assert.True(tramo is not null, $"{archivo} ya no publica {ruta}: actualizá RutasSueltas.");
+            Assert.True(tramo!.Contains($".RequirePermission(\"{permiso}\")", StringComparison.Ordinal),
+                $"{ruta} de {archivo} debe exigir .RequirePermission(\"{permiso}\").");
         }
     }
 }

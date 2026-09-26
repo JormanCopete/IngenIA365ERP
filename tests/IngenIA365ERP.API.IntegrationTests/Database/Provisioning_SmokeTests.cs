@@ -30,7 +30,11 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         // sacó las tablas ADM_* del contexto operativo: la prueba pedía 286 y
         // encontraba 277, y lo que delataba no era un esquema incompleto sino
         // su propia constante. Preguntándole al modelo no puede volver a pasar.
-        var esperadas = appDb.Model.GetEntityTypes()
+        // Lo excluido de las migraciones no se crea (hoy nada: la feature 012 excluyó las tablas INV_
+        // de I1 hasta que el par InventarioComercialNucleo las creó).
+        var esperadas = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions
+            .GetService<Microsoft.EntityFrameworkCore.Metadata.IDesignTimeModel>(appDb).Model.GetEntityTypes()
+            .Where(e => !e.IsTableExcludedFromMigrations())
             .Select(e => e.GetTableName())
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => n!)

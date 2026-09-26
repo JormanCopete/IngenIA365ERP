@@ -28,4 +28,13 @@ public static class CodigoDeCatalogo
     public static Error Duplicado(string catalogo, string codigo, string nombreDelExistente) =>
         new("Catalogo.CodigoDuplicado",
             $"Ya existe {catalogo} con el código {codigo}: «{nombreDelExistente}». Editá ese registro o usá otro código.");
+
+    /// <summary>
+    /// El mismo error con <c>data: { existingPublicId, existingName }</c> (feature 012, contracts/api.md §3, §3.10), para
+    /// que la pantalla ofrezca abrir el existente.
+    /// </summary>
+    public static Error Duplicado(string catalogo, string codigo, string nombreDelExistente, Guid publicIdDelExistente) =>
+        new ErrorConDatos("Catalogo.CodigoDuplicado",
+            $"Ya existe {catalogo} con el código {codigo}: «{nombreDelExistente}». Editá ese registro o usá otro código.",
+            new { existingPublicId = publicIdDelExistente, existingName = nombreDelExistente });
 }

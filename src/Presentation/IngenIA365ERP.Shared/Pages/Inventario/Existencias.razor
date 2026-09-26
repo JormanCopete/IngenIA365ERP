@@ -1,0 +1,236 @@
+@page "/inventario/existencias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Existencias - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T265 (FR-019, FR-033; contracts/api.md §5): la existencia en ≤ 3 pasos —1) leer o escribir el producto,
+   2) ver sus bodegas, ubicaciones y lo que va en tránsito, 3) abrir su kardex—, y la lista por producto y bodega del
+   alcance con filtros. Física, reservada (0 hasta los pedidos de I6), disponible y en tránsito hacia la bodega; mínimo,
+   punto de reorden y posición cuando la bodega tiene política. Los valores (promedio, valor, estado de costo) sólo llegan
+   con Inventory.Costs.Read: la pantalla los pinta si llegan, nunca los deduce. *@
+<PermissionGate Required="Inventory.Stock.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Existencias</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/inventario/kardex">Kardex</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarListaAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <SelectorDeProducto Etiqueta="Producto" Elegido="@ElegirAsync" />
+    </div>
+
+    <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+        @if (_detalle is { } d)
+        {
+            <div class="info-card">
+                <div class="page-header">
+                    <h4>@d.Product.Code · @d.Product.Name <span class="texto-tenue">(@d.Product.BaseUnitCode)</span></h4>
+                    <div class="toolbar">
+                        <a class="e-btn e-outline" href="@($"/inventario/kardex?product={d.Product.PublicId}")">Ver kardex</a>
+                        <SfButton CssClass="e-flat" OnClick="@(() => _detalle = null)">Cerrar</SfButton>
+                    </div>
+                </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Física</span><span class="kpi-value">@Cantidad(d.Totals.Physical)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Reservada</span><span class="kpi-value">@Cantidad(d.Totals.Reserved)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Disponible</span><span class="kpi-value">@Cantidad(d.Totals.Available)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">En tránsito</span><span class="kpi-value">@Cantidad(d.Totals.InTransit)</span></div>
+                    @if (d.Totals.Value is { } valor)
+                    {
+                        <div class="kpi-card"><span class="kpi-label">Valor</span><span class="kpi-value">@valor.ToString("N2")</span></div>
+                    }
+                </div>
+                @if (d.CostState is { } c)
+                {
+                    <p class="texto-apoyo">
+                        Costo @(c.Method == 2 ? "PEPS" : "promedio ponderado") por @(c.Scope == 2 ? "bodega" : "cooperativa"):
+                        promedio @c.AverageCost.ToString("N6") · último costo @c.LastUnitCost.ToString("N6") · @Cantidad(c.Quantity) unidades · valor @c.Value.ToString("N2")
+                    </p>
+                }
+                <h5>Por bodega</h5>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Bodega</th><th class="numero">Física</th><th class="numero">Reservada</th><th class="numero">Disponible</th><th class="numero">En tránsito hacia</th>@if (d.Totals.Value is not null) { <th class="numero">Valor</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var b in d.ByWarehouse)
+                            {
+                                <tr>
+                                    <td>@b.Warehouse.Code · @b.Warehouse.Name@(b.Warehouse.IsTransit ? " (tránsito)" : "")</td>
+                                    <td class="numero">@Cantidad(b.Physical)</td>
+                                    <td class="numero">@Cantidad(b.Reserved)</td>
+                                    <td class="numero">@Cantidad(b.Available)</td>
+                                    <td class="numero">@Cantidad(b.InTransitTo)</td>
+                                    @if (d.Totals.Value is not null) { <td class="numero">@b.Value?.ToString("N2")</td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (d.ByLocation.Count > 0)
+                {
+                    <h5>Por ubicación</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Bodega</th><th>Ubicación</th><th>Lote</th><th class="numero">Cantidad</th></tr></thead>
+                            <tbody>
+                                @foreach (var u in d.ByLocation)
+                                {
+                                    <tr><td>@u.Warehouse.Code</td><td>@u.Location.Code</td><td>@u.Lot</td><td class="numero">@Cantidad(u.Quantity)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                @if (d.InTransit.Count > 0)
+                {
+                    <h5>En tránsito</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Despacho</th><th>Desde</th><th>Hacia</th><th>Fecha</th><th class="numero">Cantidad</th></tr></thead>
+                            <tbody>
+                                @foreach (var t in d.InTransit)
+                                {
+                                    <tr><td>@t.DispatchNumber</td><td>@t.From?.Code</td><td>@t.To.Code</td><td>@t.DispatchedOn.ToString("dd/MM/yyyy")</td><td class="numero">@Cantidad(t.Quantity)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <div class="toolbar">
+        <label class="campo">Bodega
+            <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => CambiarBodegaAsync(e.Value?.ToString()))">
+                <option value="">Todas las del alcance</option>
+                @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:after="CargarListaAsync" placeholder="Código o nombre" /></label>
+        <SfCheckBox Checked="@_conExistencia" CheckedChanged="@((bool v) => { _conExistencia = v; return CargarListaAsync(); })" TChecked="bool" Label="Sólo con existencia" />
+        <SfCheckBox Checked="@_bajoReorden" CheckedChanged="@((bool v) => { _bajoReorden = v; return CargarListaAsync(); })" TChecked="bool" Label="En o bajo el punto de reorden" />
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay existencias que mostrar con estos filtros en las bodegas de su alcance.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Producto</th><th>Bodega</th><th class="numero">Física</th><th class="numero">Reservada</th><th class="numero">Disponible</th>
+                            <th class="numero">En tránsito</th><th class="numero">Mínimo</th><th class="numero">Punto de reorden</th><th class="numero">Posición</th>
+                            @if (_conValores) { <th class="numero">Promedio</th><th class="numero">Valor</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in _filas)
+                        {
+                            <tr>
+                                <td><button type="button" class="enlace" @onclick="@(() => VerDetalleAsync(f.Product.PublicId))">@f.Product.Code</button> · @f.Product.Name</td>
+                                <td>@f.Warehouse.Code@(f.Warehouse.IsTransit ? " (tránsito)" : "")</td>
+                                <td class="numero">@Cantidad(f.Physical)</td>
+                                <td class="numero">@Cantidad(f.Reserved)</td>
+                                <td class="numero">@Cantidad(f.Available)</td>
+                                <td class="numero">@Cantidad(f.InTransitTo)</td>
+                                <td class="numero">@(f.Minimum is { } m ? Cantidad(m) : "")</td>
+                                <td class="numero">@(f.ReorderPoint is { } r ? Cantidad(r) : "")</td>
+                                <td class="numero @(f.Position is { } p && f.ReorderPoint is { } rp && p <= rp ? "texto-alerta" : "")">@(f.Position is { } pos ? Cantidad(pos) : "")</td>
+                                @if (_conValores) { <td class="numero">@f.AverageCost?.ToString("N6")</td><td class="numero">@f.Value?.ToString("N2")</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina de @Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoDePagina)) · @_total fila(s)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new();
+    private List<FilaDeExistenciaDto> _filas = [];
+    private List<BodegaDto> _bodegas = [];
+    private ExistenciaDelProductoDto? _detalle;
+    private Guid? _bodega;
+    private string? _buscar;
+    private bool _conExistencia = true, _bajoReorden;
+    private int _pagina = 1;
+    private long _total;
+
+    /// <summary>Los valores se muestran si el servidor los mandó (con Inventory.Costs.Read): no se deduce del permiso.</summary>
+    private bool _conValores => _filas.Any(f => f.AverageCost is not null || f.Value is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var bodegas = await Inventario.ListarBodegasAsync(incluirTransito: true);
+        _bodegas = bodegas.IsSuccess ? [.. bodegas.Value ?? []] : [];
+        await CargarListaAsync();
+    }
+
+    private async Task CargarListaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ExistenciasAsync(new FiltroDeExistencias
+        {
+            WarehousePublicId = _bodega, Search = string.IsNullOrWhiteSpace(_buscar) ? null : _buscar, OnlyWithStock = _conExistencia,
+            BelowReorderPoint = _bajoReorden, Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las existencias.");
+            return;
+        }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task CambiarBodegaAsync(string? valor)
+    {
+        _bodega = Guid.TryParse(valor, out var g) ? g : null;
+        _pagina = 1;
+        await CargarListaAsync();
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarListaAsync();
+    }
+
+    private Task ElegirAsync(ProductoElegido elegido) => VerDetalleAsync(elegido.Producto.PublicId);
+
+    private async Task VerDetalleAsync(Guid producto)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Inventario.ExistenciaDelProductoAsync(producto);
+        if (!r.IsSuccess)
+        {
+            _detalle = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la existencia del producto.");
+            return;
+        }
+        _detalle = r.Value;
+    }
+
+    private static string Cantidad(decimal valor) => valor.ToString("N4");
+}
