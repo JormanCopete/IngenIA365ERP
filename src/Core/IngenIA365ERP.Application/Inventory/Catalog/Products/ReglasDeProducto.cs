@@ -31,6 +31,10 @@ public sealed record DatosDeProducto(
     bool IsPurchasable = true,
     bool IsSellable = true);
 
+/// <summary>Las referencias del producto ya resueltas contra el catálogo (la plantilla las carga en bloque). (nuevo)</summary>
+public sealed record ReferenciasDeProducto(
+    ProductCategory Categoria, Brand? Marca, UnitOfMeasure UnidadBase, AccountingGroup? Grupo, WithholdingConcept? Concepto);
+
 /// <summary>Un impuesto pedido para el producto: la definición, la tarifa (cualquier vigencia de su código) y las unidades gravables. (nuevo)</summary>
 public sealed record ImpuestoPedido(Guid TaxDefinitionPublicId, Guid? TaxRatePublicId, decimal? TaxableUnitsPerBaseUnit);
 
@@ -96,7 +100,6 @@ public static class ReglasDeProducto
             grupo = await db.AccountingGroups.FirstOrDefaultAsync(g => g.PublicId == gp, ct);
             if (grupo is null) return Result.Failure(CatalogErrors.AccountingGroupNotFound());
         }
-        if (grupo is null && datos.Kind != ProductKind.Template) return Result.Failure(CatalogErrors.ProductAccountingGroupRequired());
 
         WithholdingConcept? concepto = null;
         if (datos.WithholdingConceptPublicId is { } cp)
@@ -104,15 +107,32 @@ public static class ReglasDeProducto
             concepto = await db.WithholdingConcepts.FirstOrDefaultAsync(c => c.PublicId == cp, ct);
             if (concepto is null) return Result.Failure(TaxErrors.ConceptNotFound());
         }
+
+        var cambiaAlgoBloqueado = producto.Id != 0 && (producto.BaseUnitId != unidadBase.Id || producto.AccountingGroupId != grupo?.Id);
+        var conMovimientos = cambiaAlgoBloqueado && await TieneMovimientosAsync(db, producto.Id, ct);
+        return Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupo, concepto), conMovimientos);
+    }
+
+    /// <summary>
+    /// Las mismas reglas de <see cref="AplicarAsync"/> con las referencias ya resueltas (la plantilla de productos las carga en
+    /// bloque, T228: nunca una consulta por fila). <paramref name="tieneMovimientos"/> es si el producto existente estuvo
+    /// alguna vez en un documento. No guarda.
+    /// </summary>
+    public static Result Aplicar(Product producto, DatosDeProducto datos, ReferenciasDeProducto referencias, bool tieneMovimientos)
+    {
+        var clase = ClaseYSeguimiento(datos.Kind, datos.TracksLot, datos.TracksSerial, datos.TracksExpiry);
+        if (clase.IsFailure) return clase;
+
+        var (categoria, marca, unidadBase, grupo, concepto) = referencias;
+        if (grupo is null && datos.Kind != ProductKind.Template) return Result.Failure(CatalogErrors.ProductAccountingGroupRequired());
         if (concepto is null && datos.Kind is not (ProductKind.Template or ProductKind.Combo))
             return Result.Failure(CatalogErrors.ProductWithholdingConceptRequired());
 
         var esNuevo = producto.Id == 0;
-        if (!esNuevo && (producto.BaseUnitId != unidadBase.Id || producto.AccountingGroupId != grupo?.Id)
-            && await TieneMovimientosAsync(db, producto.Id, ct))
+        if (!esNuevo && tieneMovimientos)
         {
             if (producto.BaseUnitId != unidadBase.Id) return Result.Failure(CatalogErrors.ProductBaseUnitLocked());
-            return Result.Failure(CatalogErrors.ProductUseReclassifyAccountingGroup());
+            if (producto.AccountingGroupId != grupo?.Id) return Result.Failure(CatalogErrors.ProductUseReclassifyAccountingGroup());
         }
         if (grupo is not null && !grupo.IsActive && producto.AccountingGroupId != grupo.Id)
             return Result.Failure(CatalogErrors.AccountingGroupInactive(grupo.Code));

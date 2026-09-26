@@ -77,15 +77,38 @@ public sealed class AddParameterVersionCommandHandler(
         else
             ids = [ambito?.Id ?? 0];
 
+        var agregadas = await AgregarVigenciasAsync(db, definicion, request.ScopeKind, ids, valor.Texto!, request.ValidFrom,
+            request.Reason, request.LegalSource, ct);
+        if (agregadas.IsFailure) return Result.Failure<AddParameterVersionResponse>(agregadas.Error);
+        var (creadas, cerradaEl) = agregadas.Value;
+
+        await db.SaveChangesAsync(ct);
+
+        var afectados = decision.Value.AfectadosPorTipoDeDocumento?
+            .Select(a => new ReferenciaDeAmbitoDto(a.PublicId, a.Code, a.Name))
+            .ToList();
+        return Result.Success(new AddParameterVersionResponse(creadas, cerradaEl, afectados));
+    }
+
+    /// <summary>
+    /// El alta de las vigencias ya validadas, sin guardar (feature 012, T229): sin cruces (<c>Parameters.Overlaps</c> si ya
+    /// hay una que empieza ese día o después) y con la anterior de cada ámbito cerrada la víspera. La comparten este
+    /// handler y la plantilla de bodegas (<c>stockNegativo</c>), que la llama con los Id de las bodegas recién guardadas
+    /// dentro de su propia transacción: así este archivo sigue siendo el único que escribe <c>COR_ParameterVersions</c>.
+    /// </summary>
+    public static async Task<Result<(IReadOnlyList<Guid> Creadas, DateOnly? CerradaEl)>> AgregarVigenciasAsync(
+        IApplicationDbContext db, DefinicionDeParametro definicion, ParameterScopeKind ambito, IReadOnlyList<int> ids,
+        string valor, DateOnly desde, string motivo, string? fuenteLegal, CancellationToken ct)
+    {
         var existentes = await db.ParameterVersions
-            .Where(v => !v.IsDeleted && v.Module == definicion.Modulo && v.Key == definicion.Clave && v.ScopeKind == request.ScopeKind && ids.Contains(v.ScopeId))
+            .Where(v => !v.IsDeleted && v.Module == definicion.Modulo && v.Key == definicion.Clave && v.ScopeKind == ambito && ids.Contains(v.ScopeId))
             .ToListAsync(ct);
 
-        var posterior = existentes.Where(v => v.ValidFrom >= request.ValidFrom).OrderBy(v => v.ValidFrom).FirstOrDefault();
+        var posterior = existentes.Where(v => v.ValidFrom >= desde).OrderBy(v => v.ValidFrom).FirstOrDefault();
         if (posterior is not null)
-            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.SeCruza(posterior.ValidFrom));
+            return Result.Failure<(IReadOnlyList<Guid>, DateOnly?)>(ErroresDeParametros.SeCruza(posterior.ValidFrom));
 
-        var vispera = request.ValidFrom.AddDays(-1);
+        var vispera = desde.AddDays(-1);
         DateOnly? cerradaEl = null;
         var creadas = new List<Guid>(ids.Count);
         foreach (var id in ids)
@@ -104,24 +127,24 @@ public sealed class AddParameterVersionCommandHandler(
             {
                 Module = definicion.Modulo,
                 Key = definicion.Clave,
-                ScopeKind = request.ScopeKind,
+                ScopeKind = ambito,
                 ScopeId = id,
-                Value = valor.Texto!,
-                ValidFrom = request.ValidFrom,
-                Reason = request.Reason.Trim(),
-                LegalSource = NuloSiVacio(request.LegalSource),
+                Value = valor,
+                ValidFrom = desde,
+                Reason = motivo.Trim(),
+                LegalSource = NuloSiVacio(fuenteLegal),
             };
             db.ParameterVersions.Add(nueva);
             creadas.Add(nueva.PublicId);
         }
-
-        await db.SaveChangesAsync(ct);
-
-        var afectados = decision.Value.AfectadosPorTipoDeDocumento?
-            .Select(a => new ReferenciaDeAmbitoDto(a.PublicId, a.Code, a.Name))
-            .ToList();
-        return Result.Success(new AddParameterVersionResponse(creadas, cerradaEl, afectados));
+        return Result.Success<(IReadOnlyList<Guid>, DateOnly?)>((creadas, cerradaEl));
     }
+
+    /// <summary>La vigencia vigente o futura que chocaría con una nueva desde <paramref name="desde"/> (la revisión de una plantilla); nula si no hay.</summary>
+    public static Task<DateOnly?> CruceAsync(IApplicationDbContext db, DefinicionDeParametro definicion, ParameterScopeKind ambito, int id, DateOnly desde, CancellationToken ct) =>
+        db.ParameterVersions
+            .Where(v => !v.IsDeleted && v.Module == definicion.Modulo && v.Key == definicion.Clave && v.ScopeKind == ambito && v.ScopeId == id && v.ValidFrom >= desde)
+            .OrderBy(v => v.ValidFrom).Select(v => (DateOnly?)v.ValidFrom).FirstOrDefaultAsync(ct);
 
     private static string? NuloSiVacio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 }

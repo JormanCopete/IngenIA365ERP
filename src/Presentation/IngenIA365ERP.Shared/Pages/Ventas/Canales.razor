@@ -1,0 +1,28 @@
+@page "/ventas/canales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Canales de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T235 (contracts/api.md §3.8; decisiones-transversales §2.11): los canales de venta que usan los tipos de
+   documento, los puntos de venta y las listas de precios. Uno en uso por un punto, un tipo o una lista vigentes no se
+   inactiva (Inventory.SalesChannel.InUse). *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Canales de venta"
+                          RutaBase="@InventarioClient.RutaDeCanales"
+                          CatalogoDeCodigo="canales-de-venta"
+                          AvisoAlInactivar="Un canal en uso por un punto de venta, un tipo de documento o una lista de precios vigentes no se inactiva."
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivos) =>
+        Filas(await Inventario.ListarCanalesAsync(inactivos), c => new FilaDeCatalogo(c.PublicId, c.Code, c.Name, c.IsActive, false,
+            new Dictionary<string, string?>()));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarCanalAsync(fila?.PublicId, new CodigoYNombreRequest(codigo, nombre), clave));
+}

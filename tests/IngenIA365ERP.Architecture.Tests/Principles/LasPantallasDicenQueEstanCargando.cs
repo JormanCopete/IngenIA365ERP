@@ -21,8 +21,9 @@ public class LasPantallasDicenQueEstanCargando
 {
     /// <summary>Carpetas bajo <c>Shared/Pages</c> ya migradas al patrón. Se amplía módulo a módulo.</summary>
     /// Feature 012 (T118, decisiones-transversales §2.11): «Inventario» entra con sus primeras pantallas (informes y tipos
-    /// de documento); «Compras», «Ventas» y «Pos» los agrega la historia que crea la primera pantalla de cada carpeta.
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario"];
+    /// de documento); «Ventas» entra con Canales (US1, T239); «Compras» y «Pos» los agrega la historia que crea la primera
+    /// pantalla de cada carpeta.
+    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas"];
 
     private static IEnumerable<string> PantallasMigradas()
     {

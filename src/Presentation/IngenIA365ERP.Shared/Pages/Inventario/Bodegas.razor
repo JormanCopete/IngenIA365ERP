@@ -1,0 +1,201 @@
+@page "/inventario/bodegas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Bodegas - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T236 (FR-032, FR-034; contracts/api.md §4.1, §4.2; plantilla 7): las bodegas del alcance por sucursal, con su
+   estado de activación y la de tránsito marcada. Toda bodega nace NO activada (sólo admite su saldo inicial hasta
+   activarse) con su ubicación GENERAL; la primera bodega operativa de una sucursal trae su bodega de tránsito, cuyo código
+   propone el sistema (TR + código de la sucursal) o fija quien crea. Sin municipio en la sucursal, el aviso de ReteICA. Una
+   bodega de tránsito no se crea a mano. La plantilla 7 carga bodegas y ubicaciones por archivo. *@
+<PermissionGate Required="Inventory.Warehouses.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Bodegas</h3>
+        <div class="toolbar">
+            <SfCheckBox Checked="@_incluirInactivas" CheckedChanged="@((bool v) => CambiarInactivasAsync(v))" TChecked="bool" Label="Ver inactivas" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = true)">Plantilla</SfButton>
+            <PermissionGate Required="Inventory.Warehouses.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAltaAsync">Nueva bodega</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _bodegas.Count == 0)
+        {
+            <p class="texto-tenue">No hay bodegas en su alcance. Una bodega nueva sólo la ve quien tiene alcance total hasta que se la asignen.</p>
+        }
+        @foreach (var sucursal in _bodegas.GroupBy(b => b.Branch.Name).OrderBy(g => g.Key))
+        {
+            <h4>@sucursal.Key</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Activación</th><th>Tránsito de la sucursal</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in sucursal.OrderBy(b => b.IsTransit).ThenBy(b => b.Code))
+                        {
+                            <tr>
+                                <td><a href="@($"/inventario/bodegas/{b.PublicId}")">@b.Code</a></td>
+                                <td>@b.Name@(b.IsDefault ? " · su bodega por defecto" : "")</td>
+                                <td>@b.Type.Name@(b.IsTransit ? " (tránsito)" : "")</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.ActivacionesDeBodega, b.ActivationStatus)</td>
+                                <td>@b.TransitWarehouse?.Code</td>
+                                <td>@(b.IsActive ? "activa" : "inactiva")@(b.NegativeStockAllowed ? " · admite negativos" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Nueva bodega" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDeCatalogos.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="bodegas" @bind-Value="_f.Code" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="120" /></label>
+                    <label class="campo">Sucursal *
+                        <select class="e-input" value="@(_f.BranchPublicId?.ToString() ?? "")" @onchange="@(e => _f.BranchPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var s in _sucursales) { <option value="@s.PublicId">@(s.Code is null ? s.Name : $"{s.Code} · {s.Name}")</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tipo *
+                        <select class="e-input" @bind="_f.WarehouseTypePublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _tipos.Where(t => t.IsActive && t.Behavior == 1)) { <option value="@t.PublicId">@t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Dirección <input class="e-input" @bind="_f.Notes" maxlength="200" /></label>
+                    @if (EsLaPrimeraDeLaSucursal)
+                    {
+                        <p class="texto-apoyo campo-ancho">
+                            Es la primera bodega de la sucursal: nace también su bodega de tránsito. Su código lo propone el sistema
+                            (TR + código de la sucursal); puede fijarlo aquí. Como la matriz contable lo usa, no se cambia después.
+                        </p>
+                        <label class="campo">Código del tránsito <input class="e-input" @bind="_f.TransitCode" maxlength="10" placeholder="@CodigoPropuesto" /></label>
+                        <label class="campo">Nombre del tránsito <input class="e-input" @bind="_f.TransitName" maxlength="120" /></label>
+                    }
+                    <p class="texto-tenue campo-ancho">La bodega nace no activada: sólo admite su saldo inicial hasta activarse.</p>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@CrearAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPlantilla" Header="Plantilla 7 · Bodegas y ubicaciones" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-apoyo">
+                Hojas <code>Bodegas</code> y <code>Ubicaciones</code>. Toda bodega nace no activada; una fila de tipo tránsito fija el código
+                del tránsito de la primera bodega de su sucursal. <code>stockNegativo</code> crea una vigencia con motivo
+                (exige Inventory.Parameters.Manage).
+            </p>
+            <ImportarPlantilla RutaBase="@InventarioClient.RutaDeBodegas"
+                               PermisoDeDescarga="Inventory.Warehouses.View"
+                               PermisoDeDescargaConDatos="Inventory.Catalog.Export"
+                               PermisoDeImportacion="Inventory.Warehouses.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaDeCatalogos = new(), _guardado = new();
+    private List<BodegaDto> _bodegas = [];
+    private List<SucursalContableDto> _sucursales = [];
+    private List<TipoDeBodegaDto> _tipos = [];
+    private bool _incluirInactivas, _mostrarAlta, _mostrarPlantilla, _codigoRepetido;
+    private FormBodega _f = new();
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarBodegasAsync(incluirTransito: true, incluirInactivas: _incluirInactivas);
+        if (!r.IsSuccess)
+        {
+            _bodegas = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las bodegas.");
+            return;
+        }
+        _bodegas = [.. r.Value ?? []];
+    }
+
+    private async Task CambiarInactivasAsync(bool valor)
+    {
+        _incluirInactivas = valor;
+        await CargarAsync();
+    }
+
+    /// <summary>Si la sucursal elegida todavía no tiene bodegas (de las que se ven): nace su tránsito.</summary>
+    private bool EsLaPrimeraDeLaSucursal => _f.BranchPublicId is { } s && _bodegas.All(b => b.Branch.PublicId != s);
+
+    private string CodigoPropuesto => _sucursales.FirstOrDefault(s => s.PublicId == _f.BranchPublicId)?.Code is { Length: > 0 } c ? $"TR{c}" : "obligatorio: la sucursal no tiene código";
+
+    private async Task AbrirAltaAsync()
+    {
+        _f = new FormBodega();
+        _codigoRepetido = false;
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+        if (_sucursales.Count > 0) return;
+        using var carga = _cargaDeCatalogos.Iniciar();
+        var sucursales = await Inventario.ListarSucursalesAsync();
+        var tipos = await Inventario.ListarTiposDeBodegaAsync();
+        _sucursales = [.. sucursales.Value ?? []];
+        _tipos = [.. tipos.Value ?? []];
+        if (!sucursales.IsSuccess || !tipos.IsSuccess) await Notification.WarningAsync("No se pudieron cargar las sucursales o los tipos de bodega.");
+    }
+
+    private async Task CrearAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Code) || string.IsNullOrWhiteSpace(_f.Name) || _f.BranchPublicId is null || _f.WarehouseTypePublicId is null)
+        {
+            await Notification.WarningAsync("Escriba código y nombre y elija la sucursal y el tipo.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var transito = EsLaPrimeraDeLaSucursal && !string.IsNullOrWhiteSpace(_f.TransitCode)
+            ? new TransitoRequest(_f.TransitCode.Trim().ToUpperInvariant(), _f.TransitName)
+            : null;
+        var r = await Inventario.CrearBodegaAsync(new CrearBodegaRequest(_f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(), _f.BranchPublicId.Value,
+            _f.WarehouseTypePublicId.Value, _f.Notes, transito), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la bodega."); return; }
+        _mostrarAlta = false;
+        var creada = r.Value!;
+        await Notification.SuccessAsync(creada.TransitWarehouseCreated is { } t
+            ? $"Bodega {creada.Warehouse.Code} creada, con su bodega de tránsito {t.Code}."
+            : $"Bodega {creada.Warehouse.Code} creada.");
+        foreach (var aviso in creada.Warnings) await Notification.WarningAsync(aviso.Message);
+        Nav.NavigateTo($"/inventario/bodegas/{creada.Warehouse.PublicId}");
+    }
+
+    private sealed class FormBodega
+    {
+        public string? Code { get; set; }
+        public string Name { get; set; } = "";
+        public Guid? BranchPublicId { get; set; }
+        public Guid? WarehouseTypePublicId { get; set; }
+        public string? Notes { get; set; }
+        public string? TransitCode { get; set; }
+        public string? TransitName { get; set; }
+    }
+}

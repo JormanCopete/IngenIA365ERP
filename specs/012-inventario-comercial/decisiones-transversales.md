@@ -1230,6 +1230,30 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   `FiltrosDeInformeDeInventarioTests`, `VistaDeInformeDeInventarioTests`, `InventarioClientTests`,
   `FiltrosDeInformeDeInventarioModeloTests`, `TextosDeInventarioTests` (arquitectura) y
   `LosEndpointsProtegidosExigenPermiso.Las_vistas_de_inventario_exigen_ver_y_exportar`.
+- Plantillas 2 a 7, API y pantallas del catálogo (fase 4, US1, T194–T239; todos **(nuevo)**): Application
+  `Inventory/Imports/PlantillasDelCatalogo` con `PlantillaDeGruposContables`, `PlantillaDeUnidades`, `PlantillaDeMarcas`,
+  `PlantillaDeCategorias`, `PlantillaDeProductos`, `PlantillaDeBodegas` (hojas, columnas y etiquetas de §2–§7) y
+  `PlantillasQueSeImportanConI3` (columnas de §10–§13, sólo descarga en I1); los comandos `Import{AccountingGroups,
+  UnitsOfMeasure, Brands, ProductCategories, Products, Warehouses}Command` con sus `Get…TemplateDataQuery` (la descarga con
+  datos), `ImportProductsCommandHandler.AvisoDeDigitoDeControl` (`Import.Barcode.CheckDigit`) y `.DigitoDeControlErrado`,
+  `ImportWarehousesCommandHandler.ExtraDeTransito` (clave `transitWarehouses` de `ImportResultDto.Extra`, con
+  `BodegaDeTransitoPropuestaDto { branch, code, name, fromFile }`: la revisión anuncia la bodega de tránsito que nace);
+  `ReglasDeProducto.Aplicar` (las mismas reglas con las referencias resueltas en bloque, `ReferenciasDeProducto`);
+  `EjecutorDeImportacion.EjecutarAsync(…, despuesDeGuardar)` (lo que necesita los Id recién asignados —la ruta de una
+  categoría nueva, la vigencia de una bodega nueva— se escribe tras el primer guardado, en la misma transacción);
+  `AddParameterVersionCommandHandler.AgregarVigenciasAsync`/`CruceAsync` (el alta de vigencias sin guardar, que reusa la
+  plantilla 7 para `stockNegativo`: el handler sigue siendo el único escritor de `COR_ParameterVersions`). API
+  `Endpoints/Inventory/{CatalogEndpoints, WarehousesEndpoints, PointsOfSaleEndpoints, PricingEndpoints}` y
+  `Endpoints/Core/PaymentMeansEndpoints` (los tres últimos, en I1, sólo la descarga vacía de las plantillas 10 a 13). Shared
+  `Services/Inventario/{InventarioClient.Catalogo, InventarioClient.Bodegas, InventarioDtos.Catalogo}` (`ProductoElegido`),
+  `Components/Inventario/SelectorDeProducto.razor` (el campo de producto con lector) y `CatalogoDeInventario.razor`
+  (+ `CampoDeCatalogo`, `FilaDeCatalogo`, `TipoDeCampoDeCatalogo`: el catálogo simple que usan unidades, categorías, marcas,
+  grupos, causas y canales), `ImportarPlantilla.Importable`, las páginas `Pages/Inventario/{Productos, ProductoDetalle,
+  Categorias, Marcas, Unidades, GruposContables, CausasDeAjuste, Bodegas, BodegaDetalle, Plantillas}.razor` y
+  `Pages/Ventas/Canales.razor`; `TextosDeInventario.{ClasesDeProducto, EstadosDeProducto, TratamientosDeIva, UsosDeUnidad,
+  ComportamientosDeBodega, ActivacionesDeBodega}`. Pruebas: `ImportProductsCommandTests`, `ImportCatalogosTests`, las e2e
+  `CatalogoYBodegasTests` y `Ventas/BusquedaDeProductos50kTests` (con `FactDeRendimientoAttribute`: sin
+  `RUN_PERF_TESTS=1` se reporta omitida, nunca aprobada).
 
 ### 2.17 Códigos de error principales (familias)
 

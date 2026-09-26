@@ -132,8 +132,12 @@ public class LosEndpointsProtegidosExigenPermiso
         var ruta = Path.Combine(Api, relativo);
         Assert.True(File.Exists(ruta), $"No existe {ruta}: si el archivo se movió, actualizá la lista.");
 
-        var tramos = Tramos(File.ReadAllText(ruta));
-        Assert.True(tramos.Count > 0, $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
+        var texto = File.ReadAllText(ruta);
+        var tramos = Tramos(texto);
+        // Feature 012, T238: un archivo que en esta entrega sólo publica la descarga de su plantilla lo hace por
+        // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido).
+        Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal),
+            $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos
             .Where(t => !t.Contains(".RequirePermission(", StringComparison.Ordinal))

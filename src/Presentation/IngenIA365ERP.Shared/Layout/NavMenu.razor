@@ -90,9 +90,32 @@
             <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
         </NavMenuGroup>
 
+        @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
-            <NavLink href="/inventario/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/inventario/productos" class="nav-subitem">Productos</NavLink>
+                <NavLink href="/inventario/categorias" class="nav-subitem">Categorías</NavLink>
+                <NavLink href="/inventario/marcas" class="nav-subitem">Marcas</NavLink>
+                <NavLink href="/inventario/unidades" class="nav-subitem">Unidades de medida</NavLink>
+                <NavLink href="/inventario/grupos-contables" class="nav-subitem">Grupos contables</NavLink>
+                <NavLink href="/inventario/causas-de-ajuste" class="nav-subitem">Causas de ajuste</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Warehouses.View">
+                <NavLink href="/inventario/bodegas" class="nav-subitem">Bodegas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.DocumentTypes.View">
+                <NavLink href="/inventario/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/inventario/plantillas" class="nav-subitem">Plantillas</NavLink>
+            </PermissionGate>
             <NavLink href="/inventario/vendedores" class="nav-subitem">Vendedores</NavLink>
+        </NavMenuGroup>
+
+        <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/ventas/canales" class="nav-subitem">Canales de venta</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">

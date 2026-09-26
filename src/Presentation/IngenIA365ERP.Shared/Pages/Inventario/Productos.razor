@@ -1,0 +1,395 @@
+@page "/inventario/productos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject ImpuestosClient Impuestos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Productos - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T234 (FR-023 a FR-030; contracts/api.md §3.5; plantilla 6): el catálogo de productos paginado con filtros y
+   la búsqueda del lector (SelectorDeProducto) para ir al detalle; el alta con CampoCodigo de 20 (inventariable o servicio en
+   I1: las demás clases y el control de lote, serie o vencimiento llegan con I6), grupo contable obligatorio, concepto de
+   retención e IVA; el estado (activo, inactivo, bloqueado) cambia con motivo; borrar sólo un producto sin historia, y si
+   la tiene la pantalla ofrece inactivarlo o bloquearlo (Inventory.Product.HasHistory). Las unidades alternas, los códigos
+   de barras, los impuestos y las imágenes se editan en el detalle. La plantilla 6 carga todo por archivo. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Productos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = true)">Plantilla</SfButton>
+            <PermissionGate Required="Inventory.Catalog.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAlta">Nuevo producto</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <SelectorDeProducto Etiqueta="Ir al producto (lector o búsqueda)" IncluirInactivos="true" Elegido="@(e => Nav.NavigateTo($"/inventario/productos/{e.Producto.PublicId}"))" />
+
+    <div class="toolbar">
+        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:event="oninput" @onkeydown="@(e => e.Key == "Enter" ? FiltrarAsync() : Task.CompletedTask)" /></label>
+        <label class="campo">Categoría
+            <select class="e-input" value="@(_categoria?.ToString() ?? "")" @onchange="@(e => CambiarCategoriaAsync(e.Value?.ToString()))">
+                <option value="">Todas</option>
+                @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => CambiarEstadoFiltroAsync(e.Value?.ToString()))">
+                <option value="">Todos</option>
+                @foreach (var (n, t) in TextosDeInventario.EstadosDeProducto) { <option value="@n">@t</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@FiltrarAsync">Filtrar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _productos.Count == 0)
+        {
+            <p class="texto-tenue">No hay productos con esos filtros.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Categoría</th><th>Unidad</th><th>Grupo</th><th>Código de barras</th><th>Estado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _productos)
+                        {
+                            var producto = p;
+                            <tr>
+                                <td><a href="@($"/inventario/productos/{producto.PublicId}")">@producto.Code</a></td>
+                                <td>@producto.Name@(producto.Brand is { } m ? $" · {m.Name}" : "")</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, producto.Kind)</td>
+                                <td>@producto.Category.Name</td>
+                                <td>@producto.BaseUnitCode</td>
+                                <td>@producto.AccountingGroupCode</td>
+                                <td>@producto.PrimaryBarcode</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, producto.Status)@(producto.HasMovements ? " · con movimientos" : "")</td>
+                                <td>
+                                    <PermissionGate Required="Inventory.Catalog.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEstado(producto, null))">Estado</SfButton>
+                                        @if (!producto.HasMovements)
+                                        {
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => BorrarAsync(producto))">Borrar</SfButton>
+                                        }
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina - 1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina de @Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoDePagina)) · @_total productos</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@* ---------------------------------------------------------------------------------------------------- alta -- *@
+<SfDialog @bind-Visible="_mostrarAlta" Header="Nuevo producto" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDeCatalogos.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando catálogos…")">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="productos" @bind-Value="_f.Code" Largo="20" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="200" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_f.Kind">
+                            @foreach (var k in TextosDeInventario.ClasesDeProductoDeI1) { <option value="@k">@TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, k)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Categoría *
+                        <select class="e-input" @bind="_f.CategoryPublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var c in _categorias.Where(c => c.IsActive)) { <option value="@c.PublicId">@c.Path</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Marca
+                        <select class="e-input" @bind="_f.BrandPublicId">
+                            <option value="">Sin marca</option>
+                            @foreach (var m in _marcas) { <option value="@m.PublicId">@m.Code · @m.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Unidad base *
+                        <select class="e-input" @bind="_f.BaseUnitPublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var u in _unidades) { <option value="@u.PublicId">@u.Code · @u.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Grupo contable *
+                        <select class="e-input" @bind="_f.AccountingGroupPublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var g in _grupos) { <option value="@g.PublicId">@g.Code · @g.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Concepto de retención *
+                        <select class="e-input" @bind="_f.WithholdingConceptPublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var c in _conceptos) { <option value="@c.WithholdingConceptPublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">IVA en la venta *
+                        <select class="e-input" @bind="_f.VatSaleTreatment">
+                            @foreach (var (n, t) in TextosDeInventario.TratamientosDeIva) { <option value="@n">@t</option> }
+                        </select>
+                    </label>
+                    @if (_f.VatSaleTreatment == TextosDeInventario.TratamientoGravado)
+                    {
+                        <label class="campo">Tarifa de IVA *
+                            <select class="e-input" @bind="_f.VatRatePublicId">
+                                <option value="">Elija…</option>
+                                @foreach (var t in _tarifasIva) { <option value="@t.TaxRatePublicId">@t.Code · @t.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Referencia <input class="e-input" @bind="_f.Reference" maxlength="60" /></label>
+                    <label class="campo">Código de barras <input class="e-input" @bind="_f.Barcode" maxlength="48" placeholder="opcional; más en el detalle" /></label>
+                    <p class="texto-tenue campo-ancho">Combos, kits, variantes y el control de lote, serie o vencimiento llegan con la entrega I6.</p>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@CrearAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* -------------------------------------------------------------------------------------------------- estado -- *@
+<SfDialog @bind-Visible="_mostrarEstado" Header="@($"Estado de {_cambio?.Code}")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_conHistoria)
+                {
+                    <p class="texto-alerta">El producto ya estuvo en un documento y no se puede borrar. Puede inactivarlo (no se ofrece en documentos nuevos) o bloquearlo (ningún movimiento salvo el conteo y la recepción de lo que ya viajaba).</p>
+                }
+                <label class="campo">Nuevo estado
+                    <select class="e-input" @bind="_nuevoEstado">
+                        @foreach (var (n, t) in TextosDeInventario.EstadosDeProducto) { <option value="@n">@t</option> }
+                    </select>
+                </label>
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CambiarEstadoAsync">Cambiar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEstado = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPlantilla" Header="Plantilla 6 · Productos" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-apoyo">
+                Hojas <code>Productos</code>, <code>CodigosDeBarras</code>, <code>Unidades</code> e <code>ImpuestosAdicionales</code>: se revisan y
+                se aplican juntas, con las mismas reglas que el alta. Un código que ya existe se actualiza.
+            </p>
+            <ImportarPlantilla RutaBase="@InventarioClient.RutaDeProductos"
+                               PermisoDeDescarga="Inventory.Catalog.View"
+                               PermisoDeDescargaConDatos="Inventory.Catalog.Export"
+                               PermisoDeImportacion="Inventory.Catalog.Import"
+                               Aplicado="@(_ => CargarAsync())" />
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDeCatalogos = new(), _guardado = new();
+    private List<ProductoDeListaDto> _productos = [];
+    private List<CategoriaDto> _categorias = [];
+    private List<MarcaDto> _marcas = [];
+    private List<UnidadDeMedidaDto> _unidades = [];
+    private List<GrupoContableDto> _grupos = [];
+    private List<ConceptoDeRetencionDto> _conceptos = [];
+    private List<TarifaTributariaDto> _tarifasIva = [];
+    private Guid _impuestoIva;
+    private string? _buscar;
+    private Guid? _categoria;
+    private int? _estado;
+    private int _pagina = 1;
+    private long _total;
+    private bool _mostrarAlta, _mostrarEstado, _mostrarPlantilla, _codigoRepetido, _conHistoria;
+    private FormProducto _f = new();
+    private ProductoDeListaDto? _cambio;
+    private int _nuevoEstado = 2;
+    private string? _motivo;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var categorias = await Inventario.ListarCategoriasAsync();
+        if (categorias.IsSuccess) _categorias = [.. categorias.Value ?? []];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarProductosAsync(_buscar, _categoria, estado: _estado, pagina: _pagina, tamano: TamanoDePagina);
+        if (!r.IsSuccess)
+        {
+            _productos = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los productos.");
+            return;
+        }
+        _productos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private Task FiltrarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private Task IrAAsync(int pagina)
+    {
+        _pagina = pagina;
+        return CargarAsync();
+    }
+
+    private Task CambiarCategoriaAsync(string? valor)
+    {
+        _categoria = Guid.TryParse(valor, out var g) ? g : null;
+        return FiltrarAsync();
+    }
+
+    private Task CambiarEstadoFiltroAsync(string? valor)
+    {
+        _estado = int.TryParse(valor, out var e) ? e : null;
+        return FiltrarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------------ alta --
+
+    private async Task AbrirAlta()
+    {
+        _f = new FormProducto();
+        _codigoRepetido = false;
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+        if (_unidades.Count > 0) return;
+
+        using var carga = _cargaDeCatalogos.Iniciar();
+        var marcas = await Inventario.ListarMarcasAsync();
+        var unidades = await Inventario.ListarUnidadesAsync();
+        var grupos = await Inventario.ListarGruposContablesAsync();
+        var conceptos = await Impuestos.ListarConceptosAsync(activos: true);
+        var impuestos = await Impuestos.ListarImpuestosAsync(activos: true);
+        _marcas = [.. marcas.Value ?? []];
+        _unidades = [.. unidades.Value ?? []];
+        _grupos = [.. grupos.Value ?? []];
+        _conceptos = [.. conceptos.Value ?? []];
+        // El IVA (TaxKind.Iva = 1) y sus tarifas: la que se elija viaja con su definición.
+        var iva = (impuestos.Value ?? []).FirstOrDefault(i => i.Kind == 1);
+        if (iva is not null)
+        {
+            _impuestoIva = iva.TaxPublicId;
+            var tarifas = await Impuestos.ListarTarifasAsync(iva.TaxPublicId);
+            _tarifasIva = [.. tarifas.Value ?? []];
+        }
+        if (!marcas.IsSuccess || !unidades.IsSuccess || !grupos.IsSuccess || !conceptos.IsSuccess)
+            await Notification.WarningAsync("No se pudieron cargar todos los catálogos del alta.");
+    }
+
+    private async Task CrearAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Code) || string.IsNullOrWhiteSpace(_f.Name) || _f.CategoryPublicId is null || _f.BaseUnitPublicId is null)
+        {
+            await Notification.WarningAsync("Escriba código y nombre y elija la categoría y la unidad base.");
+            return;
+        }
+        if (_f.VatSaleTreatment == TextosDeInventario.TratamientoGravado && _f.VatRatePublicId is null)
+        {
+            await Notification.WarningAsync("Un producto gravado lleva su tarifa de IVA.");
+            return;
+        }
+
+        using var guardado = _guardado.Iniciar();
+        IReadOnlyList<ImpuestoRequest>? impuestos = _f.VatRatePublicId is { } tarifa && _f.VatSaleTreatment == TextosDeInventario.TratamientoGravado
+            ? [new ImpuestoRequest(_impuestoIva, tarifa, null)]
+            : null;
+        IReadOnlyList<CodigoDelAltaRequest>? codigos = string.IsNullOrWhiteSpace(_f.Barcode) ? null : [new CodigoDelAltaRequest(_f.Barcode.Trim(), null)];
+        var r = await Inventario.CrearProductoAsync(new CrearProductoRequest(
+            _f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(), null, null, _f.Kind, _f.CategoryPublicId.Value, _f.BrandPublicId, _f.BaseUnitPublicId.Value,
+            _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null, false, false, false,
+            null, codigos, impuestos), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el producto."); return; }
+        _mostrarAlta = false;
+        await Notification.SuccessAsync("Producto creado.");
+        Nav.NavigateTo($"/inventario/productos/{r.Value!.PublicId}");
+    }
+
+    // ------------------------------------------------------------------------------------- estado y borrar --
+
+    private void AbrirEstado(ProductoDeListaDto producto, bool? conHistoria)
+    {
+        _cambio = producto;
+        _conHistoria = conHistoria == true;
+        _nuevoEstado = producto.Status == 1 ? 2 : 1;
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEstado = true;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (_cambio is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.CambiarEstadoDeProductoAsync(_cambio.PublicId, new EstadoDeProductoRequest(_nuevoEstado, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado."); return; }
+        _mostrarEstado = false;
+        await Notification.SuccessAsync("Estado cambiado.");
+        await CargarAsync();
+    }
+
+    private async Task BorrarAsync(ProductoDeListaDto producto)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.BorrarProductoAsync(producto.PublicId, new ClaveDeOperacion());
+        if (r.IsSuccess)
+        {
+            await Notification.SuccessAsync($"Producto {producto.Code} borrado.");
+            await CargarAsync();
+            return;
+        }
+        if (r.ErrorCode == "Inventory.Product.HasHistory")
+        {
+            // US1-3: con historia no se borra; se ofrece inactivar o bloquear.
+            AbrirEstado(producto, conHistoria: true);
+            return;
+        }
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo borrar el producto.");
+    }
+
+    private sealed class FormProducto
+    {
+        public string? Code { get; set; }
+        public string Name { get; set; } = "";
+        public int Kind { get; set; } = 1;
+        public Guid? CategoryPublicId { get; set; }
+        public Guid? BrandPublicId { get; set; }
+        public Guid? BaseUnitPublicId { get; set; }
+        public Guid? AccountingGroupPublicId { get; set; }
+        public Guid? WithholdingConceptPublicId { get; set; }
+        public int VatSaleTreatment { get; set; } = 3;
+        public Guid? VatRatePublicId { get; set; }
+        public string? Reference { get; set; }
+        public string? Barcode { get; set; }
+    }
+}

@@ -1,0 +1,275 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+@*
+    Un catálogo simple del módulo (feature 012, T235; contracts/api.md §3.1–§3.4, §3.7, §3.8, §4.1): la lista con «ver
+    inactivos», el alta con CampoCodigo (el código no se edita después: identifica la fila en las plantillas y en la matriz
+    contable), la edición de los demás campos, inactivar y reactivar con motivo, y la plantilla del catálogo con el
+    componente común ImportarPlantilla. Lo usan Unidades, Categorías, Marcas, Grupos contables, Causas de ajuste, Canales y
+    los tipos de bodega; cada página pone su PermissionGate de consulta y dice sus campos propios. Toda escritura lleva su
+    Idempotency-Key (ClaveDeOperacion) y un indicador de carga por zona.
+*@
+
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <SfCheckBox Checked="@_incluirInactivos" CheckedChanged="@((bool v) => CambiarInactivosAsync(v))" TChecked="bool" Label="Ver inactivos" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            @if (RutaDePlantilla is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = true)">Plantilla</SfButton>
+            }
+            <PermissionGate Required="@PermisoDeAdministrar">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirEdicion(null))">Nuevo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    @if (Descripcion is not null)
+    {
+        <p class="texto-apoyo">@Descripcion</p>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay registros@(_incluirInactivos ? "" : " activos").</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            @foreach (var c in Campos.Where(c => c.EnLista)) { <th>@c.Etiqueta</th> }
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in _filas)
+                        {
+                            var fila = f;
+                            <tr>
+                                <td>@fila.Code</td>
+                                <td>@fila.Name</td>
+                                @foreach (var c in Campos.Where(c => c.EnLista)) { <td>@Mostrar(c, fila.Valores.GetValueOrDefault(c.Clave))</td> }
+                                <td>@(fila.IsActive ? "activo" : "inactivo")@(fila.Sembrado ? " · sembrado" : "")@(fila.Detalle is null ? "" : $" · {fila.Detalle}")</td>
+                                <td>
+                                    <PermissionGate Required="@PermisoDeAdministrar">
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => AbrirEdicion(fila))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEstado(fila))">@(fila.IsActive ? "Inactivar" : "Reactivar")</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarEdicion" Header="@(_editada is null ? $"Nuevo · {Titulo}" : $"{_editada.Code} · {_editada.Name}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_editada is null)
+                    {
+                        <CampoCodigo Catalogo="@CatalogoDeCodigo" @bind-Value="_codigo" Largo="@LargoDeCodigo" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    }
+                    else
+                    {
+                        <div class="campo"><span class="texto-tenue">Código</span> @_editada.Code</div>
+                    }
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="@LargoDeNombre" /></label>
+                    @foreach (var c in Campos.Where(c => c.EnFormulario && (_editada is null || !c.SoloAlCrear)))
+                    {
+                        var campo = c;
+                        @switch (campo.Tipo)
+                        {
+                            case TipoDeCampoDeCatalogo.SiNo:
+                                <label class="campo"><SfCheckBox TChecked="bool" Checked="@(Valor(campo) == "true")" CheckedChanged="@((bool v) => _valores[campo.Clave] = v ? "true" : "false")" Label="@campo.Etiqueta" /></label>
+                                break;
+                            case TipoDeCampoDeCatalogo.Lista:
+                                <label class="campo campo-ancho">@campo.Etiqueta
+                                    <select class="e-input" value="@(Valor(campo) ?? "")" @onchange="@(e => _valores[campo.Clave] = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString())">
+                                        <option value="">@(campo.TextoVacio ?? "—")</option>
+                                        @foreach (var (valor, texto) in campo.Opciones?.Invoke(_filas, _editada) ?? [])
+                                        {
+                                            <option value="@valor">@texto</option>
+                                        }
+                                    </select>
+                                </label>
+                                break;
+                            case TipoDeCampoDeCatalogo.Entero:
+                                <label class="campo">@campo.Etiqueta <input class="e-input" type="number" value="@Valor(campo)" @onchange="@(e => _valores[campo.Clave] = e.Value?.ToString())" /></label>
+                                break;
+                            default:
+                                <label class="campo campo-ancho">@campo.Etiqueta <input class="e-input" value="@Valor(campo)" maxlength="@(campo.Largo ?? 400)" @onchange="@(e => _valores[campo.Clave] = e.Value?.ToString())" /></label>
+                                break;
+                        }
+                        @if (campo.Ayuda is not null) { <p class="texto-tenue campo-ancho">@campo.Ayuda</p> }
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEdicion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarEstado" Header="@(_cambio?.IsActive == true ? $"Inactivar {_cambio.Code}" : $"Reactivar {_cambio?.Code}")" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_cambio?.IsActive == true && AvisoAlInactivar is not null)
+                {
+                    <p class="texto-apoyo">@AvisoAlInactivar</p>
+                }
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CambiarEstadoAsync">@(_cambio?.IsActive == true ? "Inactivar" : "Reactivar")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEstado = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@if (RutaDePlantilla is not null)
+{
+    <SfDialog @bind-Visible="_mostrarPlantilla" Header="@($"Plantilla · {Titulo}")" Width="860px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <p class="texto-apoyo">Un código que ya existe se actualiza con las mismas reglas que la edición; la plantilla nunca borra.</p>
+                <ImportarPlantilla RutaBase="@RutaDePlantilla"
+                                   PermisoDeDescarga="@PermisoDeVer"
+                                   PermisoDeDescargaConDatos="Inventory.Catalog.Export"
+                                   PermisoDeImportacion="@PermisoDeImportar"
+                                   Aplicado="@(_ => CargarAsync())" />
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = "";
+    [Parameter] public string? Descripcion { get; set; }
+
+    /// <summary>La ruta base del catálogo (inactivar/reactivar van sobre ella).</summary>
+    [Parameter, EditorRequired] public string RutaBase { get; set; } = "";
+
+    /// <summary>El nombre del catálogo en <c>GET /api/catalogos/{catalogo}/codigo/{codigo}</c>.</summary>
+    [Parameter, EditorRequired] public string CatalogoDeCodigo { get; set; } = "";
+
+    [Parameter] public int LargoDeCodigo { get; set; } = 10;
+    [Parameter] public int LargoDeNombre { get; set; } = 120;
+    [Parameter] public string PermisoDeVer { get; set; } = "Inventory.Catalog.View";
+    [Parameter] public string PermisoDeAdministrar { get; set; } = "Inventory.Catalog.Manage";
+    [Parameter] public string PermisoDeImportar { get; set; } = "Inventory.Catalog.Import";
+
+    /// <summary>La ruta de la plantilla del catálogo; nula si el catálogo no tiene plantilla.</summary>
+    [Parameter] public string? RutaDePlantilla { get; set; }
+
+    [Parameter] public string? AvisoAlInactivar { get; set; }
+
+    /// <summary>Los campos propios del catálogo además de código y nombre.</summary>
+    [Parameter] public IReadOnlyList<CampoDeCatalogo> Campos { get; set; } = [];
+
+    /// <summary>Carga las filas (con inactivas o no).</summary>
+    [Parameter, EditorRequired] public Func<bool, Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>>> Cargar { get; set; } = null!;
+
+    /// <summary>Guarda: nulo = alta (con el código); si no, edición de la fila.</summary>
+    [Parameter, EditorRequired] public Func<FilaDeCatalogo?, string?, string, IReadOnlyDictionary<string, string?>, ClaveDeOperacion, Task<(bool Ok, string? Error)>> Guardar { get; set; } = null!;
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<FilaDeCatalogo> _filas = [];
+    private bool _incluirInactivos, _codigoRepetido, _mostrarEdicion, _mostrarEstado, _mostrarPlantilla;
+    private FilaDeCatalogo? _editada, _cambio;
+    private string? _codigo, _motivo;
+    private string _nombre = "";
+    private Dictionary<string, string?> _valores = [];
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cargar(_incluirInactivos);
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudo consultar {Titulo.ToLowerInvariant()}.");
+            return;
+        }
+        _filas = [.. r.Value ?? []];
+    }
+
+    private async Task CambiarInactivosAsync(bool valor)
+    {
+        _incluirInactivos = valor;
+        await CargarAsync();
+    }
+
+    private string? Valor(CampoDeCatalogo c) => _valores.GetValueOrDefault(c.Clave);
+
+    private static string Mostrar(CampoDeCatalogo c, string? valor) => c.Tipo == TipoDeCampoDeCatalogo.SiNo
+        ? (valor == "true" ? "sí" : "no")
+        : c.Mostrar?.Invoke(valor) ?? valor ?? "";
+
+    private void AbrirEdicion(FilaDeCatalogo? fila)
+    {
+        _editada = fila;
+        _codigoRepetido = false;
+        _clave = new ClaveDeOperacion();
+        _codigo = null;
+        _nombre = fila?.Name ?? "";
+        _valores = fila is null
+            ? Campos.ToDictionary(c => c.Clave, c => c.PorDefecto)
+            : new Dictionary<string, string?>(fila.Valores);
+        _mostrarEdicion = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        if (_editada is null && string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Escriba el código."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        var (ok, error) = await Guardar(_editada, _codigo?.Trim().ToUpperInvariant(), _nombre.Trim(), _valores, _clave);
+        if (!ok) { await Notification.ErrorAsync(error ?? "No se pudo guardar."); return; }
+        _mostrarEdicion = false;
+        await Notification.SuccessAsync("Guardado.");
+        await CargarAsync();
+    }
+
+    private void AbrirEstado(FilaDeCatalogo fila)
+    {
+        _cambio = fila;
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEstado = true;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (_cambio is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.CambiarActivoAsync(RutaBase, _cambio.PublicId, !_cambio.IsActive, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado."); return; }
+        _mostrarEstado = false;
+        await Notification.SuccessAsync(_cambio.IsActive ? "Inactivado." : "Reactivado.");
+        await CargarAsync();
+    }
+}

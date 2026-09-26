@@ -1,0 +1,324 @@
+@page "/inventario/bodegas/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Bodega - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T236 (FR-032, FR-034, FR-035; contracts/api.md §4.2–§4.4): una bodega con sus datos, sus ubicaciones (una por
+   defecto; la de tránsito sólo tiene la suya; ninguna con existencia se inactiva) y la pestaña «Mínimos y máximos» con las
+   políticas de reorden de la bodega: alta o cambio por producto con el SelectorDeProducto (0 ≤ mínimo ≤ punto ≤ máximo) y
+   retiro, bajo Inventory.Warehouses.Manage. La posición sale sólo si la API la manda (con Inventory.Stock.View, desde US2).
+   El saldo inicial y la activación son zonas que llenan US4 e I2. Una bodega fuera del alcance es el mismo 404. *@
+<PermissionGate Required="Inventory.Warehouses.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_b is null ? "Bodega" : $"{_b.Code} · {_b.Name}")</h3>
+        <div class="toolbar"><a class="boton boton-secundario" href="/inventario/bodegas">Volver a bodegas</a></div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_b is { } b)
+        {
+            <div class="form-grid">
+                <div class="campo"><span class="texto-tenue">Sucursal</span> @b.Branch.Name</div>
+                <div class="campo"><span class="texto-tenue">Tipo</span> @b.Type.Name (@TextosDeInventario.Texto(TextosDeInventario.ComportamientosDeBodega, b.Type.Behavior))</div>
+                <div class="campo"><span class="texto-tenue">Activación</span> @TextosDeInventario.Texto(TextosDeInventario.ActivacionesDeBodega, b.ActivationStatus)@(b.CutoffDate is { } corte ? $" · corte {corte:yyyy-MM-dd}" : "")</div>
+                <div class="campo"><span class="texto-tenue">Tránsito de la sucursal</span> @(b.IsTransit ? "es la bodega de tránsito" : b.TransitWarehouse?.Code ?? "—")</div>
+                <div class="campo"><span class="texto-tenue">Existencias negativas</span> @(b.NegativeStockAllowed ? "se permiten" : "no se permiten")</div>
+                <div class="campo"><span class="texto-tenue">Estado</span> @(b.IsActive ? "activa" : "inactiva")</div>
+            </div>
+
+            <SfTab>
+                <TabItems>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Datos" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <div class="form-grid">
+                                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                                    <label class="campo">Tipo
+                                        <select class="e-input" @bind="_tipo">
+                                            @foreach (var t in _tipos.Where(t => t.Behavior == b.Type.Behavior)) { <option value="@t.PublicId">@t.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo campo-ancho">Dirección <input class="e-input" @bind="_direccion" maxlength="200" /></label>
+                                </div>
+                                <PermissionGate Required="Inventory.Warehouses.Manage">
+                                    <div class="toolbar">
+                                        <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarDatosAsync">Guardar</SfButton>
+                                        <SfButton CssClass="e-outline" OnClick="@(() => AbrirMotivo(null))">@(b.IsActive ? "Inactivar bodega" : "Reactivar bodega")</SfButton>
+                                    </div>
+                                </PermissionGate>
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Ubicaciones" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDeUbicaciones.Activa)">
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Código</th><th>Nombre</th><th>Por defecto</th><th>Estado</th><th></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var u in _ubicaciones)
+                                            {
+                                                var ubicacion = u;
+                                                <tr>
+                                                    <td>@ubicacion.Code</td>
+                                                    <td>@ubicacion.Name</td>
+                                                    <td>@(ubicacion.IsDefault ? "sí" : "")</td>
+                                                    <td>@(ubicacion.IsActive ? "activa" : "inactiva")</td>
+                                                    <td>
+                                                        <PermissionGate Required="Inventory.Warehouses.Manage">
+                                                            @if (!ubicacion.IsDefault)
+                                                            {
+                                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => MarcarPorDefectoAsync(ubicacion))">Por defecto</SfButton>
+                                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(ubicacion))">@(ubicacion.IsActive ? "Inactivar" : "Reactivar")</SfButton>
+                                                            }
+                                                        </PermissionGate>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if (!b.IsTransit)
+                                {
+                                    <PermissionGate Required="Inventory.Warehouses.Manage">
+                                        <div class="form-grid">
+                                            <label class="campo">Código (único en la bodega) <input class="e-input" @bind="_codigoUbicacion" maxlength="10" /></label>
+                                            <label class="campo">Nombre <input class="e-input" @bind="_nombreUbicacion" maxlength="60" /></label>
+                                            <div class="toolbar"><SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@AgregarUbicacionAsync">Agregar ubicación</SfButton></div>
+                                        </div>
+                                    </PermissionGate>
+                                }
+                                else
+                                {
+                                    <p class="texto-tenue">La bodega de tránsito sólo tiene su ubicación por defecto.</p>
+                                }
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Mínimos y máximos" /></ChildContent>
+                        <ContentTemplate>
+                            @if (b.IsTransit)
+                            {
+                                <p class="texto-tenue">La bodega de tránsito no tiene mínimos ni máximos.</p>
+                            }
+                            else
+                            {
+                                <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDeReorden.Activa)">
+                                    <div class="tabla-desplazable">
+                                        <table class="data-grid">
+                                            <thead><tr><th>Producto</th><th class="numero">Mínimo</th><th class="numero">Punto de reorden</th><th class="numero">Máximo</th><th class="numero">Posición</th><th class="numero">Disponible</th><th></th></tr></thead>
+                                            <tbody>
+                                                @foreach (var r in _reorden)
+                                                {
+                                                    var politica = r;
+                                                    <tr>
+                                                        <td>@politica.Product.Code · @politica.Product.Name</td>
+                                                        <td class="numero">@politica.Minimum.ToString("0.####")</td>
+                                                        <td class="numero">@politica.ReorderPoint.ToString("0.####")</td>
+                                                        <td class="numero">@politica.Maximum.ToString("0.####")</td>
+                                                        <td class="numero">@(politica.Position?.ToString("0.####") ?? "—")</td>
+                                                        <td class="numero">@(politica.Available?.ToString("0.####") ?? "—")</td>
+                                                        <td>
+                                                            <PermissionGate Required="Inventory.Warehouses.Manage">
+                                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarReordenAsync(politica))">Retirar</SfButton>
+                                                            </PermissionGate>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <PermissionGate Required="Inventory.Warehouses.Manage">
+                                        <SelectorDeProducto Etiqueta="Producto (lector o búsqueda)" Clases="@TextosDeInventario.ClasesDeProductoDeI1.Take(1).ToList()" Elegido="@(e => _productoDeReorden = e.Producto)" />
+                                        <div class="form-grid">
+                                            <div class="campo"><span class="texto-tenue">Elegido</span> @(_productoDeReorden is { } pr ? $"{pr.Code} · {pr.Name}" : "—")</div>
+                                            <label class="campo">Mínimo <input class="e-input" type="number" step="0.0001" @bind="_minimo" /></label>
+                                            <label class="campo">Punto de reorden <input class="e-input" type="number" step="0.0001" @bind="_punto" /></label>
+                                            <label class="campo">Máximo <input class="e-input" type="number" step="0.0001" @bind="_maximo" /></label>
+                                            <div class="toolbar"><SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || _productoDeReorden is null)" OnClick="@FijarReordenAsync">Guardar mínimos y máximos</SfButton></div>
+                                        </div>
+                                    </PermissionGate>
+                                </IndicadorDeCarga>
+                            }
+                        </ContentTemplate>
+                    </TabItem>
+
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Saldo inicial y activación" /></ChildContent>
+                        <ContentTemplate>
+                            @if (b.OpeningBalance is { } saldo)
+                            {
+                                <p>Saldo inicial @(saldo.Number ?? "en borrador") · @TextosDeInventario.Estado(saldo.Status)@(saldo.CutoffDate is { } c ? $" · corte {c:yyyy-MM-dd}" : "")</p>
+                            }
+                            else
+                            {
+                                <p class="texto-tenue">Sin saldo inicial. Se carga con la plantilla 14 o en Inventario → Saldo inicial; la activación compara contra Contabilidad (I2).</p>
+                            }
+                        </ContentTemplate>
+                    </TabItem>
+                </TabItems>
+            </SfTab>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_ubicacionDeEstado is null ? "Bodega" : $"Ubicación {_ubicacionDeEstado.Code}")" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Con existencia no se inactiva.</p>
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CambiarEstadoAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDeUbicaciones = new(), _cargaDeReorden = new(), _guardado = new();
+    private BodegaDto? _b;
+    private List<TipoDeBodegaDto> _tipos = [];
+    private List<UbicacionDto> _ubicaciones = [];
+    private List<PoliticaDeReordenDto> _reorden = [];
+    private string _nombre = "";
+    private string? _direccion, _codigoUbicacion, _nombreUbicacion, _motivo;
+    private Guid _tipo;
+    private ProductoEncontradoDto? _productoDeReorden;
+    private decimal _minimo, _punto, _maximo;
+    private bool _mostrarMotivo;
+    private UbicacionDto? _ubicacionDeEstado;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var tipos = await Inventario.ListarTiposDeBodegaAsync();
+        _tipos = [.. tipos.Value ?? []];
+        await RecargarAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        var r = await Inventario.ObtenerBodegaAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _b = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la bodega.");
+            return;
+        }
+        _b = r.Value;
+        _nombre = _b.Name;
+        _direccion = _b.Address;
+        _tipo = _b.Type.PublicId;
+        _ubicaciones = [.. _b.Locations ?? []];
+        await CargarReordenAsync();
+    }
+
+    private async Task CargarUbicacionesAsync()
+    {
+        using var carga = _cargaDeUbicaciones.Iniciar();
+        var r = await Inventario.ListarUbicacionesAsync(Id, incluirInactivas: true);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ubicaciones."); return; }
+        _ubicaciones = [.. r.Value ?? []];
+    }
+
+    private async Task CargarReordenAsync()
+    {
+        if (_b is null || _b.IsTransit) return;
+        using var carga = _cargaDeReorden.Iniciar();
+        var r = await Inventario.ListarReordenAsync(bodega: Id, tamano: 200);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los mínimos y máximos."); return; }
+        _reorden = [.. r.Value?.Items ?? []];
+    }
+
+    private async Task<bool> EnviarAsync<T>(Task<ResultadoDeInventario<T>> envio, string exito)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await envio;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar."); return false; }
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync(exito);
+        return true;
+    }
+
+    private async Task GuardarDatosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        if (await EnviarAsync(Inventario.EditarBodegaAsync(Id, new EditarBodegaRequest(_nombre.Trim(), _tipo, _direccion), _clave), "Bodega guardada."))
+            await RecargarAsync();
+    }
+
+    private async Task AgregarUbicacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_codigoUbicacion) || string.IsNullOrWhiteSpace(_nombreUbicacion)) { await Notification.WarningAsync("Escriba código y nombre."); return; }
+        if (await EnviarAsync(Inventario.GuardarUbicacionAsync(Id, null, new UbicacionRequest(_codigoUbicacion.Trim().ToUpperInvariant(), _nombreUbicacion.Trim(), false), _clave), "Ubicación agregada."))
+        {
+            _codigoUbicacion = _nombreUbicacion = null;
+            await CargarUbicacionesAsync();
+        }
+    }
+
+    private async Task MarcarPorDefectoAsync(UbicacionDto ubicacion)
+    {
+        if (await EnviarAsync(Inventario.GuardarUbicacionAsync(Id, ubicacion.PublicId, new UbicacionRequest(null, ubicacion.Name, true), new ClaveDeOperacion()), "Ubicación por defecto cambiada."))
+            await CargarUbicacionesAsync();
+    }
+
+    private void AbrirMotivo(UbicacionDto? ubicacion)
+    {
+        _ubicacionDeEstado = ubicacion;
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (_b is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        var ok = _ubicacionDeEstado is { } u
+            ? await EnviarAsync(Inventario.CambiarUbicacionActivaAsync(Id, u.PublicId, !u.IsActive, _motivo.Trim(), _clave), "Estado de la ubicación cambiado.")
+            : await EnviarAsync(Inventario.CambiarActivoAsync(InventarioClient.RutaDeBodegas, Id, !_b.IsActive, _motivo.Trim(), _clave), "Estado de la bodega cambiado.");
+        if (!ok) return;
+        _mostrarMotivo = false;
+        await RecargarAsync();
+        await CargarUbicacionesAsync();
+    }
+
+    private async Task FijarReordenAsync()
+    {
+        if (_productoDeReorden is null) return;
+        if (!(0 <= _minimo && _minimo <= _punto && _punto <= _maximo))
+        {
+            await Notification.WarningAsync("Debe cumplirse 0 ≤ mínimo ≤ punto de reorden ≤ máximo.");
+            return;
+        }
+        if (await EnviarAsync(Inventario.FijarReordenAsync(new PoliticaDeReordenRequest(_productoDeReorden.PublicId, Id, _minimo, _maximo, _punto), _clave), "Mínimos y máximos guardados."))
+        {
+            _productoDeReorden = null;
+            await CargarReordenAsync();
+        }
+    }
+
+    private async Task RetirarReordenAsync(PoliticaDeReordenDto politica)
+    {
+        if (await EnviarAsync(Inventario.RetirarReordenAsync(politica.PublicId, new ClaveDeOperacion()), "Política retirada."))
+            await CargarReordenAsync();
+    }
+}

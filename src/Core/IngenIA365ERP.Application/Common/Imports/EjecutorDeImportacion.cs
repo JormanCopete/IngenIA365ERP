@@ -27,6 +27,8 @@ namespace IngenIA365ERP.Application.Common.Imports;
 /// <c>apply</c> corre en <see cref="TransaccionExplicita"/> y guarda con un solo <c>SaveChanges</c> o nada (422
 /// <c>Import.Invalid</c> con el mismo cuerpo en <c>data</c>); sin motivo cuando la revisión lo pide, un error
 /// <c>Import.Cell.Required</c> sin fila en la columna <c>reason</c>;</item>
+/// <item>si la plantilla lo pide, corre <c>despuesDeGuardar</c> tras el primer guardado (lo que necesita los Id nuevos) y
+/// guarda otra vez en la misma transacción;</item>
 /// <item>registra el evento de la importación (plantilla, modo, archivo y su SHA-256, conteos) en el módulo de la
 /// plantilla; en <c>apply</c>, dentro de la misma transacción.</item>
 /// </list>
@@ -60,7 +62,8 @@ public sealed class EjecutorDeImportacion(
         DefinicionDePlantilla plantilla,
         IComandoDeImportacion comando,
         Func<ContextoDeImportacion, CancellationToken, Task> procesar,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<ContextoDeImportacion, CancellationToken, Task>? despuesDeGuardar = null)
     {
         ArgumentNullException.ThrowIfNull(plantilla);
         ArgumentNullException.ThrowIfNull(comando);
@@ -84,7 +87,7 @@ public sealed class EjecutorDeImportacion(
 
         return modo == ModoDeImportacion.Review
             ? await RevisarAsync(contexto, archivo, procesar, ct)
-            : await AplicarAsync(contexto, archivo, procesar, ct);
+            : await AplicarAsync(contexto, archivo, procesar, despuesDeGuardar, ct);
     }
 
     // --------------------------------------------------------------- lectura --
@@ -195,7 +198,8 @@ public sealed class EjecutorDeImportacion(
 
     private async Task<Result<ImportResultDto>> AplicarAsync(
         ContextoDeImportacion contexto, ArchivoDeImportacion archivo,
-        Func<ContextoDeImportacion, CancellationToken, Task> procesar, CancellationToken ct)
+        Func<ContextoDeImportacion, CancellationToken, Task> procesar,
+        Func<ContextoDeImportacion, CancellationToken, Task>? despuesDeGuardar, CancellationToken ct)
     {
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -222,6 +226,16 @@ public sealed class EjecutorDeImportacion(
 
             var resultado = contexto.Resultado(archivo, aplicado: true);
             await db.SaveChangesAsync(ct);
+
+            // Lo que necesita los Id recién asignados (la ruta de una categoría nueva, la vigencia de una bodega nueva):
+            // un segundo guardado dentro de la misma transacción; un error aquí revierte todo.
+            if (despuesDeGuardar is not null)
+            {
+                await despuesDeGuardar(contexto, ct);
+                if (contexto.HayErrores)
+                    return Result.Failure<ImportResultDto>(ImportErrors.Invalid(contexto.Resultado(archivo, aplicado: false)));
+                await db.SaveChangesAsync(ct);
+            }
             await RegistrarAsync(contexto, resultado, EventoAplicada, ct);
             return Result.Success(resultado);
         }, ct);

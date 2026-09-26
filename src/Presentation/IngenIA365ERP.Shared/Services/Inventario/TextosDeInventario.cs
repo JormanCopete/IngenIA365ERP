@@ -84,6 +84,66 @@ public static class TextosDeInventario
         [2] = "Resolución DIAN",
     };
 
+    /// <summary><c>ProductKind</c> (1..6); en I1 sólo se crean inventariables y servicios.</summary>
+    public static IReadOnlyDictionary<int, string> ClasesDeProducto { get; } = new Dictionary<int, string>
+    {
+        [1] = "Inventariable",
+        [2] = "Servicio",
+        [3] = "Combo",
+        [4] = "Kit",
+        [5] = "Plantilla",
+        [6] = "Variante",
+    };
+
+    /// <summary><c>ProductStatus</c> (1..3).</summary>
+    public static IReadOnlyDictionary<int, string> EstadosDeProducto { get; } = new Dictionary<int, string>
+    {
+        [1] = "Activo",
+        [2] = "Inactivo",
+        [3] = "Bloqueado",
+    };
+
+    /// <summary><c>VatSaleTreatment</c> (1..3).</summary>
+    public static IReadOnlyDictionary<int, string> TratamientosDeIva { get; } = new Dictionary<int, string>
+    {
+        [1] = "Gravado",
+        [2] = "Exento",
+        [3] = "Excluido",
+    };
+
+    /// <summary><c>ProductUnitUsage</c> (1..3).</summary>
+    public static IReadOnlyDictionary<int, string> UsosDeUnidad { get; } = new Dictionary<int, string>
+    {
+        [1] = "Compra",
+        [2] = "Venta",
+        [3] = "Compra y venta",
+    };
+
+    /// <summary><c>WarehouseBehavior</c> (1..2).</summary>
+    public static IReadOnlyDictionary<int, string> ComportamientosDeBodega { get; } = new Dictionary<int, string>
+    {
+        [1] = "Operativa",
+        [2] = "Tránsito",
+    };
+
+    /// <summary><c>WarehouseActivationStatus</c> (0..1).</summary>
+    public static IReadOnlyDictionary<int, string> ActivacionesDeBodega { get; } = new Dictionary<int, string>
+    {
+        [0] = "No activada",
+        [1] = "Activa",
+    };
+
+    /// <summary>Las clases de producto que se crean en I1 (<c>Inventoriable</c>, <c>Service</c>).</summary>
+    public static readonly IReadOnlyList<int> ClasesDeProductoDeI1 = [1, 2];
+
+    /// <summary><c>VatSaleTreatment.Taxed</c>: exige una tarifa de IVA.</summary>
+    public const int TratamientoGravado = 1;
+
+    /// <summary><c>ProductStatus.Blocked</c>.</summary>
+    public const int EstadoBloqueado = 3;
+
+    public static string Texto(IReadOnlyDictionary<int, string> textos, int valor) => textos.TryGetValue(valor, out var t) ? t : valor.ToString();
+
     /// <summary>El grupo de Compras (<c>DocumentClassGroup.Purchases</c>): sólo sus clases admiten «IVA no descontable».</summary>
     public const int GrupoDeCompras = 1;
 

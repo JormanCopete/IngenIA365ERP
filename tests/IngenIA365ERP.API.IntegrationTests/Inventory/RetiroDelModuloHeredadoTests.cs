@@ -23,10 +23,12 @@ namespace IngenIA365ERP.API.IntegrationTests.Inventory;
 [Collection(InventarioCollection.Nombre)]
 public class RetiroDelModuloHeredadoTests(CentralIdentityApiFixture fx)
 {
-    /// <summary>Las rutas del módulo heredado que la fase 2 retiró sin alias (contracts/api.md §29).</summary>
+    /// <summary>
+    /// Las rutas del módulo heredado que la fase 2 retiró sin alias (contracts/api.md §29). <c>GET /api/inventory/products</c>
+    /// salió de la lista con el catálogo de US1 (T230): la ruta nueva existe y su permiso lo prueba <c>CatalogoYBodegasTests</c>.
+    /// </summary>
     public static TheoryData<string, string> RutasHeredadas => new()
     {
-        { "GET", "/api/inventory/products" },
         { "GET", "/api/inventory/invoices" },
         { "POST", "/api/inventory/invoices" },
         { "GET", "/api/reports/inventory/valuation/pdf" },

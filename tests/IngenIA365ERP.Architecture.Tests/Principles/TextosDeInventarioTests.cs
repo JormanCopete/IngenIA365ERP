@@ -47,8 +47,29 @@ public class TextosDeInventarioTests
     public void Cada_forma_de_numerar_tiene_su_texto() => Cubre<NumberedBy>("Numeracion");
 
     [Fact]
+    public void Cada_clase_de_producto_tiene_su_texto() => Cubre<ProductKind>("ClasesDeProducto");
+
+    [Fact]
+    public void Cada_estado_de_producto_tiene_su_texto() => Cubre<ProductStatus>("EstadosDeProducto");
+
+    [Fact]
+    public void Cada_tratamiento_de_IVA_tiene_su_texto() => Cubre<IngenIA365ERP.Domain.Enums.Core.VatSaleTreatment>("TratamientosDeIva");
+
+    [Fact]
+    public void Cada_uso_de_unidad_tiene_su_texto() => Cubre<ProductUnitUsage>("UsosDeUnidad");
+
+    [Fact]
+    public void Cada_comportamiento_de_bodega_tiene_su_texto() => Cubre<WarehouseBehavior>("ComportamientosDeBodega");
+
+    [Fact]
+    public void Cada_estado_de_activacion_tiene_su_texto() => Cubre<WarehouseActivationStatus>("ActivacionesDeBodega");
+
+    [Fact]
     public void Las_constantes_nombran_el_valor_del_dominio()
     {
+        Assert.Contains($"TratamientoGravado = {(int)IngenIA365ERP.Domain.Enums.Core.VatSaleTreatment.Taxed};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"EstadoBloqueado = {(int)ProductStatus.Blocked};", Fuente, StringComparison.Ordinal);
+        Assert.Contains($"ClasesDeProductoDeI1 = [{(int)ProductKind.Inventoriable}, {(int)ProductKind.Service}];", Fuente, StringComparison.Ordinal);
         Assert.Contains($"GrupoDeCompras = {(int)DocumentClassGroup.Purchases};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ClaseDeConsumoInterno = {(int)DocumentClass.InternalConsumption};", Fuente, StringComparison.Ordinal);
     }

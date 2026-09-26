@@ -1,0 +1,47 @@
+@page "/inventario/categorias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Categorías - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T235 (FR-024; contracts/api.md §3.2; plantilla 5): el árbol de categorías, hasta 5 niveles, en orden de árbol
+   con la ruta legible («ALIMENTOS › GRANOS»). Mover una rama elige otro padre: una categoría no queda debajo de sí misma ni
+   ninguna hija pasa del nivel 5. Con subcategorías o productos activos no se inactiva. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Categorías"
+                          Descripcion="Hasta 5 niveles. El padre se elige al crear y se cambia para mover la rama entera."
+                          RutaBase="@InventarioClient.RutaDeCategorias"
+                          RutaDePlantilla="@InventarioClient.RutaDeCategorias"
+                          CatalogoDeCodigo="categorias"
+                          AvisoAlInactivar="Una categoría con subcategorías activas o productos activos no se inactiva."
+                          Campos="@_campos"
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<CampoDeCatalogo> _campos =
+    [
+        new("ruta", "Ruta", EnFormulario: false),
+        new("nivel", "Nivel", EnFormulario: false),
+        new("padre", "Padre", TipoDeCampoDeCatalogo.Lista, EnLista: false, TextoVacio: "(raíz)",
+            Opciones: (filas, editada) => filas
+                .Where(f => f.IsActive && int.TryParse(f.Valores.GetValueOrDefault("nivel"), out var n) && n < 5)
+                .Where(f => editada is null || (f.PublicId != editada.PublicId
+                    && !(f.Valores.GetValueOrDefault("ruta") ?? "").StartsWith((editada.Valores.GetValueOrDefault("ruta") ?? "") + " › ", StringComparison.Ordinal)))
+                .Select(f => (f.PublicId.ToString(), f.Valores.GetValueOrDefault("ruta") ?? f.Name))),
+        new("productos", "Productos", EnFormulario: false),
+    ];
+
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivas) =>
+        Filas(await Inventario.ListarCategoriasAsync(inactivas), c => new FilaDeCatalogo(c.PublicId, c.Code, c.Name, c.IsActive, false,
+            new Dictionary<string, string?>
+            {
+                ["ruta"] = c.Path, ["nivel"] = c.Level.ToString(), ["padre"] = c.ParentPublicId?.ToString(), ["productos"] = c.Products.ToString(),
+            }));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarCategoriaAsync(fila?.PublicId, new CategoriaRequest(codigo, nombre, Id(v, "padre")), clave));
+}

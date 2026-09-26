@@ -1,0 +1,200 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+@implements IDisposable
+@inject InventarioClient Inventario
+
+@*
+    El campo de producto de todo el comercio (feature 012, T233; FR-020; contracts/api.md §3.5, búsqueda). Nombre fijo de
+    decisiones-transversales §2.16: lo reutilizan ajustes, traslados, conteos, compras y el POS.
+    - El lector de código de barras en modo teclado escribe una ráfaga terminada en Enter: con Enter se pide la lectura
+      EXACTA (código de barras vivo o código de producto) y, si acierta, queda elegido el producto y, si el código es de un
+      empaque, su unidad y factor (CAJA12 × 12), sin más pasos (US1-5).
+    - Mientras se escribe, busca 200 ms después de la última tecla y cancela la búsqueda anterior; ↑ ↓ recorren los
+      resultados, Enter elige el marcado y Esc cierra. Los bloqueados salen marcados.
+    - Un indicador de carga en la lista de resultados.
+*@
+
+<div class="selector-de-producto">
+    <label class="campo campo-ancho">
+        @Etiqueta
+        <input class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off"
+               @oninput="EscribirAsync" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
+    </label>
+    <span class="texto-tenue">Lector o código + Enter · ↑ ↓ recorren · Enter elige · Esc cierra</span>
+
+    @if (_abierta)
+    {
+        <IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Buscando…">
+            @if (_mensaje is not null)
+            {
+                <p class="texto-tenue">@_mensaje</p>
+            }
+            else if (_resultados.Count > 0)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Unidad</th><th>Estado</th>@if (Bodega is not null) { <th class="numero">Disponible</th> }</tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < _resultados.Count; i++)
+                            {
+                                var indice = i;
+                                var p = _resultados[i];
+                                <tr class="@(indice == _marcado ? "resaltada" : "")" @onclick="@(() => ElegirAsync(p, null))">
+                                    <td>@p.Code</td>
+                                    <td>@p.Name@(p.BrandName is null ? "" : $" · {p.BrandName}")@(p.Reference is null ? "" : $" · {p.Reference}")</td>
+                                    <td>@p.BaseUnitCode</td>
+                                    <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, p.Status)</td>
+                                    @if (Bodega is not null) { <td class="numero">@(p.Available?.ToString("N4") ?? "—")</td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+@code {
+    /// <summary>La espera desde la última tecla antes de buscar (contracts/api.md §3.5).</summary>
+    public const int EsperaEnMilisegundos = 200;
+
+    [Parameter] public string Etiqueta { get; set; } = "Producto";
+    [Parameter] public string Placeholder { get; set; } = "Código, código de barras, nombre o referencia";
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    /// <summary>Con bodega, cada resultado trae el disponible (si quien busca tiene <c>Inventory.Stock.View</c>).</summary>
+    [Parameter] public Guid? Bodega { get; set; }
+
+    /// <summary><c>ProductKind</c> admitidos; vacío = todos.</summary>
+    [Parameter] public IReadOnlyList<int>? Clases { get; set; }
+
+    /// <summary>Consultas: también los inactivos.</summary>
+    [Parameter] public bool IncluirInactivos { get; set; }
+
+    /// <summary>El producto elegido y, si se leyó el código de un empaque, su unidad y factor.</summary>
+    [Parameter] public EventCallback<ProductoElegido> Elegido { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private CancellationTokenSource? _busqueda;
+    private string _texto = "";
+    private List<ProductoEncontradoDto> _resultados = [];
+    private int _marcado = -1;
+    private bool _abierta, _prevenir;
+    private string? _mensaje;
+
+    private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _texto = e.Value?.ToString() ?? "";
+        var token = Reiniciar();
+        if (_texto.Trim().Length < 2)
+        {
+            _abierta = false;
+            _resultados = [];
+            return;
+        }
+        try
+        {
+            await Task.Delay(EsperaEnMilisegundos, token);
+            await BuscarAsync(_texto.Trim(), exacta: false, token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Llegó otra tecla: la búsqueda nueva reemplaza a ésta.
+        }
+    }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        _prevenir = e.Key is "ArrowDown" or "ArrowUp" or "Enter";
+        switch (e.Key)
+        {
+            case "ArrowDown" when _resultados.Count > 0:
+                _marcado = Math.Min(_marcado + 1, _resultados.Count - 1);
+                break;
+            case "ArrowUp" when _resultados.Count > 0:
+                _marcado = Math.Max(_marcado - 1, 0);
+                break;
+            case "Escape":
+                Reiniciar();
+                _abierta = false;
+                break;
+            case "Enter":
+                if (_abierta && _marcado >= 0 && _marcado < _resultados.Count)
+                {
+                    await ElegirAsync(_resultados[_marcado], null);
+                    return;
+                }
+                if (_texto.Trim().Length < 2) return;
+                // La ráfaga del lector termina en Enter: lectura exacta, sin esperar.
+                var token = Reiniciar();
+                try { await BuscarAsync(_texto.Trim(), exacta: true, token); }
+                catch (OperationCanceledException) { }
+                break;
+        }
+    }
+
+    private async Task BuscarAsync(string q, bool exacta, CancellationToken token)
+    {
+        _abierta = true;
+        _mensaje = null;
+        using var carga = _carga.Iniciar();
+        StateHasChanged();
+        var r = await Inventario.BuscarProductosAsync(q, Bodega, IncluirInactivos, null, Clases, token);
+        token.ThrowIfCancellationRequested();
+        if (!r.IsSuccess)
+        {
+            _resultados = [];
+            _mensaje = r.ErrorMessage ?? "No se pudo buscar.";
+            return;
+        }
+
+        if (exacta && r.Value?.Exact is { } exacto)
+        {
+            await ElegirAsync(exacto, exacto.PackUnit);
+            return;
+        }
+        _resultados = [.. r.Value?.Items ?? []];
+        _marcado = _resultados.Count > 0 ? 0 : -1;
+        if (exacta && _resultados.Count == 1)
+        {
+            await ElegirAsync(_resultados[0], null);
+            return;
+        }
+        if (_resultados.Count == 0) _mensaje = $"Ningún producto coincide con «{q}».";
+    }
+
+    private async Task ElegirAsync(ProductoEncontradoDto producto, EmpaqueDto? empaque)
+    {
+        Reiniciar();
+        _abierta = false;
+        _resultados = [];
+        _marcado = -1;
+        _texto = $"{producto.Code} · {producto.Name}";
+        await Elegido.InvokeAsync(new ProductoElegido(producto, empaque));
+    }
+
+    /// <summary>Cancela la búsqueda en curso y devuelve el token de la nueva.</summary>
+    private CancellationToken Reiniciar()
+    {
+        _busqueda?.Cancel();
+        _busqueda?.Dispose();
+        _busqueda = new CancellationTokenSource();
+        return _busqueda.Token;
+    }
+
+    /// <summary>Vacía el campo (tras agregar la línea, por ejemplo).</summary>
+    public void Limpiar()
+    {
+        Reiniciar();
+        _texto = "";
+        _abierta = false;
+        _resultados = [];
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _busqueda?.Cancel();
+        _busqueda?.Dispose();
+    }
+}

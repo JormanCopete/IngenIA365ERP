@@ -154,6 +154,12 @@
     /// <summary>El permiso de importar (§0.7); nulo = sin comprobación en pantalla (el servidor decide igual).</summary>
     [Parameter] public string? PermisoDeImportacion { get; set; }
 
+    /// <summary>
+    /// Falso cuando la importación de la plantilla todavía no existe en esta entrega (<c>canImport = false</c> de
+    /// <c>GET /api/inventory/templates</c>: las plantillas 10 a 13 en I1, T237): sólo se descarga, y vacía (sin «con datos»).
+    /// </summary>
+    [Parameter] public bool Importable { get; set; } = true;
+
     /// <summary>La pantalla ya tiene sus propios botones de descarga.</summary>
     [Parameter] public bool MostrarDescargas { get; set; } = true;
 
@@ -176,8 +182,8 @@
     protected override async Task OnParametersSetAsync()
     {
         _puedeDescargar = PermisoDeDescarga is null || await Permisos.TieneAsync(PermisoDeDescarga);
-        _puedeDescargarConDatos = _puedeDescargar && (PermisoDeDescargaConDatos is null || await Permisos.TieneAsync(PermisoDeDescargaConDatos));
-        _puedeImportar = PermisoDeImportacion is null || await Permisos.TieneAsync(PermisoDeImportacion);
+        _puedeDescargarConDatos = _puedeDescargar && Importable && (PermisoDeDescargaConDatos is null || await Permisos.TieneAsync(PermisoDeDescargaConDatos));
+        _puedeImportar = Importable && (PermisoDeImportacion is null || await Permisos.TieneAsync(PermisoDeImportacion));
     }
 
     private async Task DescargarAsync(bool conDatos)

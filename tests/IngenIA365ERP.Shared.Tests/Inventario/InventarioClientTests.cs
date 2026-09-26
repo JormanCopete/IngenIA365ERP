@@ -166,6 +166,85 @@ public class InventarioClientTests
         _servidor.Vistas.Should().BeEmpty();
     }
 
+    // ------------------------------------------------------------------------------- catálogo y bodegas (T232) --
+
+    [Fact]
+    public async Task La_lectura_exacta_de_un_empaque_trae_su_unidad_y_la_busqueda_no_lleva_clave()
+    {
+        var producto = Guid.NewGuid();
+        _servidor.Responder = _ => Servidor.Json(HttpStatusCode.OK, new
+        {
+            exact = new
+            {
+                publicId = producto, code = "P1", name = "Aceite", baseUnitCode = "UND", status = 1, matchedBarcode = "7702001000012",
+                packUnit = new { productUnitPublicId = Guid.NewGuid(), unitCode = "CAJA12", factor = 12m },
+            },
+            items = Array.Empty<object>(),
+        });
+
+        var r = await _cliente.BuscarProductosAsync("7702001000012", clases: [1]);
+
+        r.IsSuccess.Should().BeTrue(r.ErrorMessage);
+        r.Value!.Exact!.PublicId.Should().Be(producto);
+        r.Value.Exact.PackUnit!.UnitCode.Should().Be("CAJA12");
+        r.Value.Exact.PackUnit.Factor.Should().Be(12m);
+        var vista = _servidor.Vistas.Single();
+        vista.Ruta.Should().Be("/api/inventory/products/search?q=7702001000012&kinds=1");
+        vista.Clave.Should().BeNull("la búsqueda es una consulta");
+    }
+
+    [Fact]
+    public async Task Borrar_un_producto_con_historia_conserva_las_alternativas()
+    {
+        _servidor.Responder = _ => Servidor.Json(HttpStatusCode.UnprocessableEntity, new
+        {
+            code = "Inventory.Product.HasHistory", message = "El producto tiene historia.", data = new { alternatives = new[] { "Inactive", "Blocked" } },
+        });
+
+        var r = await _cliente.BorrarProductoAsync(Guid.NewGuid(), new ClaveDeOperacion());
+
+        r.IsSuccess.Should().BeFalse();
+        r.ErrorCode.Should().Be("Inventory.Product.HasHistory");
+        r.Dato<string[]>("alternatives").Should().Equal("Inactive", "Blocked");
+        _servidor.Vistas.Single().Clave.Should().NotBeNullOrWhiteSpace("borrar es una escritura");
+    }
+
+    [Fact]
+    public async Task Crear_una_bodega_lleva_su_clave_y_devuelve_el_transito_que_nacio()
+    {
+        var transito = Guid.NewGuid();
+        _servidor.Responder = _ => Servidor.Json(HttpStatusCode.Created, new
+        {
+            warehouse = new { publicId = Guid.NewGuid(), code = "PRIN", name = "Principal", activationStatus = 0, isActive = true },
+            transitWarehouseCreated = new { publicId = transito, code = "TR01", name = "Tránsito Florida" },
+            warnings = new[] { new { code = "Inventory.Branch.MunicipalityMissing", message = "Sin municipio." } },
+        });
+
+        var r = await _cliente.CrearBodegaAsync(new CrearBodegaRequest("PRIN", "Principal", Guid.NewGuid(), Guid.NewGuid(), null, null), new ClaveDeOperacion());
+
+        r.IsSuccess.Should().BeTrue(r.ErrorMessage);
+        r.Value!.TransitWarehouseCreated!.Code.Should().Be("TR01");
+        r.Value.Warnings.Should().ContainSingle(w => w.Code == "Inventory.Branch.MunicipalityMissing");
+        var vista = _servidor.Vistas.Single();
+        vista.Ruta.Should().Be("/api/inventory/warehouses");
+        vista.Clave.Should().NotBeNullOrWhiteSpace();
+        vista.Authorization.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Inactivar_una_fila_de_catalogo_manda_el_motivo_a_su_ruta()
+    {
+        _servidor.Responder = _ => new HttpResponseMessage(HttpStatusCode.NoContent);
+        var id = Guid.NewGuid();
+
+        var r = await _cliente.CambiarActivoAsync(InventarioClient.RutaDeMarcas, id, activar: false, "Ya no se vende", new ClaveDeOperacion());
+
+        r.IsSuccess.Should().BeTrue(r.ErrorMessage);
+        var vista = _servidor.Vistas.Single();
+        vista.Ruta.Should().Be($"/api/inventory/brands/{id}/deactivate");
+        vista.Cuerpo.Should().Contain("Ya no se vende");
+    }
+
     // ------------------------------------------------------------------------------------------ ayudantes --
 
     private static object TipoJson() => new
