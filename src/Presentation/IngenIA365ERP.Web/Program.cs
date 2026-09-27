@@ -97,6 +97,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Inventario.InventarioCl
 // Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
+// Feature 012, I3 (T633, T634): Ventas (POS, caja, precios, documentos), medios de pago de Core e impresión de la tirilla con pos.js.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Ventas.VentasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
 // Feature 012, US7 (T532): el lado contable de la integración con Inventario (matriz, tipos de comprobante, completitud, lotes).

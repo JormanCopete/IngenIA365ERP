@@ -16,6 +16,8 @@ public static class DestinoDeDocumentoDeInventario
         10 or 11 or 12 or 13 => $"/inventario/ajustes/{id}",
         16 => $"/inventario/traslados/{id}",
         19 => $"/inventario/conteos/{id}",
+        // I3 (T642): las ventas y sus notas de I3 abren su detalle de Ventas.
+        26 or 28 or 29 or 30 or 31 or 32 => $"/ventas/documentos/{id}",
         _ => null,
     };
 

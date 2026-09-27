@@ -1,0 +1,78 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject INotificationService NotificationService
+@inject IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos Accesos
+@implements IDisposable
+
+@* Feature 012, I3 (T635; FR-019, SC-008): el layout del punto de venta. Pantalla completa, sin barra lateral ni menú, para vender sin
+   ratón; conserva lo que ninguna pantalla puede perder: la cuenta atrás de la sesión (AvisoDeVencimientoDeSesion, sin modal) y el
+   registro de cada ingreso en la auditoría (RegistroDeAccesos, módulo Navigation). Los avisos salen abajo a la derecha, como en el
+   layout principal. Colores sólo de tokens.css / componentes.css. *@
+@if (!RendererInfo.IsInteractive)
+{
+    <div class="arranque" role="status" aria-live="polite">
+        <span class="arranque-marca">IngenIA365<span class="arranque-marca-sufijo">ERP</span></span>
+        <div class="arranque-barra" aria-hidden="true"></div>
+        <span class="arranque-texto">Cargando el punto de venta <span class="arranque-porcentaje"></span></span>
+    </div>
+}
+
+<AuthorizeView>
+    <Authorized>
+        <div class="pos-layout">
+            <AvisoDeVencimientoDeSesion />
+            @Body
+        </div>
+
+        <SfToast @ref="_toast" ShowCloseButton="true" NewestOnTop="true">
+            <ToastPosition X="Right" Y="Bottom" />
+        </SfToast>
+    </Authorized>
+    <NotAuthorized>
+        <RedirectToLogin />
+    </NotAuthorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ha ocurrido un error inesperado.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">X</span>
+</div>
+
+@code {
+    private SfToast? _toast;
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnNotify += MostrarAsync;
+        Navigation.LocationChanged += AlNavegar;
+        Accesos.Registrar(Navigation.Uri);
+    }
+
+    private void AlNavegar(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Accesos.Registrar(e.Location);
+
+    private async Task MostrarAsync(string titulo, string mensaje, NotificationType tipo)
+    {
+        if (_toast is null) return;
+        await _toast.ShowAsync(new ToastModel
+        {
+            Title = titulo,
+            Content = mensaje,
+            CssClass = tipo switch
+            {
+                NotificationType.Success => "e-toast-success",
+                NotificationType.Error => "e-toast-danger",
+                NotificationType.Warning => "e-toast-warning",
+                NotificationType.Info => "e-toast-info",
+                _ => "",
+            },
+            Timeout = tipo == NotificationType.Error ? 8000 : 3000,
+        });
+    }
+
+    public void Dispose()
+    {
+        NotificationService.OnNotify -= MostrarAsync;
+        Navigation.LocationChanged -= AlNavegar;
+    }
+}

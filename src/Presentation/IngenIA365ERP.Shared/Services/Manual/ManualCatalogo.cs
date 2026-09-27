@@ -1153,6 +1153,92 @@ public static class ManualCatalogo
             ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
             ["compras-recepciones"], [], TipoDeTema.Proceso));
 
+        // ------------------------------------------------- Ventas y punto de venta (feature 012, I3, T644) --
+        t.Add(Proceso("ventas-pos", "Vender en el punto de venta", Modulos.Ventas, "/pos",
+            "La venta en caja, pensada para el lector y el teclado: cada lectura suma una línea, la venta vive en el servidor desde la primera y se cobra con uno o varios medios. Un doble clic o una conexión que se cae no venden dos veces.",
+            [
+                P("Punto de venta → Vender en el POS", "Hace falta una sesión de caja abierta; si no la tiene, la pantalla lleva a abrirla. Un punto que cobra en oficina no ofrece el POS.", "/pos", "Abrir el POS"),
+                P("Leer los productos", "El campo de lectura siempre tiene el foco. Enter lee el código exacto (el de un empaque trae su unidad); «3*» antes de leer multiplica; un código desconocido abre la búsqueda (F2)."),
+                P("Cambiar la venta", "F3 cantidad de la línea elegida (flechas para elegir), F4 cliente (se busca o se crea con su autorización de datos; con «el comprador pide factura» pasa a factura), F6 vendedor, F7 descuento o precio digitado, Supr quita la línea."),
+                P("Descuento sobre su tope", "La línea queda esperando la aprobación de alguien con un tope suficiente: desde su bandeja, o en persona en la caja con su llave (passkey) o el código de su autenticador. Nunca con contraseña."),
+                P("Cobrar (F10)", "El panel muestra lo que falta, lo que sobra y las vueltas. La tecla o el botón de un medio agrega un pago por lo que falta. De la tarjeta sólo se digitan los últimos cuatro dígitos; el datáfono se propone el de la caja. F10 otra vez confirma."),
+                P("Entregar", "La tirilla sale en la respuesta del cobro y se imprime; si la venta quedó en aprobación, se espera y se entrega al aprobarse. Ctrl+Alt+R reimprime la última con la marca «COPIA»."),
+                P("Suspender y recuperar", "F8 suspende con un rótulo; F9 la recupera en cualquier caja del punto. Ctrl+Alt+D descarta la venta con motivo."),
+            ],
+            ["pos", "punto de venta", "caja", "lector", "cobrar", "tirilla", "suspender", "vueltas", "bono", "descuento", "atajos"],
+            ["Permiso Inventory.Pos.Sell.", "Sesión de caja abierta en un punto con POS.", "Medios de pago, lista de precios general y la caja con su tipo de venta POS."],
+            ["ventas-caja", "ventas-medios-de-pago", "ventas-precios", "ventas-puntos-de-venta"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-caja", "Caja: sesiones, movimientos y cierre", Modulos.Ventas, "/pos/sesiones",
+            "La caja se abre con su base, recibe movimientos (retiros, ingresos de base, reclasificaciones), se cierra con arqueo por medio de pago y el día de cada punto se consolida en su cierre del día.",
+            [
+                P("Punto de venta → Sesiones de caja", "Su sesión abierta arriba; si no tiene, elija punto y caja libre y cuente la base por denominaciones. Una caja tiene una sola sesión abierta y un cajero una sola.", "/pos/sesiones", "Abrir Sesiones"),
+                P("Movimientos de caja", "Retiro parcial a caja fuerte, traslado a otra caja, retiro para consignar, ingreso de base o reclasificación de un pago entre medios (Visa a Mastercard sin tocar la venta). Si su política lo pide quedan en aprobación. Cada uno tiene su comprobante con firmas.", "/pos/movimientos-de-caja", "Abrir Movimientos"),
+                P("Cerrar la caja", "Cada medio se cuenta como dice su forma de arqueo: el efectivo por denominaciones, las tarjetas por el lote de cada datáfono, los que se cotejan por referencia marcándolas. Con arqueo ciego no se ve lo esperado. Una diferencia fuera de la tolerancia pide motivo; el retiro de cierre lleva el efectivo a donde se diga."),
+                P("Cierre del día", "Con todas las sesiones del día cerradas, consolida por medio, adquirente y datáfono. Reabrirlo pide motivo y el siguiente es otra versión.", "/pos/cierre-del-dia", "Abrir Cierre del día"),
+            ],
+            ["caja", "sesion", "base", "arqueo", "denominaciones", "datafono", "lote", "retiro", "caja fuerte", "cierre del dia", "sobrante", "faltante"],
+            ["Permisos Inventory.CashSessions.View, .Open y .Close; Inventory.CashMovements.Create y .Approve; Inventory.DayClose.Execute y .Reopen."],
+            ["ventas-pos", "ventas-medios-de-pago"], ["/pos/sesiones/{Id}", "/pos/sesiones/{Id}/cierre"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-medios-de-pago", "Medios de pago", Modulos.Maestros, "/maestros/medios-de-pago",
+            "El catálogo de cómo se paga: efectivo, tarjetas, transferencias, bonos, créditos… con su forma de captura, su arqueo, su tolerancia y dónde se ofrece cada uno. También las franquicias, los adquirentes, los datáfonos de cobro y las denominaciones del efectivo.",
+            [
+                P("Maestros → Medios de pago", "Pestañas Medios, Franquicias, Adquirentes, Datáfonos de cobro y Denominaciones.", "/maestros/medios-de-pago", "Abrir Medios de pago"),
+                P("Un medio", "Código, clase, tecla rápida del POS, código DIAN; si pide referencia y cuál (el número del bono, con referencia única, no se puede usar dos veces); si da vueltas o admite pago parcial; cómo se arquea y con qué tolerancia; la comisión esperada; en los créditos, plazo, cuotas y periodicidad."),
+                P("Dónde se ofrece", "En todos los puntos, canales y tipos de venta, o sólo en los elegidos. Los créditos sólo aparecen con un cliente identificado y a quien tenga el permiso de vender a crédito."),
+                P("Cambios", "Editar un medio pide motivo y queda en su historia. Plantilla 11 para cargarlos en bloque."),
+            ],
+            ["medios de pago", "tarjeta", "franquicia", "adquirente", "datafono", "denominaciones", "bono", "credito", "tolerancia", "plantilla 11"],
+            ["Permiso Core.PaymentMeans.View; para cambiar, Core.PaymentMeans.Manage."],
+            ["ventas-pos", "ventas-caja"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-puntos-de-venta", "Puntos de venta y cajas", Modulos.Ventas, "/ventas/puntos-de-venta",
+            "Cada punto es de una sucursal, vende por un canal y tiene su bodega por defecto; dice si usa el POS o cobra en oficina. Sus cajas tienen bodega, datáfono propuesto, formato de impresión y los tipos de documento de sus seis roles.",
+            [
+                P("Ventas → Puntos de venta", "La lista con sus cajas y la sesión abierta de cada una.", "/ventas/puntos-de-venta", "Abrir Puntos de venta"),
+                P("Nueva caja", "Código, nombre, bodega de la sucursal del punto, datáfono por defecto, tirilla de 58 u 80 mm o carta, copias y el tipo de cada rol: venta POS, factura a pedido del comprador, nota de ajuste POS, nota crédito de factura y los dos de contingencia."),
+                P("Plantilla 10", "Carga puntos y cajas en bloque."),
+            ],
+            ["punto de venta", "caja", "tirilla", "roles", "datafono", "plantilla 10"],
+            ["Permiso Inventory.PointsOfSale.View; para cambiar, Inventory.PointsOfSale.Manage."],
+            ["ventas-pos", "ventas-caja"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-precios", "Listas de precios y topes de descuento", Modulos.Ventas, "/ventas/listas-de-precios",
+            "El precio de venta sale de la lista más específica vigente para el cliente, su segmento, el canal y la sucursal; sin ninguna, de la general. Cada rol tiene su descuento máximo por línea y por total.",
+            [
+                P("Ventas → Listas de precios", "Cada lista tiene ámbito (vacío es la general) y vigencia; el ámbito, el código y si incluye impuestos no cambian.", "/ventas/listas-de-precios", "Abrir Listas"),
+                P("Precios de una lista", "Se agregan o cambian por producto y unidad y se guardan juntos con un motivo. Abajo, «Consultar el precio que gana» dice el precio, la lista que ganó y las candidatas."),
+                P("Topes de descuento", "Por rol, en porcentaje de la línea y del total, con vigencia. A quien tiene varios roles le aplica el mayor; sobre su tope, el descuento pide aprobación.", "/ventas/topes-de-descuento", "Abrir Topes"),
+                P("Plantillas 12 y 13", "Listas con sus precios y topes en bloque."),
+            ],
+            ["precios", "lista de precios", "descuento", "tope", "segmento", "canal", "plantilla 12", "plantilla 13"],
+            ["Permiso Inventory.Prices.View; para cambiar listas, Inventory.Prices.Manage; topes, Inventory.DiscountCaps.Manage."],
+            ["ventas-pos", "ventas-oficina"], ["/ventas/listas-de-precios/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-oficina", "Ventas de oficina: facturas, notas y entrega", Modulos.Ventas, "/ventas/documentos",
+            "La consulta de las ventas y sus notas, la factura de oficina con pagos múltiples, la nota crédito sobre una venta confirmada, la entrega de la tirilla o la carta y la reimpresión con «COPIA».",
+            [
+                P("Ventas → Documentos de venta", "Filtros por clase, estado, fechas, cliente, número y pendientes de entrega.", "/ventas/documentos", "Abrir Documentos"),
+                P("Nueva factura", "Tipo, bodega, cliente, vendedor y productos; el precio sale de la lista que gana. Guardar trae el total; después se registran los pagos (los que se arquean van a su sesión de caja) y se confirma.", "/ventas/facturas/nueva", "Nueva factura"),
+                P("Nota crédito", "Desde la venta confirmada («Nota crédito»): por cantidad (con devolución a una bodega) o por valor, o la anulación total, con los reintegros por medio de pago."),
+                P("Entregar y reimprimir", "La primera entrega sale sin marca (tirilla, carta en PDF o por correo); las siguientes son reimpresiones con «COPIA», auditadas."),
+                P("Anular", "Crea el documento contrario con su propia fecha (Inventory.Sales.Void)."),
+            ],
+            ["factura", "venta", "nota credito", "devolucion", "reintegro", "entregar", "reimprimir", "copia"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm."],
+            ["ventas-pos", "ventas-precios", "ventas-informes"], ["/ventas/documentos/{Id}", "/ventas/notas-credito/nueva"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-informes", "Informes de ventas", Modulos.Ventas, "/ventas/informes",
+            "Ventas por sesión, por caja y por medio de pago, la sesión de caja, el cierre del día, los pagos con tarjeta, los movimientos de caja, las diferencias de arqueo, los bonos redimidos, las aprobaciones de descuento y los indicios de deterioro.",
+            [
+                P("Ventas → Informes de ventas", "Elija el informe, el rango y el punto; los filtros propios de cada informe aparecen solos.", "/ventas/informes", "Abrir Informes"),
+                P("Exportar", "Excel, PDF o Word con Inventory.Reports.Export; los que traen datos de clientes piden además Inventory.Reports.ExportPersonalData."),
+            ],
+            ["informes", "ventas", "caja", "arqueo", "tarjetas", "bonos", "deterioro", "exportar"],
+            ["Permiso Inventory.Reports.View."],
+            ["ventas-oficina", "ventas-caja"], [], TipoDeTema.Proceso));
+
         // -------------------------------------------------------------------- Nómina --
         t.Add(Proceso("empleados", "Empleados", Modulos.Nomina, "/nomina/empleados",
             "Las personas vinculadas laboralmente: contrato, cargo, salario, afiliaciones (EPS, ARL, pensión, cesantías) y cuenta de pago.",

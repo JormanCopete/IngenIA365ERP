@@ -1796,6 +1796,32 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     notas y movimientos responden con el detalle de la consulta (`SalesDocumentDto`, `CashMovementDto`) y, si ésta falla, con lo que devolvió
     el guardado; `deliver` y `reprint` devuelven la carta como `application/pdf` y la tirilla como JSON; el `PUT` de un medio lee el
     `PaymentMeansInput` y el `reason` del mismo cuerpo.
+- **I3, Shared web y app (T633–T645, T561) (nuevo)**: clientes tipados `Shared/Services/Core/MediosDePagoClient` (medios, franquicias,
+    adquirentes, datáfonos, denominaciones y la disponibilidad de `/api/inventory/payment-means/{id}/availability`) y
+    `Shared/Services/Ventas/VentasClient` con parciales `.Pos` (puntos, cajas, la venta del POS y el aprobador presente: `presence-challenge` y
+    `decide` con `InPersonPasskey`/`InPersonTotp`), `.Caja`, `.Precios` y `.Documentos` (la entrega devuelve `EntregaDeVentaDto` con la tirilla o
+    el PDF en `Archivo`), sobre `EnvioDeVentas` (el envío común: sin sesión no sale nada, sin `Authorization` propia, `Idempotency-Key` de la
+    operación de pantalla); DTO espejo en `VentasDtos.{Pos,Caja,Precios,Documentos}` y `MediosDePagoDtos` (enums `int` al leer, nombre al
+    mandar). `TextosDeVentas` (etiquetas y nombres de `PaymentMeansClass`, `CardKind`, `PaymentReferenceKind`, `CashCountMethod`,
+    `CashDenominationKind`, `CashRegisterDocumentRole`, `CashRegisterPrintFormat`, `CashSessionStatus`, `CashMovementKind`,
+    `CashMovementDestination`, `CashDifferenceTreatment`, `DayCloseStatus`, `PaymentDirection`, `CreditOrigin`, `VoucherRedemptionStatus`;
+    constantes `GrupoDeVentas`, `GrupoDeCaja`, `ClasesDeVenta`, `ClasesDeNota`), fijado por `TextosDeVentasTests` (Architecture). Modelos
+    puros: `LecturaDelPos` («3*» multiplica; el multiplicador solo espera la lectura siguiente), `CobroDelPos`/`PagoEnCobro` (falta, sobra,
+    vueltas; la tecla del medio agrega un pago por lo que falta; de la tarjeta sólo `Last4` de cuatro dígitos), `HtmlDeTirilla` (la tirilla
+    en HTML a 58/80 mm; la carta a 190), `MediosDeOficina` (los medios del panel de cobro en oficina desde el catálogo de Core) y
+    `VistasDeVentas` (las once vistas de `/ventas/informes`). Impresión: `Shared/Services/IImpresionDeDocumentos` con
+    `ImpresionEnElNavegador` (`wwwroot/js/pos.js`, iframe oculto) y `App/Services/ImpresionNativa` (MAUI: la tirilla a la hoja de compartir,
+    porque el WebView de Android no admite `window.print`). `pos.js` es el global `window.ingeniaPos` (`montar`, `desmontar`, `reservar` las
+    teclas rápidas F de los medios mientras se cobra, `enfocar`, `imprimir`, `leerCaja`/`guardarCaja` con try/catch). Layout
+    `Shared/Layout/PosLayout` (sin barra lateral, con `AvisoDeVencimientoDeSesion` y `RegistroDeAccesos`); componentes
+    `Shared/Components/Pos/{LineasDeVenta, PanelDeCobro, AtajosDelPos, ClienteDelPos, AprobacionEnCaja, TirillaDeVenta, ConteoPorDenominaciones,
+    LotesDeDatafono}`; pantallas `/maestros/medios-de-pago`, `/ventas/puntos-de-venta`, `/ventas/listas-de-precios` (+ `/{id}`),
+    `/ventas/topes-de-descuento`, `/pos` (con `PosLayout`), `/pos/sesiones` (+ `/{id}`, `/{id}/cierre`), `/pos/movimientos-de-caja`,
+    `/pos/cierre-del-dia`, `/ventas/documentos` (+ `/{id}`), `/ventas/facturas/nueva` (`?documento=` edita el borrador),
+    `/ventas/notas-credito/nueva` (`?origen=` o `?documento=`) y `/ventas/informes`. «Pos» entra a `ModulosMigrados`. Menú: grupo
+    **Punto de venta** y enlaces de I3 en **Ventas** y **Maestros Core**; «Vender en el POS» se oculta si la sesión abierta del usuario es de un
+    punto sin POS (FR-058). `DestinoDeDocumentoDeInventario` abre las ventas y notas de I3 en `/ventas/documentos/{id}`. Siete temas de ayuda
+    `ventas-*` en `ManualCatalogo`.
 
 ### 2.17 Códigos de error principales (familias)
 

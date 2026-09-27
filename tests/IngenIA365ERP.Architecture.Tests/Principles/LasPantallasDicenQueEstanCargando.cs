@@ -24,7 +24,7 @@ public class LasPantallasDicenQueEstanCargando
     /// de documento); «Ventas» entra con Canales (US1, T239); «Compras» y «Pos» los agrega la historia que crea la primera
     /// pantalla de cada carpeta.
     /// US9 (T358): «Compras» entra con sus pantallas de I1 (recepciones, compra directa, facturas, notas y devoluciones).
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras"];
+    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos"];
 
     private static IEnumerable<string> PantallasMigradas()
     {

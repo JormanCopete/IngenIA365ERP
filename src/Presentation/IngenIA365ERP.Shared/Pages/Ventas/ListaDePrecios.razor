@@ -1,0 +1,290 @@
+@page "/ventas/listas-de-precios/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Lista de precios - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T638; FR-053; contracts/api.md §19.1–§19.2): una lista de precios con sus precios por producto y unidad, paginados
+   y filtrables; los cambios se acumulan y se guardan juntos con un motivo (cada uno queda en la historia). Abajo, la consulta del precio
+   resuelto: para un producto, cliente, canal, sucursal y fecha, el precio que ganaría, la lista que ganó y las candidatas. *@
+<PermissionGate Required="Inventory.Prices.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_lista is null ? "Lista de precios" : $"{_lista.Code} · {_lista.Name}")</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/ventas/listas-de-precios">Volver a las listas</a>
+            @if (_lista is not null)
+            {
+                <PermissionGate Required="Inventory.Prices.Manage">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@AbrirCabecera">Editar lista</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_lista is { } l)
+        {
+            <div class="info-card">
+                <div>@(l.IncludesTaxes ? "El precio incluye impuestos." : "El precio es antes de impuestos.") Vigente desde @l.ValidFrom.ToString("dd/MM/yyyy")@(l.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : ""). @(l.IsActive ? "Activa." : "Inactiva.")</div>
+                <div class="texto-tenue">Especificidad @l.Specificity · @l.ItemCount precio(s)</div>
+            </div>
+
+            <PermissionGate Required="Inventory.Prices.Manage">
+                <div class="info-card">
+                    <div class="form-grid">
+                        <SelectorDeProducto Etiqueta="Agregar o cambiar el precio de un producto" Elegido="@ElegirAsync" />
+                        @if (_nuevo is { } n)
+                        {
+                            <label class="campo">@n.Producto (@n.Unidad) <input class="e-input numero" type="number" min="0" step="any" @bind="n.Precio" /></label>
+                            <SfButton CssClass="e-outline" OnClick="@AgregarPendiente">Agregar al cambio</SfButton>
+                        }
+                    </div>
+                    @if (_pendientes.Count > 0 || _retirar.Count > 0)
+                    {
+                        <p>Cambios sin guardar: @_pendientes.Count precio(s) y @_retirar.Count producto(s) que salen.</p>
+                        <div class="form-grid">
+                            <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                            <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarPreciosAsync">Guardar precios</SfButton>
+                            <SfButton CssClass="e-flat" OnClick="@Deshacer">Deshacer</SfButton>
+                        </div>
+                    }
+                </div>
+            </PermissionGate>
+
+            <div class="toolbar">
+                <label class="campo">Buscar producto <input class="e-input" @bind="_buscar" @bind:after="BuscarAsync" /></label>
+            </div>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Producto</th><th>Unidad</th><th class="numero">Precio</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _items)
+                        {
+                            var item = i;
+                            var pendiente = _pendientes.FirstOrDefault(p => p.ProductoId == i.ProductPublicId && p.UnidadId == i.UnitPublicId);
+                            <tr class="@(_retirar.Contains(i.ProductPublicId) ? "texto-tenue" : null)">
+                                <td>@i.ProductCode · @i.ProductName</td><td>@i.UnitCode</td>
+                                <td class="numero">@i.Price.ToString("N2")@(pendiente is not null ? $" → {pendiente.Precio:N2}" : "")</td>
+                                <td>
+                                    <PermissionGate Required="Inventory.Prices.Manage">
+                                        <SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Cambiar el precio" OnClick="@(() => Cambiar(item))" />
+                                        <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Sacar de la lista" OnClick="@(() => Retirar(item.ProductPublicId))" />
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina · @_total precio(s)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <div class="info-card">
+        <h4>Consultar el precio que gana</h4>
+        <div class="form-grid">
+            <SelectorDeProducto Etiqueta="Producto" Elegido="@ElegirParaConsultar" />
+            <label class="campo campo-ancho">Cliente <PersonSearchPicker @bind-Selected="_clienteConsulta" ShowHelpText="false" Compacto="true" /></label>
+            <label class="campo">Fecha <input type="date" class="e-input" value="@(_fechaConsulta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fechaConsulta = Fecha(e.Value))" /></label>
+            <SfButton CssClass="e-primary" Disabled="@(_productoConsulta is null || _cargaConsulta.Activa)" OnClick="@ConsultarAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaConsulta.Activa" Compacto="true">
+            @if (_resuelto is { } r)
+            {
+                <p><b>@r.Price.ToString("N2")</b> @(r.IncludesTaxes ? "con impuestos" : "antes de impuestos") · lista @r.PriceList.Code (@r.PriceList.Name)@(r.PriceList.MatchedDimensions.Count > 0 ? $" por {string.Join(", ", r.PriceList.MatchedDimensions)}" : "")@(r.FallbackUsed ? " · se usó la lista general" : "")</p>
+                @if (r.Candidates.Count > 0)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Candidata</th><th>Coincide por</th><th>Tiene el producto</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in r.Candidates) { <tr><td>@c.Code</td><td>@string.Join(", ", c.MatchedDimensions)</td><td>@(c.HasProduct ? "Sí" : "No")</td></tr> }
+                        </tbody>
+                    </table>
+                }
+            }
+        </IndicadorDeCarga>
+    </div>
+</div>
+
+<SfDialog @bind-Visible="_mostrarCabecera" Header="Editar la lista" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="100" /></label>
+                    <label class="campo">Vigente hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = Fecha(e.Value))" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_activa" /> Activa</label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="500" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoCabecera" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarCabeceraAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCabecera = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class PrecioPendiente
+    {
+        public Guid ProductoId { get; init; }
+        public string Producto { get; init; } = "";
+        public Guid UnidadId { get; init; }
+        public string Unidad { get; init; } = "";
+        public decimal Precio { get; set; }
+    }
+
+    private const int TamanoDePagina = 50;
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaConsulta = new();
+    private readonly ClaveDeOperacion _clavePrecios = new(), _claveCabecera = new();
+    private ListaDePreciosDto? _lista;
+    private List<PrecioDeListaDto> _items = [];
+    private readonly List<PrecioPendiente> _pendientes = [];
+    private readonly HashSet<Guid> _retirar = [];
+    private PrecioPendiente? _nuevo;
+    private string? _buscar, _motivo;
+    private int _pagina = 1;
+    private long _total;
+
+    private bool _mostrarCabecera, _activa;
+    private string? _nombre, _notas, _motivoCabecera;
+    private DateOnly? _hasta;
+
+    private Guid? _productoConsulta;
+    private PersonSearchPicker.PersonSearchItem? _clienteConsulta;
+    private DateOnly? _fechaConsulta = DateOnly.FromDateTime(DateTime.Today);
+    private PrecioResueltoDto? _resuelto;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ObtenerListaAsync(Id, _buscar, _pagina, TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la lista."); return; }
+        _lista = r.Value.List;
+        _items = [.. r.Value.Items];
+        _total = r.Value.TotalItems;
+    }
+
+    private async Task<PrecioPendiente?> DesdeAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return null; }
+        var p = producto.Value;
+        var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        return new PrecioPendiente
+        {
+            ProductoId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnidadId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+        };
+    }
+
+    private async Task ElegirAsync(ProductoElegido elegido) => _nuevo = await DesdeAsync(elegido);
+
+    private void AgregarPendiente()
+    {
+        if (_nuevo is null) return;
+        _pendientes.RemoveAll(p => p.ProductoId == _nuevo.ProductoId && p.UnidadId == _nuevo.UnidadId);
+        _pendientes.Add(_nuevo);
+        _retirar.Remove(_nuevo.ProductoId);
+        _nuevo = null;
+    }
+
+    private void Cambiar(PrecioDeListaDto i) =>
+        _nuevo = new PrecioPendiente { ProductoId = i.ProductPublicId, Producto = $"{i.ProductCode} · {i.ProductName}", UnidadId = i.UnitPublicId, Unidad = i.UnitCode, Precio = i.Price };
+
+    private void Retirar(Guid producto)
+    {
+        if (!_retirar.Add(producto)) _retirar.Remove(producto);
+        _pendientes.RemoveAll(p => p.ProductoId == producto);
+    }
+
+    private void Deshacer()
+    {
+        _pendientes.Clear();
+        _retirar.Clear();
+        _nuevo = null;
+    }
+
+    private async Task GuardarPreciosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo del cambio de precios."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.FijarPreciosAsync(Id, new PreciosDeListaRequest(
+            _pendientes.Select(p => new PrecioDeListaRequest(p.ProductoId, p.UnidadId, p.Precio)).ToList(),
+            _retirar.Count > 0 ? [.. _retirar] : null, _motivo.Trim()), _clavePrecios);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar los precios."); return; }
+        await Notification.SuccessAsync($"{r.Value.Created} nuevo(s), {r.Value.Updated} cambiado(s), {r.Value.Removed} retirado(s).");
+        Deshacer();
+        _motivo = null;
+        await CargarAsync();
+    }
+
+    private void AbrirCabecera()
+    {
+        if (_lista is null) return;
+        _nombre = _lista.Name; _hasta = _lista.ValidTo; _activa = _lista.IsActive; _notas = null; _motivoCabecera = null;
+        _mostrarCabecera = true;
+    }
+
+    private async Task GuardarCabeceraAsync()
+    {
+        if (_lista is null || string.IsNullOrWhiteSpace(_nombre) || string.IsNullOrWhiteSpace(_motivoCabecera))
+        {
+            await Notification.WarningAsync("El nombre y el motivo son obligatorios.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.GuardarListaAsync(Id, new ListaDePreciosRequest(null, _nombre.Trim(), _lista.IncludesTaxes, null, null, _hasta, _activa, _motivoCabecera.Trim(),
+            string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _claveCabecera);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la lista."); return; }
+        _mostrarCabecera = false;
+        await CargarAsync();
+    }
+
+    private void ElegirParaConsultar(ProductoElegido elegido)
+    {
+        _productoConsulta = elegido.Producto.PublicId;
+        _resuelto = null;
+    }
+
+    private async Task ConsultarAsync()
+    {
+        if (_productoConsulta is not { } producto) return;
+        using var carga = _cargaConsulta.Iniciar();
+        var r = await Ventas.ResolverPrecioAsync(producto, persona: _clienteConsulta?.PublicId, fecha: _fechaConsulta);
+        if (!r.IsSuccess) { _resuelto = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo resolver el precio."); return; }
+        _resuelto = r.Value;
+    }
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

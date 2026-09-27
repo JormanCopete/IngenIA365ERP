@@ -1,0 +1,333 @@
+@page "/ventas/puntos-de-venta"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject MediosDePagoClient Medios
+@inject INotificationService Notification
+
+<PageTitle>Puntos de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T637; FR-058; contracts/api.md §20.1, plantilla 10): los puntos de venta y sus cajas. El punto es de una sucursal
+   (no cambia), vende por un canal, tiene bodega por defecto y dice si usa el POS (sin POS cobra en oficina). Cada caja tiene su bodega,
+   el datáfono que se propone al cobrar, el formato de impresión y los tipos de documento de sus seis roles: venta POS, factura a pedido
+   del comprador, nota de ajuste POS, nota crédito de factura y los dos de contingencia. Se ve la sesión abierta de cada caja. *@
+<PermissionGate Required="Inventory.PointsOfSale.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Puntos de venta</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <label class="campo-check"><input type="checkbox" @bind="_inactivos" @bind:after="CargarAsync" /> Ver inactivos</label>
+            <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@NuevoPunto">Nuevo punto</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla 10</SfButton>
+        </div>
+    </div>
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Plantilla 10 · Puntos de venta y cajas</h4>
+            <ImportarPlantilla RutaBase="@VentasClient.Rutas.Puntos" PermisoDeDescarga="Inventory.PointsOfSale.View"
+                               PermisoDeImportacion="Inventory.PointsOfSale.Manage" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _puntos.Count == 0)
+        {
+            <p class="texto-tenue">No hay puntos de venta. Cree el primero o cárguelos con la plantilla 10.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Sucursal</th><th>Canal</th><th>POS</th><th>Bodega por defecto</th><th class="numero">Cajas</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _puntos)
+                    {
+                        var punto = p;
+                        <tr class="@(_elegido == p.PointOfSalePublicId ? "pos-linea-elegida" : null)">
+                            <td>@p.Code</td><td>@p.Name</td><td>@Sucursal(p.BranchPublicId)</td><td>@Canal(p.SalesChannelPublicId)</td>
+                            <td>@(p.PosEnabled ? "Sí" : "Cobra en oficina")</td><td>@Bodega(p.DefaultWarehousePublicId)</td>
+                            <td class="numero">@p.CashRegisterCount</td><td>@(p.IsActive ? "Activo" : "Inactivo")</td>
+                            <td>
+                                <SfButton CssClass="e-flat" OnClick="@(() => VerCajasAsync(punto.PointOfSalePublicId))">Cajas</SfButton>
+                                <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                                    <SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarPunto(punto))" />
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_elegido is { } puntoElegido)
+    {
+        <div class="info-card">
+            <div class="page-header">
+                <h4>Cajas de @(_puntos.FirstOrDefault(x => x.PointOfSalePublicId == puntoElegido)?.Name)</h4>
+                <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@NuevaCaja">Nueva caja</SfButton>
+                </PermissionGate>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaCajas.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Bodega</th><th>Datáfono</th><th>Impresión</th><th>Tipos por rol</th><th>Sesión abierta</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _cajas)
+                            {
+                                var caja = c;
+                                <tr>
+                                    <td>@c.Code</td><td>@c.Name</td><td>@c.WarehouseCode</td><td>@Datafono(c.DefaultCardTerminalPublicId)</td>
+                                    <td>@TextosDeVentas.FormatoDeImpresion(c.PrintFormat) · @c.PrintCopies copia(s)</td>
+                                    <td>@string.Join(" · ", c.DocumentTypes.OrderBy(t => t.Role).Select(t => $"{TextosDeVentas.RolDeCaja(t.Role)}: {t.DocumentTypeCode}"))</td>
+                                    <td>@(c.OpenSession is { } s ? $"{s.CashierName} desde {s.OpenedAt.ToLocalTime():dd/MM HH:mm}" : "Sin sesión")</td>
+                                    <td>@(c.IsActive ? "Activa" : "Inactiva")</td>
+                                    <td><PermissionGate Required="Inventory.PointsOfSale.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarCaja(caja))" /></PermissionGate></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarPunto" Header="@(_puntoId is null ? "Nuevo punto de venta" : "Editar punto de venta")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="puntos-de-venta" @bind-Value="_codigo" Obligatorio="true" Readonly="@(_puntoId is not null)" EditandoPublicId="@_puntoId" />
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="100" /></label>
+                    <label class="campo">Sucursal *
+                        <select class="e-input" disabled="@(_puntoId is not null)" value="@(_sucursal?.ToString() ?? "")" @onchange="@(e => _sucursal = Id(e.Value))">
+                            <option value="">Elija…</option>
+                            @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Code · @s.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Canal *
+                        <select class="e-input" value="@(_canal?.ToString() ?? "")" @onchange="@(e => _canal = Id(e.Value))">
+                            <option value="">Elija…</option>
+                            @foreach (var c in _canales.Where(x => x.IsActive)) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Bodega por defecto *
+                        <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Id(e.Value))">
+                            <option value="">Elija…</option>
+                            @foreach (var b in BodegasDe(_sucursal)) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_posHabilitado" /> Vende en el POS</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
+                    <label class="campo campo-ancho">Dirección <input class="e-input" @bind="_direccion" maxlength="200" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarPuntoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPunto = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCaja" Header="@(_cajaId is null ? "Nueva caja" : "Editar caja")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="cajas" @bind-Value="_codigoCaja" Obligatorio="true" Readonly="@(_cajaId is not null)" EditandoPublicId="@_cajaId" />
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombreCaja" maxlength="100" /></label>
+                    <label class="campo">Bodega *
+                        <select class="e-input" value="@(_bodegaCaja?.ToString() ?? "")" @onchange="@(e => _bodegaCaja = Id(e.Value))">
+                            <option value="">Elija…</option>
+                            @foreach (var b in BodegasDe(_puntos.FirstOrDefault(x => x.PointOfSalePublicId == _elegido)?.BranchPublicId)) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Datáfono por defecto
+                        <select class="e-input" value="@(_datafonoCaja?.ToString() ?? "")" @onchange="@(e => _datafonoCaja = Id(e.Value))">
+                            <option value="">Ninguno</option>
+                            @foreach (var d in _datafonos.Where(x => x.IsActive)) { <option value="@d.CardTerminalPublicId">@d.Code · @d.CardAcquirerCode</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Formato de impresión
+                        <select class="e-input" value="@_formato" @onchange="@(e => _formato = int.TryParse(e.Value?.ToString(), out var f) ? f : 80)">
+                            @foreach (var (v, t) in TextosDeVentas.FormatosDeImpresion) { <option value="@v">@t</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Copias <input class="e-input numero" type="number" min="1" max="5" @bind="_copias" /></label>
+                    <label class="campo">Placa de la caja (DIAN) <input class="e-input" @bind="_placa" maxlength="30" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_activaCaja" /> Activa</label>
+                </div>
+                <h4>Tipos de documento por rol</h4>
+                <div class="form-grid">
+                    @foreach (var (rol, texto) in TextosDeVentas.RolesDeCaja)
+                    {
+                        var r = rol;
+                        <label class="campo">@texto
+                            <select class="e-input" value="@(_tiposPorRol.TryGetValue(r, out var t) ? t.ToString() : "")" @onchange="@(e => FijarRol(r, e.Value))">
+                                <option value="">Sin tipo</option>
+                                @foreach (var tipo in _tiposDeVenta) { <option value="@tipo.PublicId">@tipo.Code · @tipo.Name</option> }
+                            </select>
+                        </label>
+                    }
+                </div>
+                <p class="texto-tenue">La venta POS es obligatoria para vender en el POS; la clase del tipo tiene que servir para su rol y su bodega ser de la sucursal del punto.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarCajaAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCaja = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaCajas = new(), _guardado = new();
+    private readonly ClaveDeOperacion _clavePunto = new(), _claveCaja = new();
+    private List<PuntoDeVentaDto> _puntos = [];
+    private List<CajaDto> _cajas = [];
+    private List<SucursalContableDto> _sucursales = [];
+    private List<CanalDeVentaDto> _canales = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<DatafonoDto> _datafonos = [];
+    private List<TipoDeDocumentoDto> _tiposDeVenta = [];
+    private Guid? _elegido;
+    private bool _inactivos, _mostrarPlantilla, _mostrarPunto, _mostrarCaja;
+
+    private Guid? _puntoId, _sucursal, _canal, _bodega;
+    private string? _codigo, _nombre, _direccion;
+    private bool _posHabilitado = true, _activo = true;
+
+    private Guid? _cajaId, _bodegaCaja, _datafonoCaja;
+    private string? _codigoCaja, _nombreCaja, _placa;
+    private int _formato = 80;
+    private byte _copias = 1;
+    private bool _activaCaja = true;
+    private Dictionary<int, Guid> _tiposPorRol = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var sucursales = await Inventario.ListarSucursalesAsync();
+        _sucursales = sucursales.IsSuccess ? [.. sucursales.Value ?? []] : [];
+        var canales = await Inventario.ListarCanalesAsync();
+        _canales = canales.IsSuccess ? [.. canales.Value ?? []] : [];
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
+        var datafonos = await Medios.DatafonosAsync();
+        _datafonos = datafonos.IsSuccess ? [.. datafonos.Value ?? []] : [];
+        var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+        _tiposDeVenta = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive)] : [];
+        await CargarPuntosAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        await CargarPuntosAsync();
+    }
+
+    private async Task CargarPuntosAsync()
+    {
+        var r = await Ventas.ListarPuntosAsync(activos: _inactivos ? null : true);
+        if (!r.IsSuccess) { _puntos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los puntos de venta."); return; }
+        _puntos = [.. r.Value ?? []];
+    }
+
+    private async Task VerCajasAsync(Guid punto)
+    {
+        _elegido = punto;
+        using var carga = _cargaCajas.Iniciar();
+        var r = await Ventas.ListarCajasAsync(punto);
+        if (!r.IsSuccess) { _cajas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
+        _cajas = [.. r.Value ?? []];
+    }
+
+    private IEnumerable<BodegaDto> BodegasDe(Guid? sucursal) => sucursal is { } s ? _bodegas.Where(b => b.Branch.PublicId == s) : _bodegas;
+
+    private string Sucursal(Guid id) => _sucursales.FirstOrDefault(s => s.PublicId == id)?.Name ?? "—";
+    private string Canal(Guid id) => _canales.FirstOrDefault(c => c.PublicId == id)?.Name ?? "—";
+    private string Bodega(Guid id) => _bodegas.FirstOrDefault(b => b.PublicId == id)?.Code ?? "—";
+    private string Datafono(Guid? id) => id is { } d ? _datafonos.FirstOrDefault(x => x.CardTerminalPublicId == d)?.Code ?? "—" : "—";
+
+    private void NuevoPunto()
+    {
+        _puntoId = null; _codigo = null; _nombre = null; _direccion = null; _sucursal = _sucursales.FirstOrDefault()?.PublicId;
+        _canal = _canales.FirstOrDefault(c => c.IsActive)?.PublicId; _bodega = BodegasDe(_sucursal).FirstOrDefault()?.PublicId; _posHabilitado = true; _activo = true;
+        _mostrarPunto = true;
+    }
+
+    private void EditarPunto(PuntoDeVentaDto p)
+    {
+        _puntoId = p.PointOfSalePublicId; _codigo = p.Code; _nombre = p.Name; _direccion = p.Address; _sucursal = p.BranchPublicId; _canal = p.SalesChannelPublicId;
+        _bodega = p.DefaultWarehousePublicId; _posHabilitado = p.PosEnabled; _activo = p.IsActive;
+        _mostrarPunto = true;
+    }
+
+    private async Task GuardarPuntoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre) || _canal is null || _bodega is null || (_puntoId is null && (_sucursal is null || string.IsNullOrWhiteSpace(_codigo))))
+        {
+            await Notification.WarningAsync("Complete código, nombre, sucursal, canal y bodega.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.GuardarPuntoAsync(_puntoId, new PuntoDeVentaRequest(_codigo, _nombre.Trim(), _sucursal, _canal.Value, _posHabilitado, _bodega.Value, _activo,
+            string.IsNullOrWhiteSpace(_direccion) ? null : _direccion.Trim()), _clavePunto);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el punto."); return; }
+        _mostrarPunto = false;
+        await Notification.SuccessAsync("Punto de venta guardado.");
+        await CargarPuntosAsync();
+    }
+
+    private void NuevaCaja()
+    {
+        var punto = _puntos.FirstOrDefault(p => p.PointOfSalePublicId == _elegido);
+        _cajaId = null; _codigoCaja = null; _nombreCaja = null; _placa = null; _bodegaCaja = punto?.DefaultWarehousePublicId; _datafonoCaja = null;
+        _formato = 80; _copias = 1; _activaCaja = true; _tiposPorRol = [];
+        _mostrarCaja = true;
+    }
+
+    private void EditarCaja(CajaDto c)
+    {
+        _cajaId = c.CashRegisterPublicId; _codigoCaja = c.Code; _nombreCaja = c.Name; _placa = c.DianCashRegisterPlate; _bodegaCaja = c.WarehousePublicId;
+        _datafonoCaja = c.DefaultCardTerminalPublicId; _formato = c.PrintFormat; _copias = c.PrintCopies; _activaCaja = c.IsActive;
+        _tiposPorRol = c.DocumentTypes.ToDictionary(t => t.Role, t => t.DocumentTypePublicId);
+        _mostrarCaja = true;
+    }
+
+    private void FijarRol(int rol, object? valor)
+    {
+        if (Id(valor) is { } tipo) _tiposPorRol[rol] = tipo;
+        else _tiposPorRol.Remove(rol);
+    }
+
+    private async Task GuardarCajaAsync()
+    {
+        if (_elegido is not { } punto || _bodegaCaja is null || string.IsNullOrWhiteSpace(_nombreCaja) || (_cajaId is null && string.IsNullOrWhiteSpace(_codigoCaja)))
+        {
+            await Notification.WarningAsync("Complete código, nombre y bodega de la caja.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var tipos = _tiposPorRol.OrderBy(p => p.Key).Select(p => new TipoDeCajaRequest(TextosDeVentas.NombreDeRolDeCaja(p.Key), p.Value)).ToList();
+        var r = await Ventas.GuardarCajaAsync(punto, _cajaId, new CajaRequest(_codigoCaja, _nombreCaja.Trim(), _bodegaCaja.Value, _datafonoCaja,
+            TextosDeVentas.NombreDeFormato(_formato), tipos, string.IsNullOrWhiteSpace(_placa) ? null : _placa.Trim(), _copias, _activaCaja), _claveCaja);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la caja."); return; }
+        _mostrarCaja = false;
+        await Notification.SuccessAsync("Caja guardada.");
+        await VerCajasAsync(punto);
+        await CargarPuntosAsync();
+    }
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+}

@@ -1,0 +1,46 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+
+@* Feature 012, I3 (T639; FR-059, SC-008): las líneas de la venta en una tabla liviana, sin SfGrid: cientos de lecturas por hora no
+   pueden esperar a una grilla. La línea elegida es la que cambian F3, F7 y Supr; por defecto, la última leída. Marca los descuentos
+   que esperan aprobación y lo que se vende bajo el costo. (nuevo) *@
+<div class="tabla-desplazable">
+    <table class="pos-lineas" aria-label="Líneas de la venta">
+        <thead>
+            <tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th class="numero">Descuento</th><th class="numero">Total</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var l in Lineas.OrderBy(x => x.LineNumber))
+            {
+                var linea = l;
+                <tr class="@Clase(l)" @onclick="@(() => ElegidaChanged.InvokeAsync((Guid?)linea.LinePublicId))">
+                    <td>@l.LineNumber</td>
+                    <td>@l.Product.Code · @l.Product.Name
+                        @if (l.EsperaAprobacion) { <span class="badge">descuento por aprobar</span> }
+                        @if (l.BelowCost) { <span class="badge">bajo el costo</span> }
+                        @if (l.Available is { } d && d < l.QuantityBase) { <span class="badge">existencia @d.ToString("0.##")</span> }
+                    </td>
+                    <td>@l.Unit.Code</td>
+                    <td class="numero">@l.Quantity.ToString("0.####")</td>
+                    <td class="numero">@l.UnitPrice.ToString("N0")@(l.UnitPrice != l.ListPrice ? " *" : "")</td>
+                    <td class="numero">@(l.Descuento > 0m ? l.Descuento.ToString("N0") : "")</td>
+                    <td class="numero">@l.Total.ToString("N0")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<LineaDelPosDto> Lineas { get; set; } = [];
+
+    /// <summary>La línea que cambian F3, F7 y Supr.</summary>
+    [Parameter] public Guid? Elegida { get; set; }
+
+    [Parameter] public EventCallback<Guid?> ElegidaChanged { get; set; }
+
+    /// <summary>La última leída: se resalta.</summary>
+    [Parameter] public Guid? Ultima { get; set; }
+
+    private string? Clase(LineaDelPosDto l) =>
+        l.LinePublicId == Elegida ? "pos-linea-elegida" : l.LinePublicId == Ultima ? "pos-linea-ultima" : null;
+}
