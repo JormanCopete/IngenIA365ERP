@@ -292,7 +292,7 @@ primer día coincide con el archivo; el estado de cuenta de un tercero muestra s
 
 - [x] T118 Actualizar `docs/operaciones/contabilidad-primer-ejercicio.md` (apertura y cierre), `CLAUDE.md` (totales) y `docs/operaciones/estado-y-pendientes.md`; correr `quickstart.md` §1–§3; merge a `develop`, DEV/QA, QA manual `quickstart.md` §5 E2 — **Hecha 2026-09-21** (runbook §7a, contrato §5 y §7, CLAUDE.md, estado P15; `quickstart.md` §1–§3 lo cubren las e2e; merge a develop `857d0e5` y producción `release 0a309f3` el 2026-09-22; QA manual §5 E2 pendiente del dueño)
 
-**Checkpoint E2**: una cooperativa que viene de SOLIDO puede arrancar y cerrar su primer ejercicio.
+**Checkpoint E2**: una cooperativa que viene del sistema anterior puede arrancar y cerrar su primer ejercicio.
 
 ---
 

@@ -93,7 +93,7 @@ public class PayPeriod : AuditableEntity
     [MaxLength(1)]
     public string AdvanceCrossing { get; set; } = string.Empty;
 
-    /// <summary>Largo de la columna legada <c>StatusMessage</c> (SOLIDO): varchar(100).</summary>
+    /// <summary>Largo de la columna legada <c>StatusMessage</c> (del sistema anterior): varchar(100).</summary>
     public const int StatusMessageMaxLength = 100;
 
     /// <summary>

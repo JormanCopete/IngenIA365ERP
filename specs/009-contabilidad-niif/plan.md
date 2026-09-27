@@ -7,7 +7,7 @@ requisitos, 8 decisiones del dueño en Clarifications, sesión 2026-09-14).
 
 ## Summary
 
-Se **reemplaza** el módulo de contabilidad heredado de SOLIDO (33 tablas `ACC_`, libros vacíos en
+Se **reemplaza** el módulo de contabilidad heredado del sistema anterior (33 tablas `ACC_`, libros vacíos en
 los cuatro ambientes) por un núcleo NIIF: catálogos PUC Solidario y Comercial hasta nivel 4 como
 datos (JSON embebido) más importador de catálogo propio; configuración por empresa (catálogo,
 nivel de movimiento 5 o 6, longitudes, grupo NIIF, sucursal principal, cuatro ojos); plan de la

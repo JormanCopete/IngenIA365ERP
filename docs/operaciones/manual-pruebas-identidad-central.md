@@ -92,7 +92,7 @@ $env:MASTER_ADMIN_EMAIL = 'master@ingenia.dev'
 $env:MASTER_ADMIN_PASSWORD = 'Master-Dev-2026-Long-Password'
 ```
 
-> Si el seed legacy ya creó otro admin (`admin@solido.local`) y prefieres
+> Si el seed legacy ya creó otro administrador (el del seed legacy) y prefieres
 > usarlo, ignora esto. El flujo central solo necesita un usuario con
 > `IsGlobalMasterAdmin=true` en `ADM_CentralUsers`.
 

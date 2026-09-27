@@ -726,8 +726,7 @@ public sealed record CuentaDelConjuntoDto(
 ```
 
 Inventario suma su valorizado sobre esos pares (con el tránsito como columna propia); las bodegas no
-activas que comparten cuentas con el conjunto **suman al valorizado del conjunto** con sus cifras de
-SOLIDO a la fecha de corte (FR-090) y se muestran aparte para identificarlas (la diferencia no se les
+activas que comparten cuentas con el conjunto **suman al valorizado del conjunto** con sus cifras del sistema anterior a la fecha de corte (FR-090) y se muestran aparte para identificarlas (la diferencia no se les
 atribuye: precisión aplicada a la spec en FR-081); y explica la diferencia con sus propios mensajes
 pendientes, en lote, rechazados y «no aplica» (FR-081). Con cero mensajes sin procesar, la diferencia
 es cero (SC-005).

@@ -6,7 +6,7 @@
 
 ## Summary
 
-La feature reemplaza el traslado a medias de SOLIDO por un módulo comercial nuevo.
+La feature reemplaza el traslado a medias del sistema anterior por un módulo comercial nuevo.
 
 **Qué construye**:
 - catálogo, bodegas con bodegas de tránsito, kardex inmutable y costeo;
@@ -122,7 +122,7 @@ el POS corre en navegador en modo kiosco o en la app.
 
 | #    | Principio | Estado | Nota |
 |------|-----------|--------|------|
-| I    | Spec-First | PASS | spec → clarify (dueño: fechas, Cartera pendiente, factura electrónica parametrizable, crédito provisional) → medios de pago (pedido del dueño al abrir el plan) → research (R1–R34) → este plan → tasks. La spec ya recibió las precisiones de la investigación: norma DIAN vigente, total a pagar, excepción de arranque, factura después del documento equivalente, conciliación con SOLIDO y 422 por permiso de cuerpo. Las piezas del lado contable quedan especificadas aquí como enmienda de la 009; lo que Cartera construya necesita su propia spec (D-02). |
+| I    | Spec-First | PASS | spec → clarify (dueño: fechas, Cartera pendiente, factura electrónica parametrizable, crédito provisional) → medios de pago (pedido del dueño al abrir el plan) → research (R1–R34) → este plan → tasks. La spec ya recibió las precisiones de la investigación: norma DIAN vigente, total a pagar, excepción de arranque, factura después del documento equivalente, conciliación con el sistema anterior y 422 por permiso de cuerpo. Las piezas del lado contable quedan especificadas aquí como enmienda de la 009; lo que Cartera construya necesita su propia spec (D-02). |
 | II   | Clean Architecture | PASS | Motores puros en Domain (costeo, tributario, precios, caja, aprobaciones, unidades) sin IO. Puertos en Application (`IContabilidadParaInventario`, `IConsultasDeCartera`, `ICanalDeEmisionElectronica`, `IEjecutorEnCooperativa`). El proveedor DIAN vive sólo en el proyecto de infraestructura nuevo: la API lo referencia únicamente como raíz de composición, y una prueba de arquitectura lo fija. |
 | III  | CQRS + MediatR | PASS | Todo comando tiene su validador. Los consumidores de mensajes son comandos sin ruta, ejecutados por `ISender` con todos los comportamientos. `IdempotencyBehavior` entra al pipeline (Validation → Logging → Idempotency → Audit → Reintento → Performance). Los endpoints sólo reenvían. |
 | IV   | Multi-tenancy | PASS | Toda tabla nueva vive en la base de la cooperativa. El despachador, el procesador DIAN y las tareas programadas recorren el directorio y abren cada cooperativa con `IEjecutorEnCooperativa`, con su contexto (base de datos y base de auditoría) fijado. Sin cooperativa resuelta fallan, y hay una guarda contra la base de auditoría global. Los arrendamientos están en la base de cada cooperativa. El servicio central de la 010 sigue sin estado. |
@@ -263,7 +263,7 @@ I3 → I4**, con I4 construida en paralelo sobre el simulador. El ensayo exige I
 
 | Entrega | Contenido | Migración |
 |---|---|---|
-| **I1 · Núcleo y plataforma** | Plantillas primero. Retiro del módulo actual; plataforma completa (T5–T21, T33–T39); catálogo tributario en Core; catálogo, bodegas, kardex, costeo promedio con la excepción de arranque, documentos de inventario, compra directa, traslados, conteos, períodos, saldo inicial, cifras de SOLIDO, vendedores, alcance, alertas, auditoría verificable. | `RetiroDelInventarioHeredado` (destructiva con guarda), `PlataformaParaInventario`, `InventarioComercialNucleo` |
+| **I1 · Núcleo y plataforma** | Plantillas primero. Retiro del módulo actual; plataforma completa (T5–T21, T33–T39); catálogo tributario en Core; catálogo, bodegas, kardex, costeo promedio con la excepción de arranque, documentos de inventario, compra directa, traslados, conteos, períodos, saldo inicial, cifras de referencia, vendedores, alcance, alertas, auditoría verificable. | `RetiroDelInventarioHeredado` (destructiva con guarda), `PlataformaParaInventario`, `InventarioComercialNucleo` |
 | **I2 · Integración contable** | Despachador y lotes; enmienda de la 009 (matriz, consumidor, validación previa, conciliación, aviso de cierre); bandeja; activación de bodegas con cuadre. | `IntegracionContableDeInventario` |
 | **I3 · Ventas y POS** | Medios de pago en Core; puntos, cajas, sesiones, arqueo y cierre por medio; POS; ventas y notas (las electrónicas confirman con I4); comprobante no electrónico; precios y topes; crédito provisional. | `VentasYPuntoDeVenta` |
 | **I4 · Documentos electrónicos** | Proyecto nuevo, simulador y adaptador del proveedor; numeración fiscal, contingencias, casos a, b y c, factura después del documento equivalente; documento soporte; representación gráfica y correo. | `DocumentosElectronicos` |
@@ -295,7 +295,7 @@ Riesgos principales:
 - el tamaño de I1, que carga toda la plataforma;
 - la dependencia de un proveedor tecnológico todavía no elegido;
 - el volumen de documentos del POS ante la DIAN (unos 150.000 al mes);
-- la calidad de los datos que llegan de SOLIDO;
+- la calidad de los datos que llegan del sistema anterior;
 - la migración destructiva en ambientes donde alguien ya haya parametrizado el módulo actual.
 
 ## Re-evaluación de la constitución tras el diseño

@@ -81,7 +81,7 @@ formato Decision / Rationale / Alternatives.
   único sin filtro, así que el reingreso —que la validación ya permitía— reventaba en la base con
   500; se convirtió en índice único filtrado a fichas vivas (migración `UnaSolaFichaVivaPorPersona`,
   reversible, filtro en T-SQL canónico traducido por `ProviderModelConventions`).
-- **Alternatives considered**: reabrir la ficha con `RehireDate` (modelo SOLIDO); dejarlo fuera
+- **Alternatives considered**: reabrir la ficha con `RehireDate` (modelo el sistema anterior); dejarlo fuera
   de alcance (pero la pantalla decide edición/registro por `IsEmployee`, que esta feature
   redefine, así que había que fijarlo).
 

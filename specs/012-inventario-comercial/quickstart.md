@@ -232,7 +232,7 @@ contabilidad (receta: `docs/operaciones/contabilidad-primer-ejercicio.md`):
 
 1. Contabilidad iniciada con el CUIF, sucursales contables S1 y S2, centros de costo y los períodos
    contables de M y M+1 abiertos.
-2. Apertura `AP` con los saldos de las cuentas de inventario **iguales al valorizado de SOLIDO al
+2. Apertura `AP` con los saldos de las cuentas de inventario **iguales al valorizado del sistema anterior al
    corte**, salvo el grupo `ABARROTES`, que se deja **250.000** por debajo a propósito para §4.2.
 3. UVT vigente en Parámetros legales (`PAY_LegalParameters`, código `UVT`). Sin ella, el motor
    tributario falla visible: «No hay UVT vigente al {fecha}; regístrela en Parámetros legales».
@@ -268,7 +268,7 @@ respuesta (`ImportResultDto`) son los de `contracts/plantillas.md` §0.1 (diecis
 impuestos y retenciones (`/api/core/taxes`), grupos contables, unidades, marcas, categorías, productos,
 bodegas y ubicaciones, tipos de documento (prefijo, consecutivo, aprobación, modo de paso y
 granularidad), vendedores. Las de puntos y cajas, medios de pago, listas de precios y topes se
-descargan desde I1 y se **importan** cuando existe I3; las de saldo inicial y cifras de SOLIDO, en I1;
+descargan desde I1 y se **importan** cuando existe I3; las de saldo inicial y cifras de referencia, en I1;
 la de la matriz contable, en I2.
 
 Datos del ensayo que usan los escenarios:
@@ -372,9 +372,9 @@ mensajes y la entrega a Contabilidad queda `Pending` sin consumidor: es lo esper
 3. Las bodegas nacen **no activas**: cualquier documento que no sea su saldo inicial responde
    `Inventory.Warehouse.NotActive`.
 
-### 3.5 Saldo inicial y cifras de SOLIDO (US4-1, US4-4, US4-5, US4-6; FR-089, FR-091; SC-016)
+### 3.5 Saldo inicial y cifras de referencia (US4-1, US4-4, US4-5, US4-6; FR-089, FR-091; SC-016)
 
-1. `/inventario/cifras-solido`: importar las cifras de SOLIDO al corte (fecha, códigos tal como vienen,
+1. `/inventario/cifras-de-referencia`: importar las cifras de referencia al corte (fecha, códigos tal como vienen,
    cantidad y valor) de PRIN, PV1 y PV2 (`ImportLegacyFiguresCommand`).
 2. `/inventario/saldo-inicial`: plantilla de **20.000 líneas** con un producto y una bodega
    inexistentes → no se guarda nada y se listan los dos errores con fila y columna. Corregida: un
@@ -584,7 +584,7 @@ pasada tiene que estar listo en menos de 30 s (SC-017, medición en QA).
 
 1. `/inventario/activacion` › PRIN (`/api/inventory/warehouses/{id}/activation`): por grupo contable y
    conjunto de cuentas mapeadas, el saldo contable al corte, el valorizado de PRIN (módulo nuevo), el
-   de PV1 y PV2 **con sus cifras de SOLIDO** y la diferencia. PV1 y PV2 suman al valorizado del
+   de PV1 y PV2 **con sus cifras de referencia** y la diferencia. PV1 y PV2 suman al valorizado del
    conjunto y se muestran aparte para identificarlas. `ASEO` cuadra; `ABARROTES` difiere en 250.000
    (§2.3). El inventario de PV1 y PV2 no aparece como diferencia.
 2. `bodega.a` intenta activar → 404. Un rol con `Inventory.Warehouses.Activate` y sin
@@ -597,7 +597,7 @@ pasada tiene que estar listo en menos de 30 s (SC-017, medición en QA).
    el saldo contable (US4-5).
 5. **Bodegas activadas en fechas distintas** (FR-089, FR-091; excepción de puesta en marcha, caso
    dorado 17). Después de §5.2, con P4 ya vendido en PV1 en días posteriores a su activación: cargar
-   las cifras de SOLIDO y el saldo inicial de P4 en PV3 (S2, todavía `NotActivated`), con un costo
+   las cifras de referencia y el saldo inicial de P4 en PV3 (S2, todavía `NotActivated`), con un costo
    distinto del promedio y fechado en su corte, que cae **antes** de esas ventas (ámbito
    cooperativa). Se confirma aunque `Costeo.RetroactivosPermitidos = false`: el kardex de P4 inserta
    el saldo en su fecha (`OperationDate`, `Id`), agrega líneas de ajuste de costo a las salidas
@@ -697,7 +697,7 @@ o 15 minutos, levantan `Integracion.MensajeSinEntregar`.
 `/inventario/conciliacion` (vista `reconciliation`, exige además `Inventory.Reconciliation.View`) a
 una fecha de corte con **cero** mensajes pendientes, en lote o rechazados: diferencia **cero** por
 grupo contable y conjunto de cuentas. El saldo inicial cuenta como incluido; los traslados que no
-pasan y las ventas a crédito de tipos sin paso van aparte; una bodega que siga en SOLIDO y comparta
+pasan y las ventas a crédito de tipos sin paso van aparte; una bodega que siga en el sistema anterior y comparta
 cuentas entra con sus cifras al corte, suma al valorizado del conjunto y se muestra aparte para
 identificarla (no se le atribuye diferencia). Dejar un mensaje rechazado: la diferencia aparece y la explica ese mensaje. La conciliación
 ignora el alcance de sucursal contable del usuario (sólo agrega por cuenta).
@@ -1115,10 +1115,10 @@ las notas de release.
 4. **Datos**: las plantillas diligenciadas por COOFLOPAL, la matriz de su contadora con la completitud
    vacía, usuarios y alcances.
 5. **Marcha paralela en la cooperativa de ensayo** (SC-018): cada diferencia de kardex y valorizado
-   contra SOLIDO con su causa documentada y aprobada por el jefe de inventario antes de salir.
+   contra el sistema anterior con su causa documentada y aprobada por el jefe de inventario antes de salir.
 6. **Por bodega**: conteo físico, saldo inicial fechado en su corte, activación con cuadre (§4.2). La
    segunda bodega y las siguientes entran con la excepción de puesta en marcha (§4.2 paso 5, pregunta
-   D8). Hasta activarse, SOLIDO sigue registrando sus ventas; no hay sincronización automática.
+   D8). Hasta activarse, el sistema anterior sigue registrando sus ventas; no hay sincronización automática.
 
 ## 11. Lo que el dueño y COOFLOPAL deben aportar
 
@@ -1127,9 +1127,9 @@ Sin cada ítem, el paso indicado no se puede probar ni promover.
 | # | Qué | Para |
 |---|---|---|
 | 1 | Plantillas de parametrización diligenciadas (D-07), con el largo de los códigos confirmado (D1) | §2.5, §10.4 |
-| 2 | Validación de la contadora de la semilla tributaria, los tipos de comprobante y cruces, y los códigos DIAN por medio de pago (A8); los impuestos que vende COOFLOPAL (A7); la traducción de `TaxRegime`, `SourceWithholding` e `IcaType` de SOLIDO (E3) | §2.2, §2.5, §5.1 |
+| 2 | Validación de la contadora de la semilla tributaria, los tipos de comprobante y cruces, y los códigos DIAN por medio de pago (A8); los impuestos que vende COOFLOPAL (A7); la traducción de `TaxRegime`, `SourceWithholding` e `IcaType` del sistema anterior (E3) | §2.2, §2.5, §5.1 |
 | 3 | La matriz contable diligenciada con la contadora y el modo de paso de cada tipo (D-07) | §4.1, §2.6 |
-| 4 | Cifras de SOLIDO para el ensayo y la marcha paralela, y el conteo físico antes de cada carga (D-07) | §3.5, §4.2, §10.5 |
+| 4 | Cifras de referencia para el ensayo y la marcha paralela, y el conteo físico antes de cada carga (D-07) | §3.5, §4.2, §10.5 |
 | 5 | Proveedor tecnológico contratado, con credenciales por empresa y sandbox (A3) | §6.11, §10.3 |
 | 6 | Resoluciones y prefijos de COOFLOPAL, software asociado, resolución de contingencia y numeración del documento equivalente POS (A4) | §6.1, §10.3 |
 | 7 | Buzón y dominio del correo al comprador (A5) e impresión de las cajas (A6) | §6.2, §5.2 |

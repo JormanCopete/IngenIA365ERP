@@ -235,7 +235,7 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups { get; }
     DbSet<Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods { get; }
     DbSet<Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances { get; }
-    // Feature 012 (T307, US4): la activación de cada bodega y las cifras de SOLIDO (sólo informativas: nunca kardex).
+    // Feature 012 (T307, US4): la activación de cada bodega y las cifras de referencia (sólo informativas: nunca kardex).
     DbSet<Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations { get; }
     DbSet<Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures { get; }
     // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.

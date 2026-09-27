@@ -17,7 +17,7 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
 
         // Basic info
         builder.Property(e => e.LegacyCode).HasMaxLength(10);
-        // Único cuando existe: los registros migrados del SOLIDO pueden venir sin código.
+        // Único cuando existe: los registros migrados del sistema anterior pueden venir sin código.
         builder.HasIndex(e => e.LegacyCode).IsUnique().HasFilter("[LegacyCode] IS NOT NULL");
         builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
         builder.Property(e => e.ShortName).HasMaxLength(60);

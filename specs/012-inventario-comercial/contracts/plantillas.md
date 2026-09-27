@@ -6,7 +6,7 @@ T25, T27, T21, T13 (`decisiones-transversales.md`, en la carpeta de la feature);
 (entidades que cada plantilla escribe), `dian.md`
 
 Requisitos que cubre: FR-030 (revisión previa, todo o nada, fila y columna), FR-031 (vendedores),
-FR-089 (saldo inicial), FR-091 (cifras de SOLIDO), FR-095 (plantillas primero), FR-096 (medios de
+FR-089 (saldo inicial), FR-091 (cifras de referencia), FR-095 (plantillas primero), FR-096 (medios de
 pago), FR-073 (matriz); US1-1, US1-6, US4-1; SC-016.
 
 **Por qué este contrato existe antes que las pantallas**: COOFLOPAL diligencia estas plantillas desde
@@ -39,7 +39,7 @@ cuándo existe su `POST …/import`.
 | 12 | Listas de precios | `Listas`, `Precios` | `/api/inventory/price-lists` | `ImportPriceListsCommand` | I3 |
 | 13 | Topes de descuento | `Datos` | `/api/inventory/discount-caps` | `ImportDiscountCapsCommand` | I3 |
 | 14 | Saldo inicial | `Datos` | `/api/inventory/opening-balances` | `ImportOpeningBalanceCommand` | I1 |
-| 15 | Cifras de SOLIDO | `Datos` | `/api/inventory/legacy-figures` | `ImportLegacyFiguresCommand` | I1 |
+| 15 | Cifras de referencia | `Datos` | `/api/inventory/legacy-figures` | `ImportLegacyFiguresCommand` | I1 |
 | 16 | Matriz de reglas contables | `Datos` | `/api/accounting/inventory/rules` | `ImportInventoryPostingRulesCommand` (+ `GetInventoryRulesTemplateQuery`) | I2 (su `GET` también es de I2, T49) |
 
 En cada ruta base: `GET {base}/template.xlsx` y `POST {base}/import?mode=review|apply`.
@@ -810,8 +810,8 @@ Reglas:
 
 - Llave: `bodega` + `producto` + `ubicacion` (+ `lote`/`serie` desde I6); repetida en el archivo es
   error, no se suma.
-- La cantidad es la del conteo, más o menos los movimientos que la bodega tuvo en SOLIDO entre el conteo
-  y el corte (o la bodega deja de operar en SOLIDO desde el conteo hasta su activación; FR-089).
+- La cantidad es la del conteo, más o menos los movimientos que la bodega tuvo en el sistema anterior entre el conteo
+  y el corte (o la bodega deja de operar en el sistema anterior desde el conteo hasta su activación; FR-089).
 - Una bodega con saldo inicial **confirmado** vigente rechaza la fila (para reemplazarlo, se anula
   primero; la anulación también es informativa). Si tiene un borrador, **volver a importar reemplaza
   sus líneas** conservando el mismo borrador, como la apertura contable de la 009.
@@ -839,12 +839,12 @@ Reglas:
 | B01 | AAAA-MM-DD | ARZ-001 | A-01 | 1200 | 1850,000000 |
 | B01 | AAAA-MM-DD | FERT-50 | PATIO | 85 | 142300,500000 |
 
-## 15. Cifras de SOLIDO
+## 15. Cifras de referencia
 
-Escribe `INV_LegacyFigures`: existencias y valores de SOLIDO a una fecha, **sólo informativos**
+Escribe `INV_LegacyFigures`: existencias y valores del sistema anterior a una fecha, **sólo informativos**
 (FR-091). No mueven existencias ni costo (FR-001). Sirven al ensayo, a los comparativos
 (`legacy-comparison-kardex`, `legacy-comparison-valuation`), a la comparación de activación de las
-bodegas que siguen en SOLIDO (FR-090) y a la conciliación (FR-081): las bodegas no activas que comparten
+bodegas que siguen en el sistema anterior (FR-090) y a la conciliación (FR-081): las bodegas no activas que comparten
 cuentas con las activas **entran al valorizado del conjunto** con sus cifras a la fecha de corte, y se
 muestran aparte para identificarlas (la diferencia no se les atribuye).
 
@@ -853,7 +853,7 @@ muestran aparte para identificarlas (la diferencia no se les atribuye).
 | `fecha` | fecha | sí | fecha de corte de la cifra; un archivo puede traer varias |
 | `bodega` | código de bodega | sí | debe existir en el ERP (activa o no) |
 | `producto` | código de producto | sí | se guarda tal como viene; si no existe en el catálogo nuevo, la fila exige `grupoContable` y queda «sin producto en el catálogo» (cuenta en el valorizado por grupo, no en el comparativo por producto) |
-| `cantidad` | cantidad | sí | en unidad base de SOLIDO; puede ser negativa (se muestra así en el comparativo) |
+| `cantidad` | cantidad | sí | en unidad base del sistema anterior; puede ser negativa (se muestra así en el comparativo) |
 | `valor` | monto | sí | valor total de la existencia |
 | `grupoContable` | código de grupo | si el producto no existe | si el producto existe y el grupo difiere del suyo, aviso |
 

@@ -29,7 +29,7 @@ Estado verificado el 2026-09-24 en el código, las especificaciones vigentes y e
 
 ### El módulo actual
 
-1. **Es un traslado tabla por tabla de SOLIDO que nunca se terminó.** Tiene 24 tablas, creadas en la
+1. **Es un traslado tabla por tabla del sistema anterior que nunca se terminó.** Tiene 24 tablas, creadas en la
    base de toda cooperativa y en los dos motores. Muy probablemente están vacías: ninguna semilla ni
    migración las llena.
 2. **La existencia no es confiable.**
@@ -55,9 +55,9 @@ Estado verificado el 2026-09-24 en el código, las especificaciones vigentes y e
 
    La única operación que hoy crea y retira el rol de vendedor, y mantiene la marca «Vendedor» de la
    persona, vive en este módulo.
-8. **No hay camino utilizable para migrar datos de SOLIDO.** El guion está congelado y sólo corre en
+8. **No hay camino utilizable para migrar datos del sistema anterior.** El guion está congelado y sólo corre en
    un motor de base de datos que producción no usa. Además inserta 18 de 24 tablas y no coincide con
-   la definición de las tablas. La tabla de control de costos por período de SOLIDO no se mapeó a
+   la definición de las tablas. La tabla de control de costos por período del sistema anterior no se mapeó a
    ningún sitio.
 
 ### La plataforma alrededor
@@ -83,7 +83,7 @@ Estado verificado el 2026-09-24 en el código, las especificaciones vigentes y e
       la base de auditoría global.
 11. **Cartera no ofrece consultas.** No expone el cupo disponible ni el estado del asociado (activo,
     en mora, bloqueado). Nómina la integra dentro del mismo proceso y lee sus datos directamente. En
-    el maestro, el asociado tiene cupo, clase y estado heredados de SOLIDO.
+    el maestro, el asociado tiene cupo, clase y estado heredados del sistema anterior.
 12. **La auditoría no cumple todavía lo que pide el Principio X.** Lo que ya hace:
     - cada operación queda en la base de auditoría de su cooperativa;
     - esa base no admite modificar ni borrar.
@@ -128,7 +128,7 @@ Estado verificado el 2026-09-24 en el código, las especificaciones vigentes y e
     El plan dice:
     - parametrizar **este** módulo desde el 2026-09-26: grupos, bodegas, puntos de venta, turnos,
       vendedores y comisiones, listas de precios, tipos de movimiento y catálogo;
-    - marcha en paralelo con SOLIDO en noviembre: ventas por punto de venta y turno, contado y
+    - marcha en paralelo con el sistema anterior en noviembre: ventas por punto de venta y turno, contado y
       crédito, compras, traslados, devoluciones y cierres de turno, comparando kardex y valorizado
       con el sistema anterior;
     - conteo físico el 30/11, carga del inventario inicial del 30/11 al 02/12 y **salida en vivo el
@@ -321,7 +321,7 @@ Clarifications). Los demás se resuelven como se indica, y la enmienda de la 009
 - **Ingenia365 como proveedor tecnológico** (C6).
 - **Multimoneda operativa**: importaciones en moneda extranjera y diferencia en cambio. La
   estructura queda lista.
-- **Movimientos históricos de SOLIDO**: no se migran. Se entra con **saldos**, como en la 009.
+- **Movimientos históricos del sistema anterior**: no se migran. Se entra con **saldos**, como en la 009.
 
 ### Entregas
 
@@ -338,7 +338,7 @@ cooperativa obligada no confirma ventas fiscales hasta que exista I4.
 
 | Entrega | Contenido |
 |---|---|
-| **I1 · Núcleo** | **Primero, las plantillas de importación de la parametrización** (FR-095), para que COOFLOPAL prepare sus datos. Después: catálogo básico con impuestos y conceptos de retención, bodegas, ubicaciones y bodegas de tránsito, kardex y costo promedio, ajustes, consumos y bajas con aprobación, traslados, conteos (totales y cíclicos, salvo por clase ABC), cierre de período, compra directa (recepción y factura del proveedor), devolución a proveedor, carga y validación del saldo inicial, importación de cifras de SOLIDO y comparativos de kardex y valorizado, rol de vendedor, alertas, permisos, auditoría y parámetros. Retiro del módulo actual. El retiro gravado de consumo interno necesita la lista general de precios, que llega con I3. |
+| **I1 · Núcleo** | **Primero, las plantillas de importación de la parametrización** (FR-095), para que COOFLOPAL prepare sus datos. Después: catálogo básico con impuestos y conceptos de retención, bodegas, ubicaciones y bodegas de tránsito, kardex y costo promedio, ajustes, consumos y bajas con aprobación, traslados, conteos (totales y cíclicos, salvo por clase ABC), cierre de período, compra directa (recepción y factura del proveedor), devolución a proveedor, carga y validación del saldo inicial, importación de cifras de referencia y comparativos de kardex y valorizado, rol de vendedor, alertas, permisos, auditoría y parámetros. Retiro del módulo actual. El retiro gravado de consumo interno necesita la lista general de precios, que llega con I3. |
 | **I2 · Integración** | Mensajes a Contabilidad y a Cartera, validación previa y modo de paso a contabilidad. Del lado de Contabilidad, como enmienda de la 009 y en la ruta crítica de la salida: matriz de reglas con sus pantallas y su plantilla, procesamiento en línea y por lotes, comprobantes por documento y resumidos, registro de anulaciones, consultas, aviso antes del cierre contable y actor de proceso. Además: bandeja, conciliación, cuadre del saldo inicial y activación de bodegas. |
 | **I3 · Ventas y POS** | POS con cajas y turnos, medios de pago configurables y múltiples, cierre de caja por punto y por medio con movimientos de caja, factura (o comprobante no electrónico para una cooperativa no obligada), nota crédito (o nota no electrónica) y devoluciones, contado y mixto, crédito provisional mientras IC está pendiente (F2), listas de precios y descuentos con topes. Las plantillas de cajas, precios y topes se entregan en I1 y se cargan cuando I3 existe. |
 | **IC · Crédito con Cartera (pendiente)** | Consulta de estado, cupo y líneas de crédito antes de vender a crédito. Entrega a Cartera de «VentaACreditoRegistrada» y sus ajustes, incluidos los acumulados durante el crédito provisional, y validación de las ventas pendientes. Espera la especificación de Cartera (D-02). |
@@ -350,8 +350,8 @@ cooperativa obligada no confirma ventas fiscales hasta que exista I4.
 
 | Término | Significado en esta especificación |
 |---|---|
-| Sistema anterior | SOLIDO, el sistema de escritorio que la cooperativa usa hoy. |
-| Módulo actual | El inventario que hoy tiene el ERP, a medio trasladar de SOLIDO, que esta feature retira. |
+| Sistema anterior | El sistema de escritorio que la cooperativa usa hoy. |
+| Módulo actual | El inventario que hoy tiene el ERP, a medio trasladar del sistema anterior, que esta feature retira. |
 | Producto inventariable | Ítem con existencia y kardex. |
 | Servicio | Ítem que se vende o se compra sin existencia ni kardex. |
 | Combo | Ítem virtual que se vende como uno y descuenta sus componentes. |
@@ -534,7 +534,7 @@ El saldo inicial **no genera comprobante**: el valor de ese inventario ya está 
 apertura contable de la 009 o por los registros que la contabilidad lleva. Antes de activar una
 bodega, el sistema compara esos saldos contables, a su fecha de corte y por grupo contable y
 conjunto de cuentas mapeadas, con el valorizado de todas las bodegas que usan esas cuentas: las
-activas y la que se activa, con el del módulo nuevo; las demás, con las cifras importadas de SOLIDO.
+activas y la que se activa, con el del módulo nuevo; las demás, con las cifras importadas del sistema anterior.
 Entonces:
 - con cuadre, se activa;
 - con diferencia, sólo se activa si alguien con permiso la acepta con motivo.
@@ -556,7 +556,7 @@ que difieren en un grupo, aceptar la diferencia con motivo y activar una bodega.
    contable y conjunto de cuentas mapeadas, el saldo contable, la diferencia y el valorizado de todas
    las bodegas que usan esas cuentas:
    - las activas y la que se activa, con el valorizado del módulo nuevo;
-   - las demás, con las cifras importadas de SOLIDO.
+   - las demás, con las cifras importadas del sistema anterior.
 3. **Given** una diferencia, **When** alguien sin el permiso especial intenta activar, **Then** no
    puede. **When** lo hace quien lo tiene, con motivo, **Then** se activa y queda auditado.
 4. **Given** una bodega activa, **Then** sólo la opera el módulo nuevo. **Given** una bodega no
@@ -762,7 +762,7 @@ traslados sin paso a contabilidad. Luego:
    de corte, **Then** la diferencia entre valorizado y saldo contable por grupo es cero:
    - el saldo inicial cuenta como incluido en el saldo contable;
    - las partidas de los tipos que no pasan se muestran aparte;
-   - las bodegas que siguen en SOLIDO se cuentan con sus cifras importadas.
+   - las bodegas que siguen en el sistema anterior se cuentan con sus cifras importadas.
 8. **Given** una factura validada por la DIAN que iba en un comprobante resumido, **When** la anulan,
    **Then**:
    - se emite su nota crédito total, con su propia fecha;
@@ -2067,7 +2067,7 @@ Lo que sigue queda especificado para cuando exista la entrega IC.
   - lo movido por tipos que no pasan a contabilidad;
   - las ventas a crédito de esos tipos, cuya obligación en Cartera no tiene ingreso en los libros;
   - mientras haya bodegas no activas que usan las mismas cuentas, esas bodegas con las cifras
-    importadas de SOLIDO, como en FR-090: entran al valorizado del conjunto y se muestran aparte para
+    importadas del sistema anterior, como en FR-090: entran al valorizado del conjunto y se muestran aparte para
     identificarlas.
 - **FR-082** El sistema MUST mostrar:
   - las combinaciones de operación, grupo contable y bodega en uso, de tipos que pasan a contabilidad,
@@ -2135,8 +2135,8 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
   - Tiene revisión previa completa de la plantilla, todo o nada.
   - Genera un documento de saldo inicial por bodega, fechado en su fecha de corte (la víspera de su
     activación), que se confirma con aprobación.
-  - La cantidad cargada es la del conteo más o menos los movimientos que la bodega tuvo en SOLIDO entre
-    el conteo y el corte. La otra opción es que la bodega deje de operar en SOLIDO desde el conteo
+  - La cantidad cargada es la del conteo más o menos los movimientos que la bodega tuvo en el sistema anterior entre
+    el conteo y el corte. La otra opción es que la bodega deje de operar en el sistema anterior desde el conteo
     hasta su activación.
   - Emite «SaldoInicialCargado», **informativo**: no genera comprobante, porque el valor de ese
     inventario ya está en los libros (apertura contable de la 009 o registros previos). No depende
@@ -2145,10 +2145,9 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
   contable y conjunto de cuentas mapeadas, el valorizado de todas las bodegas que usan esas cuentas
   contra su saldo contable, tal como Contabilidad lo lleva:
   - las bodegas activas y la que se activa entran con el valorizado del módulo nuevo;
-  - las no activas, con las cifras importadas de SOLIDO a esa misma fecha (FR-091).
+  - las no activas, con las cifras importadas del sistema anterior a esa misma fecha (FR-091).
 
-  Así, la primera bodega que se activa no muestra como diferencia el inventario de las que siguen en
-  SOLIDO. Para esta comparación hacen falta la matriz y la consulta de saldos (I2). Activar exige
+  Así, la primera bodega que se activa no muestra como diferencia el inventario de las que siguen en el sistema anterior. Para esta comparación hacen falta la matriz y la consulta de saldos (I2). Activar exige
   cuadre, o aceptar la diferencia con motivo y permiso especial, y queda auditado.
 - **FR-091** Durante la transición:
   - la activación es por bodega, con fecha de corte;
@@ -2187,7 +2186,7 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
       cargan cuando exista I3.
     - La matriz de reglas contables tiene su propia plantilla (I2), que COOFLOPAL diligencia con su
       contadora.
-    - La de cifras de SOLIDO sirve para el ensayo, la conciliación y la activación.
+    - La de cifras de referencia sirve para el ensayo, la conciliación y la activación.
   - **COOFLOPAL diligencia esas plantillas desde ya**, en lugar de parametrizar en las pantallas del
     módulo actual, y se cargan con la revisión previa de FR-030.
   - **Ensayo previo en una cooperativa de ensayo**, fuera de producción, con la parametrización
@@ -2196,7 +2195,7 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
     I1 a I4 MUST estar disponibles para el ensayo antes de la salida.
   - **Salida bodega por bodega**: en producción, cada bodega sale en vivo cuando su saldo inicial queda
     cargado y cuadrado (FR-090). Cada saldo inicial se fecha en la fecha de corte de su bodega
-    (FR-089). Hasta su activación, SOLIDO registra sus ventas (FR-091).
+    (FR-089). Hasta su activación, el sistema anterior registra sus ventas (FR-091).
   - **Módulo actual**: se retira sin migrar datos (FR-092).
   - **Después**: I5 e I6 van después de la salida. IC, cuando exista la especificación de Cartera.
 
@@ -2377,7 +2376,7 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
   cero entre inventario valorizado y saldo contable, por grupo contable y a cualquier fecha de corte:
   - el saldo inicial cuenta como incluido en el saldo contable;
   - las partidas de los tipos que no pasan a contabilidad se muestran aparte;
-  - las bodegas que siguen en SOLIDO se cuentan con sus cifras importadas, como en FR-090.
+  - las bodegas que siguen en el sistema anterior se cuentan con sus cifras importadas, como en FR-090.
 - **SC-006**: La verificación de integridad del kardex reporta 0 diferencias entre existencias,
   saldos y lo que resulta del kardex, en cualquier momento.
 - **SC-007**: El costo calculado coincide al peso con casos calculados a mano para compras, ventas,
@@ -2416,7 +2415,7 @@ Igual que F2: especificados y pendientes hasta que exista la especificación de 
 - **SC-017**: El inventario valorizado a una fecha pasada, con 50.000 productos en 50 bodegas, está
   listo en menos de 30 segundos.
 - **SC-018**: En la marcha paralela de la cooperativa de ensayo, cada diferencia de kardex y valorizado
-  contra SOLIDO tiene su causa documentada y aprobada por el jefe de inventario antes de la salida en
+  contra el sistema anterior tiene su causa documentada y aprobada por el jefe de inventario antes de la salida en
   vivo.
 - **SC-019**: Con 30 cajas vendiendo a la vez en una cooperativa, el percentil 95 del tiempo de
   SC-004 sigue por debajo de 30 segundos, y el percentil 95 de la emisión electrónica (desde el envío
@@ -2483,7 +2482,7 @@ adelante.
 1. **Ensayo y salida**: el ensayo previo corre en una cooperativa de ensayo, fuera de
    producción, porque en producción una bodega no activa sólo admite su saldo inicial. La salida en
    producción es bodega por bodega, cuando cada una queda cuadrada, con el saldo inicial fechado en su
-   corte. El cuadre se hace por conjunto de cuentas, sumando las bodegas que siguen en SOLIDO con sus
+   corte. El cuadre se hace por conjunto de cuentas, sumando las bodegas que siguen en el sistema anterior con sus
    cifras importadas. Las fechas las define el dueño.
 2. **El saldo inicial no contabiliza**: su valor ya está en los libros por la apertura de la 009.
    Contabilizarlo lo contaría dos veces.
@@ -2610,6 +2609,6 @@ adelante.
   - elegir su proveedor tecnológico, porque está obligada a facturar electrónicamente, y registrar
     resoluciones (también la de contingencia), certificado y configuración del modo;
   - hacer el conteo físico antes de la carga del saldo inicial;
-  - entregar las cifras de SOLIDO para el ensayo, la conciliación y la marcha paralela.
+  - entregar las cifras de referencia para el ensayo, la conciliación y la marcha paralela.
 
   Las fechas de todo esto las define el dueño.

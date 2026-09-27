@@ -58,7 +58,7 @@ ellos se usó está en este documento y en `decisiones-transversales.md`.
 | R16 | Alertas | I1 |
 | R17 | Catálogo, búsqueda de productos e importación | I1 |
 | R18 | Bodegas, tránsito, traslados y conteos | I1 |
-| R19 | Períodos, saldo inicial, activación por bodega y convivencia con SOLIDO | I1 · I2 |
+| R19 | Períodos, saldo inicial, activación por bodega y convivencia con el sistema anterior | I1 · I2 |
 | R20 | Compras y cruce | I1 · I4 · I5 |
 | R21 | Impuestos y retenciones | I1 |
 | R22 | Personas: copia fiscal, consumidor final y autorización de datos | I1 · I3 |
@@ -116,7 +116,7 @@ Estado del repositorio el 2026-09-24 (`develop` en `04bc649`, más este worktree
   - `DEB_PosTerminals`: datáfonos del emisor de la tarjeta débito propia.
   - `COR_Companies.Dian*`: una sola resolución (`Company.cs:48-59`).
   - `InvoicePrintReport.cs`: sin CUFE ni QR.
-- **SOLIDO**:
+- **el sistema anterior**:
   - No factura electrónicamente: el grep de cufe y de nombres de proveedores en sus `.vb` no
     encuentra nada.
   - Guarda los pagos en columnas fijas (`inv_docs`, `sys_forpago`).
@@ -351,7 +351,7 @@ Estado del repositorio el 2026-09-24 (`develop` en `04bc649`, más este worktree
     max+1 y amortiza con `double`.
 - **Otros módulos leen sus tablas directamente**: Nómina (`SettlementInputLoader.cs:639`,
   `ApproveSettlementCommand.cs:136`) y la ficha de persona (`GetPersonDetailQuery.cs:146-170`).
-- **El asociado en el maestro** trae, heredados de SOLIDO, `Status`, `AssociateClass` (texto de 4, sin
+- **El asociado en el maestro** trae, heredados del sistema anterior, `Status`, `AssociateClass` (texto de 4, sin
   catálogo), `CreditLimit`, `PosCardLimit`, `IsInLegalCollection` y `WithdrawalDate`.
 
 ### Presentación
@@ -428,10 +428,10 @@ falta del dueño» y aplican la propuesta por defecto mientras tanto.
    conservar soportes (ET art. 632) podría exigir guardarlo (pregunta E10; por defecto, no se guarda).
 8. **Reemplazo de un rechazado (FR-066 b).** Exige que, desde I1, el índice único de `INV_Documents`
    excluya el número liberado (`FiscalNumberReleased`), aunque la emisión llegue en I4 (R9).
-9. **Bodegas que siguen en SOLIDO en la conciliación (FR-081, SC-005).** «La diferencia no las
+9. **Bodegas que siguen en el sistema anterior en la conciliación (FR-081, SC-005).** «La diferencia no las
    cuenta» se lee «la diferencia no se les atribuye: entran con sus cifras importadas». Las bodegas no
    activas que comparten cuentas con las activas **suman al valorizado del conjunto** con sus cifras
-   de SOLIDO a la fecha de corte, como en FR-090, y se muestran aparte para identificarlas. Si
+   del sistema anterior a la fecha de corte, como en FR-090, y se muestran aparte para identificarlas. Si
    quedaran fuera, la diferencia sería su valor y SC-005 (diferencia cero) no se cumpliría durante la
    transición (R19).
 10. **Retroactivos que no dependen del parámetro (FR-045).** «Los ajustes que el sistema genera desde
@@ -1898,7 +1898,7 @@ D-03.
     personas.
   - **Todas** las plantillas de FR-095 se publican en I1: las de puntos y cajas, medios de pago, listas
     de precios y topes publican su `GET template.xlsx` en I1 y su importación llega en I3. La de la
-    matriz llega en I2, y la de cifras de SOLIDO, en I1.
+    matriz llega en I2, y la de cifras de referencia, en I1.
   - El modelo de cada catálogo se congela antes de publicar su plantilla.
   - Rutas: `GET …/template.xlsx` (con `?withData=true` para bajar lo cargado) y
     `POST …/import?mode=review|apply`, junto a cada catálogo. Pantalla `/inventario/plantillas`.
@@ -2039,7 +2039,7 @@ D-03.
 
 **Spec**: FR-032 a FR-035, FR-039 a FR-041, US1, US10, US11, SC-008; Supuesto 15.
 
-## R19. Períodos, saldo inicial, activación por bodega y convivencia con SOLIDO
+## R19. Períodos, saldo inicial, activación por bodega y convivencia con el sistema anterior
 
 **Decisión**:
 - **Período** (informe de núcleo, decisión 9).
@@ -2085,7 +2085,7 @@ D-03.
   - Una bodega no activa sólo admite su saldo inicial y su anulación: es una regla de clase en el
     confirmador.
   - Antes de activar se compara, a la fecha de corte y por grupo y conjunto de cuentas:
-    - el valorizado de las bodegas activas y de la que se activa, más las cifras de SOLIDO de las no
+    - el valorizado de las bodegas activas y de la que se activa, más las cifras de referencia de las no
       activas;
     - contra el saldo contable (`IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync`).
   - La comparación se guarda en `INV_WarehouseActivations`.
@@ -2096,15 +2096,15 @@ D-03.
     `Inventory.Activation.AccountingUnavailable` mientras la consulta de saldos no exista (FR-090).
   - La bodega de tránsito se considera activa cuando lo está alguna bodega de su sucursal.
   - El corte debe caer en un período abierto.
-- **Convivencia con SOLIDO**.
-  - Las cifras de SOLIDO van en `INV_LegacyFigures`, con `ImportLegacyFiguresCommand`
-    (`Inventory.LegacyFigures.Import`) y la pantalla `/inventario/cifras-solido`. Guarda fecha, códigos
+- **Convivencia con el sistema anterior**.
+  - Las cifras de referencia van en `INV_LegacyFigures`, con `ImportLegacyFiguresCommand`
+    (`Inventory.LegacyFigures.Import`) y la pantalla `/inventario/cifras-de-referencia`. Guarda fecha, códigos
     tal como vienen, los Ids resueltos si existen, cantidad, valor y lote de importación.
   - Vistas: `legacy-comparison-kardex` y `legacy-comparison-valuation` (I1), y la conciliación
     `reconciliation` (I2). En la conciliación, las bodegas no activas que comparten cuentas entran con
-    sus cifras de SOLIDO a la fecha de corte y **suman al valorizado del conjunto**, como en la
+    sus cifras de referencia a la fecha de corte y **suman al valorizado del conjunto**, como en la
     activación (FR-090); se muestran aparte sólo para identificarlas (precisión 9 a la spec).
-  - No hay sincronización automática con SOLIDO: SOLIDO sigue registrando las bodegas no activas.
+  - No hay sincronización automática con el sistema anterior: El sistema anterior sigue registrando las bodegas no activas.
 - **Ensayo y salida** (Supuesto 1, FR-095).
   - El ensayo corre en una cooperativa de ensayo, fuera de producción, con la parametrización cargada
     desde las plantillas y un saldo inicial provisional. Allí los tipos pasan a una contabilidad de
@@ -2119,19 +2119,19 @@ D-03.
 - Guardar el valorizado fijado por producto × bodega cubre FR-047, acelera SC-017 y deja verificarlo
   contra el kardex.
 - La activación por bodega, con su comparación guardada, da la trazabilidad de FR-090 y SC-018.
-- Contar las no activas con sus cifras de SOLIDO evita que la primera bodega que se activa muestre como
-  diferencia el inventario de las que siguen en SOLIDO.
+- Contar las no activas con sus cifras de referencia evita que la primera bodega que se activa muestre como
+  diferencia el inventario de las que siguen en el sistema anterior.
 
 **Alternativas descartadas**:
 - Comprobar el período sin bloquearlo: un documento entraría a un mes que se está cerrando.
 - Reutilizar `ACC_AccountingPeriods`: viola FR-014, y el período de inventario es otro.
 - Guardar el valorizado sólo por grupo y bodega: ni acelera ni permite verificar.
 - Contabilizar el saldo inicial: lo contaría dos veces.
-- Migrar los movimientos históricos de SOLIDO: fuera de alcance; se entra con saldos.
+- Migrar los movimientos históricos del sistema anterior: fuera de alcance; se entra con saldos.
 - Ensayar en la cooperativa de producción: una bodega no activa sólo admite su saldo inicial.
 
 **Riesgos**:
-- La activación necesita la matriz y la consulta de saldos (I2), y las cifras de SOLIDO que COOFLOPAL
+- La activación necesita la matriz y la consulta de saldos (I2), y las cifras de referencia que COOFLOPAL
   entregue en el formato de la plantilla.
 - El conteo físico antes de la carga, y los movimientos entre el conteo y el corte, son trabajo
   operativo de la cooperativa (D-07).
@@ -2329,7 +2329,7 @@ Supuesto 11.
 - Enmendar la regla 10 de la 009 para los impuestos por unidad.
 
 **Riesgos**:
-- Sin el mapeo de `TaxRegime`, `SourceWithholding` e `IcaType` de SOLIDO, las retenciones del primer día
+- Sin el mapeo de `TaxRegime`, `SourceWithholding` e `IcaType` del sistema anterior, las retenciones del primer día
   pueden salir mal (pregunta E3).
 - La DIVIPOLA debe estar sembrada antes de I1, y las ciudades existentes conciliadas por `LegacyCode`
   (pregunta E4).
@@ -2676,13 +2676,13 @@ Supuesto «Hardware».
 **Por qué**:
 - La clase es lo único que el código conoce: vueltas, crédito, forma de pago DIAN y arqueo por defecto.
   Lo demás es dato, como pidió el dueño.
-- Core, porque Cartera y Tesorería van a reutilizar el catálogo (en SOLIDO, `sys_forpago` ya era común),
+- Core, porque Cartera y Tesorería van a reutilizar el catálogo (en el sistema anterior, `sys_forpago` ya era común),
   y porque la matriz lo referencia sin leer Inventario.
-- N pagos por documento reemplazan las columnas fijas de SOLIDO, y las copias protegen la historia si el
+- N pagos por documento reemplazan las columnas fijas del sistema anterior, y las copias protegen la historia si el
   medio cambia.
 - `Last4` y la autorización bastan para cotejar con la red sin entrar al alcance de PCI-DSS.
 - El UK filtrado de los bonos garantiza la unicidad bajo concurrencia sin bloquear filas.
-- Separar el punto (configuración) de la sesión (estado del día) corrige lo que SOLIDO mezclaba en
+- Separar el punto (configuración) de la sesión (estado del día) corrige lo que el sistema anterior mezclaba en
   `inv_puntos`, y la base de datos garantiza una sesión por caja.
 - Cerrar sin esperar la aprobación evita dejar la caja bloqueada.
 - Contabilizar también lo aceptado dentro de la tolerancia es lo único que deja cuadrada la caja del
@@ -2697,7 +2697,7 @@ Supuesto «Hardware».
   adquirente.
 - Clases configurables.
 - Reutilizar `DEB_PosTerminals`.
-- Columnas por clase, como SOLIDO.
+- Columnas por clase, como el sistema anterior.
 - Los pagos como documento aparte: parte la atomicidad venta-pago.
 - Guardar la cuenta contable en el medio: es el error del módulo actual.
 - Un mapa fijo de códigos DIAN en el código.
@@ -3679,7 +3679,7 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 - la matriz de reglas, diligenciada con la contadora, dejando vacío el reporte de completitud antes del
   ensayo;
 - el conteo físico, antes de la carga del saldo inicial;
-- las cifras de SOLIDO, para el ensayo, la conciliación y la marcha paralela;
+- las cifras de referencia, para el ensayo, la conciliación y la marcha paralela;
 - el nombre del segundo revisor de la migración destructiva.
 
 ### A. Salida de COOFLOPAL y operación
@@ -3728,7 +3728,7 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 
 | # | Pregunta | Propuesta por defecto | Bloquea |
 |---|---|---|---|
-| D1 | Largo del código de producto y del de bodega (códigos de SOLIDO, referencias de proveedor). | Producto 20 (`LargoLargo`); bodega y demás catálogos 10 | La publicación de las plantillas (I1) |
+| D1 | Largo del código de producto y del de bodega (códigos del sistema anterior, referencias de proveedor). | Producto 20 (`LargoLargo`); bodega y demás catálogos 10 | La publicación de las plantillas (I1) |
 | D2 | Ámbito de costeo cooperativa cuando la contadora mapea bodegas del mismo grupo a cuentas de inventario distintas. | Ámbito cooperativa; la completitud avisa y exige una cuenta de inventario por grupo en ese ámbito | No |
 | D3 | Residuo de redondeo: ¿a la línea o bodega de mayor valor, o a la última? | Mayor valor | No |
 | D4 | Precio unitario de venta con 6 decimales o con 2. | Lista en pesos (18,2); precio de línea (18,6) | No |
@@ -3744,7 +3744,7 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 |---|---|---|---|
 | E1 | ¿El catálogo de impuestos y retenciones queda en Core? | Sí (R21) | No |
 | E2 | ¿Se lee la UVT de `PAY_LegalParameters` con un solo lector? ¿Quién la mantiene si la cooperativa no usa nómina? | Sí; la mantiene quien tenga el permiso de parámetros legales | No |
-| E3 | Enmienda de la 008: ¿se agregan las marcas tributarias al maestro y al diálogo único? ¿Cómo se traducen `TaxRegime`, `SourceWithholding` e `IcaType` de SOLIDO? | Sí; la traducción la define la contadora | El ensayo (cargue de personas con retenciones) |
+| E3 | Enmienda de la 008: ¿se agregan las marcas tributarias al maestro y al diálogo único? ¿Cómo se traducen `TaxRegime`, `SourceWithholding` e `IcaType` del sistema anterior? | Sí; la traducción la define la contadora | El ensayo (cargue de personas con retenciones) |
 | E4 | ¿Código DANE en `COR_Cities` (con DIVIPOLA) y municipio en `COR_Branches`, como municipio por defecto de la operación? | Sí; las ciudades existentes se concilian por `LegacyCode` | No |
 | E5 | Tolerancias del cruce: ¿porcentaje **y** valor, o cualquiera de los dos? ¿Excepción por proveedor? | Ambas condiciones; una sola tolerancia por cooperativa | No (I5) |
 | E6 | En I1 (dos vías), ¿una diferencia de precio sólo ajusta el costo, o también se retiene? | Sólo ajusta el costo | No |
@@ -3812,7 +3812,7 @@ Además de responder, el dueño y COOFLOPAL aportan (D-05, D-07):
 
 | # | Pregunta | Propuesta por defecto | Bloquea |
 |---|---|---|---|
-| T325 | La cantidad del saldo inicial de cada bodega (plantilla 14, FR-089), ¿es la del **conteo físico más o menos los movimientos que la bodega tuvo en SOLIDO entre el conteo y la fecha de corte**, o la bodega **deja de operar en SOLIDO desde el conteo hasta su activación** (bodega congelada) y la cantidad es la del conteo sin más? | Conteo ± movimientos de SOLIDO hasta el corte: la bodega sigue vendiendo en SOLIDO hasta la víspera de su activación y el archivo trae la cantidad ya corregida. La importación no distingue los dos casos (recibe la cantidad final); la regla la aplica quien arma el archivo. Registrada el 2026-09-26 en la implementación de US4, sin respuesta del dueño todavía: **rige la propuesta**. | No (la carga funciona con cualquiera de las dos; cambia el procedimiento de conteo de la guía de COOFLOPAL) |
+| T325 | La cantidad del saldo inicial de cada bodega (plantilla 14, FR-089), ¿es la del **conteo físico más o menos los movimientos que la bodega tuvo en el sistema anterior entre el conteo y la fecha de corte**, o la bodega **deja de operar en el sistema anterior desde el conteo hasta su activación** (bodega congelada) y la cantidad es la del conteo sin más? | Conteo ± movimientos del sistema anterior hasta el corte: la bodega sigue vendiendo en el sistema anterior hasta la víspera de su activación y el archivo trae la cantidad ya corregida. La importación no distingue los dos casos (recibe la cantidad final); la regla la aplica quien arma el archivo. Registrada el 2026-09-26 en la implementación de US4, sin respuesta del dueño todavía: **rige la propuesta**. | No (la carga funciona con cualquiera de las dos; cambia el procedimiento de conteo de la guía de COOFLOPAL) |
 
 ### US11 · Tolerancia de reconteo y fecha del ajuste (T406, pendiente)
 

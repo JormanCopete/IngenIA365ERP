@@ -54,7 +54,7 @@ Al revisar el código se encontraron tres problemas además del doble paso:
 - Q: ¿Cómo se trata el **reingreso** de una persona con contrato terminado? → A: **Ficha nueva**:
   la retirada queda como historial («Retirado») con sus liquidaciones intactas; «Empleado» significa
   «existe una ficha viva»; la consulta de empleado por persona y el modo edición miran **sólo la
-  ficha viva**; la «fecha de reingreso» heredada de SOLIDO no se usa. Hoy el registro ya crea la
+  ficha viva**; la «fecha de reingreso» heredada del sistema anterior no se usa. Hoy el registro ya crea la
   segunda ficha, pero la consulta por persona devolvía cualquiera de las dos.
 
 ## User Scenarios & Testing *(mandatory)*

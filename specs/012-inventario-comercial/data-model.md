@@ -997,7 +997,7 @@ clase de I1, incluido `Voiding`, con su secuencia.
 |---|---|---|---|
 | `DocumentTypeId` | int FK | no | tipos no fiscales y **todas las notas** (crédito, débito, de ajuste POS, de ajuste del documento soporte, las no electrónicas) |
 | `Prefix` | nvarchar(10) | no | puede ser `''` |
-| `NextValue` | bigint | no | ≥ 1. Se fija al crear (para continuar la numeración de SOLIDO) y después sólo lo cambia `Numerador` |
+| `NextValue` | bigint | no | ≥ 1. Se fija al crear (para continuar la numeración del sistema anterior) y después sólo lo cambia `Numerador` |
 | `ValidFrom` | date | no | |
 | `ValidTo` | date | sí | |
 
@@ -1086,7 +1086,7 @@ cero. Σ `Value` por ámbito = `CostState.Value` a esa fecha. El valorizado a un
 |---|---|---|---|
 | `WarehouseId` | int FK | no | `UK (WarehouseId)` filtrado: se activa una sola vez |
 | `CutoffDate` | date | no | copia de la bodega |
-| `ComparisonJson` | nvarchar(max) | no | por grupo contable y conjunto de cuentas mapeadas: valorizado de las bodegas activas y de la que se activa, cifras de SOLIDO a la fecha de corte de las no activas que comparten cuentas —que **suman al valorizado del conjunto** y se guardan aparte para identificarlas—, saldo contable (`IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync`) y diferencia |
+| `ComparisonJson` | nvarchar(max) | no | por grupo contable y conjunto de cuentas mapeadas: valorizado de las bodegas activas y de la que se activa, cifras de referencia a la fecha de corte de las no activas que comparten cuentas —que **suman al valorizado del conjunto** y se guardan aparte para identificarlas—, saldo contable (`IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync`) y diferencia |
 | `TotalDifference` | `Monto` | no | |
 | `IsBalanced` | bit | no | diferencia 0 en todo conjunto |
 | `DifferenceAcceptedByUserId` · `AcceptanceReason` | int FK · nvarchar(500) | sí | `Inventory.Warehouses.AcceptActivationDifference` |
@@ -1096,7 +1096,7 @@ cero. Σ `Value` por ámbito = `CostState.Value` a esa fecha. El valorizado a un
 sin cuadre y sin aceptación se rechaza sin dejar fila (el intento queda en la auditoría); con cuadre o
 aceptación escribe esta fila, pasa la bodega a `Active` y, si es la primera de la sucursal, también su
 tránsito. El saldo inicial es opcional: una bodega nueva que arranca vacía también se compara. Las
-bodegas no activas que comparten cuentas entran al conjunto con sus cifras de SOLIDO a la fecha de
+bodegas no activas que comparten cuentas entran al conjunto con sus cifras de referencia a la fecha de
 corte (`INV_LegacyFigures`): la diferencia no se les atribuye, porque el saldo contable de esas
 cuentas también las contiene (FR-081 y SC-005, precisión aplicada a la spec).
 
@@ -1113,7 +1113,7 @@ exista, así que ninguna bodega de producción se activa sin la comparación de 
 | `ImportBatchPublicId` | uniqueidentifier | no | el lote de `ImportLegacyFiguresCommand` |
 | `AsOfDate` | date | no | fecha de la cifra (saldo) o fin del rango (movimiento) |
 | `FromDate` | date | sí | con valor, la fila trae movimientos del rango para el comparativo de kardex |
-| `ProductCodeRaw` · `WarehouseCodeRaw` | nvarchar(40) · (20) | no | tal como vienen de SOLIDO |
+| `ProductCodeRaw` · `WarehouseCodeRaw` | nvarchar(40) · (20) | no | tal como vienen del sistema anterior |
 | `ProductId` · `WarehouseId` | int FK | sí | resueltos si existen; lo no resuelto se lista en la revisión previa |
 | `Quantity` · `Value` | `Cantidad` · `Monto` | sí | saldo a `AsOfDate` |
 | `QuantityIn` · `QuantityOut` · `ValueIn` · `ValueOut` | `Cantidad` · `Monto` | sí | movimientos del rango |
@@ -1445,8 +1445,8 @@ No tiene tablas propias: es la clase `OpeningBalance` más `INV_Warehouses.Cutof
   de paso (`PostingMode` nulo). Su anulación también es informativa.
 - Sólo en bodegas `NotActivated`; tras activar, `Inventory.OpeningBalance.WarehouseActive` (**nuevo**).
   Recargar antes de activar = anular los documentos anteriores y volver a importar.
-- La cantidad es la del conteo más o menos lo movido en SOLIDO entre el conteo y el corte, o la bodega
-  deja de operar en SOLIDO desde el conteo (FR-089).
+- La cantidad es la del conteo más o menos lo movido en el sistema anterior entre el conteo y el corte, o la bodega
+  deja de operar en el sistema anterior desde el conteo (FR-089).
 - **Excepción de puesta en marcha** (FR-089 a FR-091, SC-016; precisión aplicada a la spec sobre
   FR-045; pregunta D8, con esta excepción como propuesta por defecto). Con el ámbito de costo por
   defecto (`Costeo.Ambito = Cooperativa`), la segunda bodega y las siguientes cargan su saldo inicial
@@ -2068,7 +2068,7 @@ crédito) se deriva: un documento con algún pago de clase crédito es a crédit
 
 ### `INV_DocumentPayments` — `DocumentPayment` (I3)
 
-N pagos por documento, reemplazo de las columnas fijas de SOLIDO (FR-097). En borrador de oficina se
+N pagos por documento, reemplazo de las columnas fijas del sistema anterior (FR-097). En borrador de oficina se
 editan; el POS los manda con `CheckoutPosDraftCommand` y entran en la transacción que confirma. En un
 documento confirmado, inmutables: un medio mal registrado se corrige con un movimiento
 `ReclassificationBetweenMeans`.

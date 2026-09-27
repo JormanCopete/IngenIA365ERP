@@ -229,7 +229,7 @@ Lo que la cooperativa debe tener antes de generar el primero, y cómo comprobarl
 
 | Qué | Dónde se carga | Cómo se comprueba | Si falta |
 |---|---|---|---|
-| **Código de transferencia (ACH)** de cada banco destino de los empleados | Maestros › Bancos (`COR_Banks.TransferCode`; en SOLIDO era `codtras`) | `SELECT "LegacyCode","Name","TransferCode" FROM dbo."COR_Banks" WHERE "IsDeleted" = false` → ninguno en blanco entre los bancos de las fichas | el empleado queda en **pendientes** con `BankCodeMissing` |
+| **Código de transferencia (ACH)** de cada banco destino de los empleados | Maestros › Bancos (`COR_Banks.TransferCode`; en el sistema anterior era `codtras`) | `SELECT "LegacyCode","Name","TransferCode" FROM dbo."COR_Banks" WHERE "IsDeleted" = false` → ninguno en blanco entre los bancos de las fichas | el empleado queda en **pendientes** con `BankCodeMissing` |
 | **Cuenta bancaria del plan** del banco pagador (auxiliar bajo `111005` con banco y número) | Contabilidad › Plan de cuentas | `GET /api/accounting/accounts/bank-accounts` la lista con `bankTransferCode` | `SourceAccountRequired` / `SourceAccountNotFound` al generar |
 | **Empresa** con NIT, dígito y razón social | Maestros › Empresas | `SELECT "TaxId","TaxIdCheckDigit","Name" FROM dbo."COR_Companies"` | `Payroll.Disbursement.CompanyMissing` |
 | **Formato vigente** del banco pagador, o el genérico | Maestros › Formatos bancarios (`COR_BankFileFormats`); la semilla deja `CSV-GENERICO` activo y `AVVILLAS-1` inactivo sin campos sólo si hay un banco «VILLAS» | `SELECT "Code","BankId","Scope","ValidFrom","ValidTo","IsActive" FROM dbo."COR_BankFileFormats"` | `Payroll.Disbursement.NoFormat` con el banco en `data` |

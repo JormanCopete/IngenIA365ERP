@@ -19,7 +19,7 @@ namespace IngenIA365ERP.Application.Accounting.Opening;
 
 // Saldos de apertura (feature 009 E2, US13; FR-084..FR-087; contracts/api.md §7).
 //
-// La cooperativa que llega desde SOLIDO carga una sola vez los saldos con que arranca: un archivo
+// La cooperativa que llega desde el sistema anterior carga una sola vez los saldos con que arranca: un archivo
 // (o la digitación) con cuenta, tercero, documento cruce, centro de costo, sucursal y débito o
 // crédito. El resultado es un BORRADOR de tipo `AP` (`Kind = Opening`) fechado la víspera del primer
 // período —la única fecha que el contrato admite fuera de un período abierto— que sigue el flujo de

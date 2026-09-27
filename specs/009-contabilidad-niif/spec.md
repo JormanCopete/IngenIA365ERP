@@ -25,7 +25,7 @@ ingreso a todas las opciones. (9) Todo lo demás que exija la norma colombiana e
 
 ## Contexto
 
-El módulo de contabilidad actual es la transcripción del de SOLIDO (37 tablas `cnt_`), y al
+El módulo de contabilidad actual es la transcripción del del sistema anterior (37 tablas `cnt_`), y al
 revisarlo se encuentra esto:
 
 1. **El plan de cuentas no tiene catálogo de referencia**: la semilla deja sólo las nueve clases;
@@ -72,11 +72,11 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
 - Q: ¿La digitación manual contabiliza al guardar o pasa por borrador? → A: **Borrador y
   «Contabilizar» son permisos distintos** (la misma persona puede tener ambos) **y cada empresa puede
   exigir cuatro ojos**: quien contabiliza debe ser distinto de quien registró.
-- Q: ¿Cómo entran los saldos de una cooperativa que ya opera (años de contabilidad en SOLIDO)?
+- Q: ¿Cómo entran los saldos de una cooperativa que ya opera (años de contabilidad en el sistema anterior)?
   → A: **Comprobante de apertura** con tipo reservado «Apertura», digitado o importado desde
   archivo (cuenta, tercero, documento cruce, centro, sucursal, débito/crédito), cuadrado, fechado el
   día anterior al primer período, único por empresa (corregir = reversar y cargar otro); pasa por el
-  contrato y las reglas de cuenta como cualquier comprobante. No se migran movimientos de SOLIDO.
+  contrato y las reglas de cuenta como cualquier comprobante. No se migran movimientos del sistema anterior.
 - Q: ¿Toda línea lleva sucursal? → A: **Sí, siempre**: la empresa define una **sucursal principal**
   que se propone sola (a un usuario con sucursales asignadas se le propone la suya); la regla
   «exige sucursal» de la cuenta significa que el usuario debe elegirla explícitamente y no vale la
@@ -152,7 +152,7 @@ hay datos históricos que migrar: el rediseño puede reemplazar la estructura si
   ejecución.
 - Deterioro y revaluación automáticos de activos fijos (se registran con comprobante manual);
   impuesto de timbre por grados (tabla heredada sin uso).
-- Migración de los movimientos históricos de SOLIDO: no se hace; una cooperativa que ya opera
+- Migración de los movimientos históricos del sistema anterior: no se hace; una cooperativa que ya opera
   entra con sus **saldos** por el comprobante de apertura (US13), no con su historia.
 
 ### Glosario
@@ -661,7 +661,7 @@ recalculan sin tocar las pasadas.
 
 ### User Story 13 - Cargar los saldos de apertura de una cooperativa que ya opera (Priority: P2)
 
-El contador de una cooperativa que llega desde SOLIDO carga, una sola vez, los saldos con que
+El contador de una cooperativa que llega desde el sistema anterior carga, una sola vez, los saldos con que
 arranca en el ERP: importa un archivo (o digita) con cuenta, tercero, documento cruce, centro de
 costo, sucursal y débito o crédito, el sistema valida cada fila con las mismas reglas de cuenta que
 cualquier comprobante, muestra los errores fila por fila, exige que cuadre, y al contabilizarlo el
@@ -1234,8 +1234,8 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
   cuatro ojos aplica al comprobante original, no a su reversión.
 - **Ejercicio**: coincide con el año calendario (enero a diciembre).
 - **Sin datos históricos en el ERP**: verificado el 2026-09-14 en DEV, QA y producción; no se
-  construye conversión de movimientos. Una cooperativa que viene de SOLIDO arranca con el
-  comprobante de apertura (US13); el archivo lo prepara su contador desde SOLIDO con la plantilla
+  construye conversión de movimientos. Una cooperativa que viene del sistema anterior arranca con el
+  comprobante de apertura (US13); el archivo lo prepara su contador desde el sistema anterior con la plantilla
   que el ERP publica.
 
 ## Dependencias

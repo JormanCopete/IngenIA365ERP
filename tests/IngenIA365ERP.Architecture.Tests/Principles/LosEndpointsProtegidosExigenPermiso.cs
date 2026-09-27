@@ -48,7 +48,7 @@ public class LosEndpointsProtegidosExigenPermiso
     ];
 
     /// <summary>
-    /// Catálogos de nómina heredados de SOLIDO (EPS, ARL, fondos, cajas, causas y parámetros de
+    /// Catálogos de nómina heredados del sistema anterior (EPS, ARL, fondos, cajas, causas y parámetros de
     /// retención, conceptos heredados, cuentas por concepto heredadas, autoaportes): sus rutas
     /// llevan sólo <c>RequireAuthorization()</c> del grupo y no un permiso propio. Es deuda
     /// conocida que no abre esta feature; quedan fuera <b>por nombre</b>, para que cualquier
