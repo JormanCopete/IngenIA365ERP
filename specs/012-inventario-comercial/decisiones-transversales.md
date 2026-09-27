@@ -1633,6 +1633,30 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `Sembrados` `CashMovement` → `MC` «Movimiento de caja» (con motivo) y `CashCountDifference` → `DA` «Diferencia de arqueo»,
     que se siembran cuando la entrega vigente llega a I3.
 
+  - **(nuevo, I3 medios y puntos, T590–T596)** En `Application/Core/PaymentMeans`: `ReglasDeMedioDePago.{AplicarAsync,
+    Combinacion, ArqueoDe, PagosAsync, DuplicadoAsync}` y sus reglas de `data.rule` (`ChangeOnlyInCash`, `CreditNotPhysicallyCounted`,
+    `CashMustBeCounted`, `CardRequiresNetwork`, `CardRequiresAcquirer`, `NetworkOnlyForCards`, `NetworkKindMismatch`,
+    `ReferenceKindRequired`, `ReferenceLengthRange`, `BankRequired`, `AccountRequiresBank`, `CreditDefaultsRequired`,
+    `CreditDefaultsOnlyForCredit`, `CreditDefaultsRange`, `DianCodeUnknown`, `ValidityRange`, `QuickKeyTaken`, `CommissionRange`,
+    `ToleranceRange`), `DatosDeMedio`, `ReferenciasDelMedio`, `PaymentMeansInput`, `CreditDefaultsInput`, `CreditDefaultsDto`,
+    `PaymentMeansDto`, `PaymentMeansAvailabilityDto`, `PaymentMeansErrors`, `VistaDeMediosDePago`, `PaymentMeansInputValidator`;
+    `ReglasDeTarjetas`, `VistaDeTarjetas`, `CardNetworkDto`, `CardAcquirerDto`, `CardTerminalDto`, `CashDenominationDto` y los
+    comandos y consultas `{Create,Update,Delete}{CardNetwork,CardAcquirer,CardTerminal,CashDenomination}Command`,
+    `List{CardNetworks,CardAcquirers,CardTerminals,CashDenominations}Query`, `Get{CardNetwork,CardAcquirer,CardTerminal,
+    CashDenomination}Query` (`CreateCashDenominationCommand.RetiresPublicId` cierra la vigencia de la retirada);
+    `PlantillaDeMediosDePago` (plantilla 11, con `ReferenciaPorDefecto`) e `ImportPaymentMeansCommand`. En
+    `Application/Inventory/Pos`: `ReglasDePuntoDeVenta.{AltaDePuntoAsync, ActualizarPuntoAsync, AplicarCajaAsync, ClasesAdmitidas,
+    ObligadaAFacturarAsync, FormatoDe}`, `DatosDePunto`, `DatosDeCaja`, `ErroresDePuntoDeVenta`, `CashRegisterPrintFormat`
+    { Ticket58=58, Ticket80=80, Letter=216 } (el ancho en mm que guarda `INV_CashRegisters.ReceiptWidthMm`; no es columna nueva),
+    `PointOfSaleDto`, `CashRegisterDto`, `CashRegisterDocumentTypeDto`, `CashRegisterOpenSessionDto`, `CashRegisterDocumentTypeInput`,
+    `ListCashRegistersQuery`, `PuntosDelAlcance`, `ReferenciasDelPunto`, `ReferenciasDeLaCaja`, `VistaDePuntosDeVenta`,
+    `DisponibilidadDeMedioEnBase.{LeerAsync, ReemplazarAsync}`, `GetPaymentMeansAvailabilityQuery`; en `Application/Inventory/Imports`
+    `PlantillaDePuntosDeVenta` (plantilla 10). Errores: `Core.PaymentMeans.NotFound`, `Core.CardNetwork.NotFound`,
+    `Core.CardAcquirer.NotFound`, `Core.CardTerminal.NotFound`, `Core.CashDenomination.{NotFound, InUse}`, `Core.Bank.NotFound`,
+    `Inventory.CashRegister.{NotFound, RoleDuplicate, RoleRequired, TransitWarehouse}`, `Inventory.PointOfSale.WarehouseBranchMismatch`.
+    Slugs de `CampoCodigo`: `medios-de-pago`, `franquicias`, `adquirentes`, `puntos-de-venta`, `cajas`. `FiltroDeAlcance` ve una venta
+    por su bodega **o** su punto (T35, FR-009).
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·

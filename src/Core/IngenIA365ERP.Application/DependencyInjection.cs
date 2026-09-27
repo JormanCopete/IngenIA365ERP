@@ -172,6 +172,9 @@ public static class DependencyInjection
         // para inactivar y para la busqueda la informa IExistenciasParaElCatalogo: sin kardex hasta que US2 registre la real.
         services.AddScoped<Inventory.Warehouses.VistaDeBodegas>();
         services.AddScoped<Common.Interfaces.Security.IAsignacionesDeBodega, Inventory.Security.Scopes.AsignacionesDeBodegaEnBase>();
+        // Feature 012, I3 (T596): el alcance por punto de venta sobre INV_UserPointOfSaleScopes, en lugar de la vacia que la API
+        // registra con TryAdd (SinAsignacionesDePuntoDeVenta).
+        services.AddScoped<Common.Interfaces.Security.IAsignacionesDePuntoDeVenta, Inventory.Security.Scopes.AsignacionesDePuntoDeVentaEnBase>();
         // Feature 012 (US2, T251-T258): el kardex. RegistroDeKardex es el unico escritor del kardex y sus proyecciones (con la
         // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
         // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.

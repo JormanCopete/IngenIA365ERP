@@ -87,7 +87,8 @@ public static class FiltroDeAlcance
 
     /// <summary>
     /// La visibilidad de <c>INV_Documents</c> sobre las entidades de la base de inventario (T140; data-model §5.2): por
-    /// bodega de origen <b>o</b> de destino; un documento sin ninguna de las dos, si alguna bodega de sus orígenes
+    /// bodega de origen <b>o</b> de destino, o por su punto de venta (I3, T596: la venta se ve si su bodega o su punto están en
+    /// el alcance); un documento sin ninguna de las dos, si alguna bodega de sus orígenes
     /// (<c>INV_DocumentLinks</c> vivos donde es el destino) está en el alcance. Falla cerrado: sin asignaciones, nada.
     /// <paramref name="vinculos"/> y <paramref name="documentos"/> son los <c>DbSet</c> del contexto (EF los traduce a
     /// subconsultas).
@@ -100,8 +101,12 @@ public static class FiltroDeAlcance
     {
         if (alcance.TodasLasBodegas) return consulta;
         var ids = alcance.Bodegas.ToArray();
+        // I3 (T596, T35, FR-009): un documento de venta también se ve si su punto de venta está en el alcance.
+        var todosLosPuntos = alcance.TodosLosPuntos;
+        var puntos = alcance.Puntos.ToArray();
         return consulta.Where(d =>
-            (d.WarehouseId != null && ids.Contains(d.WarehouseId.Value))
+            (d.PointOfSaleId != null && (todosLosPuntos || puntos.Contains(d.PointOfSaleId.Value)))
+            || (d.WarehouseId != null && ids.Contains(d.WarehouseId.Value))
             || (d.DestinationWarehouseId != null && ids.Contains(d.DestinationWarehouseId.Value))
             || (d.WarehouseId == null && d.DestinationWarehouseId == null
                 && vinculos.Any(l => l.TargetDocumentId == d.Id
@@ -123,12 +128,13 @@ public static class FiltroDeAlcance
             .ToListAsync(ct);
 
     /// <summary>
-    /// ¿Se ve este documento? Con bodega de origen o de destino, si alguna está en el alcance; sin ninguna, por las
-    /// bodegas de sus orígenes. Falla cerrado.
+    /// ¿Se ve este documento? Con su punto de venta en el alcance, sí (I3); con bodega de origen o de destino, si alguna está
+    /// en el alcance; sin ninguna, por las bodegas de sus orígenes. Falla cerrado.
     /// </summary>
     public static bool DocumentoVisible(AlcanceDeInventario alcance, InventoryDocument documento, IEnumerable<int> bodegasDeSusOrigenes)
     {
         if (alcance.TodasLasBodegas) return true;
+        if (documento.PointOfSaleId is int punto && alcance.IncluyePunto(punto)) return true;
         if (documento.WarehouseId is null && documento.DestinationWarehouseId is null)
             return DocumentoSinBodegaVisible(alcance, bodegasDeSusOrigenes);
         return (documento.WarehouseId is int o && alcance.IncluyeBodega(o))

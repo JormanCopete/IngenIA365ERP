@@ -100,10 +100,12 @@ public static class CatalogoDePlantillas
         new(9, Inventory.Salespeople.Import.PlantillaDeVendedores.Definicion,
             "/api/inventory/salespeople", "ImportSalespeopleCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.Salespeople.View", "Inventory.Salespeople.Manage"),
-        new(10, PlantillasQueSeImportanConI3.PuntosDeVenta,
+        // T595: la plantilla 10 declara sus columnas junto a su comando (ImportPointsOfSaleCommand).
+        new(10, PlantillaDePuntosDeVenta.Definicion,
             "/api/inventory/points-of-sale", "ImportPointsOfSaleCommand", EntregaDelComercio.I3, EntregaDelComercio.I1,
             "Inventory.PointsOfSale.View", "Inventory.PointsOfSale.Manage"),
-        new(11, PlantillasQueSeImportanConI3.MediosDePago,
+        // T592: la plantilla 11 declara sus columnas en Core/PaymentMeans/ImportPaymentMeansCommand.
+        new(11, Core.PaymentMeans.PlantillaDeMediosDePago.Definicion,
             "/api/core/payment-means", "ImportPaymentMeansCommand", EntregaDelComercio.I3, EntregaDelComercio.I1,
             "Core.PaymentMeans.View", "Core.PaymentMeans.Manage",
             "Columnas de disponibilidad (puntos, canales, tiposDeDocumento): Inventory.PointsOfSale.Manage"),

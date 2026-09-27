@@ -268,69 +268,12 @@ public static class PlantillaDeBodegas
 }
 
 /// <summary>
-/// Las columnas de las plantillas 10 a 13 (§10–§13): en I1 sólo se descargan vacías (T238, FR-095); su importación llega con
-/// I3 (T627–T629), que reemplaza estas definiciones por las suyas si hace falta. (nuevo)
+/// Las columnas de las plantillas 12 y 13 (§12–§13): en I1 sólo se descargan vacías (T238, FR-095); su importación llega con
+/// I3 (T627–T629), que reemplaza estas definiciones por las suyas si hace falta. Las 10 y 11 ya las declaran sus comandos
+/// (<see cref="PlantillaDePuntosDeVenta"/>, <c>Core.PaymentMeans.PlantillaDeMediosDePago</c>, T592 y T595). (nuevo)
 /// </summary>
 public static class PlantillasQueSeImportanConI3
 {
-    public static DefinicionDePlantilla PuntosDeVenta { get; } = new(CatalogoDePlantillas.PuntosDeVentaClave, "Puntos de venta y cajas", ModuloDeAuditoria.Inventory,
-    [
-        new HojaDePlantilla("PuntosDeVenta",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10, "llave; no cambia nunca"), C("nombre", TipoDeValor.Texto, true, 120),
-            C("sucursal", TipoDeValor.Sucursal, true), C("canal", TipoDeValor.Codigo, true, 10, "el punto fija el canal"),
-            C("posHabilitado", TipoDeValor.SiNo, reglas: "vacío = sí"), C("bodegaPorDefecto", TipoDeValor.Codigo, true, 10, "operativa y de la misma sucursal"),
-            C("activo", TipoDeValor.SiNo, reglas: "vacío = sí"),
-        ]),
-        new HojaDePlantilla("Cajas",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10, "llave, única en la cooperativa"), C("punto", TipoDeValor.Codigo, true, 10),
-            C("nombre", TipoDeValor.Texto, true, 60), C("bodega", TipoDeValor.Codigo, true, 10),
-            C("tipoVentaPos", TipoDeValor.Codigo, true, 10), C("tipoFactura", TipoDeValor.Codigo, largo: 10),
-            C("tipoNotaVentaPos", TipoDeValor.Codigo, largo: 10), C("tipoNotaCreditoFactura", TipoDeValor.Codigo, largo: 10),
-            C("tipoContingenciaVentaPos", TipoDeValor.Codigo, largo: 10), C("tipoContingenciaFactura", TipoDeValor.Codigo, largo: 10),
-            C("impresion", TipoDeValor.Enumeracion, reglas: "Tirilla80, Carta; vacío = Tirilla80"), C("activa", TipoDeValor.SiNo, reglas: "vacío = sí"),
-        ]),
-    ]);
-
-    public static DefinicionDePlantilla MediosDePago { get; } = new(CatalogoDePlantillas.MediosDePagoClave, "Medios de pago (con franquicias, adquirentes y datáfonos)",
-        ModuloDeAuditoria.PaymentMeans,
-    [
-        new HojaDePlantilla("Franquicias",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10), C("nombre", TipoDeValor.Texto, true, 60),
-            C("tipoDeTarjeta", TipoDeValor.Enumeracion, true, reglas: "Credit, Debit, Both"), C("activa", TipoDeValor.SiNo),
-        ]),
-        new HojaDePlantilla("Adquirentes",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10), C("nombre", TipoDeValor.Texto, true, 60),
-            C("tercero", TipoDeValor.Persona), C("activo", TipoDeValor.SiNo),
-        ]),
-        new HojaDePlantilla("Datafonos",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10), C("adquirente", TipoDeValor.Codigo, true, 10),
-            C("serial", TipoDeValor.Texto, largo: 40), C("cajaPorDefecto", TipoDeValor.Codigo, largo: 10), C("activo", TipoDeValor.SiNo),
-        ]),
-        new HojaDePlantilla("MediosDePago",
-        [
-            C("codigo", TipoDeValor.Codigo, true, 10, "llave; no cambia nunca"), C("nombre", TipoDeValor.Texto, true, 60),
-            C("orden", TipoDeValor.Entero), C("teclaRapida", TipoDeValor.Texto, largo: 1),
-            C("clase", TipoDeValor.Enumeracion, true, reglas: "Cash, CreditCard, DebitCard, AssociateCredit, CustomerCredit, BankDeposit, Transfer, Voucher, Check, Other"),
-            C("franquicia", TipoDeValor.Codigo, largo: 10), C("adquirente", TipoDeValor.Codigo, largo: 10), C("banco", TipoDeValor.Banco),
-            C("cuentaDestino", TipoDeValor.Texto, largo: 30), C("tipoCuentaDestino", TipoDeValor.Enumeracion, reglas: "Ahorros, Corriente"),
-            C("exigeReferencia", TipoDeValor.SiNo), C("tipoReferencia", TipoDeValor.Enumeracion),
-            C("largoMinimoReferencia", TipoDeValor.Entero), C("largoMaximoReferencia", TipoDeValor.Entero),
-            C("admiteVueltas", TipoDeValor.SiNo), C("admitePagoParcial", TipoDeValor.SiNo), C("referenciaUnica", TipoDeValor.SiNo),
-            C("arqueo", TipoDeValor.Enumeracion, reglas: "PhysicalCount, VoucherTotal, ByReference, None"), C("tolerancia", TipoDeValor.Monto),
-            C("comisionEsperadaPorcentaje", TipoDeValor.Porcentaje), C("comisionEsperadaValor", TipoDeValor.Monto),
-            C("codigoDian", TipoDeValor.Texto, true, 3), C("plazoDias", TipoDeValor.Entero), C("cuotas", TipoDeValor.Entero),
-            C("periodicidad", TipoDeValor.Enumeracion, reglas: "Mensual, Quincenal, Semanal"), C("lineaSugerida", TipoDeValor.Texto, largo: 20),
-            C("puntos", TipoDeValor.Lista, permiso: "Inventory.PointsOfSale.Manage"), C("canales", TipoDeValor.Lista, permiso: "Inventory.PointsOfSale.Manage"),
-            C("tiposDeDocumento", TipoDeValor.Lista, permiso: "Inventory.PointsOfSale.Manage"),
-            C("vigenteDesde", TipoDeValor.Fecha, true), C("vigenteHasta", TipoDeValor.Fecha), C("activo", TipoDeValor.SiNo),
-        ]),
-    ]);
-
     public static DefinicionDePlantilla ListasDePrecios { get; } = new(CatalogoDePlantillas.ListasDePreciosClave, "Listas de precios", ModuloDeAuditoria.Inventory,
     [
         new HojaDePlantilla("Listas",
