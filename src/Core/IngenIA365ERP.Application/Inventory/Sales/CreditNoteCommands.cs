@@ -87,7 +87,7 @@ public sealed class SaveCreditNoteDraftCommandValidator : AbstractValidator<Save
 /// <c>Inventory.CreditNote.ClassMismatch</c>; una clase ajena a la ruta, <c>Inventory.Document.TypeNotForRoute</c>;</item>
 /// <item>en las electrónicas, el concepto de corrección del catálogo DIAN (<see cref="CatalogoDian"/>);</item>
 /// <item>cada línea acredita a lo sumo lo que queda (original − notas vivas, calculado por <c>INV_DocumentLineLinks</c>): si se pasa,
-/// <c>Inventory.CreditNote.ExceedsRemaining</c> con <c>data.lines</c>; vínculos <c>NoteOf</c> y, con devolución, <c>ReturnOf</c>;</item>
+/// <c>Inventory.CreditNote.ExceedsRemaining</c> con <c>data.lines</c>; vínculo <c>NoteOf</c> (con devolución, <c>ReturnsGoods</c>);</item>
 /// <item>impuestos y retenciones con la foto del original en proporción (<see cref="CalculoTributarioDeVenta"/>, E9);</item>
 /// <item>reintegros <c>Refunded</c> con <c>RefundsPaymentId</c>: por defecto el mismo medio y en proporción; otro medio exige
 /// <c>Inventory.Sales.RefundOtherMeans</c> (sin él <c>Payments.RefundMeansNotAllowed</c>; con él queda auditado); lo que se arquea sale
@@ -255,12 +255,9 @@ public sealed class SaveCreditNoteDraftCommandHandler(
 
         var deNota = new DocumentLink { SourceDocument = original, SourceDocumentId = original.Id, TargetDocument = nota, Kind = DocumentLinkKind.NoteOf };
         db.DocumentLinks.Add(deNota);
-        DocumentLink? deDevolucion = null;
-        if (entrada.WithReturn)
-        {
-            deDevolucion = new DocumentLink { SourceDocument = original, SourceDocumentId = original.Id, TargetDocument = nota, Kind = DocumentLinkKind.ReturnOf };
-            db.DocumentLinks.Add(deDevolucion);
-        }
+        // Una nota de venta se enlaza sólo con NoteOf (data-model §5.5: ReturnOf es la devolución a proveedor); si devuelve mercancía
+        // lo dice ReturnsGoods. Hasta el 2026-09-27 la devolución agregaba un segundo vínculo ReturnOf con las mismas líneas y el
+        // índice único (SourceLineId, TargetLineId) de INV_DocumentLineLinks la rechazaba: toda nota con devolución respondía 500.
         var ubicacion = bodegaId is int b2
             ? await db.WarehouseLocations.AsNoTracking().Where(l => l.WarehouseId == b2 && l.IsDefault).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct)
             : null;
@@ -292,7 +289,6 @@ public sealed class SaveCreditNoteDraftCommandHandler(
             nota.Lines.Add(linea);
             lineaOriginal[numero] = origen.LineNumber;
             deNota.LineLinks.Add(new DocumentLineLink { DocumentLink = deNota, SourceLine = origen, SourceLineId = origen.Id, TargetLine = linea, QuantityBase = cantidadBase });
-            deDevolucion?.LineLinks.Add(new DocumentLineLink { DocumentLink = deDevolucion, SourceLine = origen, SourceLineId = origen.Id, TargetLine = linea, QuantityBase = cantidadBase });
         }
 
         // (8) Impuestos y retenciones con la foto del original en proporción (E9), y totales (T26).
@@ -457,7 +453,8 @@ public static class NotasDeVenta
 
     /// <summary>
     /// Lo que queda por acreditar de cada línea viva del original, sin contar la nota <paramref name="excluir"/>: cantidad = original −
-    /// devuelto por notas vivas (<c>ReturnOf</c>); valor = neto original − neto acreditado por notas vivas (<c>NoteOf</c>). Vivas = en
+    /// devuelto por notas vivas con devolución (<c>NoteOf</c> de una nota con <c>ReturnsGoods</c>); valor = neto original − neto acreditado
+    /// por notas vivas (<c>NoteOf</c>). Vivas = en
     /// borrador, en aprobación o confirmadas y no anuladas ni descartadas.
     /// </summary>
     public static async Task<IReadOnlyDictionary<int, ErroresDeVentas.Restante>> RestantesAsync(IApplicationDbContext db, InventoryDocument original, int? excluir,
@@ -467,16 +464,16 @@ public static class NotasDeVenta
         var ids = vivasDelOriginal.Select(l => l.Id).ToList();
         var consumos = await db.DocumentLineLinks.AsNoTracking()
             .Where(x => !x.IsDeleted && ids.Contains(x.SourceLineId) && !x.DocumentLink!.IsDeleted
-                && (x.DocumentLink.Kind == DocumentLinkKind.NoteOf || x.DocumentLink.Kind == DocumentLinkKind.ReturnOf)
+                && x.DocumentLink.Kind == DocumentLinkKind.NoteOf
                 && x.DocumentLink.TargetDocumentId != (excluir ?? 0)
                 && (x.DocumentLink.TargetDocument!.Status == DocumentStatus.Draft || x.DocumentLink.TargetDocument.Status == DocumentStatus.PendingApproval
                     || x.DocumentLink.TargetDocument.Status == DocumentStatus.Confirmed)
                 && !x.TargetLine!.IsDeleted)
-            .Select(x => new { x.SourceLineId, x.DocumentLink!.Kind, x.QuantityBase, x.TargetLine!.NetAmount })
+            .Select(x => new { x.SourceLineId, x.DocumentLink!.TargetDocument!.ReturnsGoods, x.QuantityBase, x.TargetLine!.NetAmount })
             .ToListAsync(ct);
         return vivasDelOriginal.ToDictionary(l => l.Id, l => new ErroresDeVentas.Restante(l.PublicId,
-            l.QuantityBase - consumos.Where(c => c.SourceLineId == l.Id && c.Kind == DocumentLinkKind.ReturnOf).Sum(c => c.QuantityBase),
-            l.NetAmount - consumos.Where(c => c.SourceLineId == l.Id && c.Kind == DocumentLinkKind.NoteOf).Sum(c => c.NetAmount)));
+            l.QuantityBase - consumos.Where(c => c.SourceLineId == l.Id && c.ReturnsGoods).Sum(c => c.QuantityBase),
+            l.NetAmount - consumos.Where(c => c.SourceLineId == l.Id).Sum(c => c.NetAmount)));
     }
 
     /// <summary><c>Inventory.CreditNote.ExceedsRemaining</c> si alguna línea de la nota acredita (o devuelve) más de lo que queda; nulo si no.</summary>

@@ -210,6 +210,43 @@ public class SalesDocumentsTests
         var id = v.Documento(nota.Value.PublicId).Id;
         var entrada = v.Db.KardexEntries.Single(k => k.DocumentId == id);
         (entrada.Kind, entrada.QuantityBase, entrada.UnitCost).Should().Be((KardexEntryKind.Entry, 1m, 1000m));
+
+        // Un solo vínculo por par de líneas (índice único (SourceLineId, TargetLineId) en la base, que InMemory no aplica): la nota con
+        // devolución se enlaza sólo con NoteOf. Hasta el 2026-09-27 agregaba además ReturnOf y en la base respondía 500 (e2e T564).
+        var pares = v.Db.DocumentLineLinks.Where(x => !x.IsDeleted && x.TargetLine!.DocumentId == id).Select(x => new { x.SourceLineId, x.TargetLineId }).ToList();
+        pares.Should().OnlyHaveUniqueItems().And.ContainSingle();
+    }
+
+    [Fact]
+    public async Task La_validacion_previa_evalua_los_sobres_con_un_numero_provisional_porque_el_numero_se_da_despues()
+    {
+        // La validación previa corre antes del cerrojo y del número (flujo canónico): con el número vacío, una cuenta que exige documento
+        // cruce (el crédito provisional, FV + número) nunca era contabilizable y la última aprobación del crédito respondía NotPostable
+        // (e2e T650, 2026-09-27). Lo evaluado lleva un número provisional; lo emitido, el definitivo.
+        var v = await VentasDePrueba.CrearAsync();
+        v.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeInventario.Modulo, Key = ParametrosDeInventario.ContabilidadModoDePaso, ScopeKind = ParameterScopeKind.None,
+            Value = "EnLinea", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+        });
+        await v.Db.SaveChangesAsync();
+        IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.MensajeContableDto> evaluados = [];
+        var validador = Substitute.For<IPasoDeValidacionPrevia>();
+        validador.EvaluarAsync(default!, default!, default).ReturnsForAnyArgs(ci =>
+        {
+            evaluados = ci.ArgAt<IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.MensajeContableDto>>(1);
+            return Task.FromResult(Result.Success(new ResultadoDeValidacionPrevia(IngenIA365ERP.Domain.Enums.Integration.PrevalidationOutcome.Postable, [])));
+        });
+        var borrador = await v.GuardarAsync(v.Venta(lineas: v.Linea(v.P1, 1m)));
+        var total = v.Documento(borrador.Value.PublicId).AmountDue;
+        await v.GuardarAsync(v.Venta(pagos: [v.Pago(v.Efectivo, total)], lineas: v.Linea(v.P1, 1m)), borrador.Value.PublicId);
+
+        var r = await new ConfirmInventoryDocumentCommandHandler(v.Db, v.Confirmacion(validador))
+            .Handle(new ConfirmInventoryDocumentCommand(borrador.Value.PublicId, DocumentClassGroup.Sales), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        evaluados.Should().NotBeEmpty("con modo en línea se evalúa");
+        evaluados.Should().OnlyContain(m => !string.IsNullOrWhiteSpace(m.Envelope.Origin.Number), "el número provisional llena el cruce");
     }
 
     // ----------------------------------------------------------------------------------------------- anulación --

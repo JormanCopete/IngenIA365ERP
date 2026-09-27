@@ -10,27 +10,30 @@ using MedioDePago = IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans;
 
 namespace IngenIA365ERP.Application.Core.PaymentMeans;
 
-/// <summary>Las reglas de forma del cuerpo de un medio (400 <c>Validation.Invalid</c>), comunes al alta y a la edición. (nuevo)</summary>
-public sealed class PaymentMeansInputValidator : AbstractValidator<PaymentMeansInput>
+/// <summary>Las reglas de forma del cuerpo de un medio (400 <c>Validation.Invalid</c>), comunes al alta y a la edición. (nuevo)
+/// No es un validador propio a propósito: Carter y <c>AddValidatorsFromAssembly</c> registran todo <c>IValidator</c> del ensamblado
+/// (también los internos) y el contenedor no sabe construir uno que pide un <c>bool</c>; la API no arrancaba (2026-09-27). Los
+/// validadores de los comandos las aplican con <c>ChildRules</c> (<c>LosValidadoresSeConstruyenPorInyeccion</c>).</summary>
+internal static class ReglasDeFormaDelMedio
 {
-    public PaymentMeansInputValidator(bool conCodigo)
+    public static void Definir(InlineValidator<PaymentMeansInput> v, bool conCodigo)
     {
         if (conCodigo)
-            RuleFor(x => x.Code).NotEmpty().MaximumLength(CodigoDeCatalogo.LargoCorto)
+            v.RuleFor(x => x.Code).NotEmpty().MaximumLength(CodigoDeCatalogo.LargoCorto)
                 .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(ReglasDeMedioDePago.LargoDeNombre);
-        RuleFor(x => x.Class).IsInEnum();
-        RuleFor(x => x.QuickKey).Matches("^[A-Za-z0-9]$").When(x => !string.IsNullOrWhiteSpace(x.QuickKey))
+        v.RuleFor(x => x.Name).NotEmpty().MaximumLength(ReglasDeMedioDePago.LargoDeNombre);
+        v.RuleFor(x => x.Class).IsInEnum();
+        v.RuleFor(x => x.QuickKey).Matches("^[A-Za-z0-9]$").When(x => !string.IsNullOrWhiteSpace(x.QuickKey))
             .WithMessage("La tecla rápida es una letra o un dígito.");
-        RuleFor(x => x.DestinationAccountNumber).MaximumLength(ReglasDeMedioDePago.LargoDeCuenta);
-        RuleFor(x => x.DestinationAccountType).InclusiveBetween((byte)1, (byte)2).When(x => x.DestinationAccountType is not null)
+        v.RuleFor(x => x.DestinationAccountNumber).MaximumLength(ReglasDeMedioDePago.LargoDeCuenta);
+        v.RuleFor(x => x.DestinationAccountType).InclusiveBetween((byte)1, (byte)2).When(x => x.DestinationAccountType is not null)
             .WithMessage("El tipo de cuenta es 1 (ahorros) o 2 (corriente).");
-        RuleFor(x => x.ReferenceKind).IsInEnum().When(x => x.ReferenceKind is not null);
-        RuleFor(x => x.CountMethod).IsInEnum().When(x => x.CountMethod is not null);
-        RuleFor(x => x.DianPaymentMeansCode).NotEmpty().MaximumLength(3);
-        RuleFor(x => x.ValidFrom).NotEmpty();
-        RuleFor(x => x.Notes).MaximumLength(ReglasDeMedioDePago.LargoDeNotas);
-        RuleFor(x => x.CreditDefaults!.SuggestedLineCode).MaximumLength(ReglasDeMedioDePago.LargoDeLinea).When(x => x.CreditDefaults is not null);
+        v.RuleFor(x => x.ReferenceKind).IsInEnum().When(x => x.ReferenceKind is not null);
+        v.RuleFor(x => x.CountMethod).IsInEnum().When(x => x.CountMethod is not null);
+        v.RuleFor(x => x.DianPaymentMeansCode).NotEmpty().MaximumLength(3);
+        v.RuleFor(x => x.ValidFrom).NotEmpty();
+        v.RuleFor(x => x.Notes).MaximumLength(ReglasDeMedioDePago.LargoDeNotas);
+        v.RuleFor(x => x.CreditDefaults!.SuggestedLineCode).MaximumLength(ReglasDeMedioDePago.LargoDeLinea).When(x => x.CreditDefaults is not null);
     }
 }
 
@@ -46,7 +49,7 @@ public sealed record CreatePaymentMeansCommand(PaymentMeansInput Means) : IReque
 public sealed class CreatePaymentMeansCommandValidator : AbstractValidator<CreatePaymentMeansCommand>
 {
     public CreatePaymentMeansCommandValidator() =>
-        RuleFor(x => x.Means).NotNull().SetValidator(new PaymentMeansInputValidator(conCodigo: true));
+        RuleFor(x => x.Means).NotNull().ChildRules(v => ReglasDeFormaDelMedio.Definir(v, conCodigo: true));
 }
 
 public sealed class CreatePaymentMeansCommandHandler(IApplicationDbContext db, IDateTimeService reloj)
@@ -79,7 +82,7 @@ public sealed class UpdatePaymentMeansCommandValidator : ValidadorConMotivo<Upda
     public UpdatePaymentMeansCommandValidator()
     {
         RuleFor(x => x.PaymentMeansPublicId).NotEmpty();
-        RuleFor(x => x.Means).NotNull().SetValidator(new PaymentMeansInputValidator(conCodigo: false));
+        RuleFor(x => x.Means).NotNull().ChildRules(v => ReglasDeFormaDelMedio.Definir(v, conCodigo: false));
     }
 }
 

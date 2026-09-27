@@ -213,14 +213,17 @@ public sealed class InventoryRulesCompletenessQueryHandler(
     /// <summary>
     /// Los medios de pago activos sin regla <c>MedioDePago</c> vigente (FR-098, SC-024; I3, T622). Con puntos de venta publicados, un
     /// medio cuyas reglas son todas de puntos concretos queda sin cuenta en los demás: sale una fila por cada punto que no cubre. Un
-    /// medio sin ninguna regla sale una sola vez, sin punto.
+    /// medio sin ninguna regla sale una sola vez, sin punto. Cuenta sólo la regla de la <b>venta</b>, que es donde entra el cobro: la de la
+    /// nota o la de un movimiento de caja del mismo medio no la reemplaza —hasta el 2026-09-27 la tapaban, y un medio que la validación
+    /// previa rechazaba al cobrar no salía en la completitud (e2e T567, SC-024)—.
     /// </summary>
     public static List<MedioSinCuentaDto> MediosSinCuenta(CatalogoDeDimensionesDto catalogo, IReadOnlyList<InventoryPostingRule> vigentes)
     {
         var resultado = new List<MedioSinCuentaDto>();
         foreach (var m in catalogo.PaymentMeans ?? [])
         {
-            var suyas = vigentes.Where(r => r.Role == R.MedioDePago && string.Equals(r.PaymentMeansCode, m.Code, StringComparison.OrdinalIgnoreCase)).ToList();
+            var suyas = vigentes.Where(r => r.Role == R.MedioDePago && r.Operation == OperacionesDeInventario.Venta
+                && string.Equals(r.PaymentMeansCode, m.Code, StringComparison.OrdinalIgnoreCase)).ToList();
             if (suyas.Count == 0)
             {
                 resultado.Add(new MedioSinCuentaDto(m.Code, m.Name, null));

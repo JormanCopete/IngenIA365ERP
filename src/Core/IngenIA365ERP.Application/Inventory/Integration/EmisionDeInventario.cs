@@ -862,8 +862,9 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
     }
 
     /// <summary>
-    /// El contenido de un mensaje con todos sus importes y cantidades con el signo contrario (§6.9). Las tarifas, los números
-    /// de línea, los enums y los pagos (que llevan el sentido en <c>direction</c>, no en el signo) no cambian.
+    /// El contenido de un mensaje con todos sus importes y cantidades con el signo contrario (§6.9), <b>también el de los pagos</b>
+    /// (mensajes.md §3: su sentido va en <c>direction</c>, que no cambia; su <c>amount</c> sí se invierte). Las tarifas, los números de
+    /// línea y los enums no cambian. Hasta el 2026-09-27 los pagos se saltaban y el espejo de una venta descuadraba (e2e T570).
     /// </summary>
     public static JsonNode? Invertido(string payloadJson)
     {
@@ -878,7 +879,6 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
                 case JsonObject objeto:
                     foreach (var (nombre, valor) in objeto.ToList())
                     {
-                        if (nombre == "payments") continue;
                         if (valor is JsonValue v && ImportesYCantidades.Contains(nombre) && v.TryGetValue<decimal>(out var numero))
                             objeto[nombre] = JsonValue.Create(-numero);
                         else

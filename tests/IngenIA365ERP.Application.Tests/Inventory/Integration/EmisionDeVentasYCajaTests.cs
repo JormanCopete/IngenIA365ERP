@@ -38,6 +38,22 @@ public class EmisionDeVentasYCajaTests
             : e.GetProperty(propiedad).GetInt32() == Convert.ToInt32(valor);
 
     [Fact]
+    public void En_la_anulacion_los_pagos_tambien_invierten_su_importe_y_conservan_su_sentido()
+    {
+        // mensajes.md §3: «Los pagos llevan amount positivo y el sentido en direction; en un DocumentoAnulado su amount también se
+        // invierte». Hasta el 2026-09-27 se saltaban y el espejo de una venta descuadraba por el doble de lo cobrado (e2e T570).
+        var original = """{"totals":{"total":100000.00},"lines":[{"grossAmount":100000.00}],"payments":[{"direction":"Received","amount":100000.00,"lineNumber":1}]}""";
+
+        var invertido = EmisionDeInventario.Invertido(original)!;
+
+        invertido["totals"]!["total"]!.GetValue<decimal>().Should().Be(-100000m);
+        invertido["lines"]![0]!["grossAmount"]!.GetValue<decimal>().Should().Be(-100000m);
+        invertido["payments"]![0]!["amount"]!.GetValue<decimal>().Should().Be(-100000m);
+        invertido["payments"]![0]!["direction"]!.GetValue<string>().Should().Be("Received", "el sentido no cambia: lo invierte el signo");
+        invertido["payments"]![0]!["lineNumber"]!.GetValue<int>().Should().Be(1);
+    }
+
+    [Fact]
     public async Task VentaFacturada_cumple_sus_invariantes_y_lleva_un_pago_por_medio_con_su_tercero_sin_numero_de_tarjeta()
     {
         var v = await VentasDePrueba.CrearAsync();

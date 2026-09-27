@@ -898,7 +898,7 @@ JSON embebidos versionados (T40), no semillas.
     guardan), el record struct `ValorInterpretado(Admitido, Texto, Valor)`, `DefinicionDeParametro` (`Modulo`, `Clave`,
     `Descripcion`, `Tipo`, `ValoresAdmitidos`, `ValoresDesde`, `DefectoSeguro`, `AmbitosAdmitidos`, `PermisoAdicional`,
     `SelladoAlConfirmar`, `ExigeFuenteLegal`, `DisponibleDesde`, `AdmiteVacio`, `Minimo`, `Maximo`, `Patron`;
-    `Interpretar(texto, entrega)`, `Admitidos(entrega)`, `AdmiteAmbito`) y `CatalogoDeParametros` (`EntregaVigente` = I1,
+    `Interpretar(texto, entrega)`, `Admitidos(entrega)`, `AdmiteAmbito`) y `CatalogoDeParametros` (`EntregaVigente` = I1; **I3 desde el cierre de las e2e de I3, 2026-09-27**,
     `Modulos`, `Todas`, `Buscar(modulo, clave)`); constantes de clave y de permiso en los tres catálogos
     (`ParametrosDeInventario.PermisoDeCosteo`, `ParametrosTributarios.Permiso`, `ParametrosDeFacturacionElectronica.Permiso`);
     `ParameterVersion.VigenteEn(fecha)`; índice `UK_COR_ParameterVersions_Module_Key_Scope_ValidFrom`. En
@@ -1847,6 +1847,18 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     de cuentas). Shared: `VentasClient.EvaluarCreditoAsync`/`ObtenerCreditoAsync`, DTO espejo en `VentasDtos.Documentos`
     (`EvaluacionDeCreditoRequest`, `EvaluacionDeCreditoDto`, `CreditoDeLaVentaDto`…), la evaluación en `PanelDeCobro` (parámetros `Cliente`,
     `PuntoDeVenta`, `TipoDeDocumento`, `Fecha`) y la pestaña «Crédito» de `/ventas/documentos/{id}`.
+- **I3, cierre de las e2e (T563–T570, T650; 2026-09-27) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I3** (las clases de venta y de
+    caja se operan en la aplicación; la semilla de tipos siembra además `MC` y `DA`; las ventas no se siembran: sus tipos los crea la
+    cooperativa). Correcciones que las e2e destaparon y sus nombres: `Core/PaymentMeans/ReglasDeFormaDelMedio.Definir(InlineValidator, conCodigo)`
+    reemplaza al validador `PaymentMeansInputValidator(bool)` (Carter y `AddValidatorsFromAssembly` registran todo `IValidator`, también los
+    internos, y la API no arrancaba); `ConfirmacionDeDocumento.NumeroProvisionalDeLaValidacion` («PORNUMERAR»: el número con que la validación
+    previa evalúa un documento todavía sin número, para que el cruce `FV` + número del crédito provisional se evalúe como quedará);
+    `HuellaDeOperacion` escribe los números **sin escala** (una entidad en memoria y releída dan la misma huella: el descuento y el crédito
+    aprobados no coincidían con la línea releída); la nota de venta se enlaza sólo con `NoteOf` (el `ReturnOf` duplicaba el par de líneas del
+    índice único `UK_INV_DocumentLineLinks_SourceLine_TargetLine`; la devolución la dice `ReturnsGoods`); `EmisionDeInventario.Invertido`
+    invierte también el `amount` de los pagos (mensajes.md §3); `SesionesDeCaja.MovimientosAsync` da a la reclasificación el datáfono del pago
+    corregido; `ToqueDeSesionDeCaja` pone al día el token de concurrencia de la sesión seguida; la completitud cuenta sólo la regla
+    `MedioDePago` de la operación `Venta`; `TopesDeDescuento` sin filtrar la junción de roles por `IsDeleted`.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1915,6 +1927,8 @@ entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US1
 ### 2.18 Pruebas con nombre fijo
 
 **Arquitectura nuevas** (`tests/IngenIA365ERP.Architecture.Tests/Principles`):
+**(nuevo, 2026-09-27)** `LosValidadoresSeConstruyenPorInyeccion` (ningún `IValidator` de Application pide un valor que el contenedor
+no sabe dar) y, en `LaJuncionDeRolesNoTieneBorradoLogico`, también la sintaxis de consulta (`from ur in db.UserRoles …`).
 `InventarioNoConoceContabilidadNiCartera` (ArchUnit + regex + lista exacta de
 `IContabilidadParaInventario`/`IConsultasDeCartera`: la comprobación de FR-014),
 `NingunTrabajoDeFondoOperaSinCooperativa` (todo `BackgroundService` con `ISender` pasa por
@@ -1965,7 +1979,11 @@ EntregaGarantizadaTests, IdempotenciaDeOperacionesTests, LotesProgramadosTests}`
 `Inventory/{ConcurrenciaDeExistenciasTests, CompraDirectaTests, TrasladoEnDosPasosTests,
 ConteoYAjusteTests, CierreDePeriodoTests, SaldoInicialYActivacionTests}`,
 `Accounting/{ContabilizacionPorMensajesTests, ContabilizacionDeVentasPorMensajesTests}` (la segunda en I3: los casos de I2 que necesitan ventas), `Ventas/{VentaPosCompletaTests, BonoUnicoConcurrenteTests,
-UnaSesionPorCajaTests, BusquedaDeProductos50kTests, CreditoProvisionalTests}`,
+UnaSesionPorCajaTests, BusquedaDeProductos50kTests, CreditoProvisionalTests, CierreDeCajaPorMedioTests}` (**(nuevo, T563–T570, T650)** con los
+ayudantes `Ventas/EscenarioDeVentas` —la cooperativa de ventas de quickstart §5.1 sobre `EscenarioDeInventario`: no obligada a facturar,
+`RV`/`NV`, `MOSTRADOR`, PV1 con `CJ1`/`CJ2`, los seis medios con franquicias, adquirentes y datáfonos, la lista `GENERAL`, `cajero.1`,
+`cajero.2` y `supervisor` con sus topes y montos— y `Ventas/ContabilidadDeVentasE2E` —la misma con la contabilidad iniciada y las cuentas y
+reglas de la venta—; `VentaPosCompletaTests.cs` lleva además la clase `CadaPagoLlegaASuCuentaTests`, T567, en su propia cooperativa),
 `Security/{AprobacionMultinivelTests, AlcancePorBodegaTests, IntegridadDeAuditoriaTests}`,
 `ElectronicInvoicing/DocumentosElectronicosTests` (con `CanalSimulado`). Las de volumen (SC-001 al pie
 de la letra, 50.000 productos, SC-020) reportan **Skip explícito** sin `RUN_PERF_TESTS=1`, nunca un

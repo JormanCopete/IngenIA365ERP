@@ -393,6 +393,42 @@ public class CashCommandsTests
     }
 
     [Fact]
+    public async Task Una_reclasificacion_entre_tarjetas_mueve_lo_esperado_del_datafono_del_pago_corregido()
+    {
+        // La Visa era una Mastercard pasada por el mismo datáfono: lo esperado de ese datáfono pasa de un medio al otro, así el lote
+        // del datáfono cuadra en los dos (e2e T566, 2026-09-27: el origen iba sin datáfono y el cierre pedía motivo para dos
+        // diferencias que no existían).
+        var t = await CrearAsync();
+        var datafono = new IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal { CardAcquirerId = t.V.Tarjeta.CardAcquirerId!.Value, Code = "TER01" };
+        var master = new IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans
+        {
+            Code = "MASTER", Name = "MASTER", Class = IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass.CreditCard, DianPaymentMeansCode = "48",
+            CardNetworkId = t.V.Tarjeta.CardNetworkId, CardAcquirerId = t.V.Tarjeta.CardAcquirerId, CountMethod = IngenIA365ERP.Domain.Enums.Core.CashCountMethod.VoucherTotal,
+            OfferedAtAllPointsOfSale = true, OfferedInAllChannels = true, OfferedForAllDocumentTypes = true, ValidFrom = new DateOnly(2026, 1, 1),
+        };
+        t.Db.CardTerminals.Add(datafono);
+        t.Db.PaymentMeans.Add(master);
+        await t.Db.SaveChangesAsync();
+        var venta = await t.V.VentaConfirmadaAsync(total => [new DocumentPaymentInput(t.V.Tarjeta.PublicId, total, AuthorizationCode: "123456", Last4: "4242",
+            CardTerminalPublicId: datafono.PublicId, CashSessionPublicId: t.V.Sesion.PublicId)], lineas: t.V.Linea(t.V.P1, 1m));
+        var pago = t.Db.DocumentPayments.Single(p => p.DocumentId == venta.Id);
+
+        var r = await t.Guardar().Handle(new SaveInventoryDraftCommand(null, DocumentClassGroup.Cash,
+            new CashMovementInput(t.TipoMovimiento, t.V.Sesion.PublicId, CashMovementKind.ReclassificationBetweenMeans, t.V.Tarjeta.PublicId, venta.AmountDue,
+                "Era una Mastercard", TargetPaymentMeansPublicId: master.PublicId, ReclassifiedPaymentPublicId: pago.PublicId).ComoBorrador(t.TipoMovimiento)), default);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        (await t.ConfirmarAsync(r.Value.PublicId)).IsSuccess.Should().BeTrue();
+
+        var esperado = await t.Sesiones().EsperadoAsync(t.V.Sesion, null, default);
+        var visa = esperado.Lines.Single(l => l.Medio.PaymentMeansId == t.V.Tarjeta.Id);
+        var mc = esperado.Lines.Single(l => l.Medio.PaymentMeansId == master.Id);
+        visa.Expected.Should().Be(0m);
+        visa.Terminals.Single(d => d.CardTerminalId == datafono.Id).Expected.Should().Be(0m, "sale del datáfono del pago que corrige");
+        mc.Expected.Should().Be(venta.AmountDue);
+        mc.Terminals.Single(d => d.CardTerminalId == datafono.Id).Expected.Should().Be(venta.AmountDue, "y entra al mismo si no dice otro");
+    }
+
+    [Fact]
     public async Task Un_retiro_sobre_lo_esperado_es_ExceedsExpected()
     {
         var t = await CrearAsync();

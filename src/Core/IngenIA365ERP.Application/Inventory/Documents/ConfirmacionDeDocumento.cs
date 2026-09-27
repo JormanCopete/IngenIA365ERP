@@ -68,6 +68,9 @@ public sealed class ConfirmacionDeDocumento(
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
 
+    /// <summary>El número con que la validación previa evalúa un documento que todavía no lo tiene (sólo en lo evaluado, nunca se emite).</summary>
+    public const string NumeroProvisionalDeLaValidacion = "PORNUMERAR";
+
     public async Task<Result<ConfirmationResultDto>> ConfirmarAsync(PedidoDeConfirmacion pedido, CancellationToken ct)
     {
         var actor = await actorActual.ObtenerAsync(ct);
@@ -202,6 +205,10 @@ public sealed class ConfirmacionDeDocumento(
             if (provisionales.Count > 0)
             {
                 var origenDeEmision = await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct);
+                // El número se da después (paso 4): lo evaluado lleva uno provisional, para que la cuenta que exige documento cruce del
+                // propio documento (el crédito provisional: FV + número de la venta) se evalúe como quedará (e2e T650, 2026-09-27).
+                if (string.IsNullOrEmpty(origenDeEmision.Number))
+                    origenDeEmision = origenDeEmision with { Number = $"{documento.Prefix}{NumeroProvisionalDeLaValidacion}" };
                 var solicitudes = MensajesDelDocumento.Solicitudes(origenDeEmision, original, origenes, provisionales,
                     new ModoDeEntrega.Sellado(DeliveryMode.Online), PrevalidationOutcome.NotApplicable);
                 var sobres = MensajesDelDocumento.Sobres(solicitudes, actor.CentralUserId, actor.Name, new DateTimeOffset(reloj.UtcNow, TimeSpan.Zero));

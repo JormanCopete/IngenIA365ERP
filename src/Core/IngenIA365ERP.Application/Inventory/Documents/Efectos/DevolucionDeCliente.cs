@@ -52,7 +52,7 @@ public abstract class DevolucionDeCliente(
 
         // Cada línea entra al costo con que salió su línea original (UnitCost que dejó el kardex de la venta).
         var vinculos = await db.DocumentLineLinks.AsNoTracking()
-            .Where(x => !x.IsDeleted && x.DocumentLink!.TargetDocumentId == nota.Id && x.DocumentLink.Kind == DocumentLinkKind.ReturnOf && !x.DocumentLink.IsDeleted)
+            .Where(x => !x.IsDeleted && x.DocumentLink!.TargetDocumentId == nota.Id && x.DocumentLink.Kind == DocumentLinkKind.NoteOf && !x.DocumentLink.IsDeleted)
             .Select(x => new { x.TargetLineId, x.SourceLine!.UnitCost }).ToListAsync(ct);
         var movimientos = nota.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m && productos.Value.Contains(l.ProductId)).OrderBy(l => l.LineNumber)
             .Select(l => new MovimientoDeKardex(l, bodega, l.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen,

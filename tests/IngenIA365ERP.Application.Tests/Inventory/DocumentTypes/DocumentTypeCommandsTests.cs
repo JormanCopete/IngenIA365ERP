@@ -292,9 +292,11 @@ public class DocumentTypeCommandsTests
 
         r.Value.Should().HaveCount(34);
         r.Value.Single(c => c.Class == DocumentClass.PositiveAdjustment).Operable.Should().BeTrue();
+        // Desde I3 las ventas son operables (EntregaVigente = I3); el documento soporte sigue esperando a I4.
+        r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeFalse();
         r.Value.Single(c => c.Class == DocumentClass.SalesInvoice).Should().BeEquivalentTo(new
         {
-            Operable = false, IsFiscal = true, NumberedBy = Domain.Inventory.Documents.NumberedBy.DianResolution,
+            Operable = true, IsFiscal = true, NumberedBy = Domain.Inventory.Documents.NumberedBy.DianResolution,
         }, o => o.ExcludingMissingMembers());
     }
 
@@ -306,10 +308,13 @@ public class DocumentTypeCommandsTests
         var insertadas = await InventoryDocumentTypesSeeder.AplicarAsync(_db, default);
 
         var tipos = await _db.InventoryDocumentTypes.Include(t => t.Sequences).ToListAsync();
-        var operables = Domain.Inventory.Documents.ClasesDeDocumento.Todas.Where(c => c.Operable()).Select(c => c.Class).ToList();
+        // Las clases de venta de I3 son operables pero no se siembran: sus tipos (RV, FV, NC…) los crea la cooperativa con su
+        // numeración (quickstart §2.5); de I3 sólo se siembran los dos de caja (T588).
+        var operables = Domain.Inventory.Documents.ClasesDeDocumento.Todas.Where(c => c.Operable())
+            .Where(c => InventoryDocumentTypesSeeder.Sembrados.ContainsKey(c.Class)).Select(c => c.Class).ToList();
         // US11 (T397): además, los dos tipos de ajuste de conteo (CONP, CONN) con su política propia.
         var deConteo = InventoryDocumentTypesSeeder.AjustesDeConteo.Values.Select(v => v.Codigo).ToHashSet();
-        tipos.Where(t => !deConteo.Contains(t.Code)).Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase de I1, incluida la anulación");
+        tipos.Where(t => !deConteo.Contains(t.Code)).Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase sembrada operable (las de I1, incluida la anulación, y las dos de caja de I3)");
         tipos.Should().OnlyContain(t => t.IsSeeded && t.IsActive);
         tipos.Should().OnlyContain(t => t.Sequences.Count == 1 && t.Sequences.Single().Prefix == string.Empty
             && t.Sequences.Single().ValidFrom == InventoryDocumentTypesSeeder.VigenciaDeLaSemilla && t.Sequences.Single().NextValue == 1);

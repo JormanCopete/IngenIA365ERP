@@ -208,9 +208,9 @@ public sealed class VentasDePrueba
     public SaveInventoryDraftCommandHandler Guardar() =>
         new(Db, K.Maestros(), K.Alcance, K.Actor, Compras.C.Reloj, Efectos(), K.Vista(), [Borrador()]);
 
-    public ConfirmacionDeDocumento Confirmacion() => new(
+    public ConfirmacionDeDocumento Confirmacion(IPasoDeValidacionPrevia? validacionPrevia = null) => new(
         Db, K.Maestros(), K.Actor, Compras.C.Reloj, Efectos(), K.Motor, K.Cerrojo, new Numerador(Db, K.Cerrojo),
-        new EmisorDeMensajes(Db, K.Actor, Compras.C.Reloj), K.Lector(), K.Vista(), [], [],
+        new EmisorDeMensajes(Db, K.Actor, Compras.C.Reloj), K.Lector(), K.Vista(), [], validacionPrevia is null ? [] : [validacionPrevia],
         avisosAlConfirmar: [new AlertaDeVentaBajoCosto(Db, K.Lector(), Alertas)]);
 
     public ConfirmInventoryDocumentCommandHandler Confirmar() => new(Db, Confirmacion());

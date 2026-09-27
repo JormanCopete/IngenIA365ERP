@@ -238,8 +238,10 @@ public class LineasPorMedioDePagoTests
             .Handle(new EvaluateInventoryPostingQuery(Venta("PTO01", "FV-9", null, Pago(1, "NEQUI", PaymentMeansClass.Transfer, 1000m))
                 .Select(m => new MensajeContableDto(m.Sobre, m.Contenido!)).ToList()), default)).Value;
 
-        completitud.PaymentMeansWithoutAccount.Select(m => m.PaymentMeansCode).Should().Equal("NEQUI");
-        completitud.Summary.ByKind["paymentMeansWithoutAccount"].Should().Be(1);
+        // TRANSF sólo tiene reglas de la caja (reclasificación y arqueo), no de la venta: cobrar con él también se detendría, así que la
+        // completitud lo lista (desde el 2026-09-27 cuenta sólo la regla de la operación Venta; e2e T567).
+        completitud.PaymentMeansWithoutAccount.Select(m => m.PaymentMeansCode).Should().Equal("NEQUI", "TRANSF");
+        completitud.Summary.ByKind["paymentMeansWithoutAccount"].Should().Be(2);
         evaluacion.IsPostable.Should().BeFalse();
         evaluacion.Errors.Should().ContainSingle(e => e.Rule == "Accounting.InventoryRule.Missing");
     }

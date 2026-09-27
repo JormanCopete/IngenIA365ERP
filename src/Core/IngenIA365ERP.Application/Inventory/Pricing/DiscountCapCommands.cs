@@ -160,7 +160,7 @@ public static class TopesDeDescuento
     {
         var roles = await (from ur in db.UserRoles.AsNoTracking()
                            join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
-                           where ur.UserId == userId && !ur.IsDeleted && !r.IsDeleted && r.IsActive
+                           where ur.UserId == userId && !r.IsDeleted && r.IsActive // la junción rol-usuario no tiene borrado lógico
                            select r.Id).Distinct().ToListAsync(ct);
         if (roles.Count == 0) return TopeDelUsuario.Ninguno;
 

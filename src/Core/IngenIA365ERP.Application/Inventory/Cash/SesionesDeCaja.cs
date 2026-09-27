@@ -111,14 +111,22 @@ public sealed class SesionesDeCaja(
         return new EsperadoDeLaSesion(lineas.OrderBy(l => orden[l.Medio.PaymentMeansId]).ToList());
     }
 
-    /// <summary>Los movimientos de caja que tocan la sesión (origen o destino), con si están confirmados.</summary>
+    /// <summary>
+    /// Los movimientos de caja que tocan la sesión (origen o destino), con si están confirmados. Una reclasificación sale del datáfono
+    /// del pago que corrige y, si no dice otro, entra al mismo: el voucher pasó por ese datáfono aunque se registró con otro medio.
+    /// Hasta el 2026-09-27 el datáfono de origen iba nulo y el lote del datáfono seguía esperando lo reclasificado: el cierre pedía
+    /// motivo para dos diferencias que no existían (e2e T566).
+    /// </summary>
     public async Task<IReadOnlyList<MovimientoDeCaja>> MovimientosAsync(int sesionId, CancellationToken ct) =>
         await (from m in db.CashMovementDetails.AsNoTracking()
                join d in db.InventoryDocuments.AsNoTracking() on m.DocumentId equals d.Id
+               join p in db.DocumentPayments.AsNoTracking() on m.ReclassifiedPaymentId equals (int?)p.Id into corregidos
+               from p in corregidos.DefaultIfEmpty()
                where !m.IsDeleted && (m.CashSessionId == sesionId || m.DestinationCashSessionId == sesionId)
                orderby m.Id
                select new MovimientoDeCaja(m.DocumentId, m.Kind, d.Status == DocumentStatus.Confirmed, m.CashSessionId, m.DestinationCashSessionId,
-                   m.SourcePaymentMeansId, m.TargetPaymentMeansId, m.Amount, null, m.TargetCardTerminalId))
+                   m.SourcePaymentMeansId, m.TargetPaymentMeansId, m.Amount, p == null ? null : p.CardTerminalId,
+                   m.TargetCardTerminalId ?? (p == null ? null : p.CardTerminalId)))
             .ToListAsync(ct);
 
     /// <summary>
