@@ -139,6 +139,8 @@ public static class DependencyInjection
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
         // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
+        // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
+        services.AddScoped<Application.Inventory.Common.IToqueDeSesionDeCaja, Inventory.ToqueDeSesionDeCaja>();
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
         services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();

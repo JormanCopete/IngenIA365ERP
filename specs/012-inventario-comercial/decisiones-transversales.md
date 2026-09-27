@@ -1680,6 +1680,36 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `Inventory.Discount.CapInsufficient`; aviso de importación `Import.Product.Inactive`. Slug de `CampoCodigo`: `listas-de-precios`. Los
     topes de `/discount-caps` (`maxLinePercent`, `maxDocumentPercent`) viajan como **fracción**, como toda tarifa (§2.6 de api.md).
 
+  - **(nuevo, I3 POS, T603–T607)** En `Application/Inventory/Pos`: `BorradorDelPos.{UsuarioAsync, SesionAbiertaAsync, SesionDeLaVentaAsync,
+    VentaAsync, TipoDelRol, ConsumidorFinalAsync, EsConsumidorFinalAsync, LeerAsync, Multiplicador, AgregarAsync, CambiarCantidadAsync,
+    PrecificarAsync, EnlazarAprobacionesAsync, RetirarAprobacionesAsync, QuitarLineaAsync, DtoAsync, MediosAsync, OfreciblesAsync,
+    Nombre}` con `SesionDelPos`, `CambioDeLinea`, `ProductoLeido`; los comandos `CreatePosDraftCommand` (`PosFirstLineInput`),
+    `UpdatePosDraftCommand` (con `ClearSalesperson`), `AddPosLineCommand`, `UpdatePosLineCommand` (con `ClearUnitPrice`),
+    `RemovePosLineCommand`, `SuspendPosDraftCommand`, `ResumePosDraftCommand`, `DiscardPosDraftCommand`, `CheckoutPosDraftCommand` y las
+    consultas `LookupPosProductQuery`, `GetPosDraftQuery`, `ListPosDraftsQuery`; DTO `PosDiscountInput` (`percent` como fracción),
+    `PosRefDto`, `PosLookupDto`, `PosDocumentTypeDto`, `PosCustomerDto`, `PosSalespersonDto`, `PosLineDiscountDto`,
+    `PosLineDiscountApprovalDto`, `PosLineTaxDto`, `PosLineDto`, `PosTotalsDto`, `PosDocumentDiscountDto`, `PosPaymentMeansDto`,
+    `PosCardTerminalDto`, `PosCreditDefaultsDto`, `PosSuspendedDto`, `PosPendingApprovalDto`, `PosDraftDto`, `PosDraftSummaryDto`,
+    `CheckoutResultDto`, `CashSessionPointOfSaleDto` (el `pointOfSale` de `CashSessionDto`, con `posEnabled`); `ErroresDelPos`;
+    `IAuditoriaDelPuntoDeVenta` + `AuditoriaDelPuntoDeVenta` (evento con nombre en `COR_AuditOutbox` dentro de la transacción del
+    comando, canal `pos` para `IOperacionDePuntoDeVenta`; `ExisteAsync` dice si ya hubo primera entrega en un formato). Los comandos del
+    POS sobre una venta llevan `CashSessionPublicId { init; }` sólo como marca de canal: la sesión la toma el servidor de la venta. En
+    `Application/Inventory/Sales`: `DocumentPaymentInput`, `PaymentCreditInput`, `LugarDeCobro`, `PagosRegistrados`,
+    `RegistroDePagos.{RegistrarAsync, Bonos, ErrorDePago}` (lo reutiliza la venta de oficina, T608), `ConstructorDeTirilla.{ConstruirAsync,
+    Etiqueta}` con `TirillaOptions.AmbienteDePruebas` (la API lo fija en `!IsProduction()`), `TicketDto` y sus partes
+    (`TicketHeaderDto`, `TicketDocumentDto`, `TicketPartyDto`, `TicketLineDto`, `TicketTaxDto`, `TicketWithholdingDto`,
+    `TicketTotalsDto`, `TicketPaymentDto`, `TicketElectronicDto`), `DeliverSalesDocumentCommand`, `ReprintDocumentCommand`,
+    `EntregaDeDocumentos`, `EntregaDto` y el puerto `IRepresentacionDeVentaEnPdf` (lo implementa la API con `SalesDocumentReport`, T626).
+    Plataforma: `Application/Inventory/Common/IToqueDeSesionDeCaja` (implementación `Persistence/Inventory/ToqueDeSesionDeCaja`,
+    `ExecuteUpdateAsync … WHERE Status = Open`; la usa también el cierre de sesión, T618). Eventos de auditoría
+    `Inventory.Pos.{LineRemoved, DiscountApplied, PriceOverridden, Suspended, Resumed, Discarded, Checkout}` e
+    `Inventory.Document.{Delivered, Reprinted}` (`AuditEventTypes`). Errores: `Inventory.Sales.SalespersonInvalid`,
+    `Inventory.Product.NotFound`, `Inventory.Pos.{DraftNotFound, LineNotFound, RoleNotConfigured, CustomerNotFound}`,
+    `Inventory.Document.{EmailRequired, RepresentationUnavailable}`. Decisiones: una línea que no cambió se vuelve a medir por el
+    **valor** de sus descuentos y la que cambió de cantidad por su **fracción**; las filas de descuento iguales se **conservan** (su
+    `PublicId` es la fuente de la aprobación); el descuento por total se conserva en pesos; la primera entrega se sabe por el evento
+    `Inventory.Document.Delivered` con su `Format` (en I3 no hay columna; I4 usa `COR_ElectronicDocuments.DeliveredAt`).
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·

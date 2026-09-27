@@ -60,3 +60,13 @@ public sealed record CashRegisterDto(
 
 /// <summary>Un tipo de documento por rol, como lo pide la caja (§20.1 <c>documentTypes: [{ role, documentTypePublicId }]</c>). (nuevo)</summary>
 public sealed record CashRegisterDocumentTypeInput(CashRegisterDocumentRole Role, Guid DocumentTypePublicId);
+
+/// <summary>
+/// El punto de una sesión de caja (<c>CashSessionDto.pointOfSale</c>, contracts/api.md §20.1 y §21.1; FR-058, T605): con
+/// <see cref="PosEnabled"/> la pantalla muestra u oculta el enlace a <c>/pos</c>; en un punto sin POS la sesión sigue sirviendo para el
+/// cobro de oficina, los movimientos y el arqueo. Lo usa la sesión de caja (T617). (nuevo)
+/// </summary>
+public sealed record CashSessionPointOfSaleDto(Guid PointOfSalePublicId, string Code, string Name, bool PosEnabled)
+{
+    public static CashSessionPointOfSaleDto De(Domain.Entities.Inventory.Pos.PointOfSale punto) => new(punto.PublicId, punto.Code, punto.Name, punto.PosEnabled);
+}

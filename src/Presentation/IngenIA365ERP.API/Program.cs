@@ -166,6 +166,9 @@ try
     // Feature 012 (T317, api.md §13.3): activar una bodega sin la comparación contable (antes de I2) sólo fuera de producción.
     builder.Services.Configure<IngenIA365ERP.Application.Inventory.GoLive.PuestaEnMarchaOptions>(o =>
         o.PermitirActivacionSinComparacion = !builder.Environment.IsProduction());
+    // Feature 012 (I3, T607): fuera de produccion toda tirilla dice «SIN VALIDEZ FISCAL» (quickstart §5.13).
+    builder.Services.Configure<IngenIA365ERP.Application.Inventory.Sales.TirillaOptions>(o =>
+        o.AmbienteDePruebas = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();

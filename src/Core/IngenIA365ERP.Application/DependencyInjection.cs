@@ -254,6 +254,12 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Sales.PrecificacionDeVenta>();
         services.AddScoped<Inventory.Pricing.AprobacionDeDescuentos>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Pricing.FuenteDeAprobacionDeDescuento>();
+        // Feature 012, I3 (T603-T607): el borrador del POS, los pagos del documento, la tirilla, la entrega y los eventos de riesgo.
+        services.AddScoped<Inventory.Pos.BorradorDelPos>();
+        services.AddScoped<Inventory.Pos.IAuditoriaDelPuntoDeVenta, Inventory.Pos.AuditoriaDelPuntoDeVenta>();
+        services.AddScoped<Inventory.Sales.RegistroDePagos>();
+        services.AddScoped<Inventory.Sales.ConstructorDeTirilla>();
+        services.AddScoped<Inventory.Sales.EntregaDeDocumentos>();
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
